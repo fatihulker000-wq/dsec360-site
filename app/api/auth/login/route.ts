@@ -29,11 +29,11 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase();
 
-const { data, error } = await supabase
-  .from("users")
-  .select("*")
-  .eq("email", rawEmail)
-  .maybeSingle();
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, email, password, role, full_name")
+      .eq("email", rawEmail)
+      .maybeSingle();
 
     if (error) {
       console.error("Supabase kullanıcı sorgu hatası:", error);
@@ -50,38 +50,7 @@ const { data, error } = await supabase
       );
     }
 
-    if (!data.is_active) {
-      return NextResponse.json(
-        { error: "Bu kullanıcı pasif durumda." },
-        { status: 403 }
-      );
-    }
-
-    const now = new Date();
-    let valid = false;
-
-    if (typeof data.password === "string" && data.password === rawPassword) {
-      valid = true;
-    }
-
-    if (
-      !valid &&
-      typeof data.temp_password === "string" &&
-      data.temp_password === rawPassword &&
-      data.temp_password_created_at
-    ) {
-      const createdAt = new Date(data.temp_password_created_at);
-
-      if (!Number.isNaN(createdAt.getTime())) {
-        const diffMinutes = (now.getTime() - createdAt.getTime()) / 1000 / 60;
-
-        if (diffMinutes <= 60) {
-          valid = true;
-        }
-      }
-    }
-
-    if (!valid) {
+    if (typeof data.password !== "string" || data.password !== rawPassword) {
       return NextResponse.json(
         { error: "Hatalı şifre." },
         { status: 401 }
@@ -90,7 +59,12 @@ const { data, error } = await supabase
 
     const response = NextResponse.json({
       success: true,
-      role: data.role,
+      role: data.role ?? "training_user",
+      user: {
+        id: data.id,
+        email: data.email,
+        full_name: data.full_name ?? "",
+      },
     });
 
     response.cookies.set("dsec_user_auth", "ok", {
@@ -100,7 +74,7 @@ const { data, error } = await supabase
       maxAge: 60 * 60 * 12,
     });
 
-    response.cookies.set("dsec_user_role", String(data.role ?? ""), {
+    response.cookies.set("dsec_user_role", String(data.role ?? "training_user"), {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
