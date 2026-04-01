@@ -16,7 +16,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const rawEmail = typeof body?.email === "string" ? body.email.trim() : "";
+    const rawEmail =
+      typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
     const rawPassword =
       typeof body?.password === "string" ? body.password.trim() : "";
 
@@ -29,19 +30,15 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase();
 
-const { data, error } = await supabase
-  .from("users")
-  .select("*")
-  .eq("email", rawEmail)
-  .maybeSingle();
-  console.log("EMAIL:", rawEmail);
-console.log("DATA:", data);
-console.log("ERROR:", error);
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, full_name, email, password, role")
+      .ilike("email", rawEmail)
+      .maybeSingle();
 
     if (error) {
-      console.error("Supabase kullanıcı sorgu hatası:", error);
       return NextResponse.json(
-        { error: "Kullanıcı sorgusu sırasında hata oluştu." },
+        { error: `Supabase hata: ${error.message}` },
         { status: 500 }
       );
     }
@@ -93,9 +90,11 @@ console.log("ERROR:", error);
 
     return response;
   } catch (error) {
-    console.error("User login route hatası:", error);
+    const message =
+      error instanceof Error ? error.message : "Bilinmeyen sunucu hatası";
+
     return NextResponse.json(
-      { error: "Sunucu hatası" },
+      { error: `Sunucu hatası: ${message}` },
       { status: 500 }
     );
   }
