@@ -65,6 +65,41 @@ function normalizeType(type?: string | null) {
   return "asenkron";
 }
 
+function getEffectiveStatus(item: TrainingRecord): TrainingStatus {
+  if (item.status === "completed" || item.completed_at || item.watch_completed) {
+    return "completed";
+  }
+
+  if (item.started_at || item.status === "in_progress") {
+    return "in_progress";
+  }
+
+  return "not_started";
+}
+
+function getLocalPercent(item: TrainingRecord, trainingType: string): number {
+  const effectiveStatus = getEffectiveStatus(item);
+
+  if (effectiveStatus === "completed") return 100;
+
+  if (trainingType === "senkron") {
+    return effectiveStatus === "in_progress" ? 50 : 0;
+  }
+
+  // asenkron
+  // Video gerçekten tamamlanmadan %100 olmaz.
+  // Sadece açıldıysa %1 gösterelim; %50 göstermeyelim.
+  return effectiveStatus === "in_progress" ? 1 : 0;
+}
+
+function getPrimaryButtonLabel(item: TrainingRecord): string {
+  const effectiveStatus = getEffectiveStatus(item);
+
+  if (effectiveStatus === "not_started") return "Eğitimi Aç";
+  if (effectiveStatus === "in_progress") return "Devam Et";
+  return "Tamamlandı";
+}
+
 export default function TrainingPortalPage() {
   const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,9 +139,22 @@ export default function TrainingPortalPage() {
 
   const stats = useMemo(() => {
     const total = trainings.length;
-    const completed = trainings.filter((x) => x.status === "completed").length;
-    const inProgress = trainings.filter((x) => x.status === "in_progress").length;
-    const notStarted = trainings.filter((x) => x.status === "not_started").length;
+
+    const completed = trainings.filter((x) => {
+      const effectiveStatus = getEffectiveStatus(x);
+      return effectiveStatus === "completed";
+    }).length;
+
+    const inProgress = trainings.filter((x) => {
+      const effectiveStatus = getEffectiveStatus(x);
+      return effectiveStatus === "in_progress";
+    }).length;
+
+    const notStarted = trainings.filter((x) => {
+      const effectiveStatus = getEffectiveStatus(x);
+      return effectiveStatus === "not_started";
+    }).length;
+
     const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
 
     return {
@@ -125,7 +173,8 @@ export default function TrainingPortalPage() {
           <div className="hero-badge">D-SEC Eğitim Portalı</div>
           <h1 className="hero-title">Online Eğitimler</h1>
           <p className="hero-desc">
-            Size atanmış eğitimleri açın, aktif izleme ile tamamlayın ve belgelerinizi alın.
+            Size atanmış eğitimleri açın, aktif izleme ile tamamlayın ve
+            belgelerinizi alın.
           </p>
         </div>
       </section>
@@ -141,7 +190,9 @@ export default function TrainingPortalPage() {
             }}
           >
             <div className="card">
-              <div style={{ fontSize: "13px", color: "#6b7280" }}>Toplam Eğitim</div>
+              <div style={{ fontSize: "13px", color: "#6b7280" }}>
+                Toplam Eğitim
+              </div>
               <div
                 style={{
                   fontSize: "30px",
@@ -154,7 +205,9 @@ export default function TrainingPortalPage() {
             </div>
 
             <div className="card">
-              <div style={{ fontSize: "13px", color: "#b91c1c" }}>Başlanmadı</div>
+              <div style={{ fontSize: "13px", color: "#b91c1c" }}>
+                Başlanmadı
+              </div>
               <div
                 style={{
                   fontSize: "30px",
@@ -167,7 +220,9 @@ export default function TrainingPortalPage() {
             </div>
 
             <div className="card">
-              <div style={{ fontSize: "13px", color: "#92400e" }}>Devam Ediyor</div>
+              <div style={{ fontSize: "13px", color: "#92400e" }}>
+                Devam Ediyor
+              </div>
               <div
                 style={{
                   fontSize: "30px",
@@ -180,7 +235,9 @@ export default function TrainingPortalPage() {
             </div>
 
             <div className="card">
-              <div style={{ fontSize: "13px", color: "#166534" }}>Tamamlanma</div>
+              <div style={{ fontSize: "13px", color: "#166534" }}>
+                Tamamlanma
+              </div>
               <div
                 style={{
                   fontSize: "30px",
@@ -261,15 +318,9 @@ export default function TrainingPortalPage() {
             <div className="grid-3">
               {trainings.map((item) => {
                 const trainingType = normalizeType(item.training?.type);
-
-                const localPercent =
-                  item.status === "completed"
-                    ? 100
-                    : item.watch_completed
-                    ? 100
-                    : item.status === "in_progress"
-                    ? 50
-                    : 0;
+                const effectiveStatus = getEffectiveStatus(item);
+                const localPercent = getLocalPercent(item, trainingType);
+                const primaryButtonLabel = getPrimaryButtonLabel(item);
 
                 return (
                   <div
@@ -295,7 +346,7 @@ export default function TrainingPortalPage() {
 
                       <div
                         style={{
-                          ...getStatusStyle(item.status),
+                          ...getStatusStyle(effectiveStatus),
                           borderRadius: "999px",
                           padding: "8px 12px",
                           fontSize: "12px",
@@ -303,7 +354,7 @@ export default function TrainingPortalPage() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {getStatusLabel(item.status)}
+                        {getStatusLabel(effectiveStatus)}
                       </div>
                     </div>
 
@@ -366,7 +417,8 @@ export default function TrainingPortalPage() {
                           style={{
                             width: `${localPercent}%`,
                             height: "100%",
-                            background: localPercent === 100 ? "#16a34a" : "#f59e0b",
+                            background:
+                              localPercent === 100 ? "#16a34a" : "#f59e0b",
                           }}
                         />
                       </div>
@@ -403,22 +455,24 @@ export default function TrainingPortalPage() {
                         flexWrap: "wrap",
                       }}
                     >
-                      {item.status !== "completed" && (
+                      {effectiveStatus !== "completed" && (
                         <button
                           className="cbs-button"
                           style={{
                             background:
-                              item.status === "not_started" ? "#f59e0b" : "#2563eb",
+                              effectiveStatus === "not_started"
+                                ? "#f59e0b"
+                                : "#2563eb",
                           }}
                           onClick={() => {
                             window.location.href = `/portal/training/${item.id}`;
                           }}
                         >
-                          {item.status === "not_started" ? "Eğitimi Aç" : "Tekrar Aç"}
+                          {primaryButtonLabel}
                         </button>
                       )}
 
-                      {item.status === "completed" && (
+                      {effectiveStatus === "completed" && (
                         <>
                           <button
                             className="cbs-button"
