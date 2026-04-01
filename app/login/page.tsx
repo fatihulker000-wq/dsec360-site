@@ -35,10 +35,7 @@ export default function LoginPage() {
     try {
       setLoading(true);
 
-      // 🔥 DEBUG LOG
-      console.log("LOGIN REQUEST:", email);
-
-      const response = await fetch("/api/login", {
+      const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -51,15 +48,11 @@ export default function LoginPage() {
 
       const data = await readSafeJson(response);
 
-      // 🔥 DEBUG LOG
-      console.log("LOGIN RESPONSE:", data);
-
       if (!response.ok) {
         setError(data?.error || "Giriş başarısız.");
         return;
       }
 
-      // 🎯 ROLE YÖNLENDİRME
       if (data.role === "super_admin") {
         router.push("/admin/cbs");
       } else if (data.role === "company_admin" || data.role === "operator") {
@@ -73,7 +66,7 @@ export default function LoginPage() {
       router.refresh();
     } catch (err) {
       console.error("Login hatası:", err);
-      setError("Sunucuya bağlanılamadı.");
+      setError("Bağlantı hatası oluştu.");
     } finally {
       setLoading(false);
     }
@@ -95,6 +88,9 @@ export default function LoginPage() {
         <div className="cbs-wrap" style={{ maxWidth: "560px" }}>
           <div className="cbs-card">
             <h2 className="cbs-title">Giriş Yap</h2>
+            <p className="cbs-desc" style={{ marginBottom: "18px" }}>
+              Email, TC Kimlik veya Sicil numaranız ve şifrenizi girin.
+            </p>
 
             <div
               style={{
@@ -103,31 +99,52 @@ export default function LoginPage() {
                 borderRadius: "14px",
                 background: "#f8fafc",
                 border: "1px solid #e5e7eb",
+                color: "#4b5563",
+                fontSize: "14px",
+                lineHeight: 1.7,
               }}
             >
-              Açık demo için{" "}
-              <Link href="/demo" style={{ color: "#b91c1c", fontWeight: 700 }}>
+              Açık demoyu incelemek için{" "}
+              <Link
+                href="/demo"
+                style={{ color: "#b91c1c", fontWeight: 700 }}
+              >
                 buraya tıklayın
               </Link>
+              . Kısıtlı veya full demo erişimi için iletişim formundan talep
+              bırakabilirsiniz.
             </div>
 
             <div className="cbs-field">
-              <label>Email / TC / Sicil</label>
+              <label className="cbs-label">Email / TC / Sicil</label>
+
               <input
                 type="text"
                 className="cbs-input"
+                placeholder="Email, TC veya Sicil No"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !loading) {
+                    handleLogin();
+                  }
+                }}
               />
             </div>
 
             <div className="cbs-field" style={{ marginTop: "14px" }}>
-              <label>Şifre</label>
+              <label className="cbs-label">Şifre</label>
               <input
                 type="password"
                 className="cbs-input"
+                placeholder="Şifre"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !loading) {
+                    handleLogin();
+                  }
+                }}
               />
             </div>
 
@@ -142,6 +159,10 @@ export default function LoginPage() {
             </div>
 
             {error && <p className="cbs-result">{error}</p>}
+
+            <div className="cbs-security">
+              🔒 Email, TC veya Sicil ile güvenli giriş yapabilirsiniz.
+            </div>
           </div>
         </div>
       </section>
