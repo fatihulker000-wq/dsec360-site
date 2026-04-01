@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 const { data, error } = await supabase
   .from("users")
   .select("*")
-  .ilike("email", rawEmail)
+  .eq("email", rawEmail)
   .maybeSingle();
 
     if (error) {
