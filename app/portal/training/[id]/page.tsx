@@ -276,12 +276,22 @@ export default function TrainingPlayerPage() {
   }, [assignmentId]);
 
   useEffect(() => {
-    if (!assignmentId || !contentUrl || !isYouTubeTraining || !playerContainerRef.current) {
+    if (
+      !assignmentId ||
+      !contentUrl ||
+      !isYouTubeTraining ||
+      !playerContainerRef.current
+    ) {
       return;
     }
 
     const initPlayer = () => {
-      if (!window.YT || !window.YT.Player || !playerContainerRef.current || !youtubeVideoId) {
+      if (
+        !window.YT ||
+        !window.YT.Player ||
+        !playerContainerRef.current ||
+        !youtubeVideoId
+      ) {
         return;
       }
 
@@ -300,36 +310,15 @@ export default function TrainingPlayerPage() {
           modestbranding: 1,
         },
         events: {
-          onReady: async () => {
+          onReady: () => {
             try {
               const duration = Number(playerRef.current?.getDuration?.() || 0);
               setVideoDuration(duration);
-
-              if (!openingMarkedRef.current) {
-                openingMarkedRef.current = true;
-
-                const res = await fetch("/api/training/update", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    assignmentId,
-                    action: "open",
-                  }),
-                });
-
-                if (!res.ok) {
-                  const json = await res.json().catch(() => null);
-                  console.error("YouTube open hatası:", json);
-                }
-
-                await fetchTraining();
-              }
             } catch (err) {
               console.error(err);
             }
           },
+
           onStateChange: async (event: any) => {
             const playerState = event?.data;
 
@@ -337,11 +326,34 @@ export default function TrainingPlayerPage() {
               setIsPlaying(true);
               setAttentionOpen(false);
 
+              if (!openingMarkedRef.current) {
+                openingMarkedRef.current = true;
+
+                try {
+                  await fetch("/api/training/update", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      assignmentId,
+                      action: "open",
+                    }),
+                  });
+
+                  await fetchTraining();
+                } catch (err) {
+                  console.error(err);
+                }
+              }
+
               if (!progressTimerRef.current) {
                 progressTimerRef.current = setInterval(() => {
                   try {
-                    const current = Number(playerRef.current?.getCurrentTime?.() || 0);
-                    const duration = Number(playerRef.current?.getDuration?.() || 0);
+                    const current = Number(
+                      playerRef.current?.getCurrentTime?.() || 0
+                    );
+                    const duration = Number(
+                      playerRef.current?.getDuration?.() || 0
+                    );
 
                     setCurrentSecond(current);
 
@@ -349,7 +361,10 @@ export default function TrainingPlayerPage() {
                       setVideoDuration(duration);
                     }
 
-                    if (current >= nextCheckpointRef.current && !watchCompleted) {
+                    if (
+                      current >= nextCheckpointRef.current &&
+                      !watchCompleted
+                    ) {
                       nextCheckpointRef.current += CHECKPOINT_SECONDS;
                       pauseVideoForAttention(
                         "Devam etmek için ekranda olduğunu onayla."
@@ -378,7 +393,6 @@ export default function TrainingPlayerPage() {
               setIsPlaying(false);
               stopProgressTimer();
               stopHeartbeatTimer();
-              setCurrentSecond(videoDuration || currentSecond || 0);
               await finalizeTraining();
             }
           },
@@ -390,7 +404,9 @@ export default function TrainingPlayerPage() {
       initPlayer();
     } else {
       const scriptId = "youtube-iframe-api-script";
-      let script = document.getElementById(scriptId) as HTMLScriptElement | null;
+      let script = document.getElementById(
+        scriptId
+      ) as HTMLScriptElement | null;
 
       if (!script) {
         script = document.createElement("script");
@@ -419,8 +435,6 @@ export default function TrainingPlayerPage() {
     contentUrl,
     isYouTubeTraining,
     youtubeVideoId,
-    videoDuration,
-    currentSecond,
     watchCompleted,
   ]);
 
