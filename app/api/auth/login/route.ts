@@ -34,6 +34,9 @@ const { data, error } = await supabase
   .select("*")
   .eq("email", rawEmail)
   .maybeSingle();
+  console.log("EMAIL:", rawEmail);
+console.log("DATA:", data);
+console.log("ERROR:", error);
 
     if (error) {
       console.error("Supabase kullanıcı sorgu hatası:", error);
