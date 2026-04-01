@@ -29,11 +29,11 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, email, password, role, full_name")
-      .eq("email", rawEmail)
-      .maybeSingle();
+const { data, error } = await supabase
+  .from("users")
+  .select("*")
+  .eq("email", rawEmail)
+  .maybeSingle();
 
     if (error) {
       console.error("Supabase kullanıcı sorgu hatası:", error);
