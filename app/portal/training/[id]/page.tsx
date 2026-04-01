@@ -18,7 +18,7 @@ type TrainingDetail = {
   watch_completed?: boolean;
   started_at?: string | null;
   completed_at?: string | null;
-  trainings?: {
+  training?: {
     id: string;
     title?: string;
     description?: string;
@@ -54,6 +54,15 @@ function formatDuration(seconds: number) {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+function normalizeType(type?: string | null) {
+  const value = (type || "").trim().toLowerCase();
+
+  if (value === "senkron") return "senkron";
+  if (value === "asenkron") return "asenkron";
+
+  return "asenkron";
+}
+
 export default function TrainingPlayerPage() {
   const params = useParams();
   const router = useRouter();
@@ -83,6 +92,14 @@ export default function TrainingPlayerPage() {
   const completingRef = useRef(false);
   const openingMarkedRef = useRef(false);
   const blurCooldownRef = useRef(false);
+
+  const activeTraining = training?.training || null;
+  const normalizedType = normalizeType(activeTraining?.type);
+  const contentUrl = activeTraining?.content_url || "";
+  const youtubeVideoId = extractYouTubeId(contentUrl);
+  const isYouTubeTraining =
+    normalizedType === "asenkron" && Boolean(youtubeVideoId);
+  const isSyncTraining = normalizedType === "senkron";
 
   const stopProgressTimer = () => {
     if (progressTimerRef.current) {
@@ -138,6 +155,7 @@ export default function TrainingPlayerPage() {
 
       const res = await fetch("/api/training/my", {
         cache: "no-store",
+        credentials: "include",
       });
 
       const data = await res.json();
@@ -228,20 +246,44 @@ export default function TrainingPlayerPage() {
     }
   };
 
+  const markOpenForSyncTraining = async () => {
+    try {
+      const res = await fetch("/api/training/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assignmentId,
+          action: "open",
+        }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        console.error("Senkron eğitim open hatası:", json);
+      }
+
+      await fetchTraining();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     if (!assignmentId) return;
     fetchTraining();
   }, [assignmentId]);
 
   useEffect(() => {
-    if (!training?.trainings?.content_url || !playerContainerRef.current) return;
-
-    const videoId = extractYouTubeId(training.trainings.content_url);
-
-    if (!videoId) return;
+    if (!assignmentId || !contentUrl || !isYouTubeTraining || !playerContainerRef.current) {
+      return;
+    }
 
     const initPlayer = () => {
-      if (!window.YT || !window.YT.Player || !playerContainerRef.current) return;
+      if (!window.YT || !window.YT.Player || !playerContainerRef.current || !youtubeVideoId) {
+        return;
+      }
 
       if (playerRef.current) {
         try {
@@ -252,7 +294,7 @@ export default function TrainingPlayerPage() {
       }
 
       playerRef.current = new window.YT.Player(playerContainerRef.current, {
-        videoId,
+        videoId: youtubeVideoId,
         playerVars: {
           rel: 0,
           modestbranding: 1,
@@ -266,7 +308,7 @@ export default function TrainingPlayerPage() {
               if (!openingMarkedRef.current) {
                 openingMarkedRef.current = true;
 
-                await fetch("/api/training/update", {
+                const res = await fetch("/api/training/update", {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
@@ -277,6 +319,11 @@ export default function TrainingPlayerPage() {
                   }),
                 });
 
+                if (!res.ok) {
+                  const json = await res.json().catch(() => null);
+                  console.error("YouTube open hatası:", json);
+                }
+
                 await fetchTraining();
               }
             } catch (err) {
@@ -286,7 +333,6 @@ export default function TrainingPlayerPage() {
           onStateChange: async (event: any) => {
             const playerState = event?.data;
 
-            // 1 = playing
             if (playerState === 1) {
               setIsPlaying(true);
               setAttentionOpen(false);
@@ -322,14 +368,12 @@ export default function TrainingPlayerPage() {
               }
             }
 
-            // 2 = paused
             if (playerState === 2) {
               setIsPlaying(false);
               stopProgressTimer();
               stopHeartbeatTimer();
             }
 
-            // 0 = ended
             if (playerState === 0) {
               setIsPlaying(false);
               stopProgressTimer();
@@ -370,7 +414,22 @@ export default function TrainingPlayerPage() {
         }
       }
     };
-  }, [assignmentId, training?.trainings?.content_url, watchCompleted]);
+  }, [
+    assignmentId,
+    contentUrl,
+    isYouTubeTraining,
+    youtubeVideoId,
+    videoDuration,
+    currentSecond,
+    watchCompleted,
+  ]);
+
+  useEffect(() => {
+    if (!isSyncTraining || openingMarkedRef.current) return;
+
+    openingMarkedRef.current = true;
+    void markOpenForSyncTraining();
+  }, [isSyncTraining]);
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -456,7 +515,7 @@ export default function TrainingPlayerPage() {
       <section className="hero hero-compact">
         <div className="hero-inner">
           <div className="hero-badge">D-SEC Eğitim Oynatıcı</div>
-          <h1 className="hero-title">{training.trainings?.title || "Eğitim"}</h1>
+          <h1 className="hero-title">{activeTraining?.title || "Eğitim"}</h1>
           <p className="hero-desc">
             Eğitim sırasında ekranda kalmalı, doğrulama uyarılarını onaylamalı ve videoyu %100 bitirmelisin.
           </p>
@@ -507,7 +566,7 @@ export default function TrainingPlayerPage() {
               Eğitim İçeriği
             </h3>
             <p className="card-text" style={{ marginTop: 0 }}>
-              {training.trainings?.description || "Açıklama bulunmuyor."}
+              {activeTraining?.description || "Açıklama bulunmuyor."}
             </p>
           </div>
 
@@ -547,20 +606,118 @@ export default function TrainingPlayerPage() {
                   fontWeight: 800,
                 }}
               >
-                Eğitim Türü: {training.trainings?.type || "online"}
+                Eğitim Türü: {normalizedType}
               </div>
             </div>
 
-            <div
-              ref={playerContainerRef}
-              style={{
-                width: "100%",
-                minHeight: "420px",
-                borderRadius: "16px",
-                overflow: "hidden",
-                background: "#000",
-              }}
-            />
+            {isYouTubeTraining ? (
+              <div
+                ref={playerContainerRef}
+                style={{
+                  width: "100%",
+                  minHeight: "420px",
+                  borderRadius: "16px",
+                  overflow: "hidden",
+                  background: "#000",
+                }}
+              />
+            ) : isSyncTraining ? (
+              <div
+                style={{
+                  width: "100%",
+                  minHeight: "320px",
+                  borderRadius: "16px",
+                  background: "#f8fafc",
+                  border: "1px solid #e5e7eb",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                  padding: "32px 20px",
+                  gap: "14px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-flex",
+                    padding: "8px 12px",
+                    borderRadius: "999px",
+                    background: "#fee2e2",
+                    border: "1px solid #fca5a5",
+                    color: "#b91c1c",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                  }}
+                >
+                  Canlı Eğitim Linki
+                </div>
+
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "28px",
+                    fontWeight: 900,
+                    color: "#111827",
+                  }}
+                >
+                  Senkron Eğitim
+                </h3>
+
+                <p
+                  style={{
+                    margin: 0,
+                    color: "#4b5563",
+                    lineHeight: 1.7,
+                    maxWidth: "680px",
+                  }}
+                >
+                  Bu eğitim canlı bağlantı ile yürütülür. Aşağıdaki butondan toplantı bağlantısını yeni sekmede açabilirsin.
+                </p>
+
+                {contentUrl ? (
+                  <a
+                    href={contentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="cbs-button"
+                    style={{
+                      background: "#2563eb",
+                      textDecoration: "none",
+                    }}
+                  >
+                    Canlı Eğitime Katıl
+                  </a>
+                ) : (
+                  <div
+                    style={{
+                      color: "#b91c1c",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Canlı eğitim linki bulunamadı.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  width: "100%",
+                  minHeight: "320px",
+                  borderRadius: "16px",
+                  background: "#f8fafc",
+                  border: "1px solid #e5e7eb",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#6b7280",
+                  textAlign: "center",
+                  padding: "24px",
+                }}
+              >
+                Bu eğitim için oynatılabilir içerik bulunamadı.
+              </div>
+            )}
           </div>
 
           <div className="card" style={{ marginBottom: 24 }}>
@@ -646,6 +803,20 @@ export default function TrainingPlayerPage() {
             >
               Listeye Dön
             </a>
+
+            {isSyncTraining && training.status !== "completed" && (
+              <button
+                type="button"
+                className="cbs-button"
+                style={{ background: "#16a34a" }}
+                onClick={async () => {
+                  await finalizeTraining();
+                }}
+                disabled={busy}
+              >
+                {busy ? "Tamamlanıyor..." : "Senkron Eğitimi Tamamla"}
+              </button>
+            )}
           </div>
         </div>
       </section>

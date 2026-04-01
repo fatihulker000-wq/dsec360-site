@@ -9,6 +9,15 @@ function getSupabase() {
   );
 }
 
+type RawTrainingStatus = "assigned" | "not_started" | "in_progress" | "completed";
+type NormalizedTrainingStatus = "not_started" | "in_progress" | "completed";
+
+function normalizeStatus(status?: string | null): NormalizedTrainingStatus {
+  if (status === "completed") return "completed";
+  if (status === "in_progress") return "in_progress";
+  return "not_started";
+}
+
 export async function GET() {
   try {
     const cookieStore = await cookies();
@@ -53,8 +62,12 @@ export async function GET() {
       .from("training_assignments")
       .select(`
         id,
+        user_id,
+        training_id,
         status,
-        training_id
+        started_at,
+        completed_at,
+        watch_completed
       `)
       .order("id", { ascending: false });
 
@@ -100,7 +113,13 @@ export async function GET() {
     }
 
     const result = (data || []).map((item: any) => ({
-      ...item,
+      id: item.id,
+      user_id: item.user_id,
+      training_id: item.training_id,
+      status: normalizeStatus(item.status),
+      started_at: item.started_at ?? null,
+      completed_at: item.completed_at ?? null,
+      watch_completed: Boolean(item.watch_completed),
       training: item.training_id ? trainingsMap[item.training_id] || null : null,
     }));
 
