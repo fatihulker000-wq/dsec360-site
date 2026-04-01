@@ -9,7 +9,7 @@ function getSupabase() {
   );
 }
 
-type TrainingStatus = "not_started" | "in_progress" | "completed";
+type TrainingStatus = "assigned" | "not_started" | "in_progress" | "completed";
 type TrainingAction = "open" | "mark_watched" | "complete" | "heartbeat";
 
 type TrainingAssignmentRow = {
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
         last_opened_at: now,
       };
 
-      if (row.status === "not_started") {
+      if (row.status === "assigned" || row.status === "not_started") {
         updatePayload.status = "in_progress";
       }
 

@@ -56,6 +56,15 @@ function formatDateTr(value?: string | null) {
   return d.toLocaleString("tr-TR");
 }
 
+function normalizeType(type?: string | null) {
+  const value = (type || "").trim().toLowerCase();
+
+  if (value === "senkron") return "senkron";
+  if (value === "asenkron") return "asenkron";
+
+  return "asenkron";
+}
+
 export default function TrainingPortalPage() {
   const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -251,6 +260,8 @@ export default function TrainingPortalPage() {
           ) : !error ? (
             <div className="grid-3">
               {trainings.map((item) => {
+                const trainingType = normalizeType(item.training?.type);
+
                 const localPercent =
                   item.status === "completed"
                     ? 100
@@ -320,7 +331,7 @@ export default function TrainingPortalPage() {
                           color: "#374151",
                         }}
                       >
-                        Tür: {item.training?.type || "online"}
+                        Tür: {trainingType}
                       </div>
 
                       {item.watch_completed ? (
