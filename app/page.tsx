@@ -1,65 +1,289 @@
-import Image from "next/image";
+import Link from "next/link";
 
-export default function Home() {
+const modules = [
+  {
+    title: "Ajanda Yönetimi",
+    desc: "Görev, hatırlatma, denetim ve saha planlarını tek merkezden yönetin.",
+  },
+  {
+    title: "Denetim Sistemi",
+    desc: "Saha denetimlerini dijital formlar ve kayıt altyapısıyla yönetin.",
+  },
+  {
+    title: "Eğitim Yönetimi",
+    desc: "Senkron, asenkron ve online eğitim süreçlerini çalışan bazlı takip edin.",
+  },
+  {
+    title: "Sağlık Modülü",
+    desc: "Muayene, sağlık kayıtları ve takip süreçlerini merkezi yönetin.",
+  },
+  {
+    title: "ÇBS Yönetimi",
+    desc: "Şikayet, öneri ve talepleri web ve panel üzerinden toplayın.",
+  },
+  {
+    title: "Raporlama Sistemi",
+    desc: "Kurumsal karar destek için güçlü raporlar ve analiz ekranları alın.",
+  },
+];
+
+const advantages = [
+  {
+    title: "Saha Yönetimi",
+    desc: "Mobil ve web destekli yapı ile sahadaki verileri hızlı şekilde yönetin.",
+  },
+  {
+    title: "Kurumsal Raporlama",
+    desc: "PDF, özet rapor ve gelişmiş analiz ekranları ile karar sürecini hızlandırın.",
+  },
+  {
+    title: "Merkezi Kontrol",
+    desc: "Eğitim, sağlık, denetim ve bildirim süreçlerini tek sistemde toplayın.",
+  },
+];
+
+const trainingTypes = [
+  {
+    title: "Asenkron Eğitim",
+    desc: "Çalışanlar eğitime istedikleri zaman erişir, kendi hızında tamamlar ve sistem üzerinden takip edilir.",
+    href: "/training/async",
+  },
+  {
+    title: "Senkron Eğitim",
+    desc: "Canlı oturumlar, planlı eğitim yapısı ve katılım takibi ile daha kontrollü süreç yönetimi sunar.",
+    href: "/training/sync",
+  },
+  {
+    title: "Online Eğitim",
+    desc: "Dijital erişim, eğitim linkleri ve merkezi platform yapısı ile kurumsal online eğitim kurgusu oluşturur.",
+    href: "/training/online",
+  },
+];
+
+const processSteps = [
+  {
+    step: "01",
+    title: "Süreci Tanımla",
+    desc: "Denetim, eğitim, sağlık, ÇBS ve raporlama süreçleri modül bazında planlanır.",
+  },
+  {
+    step: "02",
+    title: "Veriyi Topla",
+    desc: "Saha, çalışan ve yönetim tarafındaki bilgiler merkezi akış içinde sisteme alınır.",
+  },
+  {
+    step: "03",
+    title: "Takip Et",
+    desc: "Açık işler, eksikler, durum değişimleri ve süreç ilerlemeleri görünür hale gelir.",
+  },
+  {
+    step: "04",
+    title: "Raporla ve Yönet",
+    desc: "Toplanan veriler özet ekranlar, raporlar ve kurumsal karar destek çıktıları üretir.",
+  },
+];
+
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main>
+      <section className="hero">
+        <div className="hero-inner">
+          <div className="hero-badge">D-SEC Kurumsal Yönetim Platformu</div>
+
+          <h1 className="hero-title">
+            Dijital Sağlık • Emniyet • Çevre Yönetim Sistemi
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+
+          <p className="hero-desc">
+            İş güvenliği, saha denetimi, eğitim yönetimi, ÇBS kayıtları ve
+            raporlama süreçlerini tek platformda birleştiren kurumsal çözüm.
           </p>
+
+          <div className="hero-actions">
+            <Link href="/contact" className="btn-primary">
+              Demo Talep Et
+            </Link>
+            <Link href="/services" className="btn-outline-light">
+              Modülleri İncele
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      <section className="section section-light">
+        <div className="page-container">
+          <div className="grid-3">
+            <div className="card">
+              <p className="card-text" style={{ marginTop: 0 }}>
+                Kurumsal Odak
+              </p>
+              <h3 className="card-title">Tek Platform</h3>
+              <p className="card-text">
+                Dağınık süreçleri tek merkezde toplayarak operasyonel verim
+                sağlar.
+              </p>
+            </div>
+
+            <div className="card">
+              <p className="card-text" style={{ marginTop: 0 }}>
+                Saha + Ofis
+              </p>
+              <h3 className="card-title">Anlık Yönetim</h3>
+              <p className="card-text">
+                Ofis, saha ve yönetim tarafını aynı veri akışında buluşturur.
+              </p>
+            </div>
+
+            <div className="card">
+              <p className="card-text" style={{ marginTop: 0 }}>
+                Karar Destek
+              </p>
+              <h3 className="card-title">Raporlama</h3>
+              <p className="card-text">
+                Analiz, rapor ve takip ekranları ile yönetime net görünürlük
+                sağlar.
+              </p>
+            </div>
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section className="section section-soft">
+        <div className="page-container">
+          <div className="section-title-wrap">
+            <h2 className="section-title">D-SEC Modülleri</h2>
+            <p className="section-subtitle">
+              İş süreçlerinizi dijital olarak yönetecek temel modüller
+            </p>
+          </div>
+
+          <div className="grid-3">
+            {modules.map((item) => (
+              <div key={item.title} className="card">
+                <div className="card-icon" />
+                <h3 className="card-title">{item.title}</h3>
+                <p className="card-text">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="section section-light">
+        <div className="page-container">
+          <div className="section-title-wrap">
+            <h2 className="section-title">Eğitim Modülü Öne Çıkan Yapılar</h2>
+            <p className="section-subtitle">
+              Eğitim süreçleri tek başlık altında değil, doğru yapıya göre
+              ayrıştırılarak yönetilir
+            </p>
+          </div>
+
+          <div className="grid-3">
+            {trainingTypes.map((item) => (
+              <div key={item.title} className="card">
+                <div className="card-icon" />
+                <h3 className="card-title">{item.title}</h3>
+                <p className="card-text">{item.desc}</p>
+
+                <div style={{ marginTop: 18 }}>
+                  <Link href={item.href} className="nav-cta">
+                    İncele
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ textAlign: "center", marginTop: 28 }}>
+            <Link href="/training" className="nav-cta">
+              Eğitim Modülünü Detaylı Gör
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="section section-soft">
+        <div className="page-container">
+          <div className="section-title-wrap">
+            <h2 className="section-title">D-SEC Nasıl Çalışır?</h2>
+            <p className="section-subtitle">
+              Kurumsal süreçlerinizi daha yönetilebilir hale getiren akış yapısı
+            </p>
+          </div>
+
+          <div className="grid-2">
+            {processSteps.map((item) => (
+              <div key={item.step} className="card">
+                <div
+                  style={{
+                    width: 54,
+                    height: 54,
+                    borderRadius: 16,
+                    background: "#fee2e2",
+                    color: "#b91c1c",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 800,
+                    fontSize: 18,
+                    marginBottom: 16,
+                  }}
+                >
+                  {item.step}
+                </div>
+
+                <h3 className="card-title">{item.title}</h3>
+                <p className="card-text">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="section section-light">
+        <div className="page-container">
+          <div className="section-title-wrap">
+            <h2 className="section-title">Neden D-SEC?</h2>
+            <p className="section-subtitle">
+              Kurumsal yapı, saha kabiliyeti ve merkezi takip gücü
+            </p>
+          </div>
+
+          <div className="grid-3">
+            {advantages.map((item) => (
+              <div key={item.title} className="card">
+                <h3 className="card-title">{item.title}</h3>
+                <p className="card-text">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="hero">
+        <div
+          className="hero-inner"
+          style={{ paddingTop: 70, paddingBottom: 70 }}
+        >
+          <h2 className="hero-title" style={{ fontSize: 42 }}>
+            D-SEC ile Dijital Dönüşüme Başlayın
+          </h2>
+          <p className="hero-desc">
+            İş güvenliği ve kurumsal süreçlerinizi daha güçlü, daha görünür ve
+            daha yönetilebilir hale getirin.
+          </p>
+
+          <div className="hero-actions">
+            <Link href="/contact" className="btn-primary">
+              İletişime Geç
+            </Link>
+            <Link href="/cbs" className="btn-outline-light">
+              ÇBS Modülünü Gör
+            </Link>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
