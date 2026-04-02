@@ -3,27 +3,45 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const url = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) {
+    throw new Error("SUPABASE_URL veya SUPABASE_SERVICE_ROLE_KEY tanımlı değil.");
+  }
+
+  return createClient(url, serviceRoleKey);
 }
 
-type RawTrainingStatus = "assigned" | "not_started" | "in_progress" | "completed";
-type NormalizedTrainingStatus = "not_started" | "in_progress" | "completed";
+type TrainingStatus = "not_started" | "in_progress" | "completed";
 
-function normalizeStatus(status?: string | null): NormalizedTrainingStatus {
-  if (status === "completed") return "completed";
-  if (status === "in_progress") return "in_progress";
-  return "not_started";
-}
+type UserRow = {
+  id: string;
+  full_name: string | null;
+};
+
+type TrainingRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  content_url: string | null;
+  type: string | null;
+};
+
+type TrainingAssignmentRow = {
+  id: string;
+  user_id: string;
+  training_id: string;
+  status: TrainingStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  watch_completed: boolean | null;
+};
 
 export async function GET() {
   try {
     const cookieStore = await cookies();
     const userId = cookieStore.get("dsec_user_id")?.value;
-
-    console.log("USER ID FROM COOKIE:", userId);
 
     if (!userId) {
       return NextResponse.json(
@@ -34,7 +52,7 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    let user: any = null;
+    let user: UserRow | { id: string; full_name: string } | null = null;
 
     if (userId === "admin-1") {
       user = {
@@ -46,9 +64,10 @@ export async function GET() {
         .from("users")
         .select("id, full_name")
         .eq("id", userId)
-        .maybeSingle();
+        .maybeSingle<UserRow>();
 
       if (userError || !userData) {
+        console.error("Kullanıcı fetch hatası:", userError);
         return NextResponse.json(
           { error: "Kullanıcı DB'de yok" },
           { status: 401 }
@@ -60,66 +79,63 @@ export async function GET() {
 
     let assignmentsQuery = supabase
       .from("training_assignments")
-      .select(`
-        id,
-        user_id,
-        training_id,
-        status,
-        started_at,
-        completed_at,
-        watch_completed
-      `)
+      .select(
+        "id, user_id, training_id, status, started_at, completed_at, watch_completed"
+      )
+      .order("started_at", { ascending: false })
       .order("id", { ascending: false });
 
     if (userId !== "admin-1") {
       assignmentsQuery = assignmentsQuery.eq("user_id", userId);
     }
 
-    const { data, error } = await assignmentsQuery;
+    const { data: assignments, error: assignmentsError } =
+      await assignmentsQuery.returns<TrainingAssignmentRow[]>();
 
-    if (error) {
-      console.error("SUPABASE ERROR:", error);
+    if (assignmentsError) {
+      console.error("training_assignments fetch hatası:", assignmentsError);
       return NextResponse.json(
         { error: "Eğitim verileri alınamadı" },
         { status: 500 }
       );
     }
 
-    let trainingsMap: Record<string, any> = {};
+    const safeAssignments = assignments || [];
 
-    if (data && data.length > 0) {
-      const trainingIds = data
-        .map((x: any) => x.training_id)
-        .filter(Boolean);
+    const trainingIds = safeAssignments
+      .map((item) => item.training_id)
+      .filter(Boolean);
 
-      if (trainingIds.length > 0) {
-        const { data: trainings, error: trainingsError } = await supabase
-          .from("trainings")
-          .select("id, title, description, content_url, type")
-          .in("id", trainingIds);
+    let trainingsMap: Record<string, TrainingRow> = {};
 
-        if (trainingsError) {
-          console.error("TRAININGS FETCH ERROR:", trainingsError);
-          return NextResponse.json(
-            { error: "Eğitim detayları alınamadı" },
-            { status: 500 }
-          );
-        }
+    if (trainingIds.length > 0) {
+      const { data: trainings, error: trainingsError } = await supabase
+        .from("trainings")
+        .select("id, title, description, content_url, type")
+        .in("id", trainingIds)
+        .returns<TrainingRow[]>();
 
-        trainingsMap = Object.fromEntries(
-          (trainings || []).map((t: any) => [t.id, t])
+      if (trainingsError) {
+        console.error("trainings fetch hatası:", trainingsError);
+        return NextResponse.json(
+          { error: "Eğitim detayları alınamadı" },
+          { status: 500 }
         );
       }
+
+      trainingsMap = Object.fromEntries(
+        (trainings || []).map((item) => [item.id, item])
+      );
     }
 
-    const result = (data || []).map((item: any) => ({
+    const result = safeAssignments.map((item) => ({
       id: item.id,
       user_id: item.user_id,
       training_id: item.training_id,
-      status: normalizeStatus(item.status),
-      started_at: item.started_at ?? null,
-      completed_at: item.completed_at ?? null,
-      watch_completed: Boolean(item.watch_completed),
+      status: item.status,
+      started_at: item.started_at,
+      completed_at: item.completed_at,
+      watch_completed: item.watch_completed,
       training: item.training_id ? trainingsMap[item.training_id] || null : null,
     }));
 
@@ -129,7 +145,7 @@ export async function GET() {
       data: result,
     });
   } catch (err) {
-    console.error("GENEL HATA:", err);
+    console.error("training/my genel hata:", err);
     return NextResponse.json(
       { error: "Sunucu hatası" },
       { status: 500 }
