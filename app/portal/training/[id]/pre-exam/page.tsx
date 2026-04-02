@@ -1,4 +1,8 @@
-export default function Page() {
+"use client";
+
+import React from "react";
+
+export default function PreExamPage(): React.JSX.Element {
   return (
     <main style={{ padding: "40px", fontFamily: "Arial" }}>
       <h1>Ön Değerlendirme Sınavı</h1>
