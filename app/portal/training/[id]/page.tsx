@@ -63,6 +63,7 @@ function normalizeType(type?: string | null) {
   return "asenkron";
 }
 
+
 function isDirectVideoUrl(url?: string | null) {
   if (!url) return false;
 
@@ -72,9 +73,8 @@ function isDirectVideoUrl(url?: string | null) {
     normalized.endsWith(".mp4") ||
     normalized.endsWith(".webm") ||
     normalized.endsWith(".ogg") ||
-    normalized.includes("/storage/v1/object/") ||
-    normalized.includes("/videos/") ||
-    normalized.includes("/video/")
+    normalized.endsWith(".mov") ||
+    normalized.endsWith(".m4v")
   );
 }
 
@@ -102,7 +102,7 @@ export default function TrainingPlayerPage() {
 
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
-  const playerRef = useRef<any>(null);
+const playerRef = useRef<any>(null);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextCheckpointRef = useRef(CHECKPOINT_SECONDS);
@@ -110,17 +110,19 @@ export default function TrainingPlayerPage() {
   const openingMarkedRef = useRef(false);
   const blurCooldownRef = useRef(false);
 
-  const activeTraining = training?.training || null;
-  const normalizedType = normalizeType(activeTraining?.type);
-  const contentUrl = activeTraining?.content_url || "";
-  const youtubeVideoId = extractYouTubeId(contentUrl);
-  const supportsDirectVideo = isDirectVideoUrl(contentUrl);
+ const activeTraining = training?.training || null;
+const normalizedType = normalizeType(activeTraining?.type);
+const contentUrl = activeTraining?.content_url || "";
+const youtubeVideoId = extractYouTubeId(contentUrl);
+const supportsDirectVideo = isDirectVideoUrl(contentUrl);
 
-  const isYouTubeTraining =
-    normalizedType === "asenkron" && Boolean(youtubeVideoId);
-  const isDirectVideoTraining =
-    normalizedType === "asenkron" && !youtubeVideoId && supportsDirectVideo;
-  const isSyncTraining = normalizedType === "senkron";
+const isYouTubeTraining =
+  normalizedType === "asenkron" && Boolean(youtubeVideoId);
+
+const isDirectVideoTraining =
+  normalizedType === "asenkron" && !youtubeVideoId && supportsDirectVideo;
+
+const isSyncTraining = normalizedType === "senkron";
 
   const stopProgressTimer = () => {
     if (progressTimerRef.current) {
@@ -193,30 +195,31 @@ export default function TrainingPlayerPage() {
     }
   };
 
-  const pauseVideoForAttention = (reason: string) => {
-    setAttentionReason(reason);
-    setAttentionOpen(true);
-    setIsPlaying(false);
+ const pauseVideoForAttention = (reason: string) => {
+  setAttentionReason(reason);
+  setAttentionOpen(true);
+  setIsPlaying(false);
 
-    stopProgressTimer();
-    stopHeartbeatTimer();
+  stopProgressTimer();
+  stopHeartbeatTimer();
 
-    try {
-      if (playerRef.current?.pauseVideo) {
-        playerRef.current.pauseVideo();
-      }
-    } catch (err) {
-      console.error(err);
+  try {
+    if (playerRef.current?.pauseVideo) {
+      playerRef.current.pauseVideo();
     }
+  } catch (err) {
+    console.error(err);
+  }
 
-    try {
-      if (htmlVideoRef.current) {
-        htmlVideoRef.current.pause();
-      }
-    } catch (err) {
-      console.error(err);
+  try {
+    if (htmlVideoRef.current) {
+      htmlVideoRef.current.pause();
     }
-  };
+  } catch (err) {
+    console.error(err);
+  }
+};
+
 
   const fetchTraining = async () => {
     try {
@@ -489,96 +492,105 @@ export default function TrainingPlayerPage() {
     watchCompleted,
    ]);
 
-  useEffect(() => {
-    if (!isDirectVideoTraining || !htmlVideoRef.current) return;
+ useEffect(() => {
+  if (!isDirectVideoTraining || !htmlVideoRef.current) return;
 
-    const video = htmlVideoRef.current;
-    setPlayerError("");
+  const video = htmlVideoRef.current;
 
-    const handleLoadedMetadata = () => {
-      setVideoDuration(Number(video.duration || 0));
-    };
+  const handleLoadedMetadata = () => {
+    const duration = Number(video.duration || 0);
+    if (duration > 0) {
+      setVideoDuration(duration);
+    }
+  };
 
-    const handlePlay = async () => {
-      setIsPlaying(true);
-      setAttentionOpen(false);
-      await markOpenIfNeeded();
+  const handlePlay = async () => {
+    setIsPlaying(true);
+    setAttentionOpen(false);
 
-      if (!progressTimerRef.current) {
-        progressTimerRef.current = setInterval(() => {
-          try {
-            const current = Number(video.currentTime || 0);
-            const duration = Number(video.duration || 0);
+    if (!openingMarkedRef.current) {
+      openingMarkedRef.current = true;
 
-            setCurrentSecond(current);
+      try {
+        const res = await fetch("/api/training/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            assignmentId,
+            action: "open",
+          }),
+        });
 
-            if (duration > 0) {
-              setVideoDuration(duration);
-            }
+        if (!res.ok) {
+          const json = await res.json().catch(() => null);
+          console.error("Direct video open hatası:", json);
+        } else {
+          await fetchTraining();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
 
-            if (current >= nextCheckpointRef.current && !watchCompleted) {
-              nextCheckpointRef.current += CHECKPOINT_SECONDS;
-              pauseVideoForAttention(
-                "Devam etmek için ekranda olduğunu onayla."
-              );
-            }
-          } catch (err) {
-            console.error(err);
+    if (!progressTimerRef.current) {
+      progressTimerRef.current = setInterval(() => {
+        try {
+          const current = Number(video.currentTime || 0);
+          const duration = Number(video.duration || 0);
+
+          setCurrentSecond(current);
+
+          if (duration > 0) {
+            setVideoDuration(duration);
           }
-        }, 1000);
-      }
 
-      if (!heartbeatTimerRef.current) {
-        heartbeatTimerRef.current = setInterval(() => {
-          void sendHeartbeat();
-        }, HEARTBEAT_SECONDS * 1000);
-      }
-    };
+          if (current >= nextCheckpointRef.current && !watchCompleted) {
+            nextCheckpointRef.current += CHECKPOINT_SECONDS;
+            pauseVideoForAttention(
+              "Devam etmek için ekranda olduğunu onayla."
+            );
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }, 1000);
+    }
 
-    const handlePause = () => {
-      setIsPlaying(false);
-      stopProgressTimer();
-      stopHeartbeatTimer();
-    };
+    if (!heartbeatTimerRef.current) {
+      heartbeatTimerRef.current = setInterval(() => {
+        void sendHeartbeat();
+      }, HEARTBEAT_SECONDS * 1000);
+    }
+  };
 
-    const handleEnded = async () => {
-      setIsPlaying(false);
-      stopProgressTimer();
-      stopHeartbeatTimer();
-      setCurrentSecond(Number(video.duration || currentSecond || 0));
-      await finalizeTraining();
-    };
+  const handlePause = () => {
+    setIsPlaying(false);
+    stopProgressTimer();
+    stopHeartbeatTimer();
+  };
 
-    const handleError = () => {
-      setPlayerError(
-        "Video dosyası oynatılamadı. Bağlantıyı kontrol edin veya farklı bir video kaynağı kullanın."
-      );
-      setIsPlaying(false);
-      stopProgressTimer();
-      stopHeartbeatTimer();
-    };
+  const handleEnded = async () => {
+    setIsPlaying(false);
+    stopProgressTimer();
+    stopHeartbeatTimer();
+    setCurrentSecond(Number(video.duration || 0));
+    await finalizeTraining();
+  };
 
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
-    video.addEventListener("play", handlePlay);
-    video.addEventListener("pause", handlePause);
-    video.addEventListener("ended", handleEnded);
-    video.addEventListener("error", handleError);
+  video.addEventListener("loadedmetadata", handleLoadedMetadata);
+  video.addEventListener("play", handlePlay);
+  video.addEventListener("pause", handlePause);
+  video.addEventListener("ended", handleEnded);
 
-    return () => {
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      video.removeEventListener("play", handlePlay);
-      video.removeEventListener("pause", handlePause);
-      video.removeEventListener("ended", handleEnded);
-      video.removeEventListener("error", handleError);
-
-      stopProgressTimer();
-      stopHeartbeatTimer();
-    };
-  }, [
-    isDirectVideoTraining,
-    watchCompleted,
-   
-  ]);
+  return () => {
+    video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+    video.removeEventListener("play", handlePlay);
+    video.removeEventListener("pause", handlePause);
+    video.removeEventListener("ended", handleEnded);
+  };
+}, [isDirectVideoTraining, watchCompleted, assignmentId]);
 
   useEffect(() => {
     if (!isSyncTraining || openingMarkedRef.current) return;
@@ -635,25 +647,26 @@ export default function TrainingPlayerPage() {
   }, [videoDuration, currentSecond]);
 
   const confirmAttention = () => {
-    setAttentionOpen(false);
-    setAttentionCount((prev) => prev + 1);
+  setAttentionOpen(false);
+  setAttentionCount((prev) => prev + 1);
 
-    try {
-      if (playerRef.current?.playVideo) {
-        playerRef.current.playVideo();
-      }
-    } catch (err) {
-      console.error(err);
+  try {
+    if (playerRef.current?.playVideo) {
+      playerRef.current.playVideo();
     }
+  } catch (err) {
+    console.error(err);
+  }
 
-    try {
-      if (htmlVideoRef.current) {
-        void htmlVideoRef.current.play();
-      }
-    } catch (err) {
-      console.error(err);
+  try {
+    if (htmlVideoRef.current) {
+      void htmlVideoRef.current.play();
     }
-  };
+  } catch (err) {
+    console.error(err);
+  }
+};
+
 
   if (loading) {
     return (
@@ -774,100 +787,101 @@ export default function TrainingPlayerPage() {
               </div>
             </div>
 
-            {isYouTubeTraining ? (
-              <>
-                <div
-                  ref={playerContainerRef}
-                  style={{
-                    width: "100%",
-                    minHeight: "420px",
-                    borderRadius: "16px",
-                    overflow: "hidden",
-                    background: "#000",
-                  }}
-                />
+ {isYouTubeTraining ? (
+  <>
+    <div
+      ref={playerContainerRef}
+      style={{
+        width: "100%",
+        minHeight: "420px",
+        borderRadius: "16px",
+        overflow: "hidden",
+        background: "#000",
+      }}
+    />
 
-                {playerError ? (
-                  <div
-                    style={{
-                      marginTop: "14px",
-                      padding: "14px 16px",
-                      borderRadius: "14px",
-                      background: "#fff7ed",
-                      border: "1px solid #fdba74",
-                      color: "#9a3412",
-                      fontSize: "14px",
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    {playerError}
-                    <div style={{ marginTop: "10px" }}>
-                      <a
-                        href={contentUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="cbs-button"
-                        style={{
-                          background: "#ea580c",
-                          textDecoration: "none",
-                        }}
-                      >
-                        YouTube’da Aç
-                      </a>
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            ) : isDirectVideoTraining ? (
-              <>
-                <video
-                  ref={htmlVideoRef}
-                  controls
-                  controlsList="nodownload"
-                  playsInline
-                  style={{
-                    width: "100%",
-                    minHeight: "420px",
-                    borderRadius: "16px",
-                    background: "#000",
-                  }}
-                >
-                  <source src={contentUrl} />
-                  Tarayıcı bu video biçimini desteklemiyor.
-                </video>
+    {playerError ? (
+      <div
+        style={{
+          marginTop: "14px",
+          padding: "14px 16px",
+          borderRadius: "14px",
+          background: "#fff7ed",
+          border: "1px solid #fdba74",
+          color: "#9a3412",
+          fontSize: "14px",
+          lineHeight: 1.7,
+        }}
+      >
+        {playerError}
+        <div style={{ marginTop: "10px" }}>
+          <a
+            href={contentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="cbs-button"
+            style={{
+              background: "#ea580c",
+              textDecoration: "none",
+            }}
+          >
+            YouTube’da Aç
+          </a>
+        </div>
+      </div>
+    ) : null}
+  </>
+) : isDirectVideoTraining ? (
+  <>
+    <video
+      ref={htmlVideoRef}
+      controls
+      controlsList="nodownload"
+      playsInline
+      preload="metadata"
+      style={{
+        width: "100%",
+        minHeight: "420px",
+        borderRadius: "16px",
+        background: "#000",
+      }}
+    >
+      <source src={contentUrl} />
+      Tarayıcı bu video biçimini desteklemiyor.
+    </video>
 
-                {playerError ? (
-                  <div
-                    style={{
-                      marginTop: "14px",
-                      padding: "14px 16px",
-                      borderRadius: "14px",
-                      background: "#fff7ed",
-                      border: "1px solid #fdba74",
-                      color: "#9a3412",
-                      fontSize: "14px",
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    {playerError}
-                    <div style={{ marginTop: "10px" }}>
-                      <a
-                        href={contentUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="cbs-button"
-                        style={{
-                          background: "#ea580c",
-                          textDecoration: "none",
-                        }}
-                      >
-                        Videoyu Yeni Sekmede Aç
-                      </a>
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            ) : isSyncTraining ? (
+    {playerError ? (
+      <div
+        style={{
+          marginTop: "14px",
+          padding: "14px 16px",
+          borderRadius: "14px",
+          background: "#fff7ed",
+          border: "1px solid #fdba74",
+          color: "#9a3412",
+          fontSize: "14px",
+          lineHeight: 1.7,
+        }}
+      >
+        {playerError}
+        <div style={{ marginTop: "10px" }}>
+          <a
+            href={contentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="cbs-button"
+            style={{
+              background: "#ea580c",
+              textDecoration: "none",
+            }}
+          >
+            Videoyu Yeni Sekmede Aç
+          </a>
+        </div>
+      </div>
+    ) : null}
+  </>
+) : isSyncTraining ? (
               <div
                 style={{
                   width: "100%",
@@ -1027,8 +1041,8 @@ export default function TrainingPlayerPage() {
               <li>Belirli aralıklarda “İzliyorum” onayı vermelisin.</li>
               <li>Sekme değiştirirsen veya başka pencereye geçersen video durur.</li>
               <li>Aktif izleme sırasında sistem arka planda heartbeat kaydı tutar.</li>
-              <li>Video %100 bitince eğitim otomatik tamamlanır.</li>
-              <li>Tamamlanınca sertifika ve katılım belgesi aktif olur.</li>
+              <li>YouTube ve direkt video içerikleri bitince eğitim otomatik tamamlanır.</li>
+              <li>Tamamlanan eğitimlerde sertifika ve katılım belgesi aktif olur.</li>
             </ul>
           </div>
 
