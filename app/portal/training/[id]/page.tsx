@@ -155,4 +155,5 @@ export default function TrainingDetailPage() {
       )}
     </main>
   );
+  console.log("training detail page loaded")
 }
