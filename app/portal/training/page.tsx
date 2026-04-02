@@ -329,6 +329,11 @@ export default function TrainingPortalPage() {
                 const trainingType = normalizeType(item.training?.type);
                 const effectiveStatus = getEffectiveStatus(item);
                 const localPercent = getLocalPercent(item, trainingType);
+                const preExamScore = typeof window !== "undefined"
+  ? localStorage.getItem(`preExamScore_${item.id}`)
+  : null;
+
+const isPreExamPassed = preExamScore && Number(preExamScore) >= 60;
                 const primaryButtonLabel = getPrimaryButtonLabel(item);
 
                 return (
@@ -473,9 +478,13 @@ export default function TrainingPortalPage() {
                                 ? "#f59e0b"
                                 : "#2563eb",
                           }}
-                          onClick={() => {
-                            window.location.href = `/portal/training/${item.id}`;
-                          }}
+                         onClick={() => {
+  if (!isPreExamPassed) {
+    window.location.href = `/portal/training/${item.id}/pre-exam`;
+  } else {
+    window.location.href = `/portal/training/${item.id}`;
+  }
+}}
                         >
                           {primaryButtonLabel}
                         </button>
