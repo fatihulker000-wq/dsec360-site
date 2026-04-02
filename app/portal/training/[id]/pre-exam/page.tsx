@@ -1,12 +1,10 @@
-﻿"use client";
+"use client";
 
-import React from "react";
-
-export default function PreExamPage(): React.JSX.Element {
+export default function PreExamPage() {
   return (
     <main style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>Ön Değerlendirme Sınavı</h1>
-      <p>Bu ekranda eğitim öncesi sınav yapılacak.</p>
+      <h1>On Degerlendirme Sinavi</h1>
+      <p>Bu ekranda egitim oncesi sinav yapilacak.</p>
     </main>
   );
 }
