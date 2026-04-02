@@ -63,6 +63,21 @@ function normalizeType(type?: string | null) {
   return "asenkron";
 }
 
+function isDirectVideoUrl(url?: string | null) {
+  if (!url) return false;
+
+  const normalized = url.toLowerCase().split("?")[0].split("#")[0];
+
+  return (
+    normalized.endsWith(".mp4") ||
+    normalized.endsWith(".webm") ||
+    normalized.endsWith(".ogg") ||
+    normalized.includes("/storage/v1/object/") ||
+    normalized.includes("/videos/") ||
+    normalized.includes("/video/")
+  );
+}
+
 export default function TrainingPlayerPage() {
   const params = useParams();
   const router = useRouter();
@@ -73,6 +88,7 @@ export default function TrainingPlayerPage() {
   const [watchCompleted, setWatchCompleted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [playerError, setPlayerError] = useState("");
 
   const [videoDuration, setVideoDuration] = useState(0);
   const [currentSecond, setCurrentSecond] = useState(0);
@@ -85,6 +101,7 @@ export default function TrainingPlayerPage() {
   const [attentionCount, setAttentionCount] = useState(0);
 
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
+  const htmlVideoRef = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<any>(null);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -97,8 +114,12 @@ export default function TrainingPlayerPage() {
   const normalizedType = normalizeType(activeTraining?.type);
   const contentUrl = activeTraining?.content_url || "";
   const youtubeVideoId = extractYouTubeId(contentUrl);
+  const supportsDirectVideo = isDirectVideoUrl(contentUrl);
+
   const isYouTubeTraining =
     normalizedType === "asenkron" && Boolean(youtubeVideoId);
+  const isDirectVideoTraining =
+    normalizedType === "asenkron" && !youtubeVideoId && supportsDirectVideo;
   const isSyncTraining = normalizedType === "senkron";
 
   const stopProgressTimer = () => {
@@ -112,6 +133,18 @@ export default function TrainingPlayerPage() {
     if (heartbeatTimerRef.current) {
       clearInterval(heartbeatTimerRef.current);
       heartbeatTimerRef.current = null;
+    }
+  };
+
+  const destroyYouTubePlayer = () => {
+    if (playerRef.current) {
+      try {
+        playerRef.current.destroy();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        playerRef.current = null;
+      }
     }
   };
 
@@ -132,6 +165,34 @@ export default function TrainingPlayerPage() {
     }
   };
 
+  const markOpenIfNeeded = async () => {
+    if (openingMarkedRef.current) return;
+
+    openingMarkedRef.current = true;
+
+    try {
+      const res = await fetch("/api/training/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assignmentId,
+          action: "open",
+        }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        console.error("Open hatası:", json);
+      } else {
+        await fetchTraining();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const pauseVideoForAttention = (reason: string) => {
     setAttentionReason(reason);
     setAttentionOpen(true);
@@ -143,6 +204,14 @@ export default function TrainingPlayerPage() {
     try {
       if (playerRef.current?.pauseVideo) {
         playerRef.current.pauseVideo();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    try {
+      if (htmlVideoRef.current) {
+        htmlVideoRef.current.pause();
       }
     } catch (err) {
       console.error(err);
@@ -262,9 +331,9 @@ export default function TrainingPlayerPage() {
       if (!res.ok) {
         const json = await res.json().catch(() => null);
         console.error("Senkron eğitim open hatası:", json);
+      } else {
+        await fetchTraining();
       }
-
-      await fetchTraining();
     } catch (err) {
       console.error(err);
     }
@@ -282,6 +351,7 @@ export default function TrainingPlayerPage() {
       !isYouTubeTraining ||
       !playerContainerRef.current
     ) {
+      destroyYouTubePlayer();
       return;
     }
 
@@ -295,13 +365,8 @@ export default function TrainingPlayerPage() {
         return;
       }
 
-      if (playerRef.current) {
-        try {
-          playerRef.current.destroy();
-        } catch (err) {
-          console.error(err);
-        }
-      }
+      destroyYouTubePlayer();
+      setPlayerError("");
 
       playerRef.current = new window.YT.Player(playerContainerRef.current, {
         videoId: youtubeVideoId,
@@ -325,25 +390,7 @@ export default function TrainingPlayerPage() {
             if (playerState === 1) {
               setIsPlaying(true);
               setAttentionOpen(false);
-
-              if (!openingMarkedRef.current) {
-                openingMarkedRef.current = true;
-
-                try {
-                  await fetch("/api/training/update", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      assignmentId,
-                      action: "open",
-                    }),
-                  });
-
-                  await fetchTraining();
-                } catch (err) {
-                  console.error(err);
-                }
-              }
+              await markOpenIfNeeded();
 
               if (!progressTimerRef.current) {
                 progressTimerRef.current = setInterval(() => {
@@ -393,8 +440,19 @@ export default function TrainingPlayerPage() {
               setIsPlaying(false);
               stopProgressTimer();
               stopHeartbeatTimer();
+              setCurrentSecond(videoDuration || currentSecond || 0);
               await finalizeTraining();
             }
+          },
+
+          onError: (event: any) => {
+            console.error("YouTube player error:", event?.data);
+            setPlayerError(
+              "Bu YouTube videosu gömülü oynatmaya izin vermiyor olabilir. Aşağıdaki bağlantıdan açmayı deneyin."
+            );
+            setIsPlaying(false);
+            stopProgressTimer();
+            stopHeartbeatTimer();
           },
         },
       });
@@ -421,14 +479,7 @@ export default function TrainingPlayerPage() {
     return () => {
       stopProgressTimer();
       stopHeartbeatTimer();
-
-      if (playerRef.current) {
-        try {
-          playerRef.current.destroy();
-        } catch (err) {
-          console.error(err);
-        }
-      }
+      destroyYouTubePlayer();
     };
   }, [
     assignmentId,
@@ -436,6 +487,97 @@ export default function TrainingPlayerPage() {
     isYouTubeTraining,
     youtubeVideoId,
     watchCompleted,
+   ]);
+
+  useEffect(() => {
+    if (!isDirectVideoTraining || !htmlVideoRef.current) return;
+
+    const video = htmlVideoRef.current;
+    setPlayerError("");
+
+    const handleLoadedMetadata = () => {
+      setVideoDuration(Number(video.duration || 0));
+    };
+
+    const handlePlay = async () => {
+      setIsPlaying(true);
+      setAttentionOpen(false);
+      await markOpenIfNeeded();
+
+      if (!progressTimerRef.current) {
+        progressTimerRef.current = setInterval(() => {
+          try {
+            const current = Number(video.currentTime || 0);
+            const duration = Number(video.duration || 0);
+
+            setCurrentSecond(current);
+
+            if (duration > 0) {
+              setVideoDuration(duration);
+            }
+
+            if (current >= nextCheckpointRef.current && !watchCompleted) {
+              nextCheckpointRef.current += CHECKPOINT_SECONDS;
+              pauseVideoForAttention(
+                "Devam etmek için ekranda olduğunu onayla."
+              );
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        }, 1000);
+      }
+
+      if (!heartbeatTimerRef.current) {
+        heartbeatTimerRef.current = setInterval(() => {
+          void sendHeartbeat();
+        }, HEARTBEAT_SECONDS * 1000);
+      }
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+      stopProgressTimer();
+      stopHeartbeatTimer();
+    };
+
+    const handleEnded = async () => {
+      setIsPlaying(false);
+      stopProgressTimer();
+      stopHeartbeatTimer();
+      setCurrentSecond(Number(video.duration || currentSecond || 0));
+      await finalizeTraining();
+    };
+
+    const handleError = () => {
+      setPlayerError(
+        "Video dosyası oynatılamadı. Bağlantıyı kontrol edin veya farklı bir video kaynağı kullanın."
+      );
+      setIsPlaying(false);
+      stopProgressTimer();
+      stopHeartbeatTimer();
+    };
+
+    video.addEventListener("loadedmetadata", handleLoadedMetadata);
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
+    video.addEventListener("ended", handleEnded);
+    video.addEventListener("error", handleError);
+
+    return () => {
+      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("error", handleError);
+
+      stopProgressTimer();
+      stopHeartbeatTimer();
+    };
+  }, [
+    isDirectVideoTraining,
+    watchCompleted,
+   
   ]);
 
   useEffect(() => {
@@ -499,6 +641,14 @@ export default function TrainingPlayerPage() {
     try {
       if (playerRef.current?.playVideo) {
         playerRef.current.playVideo();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    try {
+      if (htmlVideoRef.current) {
+        void htmlVideoRef.current.play();
       }
     } catch (err) {
       console.error(err);
@@ -625,16 +775,98 @@ export default function TrainingPlayerPage() {
             </div>
 
             {isYouTubeTraining ? (
-              <div
-                ref={playerContainerRef}
-                style={{
-                  width: "100%",
-                  minHeight: "420px",
-                  borderRadius: "16px",
-                  overflow: "hidden",
-                  background: "#000",
-                }}
-              />
+              <>
+                <div
+                  ref={playerContainerRef}
+                  style={{
+                    width: "100%",
+                    minHeight: "420px",
+                    borderRadius: "16px",
+                    overflow: "hidden",
+                    background: "#000",
+                  }}
+                />
+
+                {playerError ? (
+                  <div
+                    style={{
+                      marginTop: "14px",
+                      padding: "14px 16px",
+                      borderRadius: "14px",
+                      background: "#fff7ed",
+                      border: "1px solid #fdba74",
+                      color: "#9a3412",
+                      fontSize: "14px",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {playerError}
+                    <div style={{ marginTop: "10px" }}>
+                      <a
+                        href={contentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="cbs-button"
+                        style={{
+                          background: "#ea580c",
+                          textDecoration: "none",
+                        }}
+                      >
+                        YouTube’da Aç
+                      </a>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : isDirectVideoTraining ? (
+              <>
+                <video
+                  ref={htmlVideoRef}
+                  controls
+                  controlsList="nodownload"
+                  playsInline
+                  style={{
+                    width: "100%",
+                    minHeight: "420px",
+                    borderRadius: "16px",
+                    background: "#000",
+                  }}
+                >
+                  <source src={contentUrl} />
+                  Tarayıcı bu video biçimini desteklemiyor.
+                </video>
+
+                {playerError ? (
+                  <div
+                    style={{
+                      marginTop: "14px",
+                      padding: "14px 16px",
+                      borderRadius: "14px",
+                      background: "#fff7ed",
+                      border: "1px solid #fdba74",
+                      color: "#9a3412",
+                      fontSize: "14px",
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    {playerError}
+                    <div style={{ marginTop: "10px" }}>
+                      <a
+                        href={contentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="cbs-button"
+                        style={{
+                          background: "#ea580c",
+                          textDecoration: "none",
+                        }}
+                      >
+                        Videoyu Yeni Sekmede Aç
+                      </a>
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : isSyncTraining ? (
               <div
                 style={{

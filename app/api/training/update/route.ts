@@ -21,6 +21,11 @@ type TrainingAssignmentRow = {
   last_opened_at: string | null;
   watch_completed: boolean | null;
   watch_completed_at: string | null;
+
+  // 🔥 YENİ ALANLAR
+  last_position_seconds: number | null;
+  max_watched_seconds: number | null;
+  locked_duration_seconds: number | null;
 };
 
 export async function POST(request: Request) {
@@ -29,106 +34,76 @@ export async function POST(request: Request) {
     const userId = cookieStore.get("dsec_user_id")?.value;
 
     if (!userId) {
-      return NextResponse.json(
-        { error: "Kullanıcı yok." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Kullanıcı yok." }, { status: 401 });
     }
 
     const body = await request.json();
-    const assignmentId = body?.assignmentId as string | undefined;
-    const action = body?.action as TrainingAction | undefined;
+    const assignmentId = body?.assignmentId as string;
+    const action = body?.action as TrainingAction;
+    const currentSecond = body?.currentSecond || 0;
+    const duration = body?.duration || 0;
 
     if (!assignmentId || !action) {
-      return NextResponse.json(
-        { error: "Eksik veri." },
-        { status: 400 }
-      );
-    }
-
-    if (
-      action !== "open" &&
-      action !== "mark_watched" &&
-      action !== "complete" &&
-      action !== "heartbeat"
-    ) {
-      return NextResponse.json(
-        { error: "Geçersiz işlem." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Eksik veri." }, { status: 400 });
     }
 
     const supabase = getSupabase();
 
     const { data: row, error: rowError } = await supabase
       .from("training_assignments")
-      .select(
-        "id, user_id, status, started_at, completed_at, last_opened_at, watch_completed, watch_completed_at"
-      )
+      .select("*")
       .eq("id", assignmentId)
       .eq("user_id", userId)
       .single<TrainingAssignmentRow>();
 
     if (rowError || !row) {
-      console.error("Training row fetch hatası:", rowError);
-      return NextResponse.json(
-        { error: "Kayıt bulunamadı." },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Kayıt bulunamadı." }, { status: 404 });
     }
 
+    // 🔥 OPEN
     if (action === "open") {
       const now = new Date().toISOString();
 
-      const updatePayload: Partial<TrainingAssignmentRow> = {
+      const payload: any = {
         last_opened_at: now,
       };
 
       if (row.status === "assigned" || row.status === "not_started") {
-        updatePayload.status = "in_progress";
+        payload.status = "in_progress";
       }
 
       if (!row.started_at) {
-        updatePayload.started_at = now;
+        payload.started_at = now;
       }
 
-      const { error: openError } = await supabase
+      await supabase
         .from("training_assignments")
-        .update(updatePayload)
-        .eq("id", assignmentId)
-        .eq("user_id", userId);
-
-      if (openError) {
-        console.error("Training open update hatası:", openError);
-        return NextResponse.json(
-          { error: "Durum güncellenemedi." },
-          { status: 500 }
-        );
-      }
+        .update(payload)
+        .eq("id", assignmentId);
 
       return NextResponse.json({ success: true });
     }
 
+    // 🔥 HEARTBEAT (EN KRİTİK)
     if (action === "heartbeat") {
-      const { error: heartbeatError } = await supabase
+      const maxWatched = Math.max(
+        row.max_watched_seconds || 0,
+        currentSecond
+      );
+
+      await supabase
         .from("training_assignments")
         .update({
           last_opened_at: new Date().toISOString(),
+          last_position_seconds: currentSecond,
+          max_watched_seconds: maxWatched,
         })
-        .eq("id", assignmentId)
-        .eq("user_id", userId);
-
-      if (heartbeatError) {
-        console.error("Training heartbeat update hatası:", heartbeatError);
-        return NextResponse.json(
-          { error: "İzleme durumu güncellenemedi." },
-          { status: 500 }
-        );
-      }
+        .eq("id", assignmentId);
 
       return NextResponse.json({ success: true });
     }
 
+    // 🔥 MARK WATCHED
     if (action === "mark_watched") {
       if (!row.started_at) {
         return NextResponse.json(
@@ -137,67 +112,58 @@ export async function POST(request: Request) {
         );
       }
 
-      const { error: watchedError } = await supabase
+      await supabase
         .from("training_assignments")
         .update({
           watch_completed: true,
           watch_completed_at: new Date().toISOString(),
         })
-        .eq("id", assignmentId)
-        .eq("user_id", userId);
-
-      if (watchedError) {
-        console.error("Training mark watched hatası:", watchedError);
-        return NextResponse.json(
-          { error: "İzleme durumu kaydedilemedi." },
-          { status: 500 }
-        );
-      }
+        .eq("id", assignmentId);
 
       return NextResponse.json({ success: true });
     }
 
-    if (!row.started_at) {
-      return NextResponse.json(
-        { error: "Eğitimi açmadan tamamlayamazsın." },
-        { status: 400 }
-      );
+    // 🔥 COMPLETE (EN KRİTİK)
+    if (action === "complete") {
+      if (!row.started_at) {
+        return NextResponse.json(
+          { error: "Eğitimi açmadan tamamlayamazsın." },
+          { status: 400 }
+        );
+      }
+
+      if (!row.watch_completed) {
+        return NextResponse.json(
+          { error: "Video bitmeden tamamlanamaz." },
+          { status: 400 }
+        );
+      }
+
+      if (row.status !== "in_progress") {
+        return NextResponse.json(
+          { error: "Geçersiz durum." },
+          { status: 400 }
+        );
+      }
+
+      await supabase
+        .from("training_assignments")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+
+          // 🔥 EN KRİTİK NOKTA
+          locked_duration_seconds:
+            row.locked_duration_seconds || duration,
+        })
+        .eq("id", assignmentId);
+
+      return NextResponse.json({ success: true });
     }
 
-    if (!row.watch_completed) {
-      return NextResponse.json(
-        { error: "Video %100 bitmeden eğitimi tamamlayamazsın." },
-        { status: 400 }
-      );
-    }
-
-    if (row.status !== "in_progress") {
-      return NextResponse.json(
-        { error: "Bu eğitim tamamlanabilir durumda değil." },
-        { status: 400 }
-      );
-    }
-
-    const { error: completeError } = await supabase
-      .from("training_assignments")
-      .update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", assignmentId)
-      .eq("user_id", userId);
-
-    if (completeError) {
-      console.error("Training complete update hatası:", completeError);
-      return NextResponse.json(
-        { error: "Güncelleme başarısız." },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ error: "Geçersiz işlem." }, { status: 400 });
   } catch (err) {
-    console.error("Training update genel hata:", err);
+    console.error("Training update hata:", err);
     return NextResponse.json(
       { error: "Sunucu hatası." },
       { status: 500 }
