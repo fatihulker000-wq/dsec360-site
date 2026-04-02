@@ -1,4 +1,4 @@
-export default function PreExamPage() {
+export default function Page() {
   return (
     <main style={{ padding: "40px", fontFamily: "Arial" }}>
       <h1>Ön Değerlendirme Sınavı</h1>
