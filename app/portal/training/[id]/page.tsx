@@ -116,6 +116,22 @@ export default function TrainingPlayerPage() {
   const blurCooldownRef = useRef(false);
 
   const activeTraining = training?.training || null;
+if (!training?.pre_exam_completed) {
+  return (
+    <div className="card">
+      <h3>Ön Değerlendirme Gerekli</h3>
+      <button
+        className="cbs-button"
+        onClick={() => {
+          window.location.href = `/portal/training/${assignmentId}/pre-exam`;
+        }}
+      >
+        Sınava Başla
+      </button>
+    </div>
+  );
+}
+
   const normalizedType = normalizeType(activeTraining?.type);
   const contentUrl = activeTraining?.content_url || "";
 
