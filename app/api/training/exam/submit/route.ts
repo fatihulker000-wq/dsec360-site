@@ -29,6 +29,8 @@ type AssignmentRow = {
   final_exam_attempts: number;
   final_exam_passed: boolean;
   training_reset_required: boolean;
+  watch_seconds?: number | null;
+  click_count?: number | null;
 };
 
 type QuestionRow = {
@@ -36,6 +38,7 @@ type QuestionRow = {
   training_id: string;
   exam_type: ExamType;
   correct_option: "A" | "B" | "C" | "D";
+  is_active?: boolean | null;
 };
 
 export async function POST(request: Request) {
@@ -57,7 +60,10 @@ export async function POST(request: Request) {
     }
 
     if (examType !== "pre" && examType !== "final") {
-      return NextResponse.json({ error: "Geçersiz sınav tipi." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Geçersiz sınav tipi." },
+        { status: 400 }
+      );
     }
 
     const supabase = getSupabase();
@@ -65,7 +71,7 @@ export async function POST(request: Request) {
     const { data: assignment, error: assignmentError } = await supabase
       .from("training_assignments")
       .select(
-        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required"
+        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count"
       )
       .eq("id", assignmentId)
       .eq("user_id", userId)
@@ -73,12 +79,15 @@ export async function POST(request: Request) {
 
     if (assignmentError || !assignment) {
       console.error("assignment fetch hatası:", assignmentError);
-      return NextResponse.json({ error: "Eğitim kaydı bulunamadı." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Eğitim kaydı bulunamadı." },
+        { status: 404 }
+      );
     }
 
     const { data: questions, error: questionError } = await supabase
       .from("training_exam_questions")
-      .select("id, training_id, exam_type, correct_option")
+      .select("id, training_id, exam_type, correct_option, is_active")
       .eq("training_id", assignment.training_id)
       .eq("exam_type", examType)
       .order("sort_order", { ascending: true })
@@ -86,20 +95,61 @@ export async function POST(request: Request) {
 
     if (questionError) {
       console.error("question fetch hatası:", questionError);
-      return NextResponse.json({ error: "Sorular alınamadı." }, { status: 500 });
+      return NextResponse.json(
+        { error: "Sorular alınamadı." },
+        { status: 500 }
+      );
     }
 
-    const safeQuestions = questions || [];
+    const safeQuestions = (questions || []).filter(
+      (q) => q.is_active !== false
+    );
 
     if (safeQuestions.length === 0) {
-      return NextResponse.json({ error: "Bu sınav için soru bulunamadı." }, { status: 400 });
-    }
-
-    if (examType === "final" && !assignment.watch_completed) {
       return NextResponse.json(
-        { error: "Son değerlendirme için önce eğitimi tamamlamalısın." },
+        { error: "Bu sınav için soru bulunamadı." },
         { status: 400 }
       );
+    }
+
+    if (examType === "pre" && assignment.pre_exam_completed) {
+      return NextResponse.json({
+        success: true,
+        examType: "pre",
+        score: assignment.pre_exam_score || 0,
+        passed: true,
+        message: "Ön değerlendirme zaten tamamlanmış."
+      });
+    }
+
+    if (examType === "final") {
+      if (!assignment.watch_completed) {
+        return NextResponse.json(
+          { error: "Son değerlendirme için önce eğitimi tamamlamalısın." },
+          { status: 400 }
+        );
+      }
+
+      if ((assignment.watch_seconds || 0) <= 0) {
+        return NextResponse.json(
+          { error: "İzleme süresi kaydı bulunamadı." },
+          { status: 400 }
+        );
+      }
+
+      if ((assignment.click_count || 0) <= 0) {
+        return NextResponse.json(
+          { error: "Ekran başı doğrulama kaydı bulunamadı." },
+          { status: 400 }
+        );
+      }
+
+      if ((assignment.final_exam_attempts || 0) >= 3) {
+        return NextResponse.json(
+          { error: "Final sınav hakkı bitmiş. Eğitim yeniden alınmalı." },
+          { status: 400 }
+        );
+      }
     }
 
     const answerMap = new Map(
@@ -124,13 +174,17 @@ export async function POST(request: Request) {
           pre_exam_completed: true,
           pre_exam_score: score,
           training_reset_required: false,
+          status: "in_progress",
         })
         .eq("id", assignmentId)
         .eq("user_id", userId);
 
       if (updateError) {
         console.error("pre exam update hatası:", updateError);
-        return NextResponse.json({ error: "Ön değerlendirme kaydedilemedi." }, { status: 500 });
+        return NextResponse.json(
+          { error: "Ön değerlendirme kaydedilemedi." },
+          { status: 500 }
+        );
       }
 
       return NextResponse.json({
@@ -142,7 +196,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const nextAttempt = assignment.final_exam_attempts + 1;
+    const nextAttempt = (assignment.final_exam_attempts || 0) + 1;
     const passed = score >= 60;
 
     if (passed) {
@@ -161,7 +215,10 @@ export async function POST(request: Request) {
 
       if (successError) {
         console.error("final exam success update hatası:", successError);
-        return NextResponse.json({ error: "Sınav sonucu kaydedilemedi." }, { status: 500 });
+        return NextResponse.json(
+          { error: "Sınav sonucu kaydedilemedi." },
+          { status: 500 }
+        );
       }
 
       return NextResponse.json({
@@ -188,13 +245,19 @@ export async function POST(request: Request) {
           completed_at: null,
           watch_completed: false,
           pre_exam_completed: false,
+          pre_exam_score: 0,
+          watch_seconds: 0,
+          click_count: 0,
         })
         .eq("id", assignmentId)
         .eq("user_id", userId);
 
       if (failResetError) {
         console.error("final exam reset update hatası:", failResetError);
-        return NextResponse.json({ error: "Başarısızlık durumu kaydedilemedi." }, { status: 500 });
+        return NextResponse.json(
+          { error: "Başarısızlık durumu kaydedilemedi." },
+          { status: 500 }
+        );
       }
 
       return NextResponse.json({
@@ -215,13 +278,17 @@ export async function POST(request: Request) {
         final_exam_score: score,
         final_exam_attempts: nextAttempt,
         final_exam_passed: false,
+        status: "in_progress",
       })
       .eq("id", assignmentId)
       .eq("user_id", userId);
 
     if (failUpdateError) {
       console.error("final exam fail update hatası:", failUpdateError);
-      return NextResponse.json({ error: "Başarısız sınav sonucu kaydedilemedi." }, { status: 500 });
+      return NextResponse.json(
+        { error: "Başarısız sınav sonucu kaydedilemedi." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
