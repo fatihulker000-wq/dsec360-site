@@ -150,18 +150,33 @@ export default function TrainingPortalPage() {
     const total = trainings.length;
 
     const completed = trainings.filter((x) => {
+      const trainingCompleted =
+        typeof window !== "undefined"
+          ? localStorage.getItem(`trainingCompleted_${x.id}`) === "true"
+          : false;
+
       const effectiveStatus = getEffectiveStatus(x);
-      return effectiveStatus === "completed";
+      return effectiveStatus === "completed" || trainingCompleted;
     }).length;
 
     const inProgress = trainings.filter((x) => {
+      const trainingCompleted =
+        typeof window !== "undefined"
+          ? localStorage.getItem(`trainingCompleted_${x.id}`) === "true"
+          : false;
+
       const effectiveStatus = getEffectiveStatus(x);
-      return effectiveStatus === "in_progress";
+      return effectiveStatus === "in_progress" && !trainingCompleted;
     }).length;
 
     const notStarted = trainings.filter((x) => {
+      const trainingCompleted =
+        typeof window !== "undefined"
+          ? localStorage.getItem(`trainingCompleted_${x.id}`) === "true"
+          : false;
+
       const effectiveStatus = getEffectiveStatus(x);
-      return effectiveStatus === "not_started";
+      return effectiveStatus === "not_started" && !trainingCompleted;
     }).length;
 
     const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
@@ -327,14 +342,37 @@ export default function TrainingPortalPage() {
             <div className="grid-3">
               {trainings.map((item) => {
                 const trainingType = normalizeType(item.training?.type);
-                const effectiveStatus = getEffectiveStatus(item);
-                const localPercent = getLocalPercent(item, trainingType);
-                const preExamScore = typeof window !== "undefined"
-  ? localStorage.getItem(`preExamScore_${item.id}`)
-  : null;
+                const baseEffectiveStatus = getEffectiveStatus(item);
 
-const isPreExamPassed = preExamScore && Number(preExamScore) >= 60;
-                const primaryButtonLabel = getPrimaryButtonLabel(item);
+                const preExamScore =
+                  typeof window !== "undefined"
+                    ? localStorage.getItem(`preExamScore_${item.id}`)
+                    : null;
+
+                const isPreExamPassed = !!preExamScore && Number(preExamScore) >= 60;
+
+                const trainingCompleted =
+                  typeof window !== "undefined"
+                    ? localStorage.getItem(`trainingCompleted_${item.id}`) === "true"
+                    : false;
+
+                const finalScore =
+                  typeof window !== "undefined"
+                    ? localStorage.getItem(`finalScore_${item.id}`)
+                    : null;
+
+                const effectiveStatus: TrainingStatus = trainingCompleted
+                  ? "completed"
+                  : baseEffectiveStatus;
+
+                const localPercent = trainingCompleted
+                  ? 100
+                  : getLocalPercent(item, trainingType);
+
+                const primaryButtonLabel = getPrimaryButtonLabel({
+                  ...item,
+                  status: effectiveStatus,
+                });
 
                 return (
                   <div
@@ -415,6 +453,43 @@ const isPreExamPassed = preExamScore && Number(preExamScore) >= 60;
                           İzleme Tamam
                         </div>
                       ) : null}
+
+                      {isPreExamPassed ? (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            padding: "6px 10px",
+                            borderRadius: "999px",
+                            background: "#eff6ff",
+                            border: "1px solid #bfdbfe",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            color: "#1d4ed8",
+                          }}
+                        >
+                          Ön Sınav Geçildi
+                        </div>
+                      ) : null}
+
+                      {finalScore ? (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            padding: "6px 10px",
+                            borderRadius: "999px",
+                            background: Number(finalScore) >= 60 ? "#dcfce7" : "#fee2e2",
+                            border:
+                              Number(finalScore) >= 60
+                                ? "1px solid #86efac"
+                                : "1px solid #fca5a5",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            color: Number(finalScore) >= 60 ? "#166534" : "#b91c1c",
+                          }}
+                        >
+                          Final: %{finalScore}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div style={{ marginTop: "16px" }}>
@@ -478,19 +553,19 @@ const isPreExamPassed = preExamScore && Number(preExamScore) >= 60;
                                 ? "#f59e0b"
                                 : "#2563eb",
                           }}
-                         onClick={() => {
-  if (!isPreExamPassed) {
-    window.location.href = `/portal/training/${item.id}/pre-exam`;
-  } else {
-    window.location.href = `/portal/training/${item.id}`;
-  }
-}}
+                          onClick={() => {
+                            if (!isPreExamPassed) {
+                              window.location.href = `/portal/training/${item.id}/pre-exam`;
+                            } else {
+                              window.location.href = `/portal/training/${item.id}`;
+                            }
+                          }}
                         >
                           {primaryButtonLabel}
                         </button>
                       )}
 
-                      {effectiveStatus === "completed" && (
+                      {(effectiveStatus === "completed" || trainingCompleted) && (
                         <>
                           <button
                             className="cbs-button"
@@ -500,31 +575,43 @@ const isPreExamPassed = preExamScore && Number(preExamScore) >= 60;
                             Tamamlandı
                           </button>
 
-                          <a
-                            href={`/api/training/certificate/${item.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="cbs-button"
-                            style={{
-                              background: "#7c3aed",
-                              textDecoration: "none",
-                            }}
-                          >
-                            Eğitim Sertifikası
-                          </a>
+                          {Number(finalScore) >= 60 ? (
+                            <>
+                              <a
+                                href={`/api/training/certificate/${item.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="cbs-button"
+                                style={{
+                                  background: "#7c3aed",
+                                  textDecoration: "none",
+                                }}
+                              >
+                                Eğitim Sertifikası
+                              </a>
 
-                          <a
-                            href={`/api/training/attendance-certificate/${item.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="cbs-button"
-                            style={{
-                              background: "#0f766e",
-                              textDecoration: "none",
-                            }}
-                          >
-                            Katılım Belgesi
-                          </a>
+                              <a
+                                href={`/api/training/attendance-certificate/${item.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="cbs-button"
+                                style={{
+                                  background: "#0f766e",
+                                  textDecoration: "none",
+                                }}
+                              >
+                                Katılım Belgesi
+                              </a>
+                            </>
+                          ) : (
+                            <button
+                              className="cbs-button"
+                              style={{ background: "#9ca3af" }}
+                              disabled
+                            >
+                              Final Başarısı Bekleniyor
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
