@@ -183,7 +183,7 @@ export default function PreExamPage() {
   if (questions.length === 0) {
     return (
       <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Ön Değerlendirme Sınavı</h1>
+        <h1>Ön Değerlendirme Sınavı - YENI TEST </h1>
         <p>Bu eğitim için ön sınav sorusu bulunamadı.</p>
       </main>
     );
