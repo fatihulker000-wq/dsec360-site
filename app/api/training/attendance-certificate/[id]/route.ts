@@ -67,6 +67,7 @@ type AssignmentRow = {
   started_at: string | null;
   completed_at: string | null;
   training_id: string | null;
+  final_exam_passed?: boolean | null;
 };
 
 type TrainingRow = {
@@ -75,6 +76,7 @@ type TrainingRow = {
   description: string | null;
   type: string | null;
   topics_text: string | null;
+  duration_minutes?: number | null;
 };
 
 export async function GET(
@@ -103,21 +105,39 @@ export async function GET(
 
     let assignmentQuery = supabase
       .from("training_assignments")
-      .select("id, status, started_at, completed_at, training_id")
+      .select(
+        "id, status, started_at, completed_at, training_id, final_exam_passed"
+      )
       .eq("id", id);
 
     if (userId !== "admin-1") {
       assignmentQuery = assignmentQuery.eq("user_id", userId);
     }
 
-    const { data: assignment, error: assignmentError } =
+    const { data, error: assignmentError } =
       await assignmentQuery.single<AssignmentRow>();
 
-    if (assignmentError || !assignment) {
+    if (assignmentError || !data) {
       console.error("ATTENDANCE ASSIGNMENT ERROR:", assignmentError);
       return new NextResponse("Katılım belgesi kaydı bulunamadı.", {
         status: 404,
       });
+    }
+
+    const assignment = data;
+
+    if (assignment.status !== "completed") {
+      return new NextResponse(
+        "Katılım belgesi sadece tamamlanan eğitimler için oluşturulur.",
+        { status: 400 }
+      );
+    }
+
+    if (!assignment.final_exam_passed) {
+      return new NextResponse(
+        "Katılım belgesi için final sınavı başarıyla tamamlanmalıdır.",
+        { status: 400 }
+      );
     }
 
     let training: TrainingRow | null = null;
@@ -125,7 +145,7 @@ export async function GET(
     if (assignment.training_id) {
       const { data: trainingData, error: trainingError } = await supabase
         .from("trainings")
-        .select("id, title, description, type, topics_text")
+        .select("id, title, description, type, topics_text, duration_minutes")
         .eq("id", assignment.training_id)
         .maybeSingle<TrainingRow>();
 
@@ -143,7 +163,7 @@ export async function GET(
     const trainingTitle = escapeHtml(training?.title || "Eğitim adı bulunamadı");
     const trainingDescription = escapeHtml(training?.description || "-");
     const trainingType = escapeHtml(training?.type || "online");
-    const durationMinutes = null;
+    const durationMinutes = training?.duration_minutes ?? null;
 
     const topics = parseTrainingTopics(training?.topics_text);
     const topicsHtml = topicsToHtml(topics);
