@@ -29,12 +29,6 @@ type TrainingRow = {
 };
 
 type TrainingAssignmentRow = {
-  pre_exam_completed: boolean;
-pre_exam_score: number;
-final_exam_score: number;
-final_exam_attempts: number;
-final_exam_passed: boolean;
-training_reset_required: boolean;
   id: string;
   user_id: string;
   training_id: string;
@@ -42,6 +36,14 @@ training_reset_required: boolean;
   started_at: string | null;
   completed_at: string | null;
   watch_completed: boolean | null;
+  watch_seconds: number | null;
+  click_count: number | null;
+  pre_exam_completed: boolean;
+  pre_exam_score: number;
+  final_exam_score: number;
+  final_exam_attempts: number;
+  final_exam_passed: boolean;
+  training_reset_required: boolean;
 };
 
 export async function GET() {
@@ -85,9 +87,9 @@ export async function GET() {
 
     let assignmentsQuery = supabase
       .from("training_assignments")
-    .select(
-  "id, user_id, training_id, status, started_at, completed_at, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required"
-)
+      .select(
+        "id, user_id, training_id, status, started_at, completed_at, watch_completed, watch_seconds, click_count, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required"
+      )
       .order("started_at", { ascending: false })
       .order("id", { ascending: false });
 
@@ -142,12 +144,14 @@ export async function GET() {
       started_at: item.started_at,
       completed_at: item.completed_at,
       watch_completed: item.watch_completed,
+      watch_seconds: item.watch_seconds,
+      click_count: item.click_count,
       pre_exam_completed: item.pre_exam_completed,
-pre_exam_score: item.pre_exam_score,
-final_exam_score: item.final_exam_score,
-final_exam_attempts: item.final_exam_attempts,
-final_exam_passed: item.final_exam_passed,
-training_reset_required: item.training_reset_required,
+      pre_exam_score: item.pre_exam_score,
+      final_exam_score: item.final_exam_score,
+      final_exam_attempts: item.final_exam_attempts,
+      final_exam_passed: item.final_exam_passed,
+      training_reset_required: item.training_reset_required,
       training: item.training_id ? trainingsMap[item.training_id] || null : null,
     }));
 
