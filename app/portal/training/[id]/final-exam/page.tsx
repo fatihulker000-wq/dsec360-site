@@ -3,39 +3,42 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-const QUESTIONS = [
-  {
-    id: 1,
-    question: "İş kazalarının en büyük sebebi nedir?",
-    options: ["Dikkatsizlik", "Hava", "Şans", "Makine"],
-    correct: 0,
-  },
-  {
-    id: 2,
-    question: "Yangın sırasında ilk yapılması gereken nedir?",
-    options: ["Panik yapmak", "Alarm vermek", "Saklanmak", "Beklemek"],
-    correct: 1,
-  },
-  {
-    id: 3,
-    question: "KKD kullanımı neden önemlidir?",
-    options: [
-      "Zaman kaybı olmaması için",
-      "Yasal zorunluluk ve korunma için",
-      "Sadece görüntü için",
-      "Maliyet düşürmek için",
-    ],
-    correct: 1,
-  },
-];
+type ExamQuestion = {
+  id: string;
+  training_id: string;
+  exam_type: "pre" | "final";
+  question: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  correct_option: string;
+  sort_order?: number | null;
+  is_active?: boolean | null;
+};
+
+function normalizeCorrectOption(value?: string | null): number {
+  const v = (value || "").trim().toUpperCase();
+
+  if (v === "A") return 0;
+  if (v === "B") return 1;
+  if (v === "C") return 2;
+  if (v === "D") return 3;
+
+  return -1;
+}
 
 export default function FinalExamPage() {
-  const { id } = useParams();
+  const params = useParams();
   const router = useRouter();
+  const id = params?.id as string;
 
+  const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [answers, setAnswers] = useState<number[]>([]);
   const [score, setScore] = useState<number | null>(null);
   const [attempts, setAttempts] = useState(3);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const savedAttempts = localStorage.getItem(`finalAttempts_${id}`);
@@ -47,6 +50,45 @@ export default function FinalExamPage() {
     }
   }, [id]);
 
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const res = await fetch(`/api/training/exam/${id}?type=final`, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const json = await res.json();
+
+        if (!res.ok) {
+          setError(json?.error || "Final sınav soruları alınamadı.");
+          setQuestions([]);
+          return;
+        }
+
+        const rows = Array.isArray(json?.data) ? json.data : [];
+        const activeRows = rows.filter(
+          (item: ExamQuestion) => item.is_active !== false
+        );
+
+        setQuestions(activeRows);
+      } catch (err) {
+        console.error(err);
+        setError("Bağlantı hatası oluştu.");
+        setQuestions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) {
+      void fetchQuestions();
+    }
+  }, [id]);
+
   const handleSelect = (qIndex: number, optionIndex: number) => {
     const newAnswers = [...answers];
     newAnswers[qIndex] = optionIndex;
@@ -54,15 +96,18 @@ export default function FinalExamPage() {
   };
 
   const handleFinish = () => {
+    if (questions.length === 0) return;
+
     let correct = 0;
 
-    QUESTIONS.forEach((q, i) => {
-      if (answers[i] === q.correct) {
+    questions.forEach((q, i) => {
+      const correctIndex = normalizeCorrectOption(q.correct_option);
+      if (answers[i] === correctIndex) {
         correct++;
       }
     });
 
-    const percent = Math.round((correct / QUESTIONS.length) * 100);
+    const percent = Math.round((correct / questions.length) * 100);
     setScore(percent);
 
     if (percent >= 60) {
@@ -81,6 +126,33 @@ export default function FinalExamPage() {
     setScore(null);
   };
 
+  if (loading) {
+    return (
+      <main style={{ padding: "40px", fontFamily: "Arial" }}>
+        <h1>Final Sınavı</h1>
+        <p>Yükleniyor...</p>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main style={{ padding: "40px", fontFamily: "Arial" }}>
+        <h1>Final Sınavı</h1>
+        <p style={{ color: "#b91c1c" }}>{error}</p>
+      </main>
+    );
+  }
+
+  if (questions.length === 0) {
+    return (
+      <main style={{ padding: "40px", fontFamily: "Arial" }}>
+        <h1>Final Sınavı</h1>
+        <p>Bu eğitim için final sınav sorusu bulunamadı.</p>
+      </main>
+    );
+  }
+
   if (attempts <= 0) {
     return (
       <main style={{ padding: "40px", fontFamily: "Arial" }}>
@@ -96,6 +168,7 @@ export default function FinalExamPage() {
             border: "none",
             borderRadius: "10px",
             fontWeight: 700,
+            cursor: "pointer",
           }}
         >
           Eğitim Listesine Dön
@@ -111,27 +184,31 @@ export default function FinalExamPage() {
 
       {score === null ? (
         <>
-          {QUESTIONS.map((q, i) => (
-            <div key={q.id} style={{ marginBottom: "24px" }}>
-              <p>
-                <b>{q.question}</b>
-              </p>
+          {questions.map((q, i) => {
+            const options = [q.option_a, q.option_b, q.option_c, q.option_d];
 
-              {q.options.map((opt, j) => (
-                <div key={j}>
-                  <label>
-                    <input
-                      type="radio"
-                      name={`q-${i}`}
-                      checked={answers[i] === j}
-                      onChange={() => handleSelect(i, j)}
-                    />
-                    {opt}
-                  </label>
-                </div>
-              ))}
-            </div>
-          ))}
+            return (
+              <div key={q.id} style={{ marginBottom: "24px" }}>
+                <p>
+                  <b>{q.question}</b>
+                </p>
+
+                {options.map((opt, j) => (
+                  <div key={j}>
+                    <label>
+                      <input
+                        type="radio"
+                        name={`q-${i}`}
+                        checked={answers[i] === j}
+                        onChange={() => handleSelect(i, j)}
+                      />
+                      {opt}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
 
           <button
             onClick={handleFinish}
@@ -142,6 +219,7 @@ export default function FinalExamPage() {
               border: "none",
               borderRadius: "10px",
               fontWeight: 700,
+              cursor: "pointer",
             }}
           >
             Final Sınavını Bitir
@@ -165,6 +243,7 @@ export default function FinalExamPage() {
                   border: "none",
                   borderRadius: "10px",
                   fontWeight: 700,
+                  cursor: "pointer",
                 }}
               >
                 Eğitim Listesine Dön
@@ -184,6 +263,7 @@ export default function FinalExamPage() {
                   border: "none",
                   borderRadius: "10px",
                   fontWeight: 700,
+                  cursor: "pointer",
                 }}
               >
                 Tekrar Dene
