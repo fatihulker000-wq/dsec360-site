@@ -34,6 +34,29 @@ export default function FinalExamPage() {
   const router = useRouter();
   const assignmentId = params?.id as string;
 
+useEffect(() => {
+  if (!assignmentId) return;
+
+  const videoCompleted =
+    localStorage.getItem(`watchCompleted_${assignmentId}`) === "true";
+
+  const trackedSeconds = Number(
+    localStorage.getItem(`watchSeconds_${assignmentId}`) || 0
+  );
+
+  const clickCount = Number(
+    localStorage.getItem(`clickCount_${assignmentId}`) || 0
+  );
+
+  if (!videoCompleted || trackedSeconds <= 0 || clickCount < 1) {
+    alert("Eğitimi tamamlamadan final sınavına giremezsiniz.");
+    router.replace(`/portal/training/${assignmentId}`);
+    return;
+  }
+
+  setGuardChecked(true);
+}, [assignmentId, router]);
+
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>(
     {}
@@ -43,6 +66,7 @@ export default function FinalExamPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [guardChecked, setGuardChecked] = useState(false);
 
   useEffect(() => {
     if (!assignmentId) return;
@@ -54,22 +78,23 @@ export default function FinalExamPage() {
         setAttempts(parsed);
       }
     }
-  }, [assignmentId]);
+  }, [assignmentId, guardChecked]);
 
   useEffect(() => {
+     if (!assignmentId || !guardChecked) return;
     const fetchQuestions = async () => {
       try {
         setLoading(true);
         setError("");
 
-        const res = await fetch(
-          `/api/training/exam/${assignmentId}?type=final&_t=${Date.now()}`,
-          {
-            method: "GET",
-            cache: "no-store",
-            credentials: "include",
-          }
-        );
+     const res = await fetch(
+  `/api/training/exam/${assignmentId}?type=final`,
+  {
+    method: "GET",
+    cache: "no-store",
+    credentials: "include",
+  }
+);
 
         const json = await res.json();
 
@@ -175,9 +200,13 @@ export default function FinalExamPage() {
         localStorage.setItem(`trainingCompleted_${assignmentId}`, "false");
       }
 
-      if (json.resetRequired) {
-        localStorage.removeItem(`preExamScore_${assignmentId}`);
-      }
+     if (json.resetRequired) {
+  localStorage.removeItem(`preExamScore_${assignmentId}`);
+  localStorage.removeItem(`watchCompleted_${assignmentId}`);
+  localStorage.removeItem(`watchSeconds_${assignmentId}`);
+  localStorage.removeItem(`clickCount_${assignmentId}`);
+}
+
     } catch (err) {
       console.error("final exam submit hatası:", err);
       setError("Sınav sonucu gönderilemedi.");
@@ -191,6 +220,15 @@ export default function FinalExamPage() {
     setResult(null);
     setError("");
   };
+
+if (!guardChecked) {
+  return (
+    <main style={{ padding: "40px", fontFamily: "Arial" }}>
+      <h1>Final Sınavı</h1>
+      <p>Kontrol ediliyor...</p>
+    </main>
+  );
+}
 
   if (loading) {
     return (
