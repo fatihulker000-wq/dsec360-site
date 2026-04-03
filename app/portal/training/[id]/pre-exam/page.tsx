@@ -12,32 +12,33 @@ type ExamQuestion = {
   option_b: string;
   option_c: string;
   option_d: string;
-  correct_option: string;
+  correct_option: "A" | "B" | "C" | "D";
   sort_order?: number | null;
   is_active?: boolean | null;
 };
 
-function normalizeCorrectOption(value?: string | null): number {
-  const v = (value || "").trim().toUpperCase();
-
-  if (v === "A") return 0;
-  if (v === "B") return 1;
-  if (v === "C") return 2;
-  if (v === "D") return 3;
-
-  return -1;
-}
+type SubmitResponse = {
+  success?: boolean;
+  examType?: "pre" | "final";
+  score?: number;
+  passed?: boolean;
+  message?: string;
+  error?: string;
+};
 
 export default function PreExamPage() {
   const params = useParams();
   const router = useRouter();
-  const id = params?.id as string;
+  const assignmentId = params?.id as string;
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
-  const [answers, setAnswers] = useState<number[]>([]);
+  const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>(
+    {}
+  );
   const [finished, setFinished] = useState(false);
   const [score, setScore] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -46,9 +47,10 @@ export default function PreExamPage() {
         setLoading(true);
         setError("");
 
-        const res = await fetch(`/api/training/exam/${id}?type=pre`, {
+        const res = await fetch(`/api/training/exam/${assignmentId}?type=pre`, {
           method: "GET",
           cache: "no-store",
+          credentials: "include",
         });
 
         const json = await res.json();
@@ -66,7 +68,7 @@ export default function PreExamPage() {
 
         setQuestions(activeRows);
       } catch (err) {
-        console.error(err);
+        console.error("pre exam fetch hatası:", err);
         setError("Bağlantı hatası oluştu.");
         setQuestions([]);
       } finally {
@@ -74,35 +76,68 @@ export default function PreExamPage() {
       }
     };
 
-    if (id) {
+    if (assignmentId) {
       void fetchQuestions();
     }
-  }, [id]);
+  }, [assignmentId]);
 
-  const handleSelect = (qIndex: number, optionIndex: number) => {
-    const newAnswers = [...answers];
-    newAnswers[qIndex] = optionIndex;
-    setAnswers(newAnswers);
+  const handleSelect = (
+    questionId: string,
+    option: "A" | "B" | "C" | "D"
+  ) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: option,
+    }));
   };
 
-  const handleFinish = () => {
-    if (questions.length === 0) return;
+  const handleFinish = async () => {
+    try {
+      setSubmitting(true);
+      setError("");
 
-    let correct = 0;
+      const payload = {
+        assignmentId,
+        examType: "pre",
+        answers: questions.map((q) => ({
+          questionId: q.id,
+          selectedOption: answers[q.id],
+        })),
+      };
 
-    questions.forEach((q, i) => {
-      const correctIndex = normalizeCorrectOption(q.correct_option);
-      if (answers[i] === correctIndex) {
-        correct++;
+      const res = await fetch("/api/training/exam/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const json = (await res.json()) as SubmitResponse;
+
+      if (!res.ok || json.error) {
+        setError(json?.error || "Ön değerlendirme kaydedilemedi.");
+        return;
       }
-    });
 
-    const percent = Math.round((correct / questions.length) * 100);
+      const examScore = Number(json.score || 0);
+      setScore(examScore);
+      setFinished(true);
 
-    setScore(percent);
-    setFinished(true);
+      localStorage.setItem(`preExamScore_${assignmentId}`, String(examScore));
+    } catch (err) {
+      console.error("pre exam submit hatası:", err);
+      setError("Sınav sonucu gönderilemedi.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    localStorage.setItem(`preExamScore_${id}`, String(percent));
+  const handleRetry = () => {
+    setAnswers({});
+    setFinished(false);
+    setScore(0);
+    setError("");
   };
 
   if (loading) {
@@ -114,7 +149,7 @@ export default function PreExamPage() {
     );
   }
 
-  if (error) {
+  if (error && questions.length === 0) {
     return (
       <main style={{ padding: "40px", fontFamily: "Arial" }}>
         <h1>Ön Değerlendirme Sınavı</h1>
@@ -138,34 +173,39 @@ export default function PreExamPage() {
 
       {!finished && (
         <>
-          {questions.map((q, i) => {
-            const options = [q.option_a, q.option_b, q.option_c, q.option_d];
+          {questions.map((q) => (
+            <div key={q.id} style={{ marginBottom: "20px" }}>
+              <p>
+                <b>{q.question}</b>
+              </p>
 
-            return (
-              <div key={q.id} style={{ marginBottom: "20px" }}>
-                <p>
-                  <b>{q.question}</b>
-                </p>
+              {(["A", "B", "C", "D"] as const).map((opt) => {
+                const optionText = q[`option_${opt.toLowerCase()}` as keyof ExamQuestion];
 
-                {options.map((opt, j) => (
-                  <div key={j}>
+                return (
+                  <div key={opt}>
                     <label>
                       <input
                         type="radio"
-                        name={`q-${i}`}
-                        checked={answers[i] === j}
-                        onChange={() => handleSelect(i, j)}
+                        name={q.id}
+                        checked={answers[q.id] === opt}
+                        onChange={() => handleSelect(q.id, opt)}
                       />
-                      {opt}
+                      {String(optionText || "")}
                     </label>
                   </div>
-                ))}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          ))}
+
+          {error ? (
+            <p style={{ color: "#b91c1c" }}>{error}</p>
+          ) : null}
 
           <button
             onClick={handleFinish}
+            disabled={submitting}
             style={{
               marginTop: "20px",
               padding: "10px 20px",
@@ -176,7 +216,7 @@ export default function PreExamPage() {
               cursor: "pointer",
             }}
           >
-            Sınavı Bitir
+            {submitting ? "Kaydediliyor..." : "Sınavı Bitir"}
           </button>
         </>
       )}
@@ -185,20 +225,43 @@ export default function PreExamPage() {
         <>
           <h2>Sonuç: %{score}</h2>
 
-          <button
-            onClick={() => router.push("/portal/training")}
-            style={{
-              marginTop: "20px",
-              padding: "10px 20px",
-              background: "#16a34a",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-            }}
-          >
-            Eğitime Dön
-          </button>
+          {score >= 60 ? (
+            <button
+              onClick={() => router.push(`/portal/training/${assignmentId}`)}
+              style={{
+                marginTop: "20px",
+                padding: "10px 20px",
+                background: "#16a34a",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              Eğitime Git
+            </button>
+          ) : (
+            <>
+              <p style={{ color: "#b91c1c" }}>
+                60 puan altında kaldın. Devam etmek için tekrar çözmelisin.
+              </p>
+
+              <button
+                onClick={handleRetry}
+                style={{
+                  marginTop: "20px",
+                  padding: "10px 20px",
+                  background: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                }}
+              >
+                Tekrar Dene
+              </button>
+            </>
+          )}
         </>
       )}
     </main>

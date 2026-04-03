@@ -12,43 +12,47 @@ type ExamQuestion = {
   option_b: string;
   option_c: string;
   option_d: string;
-  correct_option: string;
+  correct_option: "A" | "B" | "C" | "D";
   sort_order?: number | null;
   is_active?: boolean | null;
 };
 
-function normalizeCorrectOption(value?: string | null): number {
-  const v = (value || "").trim().toUpperCase();
-
-  if (v === "A") return 0;
-  if (v === "B") return 1;
-  if (v === "C") return 2;
-  if (v === "D") return 3;
-
-  return -1;
-}
+type SubmitResponse = {
+  success?: boolean;
+  examType?: "pre" | "final";
+  score?: number;
+  passed?: boolean;
+  attemptsUsed?: number;
+  attemptsLeft?: number;
+  resetRequired?: boolean;
+  message?: string;
+  error?: string;
+};
 
 export default function FinalExamPage() {
   const params = useParams();
   const router = useRouter();
-  const id = params?.id as string;
+  const assignmentId = params?.id as string;
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
-  const [answers, setAnswers] = useState<number[]>([]);
-  const [score, setScore] = useState<number | null>(null);
+  const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>(
+    {}
+  );
+  const [result, setResult] = useState<SubmitResponse | null>(null);
   const [attempts, setAttempts] = useState(3);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const savedAttempts = localStorage.getItem(`finalAttempts_${id}`);
+    const savedAttempts = localStorage.getItem(`finalAttempts_${assignmentId}`);
     if (savedAttempts) {
       const parsed = Number(savedAttempts);
       if (!Number.isNaN(parsed)) {
         setAttempts(parsed);
       }
     }
-  }, [id]);
+  }, [assignmentId]);
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -56,10 +60,14 @@ export default function FinalExamPage() {
         setLoading(true);
         setError("");
 
-        const res = await fetch(`/api/training/exam/${id}?type=final`, {
-          method: "GET",
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/training/exam/${assignmentId}?type=final`,
+          {
+            method: "GET",
+            cache: "no-store",
+            credentials: "include",
+          }
+        );
 
         const json = await res.json();
 
@@ -76,7 +84,7 @@ export default function FinalExamPage() {
 
         setQuestions(activeRows);
       } catch (err) {
-        console.error(err);
+        console.error("final exam fetch hatası:", err);
         setError("Bağlantı hatası oluştu.");
         setQuestions([]);
       } finally {
@@ -84,46 +92,84 @@ export default function FinalExamPage() {
       }
     };
 
-    if (id) {
+    if (assignmentId) {
       void fetchQuestions();
     }
-  }, [id]);
+  }, [assignmentId]);
 
-  const handleSelect = (qIndex: number, optionIndex: number) => {
-    const newAnswers = [...answers];
-    newAnswers[qIndex] = optionIndex;
-    setAnswers(newAnswers);
+  const handleSelect = (
+    questionId: string,
+    option: "A" | "B" | "C" | "D"
+  ) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: option,
+    }));
   };
 
-  const handleFinish = () => {
-    if (questions.length === 0) return;
+  const handleFinish = async () => {
+    try {
+      setSubmitting(true);
+      setError("");
 
-    let correct = 0;
+      const payload = {
+        assignmentId,
+        examType: "final",
+        answers: questions.map((q) => ({
+          questionId: q.id,
+          selectedOption: answers[q.id],
+        })),
+      };
 
-    questions.forEach((q, i) => {
-      const correctIndex = normalizeCorrectOption(q.correct_option);
-      if (answers[i] === correctIndex) {
-        correct++;
+      const res = await fetch("/api/training/exam/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const json = (await res.json()) as SubmitResponse;
+
+      if (!res.ok || json.error) {
+        setError(json?.error || "Final sınav sonucu kaydedilemedi.");
+        return;
       }
-    });
 
-    const percent = Math.round((correct / questions.length) * 100);
-    setScore(percent);
+      setResult(json);
 
-    if (percent >= 60) {
-      localStorage.setItem(`trainingCompleted_${id}`, "true");
-      localStorage.setItem(`finalScore_${id}`, String(percent));
-    } else {
-      const nextAttempts = attempts - 1;
-      setAttempts(nextAttempts);
-      localStorage.setItem(`finalAttempts_${id}`, String(nextAttempts));
-      localStorage.setItem(`finalScore_${id}`, String(percent));
+      const safeScore = Number(json.score || 0);
+      localStorage.setItem(`finalScore_${assignmentId}`, String(safeScore));
+
+      if (typeof json.attemptsLeft === "number") {
+        setAttempts(json.attemptsLeft);
+        localStorage.setItem(
+          `finalAttempts_${assignmentId}`,
+          String(json.attemptsLeft)
+        );
+      }
+
+      if (json.passed) {
+        localStorage.setItem(`trainingCompleted_${assignmentId}`, "true");
+      } else {
+        localStorage.setItem(`trainingCompleted_${assignmentId}`, "false");
+      }
+
+      if (json.resetRequired) {
+        localStorage.removeItem(`preExamScore_${assignmentId}`);
+      }
+    } catch (err) {
+      console.error("final exam submit hatası:", err);
+      setError("Sınav sonucu gönderilemedi.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleRetry = () => {
-    setAnswers([]);
-    setScore(null);
+    setAnswers({});
+    setResult(null);
+    setError("");
   };
 
   if (loading) {
@@ -135,7 +181,7 @@ export default function FinalExamPage() {
     );
   }
 
-  if (error) {
+  if (error && questions.length === 0) {
     return (
       <main style={{ padding: "40px", fontFamily: "Arial" }}>
         <h1>Final Sınavı</h1>
@@ -153,7 +199,7 @@ export default function FinalExamPage() {
     );
   }
 
-  if (attempts <= 0) {
+  if ((result?.attemptsLeft === 0 || attempts <= 0) && !result?.passed) {
     return (
       <main style={{ padding: "40px", fontFamily: "Arial" }}>
         <h1>Final Sınav Hakkı Bitti</h1>
@@ -182,36 +228,41 @@ export default function FinalExamPage() {
       <h1>Final Sınavı</h1>
       <p>Kalan hak: {attempts}</p>
 
-      {score === null ? (
+      {!result ? (
         <>
-          {questions.map((q, i) => {
-            const options = [q.option_a, q.option_b, q.option_c, q.option_d];
+          {questions.map((q) => (
+            <div key={q.id} style={{ marginBottom: "24px" }}>
+              <p>
+                <b>{q.question}</b>
+              </p>
 
-            return (
-              <div key={q.id} style={{ marginBottom: "24px" }}>
-                <p>
-                  <b>{q.question}</b>
-                </p>
+              {(["A", "B", "C", "D"] as const).map((opt) => {
+                const optionText = q[`option_${opt.toLowerCase()}` as keyof ExamQuestion];
 
-                {options.map((opt, j) => (
-                  <div key={j}>
+                return (
+                  <div key={opt}>
                     <label>
                       <input
                         type="radio"
-                        name={`q-${i}`}
-                        checked={answers[i] === j}
-                        onChange={() => handleSelect(i, j)}
+                        name={q.id}
+                        checked={answers[q.id] === opt}
+                        onChange={() => handleSelect(q.id, opt)}
                       />
-                      {opt}
+                      {String(optionText || "")}
                     </label>
                   </div>
-                ))}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          ))}
+
+          {error ? (
+            <p style={{ color: "#b91c1c" }}>{error}</p>
+          ) : null}
 
           <button
             onClick={handleFinish}
+            disabled={submitting}
             style={{
               padding: "12px 20px",
               background: "#7c3aed",
@@ -222,17 +273,17 @@ export default function FinalExamPage() {
               cursor: "pointer",
             }}
           >
-            Final Sınavını Bitir
+            {submitting ? "Kaydediliyor..." : "Final Sınavını Bitir"}
           </button>
         </>
       ) : (
         <>
-          <h2>Sonuç: %{score}</h2>
+          <h2>Sonuç: %{result.score}</h2>
 
-          {score >= 60 ? (
+          {result.passed ? (
             <>
               <h3 style={{ color: "#166534" }}>Başarılı</h3>
-              <p>Eğitim tamamlandı. Sertifika ve katılım belgesi açılabilir.</p>
+              <p>{result.message || "Eğitim tamamlandı."}</p>
               <button
                 onClick={() => router.push("/portal/training")}
                 style={{
@@ -252,7 +303,9 @@ export default function FinalExamPage() {
           ) : (
             <>
               <h3 style={{ color: "#b91c1c" }}>Başarısız</h3>
-              <p>60 puan altı. Kalan hakkın varsa tekrar deneyebilirsin.</p>
+              <p>{result.message || "60 puan altı. Kalan hakkın varsa tekrar deneyebilirsin."}</p>
+              <p>Kalan hak: {result.attemptsLeft}</p>
+
               <button
                 onClick={handleRetry}
                 style={{

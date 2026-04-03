@@ -55,6 +55,7 @@ export default function TrainingDetailPage() {
 
   const [finalAttempts, setFinalAttempts] = useState(3);
   const [trainingCompleted, setTrainingCompleted] = useState(false);
+  const [finalScore, setFinalScore] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchTraining = async () => {
@@ -106,11 +107,19 @@ export default function TrainingDetailPage() {
 
     const savedAttempts = localStorage.getItem(`finalAttempts_${assignmentId}`);
     const savedCompleted = localStorage.getItem(`trainingCompleted_${assignmentId}`);
+    const savedFinalScore = localStorage.getItem(`finalScore_${assignmentId}`);
 
     if (savedAttempts !== null) {
       const parsed = Number(savedAttempts);
       if (!Number.isNaN(parsed)) {
         setFinalAttempts(parsed);
+      }
+    }
+
+    if (savedFinalScore !== null) {
+      const parsed = Number(savedFinalScore);
+      if (!Number.isNaN(parsed)) {
+        setFinalScore(parsed);
       }
     }
 
@@ -224,6 +233,26 @@ export default function TrainingDetailPage() {
             >
               Kalan Final Hakkı: {finalAttempts}
             </div>
+
+            {finalScore !== null ? (
+              <div
+                style={{
+                  display: "inline-flex",
+                  padding: "8px 12px",
+                  borderRadius: "999px",
+                  background: finalScore >= 60 ? "#dcfce7" : "#fee2e2",
+                  border:
+                    finalScore >= 60
+                      ? "1px solid #86efac"
+                      : "1px solid #fca5a5",
+                  color: finalScore >= 60 ? "#166534" : "#b91c1c",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                }}
+              >
+                Final Puanı: %{finalScore}
+              </div>
+            ) : null}
           </div>
 
           {trainingType === "senkron" ? (
