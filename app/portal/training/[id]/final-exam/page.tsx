@@ -230,14 +230,14 @@ if (!guardChecked) {
   );
 }
 
-  if (loading) {
-    return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Final Sınavı</h1>
-        <p>Yükleniyor...</p>
-      </main>
-    );
-  }
+ if (!guardChecked) {
+  return (
+    <main style={{ padding: "40px", fontFamily: "Arial" }}>
+      <h1>Final Sınavı</h1>
+      <p>Kontrol ediliyor...</p>
+    </main>
+  );
+}
 
   if (error && questions.length === 0) {
     return (
