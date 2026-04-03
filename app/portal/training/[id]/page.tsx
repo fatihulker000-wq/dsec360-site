@@ -48,6 +48,20 @@ function isNativeVideoUrl(url: string) {
 }
 
 function isYoutubeUrl(url: string) {
+    function toEmbedUrl(url: string) {
+  if (!url) return "";
+
+  if (url.includes("youtube.com/watch?v=")) {
+    return url.replace("watch?v=", "embed/");
+  }
+
+  if (url.includes("youtu.be/")) {
+    const id = url.split("youtu.be/")[1]?.split("?")[0];
+    return id ? `https://www.youtube.com/embed/${id}` : url;
+  }
+
+  return url;
+}
   const safe = (url || "").toLowerCase();
   return safe.includes("youtube.com/watch") || safe.includes("youtu.be/");
 }
@@ -197,6 +211,21 @@ export default function TrainingDetailPage() {
   );
 
   const contentUrl = training?.training?.content_url || "";
+  const embedUrl = useMemo(() => {
+  if (!contentUrl) return "";
+
+  if (contentUrl.includes("youtube.com/watch?v=")) {
+    return contentUrl.replace("watch?v=", "embed/");
+  }
+
+  if (contentUrl.includes("youtu.be/")) {
+    const id = contentUrl.split("youtu.be/")[1]?.split("?")[0];
+    return id ? `https://www.youtube.com/embed/${id}` : contentUrl;
+  }
+
+  return contentUrl;
+}, [contentUrl]);
+
   const isAsync = trainingType === "asenkron";
   const isSync = trainingType === "senkron";
   const nativeVideo = isNativeVideoUrl(contentUrl);
@@ -323,46 +352,56 @@ export default function TrainingDetailPage() {
     void saveProgress();
   }, [assignmentId, videoCompleted, trackedSeconds, clickCount, progressSaved]);
 
-  const canTakeFinalExam =
-    finalAttempts > 0 &&
-    !trainingCompleted &&
-    (isSync ||
-      (isAsync &&
-        nativeVideo &&
-        videoCompleted &&
-        trackedSeconds >= Math.floor(videoDuration) &&
-        clickCount >= requiredClicks));
+ const canTakeFinalExam =
+  finalAttempts > 0 &&
+  !trainingCompleted &&
+  (
+    isSync ||
+    (
+      isAsync &&
+      (
+        nativeVideo
+          ? (
+              videoCompleted &&
+              trackedSeconds >= Math.floor(videoDuration) &&
+              clickCount >= requiredClicks
+            )
+          : true
+      )
+    )
+  );
 
   const lockReason = useMemo(() => {
-    if (trainingCompleted) return "";
-    if (finalAttempts <= 0) return "Final hakkı bitti.";
-    if (isSync) return "";
-    if (!contentUrl) return "Eğitim içeriği bulunamadı.";
-    if (!nativeVideo) {
-      if (youtubeVideo) {
-        return "Denetimli asenkron eğitim için YouTube yerine MP4/WebM video kullanılmalı.";
-      }
-      return "Bu asenkron içerik tipi denetimli takip için uygun değil.";
-    }
+  if (trainingCompleted) return "";
+  if (finalAttempts <= 0) return "Final hakkı bitti.";
+  if (isSync) return "";
+  if (!contentUrl) return "Eğitim içeriği bulunamadı.";
+
+  // Native video ise sıkı kontrol
+  if (nativeVideo) {
     if (!videoCompleted) return "Video tamamen bitmeden final açılmaz.";
     if (clickCount < requiredClicks)
       return "Zorunlu ekran başı onayları tamamlanmadı.";
     if (trackedSeconds < Math.floor(videoDuration))
       return "Eğitim süresi tamamlanmadan final açılmaz.";
     return "";
-  }, [
-    trainingCompleted,
-    finalAttempts,
-    isSync,
-    contentUrl,
-    nativeVideo,
-    youtubeVideo,
-    videoCompleted,
-    clickCount,
-    requiredClicks,
-    trackedSeconds,
-    videoDuration,
-  ]);
+  }
+
+  // Native olmayan içerikler açılır/izlenir; burada sert engel vermiyoruz
+  return "";
+}, [
+  trainingCompleted,
+  finalAttempts,
+  isSync,
+  contentUrl,
+  nativeVideo,
+  videoCompleted,
+  clickCount,
+  requiredClicks,
+  trackedSeconds,
+  videoDuration,
+]);
+
 
   if (loading) {
     return (
@@ -530,72 +569,105 @@ export default function TrainingDetailPage() {
             </div>
           )}
 
-          {isSync ? (
-            <div style={{ marginTop: "24px" }}>
-              {contentUrl ? (
-                <a
-                  href={contentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    display: "inline-block",
-                    padding: "12px 18px",
-                    background: "#2563eb",
-                    color: "#fff",
-                    borderRadius: "10px",
-                    textDecoration: "none",
-                    fontWeight: 700,
-                  }}
-                >
-                  Canlı Eğitime Katıl
-                </a>
-              ) : (
-                <p style={{ color: "#b91c1c" }}>
-                  Canlı eğitim linki bulunamadı.
-                </p>
-              )}
-            </div>
-          ) : contentUrl ? (
-            <div style={{ marginTop: "24px" }}>
-              {nativeVideo ? (
-                <video
-                  ref={videoRef}
-                  src={contentUrl}
-                  controls
-                  controlsList="nodownload"
-                  disablePictureInPicture
-                  onLoadedMetadata={handleLoadedMetadata}
-                  onTimeUpdate={handleTimeUpdate}
-                  onSeeking={handleSeeking}
-                  style={{
-                    width: "100%",
-                    borderRadius: "16px",
-                    background: "#000",
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    padding: "18px",
-                    borderRadius: "12px",
-                    background: "#fff7ed",
-                    border: "1px solid #fdba74",
-                    color: "#9a3412",
-                    lineHeight: 1.7,
-                  }}
-                >
-                  Bu asenkron içerik bağlantısı denetimli eğitim mantığı için
-                  uygun değil. İleri sarma engeli, tıklama zorunluluğu ve gerçek
-                  süre takibi için içerik bağlantısının doğrudan MP4/WebM video
-                  olması gerekir.
-                </div>
-              )}
-            </div>
-          ) : (
-            <p style={{ marginTop: "24px", color: "#b91c1c" }}>
-              Eğitim içeriği bulunamadı.
-            </p>
-          )}
+ {isSync ? (
+  <div style={{ marginTop: "24px" }}>
+    {contentUrl ? (
+      <a
+        href={contentUrl}
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          display: "inline-block",
+          padding: "12px 18px",
+          background: "#2563eb",
+          color: "#fff",
+          borderRadius: "10px",
+          textDecoration: "none",
+          fontWeight: 700,
+        }}
+      >
+        Canlı Eğitime Katıl
+      </a>
+    ) : (
+      <p style={{ color: "#b91c1c" }}>
+        Canlı eğitim linki bulunamadı.
+      </p>
+    )}
+  </div>
+) : contentUrl ? (
+  <div style={{ marginTop: "24px" }}>
+    {nativeVideo ? (
+      <video
+        ref={videoRef}
+        src={contentUrl}
+        controls
+        controlsList="nodownload"
+        disablePictureInPicture
+        onLoadedMetadata={handleLoadedMetadata}
+        onTimeUpdate={handleTimeUpdate}
+        onSeeking={handleSeeking}
+        style={{
+          width: "100%",
+          borderRadius: "16px",
+          background: "#000",
+        }}
+      />
+    ) : youtubeVideo ? (
+      <iframe
+        src={embedUrl}
+        width="100%"
+        height="500"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        style={{
+          border: "none",
+          borderRadius: "16px",
+          background: "#000",
+        }}
+        title="Eğitim İçeriği"
+      />
+    ) : (
+      <div
+        style={{
+          display: "flex",
+          gap: "12px",
+          alignItems: "center",
+          flexWrap: "wrap",
+          padding: "18px",
+          borderRadius: "12px",
+          background: "#f9fafb",
+          border: "1px solid #e5e7eb",
+        }}
+      >
+        <div style={{ color: "#374151", lineHeight: 1.7 }}>
+          Bu eğitim içeriği tarayıcıda doğrudan oynatılamayan bir bağlantı türünde.
+          İçeriği açıp izlemek için aşağıdaki bağlantıyı kullanabilirsiniz.
+        </div>
+
+        <a
+          href={contentUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: "inline-block",
+            padding: "12px 18px",
+            background: "#2563eb",
+            color: "#fff",
+            borderRadius: "10px",
+            textDecoration: "none",
+            fontWeight: 700,
+          }}
+        >
+          Eğitimi Aç
+        </a>
+      </div>
+    )}
+  </div>
+) : (
+  <p style={{ marginTop: "24px", color: "#b91c1c" }}>
+    Eğitim içeriği bulunamadı.
+  </p>
+)}
 
           {!playbackReady && isAsync && nativeVideo && (
             <div
@@ -629,6 +701,23 @@ export default function TrainingDetailPage() {
               {lockReason}
             </div>
           )}
+
+{isAsync && !nativeVideo && contentUrl && (
+  <div
+    style={{
+      marginTop: "16px",
+      padding: "12px 14px",
+      borderRadius: "10px",
+      background: "#eff6ff",
+      border: "1px solid #bfdbfe",
+      color: "#1d4ed8",
+      lineHeight: 1.6,
+    }}
+  >
+    Bu içerik açılır ve izlenir. Ancak ileri sarma engeli, zorunlu tıklama ve
+    süre takibi en sağlıklı şekilde doğrudan video dosyalarında çalışır.
+  </div>
+)}
 
           <div
             style={{
