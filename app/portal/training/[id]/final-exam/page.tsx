@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type ExamQuestion = {
@@ -45,6 +45,8 @@ export default function FinalExamPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!assignmentId) return;
+
     const savedAttempts = localStorage.getItem(`finalAttempts_${assignmentId}`);
     if (savedAttempts) {
       const parsed = Number(savedAttempts);
@@ -61,7 +63,7 @@ export default function FinalExamPage() {
         setError("");
 
         const res = await fetch(
-          `/api/training/exam/${assignmentId}?type=final`,
+          `/api/training/exam/${assignmentId}?type=final&_t=${Date.now()}`,
           {
             method: "GET",
             cache: "no-store",
@@ -78,9 +80,13 @@ export default function FinalExamPage() {
         }
 
         const rows = Array.isArray(json?.data) ? json.data : [];
-        const activeRows = rows.filter(
-          (item: ExamQuestion) => item.is_active !== false
-        );
+        const activeRows = rows
+          .filter((item: ExamQuestion) => item.is_active !== false)
+          .sort((a: ExamQuestion, b: ExamQuestion) => {
+            const aOrder = a.sort_order ?? 0;
+            const bOrder = b.sort_order ?? 0;
+            return aOrder - bOrder;
+          });
 
         setQuestions(activeRows);
       } catch (err) {
@@ -97,6 +103,10 @@ export default function FinalExamPage() {
     }
   }, [assignmentId]);
 
+  const unansweredCount = useMemo(() => {
+    return questions.filter((q) => !answers[q.id]).length;
+  }, [questions, answers]);
+
   const handleSelect = (
     questionId: string,
     option: "A" | "B" | "C" | "D"
@@ -111,6 +121,16 @@ export default function FinalExamPage() {
     try {
       setSubmitting(true);
       setError("");
+
+      if (questions.length === 0) {
+        setError("Sınav sorusu bulunamadı.");
+        return;
+      }
+
+      if (unansweredCount > 0) {
+        setError(`Lütfen tüm soruları cevapla. Eksik soru: ${unansweredCount}`);
+        return;
+      }
 
       const payload = {
         assignmentId,
@@ -230,25 +250,46 @@ export default function FinalExamPage() {
 
       {!result ? (
         <>
-          {questions.map((q) => (
-            <div key={q.id} style={{ marginBottom: "24px" }}>
+          {questions.map((q, index) => (
+            <div
+              key={q.id}
+              style={{
+                marginBottom: "24px",
+                padding: "16px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "12px",
+                background: "#fff",
+              }}
+            >
               <p>
-                <b>{q.question}</b>
+                <b>
+                  {index + 1}. {q.question}
+                </b>
               </p>
 
               {(["A", "B", "C", "D"] as const).map((opt) => {
-                const optionText = q[`option_${opt.toLowerCase()}` as keyof ExamQuestion];
+                const optionText =
+                  q[`option_${opt.toLowerCase()}` as keyof ExamQuestion];
 
                 return (
-                  <div key={opt}>
-                    <label>
+                  <div key={opt} style={{ marginBottom: "8px" }}>
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        cursor: "pointer",
+                      }}
+                    >
                       <input
                         type="radio"
                         name={q.id}
                         checked={answers[q.id] === opt}
                         onChange={() => handleSelect(q.id, opt)}
                       />
-                      {String(optionText || "")}
+                      <span>
+                        <b>{opt})</b> {String(optionText || "")}
+                      </span>
                     </label>
                   </div>
                 );
@@ -256,9 +297,7 @@ export default function FinalExamPage() {
             </div>
           ))}
 
-          {error ? (
-            <p style={{ color: "#b91c1c" }}>{error}</p>
-          ) : null}
+          {error ? <p style={{ color: "#b91c1c" }}>{error}</p> : null}
 
           <button
             onClick={handleFinish}
@@ -283,7 +322,9 @@ export default function FinalExamPage() {
           {result.passed ? (
             <>
               <h3 style={{ color: "#166534" }}>Başarılı</h3>
-              <p>{result.message || "Eğitim tamamlandı."}</p>
+              <p>
+                {result.message || "Eğitim tamamlandı. Sertifika açılabilir."}
+              </p>
               <button
                 onClick={() => router.push("/portal/training")}
                 style={{
@@ -303,7 +344,10 @@ export default function FinalExamPage() {
           ) : (
             <>
               <h3 style={{ color: "#b91c1c" }}>Başarısız</h3>
-              <p>{result.message || "60 puan altı. Kalan hakkın varsa tekrar deneyebilirsin."}</p>
+              <p>
+                {result.message ||
+                  "60 puan altı. Kalan hakkın varsa tekrar deneyebilirsin."}
+              </p>
               <p>Kalan hak: {result.attemptsLeft}</p>
 
               <button

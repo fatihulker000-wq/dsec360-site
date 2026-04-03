@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type ExamQuestion = {
@@ -47,11 +47,14 @@ export default function PreExamPage() {
         setLoading(true);
         setError("");
 
-        const res = await fetch(`/api/training/exam/${assignmentId}?type=pre`, {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        });
+        const res = await fetch(
+          `/api/training/exam/${assignmentId}?type=pre&_t=${Date.now()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+            credentials: "include",
+          }
+        );
 
         const json = await res.json();
 
@@ -62,9 +65,14 @@ export default function PreExamPage() {
         }
 
         const rows = Array.isArray(json?.data) ? json.data : [];
-        const activeRows = rows.filter(
-          (item: ExamQuestion) => item.is_active !== false
-        );
+
+        const activeRows = rows
+          .filter((item: ExamQuestion) => item.is_active !== false)
+          .sort((a: ExamQuestion, b: ExamQuestion) => {
+            const aOrder = a.sort_order ?? 0;
+            const bOrder = b.sort_order ?? 0;
+            return aOrder - bOrder;
+          });
 
         setQuestions(activeRows);
       } catch (err) {
@@ -81,6 +89,10 @@ export default function PreExamPage() {
     }
   }, [assignmentId]);
 
+  const unansweredCount = useMemo(() => {
+    return questions.filter((q) => !answers[q.id]).length;
+  }, [questions, answers]);
+
   const handleSelect = (
     questionId: string,
     option: "A" | "B" | "C" | "D"
@@ -95,6 +107,16 @@ export default function PreExamPage() {
     try {
       setSubmitting(true);
       setError("");
+
+      if (questions.length === 0) {
+        setError("Sınav sorusu bulunamadı.");
+        return;
+      }
+
+      if (unansweredCount > 0) {
+        setError(`Lütfen tüm soruları cevapla. Eksik soru: ${unansweredCount}`);
+        return;
+      }
 
       const payload = {
         assignmentId,
@@ -173,25 +195,50 @@ export default function PreExamPage() {
 
       {!finished && (
         <>
-          {questions.map((q) => (
-            <div key={q.id} style={{ marginBottom: "20px" }}>
-              <p>
-                <b>{q.question}</b>
+          <p style={{ marginBottom: "16px", color: "#6b7280" }}>
+            Toplam soru: {questions.length}
+          </p>
+
+          {questions.map((q, index) => (
+            <div
+              key={q.id}
+              style={{
+                marginBottom: "24px",
+                padding: "16px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "12px",
+                background: "#fff",
+              }}
+            >
+              <p style={{ marginBottom: "12px" }}>
+                <b>
+                  {index + 1}. {q.question}
+                </b>
               </p>
 
               {(["A", "B", "C", "D"] as const).map((opt) => {
-                const optionText = q[`option_${opt.toLowerCase()}` as keyof ExamQuestion];
+                const optionText =
+                  q[`option_${opt.toLowerCase()}` as keyof ExamQuestion];
 
                 return (
-                  <div key={opt}>
-                    <label>
+                  <div key={opt} style={{ marginBottom: "8px" }}>
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        cursor: "pointer",
+                      }}
+                    >
                       <input
                         type="radio"
                         name={q.id}
                         checked={answers[q.id] === opt}
                         onChange={() => handleSelect(q.id, opt)}
                       />
-                      {String(optionText || "")}
+                      <span>
+                        <b>{opt})</b> {String(optionText || "")}
+                      </span>
                     </label>
                   </div>
                 );
@@ -200,7 +247,7 @@ export default function PreExamPage() {
           ))}
 
           {error ? (
-            <p style={{ color: "#b91c1c" }}>{error}</p>
+            <p style={{ color: "#b91c1c", marginTop: "8px" }}>{error}</p>
           ) : null}
 
           <button
