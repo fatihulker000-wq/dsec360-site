@@ -19,7 +19,7 @@ type AssignmentRow = {
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const cookieStore = await cookies();
@@ -29,7 +29,8 @@ export async function GET(
       return NextResponse.json({ error: "Kullanıcı yok." }, { status: 401 });
     }
 
-    const assignmentId = params.id;
+    const { id: assignmentId } = await params;
+
     const url = new URL(req.url);
     const examType = url.searchParams.get("type") as ExamType | null;
 
