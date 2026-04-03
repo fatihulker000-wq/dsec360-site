@@ -26,10 +26,7 @@ export async function GET(
     const userId = cookieStore.get("dsec_user_id")?.value;
 
     if (!userId) {
-      return NextResponse.json(
-        { error: "Kullanıcı yok." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Kullanıcı yok." }, { status: 401 });
     }
 
     const assignmentId = params.id;
@@ -45,14 +42,13 @@ export async function GET(
 
     if (!examType || !["pre", "final"].includes(examType)) {
       return NextResponse.json(
-        { error: "geçerli exam_type gerekli" },
+        { error: "geçerli exam_type gerekli: pre | final" },
         { status: 400 }
       );
     }
 
     const supabase = getSupabase();
 
-    // 🔥 ASSIGNMENT BUL
     const { data: assignment, error: assignmentError } = await supabase
       .from("training_assignments")
       .select("id, user_id, training_id")
@@ -61,16 +57,12 @@ export async function GET(
       .single<AssignmentRow>();
 
     if (assignmentError || !assignment) {
-      console.error("assignment fetch hatası:", assignmentError);
       return NextResponse.json(
         { error: "Eğitim ataması bulunamadı." },
         { status: 404 }
       );
     }
 
-    console.log("🔥 DOĞRU TRAINING_ID:", assignment.training_id);
-
-    // 🔥 SORULARI ÇEK
     const { data, error } = await supabase
       .from("training_exam_questions")
       .select("*")
@@ -79,27 +71,13 @@ export async function GET(
       .order("sort_order", { ascending: true });
 
     if (error) {
-      console.error("exam question fetch hatası:", error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    console.log("🔥 GELEN SORU SAYISI:", data?.length);
-
-    return NextResponse.json({
-      data: data || [],
-      debug: {
-        assignmentId,
-        trainingId: assignment.training_id,
-        count: data?.length || 0,
-      },
-    });
-  } catch (error: any) {
-    console.error("exam get genel hata:", error);
+    return NextResponse.json({ data: data || [] });
+  } catch (err: any) {
     return NextResponse.json(
-      { error: error?.message || "sunucu hatası" },
+      { error: err?.message || "sunucu hatası" },
       { status: 500 }
     );
   }
