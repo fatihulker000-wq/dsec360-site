@@ -79,6 +79,8 @@ type AssignmentRow = {
   certificate_no: string | null;
   certificate_issued_at: string | null;
   verification_code: string | null;
+  final_exam_passed: boolean | null;
+  final_exam_score: number | null;
 };
 
 type TrainingRow = {
@@ -87,6 +89,7 @@ type TrainingRow = {
   description: string | null;
   type: string | null;
   topics_text: string | null;
+  duration_minutes: number | null;
 };
 
 export async function GET(
@@ -116,7 +119,7 @@ export async function GET(
     let assignmentQuery = supabase
       .from("training_assignments")
       .select(
-        "id, status, completed_at, started_at, training_id, certificate_no, certificate_issued_at, verification_code"
+        "id, status, completed_at, started_at, training_id, certificate_no, certificate_issued_at, verification_code, final_exam_passed, final_exam_score"
       )
       .eq("id", id);
 
@@ -124,17 +127,33 @@ export async function GET(
       assignmentQuery = assignmentQuery.eq("user_id", userId);
     }
 
-    const { data: assignment, error: assignmentError } =
+    const { data, error: assignmentError } =
       await assignmentQuery.single<AssignmentRow>();
 
-    if (assignmentError || !assignment) {
+    if (assignmentError || !data) {
       console.error("ASSIGNMENT ERROR:", assignmentError);
       return new NextResponse("Sertifika kaydı bulunamadı.", { status: 404 });
     }
 
+    const assignment = data;
+
     if (assignment.status !== "completed") {
       return new NextResponse(
         "Belge yalnızca tamamlanan eğitimler için oluşturulur.",
+        { status: 400 }
+      );
+    }
+
+    if (!assignment.final_exam_passed) {
+      return new NextResponse(
+        "Sertifika için final sınavı başarıyla tamamlanmalıdır.",
+        { status: 400 }
+      );
+    }
+
+    if ((assignment.final_exam_score || 0) < 60) {
+      return new NextResponse(
+        "Sertifika için final sınavından en az 60 alınmalıdır.",
         { status: 400 }
       );
     }
@@ -173,7 +192,7 @@ export async function GET(
     if (assignment.training_id) {
       const { data: trainingData, error: trainingError } = await supabase
         .from("trainings")
-        .select("id, title, description, type, topics_text")
+        .select("id, title, description, type, topics_text, duration_minutes")
         .eq("id", assignment.training_id)
         .maybeSingle<TrainingRow>();
 
@@ -191,7 +210,10 @@ export async function GET(
     const trainingTitle = escapeHtml(training?.title || "Eğitim adı bulunamadı");
     const trainingDescription = escapeHtml(training?.description || "-");
     const trainingType = escapeHtml(training?.type || "online");
-    const durationText = "Süre bilgisi tanımlanmadı";
+    const durationText =
+      training?.duration_minutes && training.duration_minutes > 0
+        ? `${training.duration_minutes} dakika`
+        : "Süre bilgisi tanımlanmadı";
 
     const topics = parseTrainingTopics(training?.topics_text);
     const topicsHtml = topicsToHtml(topics);
