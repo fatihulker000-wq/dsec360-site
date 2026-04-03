@@ -75,6 +75,7 @@ export default function TrainingDetailPage() {
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [lastPromptAt, setLastPromptAt] = useState(0);
   const [playbackReady, setPlaybackReady] = useState(false);
+  const [progressSaved, setProgressSaved] = useState(false);
 
   useEffect(() => {
     const fetchTraining = async () => {
@@ -125,11 +126,17 @@ export default function TrainingDetailPage() {
     if (!assignmentId) return;
 
     const savedAttempts = localStorage.getItem(`finalAttempts_${assignmentId}`);
-    const savedCompleted = localStorage.getItem(`trainingCompleted_${assignmentId}`);
+    const savedCompleted = localStorage.getItem(
+      `trainingCompleted_${assignmentId}`
+    );
     const savedFinalScore = localStorage.getItem(`finalScore_${assignmentId}`);
-    const savedMaxReached = localStorage.getItem(`watchSeconds_${assignmentId}`);
+    const savedMaxReached = localStorage.getItem(
+      `watchSeconds_${assignmentId}`
+    );
     const savedClickCount = localStorage.getItem(`clickCount_${assignmentId}`);
-    const savedVideoCompleted = localStorage.getItem(`watchCompleted_${assignmentId}`);
+    const savedVideoCompleted = localStorage.getItem(
+      `watchCompleted_${assignmentId}`
+    );
 
     if (savedAttempts !== null) {
       const parsed = Number(savedAttempts);
@@ -165,7 +172,10 @@ export default function TrainingDetailPage() {
 
   useEffect(() => {
     if (!assignmentId) return;
-    localStorage.setItem(`watchSeconds_${assignmentId}`, String(Math.floor(maxReachedTime)));
+    localStorage.setItem(
+      `watchSeconds_${assignmentId}`,
+      String(Math.floor(maxReachedTime))
+    );
   }, [assignmentId, maxReachedTime]);
 
   useEffect(() => {
@@ -175,7 +185,10 @@ export default function TrainingDetailPage() {
 
   useEffect(() => {
     if (!assignmentId) return;
-    localStorage.setItem(`watchCompleted_${assignmentId}`, String(videoCompleted));
+    localStorage.setItem(
+      `watchCompleted_${assignmentId}`,
+      String(videoCompleted)
+    );
   }, [assignmentId, videoCompleted]);
 
   const trainingType = useMemo(
@@ -191,7 +204,10 @@ export default function TrainingDetailPage() {
 
   useEffect(() => {
     if (videoDuration > 0) {
-      const calculatedRequiredClicks = Math.max(1, Math.floor(videoDuration / 120));
+      const calculatedRequiredClicks = Math.max(
+        1,
+        Math.floor(videoDuration / 120)
+      );
       setRequiredClicks(calculatedRequiredClicks);
     }
   }, [videoDuration]);
@@ -266,42 +282,56 @@ export default function TrainingDetailPage() {
     }
   }, [maxReachedTime, videoDuration]);
 
-  const trackedSeconds = Math.min(Math.floor(maxReachedTime), Math.floor(videoDuration || maxReachedTime));
-  const progressPercent =
-  useEffect(() => {
-  if (!assignmentId) return;
+  const trackedSeconds = Math.min(
+    Math.floor(maxReachedTime),
+    Math.floor(videoDuration || maxReachedTime)
+  );
 
-  if (videoCompleted) {
-    fetch("/api/training/progress", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignmentId,
-        watchSeconds: trackedSeconds,
-        clickCount,
-        completed: true,
-      }),
-    });
-  }
-}, [videoCompleted]);
-    videoDuration > 0 ? Math.min(100, Math.round((trackedSeconds / videoDuration) * 100)) : 0;
+  const progressPercent =
+    videoDuration > 0
+      ? Math.min(100, Math.round((trackedSeconds / videoDuration) * 100))
+      : 0;
+
+  useEffect(() => {
+    if (!assignmentId) return;
+    if (!videoCompleted) return;
+    if (progressSaved) return;
+
+    const saveProgress = async () => {
+      try {
+        const res = await fetch("/api/training/progress", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            assignmentId,
+            watchSeconds: trackedSeconds,
+            clickCount,
+            completed: true,
+          }),
+        });
+
+        if (res.ok) {
+          setProgressSaved(true);
+        }
+      } catch (err) {
+        console.error("training progress save error:", err);
+      }
+    };
+
+    void saveProgress();
+  }, [assignmentId, videoCompleted, trackedSeconds, clickCount, progressSaved]);
 
   const canTakeFinalExam =
     finalAttempts > 0 &&
     !trainingCompleted &&
-    (
-      isSync ||
-      (
-        isAsync &&
+    (isSync ||
+      (isAsync &&
         nativeVideo &&
         videoCompleted &&
         trackedSeconds >= Math.floor(videoDuration) &&
-        clickCount >= requiredClicks &&
-        trackedSeconds >= videoDuration
-      )
-    );
+        clickCount >= requiredClicks));
 
   const lockReason = useMemo(() => {
     if (trainingCompleted) return "";
@@ -315,7 +345,10 @@ export default function TrainingDetailPage() {
       return "Bu asenkron içerik tipi denetimli takip için uygun değil.";
     }
     if (!videoCompleted) return "Video tamamen bitmeden final açılmaz.";
-    if (clickCount < requiredClicks) return "Zorunlu ekran başı onayları tamamlanmadı.";
+    if (clickCount < requiredClicks)
+      return "Zorunlu ekran başı onayları tamamlanmadı.";
+    if (trackedSeconds < Math.floor(videoDuration))
+      return "Eğitim süresi tamamlanmadan final açılmaz.";
     return "";
   }, [
     trainingCompleted,
@@ -327,6 +360,8 @@ export default function TrainingDetailPage() {
     videoCompleted,
     clickCount,
     requiredClicks,
+    trackedSeconds,
+    videoDuration,
   ]);
 
   if (loading) {
@@ -463,21 +498,33 @@ export default function TrainingDetailPage() {
               }}
             >
               <div>
-                <div style={{ color: "#6b7280", marginBottom: "6px" }}>Toplam Eğitim Süresi</div>
-                <div style={{ fontWeight: 700 }}>{formatSeconds(videoDuration)}</div>
+                <div style={{ color: "#6b7280", marginBottom: "6px" }}>
+                  Toplam Eğitim Süresi
+                </div>
+                <div style={{ fontWeight: 700 }}>
+                  {formatSeconds(videoDuration)}
+                </div>
               </div>
               <div>
-                <div style={{ color: "#6b7280", marginBottom: "6px" }}>Geçerli İzlenen Süre</div>
-                <div style={{ fontWeight: 700 }}>{formatSeconds(trackedSeconds)}</div>
+                <div style={{ color: "#6b7280", marginBottom: "6px" }}>
+                  Geçerli İzlenen Süre
+                </div>
+                <div style={{ fontWeight: 700 }}>
+                  {formatSeconds(trackedSeconds)}
+                </div>
               </div>
               <div>
-                <div style={{ color: "#6b7280", marginBottom: "6px" }}>Tıklama</div>
+                <div style={{ color: "#6b7280", marginBottom: "6px" }}>
+                  Tıklama
+                </div>
                 <div style={{ fontWeight: 700 }}>
                   {clickCount} / {requiredClicks}
                 </div>
               </div>
               <div>
-                <div style={{ color: "#6b7280", marginBottom: "6px" }}>İlerleme</div>
+                <div style={{ color: "#6b7280", marginBottom: "6px" }}>
+                  İlerleme
+                </div>
                 <div style={{ fontWeight: 700 }}>%{progressPercent}</div>
               </div>
             </div>
@@ -503,7 +550,9 @@ export default function TrainingDetailPage() {
                   Canlı Eğitime Katıl
                 </a>
               ) : (
-                <p style={{ color: "#b91c1c" }}>Canlı eğitim linki bulunamadı.</p>
+                <p style={{ color: "#b91c1c" }}>
+                  Canlı eğitim linki bulunamadı.
+                </p>
               )}
             </div>
           ) : contentUrl ? (
@@ -535,9 +584,10 @@ export default function TrainingDetailPage() {
                     lineHeight: 1.7,
                   }}
                 >
-                  Bu asenkron içerik bağlantısı denetimli eğitim mantığı için uygun değil.
-                  İleri sarma engeli, tıklama zorunluluğu ve gerçek süre takibi için
-                  içerik bağlantısının doğrudan MP4/WebM video olması gerekir.
+                  Bu asenkron içerik bağlantısı denetimli eğitim mantığı için
+                  uygun değil. İleri sarma engeli, tıklama zorunluluğu ve gerçek
+                  süre takibi için içerik bağlantısının doğrudan MP4/WebM video
+                  olması gerekir.
                 </div>
               )}
             </div>
@@ -559,7 +609,8 @@ export default function TrainingDetailPage() {
                 lineHeight: 1.6,
               }}
             >
-              Video meta bilgileri yükleniyor. Eğitim süresi ve izleme takibi hazırlanıyor.
+              Video meta bilgileri yükleniyor. Eğitim süresi ve izleme takibi
+              hazırlanıyor.
             </div>
           )}
 
