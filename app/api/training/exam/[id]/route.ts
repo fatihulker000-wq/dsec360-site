@@ -45,13 +45,14 @@ export async function GET(
 
     if (!examType || !["pre", "final"].includes(examType)) {
       return NextResponse.json(
-        { error: "geçerli exam_type gerekli: pre | final" },
+        { error: "geçerli exam_type gerekli" },
         { status: 400 }
       );
     }
 
     const supabase = getSupabase();
 
+    // 🔥 ASSIGNMENT BUL
     const { data: assignment, error: assignmentError } = await supabase
       .from("training_assignments")
       .select("id, user_id, training_id")
@@ -67,6 +68,9 @@ export async function GET(
       );
     }
 
+    console.log("🔥 DOĞRU TRAINING_ID:", assignment.training_id);
+
+    // 🔥 SORULARI ÇEK
     const { data, error } = await supabase
       .from("training_exam_questions")
       .select("*")
@@ -82,7 +86,16 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ data: data || [] });
+    console.log("🔥 GELEN SORU SAYISI:", data?.length);
+
+    return NextResponse.json({
+      data: data || [],
+      debug: {
+        assignmentId,
+        trainingId: assignment.training_id,
+        count: data?.length || 0,
+      },
+    });
   } catch (error: any) {
     console.error("exam get genel hata:", error);
     return NextResponse.json(
