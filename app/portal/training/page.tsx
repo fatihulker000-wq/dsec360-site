@@ -1,60 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 
 type TrainingStatus = "not_started" | "in_progress" | "completed";
 
-type TrainingRecord = {
+type TrainingDetail = {
   id: string;
   status: TrainingStatus;
   started_at?: string | null;
   completed_at?: string | null;
   watch_completed?: boolean | null;
+  watch_seconds?: number | null;
+  click_count?: number | null;
+  pre_exam_completed?: boolean | null;
+  pre_exam_score?: number | null;
+  final_exam_score?: number | null;
+  final_exam_attempts?: number | null;
+  final_exam_passed?: boolean | null;
+  training_reset_required?: boolean | null;
   training?: {
-    id: string;
+    id?: string;
     title?: string;
     description?: string;
     content_url?: string;
     type?: string;
   } | null;
 };
-
-function getStatusLabel(status: TrainingStatus) {
-  if (status === "completed") return "Tamamlandı";
-  if (status === "in_progress") return "Devam Ediyor";
-  return "Başlanmadı";
-}
-
-function getStatusStyle(status: TrainingStatus): React.CSSProperties {
-  if (status === "completed") {
-    return {
-      background: "#dcfce7",
-      color: "#166534",
-      border: "1px solid #86efac",
-    };
-  }
-
-  if (status === "in_progress") {
-    return {
-      background: "#fef3c7",
-      color: "#92400e",
-      border: "1px solid #fcd34d",
-    };
-  }
-
-  return {
-    background: "#fee2e2",
-    color: "#b91c1c",
-    border: "1px solid #fca5a5",
-  };
-}
-
-function formatDateTr(value?: string | null) {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleString("tr-TR");
-}
 
 function normalizeType(type?: string | null) {
   const value = (type || "").trim().toLowerCase();
@@ -65,44 +37,73 @@ function normalizeType(type?: string | null) {
   return "asenkron";
 }
 
-function getEffectiveStatus(item: TrainingRecord): TrainingStatus {
-  if (item.status === "completed" || item.completed_at || item.watch_completed) {
-    return "completed";
-  }
-
-  if (item.started_at || item.status === "in_progress") {
-    return "in_progress";
-  }
-
-  return "not_started";
+function formatSeconds(total: number) {
+  const safe = Math.max(0, Math.floor(total));
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${minutes} dk ${String(seconds).padStart(2, "0")} sn`;
 }
 
-function getLocalPercent(item: TrainingRecord, trainingType: string): number {
-  const effectiveStatus = getEffectiveStatus(item);
+function isNativeVideoUrl(url: string) {
+  const safe = (url || "").toLowerCase().split("?")[0];
 
-  if (effectiveStatus === "completed") return 100;
+  return (
+    safe.endsWith(".mp4") ||
+    safe.endsWith(".webm") ||
+    safe.endsWith(".ogg") ||
+    safe.endsWith(".mov")
+  );
+}
 
-  if (trainingType === "senkron") {
-    return effectiveStatus === "in_progress" ? 50 : 0;
+function isYoutubeUrl(url: string) {
+  const safe = (url || "").toLowerCase();
+  return safe.includes("youtube.com/watch") || safe.includes("youtu.be/");
+}
+
+function toEmbedUrl(url: string) {
+  if (!url) return "";
+
+  if (url.includes("youtube.com/watch?v=")) {
+    return url.replace("watch?v=", "embed/");
   }
 
-  return effectiveStatus === "in_progress" ? 1 : 0;
+  if (url.includes("youtu.be/")) {
+    const id = url.split("youtu.be/")[1]?.split("?")[0];
+    return id ? `https://www.youtube.com/embed/${id}` : url;
+  }
+
+  return url;
 }
 
-function getPrimaryButtonLabel(item: TrainingRecord): string {
-  const effectiveStatus = getEffectiveStatus(item);
+export default function TrainingDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const assignmentId = params?.id as string;
 
-  if (effectiveStatus === "not_started") return "Eğitimi Aç";
-  if (effectiveStatus === "in_progress") return "Devam Et";
-  return "Tamamlandı";
-}
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const maxReachedRef = useRef(0);
+  const isProgrammaticSeekRef = useRef(false);
 
-export default function TrainingPortalPage() {
-  const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
+  const [training, setTraining] = useState<TrainingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [progressSaved, setProgressSaved] = useState(false);
 
-  const fetchTrainings = async () => {
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [maxReachedTime, setMaxReachedTime] = useState(0);
+  const [showPresencePopup, setShowPresencePopup] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
+  const [requiredClicks, setRequiredClicks] = useState(1);
+  const [videoCompleted, setVideoCompleted] = useState(false);
+  const [playbackReady, setPlaybackReady] = useState(false);
+
+
+
+  // A3
+  const [checkpointIndex, setCheckpointIndex] = useState(0);
+  const checkpointsRef = useRef<number[]>([]);
+
+  const fetchTraining = async () => {
     try {
       setLoading(true);
       setError("");
@@ -113,515 +114,846 @@ export default function TrainingPortalPage() {
         credentials: "include",
       });
 
-      const text = await res.text();
-      let json: any = null;
-
-      try {
-        json = text ? JSON.parse(text) : null;
-      } catch (parseErr) {
-        console.error("training my json parse hatası:", parseErr, text);
-        setError("Sunucudan geçerli veri alınamadı.");
-        setTrainings([]);
-        return;
-      }
+      const json = await res.json();
 
       if (!res.ok) {
-        setError(json?.error || "Eğitimler alınamadı.");
-        setTrainings([]);
+        setError(json?.error || "Eğitim alınamadı.");
+        setTraining(null);
         return;
       }
 
-      const rows = Array.isArray(json?.data) ? json.data : [];
-      setTrainings(rows);
+      const found = Array.isArray(json?.data)
+        ? json.data.find((item: TrainingDetail) => item.id === assignmentId)
+        : null;
+
+      if (!found) {
+        setError("Eğitim kaydı bulunamadı.");
+        setTraining(null);
+        return;
+      }
+
+      const dbWatch = Number(found.watch_seconds || 0);
+      const dbClicks = Number(found.click_count || 0);
+
+      setTraining(found);
+      setMaxReachedTime(dbWatch);
+      maxReachedRef.current = dbWatch;
+      setClickCount(dbClicks);
+      setCheckpointIndex(dbClicks);
+      setVideoCompleted(found.watch_completed === true);
     } catch (err) {
-      console.error("training my fetch hatası:", err);
+      console.error("training detail fetch hatası:", err);
       setError("Bağlantı hatası oluştu.");
-      setTrainings([]);
+      setTraining(null);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void fetchTrainings();
-  }, []);
+    if (assignmentId) {
+      void fetchTraining();
+    }
+  }, [assignmentId]);
 
-  const stats = useMemo(() => {
-    const total = trainings.length;
+  const trainingType = useMemo(
+    () => normalizeType(training?.training?.type),
+    [training?.training?.type]
+  );
 
-    const completed = trainings.filter((x) => {
-      const trainingCompleted =
-        typeof window !== "undefined"
-          ? localStorage.getItem(`trainingCompleted_${x.id}`) === "true"
-          : false;
+  const contentUrl = training?.training?.content_url || "";
+  const embedUrl = useMemo(() => toEmbedUrl(contentUrl), [contentUrl]);
 
-      const effectiveStatus = getEffectiveStatus(x);
-      return effectiveStatus === "completed" || trainingCompleted;
-    }).length;
+  const isAsync = trainingType === "asenkron";
+  const isSync = trainingType === "senkron";
+  const nativeVideo = isNativeVideoUrl(contentUrl);
+  const youtubeVideo = isYoutubeUrl(contentUrl);
 
-    const inProgress = trainings.filter((x) => {
-      const trainingCompleted =
-        typeof window !== "undefined"
-          ? localStorage.getItem(`trainingCompleted_${x.id}`) === "true"
-          : false;
+  const serverFinalAttempts = Number(training?.final_exam_attempts || 0);
+  const finalAttemptsLeft = Math.max(0, 3 - serverFinalAttempts);
+  const finalScore =
+    training?.final_exam_score !== null &&
+    training?.final_exam_score !== undefined
+      ? Number(training.final_exam_score)
+      : null;
 
-      const effectiveStatus = getEffectiveStatus(x);
-      return effectiveStatus === "in_progress" && !trainingCompleted;
-    }).length;
+  const preExamCompleted = training?.pre_exam_completed === true;
 
-    const notStarted = trainings.filter((x) => {
-      const trainingCompleted =
-        typeof window !== "undefined"
-          ? localStorage.getItem(`trainingCompleted_${x.id}`) === "true"
-          : false;
+  const trainingCompleted =
+    training?.status === "completed" || training?.final_exam_passed === true;
 
-      const effectiveStatus = getEffectiveStatus(x);
-      return effectiveStatus === "not_started" && !trainingCompleted;
-    }).length;
+  useEffect(() => {
+    if (videoDuration > 0) {
+      const calculatedRequiredClicks = Math.max(
+        1,
+        Math.floor(videoDuration / 90)
+      );
+      setRequiredClicks(calculatedRequiredClicks);
 
-    const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+      const arr: number[] = [];
+      for (let sec = 90; sec < videoDuration; sec += 90) {
+        arr.push(sec);
+      }
+      checkpointsRef.current = arr;
+    }
+  }, [videoDuration]);
 
-    return {
-      total,
-      completed,
-      inProgress,
-      notStarted,
-      percent,
+  const handleLoadedMetadata = () => {
+    const player = videoRef.current;
+    if (!player) return;
+
+    const duration = Math.floor(player.duration || 0);
+    setVideoDuration(duration);
+
+    if (maxReachedRef.current > 0 && maxReachedRef.current < duration) {
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = maxReachedRef.current;
+    }
+
+    setPlaybackReady(true);
+  };
+
+  const handleTimeUpdate = () => {
+    const player = videoRef.current;
+    if (!player) return;
+
+    const current = Math.floor(player.currentTime || 0);
+    const prevMax = maxReachedRef.current;
+
+    // A1 - ileri sarma engeli
+    if (current > prevMax + 1) {
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = prevMax;
+      return;
+    }
+
+    if (current > prevMax) {
+      maxReachedRef.current = current;
+      setMaxReachedTime(current);
+    }
+
+    // A3 - checkpoint popup
+    const checkpoints = checkpointsRef.current;
+    if (
+      checkpointIndex < checkpoints.length &&
+      current >= checkpoints[checkpointIndex] &&
+      !showPresencePopup
+    ) {
+      player.pause();
+      setShowPresencePopup(true);
+    }
+  };
+
+  const handleSeeking = () => {
+    const player = videoRef.current;
+    if (!player) return;
+
+    if (isProgrammaticSeekRef.current) {
+      isProgrammaticSeekRef.current = false;
+      return;
+    }
+
+    const current = Math.floor(player.currentTime || 0);
+    const allowedMax = maxReachedRef.current + 1;
+
+    // geri sarma serbest, ileri sarma yasak
+    if (current > allowedMax) {
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = maxReachedRef.current;
+    }
+  };
+
+  const effectiveWatchSeconds = Math.min(
+    Math.max(Number(training?.watch_seconds || 0), Math.floor(maxReachedTime)),
+    Math.floor(
+      videoDuration ||
+        Math.max(Number(training?.watch_seconds || 0), maxReachedTime)
+    )
+  );
+
+  const effectiveClickCount = Math.max(
+    Number(training?.click_count || 0),
+    clickCount
+  );
+
+  // A2 - video gerçekten sona gelmeden tamam sayılmaz
+  useEffect(() => {
+    if (videoDuration <= 0) return;
+
+    const completed =
+      effectiveWatchSeconds >= Math.max(videoDuration - 1, 1);
+
+    setVideoCompleted(completed);
+  }, [effectiveWatchSeconds, videoDuration]);
+
+  const progressPercent =
+    videoDuration > 0
+      ? Math.min(100, Math.round((effectiveWatchSeconds / videoDuration) * 100))
+      : 0;
+
+  useEffect(() => {
+    if (!assignmentId) return;
+    if (!videoCompleted) return;
+    if (progressSaved) return;
+
+    const saveProgress = async () => {
+      try {
+        const res = await fetch("/api/training/progress", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            assignmentId,
+            watchSeconds: effectiveWatchSeconds,
+            clickCount: effectiveClickCount,
+            completed: true,
+          }),
+        });
+
+        if (res.ok) {
+          setProgressSaved(true);
+          await fetchTraining();
+        }
+      } catch (err) {
+        console.error("training progress save error:", err);
+      }
     };
-  }, [trainings]);
+
+    void saveProgress();
+  }, [
+    assignmentId,
+    videoCompleted,
+    effectiveWatchSeconds,
+    effectiveClickCount,
+    progressSaved,
+  ]);
+
+  const canTakeFinalExam =
+    finalAttemptsLeft > 0 &&
+    !trainingCompleted &&
+    preExamCompleted &&
+    (isSync ||
+      (isAsync &&
+        nativeVideo &&
+        (training?.watch_completed === true || videoCompleted) &&
+        effectiveWatchSeconds >= Math.floor(videoDuration) &&
+        effectiveClickCount >= requiredClicks));
+
+  const lockReason = useMemo(() => {
+    if (trainingCompleted) return "";
+    if (!preExamCompleted)
+      return "Ön sınav tamamlanmadan eğitime/finale ilerlenemez.";
+    if (finalAttemptsLeft <= 0) return "Final hakkı bitti.";
+    if (isSync) return "";
+    if (!contentUrl) return "Eğitim içeriği bulunamadı.";
+
+    if (nativeVideo) {
+      if (!(training?.watch_completed === true || videoCompleted)) {
+        return "Video tamamen bitmeden final açılmaz.";
+      }
+      if (effectiveClickCount < requiredClicks) {
+        return "Zorunlu ekran başı onayları tamamlanmadı.";
+      }
+      if (effectiveWatchSeconds < Math.floor(videoDuration)) {
+        return "Eğitim süresi tamamlanmadan final açılmaz.";
+      }
+      return "";
+    }
+
+    if (youtubeVideo) {
+      return "YouTube içerikleri açılır; ancak denetimli final kilidi doğrudan video dosyalarında tam çalışır.";
+    }
+
+    return "Bu içerik açılabilir; ancak zorunlu süre/izleme doğrulaması yapılamadığı için final kilitli kalır.";
+  }, [
+    trainingCompleted,
+    preExamCompleted,
+    finalAttemptsLeft,
+    isSync,
+    contentUrl,
+    nativeVideo,
+    youtubeVideo,
+    training?.watch_completed,
+    videoCompleted,
+    effectiveClickCount,
+    requiredClicks,
+    effectiveWatchSeconds,
+    videoDuration,
+  ]);
+
+  if (loading) {
+    return (
+      <main style={{ padding: "40px", fontFamily: "Arial" }}>
+        <h1>Yükleniyor...</h1>
+      </main>
+    );
+  }
+
+  if (error || !training) {
+    return (
+      <main style={{ padding: "40px", fontFamily: "Arial" }}>
+        <h1>Hata</h1>
+        <p>{error || "Eğitim bulunamadı."}</p>
+      </main>
+    );
+  }
 
   return (
-    <main>
-      <section className="hero hero-compact">
-        <div className="hero-inner">
-          <div className="hero-badge">D-SEC Eğitim Portalı</div>
-          <h1 className="hero-title">Online Eğitimler</h1>
-          <p className="hero-desc">
-            Size atanmış eğitimleri açın, aktif izleme ile tamamlayın ve
-            belgelerinizi alın.
+    <main style={{ padding: "40px", fontFamily: "Arial" }}>
+      <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: "18px",
+            padding: "24px",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
+          }}
+        >
+          <h1 style={{ margin: 0 }}>{training.training?.title || "Eğitim"}</h1>
+
+          <p style={{ marginTop: "12px", color: "#444", lineHeight: 1.7 }}>
+            {training.training?.description || "Açıklama bulunmuyor."}
           </p>
-        </div>
-      </section>
-
-      <section className="section section-light">
-        <div className="page-container">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: "18px",
-              marginBottom: "26px",
-            }}
-          >
-            <div className="card">
-              <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                Toplam Eğitim
-              </div>
-              <div
-                style={{
-                  fontSize: "30px",
-                  fontWeight: 800,
-                  marginTop: "8px",
-                }}
-              >
-                {stats.total}
-              </div>
-            </div>
-
-            <div className="card">
-              <div style={{ fontSize: "13px", color: "#b91c1c" }}>
-                Başlanmadı
-              </div>
-              <div
-                style={{
-                  fontSize: "30px",
-                  fontWeight: 800,
-                  marginTop: "8px",
-                }}
-              >
-                {stats.notStarted}
-              </div>
-            </div>
-
-            <div className="card">
-              <div style={{ fontSize: "13px", color: "#92400e" }}>
-                Devam Ediyor
-              </div>
-              <div
-                style={{
-                  fontSize: "30px",
-                  fontWeight: 800,
-                  marginTop: "8px",
-                }}
-              >
-                {stats.inProgress}
-              </div>
-            </div>
-
-            <div className="card">
-              <div style={{ fontSize: "13px", color: "#166534" }}>
-                Tamamlanma
-              </div>
-              <div
-                style={{
-                  fontSize: "30px",
-                  fontWeight: 800,
-                  marginTop: "8px",
-                }}
-              >
-                %{stats.percent}
-              </div>
-            </div>
-          </div>
 
           <div
-            className="card"
             style={{
-              marginBottom: "24px",
-              padding: "18px 22px",
+              marginTop: "16px",
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              alignItems: "center",
             }}
           >
             <div
               style={{
-                fontSize: "14px",
-                fontWeight: 700,
-                color: "#374151",
-                marginBottom: "10px",
-              }}
-            >
-              Genel İlerleme
-            </div>
-
-            <div
-              style={{
-                width: "100%",
-                height: "14px",
-                background: "#e5e7eb",
+                display: "inline-flex",
+                padding: "8px 12px",
                 borderRadius: "999px",
-                overflow: "hidden",
+                background: "#f9fafb",
+                border: "1px solid #e5e7eb",
+                color: "#374151",
+                fontSize: "13px",
+                fontWeight: 700,
               }}
             >
-              <div
-                style={{
-                  width: `${stats.percent}%`,
-                  height: "100%",
-                  background: "#16a34a",
-                  transition: "width 0.25s ease",
-                }}
-              />
+              Tür: {trainingType}
             </div>
 
             <div
               style={{
-                marginTop: "10px",
+                display: "inline-flex",
+                padding: "8px 12px",
+                borderRadius: "999px",
+                background: trainingCompleted ? "#dcfce7" : "#eff6ff",
+                border: trainingCompleted
+                  ? "1px solid #86efac"
+                  : "1px solid #bfdbfe",
+                color: trainingCompleted ? "#166534" : "#1d4ed8",
                 fontSize: "13px",
-                color: "#6b7280",
+                fontWeight: 700,
               }}
             >
-              {stats.completed} / {stats.total} eğitim tamamlandı
+              {trainingCompleted ? "Eğitim Başarılı" : "Eğitim Devam Ediyor"}
             </div>
+
+            <div
+              style={{
+                display: "inline-flex",
+                padding: "8px 12px",
+                borderRadius: "999px",
+                background: preExamCompleted ? "#eff6ff" : "#fef2f2",
+                border: preExamCompleted
+                  ? "1px solid #bfdbfe"
+                  : "1px solid #fecaca",
+                color: preExamCompleted ? "#1d4ed8" : "#991b1b",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              {preExamCompleted ? "Ön Sınav Tamamlandı" : "Ön Sınav Bekleniyor"}
+            </div>
+
+            <div
+              style={{
+                display: "inline-flex",
+                padding: "8px 12px",
+                borderRadius: "999px",
+                background: "#fff7ed",
+                border: "1px solid #fdba74",
+                color: "#9a3412",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              Kalan Final Hakkı: {finalAttemptsLeft}
+            </div>
+
+            {finalScore !== null ? (
+              <div
+                style={{
+                  display: "inline-flex",
+                  padding: "8px 12px",
+                  borderRadius: "999px",
+                  background: finalScore >= 60 ? "#dcfce7" : "#fee2e2",
+                  border:
+                    finalScore >= 60
+                      ? "1px solid #86efac"
+                      : "1px solid #fca5a5",
+                  color: finalScore >= 60 ? "#166534" : "#b91c1c",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                }}
+              >
+                Final Puanı: %{finalScore}
+              </div>
+            ) : null}
           </div>
 
-          {error ? (
-            <div className="card" style={{ marginBottom: "20px" }}>
-              <h3 className="card-title">Hata</h3>
-              <p className="card-text">{error}</p>
+          {isAsync && (
+            <div
+              style={{
+                marginTop: "18px",
+                padding: "14px 16px",
+                borderRadius: "12px",
+                background: "#f8fafc",
+                border: "1px solid #e5e7eb",
+                display: "grid",
+                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                gap: "12px",
+                fontSize: "13px",
+              }}
+            >
+              <div>
+                <div style={{ color: "#6b7280", marginBottom: "6px" }}>
+                  Toplam Eğitim Süresi
+                </div>
+                <div style={{ fontWeight: 700 }}>
+                  {formatSeconds(videoDuration)}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: "#6b7280", marginBottom: "6px" }}>
+                  Geçerli İzlenen Süre
+                </div>
+                <div style={{ fontWeight: 700 }}>
+                  {formatSeconds(effectiveWatchSeconds)}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: "#6b7280", marginBottom: "6px" }}>
+                  Tıklama
+                </div>
+                <div style={{ fontWeight: 700 }}>
+                  {effectiveClickCount} / {requiredClicks}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: "#6b7280", marginBottom: "6px" }}>
+                  İlerleme
+                </div>
+                <div style={{ fontWeight: 700 }}>%{progressPercent}</div>
+              </div>
             </div>
-          ) : null}
+          )}
 
-          {loading ? (
-            <div className="card">Yükleniyor...</div>
-          ) : !error && trainings.length === 0 ? (
-            <div className="card">
-              <h3 className="card-title">Eğitim bulunamadı</h3>
-              <p className="card-text">
-                Bu kullanıcıya atanmış eğitim görünmüyor.
-              </p>
+          {isSync ? (
+            <div style={{ marginTop: "24px" }}>
+              {contentUrl ? (
+                <a
+                  href={contentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "inline-block",
+                    padding: "12px 18px",
+                    background: "#2563eb",
+                    color: "#fff",
+                    borderRadius: "10px",
+                    textDecoration: "none",
+                    fontWeight: 700,
+                  }}
+                >
+                  Canlı Eğitime Katıl
+                </a>
+              ) : (
+                <p style={{ color: "#b91c1c" }}>
+                  Canlı eğitim linki bulunamadı.
+                </p>
+              )}
             </div>
-          ) : !error ? (
-            <div className="grid-3">
-              {trainings.map((item) => {
-                const trainingType = normalizeType(item.training?.type);
-                const baseEffectiveStatus = getEffectiveStatus(item);
+          ) : contentUrl ? (
+            <div style={{ marginTop: "24px" }}>
+              {nativeVideo ? (
+                <video
+                  ref={videoRef}
+                  src={contentUrl}
+                  controls
+                  controlsList="nodownload noplaybackrate"
+                  disablePictureInPicture
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onTimeUpdate={handleTimeUpdate}
+                  onSeeking={handleSeeking}
+                  onEnded={() => setVideoCompleted(true)}
 
-                const preExamScore =
-                  typeof window !== "undefined"
-                    ? localStorage.getItem(`preExamScore_${item.id}`)
-                    : null;
+                  style={{
+                    width: "100%",
+                    borderRadius: "16px",
+                    background: "#000",
+                  }}
+                />
+              ) : youtubeVideo ? (
+                <iframe
+                  src={embedUrl}
+                  width="100%"
+                  height="500"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{
+                    border: "none",
+                    borderRadius: "16px",
+                    background: "#000",
+                  }}
+                  title="Eğitim İçeriği"
+                />
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "12px",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    padding: "18px",
+                    borderRadius: "12px",
+                    background: "#f9fafb",
+                    border: "1px solid #e5e7eb",
+                  }}
+                >
+                  <div style={{ color: "#374151", lineHeight: 1.7 }}>
+                    Bu eğitim içeriği tarayıcıda doğrudan oynatılamayan bir bağlantı türünde.
+                    İçeriği açıp izlemek için aşağıdaki bağlantıyı kullanabilirsiniz.
+                  </div>
 
-                const isPreExamPassed = !!preExamScore && Number(preExamScore) >= 60;
-
-                const trainingCompleted =
-                  typeof window !== "undefined"
-                    ? localStorage.getItem(`trainingCompleted_${item.id}`) === "true"
-                    : false;
-
-                const finalScore =
-                  typeof window !== "undefined"
-                    ? localStorage.getItem(`finalScore_${item.id}`)
-                    : null;
-
-                const effectiveStatus: TrainingStatus = trainingCompleted
-                  ? "completed"
-                  : baseEffectiveStatus;
-
-                const localPercent = trainingCompleted
-                  ? 100
-                  : getLocalPercent(item, trainingType);
-
-                const primaryButtonLabel = getPrimaryButtonLabel({
-                  ...item,
-                  status: effectiveStatus,
-                });
-
-                return (
-                  <div
-                    key={item.id}
-                    className="card"
+                  <a
+                    href={contentUrl}
+                    target="_blank"
+                    rel="noreferrer"
                     style={{
-                      borderRadius: "22px",
-                      overflow: "hidden",
+                      display: "inline-block",
+                      padding: "12px 18px",
+                      background: "#2563eb",
+                      color: "#fff",
+                      borderRadius: "10px",
+                      textDecoration: "none",
+                      fontWeight: 700,
                     }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        alignItems: "flex-start",
-                        marginBottom: "14px",
-                      }}
-                    >
-                      <h3 className="card-title" style={{ marginRight: "8px" }}>
-                        {item.training?.title || "Adsız Eğitim"}
-                      </h3>
-
-                      <div
-                        style={{
-                          ...getStatusStyle(effectiveStatus),
-                          borderRadius: "999px",
-                          padding: "8px 12px",
-                          fontSize: "12px",
-                          fontWeight: 700,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {getStatusLabel(effectiveStatus)}
-                      </div>
-                    </div>
-
-                    <p className="card-text">
-                      {item.training?.description || "Açıklama bulunmuyor."}
-                    </p>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "8px",
-                        flexWrap: "wrap",
-                        marginTop: "10px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "inline-flex",
-                          padding: "6px 10px",
-                          borderRadius: "999px",
-                          background: "#f9fafb",
-                          border: "1px solid #e5e7eb",
-                          fontSize: "12px",
-                          fontWeight: 700,
-                          color: "#374151",
-                        }}
-                      >
-                        Tür: {trainingType}
-                      </div>
-
-                      {item.watch_completed ? (
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            padding: "6px 10px",
-                            borderRadius: "999px",
-                            background: "#dcfce7",
-                            border: "1px solid #86efac",
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            color: "#166534",
-                          }}
-                        >
-                          İzleme Tamam
-                        </div>
-                      ) : null}
-
-                      {isPreExamPassed ? (
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            padding: "6px 10px",
-                            borderRadius: "999px",
-                            background: "#eff6ff",
-                            border: "1px solid #bfdbfe",
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            color: "#1d4ed8",
-                          }}
-                        >
-                          Ön Sınav Geçildi
-                        </div>
-                      ) : null}
-
-                      {finalScore ? (
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            padding: "6px 10px",
-                            borderRadius: "999px",
-                            background: Number(finalScore) >= 60 ? "#dcfce7" : "#fee2e2",
-                            border:
-                              Number(finalScore) >= 60
-                                ? "1px solid #86efac"
-                                : "1px solid #fca5a5",
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            color: Number(finalScore) >= 60 ? "#166534" : "#b91c1c",
-                          }}
-                        >
-                          Final: %{finalScore}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div style={{ marginTop: "16px" }}>
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "10px",
-                          background: "#e5e7eb",
-                          borderRadius: "999px",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${localPercent}%`,
-                            height: "100%",
-                            background:
-                              localPercent === 100 ? "#16a34a" : "#f59e0b",
-                          }}
-                        />
-                      </div>
-
-                      <div
-                        style={{
-                          marginTop: "8px",
-                          fontSize: "12px",
-                          color: "#6b7280",
-                        }}
-                      >
-                        İlerleme: %{localPercent}
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: "14px",
-                        fontSize: "12px",
-                        color: "#6b7280",
-                        lineHeight: 1.7,
-                      }}
-                    >
-                      Başlangıç: {formatDateTr(item.started_at)}
-                      <br />
-                      Tamamlanma: {formatDateTr(item.completed_at)}
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: "18px",
-                        display: "flex",
-                        gap: "10px",
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      {effectiveStatus !== "completed" && (
-                        <button
-                          className="cbs-button"
-                          style={{
-                            background:
-                              effectiveStatus === "not_started"
-                                ? "#f59e0b"
-                                : "#2563eb",
-                          }}
-                          onClick={() => {
-                            if (!isPreExamPassed) {
-                              window.location.href = `/portal/training/${item.id}/pre-exam`;
-                            } else {
-                              window.location.href = `/portal/training/${item.id}`;
-                            }
-                          }}
-                        >
-                          {primaryButtonLabel}
-                        </button>
-                      )}
-
-                      {(effectiveStatus === "completed" || trainingCompleted) && (
-                        <>
-                          <button
-                            className="cbs-button"
-                            style={{ background: "#111827" }}
-                            disabled
-                          >
-                            Tamamlandı
-                          </button>
-
-                          {Number(finalScore) >= 60 ? (
-                            <>
-                              <a
-                                href={`/api/training/certificate/${item.id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="cbs-button"
-                                style={{
-                                  background: "#7c3aed",
-                                  textDecoration: "none",
-                                }}
-                              >
-                                Eğitim Sertifikası
-                              </a>
-
-                              <a
-                                href={`/api/training/attendance-certificate/${item.id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="cbs-button"
-                                style={{
-                                  background: "#0f766e",
-                                  textDecoration: "none",
-                                }}
-                              >
-                                Katılım Belgesi
-                              </a>
-                            </>
-                          ) : (
-                            <button
-                              className="cbs-button"
-                              style={{ background: "#9ca3af" }}
-                              disabled
-                            >
-                              Final Başarısı Bekleniyor
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                    Eğitimi Aç
+                  </a>
+                </div>
+              )}
             </div>
-          ) : null}
+          ) : (
+            <p style={{ marginTop: "24px", color: "#b91c1c" }}>
+              Eğitim içeriği bulunamadı.
+            </p>
+          )}
+
+          {!playbackReady && isAsync && nativeVideo && (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                background: "#eff6ff",
+                border: "1px solid #bfdbfe",
+                color: "#1d4ed8",
+                lineHeight: 1.6,
+              }}
+            >
+              Video meta bilgileri yükleniyor. Eğitim süresi ve izleme takibi hazırlanıyor.
+            </div>
+          )}
+
+          {!!lockReason && !trainingCompleted && (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#991b1b",
+                lineHeight: 1.6,
+              }}
+            >
+              {lockReason}
+            </div>
+          )}
+
+          {isAsync && !nativeVideo && contentUrl && (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                background: "#eff6ff",
+                border: "1px solid #bfdbfe",
+                color: "#1d4ed8",
+                lineHeight: 1.6,
+              }}
+            >
+              Bu içerik açılır ve izlenir. Ancak ileri sarma engeli, zorunlu tıklama ve süre takibi en sağlıklı şekilde doğrudan video dosyalarında çalışır.
+            </div>
+          )}
+
+          <div
+            style={{
+              marginTop: "24px",
+              display: "flex",
+              gap: "12px",
+              flexWrap: "wrap",
+            }}
+          >
+            {!preExamCompleted ? (
+              <button
+                onClick={() => router.push(`/portal/training/${assignmentId}/pre-exam`)}
+                style={{
+                  padding: "12px 20px",
+                  background: "#2563eb",
+                  color: "#fff",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Ön Sınava Git
+              </button>
+            ) : canTakeFinalExam ? (
+              <button
+                onClick={() => {
+                  router.push(`/portal/training/${assignmentId}/final-exam`);
+                }}
+                style={{
+                  padding: "12px 20px",
+                  background: "#7c3aed",
+                  color: "#fff",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Final Sınavına Gir
+              </button>
+            ) : trainingCompleted ? (
+              <button
+                disabled
+                style={{
+                  padding: "12px 20px",
+                  background: "#16a34a",
+                  color: "#fff",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontWeight: 700,
+                  opacity: 0.9,
+                }}
+              >
+                Eğitim Tamamlandı
+              </button>
+            ) : (
+              <button
+                disabled
+                style={{
+                  padding: "12px 20px",
+                  background: "#9ca3af",
+                  color: "#fff",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontWeight: 700,
+                  opacity: 0.9,
+                }}
+              >
+                Final Kilitli
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                router.push("/portal/training");
+              }}
+              style={{
+                padding: "12px 20px",
+                background: "#111827",
+                color: "#fff",
+                borderRadius: "10px",
+                border: "none",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Eğitim Listesine Dön
+            </button>
+          </div>
+
+          {!trainingCompleted && finalAttemptsLeft <= 0 && (
+            <div
+              style={{
+                marginTop: "18px",
+                padding: "14px 16px",
+                borderRadius: "12px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#991b1b",
+                lineHeight: 1.6,
+              }}
+            >
+              Final sınav haklarınız bitti. Bu eğitim tamamlanmadı olarak değerlendirilecektir ve eğitimin yeniden alınması gerekir.
+            </div>
+          )}
+
+          {trainingCompleted && (
+            <>
+              <div
+                style={{
+                  marginTop: "18px",
+                  padding: "14px 16px",
+                  borderRadius: "12px",
+                  background: "#f0fdf4",
+                  border: "1px solid #bbf7d0",
+                  color: "#166534",
+                  lineHeight: 1.6,
+                }}
+              >
+                Tebrikler. Final sınavı başarıyla tamamlandı. Eğitim başarılı durumda.
+              </div>
+
+              <div
+                style={{
+                  marginTop: "16px",
+                  display: "flex",
+                  gap: "12px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  onClick={() =>
+                    window.open(`/api/training/certificate/${assignmentId}`, "_blank")
+                  }
+                  style={{
+                    padding: "12px 18px",
+                    background: "#7c3aed",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Eğitim Sertifikası
+                </button>
+
+                <button
+                  onClick={() =>
+                    window.open(
+                      `/api/training/certificate/${assignmentId}?type=attendance`,
+                      "_blank"
+                    )
+                  }
+                  style={{
+                    padding: "12px 18px",
+                    background: "#0f766e",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Katılım Belgesi
+                </button>
+              </div>
+            </>
+          )}
         </div>
-      </section>
+      </div>
+
+      {showPresencePopup && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.65)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              maxWidth: "460px",
+              width: "100%",
+              borderRadius: "18px",
+              padding: "28px",
+              textAlign: "center",
+              boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
+            }}
+          >
+ <h3 style={{ marginTop: 0, marginBottom: "10px" }}>
+  90 saniyelik ekran başı doğrulaması
+</h3>
+<p style={{ color: "#4b5563", lineHeight: 1.7 }}>
+  Eğitime aktif devam ettiğinizi doğrulamak için onay vermeniz gerekir.
+  Onay verilmeden video devam etmez.
+</p>
+
+            <button
+              onClick={async () => {
+                const newCount = clickCount + 1;
+                setClickCount(newCount);
+                setShowPresencePopup(false);
+                setCheckpointIndex((prev) => prev + 1);
+
+                try {
+                  await fetch("/api/training/progress", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      assignmentId,
+                      watchSeconds: effectiveWatchSeconds,
+                      clickCount: newCount,
+                      completed: false,
+                    }),
+                  });
+                } catch (err) {
+                  console.error("presence save error:", err);
+                }
+
+                videoRef.current?.play().catch(() => undefined);
+              }}
+              style={{
+                marginTop: "12px",
+                padding: "12px 18px",
+                background: "#2563eb",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Devam Et
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
