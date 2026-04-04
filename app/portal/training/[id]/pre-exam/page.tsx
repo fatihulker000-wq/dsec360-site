@@ -118,14 +118,16 @@ export default function PreExamPage() {
         return;
       }
 
-      const payload = {
-        assignmentId,
-        examType: "pre",
-        answers: questions.map((q) => ({
-          questionId: q.id,
-          selectedOption: answers[q.id],
-        })),
-      };
+ const payload = {
+  assignmentId,
+  examType: "pre",
+  answers: questions
+    .map((q) => ({
+      questionId: q.id,
+      selected_option: (answers[q.id] || "").toUpperCase(),
+    }))
+    .filter((a) => a.selected_option),
+};
 
       const res = await fetch("/api/training/exam/submit", {
         method: "POST",
@@ -145,8 +147,6 @@ export default function PreExamPage() {
       const examScore = Number(json.score || 0);
       setScore(examScore);
       setFinished(true);
-
-      localStorage.setItem(`preExamScore_${assignmentId}`, String(examScore));
     } catch (err) {
       console.error("pre exam submit hatası:", err);
       setError("Sınav sonucu gönderilemedi.");
@@ -183,7 +183,7 @@ export default function PreExamPage() {
   if (questions.length === 0) {
     return (
       <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Ön Değerlendirme Sınavı - YENI TEST </h1>
+        <h1>Ön Değerlendirme Sınavı</h1>
         <p>Bu eğitim için ön sınav sorusu bulunamadı.</p>
       </main>
     );
@@ -272,7 +272,17 @@ export default function PreExamPage() {
         <>
           <h2>Sonuç: %{score}</h2>
 
-          {score >= 60 ? (
+          <p
+            style={{
+              marginTop: "10px",
+              color: "#374151",
+              lineHeight: 1.6,
+            }}
+          >
+            Ön sınav tamamlandı. Bu sınav seviye ölçme amaçlıdır. Puanınız ne olursa olsun eğitime devam edebilirsiniz.
+          </p>
+
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
             <button
               onClick={() => router.push(`/portal/training/${assignmentId}`)}
               style={{
@@ -287,28 +297,22 @@ export default function PreExamPage() {
             >
               Eğitime Git
             </button>
-          ) : (
-            <>
-              <p style={{ color: "#b91c1c" }}>
-                60 puan altında kaldın. Devam etmek için tekrar çözmelisin.
-              </p>
 
-              <button
-                onClick={handleRetry}
-                style={{
-                  marginTop: "20px",
-                  padding: "10px 20px",
-                  background: "#dc2626",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                }}
-              >
-                Tekrar Dene
-              </button>
-            </>
-          )}
+            <button
+              onClick={handleRetry}
+              style={{
+                marginTop: "20px",
+                padding: "10px 20px",
+                background: "#111827",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              Tekrar Çöz
+            </button>
+          </div>
         </>
       )}
     </main>
