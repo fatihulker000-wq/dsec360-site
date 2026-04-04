@@ -200,14 +200,25 @@ export async function POST(request: Request) {
 
     let correctCount = 0;
 
-    for (const q of safeQuestions) {
-      const selected = answerMap.get(q.id);
-      const correct = String(q.correct_option || "").toUpperCase().trim();
+ for (const q of safeQuestions) {
+  const selectedRaw = answerMap.get(q.id);
 
-      if (selected && selected === correct) {
-        correctCount += 1;
-      }
-    }
+  const selected = String(selectedRaw || "")
+    .toUpperCase()
+    .trim();
+
+  const correct = String(q.correct_option || "")
+    .toUpperCase()
+    .trim();
+
+  console.log("SORU:", q.id);
+  console.log("SEÇİLEN:", selected);
+  console.log("DOĞRU:", correct);
+
+  if (selected === correct) {
+    correctCount += 1;
+  }
+}
 
     const score = Math.round((correctCount / safeQuestions.length) * 100);
 
