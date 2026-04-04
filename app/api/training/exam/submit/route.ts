@@ -237,8 +237,8 @@ if (!answers.length) {
     }
 
     const nextAttempt = (assignment.final_exam_attempts || 0) + 1;
+    const isPre = String(examType) === "pre";
     const passed = isPre ? true : score >= 60;
-    const isPre = examType === "pre";
 
     if (passed) {
       const { error: successError } = await supabase
