@@ -103,6 +103,23 @@ export default function PreExamPage() {
     }));
   };
 
+  const calculateLocalScore = () => {
+    let correctCount = 0;
+
+    for (const q of questions) {
+      const selected = String(answers[q.id] || "").toUpperCase().trim();
+      const correct = String(q.correct_option || "").toUpperCase().trim();
+
+      if (selected === correct) {
+        correctCount += 1;
+      }
+    }
+
+    return questions.length > 0
+      ? Math.round((correctCount / questions.length) * 100)
+      : 0;
+  };
+
   const handleFinish = async () => {
     try {
       setSubmitting(true);
@@ -118,16 +135,17 @@ export default function PreExamPage() {
         return;
       }
 
- const payload = {
-  assignmentId,
-  examType: "pre",
-  answers: questions
-    .map((q) => ({
-      questionId: q.id,
-      selected_option: (answers[q.id] || "").toUpperCase(),
-    }))
-    .filter((a) => a.selected_option),
-};
+      const localScore = calculateLocalScore();
+      setScore(localScore);
+
+      const payload = {
+        assignmentId,
+        examType: "pre",
+        answers: questions.map((q) => ({
+          questionId: q.id,
+          selectedOption: answers[q.id],
+        })),
+      };
 
       const res = await fetch("/api/training/exam/submit", {
         method: "POST",
@@ -144,8 +162,9 @@ export default function PreExamPage() {
         return;
       }
 
-      const examScore = Number(json.score || 0);
-      setScore(examScore);
+      localStorage.setItem(`preExamScore_${assignmentId}`, String(localScore));
+      localStorage.setItem(`preExamCompleted_${assignmentId}`, "true");
+
       setFinished(true);
     } catch (err) {
       console.error("pre exam submit hatası:", err);
@@ -268,54 +287,54 @@ export default function PreExamPage() {
         </>
       )}
 
-{finished && (
-  <>
-    <h2>Sonuç: %{score}</h2>
+      {finished && (
+        <>
+          <h2>Sonuç: %{score}</h2>
 
-    <p
-      style={{
-        marginTop: "10px",
-        color: "#374151",
-        lineHeight: 1.6,
-      }}
-    >
-      Ön sınav tamamlandı. Bu sınav seviye ölçme amaçlıdır.
-      Puanınız ne olursa olsun eğitime devam edebilirsiniz.
-    </p>
+          <p
+            style={{
+              marginTop: "10px",
+              color: "#374151",
+              lineHeight: 1.6,
+            }}
+          >
+            Ön sınav tamamlandı. Bu sınav seviye ölçme amaçlıdır. Puanınız ne
+            olursa olsun eğitime devam edebilirsiniz.
+          </p>
 
-    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-      <button
-        onClick={() => router.push(`/portal/training/${assignmentId}`)}
-        style={{
-          marginTop: "20px",
-          padding: "10px 20px",
-          background: "#16a34a",
-          color: "white",
-          border: "none",
-          borderRadius: "8px",
-          cursor: "pointer",
-        }}
-      >
-        Eğitime Git
-      </button>
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <button
+              onClick={() => router.push(`/portal/training/${assignmentId}`)}
+              style={{
+                marginTop: "20px",
+                padding: "10px 20px",
+                background: "#16a34a",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              Eğitime Git
+            </button>
 
-      <button
-        onClick={handleRetry}
-        style={{
-          marginTop: "20px",
-          padding: "10px 20px",
-          background: "#111827",
-          color: "white",
-          border: "none",
-          borderRadius: "8px",
-          cursor: "pointer",
-        }}
-      >
-        Tekrar Çöz
-      </button>
-    </div>
-  </>
-)}
+            <button
+              onClick={handleRetry}
+              style={{
+                marginTop: "20px",
+                padding: "10px 20px",
+                background: "#111827",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              Tekrar Çöz
+            </button>
+          </div>
+        </>
+      )}
     </main>
   );
 }
