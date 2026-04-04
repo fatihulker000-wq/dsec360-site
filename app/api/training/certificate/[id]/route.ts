@@ -114,7 +114,18 @@ export async function GET(
     }
 
     const { id } = await context.params;
+
+    if (!id || String(id).trim().length < 3) {
+      return new NextResponse("Geçersiz belge kaydı.", { status: 400 });
+    }
+
     const supabase = getSupabase();
+    const url = new URL(request.url);
+   const docType = url.searchParams.get("type") === "attendance"
+  ? "attendance"
+  : "certificate";
+
+const isCertificate = docType === "certificate";
 
     let assignmentQuery = supabase
       .from("training_assignments")
@@ -132,26 +143,33 @@ export async function GET(
 
     if (assignmentError || !data) {
       console.error("ASSIGNMENT ERROR:", assignmentError);
-      return new NextResponse("Sertifika kaydı bulunamadı.", { status: 404 });
+      return new NextResponse(
+        isCertificate
+          ? "Sertifika kaydı bulunamadı."
+          : "Katılım belgesi kaydı bulunamadı.",
+        { status: 404 }
+      );
     }
 
     const assignment = data;
 
     if (assignment.status !== "completed") {
       return new NextResponse(
-        "Belge yalnızca tamamlanan eğitimler için oluşturulur.",
+        isCertificate
+          ? "Belge yalnızca tamamlanan eğitimler için oluşturulur."
+          : "Katılım belgesi yalnızca tamamlanan eğitimler için oluşturulur.",
         { status: 400 }
       );
     }
 
-    if (!assignment.final_exam_passed) {
+    if (isCertificate && !assignment.final_exam_passed) {
       return new NextResponse(
         "Sertifika için final sınavı başarıyla tamamlanmalıdır.",
         { status: 400 }
       );
     }
 
-    if ((assignment.final_exam_score || 0) < 60) {
+    if (isCertificate && (assignment.final_exam_score || 0) < 60) {
       return new NextResponse(
         "Sertifika için final sınavından en az 60 alınmalıdır.",
         { status: 400 }
@@ -230,13 +248,54 @@ export async function GET(
       verifyUrl
     )}`;
 
+    const documentTitle = isCertificate
+      ? "D-SEC Eğitim Sertifikası"
+      : "D-SEC Eğitim Katılım Belgesi";
+
+    const badgeText = isCertificate
+      ? "Eğitim Sertifikası"
+      : "Eğitim Katılım Belgesi";
+
+    const mainHeading = isCertificate
+      ? "EĞİTİM SERTİFİKASI"
+      : "EĞİTİM KATILIM BELGESİ";
+
+    const introText = isCertificate
+      ? "Bu belge, ilgili eğitim kaydı esas alınarak düzenlenmiş olup katılımcının aşağıda belirtilen eğitimi başarıyla tamamladığını göstermektedir."
+      : "Bu belge, ilgili eğitim kaydı esas alınarak düzenlenmiş olup katılımcının aşağıda belirtilen eğitime katılım sağladığını ve eğitim kaydının tamamlandığını göstermektedir.";
+
+    const topicsTitle = isCertificate
+      ? "Alınan Eğitim Konuları"
+      : "Katılım Sağlanan Eğitim Konuları";
+
+    const noteText = isCertificate
+      ? "Bu sertifika, eğitim kaydının ve başarı durumunun sistemde kayıt altına alındığını göstermek amacıyla düzenlenmiştir. Belge ve ilgili eğitim kayıtlarının çalışan özlük dosyasında saklanması tavsiye edilir."
+      : "Bu katılım belgesi, eğitim kaydının sistemde kayıt altına alındığını göstermek amacıyla düzenlenmiştir. Belge ve ilgili eğitim kayıtlarının çalışan özlük dosyasında saklanması tavsiye edilir.";
+
+    const verifyInfoText = isCertificate
+      ? "Bu sertifika D-SEC sistemi üzerinden oluşturulmuştur."
+      : "Bu katılım belgesi D-SEC sistemi üzerinden oluşturulmuştur.";
+
+    const scoreCard = isCertificate
+      ? `
+        <div class="card">
+          <div class="card-label">Final Sınav Puanı</div>
+          <div class="card-value">%${Number(assignment.final_exam_score || 0)}</div>
+        </div>
+      `
+      : "";
+
+    const statusChip = isCertificate
+      ? `<div class="eyebrow">6331 KAPSAMINDA DÜZENLENMİŞTİR</div>`
+      : `<div class="eyebrow">EĞİTİM KAYDI TAMAMLANMIŞTIR</div>`;
+
     const html = `
       <!doctype html>
       <html lang="tr">
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>D-SEC Eğitim Sertifikası</title>
+          <title>${documentTitle}</title>
           <style>
             * { box-sizing: border-box; }
 
@@ -280,7 +339,7 @@ export async function GET(
               position: relative;
               overflow: hidden;
               background: #ffffff;
-              border: 10px solid #cf3d2e;
+              border: 10px solid ${isCertificate ? "#cf3d2e" : "#0f766e"};
               border-radius: 28px;
               padding: 34px 38px 28px;
               box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
@@ -290,7 +349,7 @@ export async function GET(
               content: "";
               position: absolute;
               inset: 12px;
-              border: 2px solid rgba(207,61,46,0.18);
+              border: 2px solid ${isCertificate ? "rgba(207,61,46,0.18)" : "rgba(15,118,110,0.18)"};
               border-radius: 18px;
               pointer-events: none;
             }
@@ -314,20 +373,22 @@ export async function GET(
               width: 70px;
               height: 70px;
               border-radius: 20px;
-              background: linear-gradient(135deg, #ef4444, #f97316);
+              background: ${isCertificate
+                ? "linear-gradient(135deg, #ef4444, #f97316)"
+                : "linear-gradient(135deg, #0f766e, #2563eb)"};
               color: #fff;
               display: flex;
               align-items: center;
               justify-content: center;
               font-size: 30px;
               font-weight: 900;
-              box-shadow: 0 10px 24px rgba(239, 68, 68, 0.22);
+              box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
             }
 
             .brand-main {
               font-size: 30px;
               font-weight: 900;
-              color: #cf3d2e;
+              color: ${isCertificate ? "#cf3d2e" : "#0f766e"};
               letter-spacing: 0.4px;
             }
 
@@ -357,9 +418,9 @@ export async function GET(
               display: inline-block;
               padding: 10px 14px;
               border-radius: 999px;
-              background: #fff7ed;
-              border: 1px solid #fdba74;
-              color: #9a3412;
+              background: ${isCertificate ? "#fff7ed" : "#ecfeff"};
+              border: 1px solid ${isCertificate ? "#fdba74" : "#99f6e4"};
+              color: ${isCertificate ? "#9a3412" : "#115e59"};
               font-size: 12px;
               font-weight: 800;
             }
@@ -383,9 +444,9 @@ export async function GET(
               display: inline-block;
               padding: 8px 14px;
               border-radius: 999px;
-              background: #fef2f2;
-              color: #b91c1c;
-              border: 1px solid #fecaca;
+              background: ${isCertificate ? "#fef2f2" : "#ecfeff"};
+              color: ${isCertificate ? "#b91c1c" : "#115e59"};
+              border: 1px solid ${isCertificate ? "#fecaca" : "#99f6e4"};
               font-size: 12px;
               font-weight: 800;
               letter-spacing: 1px;
@@ -430,7 +491,7 @@ export async function GET(
               font-size: 26px;
               line-height: 1.35;
               font-weight: 800;
-              color: #166534;
+              color: ${isCertificate ? "#166534" : "#0f766e"};
             }
 
             .email {
@@ -519,8 +580,8 @@ export async function GET(
               min-width: 24px;
               height: 24px;
               border-radius: 999px;
-              background: #fee2e2;
-              color: #b91c1c;
+              background: ${isCertificate ? "#fee2e2" : "#ccfbf1"};
+              color: ${isCertificate ? "#b91c1c" : "#115e59"};
               display: inline-flex;
               align-items: center;
               justify-content: center;
@@ -573,7 +634,7 @@ export async function GET(
               display: inline-block;
               margin-top: 8px;
               word-break: break-all;
-              color: #b91c1c;
+              color: ${isCertificate ? "#b91c1c" : "#0f766e"};
               font-weight: 700;
               text-decoration: none;
             }
@@ -582,9 +643,9 @@ export async function GET(
               margin-top: 22px;
               padding: 16px 18px;
               border-radius: 16px;
-              background: #fff7ed;
-              border: 1px solid #fed7aa;
-              color: #7c2d12;
+              background: ${isCertificate ? "#fff7ed" : "#f0fdfa"};
+              border: 1px solid ${isCertificate ? "#fed7aa" : "#99f6e4"};
+              color: ${isCertificate ? "#7c2d12" : "#134e4a"};
               font-size: 14px;
               line-height: 1.7;
               text-align: left;
@@ -629,8 +690,8 @@ export async function GET(
               width: 122px;
               height: 122px;
               border-radius: 999px;
-              border: 4px solid #cf3d2e;
-              color: #cf3d2e;
+              border: 4px solid ${isCertificate ? "#cf3d2e" : "#0f766e"};
+              color: ${isCertificate ? "#cf3d2e" : "#0f766e"};
               font-weight: 900;
               background: rgba(255,255,255,0.96);
               transform: rotate(-10deg);
@@ -699,7 +760,7 @@ export async function GET(
                 </div>
 
                 <div class="badge-wrap">
-                  <div class="badge">Eğitim Sertifikası</div>
+                  <div class="badge">${badgeText}</div>
                   <div class="cert-no">
                     Belge No: ${certificateNo}<br/>
                     Doğrulama Kodu: ${verificationCode}<br/>
@@ -709,12 +770,11 @@ export async function GET(
               </div>
 
               <div class="content">
-                <div class="eyebrow">6331 KAPSAMINDA DÜZENLENMİŞTİR</div>
-                <h1>EĞİTİM SERTİFİKASI</h1>
+                ${statusChip}
+                <h1>${mainHeading}</h1>
 
                 <div class="desc">
-                  Bu belge, ilgili eğitim kaydı esas alınarak düzenlenmiş olup katılımcının aşağıda
-                  belirtilen eğitimi tamamladığını ve eğitim içeriğine iştirak ettiğini göstermek amacıyla oluşturulmuştur.
+                  ${introText}
                 </div>
 
                 <div class="label">Katılımcı</div>
@@ -755,10 +815,12 @@ export async function GET(
                     <div class="card-label">Belge Düzenleme Tarihi</div>
                     <div class="card-value">${issueDate}</div>
                   </div>
+
+                  ${scoreCard}
                 </div>
 
                 <div class="topics-wrap">
-                  <div class="topics-title">Alınan Eğitim Konuları</div>
+                  <div class="topics-title">${topicsTitle}</div>
                   <ul class="topics-list">
                     ${topicsHtml}
                   </ul>
@@ -770,8 +832,8 @@ export async function GET(
                   </div>
 
                   <div class="verify-text">
-                    Bu belge D-SEC sistemi üzerinden oluşturulmuştur. Belgenin ait olduğu firma
-                    bilgisi: <strong>${safeCompanyName}</strong>.
+                    ${verifyInfoText} Belgenin ait olduğu firma bilgisi:
+                    <strong>${safeCompanyName}</strong>.
                     <br/>
                     Belge doğrulaması için QR kodu okutabilir veya aşağıdaki bağlantıyı açabilirsiniz.
                     <br/>
@@ -782,8 +844,7 @@ export async function GET(
                 </div>
 
                 <div class="note">
-                  Bu belge, eğitim kaydının ve eğitim başlıklarının kayıt altına alındığını göstermek amacıyla düzenlenmiştir.
-                  Belge ve ilgili eğitim kayıtlarının çalışan özlük dosyasında saklanması tavsiye edilir.
+                  ${noteText}
                 </div>
 
                 <div class="bottom">

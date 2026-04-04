@@ -156,11 +156,20 @@ if (!json || !json.data) {
     }
   };
 
-  useEffect(() => {
-    if (assignmentId) {
-      void fetchTraining();
-    }
-  }, [assignmentId]);
+useEffect(() => {
+  if (assignmentId) {
+    void fetchTraining();
+  }
+}, [assignmentId]);
+
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setLoading(false);
+    setError("Eğitim yüklenemedi. Sayfayı yenileyin.");
+  }, 3000);
+
+  return () => clearTimeout(timer);
+}, []);
 
   const trainingType = useMemo(
     () => normalizeType(training?.training?.type),

@@ -29,72 +29,172 @@ type SubmitResponse = {
   error?: string;
 };
 
+type GuardState = {
+  ok: boolean;
+  message: string;
+};
+
+type TrainingRow = {
+  id: string;
+  pre_exam_completed?: boolean | null;
+  watch_completed?: boolean | null;
+  watch_seconds?: number | null;
+  click_count?: number | null;
+  final_exam_attempts?: number | null;
+  final_exam_score?: number | null;
+  final_exam_passed?: boolean | null;
+  training?: {
+    type?: string | null;
+  } | null;
+};
+
+function normalizeType(type?: string | null) {
+  const value = (type || "").trim().toLowerCase();
+
+  if (value === "senkron") return "senkron";
+  if (value === "asenkron") return "asenkron";
+
+  return "asenkron";
+}
+
 export default function FinalExamPage() {
   const params = useParams();
   const router = useRouter();
   const assignmentId = params?.id as string;
 
-useEffect(() => {
-  if (!assignmentId) return;
-
-  const videoCompleted =
-    localStorage.getItem(`watchCompleted_${assignmentId}`) === "true";
-
-  const trackedSeconds = Number(
-    localStorage.getItem(`watchSeconds_${assignmentId}`) || 0
+  const [trainingType, setTrainingType] = useState<"senkron" | "asenkron">(
+    "asenkron"
   );
-
-  const clickCount = Number(
-    localStorage.getItem(`clickCount_${assignmentId}`) || 0
-  );
-
-  if (!videoCompleted || trackedSeconds <= 0 || clickCount < 1) {
-    alert("Eğitimi tamamlamadan final sınavına giremezsiniz.");
-    router.replace(`/portal/training/${assignmentId}`);
-    return;
-  }
-
-  setGuardChecked(true);
-}, [assignmentId, router]);
+  const [guardChecked, setGuardChecked] = useState(false);
+  const [guardState, setGuardState] = useState<GuardState>({
+    ok: false,
+    message: "",
+  });
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>(
     {}
   );
   const [result, setResult] = useState<SubmitResponse | null>(null);
-  const [attempts, setAttempts] = useState(3);
+  const [attemptsLeft, setAttemptsLeft] = useState(3);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [guardChecked, setGuardChecked] = useState(false);
 
   useEffect(() => {
     if (!assignmentId) return;
 
-    const savedAttempts = localStorage.getItem(`finalAttempts_${assignmentId}`);
-    if (savedAttempts) {
-      const parsed = Number(savedAttempts);
-      if (!Number.isNaN(parsed)) {
-        setAttempts(parsed);
+    const fetchTrainingInfoAndGuard = async () => {
+      try {
+        const res = await fetch("/api/training/my", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        const json = await res.json();
+        const rows = Array.isArray(json?.data) ? json.data : [];
+        const currentTraining = rows.find(
+          (item: TrainingRow) => item?.id === assignmentId
+        );
+
+        if (!currentTraining) {
+          setGuardState({
+            ok: false,
+            message: "Eğitim kaydı bulunamadı.",
+          });
+          setGuardChecked(true);
+          setLoading(false);
+          return;
+        }
+
+        const type = normalizeType(currentTraining?.training?.type);
+        setTrainingType(type);
+
+        if (!currentTraining.pre_exam_completed) {
+          setGuardState({
+            ok: false,
+            message:
+              "Ön sınav tamamlanmadan final sınavına girilemez. Önce ön sınavı tamamlamalısınız.",
+          });
+          setGuardChecked(true);
+          setLoading(false);
+          return;
+        }
+
+        const attemptsUsed = Number(currentTraining.final_exam_attempts || 0);
+        setAttemptsLeft(Math.max(0, 3 - attemptsUsed));
+
+        if (type === "senkron") {
+          setGuardState({ ok: true, message: "" });
+          setGuardChecked(true);
+          return;
+        }
+
+        if (!currentTraining.watch_completed) {
+          setGuardState({
+            ok: false,
+            message:
+              "Asenkron eğitim tamamlanmadan final sınavına girilemez. Önce videoyu kurallara uygun şekilde tamamlamalısınız.",
+          });
+          setGuardChecked(true);
+          setLoading(false);
+          return;
+        }
+
+        if (Number(currentTraining.watch_seconds || 0) <= 0) {
+          setGuardState({
+            ok: false,
+            message: "İzleme süresi kaydı bulunamadı.",
+          });
+          setGuardChecked(true);
+          setLoading(false);
+          return;
+        }
+
+        if (Number(currentTraining.click_count || 0) <= 0) {
+          setGuardState({
+            ok: false,
+            message: "Ekran başı doğrulama kaydı bulunamadı.",
+          });
+          setGuardChecked(true);
+          setLoading(false);
+          return;
+        }
+
+        setGuardState({ ok: true, message: "" });
+        setGuardChecked(true);
+      } catch (err) {
+        console.error("final exam guard hatası:", err);
+        setGuardState({
+          ok: false,
+          message:
+            "Final sınav kontrolü yapılırken bir hata oluştu. Eğitim sayfasına dönüp tekrar deneyin.",
+        });
+        setGuardChecked(true);
+        setLoading(false);
       }
-    }
-  }, [assignmentId, guardChecked]);
+    };
+
+    void fetchTrainingInfoAndGuard();
+  }, [assignmentId]);
 
   useEffect(() => {
-     if (!assignmentId || !guardChecked) return;
+    if (!assignmentId || !guardChecked || !guardState.ok) return;
+
     const fetchQuestions = async () => {
       try {
         setLoading(true);
         setError("");
 
-     const res = await fetch(
-  `/api/training/exam/${assignmentId}?type=final`,
-  {
-    method: "GET",
-    cache: "no-store",
-    credentials: "include",
-  }
-);
+        const res = await fetch(
+          `/api/training/exam/${assignmentId}?type=final&_t=${Date.now()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+            credentials: "include",
+          }
+        );
 
         const json = await res.json();
 
@@ -123,10 +223,8 @@ useEffect(() => {
       }
     };
 
-    if (assignmentId) {
-      void fetchQuestions();
-    }
-  }, [assignmentId]);
+    void fetchQuestions();
+  }, [assignmentId, guardChecked, guardState.ok]);
 
   const unansweredCount = useMemo(() => {
     return questions.filter((q) => !answers[q.id]).length;
@@ -183,30 +281,9 @@ useEffect(() => {
 
       setResult(json);
 
-      const safeScore = Number(json.score || 0);
-      localStorage.setItem(`finalScore_${assignmentId}`, String(safeScore));
-
       if (typeof json.attemptsLeft === "number") {
-        setAttempts(json.attemptsLeft);
-        localStorage.setItem(
-          `finalAttempts_${assignmentId}`,
-          String(json.attemptsLeft)
-        );
+        setAttemptsLeft(json.attemptsLeft);
       }
-
-      if (json.passed) {
-        localStorage.setItem(`trainingCompleted_${assignmentId}`, "true");
-      } else {
-        localStorage.setItem(`trainingCompleted_${assignmentId}`, "false");
-      }
-
-     if (json.resetRequired) {
-  localStorage.removeItem(`preExamScore_${assignmentId}`);
-  localStorage.removeItem(`watchCompleted_${assignmentId}`);
-  localStorage.removeItem(`watchSeconds_${assignmentId}`);
-  localStorage.removeItem(`clickCount_${assignmentId}`);
-}
-
     } catch (err) {
       console.error("final exam submit hatası:", err);
       setError("Sınav sonucu gönderilemedi.");
@@ -221,23 +298,59 @@ useEffect(() => {
     setError("");
   };
 
-if (!guardChecked) {
-  return (
-    <main style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>Final Sınavı</h1>
-      <p>Kontrol ediliyor...</p>
-    </main>
-  );
-}
+  if (!guardChecked || loading) {
+    return (
+      <main style={{ padding: "40px", fontFamily: "Arial" }}>
+        <h1>Final Sınavı</h1>
+        <p>Kontrol ediliyor...</p>
+      </main>
+    );
+  }
 
- if (!guardChecked) {
-  return (
-    <main style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>Final Sınavı</h1>
-      <p>Kontrol ediliyor...</p>
-    </main>
-  );
-}
+  if (!guardState.ok) {
+    return (
+      <main style={{ padding: "40px", fontFamily: "Arial" }}>
+        <h1>Final Sınavı</h1>
+        <p style={{ color: "#b91c1c", lineHeight: 1.7 }}>{guardState.message}</p>
+
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+          <button
+            onClick={() => router.replace(`/portal/training/${assignmentId}`)}
+            style={{
+              marginTop: "20px",
+              padding: "12px 20px",
+              background: "#111827",
+              color: "#fff",
+              border: "none",
+              borderRadius: "10px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Eğitime Dön
+          </button>
+
+          <button
+            onClick={() =>
+              router.replace(`/portal/training/${assignmentId}/pre-exam`)
+            }
+            style={{
+              marginTop: "20px",
+              padding: "12px 20px",
+              background: "#2563eb",
+              color: "#fff",
+              border: "none",
+              borderRadius: "10px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Ön Sınava Git
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   if (error && questions.length === 0) {
     return (
@@ -257,7 +370,7 @@ if (!guardChecked) {
     );
   }
 
-  if ((result?.attemptsLeft === 0 || attempts <= 0) && !result?.passed) {
+  if ((result?.attemptsLeft === 0 || attemptsLeft <= 0) && !result?.passed) {
     return (
       <main style={{ padding: "40px", fontFamily: "Arial" }}>
         <h1>Final Sınav Hakkı Bitti</h1>
@@ -284,7 +397,35 @@ if (!guardChecked) {
   return (
     <main style={{ padding: "40px", fontFamily: "Arial" }}>
       <h1>Final Sınavı</h1>
-      <p>Kalan hak: {attempts}</p>
+
+      <div
+        style={{
+          marginBottom: "16px",
+          display: "flex",
+          gap: "12px",
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <p style={{ margin: 0 }}>Kalan hak: {attemptsLeft}</p>
+        <span
+          style={{
+            display: "inline-flex",
+            padding: "6px 10px",
+            borderRadius: "999px",
+            background: trainingType === "senkron" ? "#eff6ff" : "#f8fafc",
+            border:
+              trainingType === "senkron"
+                ? "1px solid #bfdbfe"
+                : "1px solid #e5e7eb",
+            color: trainingType === "senkron" ? "#1d4ed8" : "#374151",
+            fontSize: "12px",
+            fontWeight: 700,
+          }}
+        >
+          Tür: {trainingType}
+        </span>
+      </div>
 
       {!result ? (
         <>
