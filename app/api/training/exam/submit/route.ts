@@ -41,6 +41,18 @@ type QuestionRow = {
   is_active?: boolean | null;
 };
 
+type TrainingMetaRow = {
+  id: string;
+  type: string | null;
+};
+
+function normalizeType(type?: string | null) {
+  const value = (type || "").trim().toLowerCase();
+  if (value === "senkron") return "senkron";
+  if (value === "asenkron") return "asenkron";
+  return "asenkron";
+}
+
 export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
@@ -85,6 +97,14 @@ export async function POST(request: Request) {
       );
     }
 
+    const { data: trainingMeta } = await supabase
+      .from("trainings")
+      .select("id, type")
+      .eq("id", assignment.training_id)
+      .maybeSingle<TrainingMetaRow>();
+
+    const trainingType = normalizeType(trainingMeta?.type);
+
     const { data: questions, error: questionError } = await supabase
       .from("training_exam_questions")
       .select("id, training_id, exam_type, correct_option, is_active")
@@ -118,30 +138,39 @@ export async function POST(request: Request) {
         examType: "pre",
         score: assignment.pre_exam_score || 0,
         passed: true,
-        message: "Ön değerlendirme zaten tamamlanmış."
+        message: "Ön değerlendirme zaten tamamlanmış.",
       });
     }
 
     if (examType === "final") {
-      if (!assignment.watch_completed) {
+      if (!assignment.pre_exam_completed) {
         return NextResponse.json(
-          { error: "Son değerlendirme için önce eğitimi tamamlamalısın." },
+          { error: "Final için önce ön sınav tamamlanmalıdır." },
           { status: 400 }
         );
       }
 
-      if ((assignment.watch_seconds || 0) <= 0) {
-        return NextResponse.json(
-          { error: "İzleme süresi kaydı bulunamadı." },
-          { status: 400 }
-        );
-      }
+      if (trainingType === "asenkron") {
+        if (!assignment.watch_completed) {
+          return NextResponse.json(
+            { error: "Son değerlendirme için önce eğitimi tamamlamalısın." },
+            { status: 400 }
+          );
+        }
 
-      if ((assignment.click_count || 0) <= 0) {
-        return NextResponse.json(
-          { error: "Ekran başı doğrulama kaydı bulunamadı." },
-          { status: 400 }
-        );
+        if ((assignment.watch_seconds || 0) <= 0) {
+          return NextResponse.json(
+            { error: "İzleme süresi kaydı bulunamadı." },
+            { status: 400 }
+          );
+        }
+
+        if ((assignment.click_count || 0) <= 0) {
+          return NextResponse.json(
+            { error: "Ekran başı doğrulama kaydı bulunamadı." },
+            { status: 400 }
+          );
+        }
       }
 
       if ((assignment.final_exam_attempts || 0) >= 3) {
@@ -152,10 +181,21 @@ export async function POST(request: Request) {
       }
     }
 
-    const answerMap = new Map(
-      answers.map((item) => [item.questionId, item.selectedOption])
-    );
+  const answerMap = new Map(
+  answers.map((item: any) => [
+    item.questionId,
+    String(item.selected_option || item.selectedOption || "")
+      .toUpperCase()
+      .trim(),
+  ])
+);
 
+if (!answers.length) {
+  return NextResponse.json(
+    { error: "Cevaplar boş." },
+    { status: 400 }
+  );
+}
     let correctCount = 0;
 
     for (const q of safeQuestions) {
@@ -192,7 +232,7 @@ export async function POST(request: Request) {
         examType: "pre",
         score,
         passed: true,
-        message: "Ön değerlendirme kaydedildi."
+        message: "Ön değerlendirme kaydedildi.",
       });
     }
 
@@ -228,7 +268,7 @@ export async function POST(request: Request) {
         passed: true,
         attemptsUsed: nextAttempt,
         attemptsLeft: Math.max(0, 3 - nextAttempt),
-        message: "Sınav başarılı. Eğitim tamamlandı."
+        message: "Sınav başarılı. Eğitim tamamlandı.",
       });
     }
 
@@ -268,7 +308,7 @@ export async function POST(request: Request) {
         attemptsUsed: nextAttempt,
         attemptsLeft: 0,
         resetRequired: true,
-        message: "3 sınav hakkı bitti. Eğitim yeniden alınmalı."
+        message: "3 sınav hakkı bitti. Eğitim yeniden alınmalı.",
       });
     }
 
@@ -299,7 +339,7 @@ export async function POST(request: Request) {
       attemptsUsed: nextAttempt,
       attemptsLeft: Math.max(0, 3 - nextAttempt),
       resetRequired: false,
-      message: "Sınav başarısız. Kalan hakkın var."
+      message: "Sınav başarısız. Kalan hakkın var.",
     });
   } catch (err) {
     console.error("exam submit genel hata:", err);
