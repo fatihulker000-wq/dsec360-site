@@ -268,53 +268,54 @@ export default function PreExamPage() {
         </>
       )}
 
-      {finished && (
-        <>
-          <h2>Sonuç: %{score}</h2>
+{finished && (
+  <>
+    <h2>Sonuç: %{score}</h2>
 
-          <p
-            style={{
-              marginTop: "10px",
-              color: "#374151",
-              lineHeight: 1.6,
-            }}
-          >
-            Ön sınav tamamlandı. Bu sınav seviye ölçme amaçlıdır. Puanınız ne olursa olsun eğitime devam edebilirsiniz.
-          </p>
+    <p
+      style={{
+        marginTop: "10px",
+        color: "#374151",
+        lineHeight: 1.6,
+      }}
+    >
+      Ön sınav tamamlandı. Bu sınav seviye ölçme amaçlıdır.
+      Puanınız ne olursa olsun eğitime devam edebilirsiniz.
+    </p>
 
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-            <button
-              onClick={() => router.push(`/portal/training/${assignmentId}`)}
-              style={{
-                marginTop: "20px",
-                padding: "10px 20px",
-                background: "#16a34a",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-              }}
-            >
-              Eğitime Git
-            </button>
+    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+      <button
+        onClick={() => router.push(`/portal/training/${assignmentId}`)}
+        style={{
+          marginTop: "20px",
+          padding: "10px 20px",
+          background: "#16a34a",
+          color: "white",
+          border: "none",
+          borderRadius: "8px",
+          cursor: "pointer",
+        }}
+      >
+        Eğitime Git
+      </button>
 
-            <button
-              onClick={handleRetry}
-              style={{
-                marginTop: "20px",
-                padding: "10px 20px",
-                background: "#111827",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-              }}
-            >
-              Tekrar Çöz
-            </button>
-          </div>
-        </>
-      )}
+      <button
+        onClick={handleRetry}
+        style={{
+          marginTop: "20px",
+          padding: "10px 20px",
+          background: "#111827",
+          color: "white",
+          border: "none",
+          borderRadius: "8px",
+          cursor: "pointer",
+        }}
+      >
+        Tekrar Çöz
+      </button>
+    </div>
+  </>
+)}
     </main>
   );
 }
