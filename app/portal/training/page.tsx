@@ -108,19 +108,25 @@ export default function TrainingDetailPage() {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/training/my", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "include",
-      });
+const res = await fetch("/api/training/my", {
+  method: "GET",
+  cache: "no-store",
+  credentials: "include",
+});
 
-      const json = await res.json();
+if (!res.ok) {
+  console.error("API ERROR:", res.status);
+  setLoading(false); // 🔥 KRİTİK
+  return;
+}
 
-      if (!res.ok) {
-        setError(json?.error || "Eğitim alınamadı.");
-        setTraining(null);
-        return;
-      }
+ const json = await res.json();
+
+if (!json || !json.data) {
+  console.error("DATA YOK");
+  setLoading(false); // 🔥 KRİTİK
+  return;
+}
 
       const found = Array.isArray(json?.data)
         ? json.data.find((item: TrainingDetail) => item.id === assignmentId)
