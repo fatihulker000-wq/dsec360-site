@@ -8,9 +8,17 @@ type TrainingStatus = "not_started" | "in_progress" | "completed";
 type TrainingDetail = {
   id: string;
   status: TrainingStatus;
-  watch_completed?: boolean;
   started_at?: string | null;
   completed_at?: string | null;
+  watch_completed?: boolean | null;
+  watch_seconds?: number | null;
+  click_count?: number | null;
+  pre_exam_completed?: boolean | null;
+  pre_exam_score?: number | null;
+  final_exam_score?: number | null;
+  final_exam_attempts?: number | null;
+  final_exam_passed?: boolean | null;
+  training_reset_required?: boolean | null;
   training?: {
     id: string;
     title?: string;
@@ -48,7 +56,11 @@ function isNativeVideoUrl(url: string) {
 }
 
 function isYoutubeUrl(url: string) {
-    function toEmbedUrl(url: string) {
+  const safe = (url || "").toLowerCase();
+  return safe.includes("youtube.com/watch") || safe.includes("youtu.be/");
+}
+
+function toEmbedUrl(url: string) {
   if (!url) return "";
 
   if (url.includes("youtube.com/watch?v=")) {
@@ -62,9 +74,6 @@ function isYoutubeUrl(url: string) {
 
   return url;
 }
-  const safe = (url || "").toLowerCase();
-  return safe.includes("youtube.com/watch") || safe.includes("youtu.be/");
-}
 
 export default function TrainingDetailPage() {
   const params = useParams();
@@ -76,10 +85,7 @@ export default function TrainingDetailPage() {
   const [training, setTraining] = useState<TrainingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const [finalAttempts, setFinalAttempts] = useState(3);
-  const [trainingCompleted, setTrainingCompleted] = useState(false);
-  const [finalScore, setFinalScore] = useState<number | null>(null);
+  const [progressSaved, setProgressSaved] = useState(false);
 
   const [videoDuration, setVideoDuration] = useState(0);
   const [maxReachedTime, setMaxReachedTime] = useState(0);
@@ -89,121 +95,62 @@ export default function TrainingDetailPage() {
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [lastPromptAt, setLastPromptAt] = useState(0);
   const [playbackReady, setPlaybackReady] = useState(false);
-  const [progressSaved, setProgressSaved] = useState(false);
+  const [checkpointIndex, setCheckpointIndex] = useState(0);
+const checkpointsRef = useRef<number[]>([]);
+const [presenceSaving, setPresenceSaving] = useState(false);
+
+  const fetchTraining = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch("/api/training/my", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json?.error || "Eğitim alınamadı.");
+        setTraining(null);
+        return;
+      }
+
+      const found = Array.isArray(json?.data)
+        ? json.data.find((item: TrainingDetail) => item.id === assignmentId)
+        : null;
+
+      if (!found) {
+        setError("Eğitim kaydı bulunamadı.");
+        setTraining(null);
+        return;
+      }
+
+      setTraining(found);
+
+      const safeWatchSeconds = Number(found.watch_seconds || 0);
+      const safeClickCount = Number(found.click_count || 0);
+
+     setMaxReachedTime(safeWatchSeconds);
+setClickCount(safeClickCount);
+setCheckpointIndex(safeClickCount);
+setVideoCompleted(found.watch_completed === true);
+    } catch (err) {
+      console.error("training detail fetch hatası:", err);
+      setError("Bağlantı hatası oluştu.");
+      setTraining(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchTraining = async () => {
-      try {
-        setLoading(true);
-        setError("");
-
-        const res = await fetch("/api/training/my", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        });
-
-        const json = await res.json();
-
-        if (!res.ok) {
-          setError(json?.error || "Eğitim alınamadı.");
-          setTraining(null);
-          return;
-        }
-
-        const found = Array.isArray(json?.data)
-          ? json.data.find((item: TrainingDetail) => item.id === assignmentId)
-          : null;
-
-        if (!found) {
-          setError("Eğitim kaydı bulunamadı.");
-          setTraining(null);
-          return;
-        }
-
-        setTraining(found);
-      } catch (err) {
-        console.error(err);
-        setError("Bağlantı hatası oluştu.");
-        setTraining(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (assignmentId) {
       void fetchTraining();
     }
   }, [assignmentId]);
-
-  useEffect(() => {
-    if (!assignmentId) return;
-
-    const savedAttempts = localStorage.getItem(`finalAttempts_${assignmentId}`);
-    const savedCompleted = localStorage.getItem(
-      `trainingCompleted_${assignmentId}`
-    );
-    const savedFinalScore = localStorage.getItem(`finalScore_${assignmentId}`);
-    const savedMaxReached = localStorage.getItem(
-      `watchSeconds_${assignmentId}`
-    );
-    const savedClickCount = localStorage.getItem(`clickCount_${assignmentId}`);
-    const savedVideoCompleted = localStorage.getItem(
-      `watchCompleted_${assignmentId}`
-    );
-
-    if (savedAttempts !== null) {
-      const parsed = Number(savedAttempts);
-      if (!Number.isNaN(parsed)) {
-        setFinalAttempts(parsed);
-      }
-    }
-
-    if (savedFinalScore !== null) {
-      const parsed = Number(savedFinalScore);
-      if (!Number.isNaN(parsed)) {
-        setFinalScore(parsed);
-      }
-    }
-
-    if (savedMaxReached !== null) {
-      const parsed = Number(savedMaxReached);
-      if (!Number.isNaN(parsed)) {
-        setMaxReachedTime(parsed);
-      }
-    }
-
-    if (savedClickCount !== null) {
-      const parsed = Number(savedClickCount);
-      if (!Number.isNaN(parsed)) {
-        setClickCount(parsed);
-      }
-    }
-
-    setVideoCompleted(savedVideoCompleted === "true");
-    setTrainingCompleted(savedCompleted === "true");
-  }, [assignmentId]);
-
-  useEffect(() => {
-    if (!assignmentId) return;
-    localStorage.setItem(
-      `watchSeconds_${assignmentId}`,
-      String(Math.floor(maxReachedTime))
-    );
-  }, [assignmentId, maxReachedTime]);
-
-  useEffect(() => {
-    if (!assignmentId) return;
-    localStorage.setItem(`clickCount_${assignmentId}`, String(clickCount));
-  }, [assignmentId, clickCount]);
-
-  useEffect(() => {
-    if (!assignmentId) return;
-    localStorage.setItem(
-      `watchCompleted_${assignmentId}`,
-      String(videoCompleted)
-    );
-  }, [assignmentId, videoCompleted]);
 
   const trainingType = useMemo(
     () => normalizeType(training?.training?.type),
@@ -211,59 +158,39 @@ export default function TrainingDetailPage() {
   );
 
   const contentUrl = training?.training?.content_url || "";
-  const embedUrl = useMemo(() => {
-  if (!contentUrl) return "";
-
-  if (contentUrl.includes("youtube.com/watch?v=")) {
-    return contentUrl.replace("watch?v=", "embed/");
-  }
-
-  if (contentUrl.includes("youtu.be/")) {
-    const id = contentUrl.split("youtu.be/")[1]?.split("?")[0];
-    return id ? `https://www.youtube.com/embed/${id}` : contentUrl;
-  }
-
-  return contentUrl;
-}, [contentUrl]);
+  const embedUrl = useMemo(() => toEmbedUrl(contentUrl), [contentUrl]);
 
   const isAsync = trainingType === "asenkron";
   const isSync = trainingType === "senkron";
   const nativeVideo = isNativeVideoUrl(contentUrl);
   const youtubeVideo = isYoutubeUrl(contentUrl);
 
-  useEffect(() => {
-    if (videoDuration > 0) {
-      const calculatedRequiredClicks = Math.max(
-        1,
-        Math.floor(videoDuration / 120)
-      );
-      setRequiredClicks(calculatedRequiredClicks);
+  const serverFinalAttempts = Number(training?.final_exam_attempts || 0);
+  const finalAttemptsLeft = Math.max(0, 3 - serverFinalAttempts);
+  const finalScore =
+    training?.final_exam_score !== null &&
+    training?.final_exam_score !== undefined
+      ? Number(training.final_exam_score)
+      : null;
+
+  const preExamCompleted = training?.pre_exam_completed === true;
+  const trainingCompleted = training?.status === "completed" || training?.final_exam_passed === true;
+
+ useEffect(() => {
+  if (videoDuration > 0) {
+    const calculatedRequiredClicks = Math.max(
+      1,
+      Math.floor(videoDuration / 120)
+    );
+    setRequiredClicks(calculatedRequiredClicks);
+
+    const arr: number[] = [];
+    for (let sec = 120; sec < videoDuration; sec += 120) {
+      arr.push(sec);
     }
-  }, [videoDuration]);
-
-  useEffect(() => {
-    if (!isAsync || !nativeVideo || videoCompleted || showPresencePopup) return;
-
-    const interval = window.setInterval(() => {
-      const player = videoRef.current;
-      if (!player) return;
-      if (player.paused || player.ended) return;
-
-      const now = Date.now();
-
-      if (lastPromptAt === 0) {
-        setLastPromptAt(now);
-        return;
-      }
-
-      if (now - lastPromptAt >= 120000) {
-        player.pause();
-        setShowPresencePopup(true);
-      }
-    }, 3000);
-
-    return () => window.clearInterval(interval);
-  }, [isAsync, nativeVideo, videoCompleted, showPresencePopup, lastPromptAt]);
+    checkpointsRef.current = arr;
+  }
+}, [videoDuration]);
 
   const handleLoadedMetadata = () => {
     const player = videoRef.current;
@@ -279,17 +206,31 @@ export default function TrainingDetailPage() {
     setPlaybackReady(true);
   };
 
-  const handleTimeUpdate = () => {
-    const player = videoRef.current;
-    if (!player) return;
+ const handleTimeUpdate = () => {
+  const player = videoRef.current;
+  if (!player) return;
 
-    const current = Math.floor(player.currentTime || 0);
+  const current = Math.floor(player.currentTime || 0);
 
-    setMaxReachedTime((prev) => {
-      const next = Math.min(Math.max(prev, current), videoDuration || current);
-      return next;
-    });
-  };
+  setMaxReachedTime((prev) => {
+    if (current > prev) {
+      return current;
+    }
+    return prev;
+  });
+
+  const checkpoints = checkpointsRef.current;
+  if (
+    isAsync &&
+    nativeVideo &&
+    checkpointIndex < checkpoints.length &&
+    current >= checkpoints[checkpointIndex] &&
+    !showPresencePopup
+  ) {
+    player.pause();
+    setShowPresencePopup(true);
+  }
+};
 
   const handleSeeking = () => {
     const player = videoRef.current;
@@ -311,14 +252,19 @@ export default function TrainingDetailPage() {
     }
   }, [maxReachedTime, videoDuration]);
 
-  const trackedSeconds = Math.min(
-    Math.floor(maxReachedTime),
-    Math.floor(videoDuration || maxReachedTime)
+  const effectiveWatchSeconds = Math.min(
+    Math.max(Number(training?.watch_seconds || 0), Math.floor(maxReachedTime)),
+    Math.floor(videoDuration || Math.max(Number(training?.watch_seconds || 0), maxReachedTime))
+  );
+
+  const effectiveClickCount = Math.max(
+    Number(training?.click_count || 0),
+    clickCount
   );
 
   const progressPercent =
     videoDuration > 0
-      ? Math.min(100, Math.round((trackedSeconds / videoDuration) * 100))
+      ? Math.min(100, Math.round((effectiveWatchSeconds / videoDuration) * 100))
       : 0;
 
   useEffect(() => {
@@ -335,14 +281,15 @@ export default function TrainingDetailPage() {
           },
           body: JSON.stringify({
             assignmentId,
-            watchSeconds: trackedSeconds,
-            clickCount,
+            watchSeconds: effectiveWatchSeconds,
+            clickCount: effectiveClickCount,
             completed: true,
           }),
         });
 
         if (res.ok) {
           setProgressSaved(true);
+          await fetchTraining();
         }
       } catch (err) {
         console.error("training progress save error:", err);
@@ -350,58 +297,69 @@ export default function TrainingDetailPage() {
     };
 
     void saveProgress();
-  }, [assignmentId, videoCompleted, trackedSeconds, clickCount, progressSaved]);
+  }, [
+    assignmentId,
+    videoCompleted,
+    effectiveWatchSeconds,
+    effectiveClickCount,
+    progressSaved,
+  ]);
 
- const canTakeFinalExam =
-  finalAttempts > 0 &&
-  !trainingCompleted &&
-  (
-    isSync ||
+  const canTakeFinalExam =
+    finalAttemptsLeft > 0 &&
+    !trainingCompleted &&
+    preExamCompleted &&
     (
-      isAsync &&
+      isSync ||
       (
-        nativeVideo
-          ? (
-              videoCompleted &&
-              trackedSeconds >= Math.floor(videoDuration) &&
-              clickCount >= requiredClicks
-            )
-          : true
+        isAsync &&
+        nativeVideo &&
+        (training?.watch_completed === true || videoCompleted) &&
+        effectiveWatchSeconds >= Math.floor(videoDuration) &&
+        effectiveClickCount >= requiredClicks
       )
-    )
-  );
+    );
 
   const lockReason = useMemo(() => {
-  if (trainingCompleted) return "";
-  if (finalAttempts <= 0) return "Final hakkı bitti.";
-  if (isSync) return "";
-  if (!contentUrl) return "Eğitim içeriği bulunamadı.";
+    if (trainingCompleted) return "";
+    if (!preExamCompleted) return "Ön sınav tamamlanmadan eğitime/finale ilerlenemez.";
+    if (finalAttemptsLeft <= 0) return "Final hakkı bitti.";
+    if (isSync) return "";
+    if (!contentUrl) return "Eğitim içeriği bulunamadı.";
 
-  // Native video ise sıkı kontrol
-  if (nativeVideo) {
-    if (!videoCompleted) return "Video tamamen bitmeden final açılmaz.";
-    if (clickCount < requiredClicks)
-      return "Zorunlu ekran başı onayları tamamlanmadı.";
-    if (trackedSeconds < Math.floor(videoDuration))
-      return "Eğitim süresi tamamlanmadan final açılmaz.";
-    return "";
-  }
+    if (nativeVideo) {
+      if (!(training?.watch_completed === true || videoCompleted)) {
+        return "Video tamamen bitmeden final açılmaz.";
+      }
+      if (effectiveClickCount < requiredClicks) {
+        return "Zorunlu ekran başı onayları tamamlanmadı.";
+      }
+      if (effectiveWatchSeconds < Math.floor(videoDuration)) {
+        return "Eğitim süresi tamamlanmadan final açılmaz.";
+      }
+      return "";
+    }
 
-  // Native olmayan içerikler açılır/izlenir; burada sert engel vermiyoruz
-  return "";
-}, [
-  trainingCompleted,
-  finalAttempts,
-  isSync,
-  contentUrl,
-  nativeVideo,
-  videoCompleted,
-  clickCount,
-  requiredClicks,
-  trackedSeconds,
-  videoDuration,
-]);
+    if (youtubeVideo) {
+      return "YouTube içerikleri açılır; ancak denetimli final kilidi doğrudan video dosyalarında tam çalışır.";
+    }
 
+    return "Bu içerik açılabilir; ancak zorunlu süre/izleme doğrulaması yapılamadığı için final kilitli kalır.";
+  }, [
+    trainingCompleted,
+    preExamCompleted,
+    finalAttemptsLeft,
+    isSync,
+    contentUrl,
+    nativeVideo,
+    youtubeVideo,
+    training?.watch_completed,
+    videoCompleted,
+    effectiveClickCount,
+    requiredClicks,
+    effectiveWatchSeconds,
+    videoDuration,
+  ]);
 
   if (loading) {
     return (
@@ -422,12 +380,7 @@ export default function TrainingDetailPage() {
 
   return (
     <main style={{ padding: "40px", fontFamily: "Arial" }}>
-      <div
-        style={{
-          maxWidth: "1100px",
-          margin: "0 auto",
-        }}
-      >
+      <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
         <div
           style={{
             background: "#ffffff",
@@ -437,9 +390,7 @@ export default function TrainingDetailPage() {
             boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
           }}
         >
-          <h1 style={{ margin: 0 }}>
-            {training.training?.title || "Eğitim"}
-          </h1>
+          <h1 style={{ margin: 0 }}>{training.training?.title || "Eğitim"}</h1>
 
           <p style={{ marginTop: "12px", color: "#444", lineHeight: 1.7 }}>
             {training.training?.description || "Açıklama bulunmuyor."}
@@ -491,6 +442,23 @@ export default function TrainingDetailPage() {
                 display: "inline-flex",
                 padding: "8px 12px",
                 borderRadius: "999px",
+                background: preExamCompleted ? "#eff6ff" : "#fef2f2",
+                border: preExamCompleted
+                  ? "1px solid #bfdbfe"
+                  : "1px solid #fecaca",
+                color: preExamCompleted ? "#1d4ed8" : "#991b1b",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              {preExamCompleted ? "Ön Sınav Tamamlandı" : "Ön Sınav Bekleniyor"}
+            </div>
+
+            <div
+              style={{
+                display: "inline-flex",
+                padding: "8px 12px",
+                borderRadius: "999px",
                 background: "#fff7ed",
                 border: "1px solid #fdba74",
                 color: "#9a3412",
@@ -498,7 +466,7 @@ export default function TrainingDetailPage() {
                 fontWeight: 700,
               }}
             >
-              Kalan Final Hakkı: {finalAttempts}
+              Kalan Final Hakkı: {finalAttemptsLeft}
             </div>
 
             {finalScore !== null ? (
@@ -549,7 +517,7 @@ export default function TrainingDetailPage() {
                   Geçerli İzlenen Süre
                 </div>
                 <div style={{ fontWeight: 700 }}>
-                  {formatSeconds(trackedSeconds)}
+                  {formatSeconds(effectiveWatchSeconds)}
                 </div>
               </div>
               <div>
@@ -557,7 +525,7 @@ export default function TrainingDetailPage() {
                   Tıklama
                 </div>
                 <div style={{ fontWeight: 700 }}>
-                  {clickCount} / {requiredClicks}
+                  {effectiveClickCount} / {requiredClicks}
                 </div>
               </div>
               <div>
@@ -569,105 +537,115 @@ export default function TrainingDetailPage() {
             </div>
           )}
 
- {isSync ? (
-  <div style={{ marginTop: "24px" }}>
-    {contentUrl ? (
-      <a
-        href={contentUrl}
-        target="_blank"
-        rel="noreferrer"
-        style={{
-          display: "inline-block",
-          padding: "12px 18px",
-          background: "#2563eb",
-          color: "#fff",
-          borderRadius: "10px",
-          textDecoration: "none",
-          fontWeight: 700,
-        }}
-      >
-        Canlı Eğitime Katıl
-      </a>
-    ) : (
-      <p style={{ color: "#b91c1c" }}>
-        Canlı eğitim linki bulunamadı.
-      </p>
-    )}
-  </div>
-) : contentUrl ? (
-  <div style={{ marginTop: "24px" }}>
-    {nativeVideo ? (
-      <video
-        ref={videoRef}
-        src={contentUrl}
-        controls
-        controlsList="nodownload"
-        disablePictureInPicture
-        onLoadedMetadata={handleLoadedMetadata}
-        onTimeUpdate={handleTimeUpdate}
-        onSeeking={handleSeeking}
-        style={{
-          width: "100%",
-          borderRadius: "16px",
-          background: "#000",
-        }}
-      />
-    ) : youtubeVideo ? (
-      <iframe
-        src={embedUrl}
-        width="100%"
-        height="500"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        style={{
-          border: "none",
-          borderRadius: "16px",
-          background: "#000",
-        }}
-        title="Eğitim İçeriği"
-      />
-    ) : (
-      <div
-        style={{
-          display: "flex",
-          gap: "12px",
-          alignItems: "center",
-          flexWrap: "wrap",
-          padding: "18px",
-          borderRadius: "12px",
-          background: "#f9fafb",
-          border: "1px solid #e5e7eb",
-        }}
-      >
-        <div style={{ color: "#374151", lineHeight: 1.7 }}>
-          Bu eğitim içeriği tarayıcıda doğrudan oynatılamayan bir bağlantı türünde.
-          İçeriği açıp izlemek için aşağıdaki bağlantıyı kullanabilirsiniz.
-        </div>
+          {isSync ? (
+            <div style={{ marginTop: "24px" }}>
+              {contentUrl ? (
+                <a
+                  href={contentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: "inline-block",
+                    padding: "12px 18px",
+                    background: "#2563eb",
+                    color: "#fff",
+                    borderRadius: "10px",
+                    textDecoration: "none",
+                    fontWeight: 700,
+                  }}
+                >
+                  Canlı Eğitime Katıl
+                </a>
+              ) : (
+                <p style={{ color: "#b91c1c" }}>
+                  Canlı eğitim linki bulunamadı.
+                </p>
+              )}
+            </div>
+          ) : contentUrl ? (
+            <div style={{ marginTop: "24px" }}>
+              {nativeVideo ? (
+                <video
+                  ref={videoRef}
+                  src={contentUrl}
+                  controls
+                  controlsList="nodownload noplaybackrate"
+                  disablePictureInPicture
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onTimeUpdate={(e) => {
+                    const video = e.currentTarget;
+                    const current = Math.floor(video.currentTime || 0);
 
-        <a
-          href={contentUrl}
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            display: "inline-block",
-            padding: "12px 18px",
-            background: "#2563eb",
-            color: "#fff",
-            borderRadius: "10px",
-            textDecoration: "none",
-            fontWeight: 700,
-          }}
-        >
-          Eğitimi Aç
-        </a>
-      </div>
-    )}
-  </div>
-) : (
-  <p style={{ marginTop: "24px", color: "#b91c1c" }}>
-    Eğitim içeriği bulunamadı.
-  </p>
-)}
+                    if (current > maxReachedTime + 1) {
+                      video.currentTime = maxReachedTime;
+                      return;
+                    }
+
+                    handleTimeUpdate();
+                  }}
+                  onSeeking={handleSeeking}
+                  style={{
+                    width: "100%",
+                    borderRadius: "16px",
+                    background: "#000",
+                  }}
+                />
+              ) : youtubeVideo ? (
+                <iframe
+                  src={embedUrl}
+                  width="100%"
+                  height="500"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{
+                    border: "none",
+                    borderRadius: "16px",
+                    background: "#000",
+                  }}
+                  title="Eğitim İçeriği"
+                />
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "12px",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    padding: "18px",
+                    borderRadius: "12px",
+                    background: "#f9fafb",
+                    border: "1px solid #e5e7eb",
+                  }}
+                >
+                  <div style={{ color: "#374151", lineHeight: 1.7 }}>
+                    Bu eğitim içeriği tarayıcıda doğrudan oynatılamayan bir bağlantı türünde.
+                    İçeriği açıp izlemek için aşağıdaki bağlantıyı kullanabilirsiniz.
+                  </div>
+
+                  <a
+                    href={contentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: "inline-block",
+                      padding: "12px 18px",
+                      background: "#2563eb",
+                      color: "#fff",
+                      borderRadius: "10px",
+                      textDecoration: "none",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Eğitimi Aç
+                  </a>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p style={{ marginTop: "24px", color: "#b91c1c" }}>
+              Eğitim içeriği bulunamadı.
+            </p>
+          )}
 
           {!playbackReady && isAsync && nativeVideo && (
             <div
@@ -681,8 +659,7 @@ export default function TrainingDetailPage() {
                 lineHeight: 1.6,
               }}
             >
-              Video meta bilgileri yükleniyor. Eğitim süresi ve izleme takibi
-              hazırlanıyor.
+              Video meta bilgileri yükleniyor. Eğitim süresi ve izleme takibi hazırlanıyor.
             </div>
           )}
 
@@ -702,22 +679,21 @@ export default function TrainingDetailPage() {
             </div>
           )}
 
-{isAsync && !nativeVideo && contentUrl && (
-  <div
-    style={{
-      marginTop: "16px",
-      padding: "12px 14px",
-      borderRadius: "10px",
-      background: "#eff6ff",
-      border: "1px solid #bfdbfe",
-      color: "#1d4ed8",
-      lineHeight: 1.6,
-    }}
-  >
-    Bu içerik açılır ve izlenir. Ancak ileri sarma engeli, zorunlu tıklama ve
-    süre takibi en sağlıklı şekilde doğrudan video dosyalarında çalışır.
-  </div>
-)}
+          {isAsync && !nativeVideo && contentUrl && (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "12px 14px",
+                borderRadius: "10px",
+                background: "#eff6ff",
+                border: "1px solid #bfdbfe",
+                color: "#1d4ed8",
+                lineHeight: 1.6,
+              }}
+            >
+              Bu içerik açılır ve izlenir. Ancak ileri sarma engeli, zorunlu tıklama ve süre takibi en sağlıklı şekilde doğrudan video dosyalarında çalışır.
+            </div>
+          )}
 
           <div
             style={{
@@ -727,7 +703,22 @@ export default function TrainingDetailPage() {
               flexWrap: "wrap",
             }}
           >
-            {canTakeFinalExam ? (
+            {!preExamCompleted ? (
+              <button
+                onClick={() => router.push(`/portal/training/${assignmentId}/pre-exam`)}
+                style={{
+                  padding: "12px 20px",
+                  background: "#2563eb",
+                  color: "#fff",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Ön Sınava Git
+              </button>
+            ) : canTakeFinalExam ? (
               <button
                 onClick={() => {
                   router.push(`/portal/training/${assignmentId}/final-exam`);
@@ -794,7 +785,7 @@ export default function TrainingDetailPage() {
             </button>
           </div>
 
-          {!trainingCompleted && finalAttempts <= 0 && (
+          {!trainingCompleted && finalAttemptsLeft <= 0 && (
             <div
               style={{
                 marginTop: "18px",
@@ -806,8 +797,7 @@ export default function TrainingDetailPage() {
                 lineHeight: 1.6,
               }}
             >
-              Final sınav haklarınız bitti. Bu eğitim tamamlanmadı olarak
-              değerlendirilecektir ve eğitimin yeniden alınması gerekir.
+              Final sınav haklarınız bitti. Bu eğitim tamamlanmadı olarak değerlendirilecektir ve eğitimin yeniden alınması gerekir.
             </div>
           )}
 
@@ -823,9 +813,10 @@ export default function TrainingDetailPage() {
                 lineHeight: 1.6,
               }}
             >
-              Tebrikler. Final sınavı başarıyla tamamlandı. Eğitim başarılı
-              durumda.
+              Tebrikler. Final sınavı başarıyla tamamlandı. Eğitim başarılı durumda.
             </div>
+
+            
           )}
         </div>
       </div>
@@ -863,12 +854,37 @@ export default function TrainingDetailPage() {
             </p>
 
             <button
-              onClick={() => {
-                setClickCount((prev) => prev + 1);
-                setShowPresencePopup(false);
-                setLastPromptAt(Date.now());
-                videoRef.current?.play().catch(() => undefined);
-              }}
+         onClick={async () => {
+  const newCount = clickCount + 1;
+  setPresenceSaving(true);
+
+  try {
+    setClickCount(newCount);
+    setCheckpointIndex((prev) => prev + 1);
+    setShowPresencePopup(false);
+    setLastPromptAt(Date.now());
+
+    await fetch("/api/training/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        watchSeconds: effectiveWatchSeconds,
+        clickCount: newCount,
+        completed: false,
+      }),
+    });
+
+    await fetchTraining();
+    videoRef.current?.play().catch(() => undefined);
+  } catch (err) {
+    console.error("presence save error:", err);
+  } finally {
+    setPresenceSaving(false);
+  }
+}}
               style={{
                 marginTop: "12px",
                 padding: "12px 18px",
@@ -879,9 +895,9 @@ export default function TrainingDetailPage() {
                 fontWeight: 700,
                 cursor: "pointer",
               }}
-            >
-              Devam Et
-            </button>
+         >
+  {presenceSaving ? "Kaydediliyor..." : "Devam Et"}
+</button>
           </div>
         </div>
       )}
