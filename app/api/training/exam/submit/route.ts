@@ -14,7 +14,8 @@ type ExamType = "pre" | "final";
 
 type AnswerItem = {
   questionId: string;
-  selectedOption: "A" | "B" | "C" | "D";
+  selectedOption?: "A" | "B" | "C" | "D";
+  selected_option?: "A" | "B" | "C" | "D";
 };
 
 type AssignmentRow = {
@@ -74,6 +75,13 @@ export async function POST(request: Request) {
     if (examType !== "pre" && examType !== "final") {
       return NextResponse.json(
         { error: "Geçersiz sınav tipi." },
+        { status: 400 }
+      );
+    }
+
+    if (answers.length === 0) {
+      return NextResponse.json(
+        { error: "Cevaplar boş." },
         { status: 400 }
       );
     }
@@ -181,26 +189,22 @@ export async function POST(request: Request) {
       }
     }
 
-  const answerMap = new Map(
-  answers.map((item: any) => [
-    item.questionId,
-    String(item.selected_option || item.selectedOption || "")
-      .toUpperCase()
-      .trim(),
-  ])
-);
+    const answerMap = new Map(
+      answers.map((item) => [
+        item.questionId,
+        String(item.selected_option || item.selectedOption || "")
+          .toUpperCase()
+          .trim(),
+      ])
+    );
 
-if (!answers.length) {
-  return NextResponse.json(
-    { error: "Cevaplar boş." },
-    { status: 400 }
-  );
-}
     let correctCount = 0;
 
     for (const q of safeQuestions) {
       const selected = answerMap.get(q.id);
-      if (selected && selected === q.correct_option) {
+      const correct = String(q.correct_option || "").toUpperCase().trim();
+
+      if (selected && selected === correct) {
         correctCount += 1;
       }
     }
@@ -232,13 +236,12 @@ if (!answers.length) {
         examType: "pre",
         score,
         passed: true,
-        message: "Ön değerlendirme kaydedildi.",
+        message: "Ön sınav tamamlandı. Eğitime devam edebilirsin.",
       });
     }
 
     const nextAttempt = (assignment.final_exam_attempts || 0) + 1;
-    const isPre = String(examType) === "pre";
-    const passed = isPre ? true : score >= 60;
+    const passed = score >= 60;
 
     if (passed) {
       const { error: successError } = await supabase
