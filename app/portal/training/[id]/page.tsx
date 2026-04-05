@@ -261,11 +261,32 @@ const completeTrainingFlow = async (
     }
   };
 
-  useEffect(() => {
-    if (assignmentId) {
-      void fetchTraining();
+ useEffect(() => {
+  if (!assignmentId) return;
+
+  const initTraining = async () => {
+    try {
+      await fetch("/api/training/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assignmentId,
+          action: "open",
+          currentSecond: 0,
+          duration: 0,
+        }),
+      });
+    } catch (err) {
+      console.error("training open error:", err);
     }
-  }, [assignmentId]);
+
+    await fetchTraining();
+  };
+
+  void initTraining();
+}, [assignmentId]);
 
   const trainingType = useMemo(
     () => normalizeType(training?.training?.type),
@@ -333,10 +354,27 @@ const completeTrainingFlow = async (
       return;
     }
 
-    if (current > prevMax) {
-      maxReachedRef.current = current;
-      setMaxReachedTime(current);
-    }
+   if (current > prevMax) {
+  maxReachedRef.current = current;
+  setMaxReachedTime(current);
+
+  if (current % 15 === 0) {
+    fetch("/api/training/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        action: "heartbeat",
+        currentSecond: current,
+        duration: Math.floor(videoDuration || 0),
+      }),
+    }).catch((err) => {
+      console.error("training heartbeat error:", err);
+    });
+  }
+}
 
     const checkpoints = checkpointsRef.current;
     if (
@@ -410,6 +448,32 @@ const completeTrainingFlow = async (
       Math.floor(effectiveWatchSeconds),
       effectiveClickCount
     );
+
+    await fetch("/api/training/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        action: "mark_watched",
+        currentSecond: Math.floor(effectiveWatchSeconds),
+        duration: Math.floor(videoDuration),
+      }),
+    });
+
+    await fetch("/api/training/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        action: "complete",
+        currentSecond: Math.floor(effectiveWatchSeconds),
+        duration: Math.floor(videoDuration),
+      }),
+    });
 
     setProgressSaved(true);
     await fetchTraining();
@@ -722,7 +786,7 @@ effectiveClickCount >= requiredClicks));
       }}
       onTimeUpdate={handleTimeUpdate}
       onSeeking={handleSeeking}
-   onEnded={async () => {
+ onEnded={async () => {
   setVideoCompleted(true);
   maxReachedRef.current = videoDuration;
   setMaxReachedTime(videoDuration);
@@ -735,6 +799,32 @@ effectiveClickCount >= requiredClicks));
     );
 
     await completeTrainingFlow(finalWatchSeconds, finalClicks);
+
+    await fetch("/api/training/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        action: "mark_watched",
+        currentSecond: finalWatchSeconds,
+        duration: finalWatchSeconds,
+      }),
+    });
+
+    await fetch("/api/training/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        action: "complete",
+        currentSecond: finalWatchSeconds,
+        duration: finalWatchSeconds,
+      }),
+    });
 
     setClickCount(finalClicks);
     setProgressSaved(true);
@@ -960,38 +1050,51 @@ effectiveClickCount >= requiredClicks));
   setShowPresencePopup(false);
   setCheckpointIndex((prev) => prev + 1);
 
-  try {
-    const res = await fetch("/api/training/progress", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignmentId,
-        watchSeconds: currentSecond,
-        clickCount: newCount,
-        completed: false,
-      }),
-    });
+ try {
+  const res = await fetch("/api/training/progress", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      assignmentId,
+      watchSeconds: currentSecond,
+      clickCount: newCount,
+      completed: false,
+    }),
+  });
 
-    if (res.ok) {
-      const json = await res.json();
+  await fetch("/api/training/update", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      assignmentId,
+      action: "heartbeat",
+      currentSecond,
+      duration: Math.floor(videoDuration || 0),
+    }),
+  });
 
-      if (typeof json?.watch_seconds === "number") {
-        maxReachedRef.current = Math.max(
-          maxReachedRef.current,
-          Math.floor(json.watch_seconds)
-        );
-        setMaxReachedTime((prev) =>
-          Math.max(prev, Math.floor(json.watch_seconds))
-        );
-      }
+  if (res.ok) {
+    const json = await res.json();
 
-      await fetchTraining();
+    if (typeof json?.watch_seconds === "number") {
+      maxReachedRef.current = Math.max(
+        maxReachedRef.current,
+        Math.floor(json.watch_seconds)
+      );
+      setMaxReachedTime((prev) =>
+        Math.max(prev, Math.floor(json.watch_seconds))
+      );
     }
-  } catch (err) {
-    console.error("presence save error:", err);
+
+    await fetchTraining();
   }
+} catch (err) {
+  console.error("presence save error:", err);
+}
 
   requestAnimationFrame(() => {
     player?.play().catch(() => undefined);
