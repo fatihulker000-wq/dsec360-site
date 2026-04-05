@@ -46,6 +46,69 @@ type TrainingAssignmentRow = {
   training_reset_required: boolean;
 };
 
+function isHttpUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
+function normalizeSlashes(value: string) {
+  return value.replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
+function resolveTrainingContentUrl(
+  supabase: ReturnType<typeof getSupabase>,
+  rawValue?: string | null
+) {
+ const baseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "") || "";
+  const raw = String(rawValue || "").trim();
+
+  if (!raw) return null;
+
+  if (isHttpUrl(raw)) {
+    return raw;
+  }
+
+  if (raw.startsWith("/storage/v1/object/public/")) {
+    return `${baseUrl}${raw}`;
+  }
+
+  if (raw.startsWith("storage/v1/object/public/")) {
+    return `${baseUrl}/${raw}`;
+  }
+
+  if (raw.startsWith("public://")) {
+    const withoutPrefix = raw.replace("public://", "");
+    const normalized = normalizeSlashes(withoutPrefix);
+    const firstSlash = normalized.indexOf("/");
+
+    if (firstSlash === -1) return raw;
+
+    const bucket = normalized.slice(0, firstSlash);
+    const filePath = normalized.slice(firstSlash + 1);
+
+    if (!bucket || !filePath) return raw;
+
+    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+    return data?.publicUrl || raw;
+  }
+
+  const normalized = normalizeSlashes(raw);
+
+  if (!normalized.includes("://") && normalized.includes("/")) {
+    const firstSlash = normalized.indexOf("/");
+    const bucket = normalized.slice(0, firstSlash);
+    const filePath = normalized.slice(firstSlash + 1);
+
+    if (bucket && filePath) {
+      const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      if (data?.publicUrl) {
+        return data.publicUrl;
+      }
+    }
+  }
+
+  return raw;
+}
+
 export async function GET() {
   try {
     const cookieStore = await cookies();
@@ -136,24 +199,36 @@ export async function GET() {
       );
     }
 
-    const result = safeAssignments.map((item) => ({
-      id: item.id,
-      user_id: item.user_id,
-      training_id: item.training_id,
-      status: item.status,
-      started_at: item.started_at,
-      completed_at: item.completed_at,
-      watch_completed: item.watch_completed,
-      watch_seconds: item.watch_seconds,
-      click_count: item.click_count,
-      pre_exam_completed: item.pre_exam_completed,
-      pre_exam_score: item.pre_exam_score,
-      final_exam_score: item.final_exam_score,
-      final_exam_attempts: item.final_exam_attempts,
-      final_exam_passed: item.final_exam_passed,
-      training_reset_required: item.training_reset_required,
-      training: item.training_id ? trainingsMap[item.training_id] || null : null,
-    }));
+    const result = safeAssignments.map((item) => {
+      const training = item.training_id ? trainingsMap[item.training_id] || null : null;
+      const rawContentUrl = training?.content_url || null;
+      const resolvedContentUrl = resolveTrainingContentUrl(supabase, rawContentUrl);
+
+      return {
+        id: item.id,
+        user_id: item.user_id,
+        training_id: item.training_id,
+        status: item.status,
+        started_at: item.started_at,
+        completed_at: item.completed_at,
+        watch_completed: item.watch_completed,
+        watch_seconds: item.watch_seconds,
+        click_count: item.click_count,
+        pre_exam_completed: item.pre_exam_completed,
+        pre_exam_score: item.pre_exam_score,
+        final_exam_score: item.final_exam_score,
+        final_exam_attempts: item.final_exam_attempts,
+        final_exam_passed: item.final_exam_passed,
+        training_reset_required: item.training_reset_required,
+        training: training
+          ? {
+              ...training,
+              raw_content_url: rawContentUrl,
+              content_url: resolvedContentUrl,
+            }
+          : null,
+      };
+    });
 
     return NextResponse.json({
       success: true,

@@ -71,20 +71,24 @@ export default function FinalExamPage() {
     message: "",
   });
 
-  const [questions, setQuestions] = useState<ExamQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>(
-    {}
-  );
-  const [result, setResult] = useState<SubmitResponse | null>(null);
-  const [attemptsLeft, setAttemptsLeft] = useState(3);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+ const [questions, setQuestions] = useState<ExamQuestion[]>([]);
+const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>(
+  {}
+);
+const [result, setResult] = useState<SubmitResponse | null>(null);
+const [attemptsLeft, setAttemptsLeft] = useState(3);
+const [loading, setLoading] = useState(true);
+const [submitting, setSubmitting] = useState(false);
+const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!assignmentId) return;
+useEffect(() => {
+  window.scrollTo({ top: 0, behavior: "auto" });
+}, [assignmentId]);
 
-    const fetchTrainingInfoAndGuard = async () => {
+useEffect(() => {
+  if (!assignmentId) return;
+
+  const fetchTrainingInfoAndGuard = async () => {
       try {
         const res = await fetch("/api/training/my", {
           method: "GET",
@@ -279,11 +283,12 @@ export default function FinalExamPage() {
         return;
       }
 
-      setResult(json);
+setResult(json);
+window.scrollTo({ top: 0, behavior: "smooth" });
 
-      if (typeof json.attemptsLeft === "number") {
-        setAttemptsLeft(json.attemptsLeft);
-      }
+if (typeof json.attemptsLeft === "number") {
+  setAttemptsLeft(json.attemptsLeft);
+}
     } catch (err) {
       console.error("final exam submit hatası:", err);
       setError("Sınav sonucu gönderilemedi.");
@@ -292,11 +297,12 @@ export default function FinalExamPage() {
     }
   };
 
-  const handleRetry = () => {
-    setAnswers({});
-    setResult(null);
-    setError("");
-  };
+ const handleRetry = () => {
+  setAnswers({});
+  setResult(null);
+  setError("");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+};
 
   if (!guardChecked || loading) {
     return (
