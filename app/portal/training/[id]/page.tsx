@@ -686,10 +686,38 @@ export default function TrainingDetailPage() {
       }}
       onTimeUpdate={handleTimeUpdate}
       onSeeking={handleSeeking}
-     onEnded={() => {
+    onEnded={async () => {
   setVideoCompleted(true);
   maxReachedRef.current = videoDuration;
   setMaxReachedTime(videoDuration);
+
+  try {
+    const finalClicks = Math.max(
+      clickCount,
+      Math.max(1, Math.floor(videoDuration / 90))
+    );
+
+    const res = await fetch("/api/training/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        watchSeconds: Math.floor(videoDuration),
+        clickCount: finalClicks,
+        completed: true,
+      }),
+    });
+
+    if (res.ok) {
+      setClickCount(finalClicks);
+      setProgressSaved(true);
+      await fetchTraining();
+    }
+  } catch (err) {
+    console.error("video ended completion save error:", err);
+  }
 }}
       onError={() => {
         setVideoLoadError(
@@ -909,13 +937,15 @@ export default function TrainingDetailPage() {
                     headers: {
                       "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({
-                      assignmentId,
-                      watchSeconds: effectiveWatchSeconds,
-                      clickCount: newCount,
-                      completed: false,
-                    }),
+                 body: JSON.stringify({
+                assignmentId,
+                watchSeconds: Math.floor(videoRef.current?.currentTime || effectiveWatchSeconds),
+                clickCount: newCount,
+                completed: false,
+                  }),
                   });
+
+                await fetchTraining();  
                 } catch (err) {
                   console.error("presence save error:", err);
                 }
