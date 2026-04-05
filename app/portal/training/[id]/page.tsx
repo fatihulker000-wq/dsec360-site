@@ -360,9 +360,9 @@ if (isAsync && contentUrl && !nativeVideo) {
       return "";
     }
 
-    if (youtubeVideo) {
-      return "YouTube içerikleri açılır; ancak denetimli final kilidi doğrudan video dosyalarında tam çalışır.";
-    }
+if (youtubeVideo) {
+  return "YouTube linkleri desteklenmiyor. Lütfen .mp4, .webm, .ogg, .mov, .avi, .mkv veya .m3u8 video yükleyin.";
+}
 
     return "Bu içerik açılabilir; ancak zorunlu süre/izleme doğrulaması yapılamadığı için final kilitli kalır.";
   }, [
@@ -610,21 +610,21 @@ if (isAsync && contentUrl && !nativeVideo) {
                     background: "#000",
                   }}
                 />
-              ) : youtubeVideo ? (
-                <iframe
-                  src={embedUrl}
-                  width="100%"
-                  height="500"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  style={{
-                    border: "none",
-                    borderRadius: "16px",
-                    background: "#000",
-                  }}
-                  title="Eğitim İçeriği"
-                />
-              ) : (
+             ) : youtubeVideo ? (
+  <div
+    style={{
+      padding: "18px",
+      borderRadius: "12px",
+      background: "#fef2f2",
+      border: "1px solid #fecaca",
+      color: "#991b1b",
+      lineHeight: 1.6,
+    }}
+  >
+    YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin
+    (.mp4, .webm, .ogg, .mov, .avi, .mkv, .m3u8).
+  </div>
+) : (
                 <div
                   style={{
                     display: "flex",
