@@ -51,7 +51,10 @@ function isNativeVideoUrl(url: string) {
     safe.endsWith(".mp4") ||
     safe.endsWith(".webm") ||
     safe.endsWith(".ogg") ||
-    safe.endsWith(".mov")
+    safe.endsWith(".mov") ||
+    safe.endsWith(".avi") ||
+    safe.endsWith(".mkv") ||
+    safe.endsWith(".m3u8")
   );
 }
 
@@ -164,6 +167,23 @@ setVideoCompleted(found.watch_completed === true);
   const isSync = trainingType === "senkron";
   const nativeVideo = isNativeVideoUrl(contentUrl);
   const youtubeVideo = isYoutubeUrl(contentUrl);
+ if (youtubeVideo) {
+  return (
+    <main style={{ padding: "40px", fontFamily: "Arial" }}>
+      <h1>Hata</h1>
+      <p>YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin.</p>
+    </main>
+  );
+}
+
+if (isAsync && contentUrl && !nativeVideo) {
+  return (
+    <main style={{ padding: "40px", fontFamily: "Arial" }}>
+      <h1>Hata</h1>
+      <p>Desteklenmeyen video formatı.</p>
+    </main>
+  );
+}
 
   const serverFinalAttempts = Number(training?.final_exam_attempts || 0);
   const finalAttemptsLeft = Math.max(0, 3 - serverFinalAttempts);
