@@ -20,7 +20,7 @@ type TrainingDetail = {
   final_exam_passed?: boolean | null;
   training_reset_required?: boolean | null;
   training?: {
-    id: string;
+    id?: string;
     title?: string;
     description?: string;
     content_url?: string;
@@ -30,10 +30,8 @@ type TrainingDetail = {
 
 function normalizeType(type?: string | null) {
   const value = (type || "").trim().toLowerCase();
-
   if (value === "senkron") return "senkron";
   if (value === "asenkron") return "asenkron";
-
   return "asenkron";
 }
 
@@ -46,7 +44,6 @@ function formatSeconds(total: number) {
 
 function isNativeVideoUrl(url: string) {
   const safe = (url || "").toLowerCase().split("?")[0];
-
   return (
     safe.endsWith(".mp4") ||
     safe.endsWith(".webm") ||
@@ -63,27 +60,14 @@ function isYoutubeUrl(url: string) {
   return safe.includes("youtube.com/watch") || safe.includes("youtu.be/");
 }
 
-function toEmbedUrl(url: string) {
-  if (!url) return "";
-
-  if (url.includes("youtube.com/watch?v=")) {
-    return url.replace("watch?v=", "embed/");
-  }
-
-  if (url.includes("youtu.be/")) {
-    const id = url.split("youtu.be/")[1]?.split("?")[0];
-    return id ? `https://www.youtube.com/embed/${id}` : url;
-  }
-
-  return url;
-}
-
 export default function TrainingDetailPage() {
   const params = useParams();
   const router = useRouter();
   const assignmentId = params?.id as string;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const maxReachedRef = useRef(0);
+  const isProgrammaticSeekRef = useRef(false);
 
   const [training, setTraining] = useState<TrainingDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,11 +80,10 @@ export default function TrainingDetailPage() {
   const [clickCount, setClickCount] = useState(0);
   const [requiredClicks, setRequiredClicks] = useState(1);
   const [videoCompleted, setVideoCompleted] = useState(false);
-  const [lastPromptAt, setLastPromptAt] = useState(0);
   const [playbackReady, setPlaybackReady] = useState(false);
+
   const [checkpointIndex, setCheckpointIndex] = useState(0);
-const checkpointsRef = useRef<number[]>([]);
-const [presenceSaving, setPresenceSaving] = useState(false);
+  const checkpointsRef = useRef<number[]>([]);
 
   const fetchTraining = async () => {
     try {
@@ -113,10 +96,18 @@ const [presenceSaving, setPresenceSaving] = useState(false);
         credentials: "include",
       });
 
+      if (!res.ok) {
+        console.error("API ERROR:", res.status);
+        setError(`API hata verdi: ${res.status}`);
+        setTraining(null);
+        return;
+      }
+
       const json = await res.json();
 
-      if (!res.ok) {
-        setError(json?.error || "Eğitim alınamadı.");
+      if (!json || !json.data) {
+        console.error("DATA YOK");
+        setError("Eğitim verisi bulunamadı.");
         setTraining(null);
         return;
       }
@@ -131,15 +122,15 @@ const [presenceSaving, setPresenceSaving] = useState(false);
         return;
       }
 
+      const dbWatch = Number(found.watch_seconds || 0);
+      const dbClicks = Number(found.click_count || 0);
+
       setTraining(found);
-
-      const safeWatchSeconds = Number(found.watch_seconds || 0);
-      const safeClickCount = Number(found.click_count || 0);
-
-     setMaxReachedTime(safeWatchSeconds);
-setClickCount(safeClickCount);
-setCheckpointIndex(safeClickCount);
-setVideoCompleted(found.watch_completed === true);
+      setMaxReachedTime(dbWatch);
+      maxReachedRef.current = dbWatch;
+      setClickCount(dbClicks);
+      setCheckpointIndex(dbClicks);
+      setVideoCompleted(found.watch_completed === true);
     } catch (err) {
       console.error("training detail fetch hatası:", err);
       setError("Bağlantı hatası oluştu.");
@@ -161,29 +152,11 @@ setVideoCompleted(found.watch_completed === true);
   );
 
   const contentUrl = training?.training?.content_url || "";
-  const embedUrl = useMemo(() => toEmbedUrl(contentUrl), [contentUrl]);
 
   const isAsync = trainingType === "asenkron";
   const isSync = trainingType === "senkron";
   const nativeVideo = isNativeVideoUrl(contentUrl);
   const youtubeVideo = isYoutubeUrl(contentUrl);
- if (youtubeVideo) {
-  return (
-    <main style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>Hata</h1>
-      <p>YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin.</p>
-    </main>
-  );
-}
-
-if (isAsync && contentUrl && !nativeVideo) {
-  return (
-    <main style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>Hata</h1>
-      <p>Desteklenmeyen video formatı.</p>
-    </main>
-  );
-}
 
   const serverFinalAttempts = Number(training?.final_exam_attempts || 0);
   const finalAttemptsLeft = Math.max(0, 3 - serverFinalAttempts);
@@ -194,23 +167,22 @@ if (isAsync && contentUrl && !nativeVideo) {
       : null;
 
   const preExamCompleted = training?.pre_exam_completed === true;
-  const trainingCompleted = training?.status === "completed" || training?.final_exam_passed === true;
 
- useEffect(() => {
-  if (videoDuration > 0) {
-    const calculatedRequiredClicks = Math.max(
-      1,
-      Math.floor(videoDuration / 120)
-    );
-    setRequiredClicks(calculatedRequiredClicks);
+  const trainingCompleted =
+    training?.status === "completed" || training?.final_exam_passed === true;
 
-    const arr: number[] = [];
-    for (let sec = 120; sec < videoDuration; sec += 120) {
-      arr.push(sec);
+  useEffect(() => {
+    if (videoDuration > 0) {
+      const calculatedRequiredClicks = Math.max(1, Math.floor(videoDuration / 90));
+      setRequiredClicks(calculatedRequiredClicks);
+
+      const arr: number[] = [];
+      for (let sec = 90; sec < videoDuration; sec += 90) {
+        arr.push(sec);
+      }
+      checkpointsRef.current = arr;
     }
-    checkpointsRef.current = arr;
-  }
-}, [videoDuration]);
+  }, [videoDuration]);
 
   const handleLoadedMetadata = () => {
     const player = videoRef.current;
@@ -219,68 +191,80 @@ if (isAsync && contentUrl && !nativeVideo) {
     const duration = Math.floor(player.duration || 0);
     setVideoDuration(duration);
 
-    if (maxReachedTime > 0 && maxReachedTime < duration) {
-      player.currentTime = maxReachedTime;
+    if (maxReachedRef.current > 0 && maxReachedRef.current < duration) {
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = maxReachedRef.current;
     }
 
     setPlaybackReady(true);
   };
 
- const handleTimeUpdate = () => {
-  const player = videoRef.current;
-  if (!player) return;
+  const handleTimeUpdate = () => {
+    const player = videoRef.current;
+    if (!player) return;
 
-  const current = Math.floor(player.currentTime || 0);
+    const current = Math.floor(player.currentTime || 0);
+    const prevMax = maxReachedRef.current;
 
-  setMaxReachedTime((prev) => {
-    if (current > prev) {
-      return current;
+    if (current > prevMax + 1) {
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = prevMax;
+      return;
     }
-    return prev;
-  });
 
-  const checkpoints = checkpointsRef.current;
-  if (
-    isAsync &&
-    nativeVideo &&
-    checkpointIndex < checkpoints.length &&
-    current >= checkpoints[checkpointIndex] &&
-    !showPresencePopup
-  ) {
-    player.pause();
-    setShowPresencePopup(true);
-  }
-};
+    if (current > prevMax) {
+      maxReachedRef.current = current;
+      setMaxReachedTime(current);
+    }
+
+    const checkpoints = checkpointsRef.current;
+    if (
+      checkpointIndex < checkpoints.length &&
+      current >= checkpoints[checkpointIndex] &&
+      !showPresencePopup
+    ) {
+      player.pause();
+      setShowPresencePopup(true);
+    }
+  };
 
   const handleSeeking = () => {
     const player = videoRef.current;
     if (!player) return;
 
-    const current = Math.floor(player.currentTime || 0);
-    const allowed = Math.floor(maxReachedTime) + 1;
+    if (isProgrammaticSeekRef.current) {
+      isProgrammaticSeekRef.current = false;
+      return;
+    }
 
-    if (current > allowed) {
-      player.currentTime = maxReachedTime;
+    const current = Math.floor(player.currentTime || 0);
+    const allowedMax = maxReachedRef.current + 1;
+
+    if (current > allowedMax) {
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = maxReachedRef.current;
     }
   };
 
-  useEffect(() => {
-    if (videoDuration <= 0) return;
-
-    if (maxReachedTime >= Math.max(videoDuration - 2, 1)) {
-      setVideoCompleted(true);
-    }
-  }, [maxReachedTime, videoDuration]);
-
   const effectiveWatchSeconds = Math.min(
     Math.max(Number(training?.watch_seconds || 0), Math.floor(maxReachedTime)),
-    Math.floor(videoDuration || Math.max(Number(training?.watch_seconds || 0), maxReachedTime))
+    Math.floor(
+      videoDuration ||
+        Math.max(Number(training?.watch_seconds || 0), maxReachedTime)
+    )
   );
 
   const effectiveClickCount = Math.max(
     Number(training?.click_count || 0),
     clickCount
   );
+
+  useEffect(() => {
+    if (videoDuration <= 0) return;
+
+    const completed = effectiveWatchSeconds >= Math.max(videoDuration - 1, 1);
+    setVideoCompleted(completed);
+  }, [effectiveWatchSeconds, videoDuration]);
 
   const progressPercent =
     videoDuration > 0
@@ -329,16 +313,12 @@ if (isAsync && contentUrl && !nativeVideo) {
     finalAttemptsLeft > 0 &&
     !trainingCompleted &&
     preExamCompleted &&
-    (
-      isSync ||
-      (
-        isAsync &&
+    (isSync ||
+      (isAsync &&
         nativeVideo &&
         (training?.watch_completed === true || videoCompleted) &&
         effectiveWatchSeconds >= Math.floor(videoDuration) &&
-        effectiveClickCount >= requiredClicks
-      )
-    );
+        effectiveClickCount >= requiredClicks));
 
   const lockReason = useMemo(() => {
     if (trainingCompleted) return "";
@@ -346,6 +326,10 @@ if (isAsync && contentUrl && !nativeVideo) {
     if (finalAttemptsLeft <= 0) return "Final hakkı bitti.";
     if (isSync) return "";
     if (!contentUrl) return "Eğitim içeriği bulunamadı.";
+
+    if (youtubeVideo) {
+      return "YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin.";
+    }
 
     if (nativeVideo) {
       if (!(training?.watch_completed === true || videoCompleted)) {
@@ -360,19 +344,15 @@ if (isAsync && contentUrl && !nativeVideo) {
       return "";
     }
 
-if (youtubeVideo) {
-  return "YouTube linkleri desteklenmiyor. Lütfen .mp4, .webm, .ogg, .mov, .avi, .mkv veya .m3u8 video yükleyin.";
-}
-
-    return "Bu içerik açılabilir; ancak zorunlu süre/izleme doğrulaması yapılamadığı için final kilitli kalır.";
+    return "Desteklenmeyen video formatı.";
   }, [
     trainingCompleted,
     preExamCompleted,
     finalAttemptsLeft,
     isSync,
     contentUrl,
-    nativeVideo,
     youtubeVideo,
+    nativeVideo,
     training?.watch_completed,
     videoCompleted,
     effectiveClickCount,
@@ -592,72 +572,40 @@ if (youtubeVideo) {
                   controlsList="nodownload noplaybackrate"
                   disablePictureInPicture
                   onLoadedMetadata={handleLoadedMetadata}
-                  onTimeUpdate={(e) => {
-                    const video = e.currentTarget;
-                    const current = Math.floor(video.currentTime || 0);
-
-                    if (current > maxReachedTime + 1) {
-                      video.currentTime = maxReachedTime;
-                      return;
-                    }
-
-                    handleTimeUpdate();
-                  }}
+                  onTimeUpdate={handleTimeUpdate}
                   onSeeking={handleSeeking}
+                  onEnded={() => setVideoCompleted(true)}
                   style={{
                     width: "100%",
                     borderRadius: "16px",
                     background: "#000",
                   }}
                 />
-             ) : youtubeVideo ? (
-  <div
-    style={{
-      padding: "18px",
-      borderRadius: "12px",
-      background: "#fef2f2",
-      border: "1px solid #fecaca",
-      color: "#991b1b",
-      lineHeight: 1.6,
-    }}
-  >
-    YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin
-    (.mp4, .webm, .ogg, .mov, .avi, .mkv, .m3u8).
-  </div>
-) : (
+              ) : youtubeVideo ? (
                 <div
                   style={{
-                    display: "flex",
-                    gap: "12px",
-                    alignItems: "center",
-                    flexWrap: "wrap",
                     padding: "18px",
                     borderRadius: "12px",
-                    background: "#f9fafb",
-                    border: "1px solid #e5e7eb",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    color: "#991b1b",
+                    lineHeight: 1.6,
                   }}
                 >
-                  <div style={{ color: "#374151", lineHeight: 1.7 }}>
-                    Bu eğitim içeriği tarayıcıda doğrudan oynatılamayan bir bağlantı türünde.
-                    İçeriği açıp izlemek için aşağıdaki bağlantıyı kullanabilirsiniz.
-                  </div>
-
-                  <a
-                    href={contentUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: "inline-block",
-                      padding: "12px 18px",
-                      background: "#2563eb",
-                      color: "#fff",
-                      borderRadius: "10px",
-                      textDecoration: "none",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Eğitimi Aç
-                  </a>
+                  YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: "18px",
+                    borderRadius: "12px",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    color: "#991b1b",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Desteklenmeyen video formatı.
                 </div>
               )}
             </div>
@@ -699,22 +647,6 @@ if (youtubeVideo) {
             </div>
           )}
 
-          {isAsync && !nativeVideo && contentUrl && (
-            <div
-              style={{
-                marginTop: "16px",
-                padding: "12px 14px",
-                borderRadius: "10px",
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
-                color: "#1d4ed8",
-                lineHeight: 1.6,
-              }}
-            >
-              Bu içerik açılır ve izlenir. Ancak ileri sarma engeli, zorunlu tıklama ve süre takibi en sağlıklı şekilde doğrudan video dosyalarında çalışır.
-            </div>
-          )}
-
           <div
             style={{
               marginTop: "24px",
@@ -740,9 +672,7 @@ if (youtubeVideo) {
               </button>
             ) : canTakeFinalExam ? (
               <button
-                onClick={() => {
-                  router.push(`/portal/training/${assignmentId}/final-exam`);
-                }}
+                onClick={() => router.push(`/portal/training/${assignmentId}/final-exam`)}
                 style={{
                   padding: "12px 20px",
                   background: "#7c3aed",
@@ -788,9 +718,7 @@ if (youtubeVideo) {
             )}
 
             <button
-              onClick={() => {
-                router.push("/portal/training");
-              }}
+              onClick={() => router.push("/portal/training")}
               style={{
                 padding: "12px 20px",
                 background: "#111827",
@@ -804,40 +732,6 @@ if (youtubeVideo) {
               Eğitim Listesine Dön
             </button>
           </div>
-
-          {!trainingCompleted && finalAttemptsLeft <= 0 && (
-            <div
-              style={{
-                marginTop: "18px",
-                padding: "14px 16px",
-                borderRadius: "12px",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                color: "#991b1b",
-                lineHeight: 1.6,
-              }}
-            >
-              Final sınav haklarınız bitti. Bu eğitim tamamlanmadı olarak değerlendirilecektir ve eğitimin yeniden alınması gerekir.
-            </div>
-          )}
-
-          {trainingCompleted && (
-            <div
-              style={{
-                marginTop: "18px",
-                padding: "14px 16px",
-                borderRadius: "12px",
-                background: "#f0fdf4",
-                border: "1px solid #bbf7d0",
-                color: "#166534",
-                lineHeight: 1.6,
-              }}
-            >
-              Tebrikler. Final sınavı başarıyla tamamlandı. Eğitim başarılı durumda.
-            </div>
-
-            
-          )}
         </div>
       </div>
 
@@ -866,45 +760,39 @@ if (youtubeVideo) {
             }}
           >
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>
-              Ekran başı doğrulaması
+              90 saniyelik ekran başı doğrulaması
             </h3>
             <p style={{ color: "#4b5563", lineHeight: 1.7 }}>
-              Eğitime devam edebilmeniz için bu bildirimi onaylamanız gerekir.
-              Onay verilmeden video ilerlemez.
+              Eğitime aktif devam ettiğinizi doğrulamak için onay vermeniz gerekir.
+              Onay verilmeden video devam etmez.
             </p>
 
             <button
-         onClick={async () => {
-  const newCount = clickCount + 1;
-  setPresenceSaving(true);
+              onClick={async () => {
+                const newCount = clickCount + 1;
+                setClickCount(newCount);
+                setShowPresencePopup(false);
+                setCheckpointIndex((prev) => prev + 1);
 
-  try {
-    setClickCount(newCount);
-    setCheckpointIndex((prev) => prev + 1);
-    setShowPresencePopup(false);
-    setLastPromptAt(Date.now());
+                try {
+                  await fetch("/api/training/progress", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      assignmentId,
+                      watchSeconds: effectiveWatchSeconds,
+                      clickCount: newCount,
+                      completed: false,
+                    }),
+                  });
+                } catch (err) {
+                  console.error("presence save error:", err);
+                }
 
-    await fetch("/api/training/progress", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignmentId,
-        watchSeconds: effectiveWatchSeconds,
-        clickCount: newCount,
-        completed: false,
-      }),
-    });
-
-    await fetchTraining();
-    videoRef.current?.play().catch(() => undefined);
-  } catch (err) {
-    console.error("presence save error:", err);
-  } finally {
-    setPresenceSaving(false);
-  }
-}}
+                videoRef.current?.play().catch(() => undefined);
+              }}
               style={{
                 marginTop: "12px",
                 padding: "12px 18px",
@@ -915,9 +803,9 @@ if (youtubeVideo) {
                 fontWeight: 700,
                 cursor: "pointer",
               }}
-         >
-  {presenceSaving ? "Kaydediliyor..." : "Devam Et"}
-</button>
+            >
+              Devam Et
+            </button>
           </div>
         </div>
       )}
