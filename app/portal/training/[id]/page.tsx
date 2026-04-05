@@ -139,7 +139,49 @@ export default function TrainingDetailPage() {
   const params = useParams();
   const router = useRouter();
   const assignmentId = params?.id as string;
+const completeTrainingFlow = async (
+  finalWatchSeconds: number,
+  finalClicks: number
+) => {
+  await fetch("/api/training/progress", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      assignmentId,
+      watchSeconds: finalWatchSeconds,
+      clickCount: finalClicks,
+      completed: true,
+    }),
+  });
 
+  await fetch("/api/training/update", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      assignmentId,
+      action: "mark_watched",
+      currentSecond: finalWatchSeconds,
+      duration: finalWatchSeconds,
+    }),
+  });
+
+  await fetch("/api/training/update", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      assignmentId,
+      action: "complete",
+      currentSecond: finalWatchSeconds,
+      duration: finalWatchSeconds,
+    }),
+  });
+};
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const maxReachedRef = useRef(0);
   const isProgrammaticSeekRef = useRef(false);
@@ -362,29 +404,19 @@ export default function TrainingDetailPage() {
 
   if (!isActuallyCompleted) return;
 
-  const saveProgress = async () => {
-    try {
-      const res = await fetch("/api/training/progress", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          assignmentId,
-          watchSeconds: effectiveWatchSeconds,
-          clickCount: effectiveClickCount,
-          completed: true,
-        }),
-      });
+ const saveProgress = async () => {
+  try {
+    await completeTrainingFlow(
+      Math.floor(effectiveWatchSeconds),
+      effectiveClickCount
+    );
 
-      if (res.ok) {
-        setProgressSaved(true);
-        await fetchTraining();
-      }
-    } catch (err) {
-      console.error("training progress save error:", err);
-    }
-  };
+    setProgressSaved(true);
+    await fetchTraining();
+  } catch (err) {
+    console.error("training progress save error:", err);
+  }
+};
 
   void saveProgress();
 }, [
@@ -404,9 +436,11 @@ export default function TrainingDetailPage() {
       (isAsync &&
         !videoLoadError &&
         canTryNativeVideo &&
-        (training?.watch_completed === true || videoCompleted) &&
-        effectiveWatchSeconds >= Math.floor(videoDuration) &&
-        effectiveClickCount >= requiredClicks));
+    (training?.watch_completed === true ||
+ training?.status === "completed" ||
+ videoCompleted) &&
+effectiveWatchSeconds >= Math.floor(videoDuration) &&
+effectiveClickCount >= requiredClicks));
 
   const lockReason = useMemo(() => {
     if (trainingCompleted) return "";
@@ -688,35 +722,23 @@ export default function TrainingDetailPage() {
       }}
       onTimeUpdate={handleTimeUpdate}
       onSeeking={handleSeeking}
-    onEnded={async () => {
+   onEnded={async () => {
   setVideoCompleted(true);
   maxReachedRef.current = videoDuration;
   setMaxReachedTime(videoDuration);
 
   try {
+    const finalWatchSeconds = Math.floor(videoDuration);
     const finalClicks = Math.max(
       clickCount,
       Math.max(1, Math.floor(videoDuration / 90))
     );
 
-    const res = await fetch("/api/training/progress", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignmentId,
-        watchSeconds: Math.floor(videoDuration),
-        clickCount: finalClicks,
-        completed: true,
-      }),
-    });
+    await completeTrainingFlow(finalWatchSeconds, finalClicks);
 
-    if (res.ok) {
-      setClickCount(finalClicks);
-      setProgressSaved(true);
-      await fetchTraining();
-    }
+    setClickCount(finalClicks);
+    setProgressSaved(true);
+    await fetchTraining();
   } catch (err) {
     console.error("video ended completion save error:", err);
   }
