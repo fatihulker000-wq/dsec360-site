@@ -298,13 +298,15 @@ export default function TrainingDetailPage() {
 
     const checkpoints = checkpointsRef.current;
     if (
-      checkpointIndex < checkpoints.length &&
-      current >= checkpoints[checkpointIndex] &&
-      !showPresencePopup
-    ) {
-      player.pause();
-      setShowPresencePopup(true);
-    }
+  checkpointIndex < checkpoints.length &&
+  current >= checkpoints[checkpointIndex] &&
+  !showPresencePopup
+) {
+  maxReachedRef.current = Math.max(maxReachedRef.current, current);
+  setMaxReachedTime((prev) => Math.max(prev, current));
+  player.pause();
+  setShowPresencePopup(true);
+}
   };
 
   const handleSeeking = () => {
@@ -317,7 +319,7 @@ export default function TrainingDetailPage() {
     }
 
     const current = Math.floor(player.currentTime || 0);
-    const allowedMax = maxReachedRef.current + 1;
+    const allowedMax = maxReachedRef.current + 2;
 
     if (current > allowedMax) {
       isProgrammaticSeekRef.current = true;
@@ -925,33 +927,54 @@ export default function TrainingDetailPage() {
             </p>
 
             <button
-              onClick={async () => {
-                const newCount = clickCount + 1;
-                setClickCount(newCount);
-                setShowPresencePopup(false);
-                setCheckpointIndex((prev) => prev + 1);
+            onClick={async () => {
+  const player = videoRef.current;
+  const currentSecond = Math.floor(player?.currentTime || effectiveWatchSeconds || 0);
+  const newCount = clickCount + 1;
 
-                try {
-                  await fetch("/api/training/progress", {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                 body: JSON.stringify({
-                assignmentId,
-                watchSeconds: Math.floor(videoRef.current?.currentTime || effectiveWatchSeconds),
-                clickCount: newCount,
-                completed: false,
-                  }),
-                  });
+  maxReachedRef.current = Math.max(maxReachedRef.current, currentSecond);
+  setMaxReachedTime(Math.max(maxReachedTime, currentSecond));
+  setClickCount(newCount);
+  setShowPresencePopup(false);
+  setCheckpointIndex((prev) => prev + 1);
 
-                await fetchTraining();  
-                } catch (err) {
-                  console.error("presence save error:", err);
-                }
+  try {
+    const res = await fetch("/api/training/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        watchSeconds: currentSecond,
+        clickCount: newCount,
+        completed: false,
+      }),
+    });
 
-                videoRef.current?.play().catch(() => undefined);
-              }}
+    if (res.ok) {
+      const json = await res.json();
+
+      if (typeof json?.watch_seconds === "number") {
+        maxReachedRef.current = Math.max(
+          maxReachedRef.current,
+          Math.floor(json.watch_seconds)
+        );
+        setMaxReachedTime((prev) =>
+          Math.max(prev, Math.floor(json.watch_seconds))
+        );
+      }
+
+      await fetchTraining();
+    }
+  } catch (err) {
+    console.error("presence save error:", err);
+  }
+
+  requestAnimationFrame(() => {
+    player?.play().catch(() => undefined);
+  });
+}}
               style={{
                 marginTop: "12px",
                 padding: "12px 18px",
