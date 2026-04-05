@@ -116,15 +116,17 @@ const res = await fetch("/api/training/my", {
 
 if (!res.ok) {
   console.error("API ERROR:", res.status);
-  setLoading(false); // 🔥 KRİTİK
+  setError(`API hata verdi: ${res.status}`);
+  setTraining(null);
   return;
 }
 
- const json = await res.json();
+const json = await res.json();
 
 if (!json || !json.data) {
   console.error("DATA YOK");
-  setLoading(false); // 🔥 KRİTİK
+  setError("Eğitim verisi bulunamadı.");
+  setTraining(null);
   return;
 }
 
@@ -161,15 +163,6 @@ useEffect(() => {
     void fetchTraining();
   }
 }, [assignmentId]);
-
-useEffect(() => {
-  const timer = setTimeout(() => {
-    setLoading(false);
-    setError("Eğitim yüklenemedi. Sayfayı yenileyin.");
-  }, 3000);
-
-  return () => clearTimeout(timer);
-}, []);
 
   const trainingType = useMemo(
     () => normalizeType(training?.training?.type),
