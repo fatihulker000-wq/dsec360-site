@@ -35,6 +35,22 @@ function normalizeType(type?: string | null) {
   return "asenkron";
 }
 
+function isNativeVideoUrl(url: string) {
+  if (!url) return false;
+
+  const cleanUrl = url.split("?")[0].toLowerCase();
+
+  return (
+    cleanUrl.endsWith(".mp4") ||
+    cleanUrl.endsWith(".webm") ||
+    cleanUrl.endsWith(".ogg") ||
+    cleanUrl.endsWith(".mov") ||
+    cleanUrl.endsWith(".avi") ||
+    cleanUrl.endsWith(".mkv") ||
+    cleanUrl.endsWith(".m3u8")
+  );
+}
+
 function formatSeconds(total: number) {
   const safe = Math.max(0, Math.floor(total));
   const minutes = Math.floor(safe / 60);
@@ -42,22 +58,81 @@ function formatSeconds(total: number) {
   return `${minutes} dk ${String(seconds).padStart(2, "0")} sn`;
 }
 
-function isNativeVideoUrl(url: string) {
-  const safe = (url || "").toLowerCase().split("?")[0];
-  return (
-    safe.endsWith(".mp4") ||
-    safe.endsWith(".webm") ||
-    safe.endsWith(".ogg") ||
-    safe.endsWith(".mov") ||
-    safe.endsWith(".avi") ||
-    safe.endsWith(".mkv") ||
-    safe.endsWith(".m3u8")
-  );
-}
-
 function isYoutubeUrl(url: string) {
   const safe = (url || "").toLowerCase();
   return safe.includes("youtube.com/watch") || safe.includes("youtu.be/");
+}
+
+function inferVideoMimeType(url: string) {
+  const safe = (url || "").toLowerCase().split("?")[0];
+  if (safe.endsWith(".webm")) return "video/webm";
+  if (safe.endsWith(".ogg")) return "video/ogg";
+  if (safe.endsWith(".mov")) return "video/mp4";
+  if (safe.endsWith(".m3u8")) return "application/x-mpegURL";
+  return "video/mp4";
+}
+
+function LoadingShell() {
+  return (
+    <div
+      style={{
+        background: "#ffffff",
+        border: "1px solid #e5e7eb",
+        borderRadius: "18px",
+        padding: "24px",
+        boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
+      }}
+    >
+      <div
+        style={{
+          height: "34px",
+          width: "55%",
+          borderRadius: "10px",
+          background: "#f3f4f6",
+          marginBottom: "16px",
+        }}
+      />
+      <div
+        style={{
+          height: "15px",
+          width: "100%",
+          borderRadius: "8px",
+          background: "#f3f4f6",
+          marginBottom: "10px",
+        }}
+      />
+      <div
+        style={{
+          height: "15px",
+          width: "88%",
+          borderRadius: "8px",
+          background: "#f3f4f6",
+          marginBottom: "16px",
+        }}
+      />
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "20px" }}>
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            style={{
+              height: "34px",
+              width: i === 1 ? "110px" : i === 2 ? "160px" : i === 3 ? "160px" : "140px",
+              borderRadius: "999px",
+              background: "#f3f4f6",
+            }}
+          />
+        ))}
+      </div>
+      <div
+        style={{
+          width: "100%",
+          aspectRatio: "16 / 9",
+          borderRadius: "16px",
+          background: "#e5e7eb",
+        }}
+      />
+    </div>
+  );
 }
 
 export default function TrainingDetailPage() {
@@ -81,9 +156,14 @@ export default function TrainingDetailPage() {
   const [requiredClicks, setRequiredClicks] = useState(1);
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [playbackReady, setPlaybackReady] = useState(false);
+  const [videoLoadError, setVideoLoadError] = useState("");
 
   const [checkpointIndex, setCheckpointIndex] = useState(0);
   const checkpointsRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [assignmentId]);
 
   const fetchTraining = async () => {
     try {
@@ -97,7 +177,6 @@ export default function TrainingDetailPage() {
       });
 
       if (!res.ok) {
-        console.error("API ERROR:", res.status);
         setError(`API hata verdi: ${res.status}`);
         setTraining(null);
         return;
@@ -106,7 +185,6 @@ export default function TrainingDetailPage() {
       const json = await res.json();
 
       if (!json || !json.data) {
-        console.error("DATA YOK");
         setError("Eğitim verisi bulunamadı.");
         setTraining(null);
         return;
@@ -131,6 +209,7 @@ export default function TrainingDetailPage() {
       setClickCount(dbClicks);
       setCheckpointIndex(dbClicks);
       setVideoCompleted(found.watch_completed === true);
+      setVideoLoadError("");
     } catch (err) {
       console.error("training detail fetch hatası:", err);
       setError("Bağlantı hatası oluştu.");
@@ -152,17 +231,16 @@ export default function TrainingDetailPage() {
   );
 
   const contentUrl = training?.training?.content_url || "";
-
+  const nativeVideo = isNativeVideoUrl(contentUrl);
   const isAsync = trainingType === "asenkron";
   const isSync = trainingType === "senkron";
-  const nativeVideo = isNativeVideoUrl(contentUrl);
   const youtubeVideo = isYoutubeUrl(contentUrl);
+  const canTryNativeVideo = nativeVideo && !youtubeVideo;
 
   const serverFinalAttempts = Number(training?.final_exam_attempts || 0);
   const finalAttemptsLeft = Math.max(0, 3 - serverFinalAttempts);
   const finalScore =
-    training?.final_exam_score !== null &&
-    training?.final_exam_score !== undefined
+    training?.final_exam_score !== null && training?.final_exam_score !== undefined
       ? Number(training.final_exam_score)
       : null;
 
@@ -197,6 +275,7 @@ export default function TrainingDetailPage() {
     }
 
     setPlaybackReady(true);
+    setVideoLoadError("");
   };
 
   const handleTimeUpdate = () => {
@@ -261,7 +340,6 @@ export default function TrainingDetailPage() {
 
   useEffect(() => {
     if (videoDuration <= 0) return;
-
     const completed = effectiveWatchSeconds >= Math.max(videoDuration - 1, 1);
     setVideoCompleted(completed);
   }, [effectiveWatchSeconds, videoDuration]);
@@ -315,7 +393,8 @@ export default function TrainingDetailPage() {
     preExamCompleted &&
     (isSync ||
       (isAsync &&
-        nativeVideo &&
+        !videoLoadError &&
+        canTryNativeVideo &&
         (training?.watch_completed === true || videoCompleted) &&
         effectiveWatchSeconds >= Math.floor(videoDuration) &&
         effectiveClickCount >= requiredClicks));
@@ -331,20 +410,21 @@ export default function TrainingDetailPage() {
       return "YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin.";
     }
 
-    if (nativeVideo) {
-      if (!(training?.watch_completed === true || videoCompleted)) {
-        return "Video tamamen bitmeden final açılmaz.";
-      }
-      if (effectiveClickCount < requiredClicks) {
-        return "Zorunlu ekran başı onayları tamamlanmadı.";
-      }
-      if (effectiveWatchSeconds < Math.floor(videoDuration)) {
-        return "Eğitim süresi tamamlanmadan final açılmaz.";
-      }
-      return "";
+    if (videoLoadError) {
+      return videoLoadError;
     }
 
-    return "Desteklenmeyen video formatı.";
+    if (!(training?.watch_completed === true || videoCompleted)) {
+      return "Video tamamen bitmeden final açılmaz.";
+    }
+    if (effectiveClickCount < requiredClicks) {
+      return "Zorunlu ekran başı onayları tamamlanmadı.";
+    }
+    if (effectiveWatchSeconds < Math.floor(videoDuration)) {
+      return "Eğitim süresi tamamlanmadan final açılmaz.";
+    }
+
+    return "";
   }, [
     trainingCompleted,
     preExamCompleted,
@@ -352,7 +432,7 @@ export default function TrainingDetailPage() {
     isSync,
     contentUrl,
     youtubeVideo,
-    nativeVideo,
+    videoLoadError,
     training?.watch_completed,
     videoCompleted,
     effectiveClickCount,
@@ -363,23 +443,37 @@ export default function TrainingDetailPage() {
 
   if (loading) {
     return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Yükleniyor...</h1>
+      <main style={{ padding: "40px", fontFamily: "Arial", background: "#f8fafc", minHeight: "100vh" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+          <LoadingShell />
+        </div>
       </main>
     );
   }
 
   if (error || !training) {
     return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Hata</h1>
-        <p>{error || "Eğitim bulunamadı."}</p>
+      <main style={{ padding: "40px", fontFamily: "Arial", background: "#f8fafc", minHeight: "100vh" }}>
+        <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #fecaca",
+              borderRadius: "18px",
+              padding: "24px",
+              color: "#991b1b",
+            }}
+          >
+            <h1>Hata</h1>
+            <p>{error || "Eğitim bulunamadı."}</p>
+          </div>
+        </div>
       </main>
     );
   }
 
   return (
-    <main style={{ padding: "40px", fontFamily: "Arial" }}>
+    <main style={{ padding: "40px", fontFamily: "Arial", background: "#f8fafc", minHeight: "100vh" }}>
       <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
         <div
           style={{
@@ -426,9 +520,7 @@ export default function TrainingDetailPage() {
                 padding: "8px 12px",
                 borderRadius: "999px",
                 background: trainingCompleted ? "#dcfce7" : "#eff6ff",
-                border: trainingCompleted
-                  ? "1px solid #86efac"
-                  : "1px solid #bfdbfe",
+                border: trainingCompleted ? "1px solid #86efac" : "1px solid #bfdbfe",
                 color: trainingCompleted ? "#166534" : "#1d4ed8",
                 fontSize: "13px",
                 fontWeight: 700,
@@ -443,9 +535,7 @@ export default function TrainingDetailPage() {
                 padding: "8px 12px",
                 borderRadius: "999px",
                 background: preExamCompleted ? "#eff6ff" : "#fef2f2",
-                border: preExamCompleted
-                  ? "1px solid #bfdbfe"
-                  : "1px solid #fecaca",
+                border: preExamCompleted ? "1px solid #bfdbfe" : "1px solid #fecaca",
                 color: preExamCompleted ? "#1d4ed8" : "#991b1b",
                 fontSize: "13px",
                 fontWeight: 700,
@@ -476,10 +566,7 @@ export default function TrainingDetailPage() {
                   padding: "8px 12px",
                   borderRadius: "999px",
                   background: finalScore >= 60 ? "#dcfce7" : "#fee2e2",
-                  border:
-                    finalScore >= 60
-                      ? "1px solid #86efac"
-                      : "1px solid #fca5a5",
+                  border: finalScore >= 60 ? "1px solid #86efac" : "1px solid #fca5a5",
                   color: finalScore >= 60 ? "#166534" : "#b91c1c",
                   fontSize: "13px",
                   fontWeight: 700,
@@ -564,50 +651,81 @@ export default function TrainingDetailPage() {
             </div>
           ) : contentUrl ? (
             <div style={{ marginTop: "24px" }}>
-              {nativeVideo ? (
-                <video
-                  ref={videoRef}
-                  src={contentUrl}
-                  controls
-                  controlsList="nodownload noplaybackrate"
-                  disablePictureInPicture
-                  onLoadedMetadata={handleLoadedMetadata}
-                  onTimeUpdate={handleTimeUpdate}
-                  onSeeking={handleSeeking}
-                  onEnded={() => setVideoCompleted(true)}
-                  style={{
-                    width: "100%",
-                    borderRadius: "16px",
-                    background: "#000",
-                  }}
-                />
-              ) : youtubeVideo ? (
-                <div
-                  style={{
-                    padding: "18px",
-                    borderRadius: "12px",
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    color: "#991b1b",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin.
-                </div>
-              ) : (
-                <div
-                  style={{
-                    padding: "18px",
-                    borderRadius: "12px",
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    color: "#991b1b",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Desteklenmeyen video formatı.
-                </div>
-              )}
+         {youtubeVideo ? (
+  <div
+    style={{
+      padding: "18px",
+      borderRadius: "12px",
+      background: "#fef2f2",
+      border: "1px solid #fecaca",
+      color: "#991b1b",
+      lineHeight: 1.6,
+    }}
+  >
+    YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin.
+  </div>
+) : nativeVideo ? (
+  <>
+    <video
+      ref={videoRef}
+      controls
+      controlsList="nodownload noplaybackrate"
+      disablePictureInPicture
+      preload="metadata"
+      onLoadedMetadata={handleLoadedMetadata}
+      onCanPlay={() => {
+        setPlaybackReady(true);
+        setVideoLoadError("");
+      }}
+      onTimeUpdate={handleTimeUpdate}
+      onSeeking={handleSeeking}
+      onEnded={() => setVideoCompleted(true)}
+      onError={() => {
+        setVideoLoadError(
+          "Video yüklenemedi. Dosya yolu, sunucu erişimi veya içerik tipi (Content-Type) kontrol edilmelidir."
+        );
+        setPlaybackReady(false);
+      }}
+      style={{
+        width: "100%",
+        borderRadius: "16px",
+        background: "#000",
+      }}
+    >
+      <source src={contentUrl} type={inferVideoMimeType(contentUrl)} />
+      Tarayıcınız video oynatmayı desteklemiyor.
+    </video>
+
+    {videoLoadError ? (
+      <div
+        style={{
+          marginTop: "14px",
+          padding: "14px 16px",
+          borderRadius: "12px",
+          background: "#fef2f2",
+          border: "1px solid #fecaca",
+          color: "#991b1b",
+          lineHeight: 1.6,
+        }}
+      >
+        {videoLoadError}
+      </div>
+    ) : null}
+  </>
+) : (
+  <div
+    style={{
+      padding: "18px",
+      borderRadius: "12px",
+      background: "#fef2f2",
+      border: "1px solid #fecaca",
+      color: "#991b1b",
+      lineHeight: 1.6,
+    }}
+  >
+    Desteklenmeyen video formatı.
+  </div>
+)}
             </div>
           ) : (
             <p style={{ marginTop: "24px", color: "#b91c1c" }}>
@@ -615,7 +733,7 @@ export default function TrainingDetailPage() {
             </p>
           )}
 
-          {!playbackReady && isAsync && nativeVideo && (
+          {!playbackReady && isAsync && canTryNativeVideo && !videoLoadError && (
             <div
               style={{
                 marginTop: "16px",
@@ -627,7 +745,7 @@ export default function TrainingDetailPage() {
                 lineHeight: 1.6,
               }}
             >
-              Video meta bilgileri yükleniyor. Eğitim süresi ve izleme takibi hazırlanıyor.
+              Video hazırlanıyor...
             </div>
           )}
 
