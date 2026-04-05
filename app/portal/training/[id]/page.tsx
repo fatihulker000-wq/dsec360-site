@@ -349,43 +349,50 @@ export default function TrainingDetailPage() {
       ? Math.min(100, Math.round((effectiveWatchSeconds / videoDuration) * 100))
       : 0;
 
-  useEffect(() => {
-    if (!assignmentId) return;
-    if (!videoCompleted) return;
-    if (progressSaved) return;
+ useEffect(() => {
+  if (!assignmentId) return;
+  if (progressSaved) return;
+  if (videoDuration <= 0) return;
 
-    const saveProgress = async () => {
-      try {
-        const res = await fetch("/api/training/progress", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            assignmentId,
-            watchSeconds: effectiveWatchSeconds,
-            clickCount: effectiveClickCount,
-            completed: true,
-          }),
-        });
+  const isActuallyCompleted =
+    effectiveWatchSeconds >= Math.floor(videoDuration) &&
+    effectiveClickCount >= requiredClicks;
 
-        if (res.ok) {
-          setProgressSaved(true);
-          await fetchTraining();
-        }
-      } catch (err) {
-        console.error("training progress save error:", err);
+  if (!isActuallyCompleted) return;
+
+  const saveProgress = async () => {
+    try {
+      const res = await fetch("/api/training/progress", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assignmentId,
+          watchSeconds: effectiveWatchSeconds,
+          clickCount: effectiveClickCount,
+          completed: true,
+        }),
+      });
+
+      if (res.ok) {
+        setProgressSaved(true);
+        await fetchTraining();
       }
-    };
+    } catch (err) {
+      console.error("training progress save error:", err);
+    }
+  };
 
-    void saveProgress();
-  }, [
-    assignmentId,
-    videoCompleted,
-    effectiveWatchSeconds,
-    effectiveClickCount,
-    progressSaved,
-  ]);
+  void saveProgress();
+}, [
+  assignmentId,
+  effectiveWatchSeconds,
+  effectiveClickCount,
+  progressSaved,
+  videoDuration,
+  requiredClicks,
+]);
 
   const canTakeFinalExam =
     finalAttemptsLeft > 0 &&
@@ -679,7 +686,11 @@ export default function TrainingDetailPage() {
       }}
       onTimeUpdate={handleTimeUpdate}
       onSeeking={handleSeeking}
-      onEnded={() => setVideoCompleted(true)}
+     onEnded={() => {
+  setVideoCompleted(true);
+  maxReachedRef.current = videoDuration;
+  setMaxReachedTime(videoDuration);
+}}
       onError={() => {
         setVideoLoadError(
           "Video yüklenemedi. Dosya yolu, sunucu erişimi veya içerik tipi (Content-Type) kontrol edilmelidir."
@@ -878,7 +889,7 @@ export default function TrainingDetailPage() {
             }}
           >
             <h3 style={{ marginTop: 0, marginBottom: "10px" }}>
-              90 saniyelik ekran başı doğrulaması
+              Ekran başı doğrulaması
             </h3>
             <p style={{ color: "#4b5563", lineHeight: 1.7 }}>
               Eğitime aktif devam ettiğinizi doğrulamak için onay vermeniz gerekir.
