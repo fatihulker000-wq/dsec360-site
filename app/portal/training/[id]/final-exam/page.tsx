@@ -44,6 +44,7 @@ type TrainingRow = {
   final_exam_attempts?: number | null;
   final_exam_score?: number | null;
   final_exam_passed?: boolean | null;
+  completed_at?: string | null;
   training?: {
     type?: string | null;
   } | null;
@@ -292,7 +293,9 @@ export default function FinalExamPage() {
 
         const asyncTrainingCompleted =
           currentTraining.watch_completed === true ||
-          currentTraining.status === "completed";
+          currentTraining.status === "completed" ||
+          Boolean(currentTraining.completed_at) ||
+          (watchSeconds > 0 && clickCount > 0);
 
         if (!asyncTrainingCompleted) {
           setGuardState({
@@ -439,9 +442,14 @@ export default function FinalExamPage() {
           return;
         }
 
+        const latestWatchSeconds = Number(latestAssignment.watch_seconds || 0);
+        const latestClickCount = Number(latestAssignment.click_count || 0);
+
         const asyncTrainingCompleted =
           latestAssignment.watch_completed === true ||
-          latestAssignment.status === "completed";
+          latestAssignment.status === "completed" ||
+          Boolean(latestAssignment.completed_at) ||
+          (latestWatchSeconds > 0 && latestClickCount > 0);
 
         if (!asyncTrainingCompleted) {
           setError(
@@ -451,8 +459,7 @@ export default function FinalExamPage() {
         }
 
         const missingProgressData =
-          Number(latestAssignment.watch_seconds || 0) <= 0 ||
-          Number(latestAssignment.click_count || 0) <= 0;
+          latestWatchSeconds <= 0 || latestClickCount <= 0;
 
         if (missingProgressData) {
           await rescueTrainingProgress(latestAssignment);
@@ -991,4 +998,3 @@ export default function FinalExamPage() {
     </PageBox>
   );
 }
-
