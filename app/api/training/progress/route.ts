@@ -97,11 +97,12 @@ export async function POST(req: Request) {
 
     const alreadyCompleted =
       assignment.watch_completed === true ||
-      assignment.status === "completed" ||
       assignment.final_exam_passed === true;
 
-    const shouldMarkWatched =
-      alreadyCompleted || completed || (mergedWatch > 0 && mergedClick > 0);
+    // KRİTİK FIX:
+    // Artık sadece gerçekten completed:true gelirse eğitim tamamlanmış sayılacak.
+    // İlk tıkta / ilk heartbeat'te tamamlandı olmayacak.
+    const shouldMarkWatched = alreadyCompleted || completed === true;
 
     const updatePayload: Record<string, unknown> = {
       watch_seconds: mergedWatch,
@@ -120,6 +121,8 @@ export async function POST(req: Request) {
       updatePayload.watch_completed = true;
       updatePayload.watch_completed_at =
         assignment.watch_completed_at || now;
+
+      // Eğitim videosu tamamlandıysa status completed olabilir.
       updatePayload.status = "completed";
       updatePayload.completed_at = assignment.completed_at || now;
       updatePayload.locked_duration_seconds =
@@ -129,11 +132,14 @@ export async function POST(req: Request) {
     } else {
       updatePayload.watch_completed = Boolean(assignment.watch_completed);
 
+      // Eğitim henüz tamamlanmadıysa sadece in_progress yap
       if (
         !currentStatus ||
         currentStatus === "assigned" ||
         currentStatus === "not_started"
       ) {
+        updatePayload.status = "in_progress";
+      } else if (currentStatus !== "completed") {
         updatePayload.status = "in_progress";
       }
     }

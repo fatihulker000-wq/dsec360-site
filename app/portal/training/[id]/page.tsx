@@ -278,9 +278,7 @@ export default function TrainingDetailPage() {
       const dbClicks = Math.max(Number(found.click_count || 0), localClicks);
 
       const dbCompleted =
-        found.watch_completed === true ||
-        found.status === "completed" ||
-        Boolean(found.completed_at);
+        found.watch_completed === true || found.final_exam_passed === true;
 
       setTraining(found);
       setMaxReachedTime(dbWatch);
@@ -348,15 +346,6 @@ export default function TrainingDetailPage() {
 
   const preExamCompleted = training?.pre_exam_completed === true;
   const finalPassed = training?.final_exam_passed === true;
-
-  const videoWatchCompleted =
-    training?.watch_completed === true ||
-    training?.status === "completed" ||
-    Boolean(training?.completed_at) ||
-    videoCompleted;
-
-  const trainingCompleted = finalPassed;
-  const canShowCompletedState = videoWatchCompleted && !finalPassed;
 
   useEffect(() => {
     if (videoDuration > 0) {
@@ -473,12 +462,32 @@ export default function TrainingDetailPage() {
     clickCount
   );
 
+  const actualAsyncVideoCompleted =
+    isAsync &&
+    preExamCompleted &&
+    !videoLoadError &&
+    canTryNativeVideo &&
+    videoDuration > 0 &&
+    effectiveWatchSeconds >= Math.max(Math.floor(videoDuration - 2), 1) &&
+    effectiveClickCount >= requiredClicks;
+
+  const serverAsyncVideoCompleted =
+    training?.watch_completed === true ||
+    (training?.status === "completed" && !finalPassed) ||
+    Boolean(training?.completed_at && !finalPassed);
+
+  const videoWatchCompleted =
+    finalPassed ||
+    serverAsyncVideoCompleted ||
+    actualAsyncVideoCompleted ||
+    videoCompleted;
+
+  const trainingCompleted = finalPassed;
+  const canShowCompletedState = !finalPassed && videoWatchCompleted;
+
   useEffect(() => {
-    if (videoDuration <= 0) return;
-    const completed =
-      effectiveWatchSeconds >= Math.max(Math.floor(videoDuration - 2), 1);
-    setVideoCompleted(completed);
-  }, [effectiveWatchSeconds, videoDuration]);
+    setVideoCompleted(actualAsyncVideoCompleted || serverAsyncVideoCompleted);
+  }, [actualAsyncVideoCompleted, serverAsyncVideoCompleted]);
 
   const progressPercent =
     videoDuration > 0
@@ -489,12 +498,7 @@ export default function TrainingDetailPage() {
     if (!assignmentId) return;
     if (progressSaved) return;
     if (videoDuration <= 0) return;
-
-    const isActuallyCompleted =
-      effectiveWatchSeconds >= Math.floor(videoDuration - 2) &&
-      effectiveClickCount >= requiredClicks;
-
-    if (!isActuallyCompleted) return;
+    if (!actualAsyncVideoCompleted) return;
 
     const saveProgress = async () => {
       try {
@@ -514,10 +518,10 @@ export default function TrainingDetailPage() {
     void saveProgress();
   }, [
     assignmentId,
-    effectiveWatchSeconds,
-    effectiveClickCount,
+    actualAsyncVideoCompleted,
     progressSaved,
     videoDuration,
+    effectiveClickCount,
     requiredClicks,
   ]);
 
@@ -529,11 +533,7 @@ export default function TrainingDetailPage() {
       (isAsync &&
         !videoLoadError &&
         canTryNativeVideo &&
-        (
-          videoWatchCompleted ||
-          (effectiveWatchSeconds >= Math.floor(videoDuration - 2) &&
-            effectiveClickCount >= requiredClicks)
-        )));
+        videoWatchCompleted));
 
   const lockReason = useMemo(() => {
     if (finalPassed) return "";
@@ -893,7 +893,7 @@ export default function TrainingDetailPage() {
                 <>
                   <video
                     ref={videoRef}
-                    controls
+                    controls={preExamCompleted}
                     controlsList="nodownload noplaybackrate"
                     disablePictureInPicture
                     preload="metadata"
@@ -936,6 +936,8 @@ export default function TrainingDetailPage() {
                       width: "100%",
                       borderRadius: "16px",
                       background: "#000",
+                      pointerEvents: preExamCompleted ? "auto" : "none",
+                      opacity: preExamCompleted ? 1 : 0.65,
                     }}
                   >
                     <source src={contentUrl} type={inferVideoMimeType(contentUrl)} />
@@ -979,21 +981,25 @@ export default function TrainingDetailPage() {
             </p>
           )}
 
-          {!playbackReady && isAsync && canTryNativeVideo && !videoLoadError && preExamCompleted && (
-            <div
-              style={{
-                marginTop: "16px",
-                padding: "12px 14px",
-                borderRadius: "10px",
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
-                color: "#1d4ed8",
-                lineHeight: 1.6,
-              }}
-            >
-              Video hazırlanıyor...
-            </div>
-          )}
+          {!playbackReady &&
+            isAsync &&
+            canTryNativeVideo &&
+            !videoLoadError &&
+            preExamCompleted && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "12px 14px",
+                  borderRadius: "10px",
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  lineHeight: 1.6,
+                }}
+              >
+                Video hazırlanıyor...
+              </div>
+            )}
 
           {!!lockReason && !trainingCompleted && (
             <div
@@ -1199,8 +1205,6 @@ export default function TrainingDetailPage() {
                         Math.max(prev, Math.floor(json.watch_seconds))
                       );
                     }
-
-                    await fetchTraining();
                   }
                 } catch (err) {
                   console.error("presence save error:", err);
