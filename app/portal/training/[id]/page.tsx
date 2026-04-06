@@ -309,8 +309,11 @@ const completeTrainingFlow = async (
 
   const preExamCompleted = training?.pre_exam_completed === true;
 
-  const trainingCompleted =
-    training?.status === "completed" || training?.final_exam_passed === true;
+ const trainingCompleted = training?.final_exam_passed === true;
+const videoWatchCompleted =
+  training?.watch_completed === true ||
+  training?.status === "completed" ||
+  videoCompleted;
 
   useEffect(() => {
     if (videoDuration > 0) {
@@ -492,19 +495,17 @@ const completeTrainingFlow = async (
   requiredClicks,
 ]);
 
-  const canTakeFinalExam =
-    finalAttemptsLeft > 0 &&
-    !trainingCompleted &&
-    preExamCompleted &&
-    (isSync ||
-      (isAsync &&
-        !videoLoadError &&
-        canTryNativeVideo &&
-    (training?.watch_completed === true ||
- training?.status === "completed" ||
- videoCompleted) &&
-effectiveWatchSeconds >= Math.floor(videoDuration) &&
-effectiveClickCount >= requiredClicks));
+ const canTakeFinalExam =
+  finalAttemptsLeft > 0 &&
+  training?.final_exam_passed !== true &&
+  preExamCompleted &&
+  (isSync ||
+    (isAsync &&
+      !videoLoadError &&
+      canTryNativeVideo &&
+      videoWatchCompleted &&
+      effectiveWatchSeconds >= Math.floor(videoDuration) &&
+      effectiveClickCount >= requiredClicks));
 
   const lockReason = useMemo(() => {
     if (trainingCompleted) return "";
@@ -521,7 +522,7 @@ effectiveClickCount >= requiredClicks));
       return videoLoadError;
     }
 
-    if (!(training?.watch_completed === true || videoCompleted)) {
+    if (!(videoWatchCompleted)) {
       return "Video tamamen bitmeden final açılmaz.";
     }
     if (effectiveClickCount < requiredClicks) {
@@ -534,6 +535,7 @@ effectiveClickCount >= requiredClicks));
     return "";
   }, [
     trainingCompleted,
+    training?.status,
     preExamCompleted,
     finalAttemptsLeft,
     isSync,
