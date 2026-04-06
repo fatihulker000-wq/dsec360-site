@@ -139,49 +139,51 @@ export default function TrainingDetailPage() {
   const params = useParams();
   const router = useRouter();
   const assignmentId = params?.id as string;
-const completeTrainingFlow = async (
-  finalWatchSeconds: number,
-  finalClicks: number
-) => {
-  await fetch("/api/training/progress", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      assignmentId,
-      watchSeconds: finalWatchSeconds,
-      clickCount: finalClicks,
-      completed: true,
-    }),
-  });
 
-  await fetch("/api/training/update", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      assignmentId,
-      action: "mark_watched",
-      currentSecond: finalWatchSeconds,
-      duration: finalWatchSeconds,
-    }),
-  });
+  const completeTrainingFlow = async (
+    finalWatchSeconds: number,
+    finalClicks: number
+  ) => {
+    await fetch("/api/training/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        watchSeconds: finalWatchSeconds,
+        clickCount: finalClicks,
+        completed: true,
+      }),
+    });
 
-  await fetch("/api/training/update", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      assignmentId,
-      action: "complete",
-      currentSecond: finalWatchSeconds,
-      duration: finalWatchSeconds,
-    }),
-  });
-};
+    await fetch("/api/training/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        action: "mark_watched",
+        currentSecond: finalWatchSeconds,
+        duration: finalWatchSeconds,
+      }),
+    });
+
+    await fetch("/api/training/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        action: "complete",
+        currentSecond: finalWatchSeconds,
+        duration: finalWatchSeconds,
+      }),
+    });
+  };
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const maxReachedRef = useRef(0);
   const isProgrammaticSeekRef = useRef(false);
@@ -244,13 +246,18 @@ const completeTrainingFlow = async (
 
       const dbWatch = Number(found.watch_seconds || 0);
       const dbClicks = Number(found.click_count || 0);
+      const dbCompleted =
+        found.watch_completed === true ||
+        found.status === "completed" ||
+        Boolean(found.completed_at);
 
       setTraining(found);
       setMaxReachedTime(dbWatch);
       maxReachedRef.current = dbWatch;
       setClickCount(dbClicks);
       setCheckpointIndex(dbClicks);
-      setVideoCompleted(found.watch_completed === true);
+      setVideoCompleted(dbCompleted);
+      setProgressSaved(dbCompleted);
       setVideoLoadError("");
     } catch (err) {
       console.error("training detail fetch hatası:", err);
@@ -261,32 +268,32 @@ const completeTrainingFlow = async (
     }
   };
 
- useEffect(() => {
-  if (!assignmentId) return;
+  useEffect(() => {
+    if (!assignmentId) return;
 
-  const initTraining = async () => {
-    try {
-      await fetch("/api/training/update", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          assignmentId,
-          action: "open",
-          currentSecond: 0,
-          duration: 0,
-        }),
-      });
-    } catch (err) {
-      console.error("training open error:", err);
-    }
+    const initTraining = async () => {
+      try {
+        await fetch("/api/training/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            assignmentId,
+            action: "open",
+            currentSecond: 0,
+            duration: 0,
+          }),
+        });
+      } catch (err) {
+        console.error("training open error:", err);
+      }
 
-    await fetchTraining();
-  };
+      await fetchTraining();
+    };
 
-  void initTraining();
-}, [assignmentId]);
+    void initTraining();
+  }, [assignmentId]);
 
   const trainingType = useMemo(
     () => normalizeType(training?.training?.type),
@@ -303,17 +310,22 @@ const completeTrainingFlow = async (
   const serverFinalAttempts = Number(training?.final_exam_attempts || 0);
   const finalAttemptsLeft = Math.max(0, 3 - serverFinalAttempts);
   const finalScore =
-    training?.final_exam_score !== null && training?.final_exam_score !== undefined
+    training?.final_exam_score !== null &&
+    training?.final_exam_score !== undefined
       ? Number(training.final_exam_score)
       : null;
 
   const preExamCompleted = training?.pre_exam_completed === true;
+  const finalPassed = training?.final_exam_passed === true;
 
- const trainingCompleted = training?.final_exam_passed === true;
-const videoWatchCompleted =
-  training?.watch_completed === true ||
-  training?.status === "completed" ||
-  videoCompleted;
+  const videoWatchCompleted =
+    training?.watch_completed === true ||
+    training?.status === "completed" ||
+    Boolean(training?.completed_at) ||
+    videoCompleted;
+
+  const trainingCompleted = finalPassed;
+  const canShowCompletedState = videoWatchCompleted && !finalPassed;
 
   useEffect(() => {
     if (videoDuration > 0) {
@@ -357,39 +369,39 @@ const videoWatchCompleted =
       return;
     }
 
-   if (current > prevMax) {
-  maxReachedRef.current = current;
-  setMaxReachedTime(current);
+    if (current > prevMax) {
+      maxReachedRef.current = current;
+      setMaxReachedTime(current);
 
-  if (current % 15 === 0) {
-    fetch("/api/training/update", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignmentId,
-        action: "heartbeat",
-        currentSecond: current,
-        duration: Math.floor(videoDuration || 0),
-      }),
-    }).catch((err) => {
-      console.error("training heartbeat error:", err);
-    });
-  }
-}
+      if (current % 15 === 0) {
+        fetch("/api/training/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            assignmentId,
+            action: "heartbeat",
+            currentSecond: current,
+            duration: Math.floor(videoDuration || 0),
+          }),
+        }).catch((err) => {
+          console.error("training heartbeat error:", err);
+        });
+      }
+    }
 
     const checkpoints = checkpointsRef.current;
     if (
-  checkpointIndex < checkpoints.length &&
-  current >= checkpoints[checkpointIndex] &&
-  !showPresencePopup
-) {
-  maxReachedRef.current = Math.max(maxReachedRef.current, current);
-  setMaxReachedTime((prev) => Math.max(prev, current));
-  player.pause();
-  setShowPresencePopup(true);
-}
+      checkpointIndex < checkpoints.length &&
+      current >= checkpoints[checkpointIndex] &&
+      !showPresencePopup
+    ) {
+      maxReachedRef.current = Math.max(maxReachedRef.current, current);
+      setMaxReachedTime((prev) => Math.max(prev, current));
+      player.pause();
+      setShowPresencePopup(true);
+    }
   };
 
   const handleSeeking = () => {
@@ -434,81 +446,80 @@ const videoWatchCompleted =
       ? Math.min(100, Math.round((effectiveWatchSeconds / videoDuration) * 100))
       : 0;
 
- useEffect(() => {
-  if (!assignmentId) return;
-  if (progressSaved) return;
-  if (videoDuration <= 0) return;
+  useEffect(() => {
+    if (!assignmentId) return;
+    if (progressSaved) return;
+    if (videoDuration <= 0) return;
 
-  const isActuallyCompleted =
-    effectiveWatchSeconds >= Math.floor(videoDuration) &&
-    effectiveClickCount >= requiredClicks;
-
-  if (!isActuallyCompleted) return;
-
- const saveProgress = async () => {
-  try {
-    await completeTrainingFlow(
-      Math.floor(effectiveWatchSeconds),
-      effectiveClickCount
-    );
-
-    await fetch("/api/training/update", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignmentId,
-        action: "mark_watched",
-        currentSecond: Math.floor(effectiveWatchSeconds),
-        duration: Math.floor(videoDuration),
-      }),
-    });
-
-    await fetch("/api/training/update", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignmentId,
-        action: "complete",
-        currentSecond: Math.floor(effectiveWatchSeconds),
-        duration: Math.floor(videoDuration),
-      }),
-    });
-
-    setProgressSaved(true);
-    await fetchTraining();
-  } catch (err) {
-    console.error("training progress save error:", err);
-  }
-};
-
-  void saveProgress();
-}, [
-  assignmentId,
-  effectiveWatchSeconds,
-  effectiveClickCount,
-  progressSaved,
-  videoDuration,
-  requiredClicks,
-]);
-
- const canTakeFinalExam =
-  finalAttemptsLeft > 0 &&
-  training?.final_exam_passed !== true &&
-  preExamCompleted &&
-  (isSync ||
-    (isAsync &&
-      !videoLoadError &&
-      canTryNativeVideo &&
-      videoWatchCompleted &&
+    const isActuallyCompleted =
       effectiveWatchSeconds >= Math.floor(videoDuration) &&
-      effectiveClickCount >= requiredClicks));
+      effectiveClickCount >= requiredClicks;
+
+    if (!isActuallyCompleted) return;
+
+    const saveProgress = async () => {
+      try {
+        await completeTrainingFlow(
+          Math.floor(effectiveWatchSeconds),
+          effectiveClickCount
+        );
+
+        await fetch("/api/training/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            assignmentId,
+            action: "mark_watched",
+            currentSecond: Math.floor(effectiveWatchSeconds),
+            duration: Math.floor(videoDuration),
+          }),
+        });
+
+        await fetch("/api/training/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            assignmentId,
+            action: "complete",
+            currentSecond: Math.floor(effectiveWatchSeconds),
+            duration: Math.floor(videoDuration),
+          }),
+        });
+
+        setProgressSaved(true);
+        await fetchTraining();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (err) {
+        console.error("training progress save error:", err);
+      }
+    };
+
+    void saveProgress();
+  }, [
+    assignmentId,
+    effectiveWatchSeconds,
+    effectiveClickCount,
+    progressSaved,
+    videoDuration,
+    requiredClicks,
+  ]);
+
+  const canTakeFinalExam =
+    finalAttemptsLeft > 0 &&
+    !finalPassed &&
+    preExamCompleted &&
+    (isSync ||
+      (isAsync &&
+        !videoLoadError &&
+        canTryNativeVideo &&
+        videoWatchCompleted));
 
   const lockReason = useMemo(() => {
-    if (trainingCompleted) return "";
+    if (finalPassed) return "";
     if (!preExamCompleted) return "Ön sınav tamamlanmadan eğitime/finale ilerlenemez.";
     if (finalAttemptsLeft <= 0) return "Final hakkı bitti.";
     if (isSync) return "";
@@ -522,37 +533,50 @@ const videoWatchCompleted =
       return videoLoadError;
     }
 
-    if (!(videoWatchCompleted)) {
-      return "Video tamamen bitmeden final açılmaz.";
+    if (videoWatchCompleted) {
+      return "";
     }
+
     if (effectiveClickCount < requiredClicks) {
       return "Zorunlu ekran başı onayları tamamlanmadı.";
     }
+
     if (effectiveWatchSeconds < Math.floor(videoDuration)) {
       return "Eğitim süresi tamamlanmadan final açılmaz.";
     }
 
-    return "";
+    return "Video tamamen bitmeden final açılmaz.";
   }, [
-    trainingCompleted,
-    training?.status,
+    finalPassed,
     preExamCompleted,
     finalAttemptsLeft,
     isSync,
     contentUrl,
     youtubeVideo,
     videoLoadError,
-    training?.watch_completed,
-    videoCompleted,
+    videoWatchCompleted,
     effectiveClickCount,
     requiredClicks,
     effectiveWatchSeconds,
     videoDuration,
   ]);
 
+  useEffect(() => {
+    if (videoWatchCompleted) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [videoWatchCompleted]);
+
   if (loading) {
     return (
-      <main style={{ padding: "40px", fontFamily: "Arial", background: "#f8fafc", minHeight: "100vh" }}>
+      <main
+        style={{
+          padding: "40px",
+          fontFamily: "Arial",
+          background: "#f8fafc",
+          minHeight: "100vh",
+        }}
+      >
         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
           <LoadingShell />
         </div>
@@ -562,7 +586,14 @@ const videoWatchCompleted =
 
   if (error || !training) {
     return (
-      <main style={{ padding: "40px", fontFamily: "Arial", background: "#f8fafc", minHeight: "100vh" }}>
+      <main
+        style={{
+          padding: "40px",
+          fontFamily: "Arial",
+          background: "#f8fafc",
+          minHeight: "100vh",
+        }}
+      >
         <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
           <div
             style={{
@@ -582,7 +613,14 @@ const videoWatchCompleted =
   }
 
   return (
-    <main style={{ padding: "40px", fontFamily: "Arial", background: "#f8fafc", minHeight: "100vh" }}>
+    <main
+      style={{
+        padding: "40px",
+        fontFamily: "Arial",
+        background: "#f8fafc",
+        minHeight: "100vh",
+      }}
+    >
       <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
         <div
           style={{
@@ -628,14 +666,21 @@ const videoWatchCompleted =
                 display: "inline-flex",
                 padding: "8px 12px",
                 borderRadius: "999px",
-                background: trainingCompleted ? "#dcfce7" : "#eff6ff",
-                border: trainingCompleted ? "1px solid #86efac" : "1px solid #bfdbfe",
-                color: trainingCompleted ? "#166534" : "#1d4ed8",
+                background: finalPassed || canShowCompletedState ? "#dcfce7" : "#eff6ff",
+                border:
+                  finalPassed || canShowCompletedState
+                    ? "1px solid #86efac"
+                    : "1px solid #bfdbfe",
+                color: finalPassed || canShowCompletedState ? "#166534" : "#1d4ed8",
                 fontSize: "13px",
                 fontWeight: 700,
               }}
             >
-              {trainingCompleted ? "Eğitim Başarılı" : "Eğitim Devam Ediyor"}
+              {finalPassed
+                ? "Eğitim Başarılı"
+                : canShowCompletedState
+                ? "Eğitim Tamamlandı"
+                : "Eğitim Devam Ediyor"}
             </div>
 
             <div
@@ -685,6 +730,23 @@ const videoWatchCompleted =
               </div>
             ) : null}
           </div>
+
+          {canShowCompletedState ? (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "14px 16px",
+                borderRadius: "12px",
+                background: "#f0fdf4",
+                border: "1px solid #86efac",
+                color: "#166534",
+                fontWeight: 700,
+                lineHeight: 1.6,
+              }}
+            >
+              Eğitim videosu başarıyla tamamlandı. Final sınavına geçebilirsiniz.
+            </div>
+          ) : null}
 
           {isAsync && (
             <div
@@ -760,127 +822,128 @@ const videoWatchCompleted =
             </div>
           ) : contentUrl ? (
             <div style={{ marginTop: "24px" }}>
-         {youtubeVideo ? (
-  <div
-    style={{
-      padding: "18px",
-      borderRadius: "12px",
-      background: "#fef2f2",
-      border: "1px solid #fecaca",
-      color: "#991b1b",
-      lineHeight: 1.6,
-    }}
-  >
-    YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin.
-  </div>
-) : nativeVideo ? (
-  <>
-    <video
-      ref={videoRef}
-      controls
-      controlsList="nodownload noplaybackrate"
-      disablePictureInPicture
-      preload="metadata"
-      onLoadedMetadata={handleLoadedMetadata}
-      onCanPlay={() => {
-        setPlaybackReady(true);
-        setVideoLoadError("");
-      }}
-      onTimeUpdate={handleTimeUpdate}
-      onSeeking={handleSeeking}
- onEnded={async () => {
-  setVideoCompleted(true);
-  maxReachedRef.current = videoDuration;
-  setMaxReachedTime(videoDuration);
+              {youtubeVideo ? (
+                <div
+                  style={{
+                    padding: "18px",
+                    borderRadius: "12px",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    color: "#991b1b",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  YouTube linkleri desteklenmiyor. Lütfen video dosyası yükleyin.
+                </div>
+              ) : nativeVideo ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    controls
+                    controlsList="nodownload noplaybackrate"
+                    disablePictureInPicture
+                    preload="metadata"
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onCanPlay={() => {
+                      setPlaybackReady(true);
+                      setVideoLoadError("");
+                    }}
+                    onTimeUpdate={handleTimeUpdate}
+                    onSeeking={handleSeeking}
+                    onEnded={async () => {
+                      setVideoCompleted(true);
+                      maxReachedRef.current = videoDuration;
+                      setMaxReachedTime(videoDuration);
 
-  try {
-    const finalWatchSeconds = Math.floor(videoDuration);
-    const finalClicks = Math.max(
-      clickCount,
-      Math.max(1, Math.floor(videoDuration / 90))
-    );
+                      try {
+                        const finalWatchSeconds = Math.floor(videoDuration);
+                        const finalClicks = Math.max(
+                          clickCount,
+                          Math.max(1, Math.floor(videoDuration / 90))
+                        );
 
-    await completeTrainingFlow(finalWatchSeconds, finalClicks);
+                        await completeTrainingFlow(finalWatchSeconds, finalClicks);
 
-    await fetch("/api/training/update", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignmentId,
-        action: "mark_watched",
-        currentSecond: finalWatchSeconds,
-        duration: finalWatchSeconds,
-      }),
-    });
+                        await fetch("/api/training/update", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            assignmentId,
+                            action: "mark_watched",
+                            currentSecond: finalWatchSeconds,
+                            duration: finalWatchSeconds,
+                          }),
+                        });
 
-    await fetch("/api/training/update", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assignmentId,
-        action: "complete",
-        currentSecond: finalWatchSeconds,
-        duration: finalWatchSeconds,
-      }),
-    });
+                        await fetch("/api/training/update", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            assignmentId,
+                            action: "complete",
+                            currentSecond: finalWatchSeconds,
+                            duration: finalWatchSeconds,
+                          }),
+                        });
 
-    setClickCount(finalClicks);
-    setProgressSaved(true);
-    await fetchTraining();
-  } catch (err) {
-    console.error("video ended completion save error:", err);
-  }
-}}
-      onError={() => {
-        setVideoLoadError(
-          "Video yüklenemedi. Dosya yolu, sunucu erişimi veya içerik tipi (Content-Type) kontrol edilmelidir."
-        );
-        setPlaybackReady(false);
-      }}
-      style={{
-        width: "100%",
-        borderRadius: "16px",
-        background: "#000",
-      }}
-    >
-      <source src={contentUrl} type={inferVideoMimeType(contentUrl)} />
-      Tarayıcınız video oynatmayı desteklemiyor.
-    </video>
+                        setClickCount(finalClicks);
+                        setProgressSaved(true);
+                        await fetchTraining();
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      } catch (err) {
+                        console.error("video ended completion save error:", err);
+                      }
+                    }}
+                    onError={() => {
+                      setVideoLoadError(
+                        "Video yüklenemedi. Dosya yolu, sunucu erişimi veya içerik tipi (Content-Type) kontrol edilmelidir."
+                      );
+                      setPlaybackReady(false);
+                    }}
+                    style={{
+                      width: "100%",
+                      borderRadius: "16px",
+                      background: "#000",
+                    }}
+                  >
+                    <source src={contentUrl} type={inferVideoMimeType(contentUrl)} />
+                    Tarayıcınız video oynatmayı desteklemiyor.
+                  </video>
 
-    {videoLoadError ? (
-      <div
-        style={{
-          marginTop: "14px",
-          padding: "14px 16px",
-          borderRadius: "12px",
-          background: "#fef2f2",
-          border: "1px solid #fecaca",
-          color: "#991b1b",
-          lineHeight: 1.6,
-        }}
-      >
-        {videoLoadError}
-      </div>
-    ) : null}
-  </>
-) : (
-  <div
-    style={{
-      padding: "18px",
-      borderRadius: "12px",
-      background: "#fef2f2",
-      border: "1px solid #fecaca",
-      color: "#991b1b",
-      lineHeight: 1.6,
-    }}
-  >
-    Desteklenmeyen video formatı.
-  </div>
-)}
+                  {videoLoadError ? (
+                    <div
+                      style={{
+                        marginTop: "14px",
+                        padding: "14px 16px",
+                        borderRadius: "12px",
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        color: "#991b1b",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {videoLoadError}
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div
+                  style={{
+                    padding: "18px",
+                    borderRadius: "12px",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    color: "#991b1b",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Desteklenmeyen video formatı.
+                </div>
+              )}
             </div>
           ) : (
             <p style={{ marginTop: "24px", color: "#b91c1c" }}>
@@ -943,22 +1006,7 @@ const videoWatchCompleted =
               >
                 Ön Sınava Git
               </button>
-            ) : canTakeFinalExam ? (
-              <button
-                onClick={() => router.push(`/portal/training/${assignmentId}/final-exam`)}
-                style={{
-                  padding: "12px 20px",
-                  background: "#7c3aed",
-                  color: "#fff",
-                  borderRadius: "10px",
-                  border: "none",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Final Sınavına Gir
-              </button>
-            ) : trainingCompleted ? (
+            ) : finalPassed ? (
               <button
                 disabled
                 style={{
@@ -968,10 +1016,25 @@ const videoWatchCompleted =
                   borderRadius: "10px",
                   border: "none",
                   fontWeight: 700,
-                  opacity: 0.9,
+                  opacity: 0.95,
                 }}
               >
-                Eğitim Tamamlandı
+                Eğitim Başarılı
+              </button>
+            ) : canTakeFinalExam ? (
+              <button
+                onClick={() => router.push(`/portal/training/${assignmentId}/final-exam`)}
+                style={{
+                  padding: "12px 20px",
+                  background: "#16a34a",
+                  color: "#fff",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Final Sınavına Gir
               </button>
             ) : (
               <button
@@ -1041,67 +1104,69 @@ const videoWatchCompleted =
             </p>
 
             <button
-            onClick={async () => {
-  const player = videoRef.current;
-  const currentSecond = Math.floor(player?.currentTime || effectiveWatchSeconds || 0);
-  const newCount = clickCount + 1;
+              onClick={async () => {
+                const player = videoRef.current;
+                const currentSecond = Math.floor(
+                  player?.currentTime || effectiveWatchSeconds || 0
+                );
+                const newCount = clickCount + 1;
 
-  maxReachedRef.current = Math.max(maxReachedRef.current, currentSecond);
-  setMaxReachedTime(Math.max(maxReachedTime, currentSecond));
-  setClickCount(newCount);
-  setShowPresencePopup(false);
-  setCheckpointIndex((prev) => prev + 1);
+                maxReachedRef.current = Math.max(maxReachedRef.current, currentSecond);
+                setMaxReachedTime(Math.max(maxReachedTime, currentSecond));
+                setClickCount(newCount);
+                setShowPresencePopup(false);
+                setCheckpointIndex((prev) => prev + 1);
 
- try {
-  const res = await fetch("/api/training/progress", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      assignmentId,
-      watchSeconds: currentSecond,
-      clickCount: newCount,
-      completed: false,
-    }),
-  });
+                try {
+                  const res = await fetch("/api/training/progress", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      assignmentId,
+                      watchSeconds: currentSecond,
+                      clickCount: newCount,
+                      completed: false,
+                    }),
+                  });
 
-  await fetch("/api/training/update", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      assignmentId,
-      action: "heartbeat",
-      currentSecond,
-      duration: Math.floor(videoDuration || 0),
-    }),
-  });
+                  await fetch("/api/training/update", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      assignmentId,
+                      action: "heartbeat",
+                      currentSecond,
+                      duration: Math.floor(videoDuration || 0),
+                    }),
+                  });
 
-  if (res.ok) {
-    const json = await res.json();
+                  if (res.ok) {
+                    const json = await res.json();
 
-    if (typeof json?.watch_seconds === "number") {
-      maxReachedRef.current = Math.max(
-        maxReachedRef.current,
-        Math.floor(json.watch_seconds)
-      );
-      setMaxReachedTime((prev) =>
-        Math.max(prev, Math.floor(json.watch_seconds))
-      );
-    }
+                    if (typeof json?.watch_seconds === "number") {
+                      maxReachedRef.current = Math.max(
+                        maxReachedRef.current,
+                        Math.floor(json.watch_seconds)
+                      );
+                      setMaxReachedTime((prev) =>
+                        Math.max(prev, Math.floor(json.watch_seconds))
+                      );
+                    }
 
-    await fetchTraining();
-  }
-} catch (err) {
-  console.error("presence save error:", err);
-}
+                    await fetchTraining();
+                  }
+                } catch (err) {
+                  console.error("presence save error:", err);
+                }
 
-  requestAnimationFrame(() => {
-    player?.play().catch(() => undefined);
-  });
-}}
+                requestAnimationFrame(() => {
+                  player?.play().catch(() => undefined);
+                });
+              }}
               style={{
                 marginTop: "12px",
                 padding: "12px 18px",
