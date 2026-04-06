@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 type TrainingItem = {
   id: string;
   status?: "not_started" | "in_progress" | "completed";
+  watch_completed?: boolean | null;
   pre_exam_completed?: boolean | null;
   final_exam_passed?: boolean | null;
   final_exam_score?: number | null;
@@ -112,9 +113,10 @@ export default function TrainingListPage() {
             const description =
               item.training?.description || "Açıklama bulunmuyor.";
             const type = normalizeType(item.training?.type);
-            const completed =
-              item.status === "completed" || item.final_exam_passed === true;
-            const finalAttempts = Number(item.final_exam_attempts || 0);
+const completed = item.final_exam_passed === true;
+const videoCompleted =
+  item.status === "completed" || item.watch_completed === true;
+const finalAttempts = Number(item.final_exam_attempts || 0);
             const finalAttemptsLeft = Math.max(0, 3 - finalAttempts);
             const finalScore =
               item.final_exam_score !== null &&
@@ -167,22 +169,31 @@ export default function TrainingListPage() {
                     Tür: {type}
                   </span>
 
-                  <span
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: "999px",
-                      background: completed ? "#dcfce7" : "#eff6ff",
-                      border: completed
-                        ? "1px solid #86efac"
-                        : "1px solid #bfdbfe",
-                      color: completed ? "#166534" : "#1d4ed8",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {completed ? "Tamamlandı" : "Devam Ediyor"}
-                  </span>
-
+                 <span
+  style={{
+    padding: "6px 10px",
+    borderRadius: "999px",
+    background: completed
+      ? "#dcfce7"
+      : videoCompleted
+      ? "#ecfccb"
+      : "#eff6ff",
+    border: completed
+      ? "1px solid #86efac"
+      : videoCompleted
+      ? "1px solid #bef264"
+      : "1px solid #bfdbfe",
+    color: completed
+      ? "#166534"
+      : videoCompleted
+      ? "#3f6212"
+      : "#1d4ed8",
+    fontSize: "12px",
+    fontWeight: 700,
+  }}
+>
+  {completed ? "Tamamlandı" : videoCompleted ? "Eğitim Tamamlandı" : "Devam Ediyor"}
+</span>
                   <span
                     style={{
                       padding: "6px 10px",
