@@ -36,8 +36,6 @@ type GuardState = {
 
 type TrainingRow = {
   id: string;
-  status?: "assigned" | "not_started" | "in_progress" | "completed";
-  completed_at?: string | null;
   pre_exam_completed?: boolean | null;
   watch_completed?: boolean | null;
   watch_seconds?: number | null;
@@ -45,6 +43,7 @@ type TrainingRow = {
   final_exam_attempts?: number | null;
   final_exam_score?: number | null;
   final_exam_passed?: boolean | null;
+  status?: "not_started" | "in_progress" | "completed" | null;
   training?: {
     type?: string | null;
   } | null;
@@ -154,6 +153,12 @@ export default function FinalExamPage() {
   }, [assignmentId]);
 
   useEffect(() => {
+    if (error || result) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [error, result]);
+
+  useEffect(() => {
     if (!assignmentId) return;
 
     const fetchTrainingInfoAndGuard = async () => {
@@ -200,16 +205,15 @@ export default function FinalExamPage() {
         if (type === "senkron") {
           setGuardState({ ok: true, message: "" });
           setGuardChecked(true);
-          setLoading(false);
           return;
         }
 
-        const videoCompleted =
+        const hasVideoCompletion =
           currentTraining.watch_completed === true ||
           currentTraining.status === "completed" ||
-          Boolean(currentTraining.completed_at);
+          Number(currentTraining.watch_seconds || 0) > 0;
 
-        if (!videoCompleted) {
+        if (!hasVideoCompletion) {
           setGuardState({
             ok: false,
             message:
@@ -342,7 +346,6 @@ export default function FinalExamPage() {
       }
 
       setResult(json);
-      window.scrollTo({ top: 0, behavior: "smooth" });
 
       if (typeof json.attemptsLeft === "number") {
         setAttemptsLeft(json.attemptsLeft);
