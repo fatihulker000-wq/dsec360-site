@@ -176,8 +176,6 @@ export async function POST(request: Request) {
           );
         }
 
-        // KRİTİK SELF-HEAL FIX:
-        // Eğitim tamamlandı görünüyorsa ama watch/click 0 ise burada otomatik toparla.
         if (watchSeconds <= 0 || clickCount <= 0) {
           const healedWatch = Math.max(watchSeconds, 1);
           const healedClick = Math.max(clickCount, 1);
@@ -327,17 +325,21 @@ export async function POST(request: Request) {
         .from("training_assignments")
         .update({
           final_exam_score: score,
-          final_exam_attempts: nextAttempt,
+          final_exam_attempts: 0,
           final_exam_passed: false,
           training_reset_required: true,
           status: "not_started",
           started_at: null,
           completed_at: null,
           watch_completed: false,
+          watch_completed_at: null,
           pre_exam_completed: false,
           pre_exam_score: 0,
           watch_seconds: 0,
           click_count: 0,
+          last_position_seconds: 0,
+          max_watched_seconds: 0,
+          locked_duration_seconds: 0,
         })
         .eq("id", assignmentId)
         .eq("user_id", userId);

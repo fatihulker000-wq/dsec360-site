@@ -58,7 +58,7 @@ function resolveTrainingContentUrl(
   supabase: ReturnType<typeof getSupabase>,
   rawValue?: string | null
 ) {
- const baseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "") || "";
+  const baseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "") || "";
   const raw = String(rawValue || "").trim();
 
   if (!raw) return null;
@@ -204,20 +204,22 @@ export async function GET() {
       const rawContentUrl = training?.content_url || null;
       const resolvedContentUrl = resolveTrainingContentUrl(supabase, rawContentUrl);
 
+      const isReset = item.training_reset_required === true;
+
       return {
         id: item.id,
         user_id: item.user_id,
         training_id: item.training_id,
-        status: item.status,
-        started_at: item.started_at,
-        completed_at: item.completed_at,
-        watch_completed: item.watch_completed,
-        watch_seconds: item.watch_seconds,
-        click_count: item.click_count,
-        pre_exam_completed: item.pre_exam_completed,
-        pre_exam_score: item.pre_exam_score,
+        status: isReset ? "not_started" : item.status,
+        started_at: isReset ? null : item.started_at,
+        completed_at: isReset ? null : item.completed_at,
+        watch_completed: isReset ? false : item.watch_completed,
+        watch_seconds: isReset ? 0 : item.watch_seconds,
+        click_count: isReset ? 0 : item.click_count,
+        pre_exam_completed: isReset ? false : item.pre_exam_completed,
+        pre_exam_score: isReset ? 0 : item.pre_exam_score,
         final_exam_score: item.final_exam_score,
-        final_exam_attempts: item.final_exam_attempts,
+        final_exam_attempts: isReset ? 0 : item.final_exam_attempts,
         final_exam_passed: item.final_exam_passed,
         training_reset_required: item.training_reset_required,
         training: training

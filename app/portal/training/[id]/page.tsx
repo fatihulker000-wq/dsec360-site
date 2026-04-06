@@ -318,10 +318,8 @@ export default function TrainingDetailPage() {
       setProgressSaved(dbCompleted);
       setVideoLoadError("");
 
-      if (shouldForceFreshStart) {
-        if (videoRef.current) {
-          videoRef.current.currentTime = 0;
-        }
+      if (shouldForceFreshStart && videoRef.current) {
+        videoRef.current.currentTime = 0;
       }
     } catch (err) {
       console.error("training detail fetch hatası:", err);
@@ -371,8 +369,12 @@ export default function TrainingDetailPage() {
   const youtubeVideo = isYoutubeUrl(contentUrl);
   const canTryNativeVideo = nativeVideo && !youtubeVideo;
 
+  const resetRequired = training?.training_reset_required === true;
   const serverFinalAttempts = Number(training?.final_exam_attempts || 0);
-  const finalAttemptsLeft = Math.max(0, 3 - serverFinalAttempts);
+  const finalAttemptsLeft = resetRequired
+    ? 3
+    : Math.max(0, 3 - serverFinalAttempts);
+
   const finalScore =
     training?.final_exam_score !== null &&
     training?.final_exam_score !== undefined
@@ -381,7 +383,6 @@ export default function TrainingDetailPage() {
 
   const preExamCompleted = training?.pre_exam_completed === true;
   const finalPassed = training?.final_exam_passed === true;
-  const resetRequired = training?.training_reset_required === true;
 
   useEffect(() => {
     if (videoDuration > 0) {
@@ -510,6 +511,7 @@ export default function TrainingDetailPage() {
   const actualAsyncVideoCompleted =
     isAsync &&
     preExamCompleted &&
+    !resetRequired &&
     !videoLoadError &&
     canTryNativeVideo &&
     videoDuration > 0 &&
@@ -529,7 +531,8 @@ export default function TrainingDetailPage() {
     videoCompleted;
 
   const trainingCompleted = finalPassed;
-  const canShowCompletedState = !finalPassed && videoWatchCompleted;
+  const canShowCompletedState =
+    !finalPassed && !resetRequired && videoWatchCompleted;
 
   useEffect(() => {
     setVideoCompleted(actualAsyncVideoCompleted || serverAsyncVideoCompleted);
@@ -572,6 +575,7 @@ export default function TrainingDetailPage() {
   ]);
 
   const canTakeFinalExam =
+    !resetRequired &&
     finalAttemptsLeft > 0 &&
     !finalPassed &&
     preExamCompleted &&
@@ -582,6 +586,10 @@ export default function TrainingDetailPage() {
         videoWatchCompleted));
 
   const lockReason = useMemo(() => {
+    if (resetRequired) {
+      return "Bu eğitim yeniden başlatıldı. Ön sınavı tekrar tamamlayıp videoyu baştan izlemelisiniz.";
+    }
+
     if (finalPassed) return "";
     if (!preExamCompleted) return "Ön sınav tamamlanmadan eğitime/finale ilerlenemez.";
     if (finalAttemptsLeft <= 0) return "Final hakkı bitti.";
@@ -610,6 +618,7 @@ export default function TrainingDetailPage() {
 
     return "Video tamamen bitmeden final açılmaz.";
   }, [
+    resetRequired,
     finalPassed,
     preExamCompleted,
     finalAttemptsLeft,
@@ -1296,4 +1305,3 @@ export default function TrainingDetailPage() {
     </main>
   );
 }
-
