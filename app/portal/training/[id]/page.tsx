@@ -19,6 +19,7 @@ type TrainingDetail = {
   final_exam_attempts?: number | null;
   final_exam_passed?: boolean | null;
   training_reset_required?: boolean | null;
+  training_repeat_count?: number | null;
   training?: {
     id?: string;
     title?: string;
@@ -370,6 +371,7 @@ export default function TrainingDetailPage() {
   const canTryNativeVideo = nativeVideo && !youtubeVideo;
 
   const resetRequired = training?.training_reset_required === true;
+  const repeatCount = Math.max(0, Number(training?.training_repeat_count || 0));
   const serverFinalAttempts = Number(training?.final_exam_attempts || 0);
   const finalAttemptsLeft = resetRequired
     ? 3
@@ -639,6 +641,14 @@ export default function TrainingDetailPage() {
     }
   }, [videoWatchCompleted]);
 
+  const openCertificate = () => {
+    window.open(`/api/training/certificate/${assignmentId}`, "_blank", "noopener,noreferrer");
+  };
+
+  const openAttendance = () => {
+    window.open(`/api/training/attendance/${assignmentId}`, "_blank", "noopener,noreferrer");
+  };
+
   if (loading) {
     return (
       <main
@@ -787,6 +797,21 @@ export default function TrainingDetailPage() {
               Kalan Final Hakkı: {finalAttemptsLeft}
             </div>
 
+            <div
+              style={{
+                display: "inline-flex",
+                padding: "8px 12px",
+                borderRadius: "999px",
+                background: repeatCount > 0 ? "#fef2f2" : "#f9fafb",
+                border: repeatCount > 0 ? "1px solid #fecaca" : "1px solid #e5e7eb",
+                color: repeatCount > 0 ? "#991b1b" : "#374151",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              Tekrar Sayısı: {repeatCount}
+            </div>
+
             {finalScore !== null ? (
               <div
                 style={{
@@ -852,6 +877,23 @@ export default function TrainingDetailPage() {
               }}
             >
               Bu eğitim önceki final sonucu nedeniyle yeniden başlatıldı. Ön sınavı tekrar tamamlayıp eğitimi baştan almanız gerekir.
+            </div>
+          ) : null}
+
+          {repeatCount > 0 && !finalPassed ? (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "14px 16px",
+                borderRadius: "12px",
+                background: "#fff7ed",
+                border: "1px solid #fdba74",
+                color: "#9a3412",
+                lineHeight: 1.6,
+                fontWeight: 700,
+              }}
+            >
+              Bu eğitim şu ana kadar {repeatCount} kez tekrar alınmıştır.
             </div>
           ) : null}
 
@@ -1162,6 +1204,55 @@ export default function TrainingDetailPage() {
                 Final Kilitli
               </button>
             )}
+
+            {finalPassed ? (
+              <>
+                <button
+                  onClick={openCertificate}
+                  style={{
+                    padding: "12px 20px",
+                    background: "#7c3aed",
+                    color: "#fff",
+                    borderRadius: "10px",
+                    border: "none",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Sertifika
+                </button>
+
+                <button
+                  onClick={openAttendance}
+                  style={{
+                    padding: "12px 20px",
+                    background: "#0f766e",
+                    color: "#fff",
+                    borderRadius: "10px",
+                    border: "none",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Katılım Formu
+                </button>
+              </>
+            ) : resetRequired || (finalScore !== null && !finalPassed) ? (
+              <button
+                onClick={openAttendance}
+                style={{
+                  padding: "12px 20px",
+                  background: "#b91c1c",
+                  color: "#fff",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Başarısız Katılım Formu
+              </button>
+            ) : null}
 
             <button
               onClick={() => router.push("/portal/training")}

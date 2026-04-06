@@ -68,6 +68,9 @@ type AssignmentRow = {
   completed_at: string | null;
   training_id: string | null;
   final_exam_passed?: boolean | null;
+  final_exam_score?: number | null;
+  final_exam_attempts?: number | null;
+  training_reset_required?: boolean | null;
 };
 
 type TrainingRow = {
@@ -106,7 +109,7 @@ export async function GET(
     let assignmentQuery = supabase
       .from("training_assignments")
       .select(
-        "id, status, started_at, completed_at, training_id, final_exam_passed"
+        "id, status, started_at, completed_at, training_id, final_exam_passed, final_exam_score, final_exam_attempts, training_reset_required"
       )
       .eq("id", id);
 
@@ -126,16 +129,12 @@ export async function GET(
 
     const assignment = data;
 
-    if (assignment.status !== "completed") {
-      return new NextResponse(
-        "Katılım belgesi sadece tamamlanan eğitimler için oluşturulur.",
-        { status: 400 }
-      );
-    }
+    const canShowAttendance =
+      assignment.status === "completed" || assignment.training_reset_required === true;
 
-    if (!assignment.final_exam_passed) {
+    if (!canShowAttendance) {
       return new NextResponse(
-        "Katılım belgesi için final sınavı başarıyla tamamlanmalıdır.",
+        "Katılım belgesi yalnızca tamamlanan veya başarısızlık sonrası kapanan eğitimler için oluşturulur.",
         { status: 400 }
       );
     }
@@ -174,6 +173,28 @@ export async function GET(
     const durationText = durationMinutes
       ? `${durationMinutes} dakika`
       : "Süre bilgisi tanımlanmadı";
+
+    const finalPassed = assignment.final_exam_passed === true;
+    const finalScore =
+      assignment.final_exam_score !== null &&
+      assignment.final_exam_score !== undefined
+        ? Number(assignment.final_exam_score)
+        : null;
+
+    const attemptsText =
+      assignment.final_exam_attempts !== null &&
+      assignment.final_exam_attempts !== undefined
+        ? String(assignment.final_exam_attempts)
+        : "-";
+
+    const resultBadge = finalPassed ? "BAŞARILI KATILIM" : "BAŞARISIZ KATILIM";
+    const resultColor = finalPassed ? "#166534" : "#991b1b";
+    const resultBg = finalPassed ? "#dcfce7" : "#fee2e2";
+    const resultBorder = finalPassed ? "#86efac" : "#fca5a5";
+
+    const resultText = finalPassed
+      ? "Katılımcı eğitimi tamamlamış ve final sınavında başarılı olmuştur."
+      : "Katılımcı eğitime katılmıştır; ancak final sınavında başarılı olamadığı için bu belge yalnızca katılım belgesi niteliğindedir. Sertifika yerine geçmez.";
 
     const html = `
       <!doctype html>
@@ -268,6 +289,32 @@ export async function GET(
               font-size: 17px;
               line-height: 1.7;
               color: #4b5563;
+            }
+
+            .result-box {
+              margin: 18px auto 0;
+              max-width: 900px;
+              padding: 14px 16px;
+              border-radius: 14px;
+              text-align: center;
+              font-size: 15px;
+              line-height: 1.7;
+              font-weight: 700;
+              color: ${resultColor};
+              background: ${resultBg};
+              border: 1px solid ${resultBorder};
+            }
+
+            .result-chip {
+              display: inline-flex;
+              margin-top: 12px;
+              padding: 8px 12px;
+              border-radius: 999px;
+              background: ${resultBg};
+              border: 1px solid ${resultBorder};
+              color: ${resultColor};
+              font-size: 12px;
+              font-weight: 800;
             }
 
             .person {
@@ -403,6 +450,18 @@ export async function GET(
               color: #6b7280;
             }
 
+            .warning-note {
+              margin-top: 18px;
+              padding: 14px 16px;
+              border-radius: 14px;
+              background: #fff7ed;
+              border: 1px solid #fdba74;
+              color: #9a3412;
+              font-size: 14px;
+              line-height: 1.7;
+              font-weight: 700;
+            }
+
             @page {
               size: A4 landscape;
               margin: 10mm;
@@ -447,6 +506,14 @@ export async function GET(
                 ve eğitim kaydının oluşturulduğunu göstermek amacıyla düzenlenmiştir.
               </div>
 
+              <div style="text-align:center;">
+                <div class="result-chip">${resultBadge}</div>
+              </div>
+
+              <div class="result-box">
+                ${escapeHtml(resultText)}
+              </div>
+
               <div class="person">
                 <div class="name">${safeUserFullName}</div>
                 <div class="mail">${safeUserEmail}</div>
@@ -475,12 +542,24 @@ export async function GET(
                   <div class="value">${startedDate}</div>
                 </div>
                 <div class="card">
-                  <div class="label">Tamamlanma Tarihi</div>
+                  <div class="label">Tamamlanma / Kapanış Tarihi</div>
                   <div class="value">${completedDate}</div>
                 </div>
                 <div class="card">
                   <div class="label">Belge Düzenleme Tarihi</div>
                   <div class="value">${issueDate}</div>
+                </div>
+                <div class="card">
+                  <div class="label">Final Sonucu</div>
+                  <div class="value">${finalPassed ? "Başarılı" : "Başarısız"}</div>
+                </div>
+                <div class="card">
+                  <div class="label">Final Puanı</div>
+                  <div class="value">${finalScore !== null ? "%" + finalScore : "-"}</div>
+                </div>
+                <div class="card">
+                  <div class="label">Kullanılan Final Hakkı</div>
+                  <div class="value">${attemptsText}</div>
                 </div>
               </div>
 
@@ -490,6 +569,16 @@ export async function GET(
                   ${topicsHtml}
                 </ul>
               </div>
+
+              ${
+                finalPassed
+                  ? ""
+                  : `
+                    <div class="warning-note">
+                      Not: Bu belge yalnızca katılımı gösterir. Final sınavı başarısız olduğundan sertifika yerine geçmez ve başarılı tamamlanmış eğitim olarak değerlendirilmez.
+                    </div>
+                  `
+              }
 
               <div class="bottom">
                 <div>
@@ -508,7 +597,6 @@ export async function GET(
         </body>
       </html>
     `;
-
     return new NextResponse(html, {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
