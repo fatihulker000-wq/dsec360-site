@@ -36,6 +36,8 @@ type GuardState = {
 
 type TrainingRow = {
   id: string;
+  status?: "assigned" | "not_started" | "in_progress" | "completed";
+  completed_at?: string | null;
   pre_exam_completed?: boolean | null;
   watch_completed?: boolean | null;
   watch_seconds?: number | null;
@@ -57,6 +59,72 @@ function normalizeType(type?: string | null) {
   return "asenkron";
 }
 
+function LoadingPanel() {
+  return (
+    <div
+      style={{
+        background: "#ffffff",
+        border: "1px solid #e5e7eb",
+        borderRadius: "20px",
+        padding: "24px",
+        boxShadow: "0 12px 32px rgba(15,23,42,0.06)",
+      }}
+    >
+      <div
+        style={{
+          width: "220px",
+          height: "30px",
+          borderRadius: "10px",
+          background: "#f3f4f6",
+          marginBottom: "18px",
+        }}
+      />
+      <div
+        style={{
+          width: "140px",
+          height: "14px",
+          borderRadius: "8px",
+          background: "#f3f4f6",
+          marginBottom: "28px",
+        }}
+      />
+      <div
+        style={{
+          width: "100%",
+          height: "120px",
+          borderRadius: "16px",
+          background: "#f8fafc",
+          border: "1px solid #e5e7eb",
+        }}
+      />
+    </div>
+  );
+}
+
+function PageBox({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <main
+      style={{
+        padding: "40px",
+        fontFamily: "Arial",
+        background: "#f8fafc",
+        minHeight: "100vh",
+      }}
+    >
+      <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+        <h1 style={{ marginTop: 0, marginBottom: "20px" }}>{title}</h1>
+        {children}
+      </div>
+    </main>
+  );
+}
+
 export default function FinalExamPage() {
   const params = useParams();
   const router = useRouter();
@@ -71,24 +139,24 @@ export default function FinalExamPage() {
     message: "",
   });
 
- const [questions, setQuestions] = useState<ExamQuestion[]>([]);
-const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>(
-  {}
-);
-const [result, setResult] = useState<SubmitResponse | null>(null);
-const [attemptsLeft, setAttemptsLeft] = useState(3);
-const [loading, setLoading] = useState(true);
-const [submitting, setSubmitting] = useState(false);
-const [error, setError] = useState("");
+  const [questions, setQuestions] = useState<ExamQuestion[]>([]);
+  const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>(
+    {}
+  );
+  const [result, setResult] = useState<SubmitResponse | null>(null);
+  const [attemptsLeft, setAttemptsLeft] = useState(3);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-useEffect(() => {
-  window.scrollTo({ top: 0, behavior: "auto" });
-}, [assignmentId]);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [assignmentId]);
 
-useEffect(() => {
-  if (!assignmentId) return;
+  useEffect(() => {
+    if (!assignmentId) return;
 
-  const fetchTrainingInfoAndGuard = async () => {
+    const fetchTrainingInfoAndGuard = async () => {
       try {
         const res = await fetch("/api/training/my", {
           method: "GET",
@@ -132,34 +200,20 @@ useEffect(() => {
         if (type === "senkron") {
           setGuardState({ ok: true, message: "" });
           setGuardChecked(true);
+          setLoading(false);
           return;
         }
 
-        if (!currentTraining.watch_completed) {
+        const videoCompleted =
+          currentTraining.watch_completed === true ||
+          currentTraining.status === "completed" ||
+          Boolean(currentTraining.completed_at);
+
+        if (!videoCompleted) {
           setGuardState({
             ok: false,
             message:
               "Asenkron eğitim tamamlanmadan final sınavına girilemez. Önce videoyu kurallara uygun şekilde tamamlamalısınız.",
-          });
-          setGuardChecked(true);
-          setLoading(false);
-          return;
-        }
-
-        if (Number(currentTraining.watch_seconds || 0) <= 0) {
-          setGuardState({
-            ok: false,
-            message: "İzleme süresi kaydı bulunamadı.",
-          });
-          setGuardChecked(true);
-          setLoading(false);
-          return;
-        }
-
-        if (Number(currentTraining.click_count || 0) <= 0) {
-          setGuardState({
-            ok: false,
-            message: "Ekran başı doğrulama kaydı bulunamadı.",
           });
           setGuardChecked(true);
           setLoading(false);
@@ -234,6 +288,10 @@ useEffect(() => {
     return questions.filter((q) => !answers[q.id]).length;
   }, [questions, answers]);
 
+  const answeredCount = useMemo(() => {
+    return questions.length - unansweredCount;
+  }, [questions.length, unansweredCount]);
+
   const handleSelect = (
     questionId: string,
     option: "A" | "B" | "C" | "D"
@@ -283,12 +341,12 @@ useEffect(() => {
         return;
       }
 
-setResult(json);
-window.scrollTo({ top: 0, behavior: "smooth" });
+      setResult(json);
+      window.scrollTo({ top: 0, behavior: "smooth" });
 
-if (typeof json.attemptsLeft === "number") {
-  setAttemptsLeft(json.attemptsLeft);
-}
+      if (typeof json.attemptsLeft === "number") {
+        setAttemptsLeft(json.attemptsLeft);
+      }
     } catch (err) {
       console.error("final exam submit hatası:", err);
       setError("Sınav sonucu gönderilemedi.");
@@ -297,33 +355,165 @@ if (typeof json.attemptsLeft === "number") {
     }
   };
 
- const handleRetry = () => {
-  setAnswers({});
-  setResult(null);
-  setError("");
-  window.scrollTo({ top: 0, behavior: "smooth" });
-};
+  const handleRetry = () => {
+    setAnswers({});
+    setResult(null);
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   if (!guardChecked || loading) {
     return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Final Sınavı</h1>
-        <p>Kontrol ediliyor...</p>
-      </main>
+      <PageBox title="Final Sınavı">
+        <LoadingPanel />
+      </PageBox>
     );
   }
 
   if (!guardState.ok) {
     return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Final Sınavı</h1>
-        <p style={{ color: "#b91c1c", lineHeight: 1.7 }}>{guardState.message}</p>
-
-        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => router.replace(`/portal/training/${assignmentId}`)}
+      <PageBox title="Final Sınavı">
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #fecaca",
+            borderRadius: "20px",
+            padding: "24px",
+            boxShadow: "0 12px 32px rgba(15,23,42,0.05)",
+          }}
+        >
+          <div
             style={{
-              marginTop: "20px",
+              display: "inline-flex",
+              padding: "8px 12px",
+              borderRadius: "999px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#991b1b",
+              fontSize: "12px",
+              fontWeight: 700,
+              marginBottom: "14px",
+            }}
+          >
+            Erişim Kısıtlandı
+          </div>
+
+          <p style={{ color: "#991b1b", lineHeight: 1.8, marginTop: 0 }}>
+            {guardState.message}
+          </p>
+
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <button
+              onClick={() => router.replace(`/portal/training/${assignmentId}`)}
+              style={{
+                marginTop: "8px",
+                padding: "12px 20px",
+                background: "#111827",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Eğitime Dön
+            </button>
+
+            <button
+              onClick={() =>
+                router.replace(`/portal/training/${assignmentId}/pre-exam`)
+              }
+              style={{
+                marginTop: "8px",
+                padding: "12px 20px",
+                background: "#2563eb",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Ön Sınava Git
+            </button>
+          </div>
+        </div>
+      </PageBox>
+    );
+  }
+
+  if (error && questions.length === 0) {
+    return (
+      <PageBox title="Final Sınavı">
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #fecaca",
+            borderRadius: "20px",
+            padding: "24px",
+            color: "#991b1b",
+          }}
+        >
+          <p style={{ margin: 0 }}>{error}</p>
+        </div>
+      </PageBox>
+    );
+  }
+
+  if (questions.length === 0) {
+    return (
+      <PageBox title="Final Sınavı">
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: "20px",
+            padding: "24px",
+          }}
+        >
+          <p style={{ margin: 0 }}>Bu eğitim için final sınav sorusu bulunamadı.</p>
+        </div>
+      </PageBox>
+    );
+  }
+
+  if ((result?.attemptsLeft === 0 || attemptsLeft <= 0) && !result?.passed) {
+    return (
+      <PageBox title="Final Sınav Hakkı Bitti">
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: "20px",
+            padding: "24px",
+            boxShadow: "0 12px 32px rgba(15,23,42,0.05)",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              padding: "8px 12px",
+              borderRadius: "999px",
+              background: "#fee2e2",
+              border: "1px solid #fca5a5",
+              color: "#b91c1c",
+              fontSize: "12px",
+              fontWeight: 700,
+              marginBottom: "14px",
+            }}
+          >
+            Eğitim Yeniden Atanmalı
+          </div>
+
+          <p style={{ color: "#374151", lineHeight: 1.8, marginTop: 0 }}>
+            Bu eğitim başarısız sayıldı. Final sınav hakkınız bittiği için
+            eğitimin yeniden alınması gerekir.
+          </p>
+
+          <button
+            onClick={() => router.push("/portal/training")}
+            style={{
+              marginTop: "8px",
               padding: "12px 20px",
               background: "#111827",
               color: "#fff",
@@ -333,104 +523,239 @@ if (typeof json.attemptsLeft === "number") {
               cursor: "pointer",
             }}
           >
-            Eğitime Dön
-          </button>
-
-          <button
-            onClick={() =>
-              router.replace(`/portal/training/${assignmentId}/pre-exam`)
-            }
-            style={{
-              marginTop: "20px",
-              padding: "12px 20px",
-              background: "#2563eb",
-              color: "#fff",
-              border: "none",
-              borderRadius: "10px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Ön Sınava Git
+            Eğitim Listesine Dön
           </button>
         </div>
-      </main>
-    );
-  }
-
-  if (error && questions.length === 0) {
-    return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Final Sınavı</h1>
-        <p style={{ color: "#b91c1c" }}>{error}</p>
-      </main>
-    );
-  }
-
-  if (questions.length === 0) {
-    return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Final Sınavı</h1>
-        <p>Bu eğitim için final sınav sorusu bulunamadı.</p>
-      </main>
-    );
-  }
-
-  if ((result?.attemptsLeft === 0 || attemptsLeft <= 0) && !result?.passed) {
-    return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Final Sınav Hakkı Bitti</h1>
-        <p>Bu eğitim başarısız sayıldı. Eğitimin yeniden alınması gerekir.</p>
-        <button
-          onClick={() => router.push("/portal/training")}
-          style={{
-            marginTop: "20px",
-            padding: "12px 20px",
-            background: "#111827",
-            color: "#fff",
-            border: "none",
-            borderRadius: "10px",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          Eğitim Listesine Dön
-        </button>
-      </main>
+      </PageBox>
     );
   }
 
   return (
-    <main style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>Final Sınavı</h1>
-
+    <PageBox title="Final Sınavı">
       <div
         style={{
-          marginBottom: "16px",
-          display: "flex",
-          gap: "12px",
-          flexWrap: "wrap",
-          alignItems: "center",
+          background: "#ffffff",
+          border: "1px solid #e5e7eb",
+          borderRadius: "22px",
+          padding: "24px",
+          boxShadow: "0 12px 32px rgba(15,23,42,0.06)",
+          marginBottom: "20px",
         }}
       >
-        <p style={{ margin: 0 }}>Kalan hak: {attemptsLeft}</p>
-        <span
+        <div
           style={{
-            display: "inline-flex",
-            padding: "6px 10px",
-            borderRadius: "999px",
-            background: trainingType === "senkron" ? "#eff6ff" : "#f8fafc",
-            border:
-              trainingType === "senkron"
-                ? "1px solid #bfdbfe"
-                : "1px solid #e5e7eb",
-            color: trainingType === "senkron" ? "#1d4ed8" : "#374151",
-            fontSize: "12px",
-            fontWeight: 700,
+            display: "flex",
+            gap: "12px",
+            flexWrap: "wrap",
+            alignItems: "center",
+            marginBottom: "14px",
           }}
         >
-          Tür: {trainingType}
-        </span>
+          <span
+            style={{
+              display: "inline-flex",
+              padding: "8px 12px",
+              borderRadius: "999px",
+              background: "#fff7ed",
+              border: "1px solid #fdba74",
+              color: "#9a3412",
+              fontSize: "12px",
+              fontWeight: 700,
+            }}
+          >
+            Kalan Hak: {attemptsLeft}
+          </span>
+
+          <span
+            style={{
+              display: "inline-flex",
+              padding: "8px 12px",
+              borderRadius: "999px",
+              background: trainingType === "senkron" ? "#eff6ff" : "#f8fafc",
+              border:
+                trainingType === "senkron"
+                  ? "1px solid #bfdbfe"
+                  : "1px solid #e5e7eb",
+              color: trainingType === "senkron" ? "#1d4ed8" : "#374151",
+              fontSize: "12px",
+              fontWeight: 700,
+            }}
+          >
+            Tür: {trainingType}
+          </span>
+
+          {!result ? (
+            <span
+              style={{
+                display: "inline-flex",
+                padding: "8px 12px",
+                borderRadius: "999px",
+                background: "#eef2ff",
+                border: "1px solid #c7d2fe",
+                color: "#4338ca",
+                fontSize: "12px",
+                fontWeight: 700,
+              }}
+            >
+              Cevaplanan: {answeredCount} / {questions.length}
+            </span>
+          ) : null}
+        </div>
+
+        {!result ? (
+          <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.7 }}>
+            Tüm soruları dikkatlice cevaplayın. Final sınavı sonucu eğitim
+            tamamlanma durumunu etkiler.
+          </p>
+        ) : (
+          <div
+            style={{
+              marginTop: "4px",
+              borderRadius: "18px",
+              padding: "24px",
+              background: result.passed
+                ? "linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)"
+                : "linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%)",
+              border: result.passed
+                ? "1px solid #86efac"
+                : "1px solid #fdba74",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                flexWrap: "wrap",
+                alignItems: "center",
+                marginBottom: "14px",
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  padding: "8px 12px",
+                  borderRadius: "999px",
+                  background: result.passed ? "#dcfce7" : "#fee2e2",
+                  border: result.passed
+                    ? "1px solid #86efac"
+                    : "1px solid #fca5a5",
+                  color: result.passed ? "#166534" : "#b91c1c",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                }}
+              >
+                {result.passed ? "Başarılı" : "Başarısız"}
+              </span>
+
+              <span
+                style={{
+                  display: "inline-flex",
+                  padding: "8px 12px",
+                  borderRadius: "999px",
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  color: "#111827",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                }}
+              >
+                Puan: %{result.score ?? 0}
+              </span>
+
+              {typeof result.attemptsLeft === "number" ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    padding: "8px 12px",
+                    borderRadius: "999px",
+                    background: "#ffffff",
+                    border: "1px solid #e5e7eb",
+                    color: "#111827",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                  }}
+                >
+                  Kalan Hak: {result.attemptsLeft}
+                </span>
+              ) : null}
+            </div>
+
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: "10px",
+                color: result.passed ? "#166534" : "#9a3412",
+              }}
+            >
+              {result.passed
+                ? "Final sınavı başarıyla tamamlandı"
+                : "Final sınavı başarıyla tamamlanamadı"}
+            </h2>
+
+            <p
+              style={{
+                marginTop: 0,
+                color: "#374151",
+                lineHeight: 1.8,
+                marginBottom: "18px",
+              }}
+            >
+              {result.message ||
+                (result.passed
+                  ? "Eğitim başarıyla tamamlandı. Sertifika veya sonraki adımlar açılabilir."
+                  : "60 puanın altında kaldınız. Kalan hakkınız varsa tekrar deneyebilirsiniz.")}
+            </p>
+
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              {result.passed ? (
+                <button
+                  onClick={() => router.push("/portal/training")}
+                  style={{
+                    padding: "12px 20px",
+                    background: "#16a34a",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Eğitim Listesine Dön
+                </button>
+              ) : (
+                <button
+                  onClick={handleRetry}
+                  style={{
+                    padding: "12px 20px",
+                    background: "#dc2626",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Tekrar Dene
+                </button>
+              )}
+
+              <button
+                onClick={() => router.push(`/portal/training/${assignmentId}`)}
+                style={{
+                  padding: "12px 20px",
+                  background: "#111827",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "10px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Eğitim Detayına Dön
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {!result ? (
@@ -439,14 +764,15 @@ if (typeof json.attemptsLeft === "number") {
             <div
               key={q.id}
               style={{
-                marginBottom: "24px",
-                padding: "16px",
+                marginBottom: "20px",
+                padding: "18px",
                 border: "1px solid #e5e7eb",
-                borderRadius: "12px",
-                background: "#fff",
+                borderRadius: "16px",
+                background: "#ffffff",
+                boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
               }}
             >
-              <p>
+              <p style={{ marginTop: 0, marginBottom: "14px", lineHeight: 1.7 }}>
                 <b>
                   {index + 1}. {q.question}
                 </b>
@@ -456,104 +782,74 @@ if (typeof json.attemptsLeft === "number") {
                 const optionText =
                   q[`option_${opt.toLowerCase()}` as keyof ExamQuestion];
 
+                const checked = answers[q.id] === opt;
+
                 return (
-                  <div key={opt} style={{ marginBottom: "8px" }}>
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name={q.id}
-                        checked={answers[q.id] === opt}
-                        onChange={() => handleSelect(q.id, opt)}
-                      />
-                      <span>
-                        <b>{opt})</b> {String(optionText || "")}
-                      </span>
-                    </label>
-                  </div>
+                  <label
+                    key={opt}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      cursor: "pointer",
+                      padding: "12px 14px",
+                      borderRadius: "12px",
+                      border: checked
+                        ? "1px solid #8b5cf6"
+                        : "1px solid #e5e7eb",
+                      background: checked ? "#f5f3ff" : "#ffffff",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name={q.id}
+                      checked={checked}
+                      onChange={() => handleSelect(q.id, opt)}
+                    />
+                    <span style={{ lineHeight: 1.6 }}>
+                      <b>{opt})</b> {String(optionText || "")}
+                    </span>
+                  </label>
                 );
               })}
             </div>
           ))}
 
-          {error ? <p style={{ color: "#b91c1c" }}>{error}</p> : null}
+          {error ? (
+            <div
+              style={{
+                marginBottom: "16px",
+                padding: "14px 16px",
+                borderRadius: "12px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#991b1b",
+                lineHeight: 1.7,
+              }}
+            >
+              {error}
+            </div>
+          ) : null}
 
           <button
             onClick={handleFinish}
             disabled={submitting}
             style={{
-              padding: "12px 20px",
-              background: "#7c3aed",
+              padding: "14px 22px",
+              background: submitting ? "#a78bfa" : "#7c3aed",
               color: "#fff",
               border: "none",
-              borderRadius: "10px",
+              borderRadius: "12px",
               fontWeight: 700,
-              cursor: "pointer",
+              cursor: submitting ? "not-allowed" : "pointer",
+              boxShadow: "0 10px 20px rgba(124,58,237,0.20)",
             }}
           >
             {submitting ? "Kaydediliyor..." : "Final Sınavını Bitir"}
           </button>
         </>
-      ) : (
-        <>
-          <h2>Sonuç: %{result.score}</h2>
-
-          {result.passed ? (
-            <>
-              <h3 style={{ color: "#166534" }}>Başarılı</h3>
-              <p>
-                {result.message || "Eğitim tamamlandı. Sertifika açılabilir."}
-              </p>
-              <button
-                onClick={() => router.push("/portal/training")}
-                style={{
-                  marginTop: "16px",
-                  padding: "12px 20px",
-                  background: "#16a34a",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "10px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Eğitim Listesine Dön
-              </button>
-            </>
-          ) : (
-            <>
-              <h3 style={{ color: "#b91c1c" }}>Başarısız</h3>
-              <p>
-                {result.message ||
-                  "60 puan altı. Kalan hakkın varsa tekrar deneyebilirsin."}
-              </p>
-              <p>Kalan hak: {result.attemptsLeft}</p>
-
-              <button
-                onClick={handleRetry}
-                style={{
-                  marginTop: "16px",
-                  padding: "12px 20px",
-                  background: "#dc2626",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "10px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                Tekrar Dene
-              </button>
-            </>
-          )}
-        </>
-      )}
-    </main>
+      ) : null}
+    </PageBox>
   );
 }
