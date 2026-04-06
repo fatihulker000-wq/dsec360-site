@@ -203,6 +203,13 @@ export default function TrainingDetailPage() {
     } catch {}
   };
 
+  const clearLocalProgress = () => {
+    try {
+      localStorage.removeItem(`training_watch_${assignmentId}`);
+      localStorage.removeItem(`training_click_${assignmentId}`);
+    } catch {}
+  };
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const maxReachedRef = useRef(0);
   const isProgrammaticSeekRef = useRef(false);
@@ -263,31 +270,59 @@ export default function TrainingDetailPage() {
         return;
       }
 
-      const localWatch = Number(
-        typeof window !== "undefined"
-          ? localStorage.getItem(`training_watch_${assignmentId}`) || 0
-          : 0
-      );
-      const localClicks = Number(
-        typeof window !== "undefined"
-          ? localStorage.getItem(`training_click_${assignmentId}`) || 0
-          : 0
-      );
+      const shouldForceFreshStart =
+        found.training_reset_required === true ||
+        found.pre_exam_completed !== true ||
+        (Number(found.watch_seconds || 0) <= 0 &&
+          Number(found.click_count || 0) <= 0 &&
+          found.watch_completed !== true &&
+          found.final_exam_passed !== true);
 
-      const dbWatch = Math.max(Number(found.watch_seconds || 0), localWatch);
-      const dbClicks = Math.max(Number(found.click_count || 0), localClicks);
+      if (shouldForceFreshStart) {
+        clearLocalProgress();
+      }
+
+      const localWatch = shouldForceFreshStart
+        ? 0
+        : Number(
+            typeof window !== "undefined"
+              ? localStorage.getItem(`training_watch_${assignmentId}`) || 0
+              : 0
+          );
+
+      const localClicks = shouldForceFreshStart
+        ? 0
+        : Number(
+            typeof window !== "undefined"
+              ? localStorage.getItem(`training_click_${assignmentId}`) || 0
+              : 0
+          );
+
+      const dbWatch = shouldForceFreshStart
+        ? Number(found.watch_seconds || 0)
+        : Math.max(Number(found.watch_seconds || 0), localWatch);
+
+      const dbClicks = shouldForceFreshStart
+        ? Number(found.click_count || 0)
+        : Math.max(Number(found.click_count || 0), localClicks);
 
       const dbCompleted =
         found.watch_completed === true || found.final_exam_passed === true;
 
       setTraining(found);
-      setMaxReachedTime(dbWatch);
-      maxReachedRef.current = dbWatch;
-      setClickCount(dbClicks);
-      setCheckpointIndex(dbClicks);
+      setMaxReachedTime(Math.max(0, dbWatch));
+      maxReachedRef.current = Math.max(0, dbWatch);
+      setClickCount(Math.max(0, dbClicks));
+      setCheckpointIndex(Math.max(0, dbClicks));
       setVideoCompleted(dbCompleted);
       setProgressSaved(dbCompleted);
       setVideoLoadError("");
+
+      if (shouldForceFreshStart) {
+        if (videoRef.current) {
+          videoRef.current.currentTime = 0;
+        }
+      }
     } catch (err) {
       console.error("training detail fetch hatası:", err);
       setError("Bağlantı hatası oluştu.");
@@ -346,6 +381,7 @@ export default function TrainingDetailPage() {
 
   const preExamCompleted = training?.pre_exam_completed === true;
   const finalPassed = training?.final_exam_passed === true;
+  const resetRequired = training?.training_reset_required === true;
 
   useEffect(() => {
     if (videoDuration > 0) {
@@ -367,9 +403,18 @@ export default function TrainingDetailPage() {
     const duration = Math.floor(player.duration || 0);
     setVideoDuration(duration);
 
-    if (maxReachedRef.current > 0 && maxReachedRef.current < duration) {
+    const shouldResume =
+      preExamCompleted &&
+      !resetRequired &&
+      maxReachedRef.current > 0 &&
+      maxReachedRef.current < duration;
+
+    if (shouldResume) {
       isProgrammaticSeekRef.current = true;
       player.currentTime = maxReachedRef.current;
+    } else {
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = 0;
     }
 
     setPlaybackReady(true);
@@ -472,9 +517,10 @@ export default function TrainingDetailPage() {
     effectiveClickCount >= requiredClicks;
 
   const serverAsyncVideoCompleted =
-    training?.watch_completed === true ||
-    (training?.status === "completed" && !finalPassed) ||
-    Boolean(training?.completed_at && !finalPassed);
+    !resetRequired &&
+    (training?.watch_completed === true ||
+      (training?.status === "completed" && !finalPassed) ||
+      Boolean(training?.completed_at && !finalPassed));
 
   const videoWatchCompleted =
     finalPassed ||
@@ -780,6 +826,23 @@ export default function TrainingDetailPage() {
               }}
             >
               Eğitim videosu başarıyla tamamlandı. Final sınavına geçebilirsiniz.
+            </div>
+          ) : null}
+
+          {resetRequired ? (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "14px 16px",
+                borderRadius: "12px",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
+                color: "#991b1b",
+                lineHeight: 1.6,
+                fontWeight: 700,
+              }}
+            >
+              Bu eğitim önceki final sonucu nedeniyle yeniden başlatıldı. Ön sınavı tekrar tamamlayıp eğitimi baştan almanız gerekir.
             </div>
           ) : null}
 
@@ -1233,3 +1296,4 @@ export default function TrainingDetailPage() {
     </main>
   );
 }
+
