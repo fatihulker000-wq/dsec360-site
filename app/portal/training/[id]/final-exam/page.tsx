@@ -43,10 +43,17 @@ type TrainingRow = {
   final_exam_attempts?: number | null;
   final_exam_score?: number | null;
   final_exam_passed?: boolean | null;
-  status?: "not_started" | "in_progress" | "completed" | null;
   training?: {
     type?: string | null;
   } | null;
+};
+
+type TrainingSnapshot = {
+  preExamCompleted: boolean;
+  watchCompleted: boolean;
+  watchSeconds: number;
+  clickCount: number;
+  finalAttempts: number;
 };
 
 function normalizeType(type?: string | null) {
@@ -148,32 +155,74 @@ export default function FinalExamPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const [trainingSnapshot, setTrainingSnapshot] = useState<TrainingSnapshot>({
+    preExamCompleted: false,
+    watchCompleted: false,
+    watchSeconds: 0,
+    clickCount: 0,
+    finalAttempts: 0,
+  });
+
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [assignmentId]);
 
-  useEffect(() => {
-    if (error || result) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [error, result]);
+  const readAssignment = async () => {
+    const res = await fetch("/api/training/my", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    const json = await res.json();
+    const rows = Array.isArray(json?.data) ? json.data : [];
+    const currentTraining = rows.find(
+      (item: TrainingRow) => item?.id === assignmentId
+    ) as TrainingRow | undefined;
+
+    return currentTraining || null;
+  };
+
+  const syncTrainingProgressIfNeeded = async (row: TrainingRow) => {
+    if (trainingType !== "asenkron") return;
+
+    const watchSeconds = Math.max(
+      Number(row?.watch_seconds || 0),
+      trainingSnapshot.watchSeconds,
+      1
+    );
+
+    const clickCount = Math.max(
+      Number(row?.click_count || 0),
+      trainingSnapshot.clickCount,
+      1
+    );
+
+    const shouldMarkCompleted =
+      row?.watch_completed === true ||
+      trainingSnapshot.watchCompleted === true ||
+      watchSeconds > 0;
+
+    await fetch("/api/training/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assignmentId,
+        watchSeconds,
+        clickCount,
+        completed: shouldMarkCompleted,
+      }),
+    });
+  };
 
   useEffect(() => {
     if (!assignmentId) return;
 
     const fetchTrainingInfoAndGuard = async () => {
       try {
-        const res = await fetch("/api/training/my", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        });
-
-        const json = await res.json();
-        const rows = Array.isArray(json?.data) ? json.data : [];
-        const currentTraining = rows.find(
-          (item: TrainingRow) => item?.id === assignmentId
-        );
+        const currentTraining = await readAssignment();
 
         if (!currentTraining) {
           setGuardState({
@@ -188,7 +237,21 @@ export default function FinalExamPage() {
         const type = normalizeType(currentTraining?.training?.type);
         setTrainingType(type);
 
-        if (!currentTraining.pre_exam_completed) {
+        const preExamCompleted = currentTraining.pre_exam_completed === true;
+        const watchCompleted = currentTraining.watch_completed === true;
+        const watchSeconds = Number(currentTraining.watch_seconds || 0);
+        const clickCount = Number(currentTraining.click_count || 0);
+        const attemptsUsed = Number(currentTraining.final_exam_attempts || 0);
+
+        setTrainingSnapshot({
+          preExamCompleted,
+          watchCompleted,
+          watchSeconds,
+          clickCount,
+          finalAttempts: attemptsUsed,
+        });
+
+        if (!preExamCompleted) {
           setGuardState({
             ok: false,
             message:
@@ -199,7 +262,6 @@ export default function FinalExamPage() {
           return;
         }
 
-        const attemptsUsed = Number(currentTraining.final_exam_attempts || 0);
         setAttemptsLeft(Math.max(0, 3 - attemptsUsed));
 
         if (type === "senkron") {
@@ -208,16 +270,31 @@ export default function FinalExamPage() {
           return;
         }
 
-        const hasVideoCompletion =
-          currentTraining.watch_completed === true ||
-          currentTraining.status === "completed" ||
-          Number(currentTraining.watch_seconds || 0) > 0;
-
-        if (!hasVideoCompletion) {
+        if (!watchCompleted) {
           setGuardState({
             ok: false,
             message:
               "Asenkron eğitim tamamlanmadan final sınavına girilemez. Önce videoyu kurallara uygun şekilde tamamlamalısınız.",
+          });
+          setGuardChecked(true);
+          setLoading(false);
+          return;
+        }
+
+        if (watchSeconds <= 0) {
+          setGuardState({
+            ok: false,
+            message: "İzleme süresi kaydı bulunamadı.",
+          });
+          setGuardChecked(true);
+          setLoading(false);
+          return;
+        }
+
+        if (clickCount <= 0) {
+          setGuardState({
+            ok: false,
+            message: "Ekran başı doğrulama kaydı bulunamadı.",
           });
           setGuardChecked(true);
           setLoading(false);
@@ -306,6 +383,28 @@ export default function FinalExamPage() {
     }));
   };
 
+  const submitFinalOnce = async () => {
+    const payload = {
+      assignmentId,
+      examType: "final",
+      answers: questions.map((q) => ({
+        questionId: q.id,
+        selectedOption: answers[q.id],
+      })),
+    };
+
+    const res = await fetch("/api/training/exam/submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json = (await res.json()) as SubmitResponse;
+    return { res, json };
+  };
+
   const handleFinish = async () => {
     try {
       setSubmitting(true);
@@ -321,24 +420,44 @@ export default function FinalExamPage() {
         return;
       }
 
-      const payload = {
-        assignmentId,
-        examType: "final",
-        answers: questions.map((q) => ({
-          questionId: q.id,
-          selectedOption: answers[q.id],
-        })),
-      };
+      const latestAssignment = await readAssignment();
 
-      const res = await fetch("/api/training/exam/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      if (!latestAssignment) {
+        setError("Eğitim kaydı bulunamadı.");
+        return;
+      }
 
-      const json = (await res.json()) as SubmitResponse;
+      if (normalizeType(latestAssignment?.training?.type) === "asenkron") {
+        if (!latestAssignment.pre_exam_completed) {
+          setError("Ön sınav tamamlanmadan final sınavı gönderilemez.");
+          return;
+        }
+
+        if (
+          latestAssignment.watch_completed === true &&
+          (Number(latestAssignment.watch_seconds || 0) <= 0 ||
+            Number(latestAssignment.click_count || 0) <= 0)
+        ) {
+          await syncTrainingProgressIfNeeded(latestAssignment);
+        }
+      }
+
+      let { res, json } = await submitFinalOnce();
+
+      if (
+        (!res.ok || json.error) &&
+        (json?.error === "İzleme süresi kaydı bulunamadı." ||
+          json?.error === "Ekran başı doğrulama kaydı bulunamadı.")
+      ) {
+        const latestRetryAssignment = await readAssignment();
+
+        if (latestRetryAssignment) {
+          await syncTrainingProgressIfNeeded(latestRetryAssignment);
+          const retry = await submitFinalOnce();
+          res = retry.res;
+          json = retry.json;
+        }
+      }
 
       if (!res.ok || json.error) {
         setError(json?.error || "Final sınav sonucu kaydedilemedi.");
@@ -350,6 +469,8 @@ export default function FinalExamPage() {
       if (typeof json.attemptsLeft === "number") {
         setAttemptsLeft(json.attemptsLeft);
       }
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       console.error("final exam submit hatası:", err);
       setError("Sınav sonucu gönderilemedi.");
