@@ -113,7 +113,8 @@ function resolveTrainingContentUrl(
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const userId = cookieStore.get("dsec_user_id")?.value?.trim();
+    const userIdRaw = cookieStore.get("dsec_user_id")?.value;
+    const userId = userIdRaw ? userIdRaw.trim() : null;
 
     if (!userId) {
       return NextResponse.json(
@@ -136,7 +137,7 @@ export async function GET() {
         .from("users")
         .select("id, full_name")
         .eq("id", userId)
-        .maybeSingle();
+        .maybeSingle<UserRow>();
 
       if (userError) {
         console.error("users fetch hatası:", userError);
@@ -153,7 +154,7 @@ export async function GET() {
         );
       }
 
-      user = userData as UserRow;
+      user = userData;
     }
 
     let assignmentsQuery = supabase
@@ -169,7 +170,7 @@ export async function GET() {
     }
 
     const { data: assignments, error: assignmentsError } =
-      await assignmentsQuery;
+      await assignmentsQuery.returns<TrainingAssignmentRow[]>();
 
     if (assignmentsError) {
       console.error("training_assignments fetch hatası:", assignmentsError);
@@ -179,7 +180,7 @@ export async function GET() {
       );
     }
 
-    const safeAssignments = (assignments || []) as TrainingAssignmentRow[];
+    const safeAssignments = assignments || [];
 
     const trainingIds = Array.from(
       new Set(
@@ -195,7 +196,8 @@ export async function GET() {
       const { data: trainings, error: trainingsError } = await supabase
         .from("trainings")
         .select("id, title, description, content_url, type")
-        .in("id", trainingIds);
+        .in("id", trainingIds)
+        .returns<TrainingRow[]>();
 
       if (trainingsError) {
         console.error("trainings fetch hatası:", trainingsError);
@@ -206,7 +208,7 @@ export async function GET() {
       }
 
       trainingsMap = Object.fromEntries(
-        ((trainings || []) as TrainingRow[]).map((item) => [item.id, item])
+        (trainings || []).map((item) => [item.id, item])
       );
     }
 
@@ -261,12 +263,8 @@ export async function GET() {
   } catch (err) {
     console.error("training/my genel hata:", err);
 
-    const message =
-      err instanceof Error ? err.message : "Sunucu hatası";
+    const message = err instanceof Error ? err.message : "Sunucu hatası";
 
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
