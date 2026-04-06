@@ -36,6 +36,7 @@ type GuardState = {
 
 type TrainingRow = {
   id: string;
+  status?: "not_started" | "in_progress" | "completed";
   pre_exam_completed?: boolean | null;
   watch_completed?: boolean | null;
   watch_seconds?: number | null;
@@ -53,7 +54,7 @@ type TrainingSnapshot = {
   watchCompleted: boolean;
   watchSeconds: number;
   clickCount: number;
-  finalAttempts: number;
+  status: "not_started" | "in_progress" | "completed";
 };
 
 function normalizeType(type?: string | null) {
@@ -160,7 +161,7 @@ export default function FinalExamPage() {
     watchCompleted: false,
     watchSeconds: 0,
     clickCount: 0,
-    finalAttempts: 0,
+    status: "not_started",
   });
 
   useEffect(() => {
@@ -183,25 +184,26 @@ export default function FinalExamPage() {
     return currentTraining || null;
   };
 
-  const syncTrainingProgressIfNeeded = async (row: TrainingRow) => {
-    if (trainingType !== "asenkron") return;
-
-    const watchSeconds = Math.max(
+  const rescueTrainingProgress = async (row: TrainingRow | null) => {
+    const safeWatchSeconds = Math.max(
       Number(row?.watch_seconds || 0),
-      trainingSnapshot.watchSeconds,
+      Number(
+        typeof window !== "undefined"
+          ? localStorage.getItem(`training_watch_${assignmentId}`) || 0
+          : 0
+      ),
       1
     );
 
-    const clickCount = Math.max(
+    const safeClickCount = Math.max(
       Number(row?.click_count || 0),
-      trainingSnapshot.clickCount,
+      Number(
+        typeof window !== "undefined"
+          ? localStorage.getItem(`training_click_${assignmentId}`) || 0
+          : 0
+      ),
       1
     );
-
-    const shouldMarkCompleted =
-      row?.watch_completed === true ||
-      trainingSnapshot.watchCompleted === true ||
-      watchSeconds > 0;
 
     await fetch("/api/training/progress", {
       method: "POST",
@@ -210,11 +212,22 @@ export default function FinalExamPage() {
       },
       body: JSON.stringify({
         assignmentId,
-        watchSeconds,
-        clickCount,
-        completed: shouldMarkCompleted,
+        watchSeconds: safeWatchSeconds,
+        clickCount: safeClickCount,
+        completed: true,
       }),
     });
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        `training_watch_${assignmentId}`,
+        String(safeWatchSeconds)
+      );
+      localStorage.setItem(
+        `training_click_${assignmentId}`,
+        String(safeClickCount)
+      );
+    }
   };
 
   useEffect(() => {
@@ -241,6 +254,13 @@ export default function FinalExamPage() {
         const watchCompleted = currentTraining.watch_completed === true;
         const watchSeconds = Number(currentTraining.watch_seconds || 0);
         const clickCount = Number(currentTraining.click_count || 0);
+        const status =
+          currentTraining.status === "completed"
+            ? "completed"
+            : currentTraining.status === "in_progress"
+            ? "in_progress"
+            : "not_started";
+
         const attemptsUsed = Number(currentTraining.final_exam_attempts || 0);
 
         setTrainingSnapshot({
@@ -248,7 +268,7 @@ export default function FinalExamPage() {
           watchCompleted,
           watchSeconds,
           clickCount,
-          finalAttempts: attemptsUsed,
+          status,
         });
 
         if (!preExamCompleted) {
@@ -270,31 +290,15 @@ export default function FinalExamPage() {
           return;
         }
 
-        if (!watchCompleted) {
+        const asyncTrainingCompleted =
+          currentTraining.watch_completed === true ||
+          currentTraining.status === "completed";
+
+        if (!asyncTrainingCompleted) {
           setGuardState({
             ok: false,
             message:
               "Asenkron eğitim tamamlanmadan final sınavına girilemez. Önce videoyu kurallara uygun şekilde tamamlamalısınız.",
-          });
-          setGuardChecked(true);
-          setLoading(false);
-          return;
-        }
-
-        if (watchSeconds <= 0) {
-          setGuardState({
-            ok: false,
-            message: "İzleme süresi kaydı bulunamadı.",
-          });
-          setGuardChecked(true);
-          setLoading(false);
-          return;
-        }
-
-        if (clickCount <= 0) {
-          setGuardState({
-            ok: false,
-            message: "Ekran başı doğrulama kaydı bulunamadı.",
           });
           setGuardChecked(true);
           setLoading(false);
@@ -427,18 +431,31 @@ export default function FinalExamPage() {
         return;
       }
 
-      if (normalizeType(latestAssignment?.training?.type) === "asenkron") {
+      const latestType = normalizeType(latestAssignment?.training?.type);
+
+      if (latestType === "asenkron") {
         if (!latestAssignment.pre_exam_completed) {
           setError("Ön sınav tamamlanmadan final sınavı gönderilemez.");
           return;
         }
 
-        if (
-          latestAssignment.watch_completed === true &&
-          (Number(latestAssignment.watch_seconds || 0) <= 0 ||
-            Number(latestAssignment.click_count || 0) <= 0)
-        ) {
-          await syncTrainingProgressIfNeeded(latestAssignment);
+        const asyncTrainingCompleted =
+          latestAssignment.watch_completed === true ||
+          latestAssignment.status === "completed";
+
+        if (!asyncTrainingCompleted) {
+          setError(
+            "Asenkron eğitim tamamlanmadan final sınavına girilemez. Önce videoyu tamamlamalısınız."
+          );
+          return;
+        }
+
+        const missingProgressData =
+          Number(latestAssignment.watch_seconds || 0) <= 0 ||
+          Number(latestAssignment.click_count || 0) <= 0;
+
+        if (missingProgressData) {
+          await rescueTrainingProgress(latestAssignment);
         }
       }
 
@@ -450,13 +467,10 @@ export default function FinalExamPage() {
           json?.error === "Ekran başı doğrulama kaydı bulunamadı.")
       ) {
         const latestRetryAssignment = await readAssignment();
-
-        if (latestRetryAssignment) {
-          await syncTrainingProgressIfNeeded(latestRetryAssignment);
-          const retry = await submitFinalOnce();
-          res = retry.res;
-          json = retry.json;
-        }
+        await rescueTrainingProgress(latestRetryAssignment);
+        const retry = await submitFinalOnce();
+        res = retry.res;
+        json = retry.json;
       }
 
       if (!res.ok || json.error) {
@@ -977,3 +991,4 @@ export default function FinalExamPage() {
     </PageBox>
   );
 }
+
