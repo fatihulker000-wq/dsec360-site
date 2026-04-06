@@ -121,11 +121,12 @@ export async function GET(
 
     const supabase = getSupabase();
     const url = new URL(request.url);
-   const docType = url.searchParams.get("type") === "attendance"
-  ? "attendance"
-  : "certificate";
+    const docType =
+      url.searchParams.get("type") === "attendance"
+        ? "attendance"
+        : "certificate";
 
-const isCertificate = docType === "certificate";
+    const isCertificate = docType === "certificate";
 
     let assignmentQuery = supabase
       .from("training_assignments")

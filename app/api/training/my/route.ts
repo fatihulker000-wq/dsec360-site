@@ -44,6 +44,7 @@ type TrainingAssignmentRow = {
   final_exam_attempts: number;
   final_exam_passed: boolean;
   training_reset_required: boolean;
+  training_repeat_count?: number | null;
 };
 
 function isHttpUrl(value: string) {
@@ -151,7 +152,7 @@ export async function GET() {
     let assignmentsQuery = supabase
       .from("training_assignments")
       .select(
-        "id, user_id, training_id, status, started_at, completed_at, watch_completed, watch_seconds, click_count, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required"
+        "id, user_id, training_id, status, started_at, completed_at, watch_completed, watch_seconds, click_count, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, training_repeat_count"
       )
       .order("started_at", { ascending: false })
       .order("id", { ascending: false });
@@ -222,6 +223,7 @@ export async function GET() {
         final_exam_attempts: isReset ? 0 : item.final_exam_attempts,
         final_exam_passed: item.final_exam_passed,
         training_reset_required: item.training_reset_required,
+        training_repeat_count: Number(item.training_repeat_count || 0),
         training: training
           ? {
               ...training,

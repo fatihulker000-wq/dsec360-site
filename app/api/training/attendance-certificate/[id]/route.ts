@@ -130,7 +130,8 @@ export async function GET(
     const assignment = data;
 
     const canShowAttendance =
-      assignment.status === "completed" || assignment.training_reset_required === true;
+      assignment.status === "completed" ||
+      assignment.training_reset_required === true;
 
     if (!canShowAttendance) {
       return new NextResponse(
@@ -597,6 +598,7 @@ export async function GET(
         </body>
       </html>
     `;
+
     return new NextResponse(html, {
       headers: {
         "Content-Type": "text/html; charset=utf-8",

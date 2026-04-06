@@ -642,11 +642,19 @@ export default function TrainingDetailPage() {
   }, [videoWatchCompleted]);
 
   const openCertificate = () => {
-    window.open(`/api/training/certificate/${assignmentId}`, "_blank", "noopener,noreferrer");
+    window.open(
+      `/api/training/certificate/${assignmentId}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
   };
 
   const openAttendance = () => {
-    window.open(`/api/training/attendance/${assignmentId}`, "_blank", "noopener,noreferrer");
+    window.open(
+      `/api/training/attendance-certificate/${assignmentId}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
   };
 
   if (loading) {
@@ -1054,7 +1062,10 @@ export default function TrainingDetailPage() {
                       opacity: preExamCompleted ? 1 : 0.65,
                     }}
                   >
-                    <source src={contentUrl} type={inferVideoMimeType(contentUrl)} />
+                    <source
+                      src={contentUrl}
+                      type={inferVideoMimeType(contentUrl)}
+                    />
                     Tarayıcınız video oynatmayı desteklemiyor.
                   </video>
 

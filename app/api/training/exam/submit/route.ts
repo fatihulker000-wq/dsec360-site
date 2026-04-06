@@ -33,6 +33,7 @@ type AssignmentRow = {
   watch_seconds?: number | null;
   click_count?: number | null;
   completed_at?: string | null;
+  training_repeat_count?: number | null;
 };
 
 type QuestionRow = {
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
     const { data: assignment, error: assignmentError } = await supabase
       .from("training_assignments")
       .select(
-        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count, completed_at"
+        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count, completed_at, training_repeat_count"
       )
       .eq("id", assignmentId)
       .eq("user_id", userId)
@@ -321,6 +322,11 @@ export async function POST(request: Request) {
     }
 
     if (nextAttempt >= 3) {
+      const nextRepeatCount = Math.max(
+        0,
+        Number(assignment.training_repeat_count || 0)
+      ) + 1;
+
       const { error: failResetError } = await supabase
         .from("training_assignments")
         .update({
@@ -340,6 +346,7 @@ export async function POST(request: Request) {
           last_position_seconds: 0,
           max_watched_seconds: 0,
           locked_duration_seconds: 0,
+          training_repeat_count: nextRepeatCount,
         })
         .eq("id", assignmentId)
         .eq("user_id", userId);
@@ -360,6 +367,7 @@ export async function POST(request: Request) {
         attemptsUsed: nextAttempt,
         attemptsLeft: 0,
         resetRequired: true,
+        repeatCount: nextRepeatCount,
         message: "3 sınav hakkı bitti. Eğitim yeniden alınmalı.",
       });
     }
