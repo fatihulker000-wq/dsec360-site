@@ -13,7 +13,7 @@ function getSupabase() {
   return createClient(url, serviceRoleKey);
 }
 
-type TrainingStatus = "not_started" | "in_progress" | "completed";
+type TrainingStatus = "assigned" | "not_started" | "in_progress" | "completed";
 
 type UserRow = {
   id: string;
@@ -31,19 +31,19 @@ type TrainingRow = {
 type TrainingAssignmentRow = {
   id: string;
   user_id: string;
-  training_id: string;
-  status: TrainingStatus;
+  training_id: string | null;
+  status: TrainingStatus | null;
   started_at: string | null;
   completed_at: string | null;
   watch_completed: boolean | null;
   watch_seconds: number | null;
   click_count: number | null;
-  pre_exam_completed: boolean;
-  pre_exam_score: number;
-  final_exam_score: number;
-  final_exam_attempts: number;
-  final_exam_passed: boolean;
-  training_reset_required: boolean;
+  pre_exam_completed: boolean | null;
+  pre_exam_score: number | null;
+  final_exam_score: number | null;
+  final_exam_attempts: number | null;
+  final_exam_passed: boolean | null;
+  training_reset_required: boolean | null;
   training_repeat_count?: number | null;
 };
 
@@ -113,11 +113,11 @@ function resolveTrainingContentUrl(
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const userId = cookieStore.get("dsec_user_id")?.value;
+    const userId = cookieStore.get("dsec_user_id")?.value?.trim();
 
     if (!userId) {
       return NextResponse.json(
-        { error: "Kullanıcı yok (cookie gelmedi)" },
+        { error: "Kullanıcı oturumu bulunamadı." },
         { status: 401 }
       );
     }
@@ -136,17 +136,24 @@ export async function GET() {
         .from("users")
         .select("id, full_name")
         .eq("id", userId)
-        .maybeSingle<UserRow>();
+        .maybeSingle();
 
-      if (userError || !userData) {
-        console.error("Kullanıcı fetch hatası:", userError);
+      if (userError) {
+        console.error("users fetch hatası:", userError);
         return NextResponse.json(
-          { error: "Kullanıcı DB'de yok" },
+          { error: "Kullanıcı bilgileri alınamadı." },
+          { status: 500 }
+        );
+      }
+
+      if (!userData) {
+        return NextResponse.json(
+          { error: "Kullanıcı kaydı bulunamadı." },
           { status: 401 }
         );
       }
 
-      user = userData;
+      user = userData as UserRow;
     }
 
     let assignmentsQuery = supabase
@@ -162,21 +169,25 @@ export async function GET() {
     }
 
     const { data: assignments, error: assignmentsError } =
-      await assignmentsQuery.returns<TrainingAssignmentRow[]>();
+      await assignmentsQuery;
 
     if (assignmentsError) {
       console.error("training_assignments fetch hatası:", assignmentsError);
       return NextResponse.json(
-        { error: "Eğitim verileri alınamadı" },
+        { error: "Eğitim verileri alınamadı." },
         { status: 500 }
       );
     }
 
-    const safeAssignments = assignments || [];
+    const safeAssignments = (assignments || []) as TrainingAssignmentRow[];
 
-    const trainingIds = safeAssignments
-      .map((item) => item.training_id)
-      .filter(Boolean);
+    const trainingIds = Array.from(
+      new Set(
+        safeAssignments
+          .map((item) => item.training_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
 
     let trainingsMap: Record<string, TrainingRow> = {};
 
@@ -184,26 +195,31 @@ export async function GET() {
       const { data: trainings, error: trainingsError } = await supabase
         .from("trainings")
         .select("id, title, description, content_url, type")
-        .in("id", trainingIds)
-        .returns<TrainingRow[]>();
+        .in("id", trainingIds);
 
       if (trainingsError) {
         console.error("trainings fetch hatası:", trainingsError);
         return NextResponse.json(
-          { error: "Eğitim detayları alınamadı" },
+          { error: "Eğitim detayları alınamadı." },
           { status: 500 }
         );
       }
 
       trainingsMap = Object.fromEntries(
-        (trainings || []).map((item) => [item.id, item])
+        ((trainings || []) as TrainingRow[]).map((item) => [item.id, item])
       );
     }
 
     const result = safeAssignments.map((item) => {
-      const training = item.training_id ? trainingsMap[item.training_id] || null : null;
+      const training = item.training_id
+        ? trainingsMap[item.training_id] || null
+        : null;
+
       const rawContentUrl = training?.content_url || null;
-      const resolvedContentUrl = resolveTrainingContentUrl(supabase, rawContentUrl);
+      const resolvedContentUrl = resolveTrainingContentUrl(
+        supabase,
+        rawContentUrl
+      );
 
       const isReset = item.training_reset_required === true;
 
@@ -211,18 +227,21 @@ export async function GET() {
         id: item.id,
         user_id: item.user_id,
         training_id: item.training_id,
-        status: isReset ? "not_started" : item.status,
+        status: isReset ? "not_started" : item.status || "not_started",
         started_at: isReset ? null : item.started_at,
         completed_at: isReset ? null : item.completed_at,
-        watch_completed: isReset ? false : item.watch_completed,
-        watch_seconds: isReset ? 0 : item.watch_seconds,
-        click_count: isReset ? 0 : item.click_count,
-        pre_exam_completed: isReset ? false : item.pre_exam_completed,
-        pre_exam_score: isReset ? 0 : item.pre_exam_score,
-        final_exam_score: item.final_exam_score,
-        final_exam_attempts: isReset ? 0 : item.final_exam_attempts,
-        final_exam_passed: item.final_exam_passed,
-        training_reset_required: item.training_reset_required,
+        watch_completed: isReset ? false : Boolean(item.watch_completed),
+        watch_seconds: isReset ? 0 : Number(item.watch_seconds || 0),
+        click_count: isReset ? 0 : Number(item.click_count || 0),
+        pre_exam_completed: isReset ? false : Boolean(item.pre_exam_completed),
+        pre_exam_score: isReset ? 0 : Number(item.pre_exam_score || 0),
+        final_exam_score:
+          item.final_exam_score !== null && item.final_exam_score !== undefined
+            ? Number(item.final_exam_score)
+            : null,
+        final_exam_attempts: isReset ? 0 : Number(item.final_exam_attempts || 0),
+        final_exam_passed: Boolean(item.final_exam_passed),
+        training_reset_required: Boolean(item.training_reset_required),
         training_repeat_count: Number(item.training_repeat_count || 0),
         training: training
           ? {
@@ -241,8 +260,12 @@ export async function GET() {
     });
   } catch (err) {
     console.error("training/my genel hata:", err);
+
+    const message =
+      err instanceof Error ? err.message : "Sunucu hatası";
+
     return NextResponse.json(
-      { error: "Sunucu hatası" },
+      { error: message },
       { status: 500 }
     );
   }
