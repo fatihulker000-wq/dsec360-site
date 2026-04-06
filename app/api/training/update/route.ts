@@ -21,8 +21,8 @@ type TrainingAssignmentRow = {
   last_opened_at: string | null;
   watch_completed: boolean | null;
   watch_completed_at: string | null;
-
-  // 🔥 YENİ ALANLAR
+  watch_seconds?: number | null;
+  click_count?: number | null;
   last_position_seconds: number | null;
   max_watched_seconds: number | null;
   locked_duration_seconds: number | null;
@@ -38,10 +38,13 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const assignmentId = body?.assignmentId as string;
+    const assignmentId = String(body?.assignmentId || "").trim();
     const action = body?.action as TrainingAction;
-    const currentSecond = body?.currentSecond || 0;
-    const duration = body?.duration || 0;
+    const currentSecond = Math.max(
+      0,
+      Math.floor(Number(body?.currentSecond || 0))
+    );
+    const duration = Math.max(0, Math.floor(Number(body?.duration || 0)));
 
     if (!assignmentId || !action) {
       return NextResponse.json({ error: "Eksik veri." }, { status: 400 });
@@ -60,11 +63,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Kayıt bulunamadı." }, { status: 404 });
     }
 
-    // 🔥 OPEN
     if (action === "open") {
       const now = new Date().toISOString();
 
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         last_opened_at: now,
       };
 
@@ -76,97 +78,179 @@ export async function POST(request: Request) {
         payload.started_at = now;
       }
 
-      await supabase
+      const { error } = await supabase
         .from("training_assignments")
         .update(payload)
         .eq("id", assignmentId);
 
+      if (error) {
+        return NextResponse.json(
+          { error: "Açılış kaydı güncellenemedi." },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json({ success: true });
     }
 
-    // 🔥 HEARTBEAT (EN KRİTİK)
     if (action === "heartbeat") {
       const maxWatched = Math.max(
-        row.max_watched_seconds || 0,
+        Number(row.max_watched_seconds || 0),
         currentSecond
       );
 
-      await supabase
+      const watchSeconds = Math.max(
+        Number(row.watch_seconds || 0),
+        currentSecond
+      );
+
+      const payload: Record<string, unknown> = {
+        last_opened_at: new Date().toISOString(),
+        last_position_seconds: currentSecond,
+        max_watched_seconds: maxWatched,
+        watch_seconds: watchSeconds,
+      };
+
+      if (row.status === "assigned" || row.status === "not_started") {
+        payload.status = "in_progress";
+      }
+
+      if (!row.started_at) {
+        payload.started_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
         .from("training_assignments")
-        .update({
-          last_opened_at: new Date().toISOString(),
-          last_position_seconds: currentSecond,
-          max_watched_seconds: maxWatched,
-        })
+        .update(payload)
         .eq("id", assignmentId);
 
-      return NextResponse.json({ success: true });
+      if (error) {
+        return NextResponse.json(
+          { error: "Heartbeat kaydı güncellenemedi." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        max_watched_seconds: maxWatched,
+        watch_seconds: watchSeconds,
+      });
     }
 
-    // 🔥 MARK WATCHED
     if (action === "mark_watched") {
+      const now = new Date().toISOString();
+
+      const safeWatchSeconds = Math.max(
+        Number(row.watch_seconds || 0),
+        Number(row.max_watched_seconds || 0),
+        currentSecond,
+        duration
+      );
+
+      const payload: Record<string, unknown> = {
+        watch_completed: true,
+        watch_completed_at: now,
+        watch_seconds: safeWatchSeconds,
+        last_position_seconds: Math.max(
+          Number(row.last_position_seconds || 0),
+          currentSecond
+        ),
+        max_watched_seconds: Math.max(
+          Number(row.max_watched_seconds || 0),
+          currentSecond,
+          safeWatchSeconds
+        ),
+      };
+
       if (!row.started_at) {
+        payload.started_at = now;
+      }
+
+      if (row.status === "assigned" || row.status === "not_started") {
+        payload.status = "in_progress";
+      }
+
+      const { error } = await supabase
+        .from("training_assignments")
+        .update(payload)
+        .eq("id", assignmentId);
+
+      if (error) {
         return NextResponse.json(
-          { error: "Önce eğitimi açmalısın." },
-          { status: 400 }
+          { error: "İzleme tamamlama kaydı güncellenemedi." },
+          { status: 500 }
         );
       }
 
-      await supabase
-        .from("training_assignments")
-        .update({
-          watch_completed: true,
-          watch_completed_at: new Date().toISOString(),
-        })
-        .eq("id", assignmentId);
-
-      return NextResponse.json({ success: true });
+      return NextResponse.json({
+        success: true,
+        watch_completed: true,
+        watch_seconds: safeWatchSeconds,
+      });
     }
 
-    // 🔥 COMPLETE (EN KRİTİK)
     if (action === "complete") {
+      const now = new Date().toISOString();
+
+      const safeWatchSeconds = Math.max(
+        Number(row.watch_seconds || 0),
+        Number(row.max_watched_seconds || 0),
+        currentSecond,
+        duration
+      );
+
+      const payload: Record<string, unknown> = {
+        status: "completed",
+        completed_at: row.completed_at || now,
+        watch_completed: true,
+        watch_completed_at: row.watch_completed_at || now,
+        watch_seconds: safeWatchSeconds,
+        last_position_seconds: Math.max(
+          Number(row.last_position_seconds || 0),
+          currentSecond,
+          safeWatchSeconds
+        ),
+        max_watched_seconds: Math.max(
+          Number(row.max_watched_seconds || 0),
+          currentSecond,
+          safeWatchSeconds
+        ),
+        locked_duration_seconds:
+          Number(row.locked_duration_seconds || 0) > 0
+            ? Number(row.locked_duration_seconds || 0)
+            : duration > 0
+            ? duration
+            : safeWatchSeconds,
+      };
+
       if (!row.started_at) {
-        return NextResponse.json(
-          { error: "Eğitimi açmadan tamamlayamazsın." },
-          { status: 400 }
-        );
+        payload.started_at = now;
       }
 
-      if (!row.watch_completed) {
-        return NextResponse.json(
-          { error: "Video bitmeden tamamlanamaz." },
-          { status: 400 }
-        );
-      }
-
-      if (row.status !== "in_progress") {
-        return NextResponse.json(
-          { error: "Geçersiz durum." },
-          { status: 400 }
-        );
-      }
-
-      await supabase
+      const { error } = await supabase
         .from("training_assignments")
-        .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-
-          // 🔥 EN KRİTİK NOKTA
-          locked_duration_seconds:
-            row.locked_duration_seconds || duration,
-        })
+        .update(payload)
         .eq("id", assignmentId);
 
-      return NextResponse.json({ success: true });
+      if (error) {
+        return NextResponse.json(
+          { error: "Tamamlama kaydı güncellenemedi." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        status: "completed",
+        watch_completed: true,
+        watch_seconds: safeWatchSeconds,
+      });
     }
 
     return NextResponse.json({ error: "Geçersiz işlem." }, { status: 400 });
   } catch (err) {
     console.error("Training update hata:", err);
-    return NextResponse.json(
-      { error: "Sunucu hatası." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Sunucu hatası." }, { status: 500 });
   }
 }

@@ -26,6 +26,13 @@ type SubmitResponse = {
   error?: string;
 };
 
+type ExamStats = {
+  correct: number;
+  wrong: number;
+  empty: number;
+  percent: number;
+};
+
 export default function PreExamPage() {
   const params = useParams();
   const router = useRouter();
@@ -36,10 +43,29 @@ export default function PreExamPage() {
     {}
   );
   const [finished, setFinished] = useState(false);
-  const [score, setScore] = useState(0);
+  const [stats, setStats] = useState<ExamStats>({
+    correct: 0,
+    wrong: 0,
+    empty: 0,
+    percent: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [assignmentId]);
+
+  useEffect(() => {
+    if (!finished) return;
+
+    const id = window.setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 80);
+
+    return () => window.clearTimeout(id);
+  }, [finished]);
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -103,21 +129,33 @@ export default function PreExamPage() {
     }));
   };
 
-  const calculateLocalScore = () => {
-    let correctCount = 0;
+  const calculateLocalStats = (): ExamStats => {
+    let correct = 0;
+    let wrong = 0;
+    let empty = 0;
 
     for (const q of questions) {
       const selected = String(answers[q.id] || "").toUpperCase().trim();
-      const correct = String(q.correct_option || "").toUpperCase().trim();
+      const correctOption = String(q.correct_option || "").toUpperCase().trim();
 
-      if (selected === correct) {
-        correctCount += 1;
+      if (!selected) {
+        empty += 1;
+      } else if (selected === correctOption) {
+        correct += 1;
+      } else {
+        wrong += 1;
       }
     }
 
-    return questions.length > 0
-      ? Math.round((correctCount / questions.length) * 100)
-      : 0;
+    const percent =
+      questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
+
+    return {
+      correct,
+      wrong,
+      empty,
+      percent,
+    };
   };
 
   const handleFinish = async () => {
@@ -135,8 +173,8 @@ export default function PreExamPage() {
         return;
       }
 
-      const localScore = calculateLocalScore();
-      setScore(localScore);
+      const localStats = calculateLocalStats();
+      setStats(localStats);
 
       const payload = {
         assignmentId,
@@ -162,7 +200,10 @@ export default function PreExamPage() {
         return;
       }
 
-      localStorage.setItem(`preExamScore_${assignmentId}`, String(localScore));
+      localStorage.setItem(
+        `preExamScore_${assignmentId}`,
+        String(localStats.percent)
+      );
       localStorage.setItem(`preExamCompleted_${assignmentId}`, "true");
 
       setFinished(true);
@@ -177,15 +218,21 @@ export default function PreExamPage() {
   const handleRetry = () => {
     setAnswers({});
     setFinished(false);
-    setScore(0);
+    setStats({
+      correct: 0,
+      wrong: 0,
+      empty: 0,
+      percent: 0,
+    });
     setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   if (loading) {
     return (
       <main style={{ padding: "40px", fontFamily: "Arial" }}>
         <h1>Ön Değerlendirme Sınavı</h1>
-        <p>Yükleniyor...</p>
+        <p>Hazırlanıyor...</p>
       </main>
     );
   }
@@ -289,7 +336,59 @@ export default function PreExamPage() {
 
       {finished && (
         <>
-          <h2>Sonuç: %{score}</h2>
+          <h2>Sonuç: %{stats.percent}</h2>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              marginTop: "12px",
+              marginBottom: "14px",
+            }}
+          >
+            <span
+              style={{
+                padding: "8px 12px",
+                borderRadius: "999px",
+                background: "#dcfce7",
+                border: "1px solid #86efac",
+                color: "#166534",
+                fontWeight: 700,
+                fontSize: "13px",
+              }}
+            >
+              Doğru: {stats.correct}
+            </span>
+
+            <span
+              style={{
+                padding: "8px 12px",
+                borderRadius: "999px",
+                background: "#fee2e2",
+                border: "1px solid #fca5a5",
+                color: "#b91c1c",
+                fontWeight: 700,
+                fontSize: "13px",
+              }}
+            >
+              Yanlış: {stats.wrong}
+            </span>
+
+            <span
+              style={{
+                padding: "8px 12px",
+                borderRadius: "999px",
+                background: "#f3f4f6",
+                border: "1px solid #d1d5db",
+                color: "#374151",
+                fontWeight: 700,
+                fontSize: "13px",
+              }}
+            >
+              Boş: {stats.empty}
+            </span>
+          </div>
 
           <p
             style={{

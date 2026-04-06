@@ -9,28 +9,22 @@ function getSupabase() {
   );
 }
 
-type TrainingJoin =
-  | { duration_minutes: number | null }
-  | { duration_minutes: number | null }[]
-  | null;
-
 type AssignmentRow = {
   id: string;
   user_id: string;
+  training_id: string | null;
+  status: string | null;
+  started_at: string | null;
+  completed_at: string | null;
   watch_seconds: number | null;
   click_count: number | null;
-  training_id: string | null;
+  watch_completed: boolean | null;
+  watch_completed_at?: string | null;
   final_exam_passed: boolean | null;
-  training: TrainingJoin;
+  last_position_seconds?: number | null;
+  max_watched_seconds?: number | null;
+  locked_duration_seconds?: number | null;
 };
-
-function getDurationMinutes(training: TrainingJoin): number {
-  if (Array.isArray(training)) {
-    return Number(training[0]?.duration_minutes || 0);
-  }
-
-  return Number(training?.duration_minutes || 0);
-}
 
 export async function POST(req: Request) {
   try {
@@ -43,10 +37,16 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    const assignmentId = body.assignmentId;
-    const watchSeconds = Number(body.watchSeconds || 0);
-    const clickCount = Number(body.clickCount || 0);
-    const completed = body.completed === true;
+    const assignmentId = String(body?.assignmentId || "").trim();
+    const watchSeconds = Math.max(
+      0,
+      Math.floor(Number(body?.watchSeconds || 0))
+    );
+    const clickCount = Math.max(
+      0,
+      Math.floor(Number(body?.clickCount || 0))
+    );
+    const completed = body?.completed === true;
 
     if (!assignmentId) {
       return NextResponse.json(
@@ -57,23 +57,13 @@ export async function POST(req: Request) {
 
     const supabase = getSupabase();
 
-    const { data: assignment, error } = await supabase
+    const { data: assignment, error: assignmentError } = await supabase
       .from("training_assignments")
-      .select(
-        `
-        id,
-        user_id,
-        watch_seconds,
-        click_count,
-        training_id,
-        final_exam_passed,
-        training:trainings(duration_minutes)
-      `
-      )
+      .select("*")
       .eq("id", assignmentId)
       .single<AssignmentRow>();
 
-    if (error || !assignment) {
+    if (assignmentError || !assignment) {
       return NextResponse.json(
         { error: "Kayıt bulunamadı" },
         { status: 404 }
@@ -87,35 +77,66 @@ export async function POST(req: Request) {
       );
     }
 
-    const durationMinutes = getDurationMinutes(assignment.training);
-    const durationSeconds = Math.max(0, durationMinutes * 60);
+    const now = new Date().toISOString();
 
-    const existingWatch = Number(assignment.watch_seconds || 0);
-    const existingClick = Number(assignment.click_count || 0);
+    const existingWatch = Math.max(0, Number(assignment.watch_seconds || 0));
+    const existingClick = Math.max(0, Number(assignment.click_count || 0));
+    const existingLastPosition = Math.max(
+      0,
+      Number(assignment.last_position_seconds || 0)
+    );
+    const existingMaxWatched = Math.max(
+      0,
+      Number(assignment.max_watched_seconds || 0)
+    );
 
     const mergedWatch = Math.max(existingWatch, watchSeconds);
     const mergedClick = Math.max(existingClick, clickCount);
+    const mergedLastPosition = Math.max(existingLastPosition, watchSeconds);
+    const mergedMaxWatched = Math.max(existingMaxWatched, watchSeconds);
 
-    const cappedWatch =
-      durationSeconds > 0 ? Math.min(mergedWatch, durationSeconds) : mergedWatch;
+    const alreadyCompleted =
+      assignment.watch_completed === true ||
+      assignment.status === "completed" ||
+      assignment.final_exam_passed === true;
 
-    const finalWatchSeconds =
-      completed || assignment.final_exam_passed
-        ? durationSeconds > 0
-          ? durationSeconds
-          : cappedWatch
-        : cappedWatch;
-
-    const watchCompleted =
-      durationSeconds > 0
-        ? finalWatchSeconds >= durationSeconds
-        : completed || assignment.final_exam_passed === true;
+    const shouldMarkWatched =
+      alreadyCompleted || completed || (mergedWatch > 0 && mergedClick > 0);
 
     const updatePayload: Record<string, unknown> = {
-      watch_seconds: finalWatchSeconds,
-      watch_completed: watchCompleted,
+      watch_seconds: mergedWatch,
       click_count: mergedClick,
+      last_position_seconds: mergedLastPosition,
+      max_watched_seconds: mergedMaxWatched,
     };
+
+    if (!assignment.started_at) {
+      updatePayload.started_at = now;
+    }
+
+    const currentStatus = String(assignment.status || "").trim().toLowerCase();
+
+    if (shouldMarkWatched) {
+      updatePayload.watch_completed = true;
+      updatePayload.watch_completed_at =
+        assignment.watch_completed_at || now;
+      updatePayload.status = "completed";
+      updatePayload.completed_at = assignment.completed_at || now;
+      updatePayload.locked_duration_seconds =
+        Number(assignment.locked_duration_seconds || 0) > 0
+          ? Number(assignment.locked_duration_seconds || 0)
+          : mergedWatch;
+    } else {
+      updatePayload.watch_completed = Boolean(assignment.watch_completed);
+
+      if (
+        !currentStatus ||
+        currentStatus === "assigned" ||
+        currentStatus === "not_started"
+      ) {
+        updatePayload.status = "in_progress";
+      }
+    }
 
     const { error: updateError } = await supabase
       .from("training_assignments")
@@ -132,10 +153,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      watch_seconds: finalWatchSeconds,
+      watch_seconds: mergedWatch,
       click_count: mergedClick,
-      watch_completed: watchCompleted,
-      duration_seconds: durationSeconds,
+      watch_completed: shouldMarkWatched,
+      status: shouldMarkWatched ? "completed" : "in_progress",
+      last_position_seconds: mergedLastPosition,
+      max_watched_seconds: mergedMaxWatched,
     });
   } catch (err) {
     console.error("progress route error:", err);

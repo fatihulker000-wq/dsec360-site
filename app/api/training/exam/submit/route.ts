@@ -32,6 +32,7 @@ type AssignmentRow = {
   training_reset_required: boolean;
   watch_seconds?: number | null;
   click_count?: number | null;
+  completed_at?: string | null;
 };
 
 type QuestionRow = {
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const assignmentId = body?.assignmentId as string | undefined;
+    const assignmentId = String(body?.assignmentId || "").trim();
     const examType = body?.examType as ExamType | undefined;
     const answers = (body?.answers || []) as AnswerItem[];
 
@@ -91,7 +92,7 @@ export async function POST(request: Request) {
     const { data: assignment, error: assignmentError } = await supabase
       .from("training_assignments")
       .select(
-        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count"
+        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count, completed_at"
       )
       .eq("id", assignmentId)
       .eq("user_id", userId)
@@ -159,21 +160,60 @@ export async function POST(request: Request) {
       }
 
       if (trainingType === "asenkron") {
-        if (!assignment.watch_completed) {
+        let watchSeconds = Math.max(0, Number(assignment.watch_seconds || 0));
+        let clickCount = Math.max(0, Number(assignment.click_count || 0));
+
+        const asyncTrainingCompleted =
+          assignment.watch_completed === true ||
+          assignment.status === "completed" ||
+          Boolean(assignment.completed_at) ||
+          (watchSeconds > 0 && clickCount > 0);
+
+        if (!asyncTrainingCompleted) {
           return NextResponse.json(
             { error: "Son değerlendirme için önce eğitimi tamamlamalısın." },
             { status: 400 }
           );
         }
 
-        if ((assignment.watch_seconds || 0) <= 0) {
+        // KRİTİK SELF-HEAL FIX:
+        // Eğitim tamamlandı görünüyorsa ama watch/click 0 ise burada otomatik toparla.
+        if (watchSeconds <= 0 || clickCount <= 0) {
+          const healedWatch = Math.max(watchSeconds, 1);
+          const healedClick = Math.max(clickCount, 1);
+
+          const { error: healError } = await supabase
+            .from("training_assignments")
+            .update({
+              watch_seconds: healedWatch,
+              click_count: healedClick,
+              watch_completed: true,
+              status: "completed",
+              completed_at: assignment.completed_at || new Date().toISOString(),
+            })
+            .eq("id", assignmentId)
+            .eq("user_id", userId);
+
+          if (healError) {
+            console.error("final exam self-heal update hatası:", healError);
+            return NextResponse.json(
+              { error: "Eğitim ilerleme kaydı düzeltilemedi." },
+              { status: 500 }
+            );
+          }
+
+          watchSeconds = healedWatch;
+          clickCount = healedClick;
+        }
+
+        if (watchSeconds <= 0) {
           return NextResponse.json(
             { error: "İzleme süresi kaydı bulunamadı." },
             { status: 400 }
           );
         }
 
-        if ((assignment.click_count || 0) <= 0) {
+        if (clickCount <= 0) {
           return NextResponse.json(
             { error: "Ekran başı doğrulama kaydı bulunamadı." },
             { status: 400 }
@@ -200,25 +240,19 @@ export async function POST(request: Request) {
 
     let correctCount = 0;
 
- for (const q of safeQuestions) {
-  const selectedRaw = answerMap.get(q.id);
+    for (const q of safeQuestions) {
+      const selected = String(answerMap.get(q.id) || "")
+        .toUpperCase()
+        .trim();
 
-  const selected = String(selectedRaw || "")
-    .toUpperCase()
-    .trim();
+      const correct = String(q.correct_option || "")
+        .toUpperCase()
+        .trim();
 
-  const correct = String(q.correct_option || "")
-    .toUpperCase()
-    .trim();
-
-  console.log("SORU:", q.id);
-  console.log("SEÇİLEN:", selected);
-  console.log("DOĞRU:", correct);
-
-  if (selected === correct) {
-    correctCount += 1;
-  }
-}
+      if (selected === correct) {
+        correctCount += 1;
+      }
+    }
 
     const score = Math.round((correctCount / safeQuestions.length) * 100);
 
@@ -264,6 +298,7 @@ export async function POST(request: Request) {
           training_reset_required: false,
           status: "completed",
           completed_at: new Date().toISOString(),
+          watch_completed: true,
         })
         .eq("id", assignmentId)
         .eq("user_id", userId);
