@@ -34,6 +34,7 @@ type AssignmentRow = {
   click_count?: number | null;
   completed_at?: string | null;
   training_repeat_count?: number | null;
+  locked_duration_seconds?: number | null;
 };
 
 type QuestionRow = {
@@ -55,6 +56,15 @@ function normalizeType(type?: string | null) {
   if (value === "senkron") return "senkron";
   if (value === "asenkron") return "asenkron";
   return "asenkron";
+}
+
+function requiredPresenceClicks(durationSeconds: number) {
+  if (durationSeconds <= 0) return 0;
+  let count = 0;
+  for (let sec = 90; sec < durationSeconds; sec += 90) {
+    count += 1;
+  }
+  return count;
 }
 
 export async function POST(request: Request) {
@@ -86,11 +96,10 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase();
 
-    // 1) Önce sadece id ile kaydı çek
     const { data: assignmentById, error: assignmentByIdError } = await supabase
       .from("training_assignments")
       .select(
-        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count, completed_at, training_repeat_count"
+        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count, completed_at, training_repeat_count, locked_duration_seconds"
       )
       .eq("id", assignmentId)
       .maybeSingle<AssignmentRow>();
@@ -117,7 +126,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2) Kullanıcı kontrolü
     if (String(assignmentById.user_id).trim() !== userId) {
       return NextResponse.json(
         {
@@ -214,17 +222,24 @@ export async function POST(request: Request) {
 
         const watchSeconds = Math.max(0, Number(assignment.watch_seconds || 0));
         const clickCount = Math.max(0, Number(assignment.click_count || 0));
+        const lockedDuration = Math.max(
+          0,
+          Number(assignment.locked_duration_seconds || 0)
+        );
 
-        if (watchSeconds <= 0) {
+        const requiredWatch = lockedDuration > 0 ? lockedDuration : watchSeconds;
+        const requiredClicks = requiredPresenceClicks(requiredWatch);
+
+        if (watchSeconds < requiredWatch || requiredWatch <= 0) {
           return NextResponse.json(
-            { error: "İzleme süresi kaydı bulunamadı." },
+            { error: "İzleme süresi kurallara uygun tamamlanmadı." },
             { status: 400 }
           );
         }
 
-        if (clickCount <= 0) {
+        if (clickCount < requiredClicks) {
           return NextResponse.json(
-            { error: "Ekran başı doğrulama kaydı bulunamadı." },
+            { error: "Ekran başı doğrulama sayısı yetersiz." },
             { status: 400 }
           );
         }
