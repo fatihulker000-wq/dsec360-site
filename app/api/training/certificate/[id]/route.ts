@@ -48,26 +48,35 @@ function parseTrainingTopics(topicsText?: string | null) {
     .filter(Boolean);
 }
 
-function topicsToHtml(topics: string[]) {
+function topicsToRows(topics: string[]) {
   if (!topics.length) {
     return `
-      <li>
-        <span class="topic-index">-</span>
-        <span class="topic-text">Bu eğitim için konu bilgisi girilmemiştir.</span>
-      </li>
+      <tr>
+        <td>1</td>
+        <td>Bu eğitim için konu bilgisi girilmemiştir.</td>
+      </tr>
     `;
   }
 
   return topics
     .map(
       (topic, index) => `
-        <li>
-          <span class="topic-index">${index + 1}</span>
-          <span class="topic-text">${escapeHtml(topic)}</span>
-        </li>
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(topic)}</td>
+        </tr>
       `
     )
     .join("");
+}
+
+function formatRoleLabel(role?: string | null) {
+  const raw = String(role || "").trim();
+  if (!raw) return "-";
+
+  return raw
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
 type AssignmentRow = {
@@ -92,6 +101,13 @@ type TrainingRow = {
   duration_minutes: number | null;
 };
 
+type UserRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
+};
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -100,11 +116,11 @@ export async function GET(
     const cookieStore = await cookies();
 
     const userId = cookieStore.get("dsec_user_id")?.value;
-    const userEmail = cookieStore.get("dsec_user_email")?.value || "Kullanıcı";
-    const userFullName =
+    const cookieEmail = cookieStore.get("dsec_user_email")?.value || "Kullanıcı";
+    const cookieFullName =
       cookieStore.get("dsec_user_full_name")?.value ||
       cookieStore.get("dsec_user_name")?.value ||
-      userEmail;
+      cookieEmail;
 
     const companyName =
       cookieStore.get("dsec_company_name")?.value || "Firma Adı Tanımlanmadı";
@@ -172,7 +188,7 @@ export async function GET(
 
     if (isCertificate && (assignment.final_exam_score || 0) < 60) {
       return new NextResponse(
-        "Sertifika için final sınavından en az 60 alınmalıdır.",
+        "Sertifika için final sınavından en az 60 puan alınmalıdır.",
         { status: 400 }
       );
     }
@@ -222,8 +238,32 @@ export async function GET(
       }
     }
 
+    let dbUser: UserRow | null = null;
+    if (userId !== "admin-1") {
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("id, full_name, email, role")
+        .eq("id", userId)
+        .maybeSingle<UserRow>();
+
+      if (userError) {
+        console.error("CERTIFICATE USER ERROR:", userError);
+      } else {
+        dbUser = userData;
+      }
+    }
+
+    const userFullName = dbUser?.full_name || cookieFullName;
+    const userEmail = dbUser?.email || cookieEmail;
+    const userRole =
+      dbUser?.role ||
+      cookieStore.get("dsec_user_role")?.value ||
+      cookieStore.get("dsec_user_job_title")?.value ||
+      "Katılımcı";
+
     const safeUserEmail = escapeHtml(userEmail);
     const safeUserFullName = escapeHtml(userFullName);
+    const safeUserRole = escapeHtml(formatRoleLabel(userRole));
     const safeCompanyName = escapeHtml(companyName);
 
     const trainingTitle = escapeHtml(training?.title || "Eğitim adı bulunamadı");
@@ -235,7 +275,7 @@ export async function GET(
         : "Süre bilgisi tanımlanmadı";
 
     const topics = parseTrainingTopics(training?.topics_text);
-    const topicsHtml = topicsToHtml(topics);
+    const topicsRows = topicsToRows(topics);
 
     const completedDate = formatDateTr(assignment.completed_at);
     const startedDate = formatDateTr(assignment.started_at);
@@ -262,33 +302,29 @@ export async function GET(
       : "EĞİTİM KATILIM BELGESİ";
 
     const introText = isCertificate
-      ? "Bu belge, ilgili eğitim kaydı esas alınarak düzenlenmiş olup katılımcının aşağıda belirtilen eğitimi başarıyla tamamladığını göstermektedir."
-      : "Bu belge, ilgili eğitim kaydı esas alınarak düzenlenmiş olup katılımcının aşağıda belirtilen eğitime katılım sağladığını ve eğitim kaydının tamamlandığını göstermektedir.";
+      ? "İşbu belge, aşağıda bilgileri yer alan katılımcının belirtilen eğitimi başarıyla tamamladığını göstermek üzere düzenlenmiştir."
+      : "Bu belge, ilgili eğitim kaydı esas alınarak düzenlenmiş olup katılımcının aşağıda belirtilen eğitime katılım sağladığını göstermektedir.";
 
     const topicsTitle = isCertificate
-      ? "Alınan Eğitim Konuları"
+      ? "Eğitim Konu Başlıkları"
       : "Katılım Sağlanan Eğitim Konuları";
 
     const noteText = isCertificate
-      ? "Bu sertifika, eğitim kaydının ve başarı durumunun sistemde kayıt altına alındığını göstermek amacıyla düzenlenmiştir. Belge ve ilgili eğitim kayıtlarının çalışan özlük dosyasında saklanması tavsiye edilir."
-      : "Bu katılım belgesi, eğitim kaydının sistemde kayıt altına alındığını göstermek amacıyla düzenlenmiştir. Belge ve ilgili eğitim kayıtlarının çalışan özlük dosyasında saklanması tavsiye edilir.";
-
-    const verifyInfoText = isCertificate
-      ? "Bu sertifika D-SEC sistemi üzerinden oluşturulmuştur."
-      : "Bu katılım belgesi D-SEC sistemi üzerinden oluşturulmuştur.";
+      ? "Bu sertifika, sistem kayıtları esas alınarak düzenlenmiştir. Belge doğrulaması için karekod veya doğrulama bağlantısı kullanılabilir."
+      : "Bu katılım belgesi, eğitim kaydının sistemde bulunduğunu göstermek amacıyla düzenlenmiştir.";
 
     const scoreCard = isCertificate
       ? `
         <div class="card">
           <div class="card-label">Final Sınav Puanı</div>
-          <div class="card-value">%${Number(assignment.final_exam_score || 0)}</div>
+          <div class="card-value">${Number(assignment.final_exam_score || 0)}</div>
         </div>
       `
       : "";
 
     const statusChip = isCertificate
-      ? `<div class="eyebrow">6331 KAPSAMINDA DÜZENLENMİŞTİR</div>`
-      : `<div class="eyebrow">EĞİTİM KAYDI TAMAMLANMIŞTIR</div>`;
+      ? `<div class="eyebrow">BAŞARIYLA TAMAMLANDI</div>`
+      : `<div class="eyebrow">EĞİTİM KAYDI</div>`;
 
     const html = `
       <!doctype html>
@@ -302,16 +338,13 @@ export async function GET(
 
             body {
               margin: 0;
-              padding: 20px;
+              padding: 18px;
               font-family: Arial, Helvetica, sans-serif;
-              background:
-                radial-gradient(circle at top left, rgba(220,38,38,0.10), transparent 30%),
-                radial-gradient(circle at bottom right, rgba(22,101,52,0.10), transparent 28%),
-                #f8fafc;
+              background: #f4f6fb;
               color: #111827;
             }
 
-            .page {
+            .page-wrap {
               max-width: 1240px;
               margin: 0 auto;
             }
@@ -319,7 +352,6 @@ export async function GET(
             .toolbar {
               display: flex;
               justify-content: flex-end;
-              gap: 12px;
               margin-bottom: 16px;
             }
 
@@ -336,23 +368,25 @@ export async function GET(
               font-weight: 700;
             }
 
-            .certificate {
-              position: relative;
-              overflow: hidden;
-              background: #ffffff;
-              border: 10px solid ${isCertificate ? "#cf3d2e" : "#0f766e"};
+            .sheet {
+              background: #fff;
               border-radius: 28px;
-              padding: 34px 38px 28px;
-              box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+              overflow: hidden;
+              box-shadow: 0 24px 60px rgba(15, 23, 42, 0.10);
+              margin-bottom: 20px;
+              border: 1px solid #e5e7eb;
             }
 
-            .certificate::before {
-              content: "";
-              position: absolute;
-              inset: 12px;
-              border: 2px solid ${isCertificate ? "rgba(207,61,46,0.18)" : "rgba(15,118,110,0.18)"};
-              border-radius: 18px;
-              pointer-events: none;
+            .sheet-inner {
+              padding: 34px 38px 30px;
+            }
+
+            .sheet-front {
+              border: 10px solid #cf3d2e;
+            }
+
+            .sheet-back {
+              border: 10px solid #0f766e;
             }
 
             .top {
@@ -360,8 +394,6 @@ export async function GET(
               justify-content: space-between;
               gap: 20px;
               align-items: flex-start;
-              position: relative;
-              z-index: 1;
             }
 
             .brand {
@@ -371,32 +403,29 @@ export async function GET(
             }
 
             .brand-icon {
-              width: 70px;
-              height: 70px;
-              border-radius: 20px;
-              background: ${isCertificate
-                ? "linear-gradient(135deg, #ef4444, #f97316)"
-                : "linear-gradient(135deg, #0f766e, #2563eb)"};
+              width: 74px;
+              height: 74px;
+              border-radius: 22px;
+              background: linear-gradient(135deg, #ef4444, #f97316);
               color: #fff;
               display: flex;
               align-items: center;
               justify-content: center;
-              font-size: 30px;
+              font-size: 32px;
               font-weight: 900;
-              box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+              box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
             }
 
             .brand-main {
               font-size: 30px;
               font-weight: 900;
-              color: ${isCertificate ? "#cf3d2e" : "#0f766e"};
-              letter-spacing: 0.4px;
+              color: #cf3d2e;
             }
 
             .brand-sub {
-              font-size: 13px;
-              color: #6b7280;
               margin-top: 4px;
+              color: #6b7280;
+              font-size: 13px;
             }
 
             .company-chip {
@@ -419,9 +448,9 @@ export async function GET(
               display: inline-block;
               padding: 10px 14px;
               border-radius: 999px;
-              background: ${isCertificate ? "#fff7ed" : "#ecfeff"};
-              border: 1px solid ${isCertificate ? "#fdba74" : "#99f6e4"};
-              color: ${isCertificate ? "#9a3412" : "#115e59"};
+              background: #fff7ed;
+              border: 1px solid #fdba74;
+              color: #9a3412;
               font-size: 12px;
               font-weight: 800;
             }
@@ -430,24 +459,22 @@ export async function GET(
               margin-top: 10px;
               font-size: 12px;
               color: #6b7280;
+              line-height: 1.8;
               font-weight: 700;
-              line-height: 1.7;
             }
 
             .content {
-              position: relative;
-              z-index: 1;
               text-align: center;
-              padding-top: 18px;
+              padding-top: 20px;
             }
 
             .eyebrow {
               display: inline-block;
               padding: 8px 14px;
               border-radius: 999px;
-              background: ${isCertificate ? "#fef2f2" : "#ecfeff"};
-              color: ${isCertificate ? "#b91c1c" : "#115e59"};
-              border: 1px solid ${isCertificate ? "#fecaca" : "#99f6e4"};
+              background: #fef2f2;
+              color: #b91c1c;
+              border: 1px solid #fecaca;
               font-size: 12px;
               font-weight: 800;
               letter-spacing: 1px;
@@ -455,22 +482,23 @@ export async function GET(
 
             h1 {
               margin: 16px 0 0;
-              font-size: 44px;
+              font-size: 46px;
               line-height: 1.1;
               font-weight: 900;
               color: #1f2937;
+              letter-spacing: 0.8px;
             }
 
             .desc {
-              max-width: 920px;
-              margin: 14px auto 0;
+              max-width: 900px;
+              margin: 16px auto 0;
               font-size: 17px;
-              line-height: 1.7;
+              line-height: 1.8;
               color: #4b5563;
             }
 
             .label {
-              margin-top: 26px;
+              margin-top: 28px;
               font-size: 13px;
               color: #6b7280;
               text-transform: uppercase;
@@ -480,19 +508,27 @@ export async function GET(
 
             .value-lg {
               margin-top: 10px;
-              font-size: 34px;
+              font-size: 36px;
               line-height: 1.2;
               font-weight: 900;
               color: #111827;
               word-break: break-word;
             }
 
+            .value-sm {
+              margin-top: 10px;
+              font-size: 20px;
+              line-height: 1.4;
+              font-weight: 700;
+              color: #374151;
+            }
+
             .value-md {
               margin-top: 10px;
-              font-size: 26px;
+              font-size: 28px;
               line-height: 1.35;
               font-weight: 800;
-              color: ${isCertificate ? "#166534" : "#0f766e"};
+              color: #166534;
             }
 
             .email {
@@ -502,7 +538,7 @@ export async function GET(
             }
 
             .training-desc {
-              max-width: 960px;
+              max-width: 940px;
               margin: 12px auto 0;
               font-size: 15px;
               line-height: 1.8;
@@ -510,7 +546,7 @@ export async function GET(
             }
 
             .grid {
-              margin-top: 26px;
+              margin-top: 28px;
               display: grid;
               grid-template-columns: repeat(3, minmax(0, 1fr));
               gap: 14px;
@@ -541,66 +577,13 @@ export async function GET(
               word-break: break-word;
             }
 
-            .topics-wrap {
-              margin-top: 24px;
-              text-align: left;
-              background: #f8fafc;
-              border: 1px solid #e5e7eb;
-              border-radius: 18px;
-              padding: 18px 20px;
-            }
-
-            .topics-title {
-              font-size: 14px;
-              font-weight: 800;
-              color: #111827;
-              margin-bottom: 12px;
-              text-transform: uppercase;
-              letter-spacing: 0.8px;
-            }
-
-            .topics-list {
-              list-style: none;
-              margin: 0;
-              padding: 0;
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 10px 16px;
-            }
-
-            .topics-list li {
-              display: flex;
-              align-items: flex-start;
-              gap: 10px;
-              font-size: 14px;
-              line-height: 1.6;
-              color: #374151;
-            }
-
-            .topic-index {
-              min-width: 24px;
-              height: 24px;
-              border-radius: 999px;
-              background: ${isCertificate ? "#fee2e2" : "#ccfbf1"};
-              color: ${isCertificate ? "#b91c1c" : "#115e59"};
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 12px;
-              font-weight: 800;
-            }
-
-            .topic-text {
-              flex: 1;
-            }
-
             .verify-box {
               margin-top: 24px;
               display: grid;
               grid-template-columns: 180px 1fr;
               gap: 18px;
               align-items: center;
-              background: #ffffff;
+              background: #fff;
               border: 1px dashed #d1d5db;
               border-radius: 18px;
               padding: 18px;
@@ -635,7 +618,7 @@ export async function GET(
               display: inline-block;
               margin-top: 8px;
               word-break: break-all;
-              color: ${isCertificate ? "#b91c1c" : "#0f766e"};
+              color: #b91c1c;
               font-weight: 700;
               text-decoration: none;
             }
@@ -644,9 +627,9 @@ export async function GET(
               margin-top: 22px;
               padding: 16px 18px;
               border-radius: 16px;
-              background: ${isCertificate ? "#fff7ed" : "#f0fdfa"};
-              border: 1px solid ${isCertificate ? "#fed7aa" : "#99f6e4"};
-              color: ${isCertificate ? "#7c2d12" : "#134e4a"};
+              background: #fff7ed;
+              border: 1px solid #fed7aa;
+              color: #7c2d12;
               font-size: 14px;
               line-height: 1.7;
               text-align: left;
@@ -662,6 +645,7 @@ export async function GET(
 
             .signature-line {
               width: 240px;
+              max-width: 100%;
               height: 1px;
               background: #111827;
               margin-bottom: 10px;
@@ -691,8 +675,8 @@ export async function GET(
               width: 122px;
               height: 122px;
               border-radius: 999px;
-              border: 4px solid ${isCertificate ? "#cf3d2e" : "#0f766e"};
-              color: ${isCertificate ? "#cf3d2e" : "#0f766e"};
+              border: 4px solid #cf3d2e;
+              color: #cf3d2e;
               font-weight: 900;
               background: rgba(255,255,255,0.96);
               transform: rotate(-10deg);
@@ -714,23 +698,96 @@ export async function GET(
               letter-spacing: 0.8px;
             }
 
+            .back-title {
+              font-size: 34px;
+              font-weight: 900;
+              color: #0f172a;
+              text-align: center;
+              margin: 0 0 10px;
+            }
+
+            .back-subtitle {
+              text-align: center;
+              color: #475569;
+              font-size: 15px;
+              line-height: 1.8;
+              max-width: 900px;
+              margin: 0 auto 22px;
+            }
+
+            .topics-table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+
+            .topics-table th,
+            .topics-table td {
+              border: 1px solid #dbe3ee;
+              padding: 12px 14px;
+              text-align: left;
+              font-size: 14px;
+              vertical-align: top;
+            }
+
+            .topics-table th {
+              background: #f8fafc;
+              color: #334155;
+              font-weight: 800;
+            }
+
+            .topics-table th:first-child,
+            .topics-table td:first-child {
+              width: 70px;
+              text-align: center;
+            }
+
+            .back-info {
+              margin-top: 18px;
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 14px;
+            }
+
+            .back-info-card {
+              background: #f8fafc;
+              border: 1px solid #e5e7eb;
+              border-radius: 16px;
+              padding: 14px 16px;
+            }
+
+            .back-info-label {
+              font-size: 12px;
+              color: #64748b;
+              text-transform: uppercase;
+              font-weight: 700;
+              letter-spacing: 0.8px;
+              margin-bottom: 8px;
+            }
+
+            .back-info-value {
+              font-size: 15px;
+              color: #0f172a;
+              line-height: 1.7;
+              font-weight: 800;
+            }
+
             @page {
               size: A4 landscape;
               margin: 10mm;
             }
 
             @media (max-width: 900px) {
-              body { padding: 14px; }
-              .certificate { padding: 24px 18px; }
+              body { padding: 12px; }
+              .sheet-inner { padding: 24px 18px; }
               .top, .bottom, .verify-box {
-                grid-template-columns: 1fr;
                 display: grid;
+                grid-template-columns: 1fr;
               }
               .badge-wrap, .seal-wrap { text-align: left; }
+              .grid, .back-info { grid-template-columns: 1fr; }
               h1 { font-size: 38px; }
               .value-lg { font-size: 30px; }
               .value-md { font-size: 24px; }
-              .grid, .topics-list { grid-template-columns: 1fr; }
             }
 
             @media print {
@@ -738,130 +795,196 @@ export async function GET(
                 background: #fff;
                 padding: 0;
               }
-              .toolbar { display: none; }
-              .certificate { box-shadow: none; }
+
+              .toolbar {
+                display: none;
+              }
+
+              .sheet {
+                box-shadow: none;
+              }
+
+              .sheet-break {
+                page-break-before: always;
+              }
             }
           </style>
         </head>
         <body>
-          <div class="page">
+          <div class="page-wrap">
             <div class="toolbar">
               <a class="print-btn" href="#" onclick="window.print(); return false;">PDF İndir / Yazdır</a>
             </div>
 
-            <div class="certificate">
-              <div class="top">
-                <div class="brand">
-                  <div class="brand-icon">D</div>
-                  <div>
-                    <div class="brand-main">D-SEC</div>
-                    <div class="brand-sub">Dijital Sağlık • Emniyet • Çevre</div>
-                    <div class="company-chip">Firma: ${safeCompanyName}</div>
+            <div class="sheet sheet-front">
+              <div class="sheet-inner">
+                <div class="top">
+                  <div class="brand">
+                    <div class="brand-icon">D</div>
+                    <div>
+                      <div class="brand-main">D-SEC</div>
+                      <div class="brand-sub">Dijital Sağlık • Emniyet • Çevre</div>
+                      <div class="company-chip">Firma: ${safeCompanyName}</div>
+                    </div>
+                  </div>
+
+                  <div class="badge-wrap">
+                    <div class="badge">${badgeText}</div>
+                    <div class="cert-no">
+                      Belge No: ${certificateNo}<br/>
+                      Doğrulama Kodu: ${verificationCode}<br/>
+                      Düzenlenme Tarihi: ${issueDate}
+                    </div>
                   </div>
                 </div>
 
-                <div class="badge-wrap">
-                  <div class="badge">${badgeText}</div>
-                  <div class="cert-no">
-                    Belge No: ${certificateNo}<br/>
-                    Doğrulama Kodu: ${verificationCode}<br/>
-                    Doğrulama: ${escapeHtml(verifyUrl)}
+                <div class="content">
+                  ${statusChip}
+                  <h1>${mainHeading}</h1>
+
+                  <div class="desc">
+                    ${introText}
+                  </div>
+
+                  <div class="label">Katılımcı</div>
+                  <div class="value-lg">${safeUserFullName}</div>
+                  <div class="email">${safeUserEmail}</div>
+
+                  <div class="label">Görevi / Rolü</div>
+                  <div class="value-sm">${safeUserRole}</div>
+
+                  <div class="label">Eğitim</div>
+                  <div class="value-md">${trainingTitle}</div>
+                  <div class="training-desc">${trainingDescription}</div>
+
+                  <div class="grid">
+                    <div class="card">
+                      <div class="card-label">Firma / Kurum</div>
+                      <div class="card-value">${safeCompanyName}</div>
+                    </div>
+
+                    <div class="card">
+                      <div class="card-label">Eğitim Tipi</div>
+                      <div class="card-value">${trainingType}</div>
+                    </div>
+
+                    <div class="card">
+                      <div class="card-label">Eğitim Süresi</div>
+                      <div class="card-value">${durationText}</div>
+                    </div>
+
+                    <div class="card">
+                      <div class="card-label">Başlangıç Kaydı</div>
+                      <div class="card-value">${startedDate}</div>
+                    </div>
+
+                    <div class="card">
+                      <div class="card-label">Tamamlanma Tarihi</div>
+                      <div class="card-value">${completedDate}</div>
+                    </div>
+
+                    <div class="card">
+                      <div class="card-label">Belge Düzenleme Tarihi</div>
+                      <div class="card-value">${issueDate}</div>
+                    </div>
+
+                    ${scoreCard}
+                  </div>
+
+                  <div class="verify-box">
+                    <div class="verify-qr">
+                      <img src="${qrImageUrl}" alt="QR Doğrulama" />
+                    </div>
+
+                    <div class="verify-text">
+                      Bu sertifika D-SEC sistemi üzerinden oluşturulmuştur.
+                      <br/>
+                      Belge doğrulaması için QR kodu okutabilir veya aşağıdaki bağlantıyı açabilirsiniz.
+                      <br/>
+                      <a class="verify-link" href="${verifyUrl}" target="_blank" rel="noreferrer">
+                        ${escapeHtml(verifyUrl)}
+                      </a>
+                    </div>
+                  </div>
+
+                  <div class="note">
+                    ${noteText}
+                  </div>
+
+                  <div class="bottom">
+                    <div>
+                      <div class="signature-line"></div>
+                      <div class="signature-title">Eğitim Yetkilisi</div>
+                      <div class="signature-sub">D-SEC Eğitim Kayıt Birimi / İmza</div>
+                    </div>
+
+                    <div class="seal-wrap">
+                      <div class="seal">
+                        <div class="seal-1">ONAYLI</div>
+                        <div class="seal-2">D-SEC</div>
+                        <div class="seal-3">${new Date().getFullYear()}</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div class="content">
-                ${statusChip}
-                <h1>${mainHeading}</h1>
-
-                <div class="desc">
-                  ${introText}
+            <div class="sheet sheet-back sheet-break">
+              <div class="sheet-inner">
+                <h2 class="back-title">EĞİTİM İÇERİK EKİ</h2>
+                <div class="back-subtitle">
+                  Bu sayfa sertifikanın ayrılmaz eki olup katılımcının tamamladığı eğitim başlıkları,
+                  temel kayıt bilgileri ve doğrulama referanslarını içerir.
                 </div>
 
-                <div class="label">Katılımcı</div>
-                <div class="value-lg">${safeUserFullName}</div>
-                <div class="email">${safeUserEmail}</div>
+                <table class="topics-table">
+                  <thead>
+                    <tr>
+                      <th>No</th>
+                      <th>Konu Başlığı</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${topicsRows}
+                  </tbody>
+                </table>
 
-                <div class="label">Eğitim</div>
-                <div class="value-md">${trainingTitle}</div>
-                <div class="training-desc">${trainingDescription}</div>
-
-                <div class="grid">
-                  <div class="card">
-                    <div class="card-label">Firma / Kurum</div>
-                    <div class="card-value">${safeCompanyName}</div>
+                <div class="back-info">
+                  <div class="back-info-card">
+                    <div class="back-info-label">Katılımcı</div>
+                    <div class="back-info-value">${safeUserFullName}</div>
                   </div>
 
-                  <div class="card">
-                    <div class="card-label">Eğitim Tipi</div>
-                    <div class="card-value">${trainingType}</div>
+                  <div class="back-info-card">
+                    <div class="back-info-label">Görevi / Rolü</div>
+                    <div class="back-info-value">${safeUserRole}</div>
                   </div>
 
-                  <div class="card">
-                    <div class="card-label">Eğitim Süresi</div>
-                    <div class="card-value">${durationText}</div>
+                  <div class="back-info-card">
+                    <div class="back-info-label">Eğitim Adı</div>
+                    <div class="back-info-value">${trainingTitle}</div>
                   </div>
 
-                  <div class="card">
-                    <div class="card-label">Başlangıç Kaydı</div>
-                    <div class="card-value">${startedDate}</div>
+                  <div class="back-info-card">
+                    <div class="back-info-label">Firma / Kurum</div>
+                    <div class="back-info-value">${safeCompanyName}</div>
                   </div>
 
-                  <div class="card">
-                    <div class="card-label">Tamamlanma Tarihi</div>
-                    <div class="card-value">${completedDate}</div>
+                  <div class="back-info-card">
+                    <div class="back-info-label">Belge No</div>
+                    <div class="back-info-value">${certificateNo}</div>
                   </div>
 
-                  <div class="card">
-                    <div class="card-label">Belge Düzenleme Tarihi</div>
-                    <div class="card-value">${issueDate}</div>
-                  </div>
-
-                  ${scoreCard}
-                </div>
-
-                <div class="topics-wrap">
-                  <div class="topics-title">${topicsTitle}</div>
-                  <ul class="topics-list">
-                    ${topicsHtml}
-                  </ul>
-                </div>
-
-                <div class="verify-box">
-                  <div class="verify-qr">
-                    <img src="${qrImageUrl}" alt="QR Doğrulama" />
-                  </div>
-
-                  <div class="verify-text">
-                    ${verifyInfoText} Belgenin ait olduğu firma bilgisi:
-                    <strong>${safeCompanyName}</strong>.
-                    <br/>
-                    Belge doğrulaması için QR kodu okutabilir veya aşağıdaki bağlantıyı açabilirsiniz.
-                    <br/>
-                    <a class="verify-link" href="${verifyUrl}" target="_blank" rel="noreferrer">
-                      ${escapeHtml(verifyUrl)}
-                    </a>
+                  <div class="back-info-card">
+                    <div class="back-info-label">Doğrulama Kodu</div>
+                    <div class="back-info-value">${verificationCode}</div>
                   </div>
                 </div>
 
                 <div class="note">
-                  ${noteText}
-                </div>
-
-                <div class="bottom">
-                  <div>
-                    <div class="signature-line"></div>
-                    <div class="signature-title">D-SEC Eğitim Yetkilisi</div>
-                    <div class="signature-sub">Onay / İmza</div>
-                  </div>
-
-                  <div class="seal-wrap">
-                    <div class="seal">
-                      <div class="seal-1">ONAYLI</div>
-                      <div class="seal-2">D-SEC</div>
-                      <div class="seal-3">${new Date().getFullYear()}</div>
-                    </div>
-                  </div>
+                  Bu ek sayfa, sertifika ile birlikte değerlendirilir. Sertifika doğrulaması yalnızca
+                  belge numarası, doğrulama kodu ve sistem kaydı birlikte esas alınarak yapılmalıdır.
                 </div>
               </div>
             </div>

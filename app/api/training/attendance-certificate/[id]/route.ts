@@ -39,26 +39,35 @@ function parseTrainingTopics(topicsText?: string | null) {
     .filter(Boolean);
 }
 
-function topicsToHtml(topics: string[]) {
+function topicsToRows(topics: string[]) {
   if (!topics.length) {
     return `
-      <li>
-        <span class="idx">-</span>
-        <span>Bu eğitim için konu bilgisi girilmemiştir.</span>
-      </li>
+      <tr>
+        <td>1</td>
+        <td>Bu eğitim için konu bilgisi girilmemiştir.</td>
+      </tr>
     `;
   }
 
   return topics
     .map(
       (topic, index) => `
-        <li>
-          <span class="idx">${index + 1}</span>
-          <span>${escapeHtml(topic)}</span>
-        </li>
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(topic)}</td>
+        </tr>
       `
     )
     .join("");
+}
+
+function formatRoleLabel(role?: string | null) {
+  const raw = String(role || "").trim();
+  if (!raw) return "-";
+
+  return raw
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
 type AssignmentRow = {
@@ -82,6 +91,13 @@ type TrainingRow = {
   duration_minutes?: number | null;
 };
 
+type UserRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
+};
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> }
@@ -90,11 +106,11 @@ export async function GET(
     const cookieStore = await cookies();
 
     const userId = cookieStore.get("dsec_user_id")?.value;
-    const userEmail = cookieStore.get("dsec_user_email")?.value || "Kullanıcı";
-    const userFullName =
+    const cookieEmail = cookieStore.get("dsec_user_email")?.value || "Kullanıcı";
+    const cookieFullName =
       cookieStore.get("dsec_user_full_name")?.value ||
       cookieStore.get("dsec_user_name")?.value ||
-      userEmail;
+      cookieEmail;
 
     const companyName =
       cookieStore.get("dsec_company_name")?.value || "D-SEC Kurumsal Eğitim";
@@ -122,7 +138,7 @@ export async function GET(
 
     if (assignmentError || !data) {
       console.error("ATTENDANCE ASSIGNMENT ERROR:", assignmentError);
-      return new NextResponse("Katılım belgesi kaydı bulunamadı.", {
+      return new NextResponse("Katılım formu kaydı bulunamadı.", {
         status: 404,
       });
     }
@@ -135,7 +151,7 @@ export async function GET(
 
     if (!canShowAttendance) {
       return new NextResponse(
-        "Katılım belgesi yalnızca tamamlanan veya başarısızlık sonrası kapanan eğitimler için oluşturulur.",
+        "Katılım formu yalnızca tamamlanan veya başarısızlık sonrası kapanan eğitimler için oluşturulur.",
         { status: 400 }
       );
     }
@@ -156,8 +172,32 @@ export async function GET(
       }
     }
 
+    let dbUser: UserRow | null = null;
+    if (userId !== "admin-1") {
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("id, full_name, email, role")
+        .eq("id", userId)
+        .maybeSingle<UserRow>();
+
+      if (userError) {
+        console.error("ATTENDANCE USER ERROR:", userError);
+      } else {
+        dbUser = userData;
+      }
+    }
+
+    const userFullName = dbUser?.full_name || cookieFullName;
+    const userEmail = dbUser?.email || cookieEmail;
+    const userRole =
+      dbUser?.role ||
+      cookieStore.get("dsec_user_role")?.value ||
+      cookieStore.get("dsec_user_job_title")?.value ||
+      "Katılımcı";
+
     const safeUserEmail = escapeHtml(userEmail);
     const safeUserFullName = escapeHtml(userFullName);
+    const safeUserRole = escapeHtml(formatRoleLabel(userRole));
     const safeCompanyName = escapeHtml(companyName);
 
     const trainingTitle = escapeHtml(training?.title || "Eğitim adı bulunamadı");
@@ -166,7 +206,7 @@ export async function GET(
     const durationMinutes = training?.duration_minutes ?? null;
 
     const topics = parseTrainingTopics(training?.topics_text);
-    const topicsHtml = topicsToHtml(topics);
+    const topicsRows = topicsToRows(topics);
 
     const startedDate = formatDateTr(assignment.started_at);
     const completedDate = formatDateTr(assignment.completed_at);
@@ -188,14 +228,11 @@ export async function GET(
         ? String(assignment.final_exam_attempts)
         : "-";
 
-    const resultBadge = finalPassed ? "BAŞARILI KATILIM" : "BAŞARISIZ KATILIM";
-    const resultColor = finalPassed ? "#166534" : "#991b1b";
-    const resultBg = finalPassed ? "#dcfce7" : "#fee2e2";
-    const resultBorder = finalPassed ? "#86efac" : "#fca5a5";
-
     const resultText = finalPassed
-      ? "Katılımcı eğitimi tamamlamış ve final sınavında başarılı olmuştur."
-      : "Katılımcı eğitime katılmıştır; ancak final sınavında başarılı olamadığı için bu belge yalnızca katılım belgesi niteliğindedir. Sertifika yerine geçmez.";
+      ? "Katılımcı ilgili eğitime katılım sağlamış, eğitimi tamamlamış ve final değerlendirmesinde başarılı olmuştur."
+      : "Katılımcı ilgili eğitime katılım sağlamıştır. Ancak final değerlendirmesinde başarılı olamadığından bu çıktı yalnızca katılım formu niteliğindedir; sertifika yerine geçmez.";
+
+    const resultClass = finalPassed ? "success-box" : "warn-box";
 
     const html = `
       <!doctype html>
@@ -203,7 +240,7 @@ export async function GET(
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>D-SEC Eğitim Katılım Belgesi</title>
+          <title>D-SEC Eğitim Katılım Formu</title>
           <style>
             * { box-sizing: border-box; }
 
@@ -211,12 +248,12 @@ export async function GET(
               margin: 0;
               padding: 22px;
               font-family: Arial, Helvetica, sans-serif;
-              background: #f8fafc;
-              color: #111827;
+              background: #f3f6fb;
+              color: #1f2937;
             }
 
             .page {
-              max-width: 1180px;
+              max-width: 1120px;
               margin: 0 auto;
             }
 
@@ -240,248 +277,230 @@ export async function GET(
             }
 
             .doc {
-              background: #fff;
-              border: 8px solid #0f766e;
-              border-radius: 24px;
-              padding: 32px 34px 28px;
-              box-shadow: 0 20px 40px rgba(15, 23, 42, 0.10);
+              background: #ffffff;
+              border: 1px solid #d7e2ee;
+              border-radius: 22px;
+              padding: 28px;
+              box-shadow: 0 22px 46px rgba(15, 23, 42, 0.08);
             }
 
-            .top {
+            .header {
               display: flex;
               justify-content: space-between;
-              gap: 16px;
               align-items: flex-start;
+              gap: 18px;
+              padding-bottom: 18px;
+              border-bottom: 2px solid #e5e7eb;
             }
 
             .brand-title {
               font-size: 30px;
               font-weight: 900;
               color: #0f766e;
+              letter-spacing: 0.4px;
             }
 
             .brand-sub {
-              margin-top: 4px;
-              font-size: 13px;
+              margin-top: 6px;
               color: #6b7280;
+              font-size: 13px;
             }
 
-            .badge {
-              padding: 10px 14px;
+            .doc-meta {
+              text-align: right;
+            }
+
+            .doc-chip {
+              display: inline-block;
+              padding: 8px 12px;
               border-radius: 999px;
-              background: #ecfeff;
-              border: 1px solid #99f6e4;
-              color: #115e59;
+              border: 1px solid #bfdbfe;
+              background: #eff6ff;
+              color: #1d4ed8;
               font-size: 12px;
               font-weight: 800;
+            }
+
+            .doc-no {
+              margin-top: 10px;
+              font-size: 12px;
+              color: #6b7280;
+              line-height: 1.7;
+              font-weight: 700;
             }
 
             h1 {
-              margin: 18px 0 0;
-              font-size: 40px;
-              font-weight: 900;
-              text-align: center;
-            }
-
-            .desc {
-              margin: 14px auto 0;
-              max-width: 860px;
-              text-align: center;
-              font-size: 17px;
-              line-height: 1.7;
-              color: #4b5563;
-            }
-
-            .result-box {
-              margin: 18px auto 0;
-              max-width: 900px;
-              padding: 14px 16px;
-              border-radius: 14px;
-              text-align: center;
-              font-size: 15px;
-              line-height: 1.7;
-              font-weight: 700;
-              color: ${resultColor};
-              background: ${resultBg};
-              border: 1px solid ${resultBorder};
-            }
-
-            .result-chip {
-              display: inline-flex;
-              margin-top: 12px;
-              padding: 8px 12px;
-              border-radius: 999px;
-              background: ${resultBg};
-              border: 1px solid ${resultBorder};
-              color: ${resultColor};
-              font-size: 12px;
-              font-weight: 800;
-            }
-
-            .person {
-              margin-top: 26px;
-              text-align: center;
-            }
-
-            .name {
+              margin: 22px 0 8px;
               font-size: 34px;
               font-weight: 900;
-            }
-
-            .mail {
-              margin-top: 8px;
-              color: #6b7280;
-              font-size: 15px;
-            }
-
-            .training {
-              margin-top: 24px;
               text-align: center;
+              color: #111827;
             }
 
-            .training-title {
-              font-size: 28px;
-              font-weight: 800;
+            .subtitle {
+              text-align: center;
+              color: #4b5563;
+              font-size: 15px;
+              line-height: 1.7;
+              max-width: 900px;
+              margin: 0 auto 18px;
+            }
+
+            .status-wrap {
+              margin-bottom: 18px;
+            }
+
+            .success-box,
+            .warn-box {
+              border-radius: 14px;
+              padding: 14px 16px;
+              font-size: 14px;
+              line-height: 1.7;
+              font-weight: 700;
+            }
+
+            .success-box {
+              background: #ecfdf5;
+              border: 1px solid #86efac;
               color: #166534;
             }
 
-            .training-desc {
-              margin-top: 10px;
-              font-size: 15px;
-              line-height: 1.75;
-              color: #4b5563;
+            .warn-box {
+              background: #fff7ed;
+              border: 1px solid #fdba74;
+              color: #9a3412;
             }
 
-            .grid {
-              margin-top: 24px;
-              display: grid;
-              grid-template-columns: repeat(3, minmax(0, 1fr));
-              gap: 14px;
-            }
-
-            .card {
-              background: #f8fafc;
-              border: 1px solid #e5e7eb;
-              border-radius: 16px;
-              padding: 16px;
-            }
-
-            .label {
-              font-size: 12px;
-              color: #6b7280;
-              text-transform: uppercase;
-              font-weight: 700;
-              margin-bottom: 8px;
-            }
-
-            .value {
-              font-size: 15px;
-              font-weight: 800;
-              line-height: 1.6;
-            }
-
-            .topics {
+            .section-title {
               margin-top: 22px;
+              margin-bottom: 10px;
+              font-size: 16px;
+              font-weight: 900;
+              color: #111827;
+              letter-spacing: 0.4px;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+
+            .info-table td,
+            .info-table th,
+            .topics-table td,
+            .topics-table th {
+              border: 1px solid #dbe3ee;
+              padding: 12px 14px;
+              vertical-align: top;
+              font-size: 14px;
+            }
+
+            .info-table th,
+            .topics-table th {
+              background: #f8fafc;
+              text-align: left;
+              color: #374151;
+              font-weight: 800;
+              width: 220px;
+            }
+
+            .topics-table th:first-child,
+            .topics-table td:first-child {
+              width: 70px;
+              text-align: center;
+            }
+
+            .description-box {
+              margin-top: 12px;
+              padding: 14px 16px;
+              border-radius: 14px;
               background: #f8fafc;
               border: 1px solid #e5e7eb;
-              border-radius: 16px;
-              padding: 16px 18px;
-            }
-
-            .topics-title {
+              color: #4b5563;
               font-size: 14px;
-              font-weight: 800;
-              margin-bottom: 10px;
+              line-height: 1.8;
             }
 
-            .topics ul {
-              list-style: none;
-              margin: 0;
-              padding: 0;
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 10px 16px;
-            }
-
-            .topics li {
-              display: flex;
-              gap: 10px;
-              align-items: flex-start;
-              font-size: 14px;
-              line-height: 1.6;
-              color: #374151;
-            }
-
-            .idx {
-              min-width: 24px;
-              height: 24px;
-              border-radius: 999px;
-              background: #ccfbf1;
-              color: #115e59;
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 12px;
-              font-weight: 800;
-            }
-
-            .bottom {
+            .signatures {
               margin-top: 28px;
               display: grid;
               grid-template-columns: 1fr 1fr;
-              gap: 24px;
-              align-items: end;
+              gap: 28px;
+            }
+
+            .signature-card {
+              border: 1px solid #dbe3ee;
+              border-radius: 16px;
+              min-height: 140px;
+              padding: 18px;
+              display: flex;
+              flex-direction: column;
+              justify-content: flex-end;
+              background: #fff;
             }
 
             .signature-line {
               width: 240px;
+              max-width: 100%;
               height: 1px;
               background: #111827;
               margin-bottom: 10px;
             }
 
             .signature-title {
-              font-size: 16px;
+              font-size: 15px;
               font-weight: 800;
+              color: #111827;
             }
 
             .signature-sub {
               margin-top: 4px;
               font-size: 13px;
               color: #6b7280;
+              line-height: 1.6;
             }
 
-            .warning-note {
-              margin-top: 18px;
+            .footer-note {
+              margin-top: 20px;
               padding: 14px 16px;
               border-radius: 14px;
-              background: #fff7ed;
-              border: 1px solid #fdba74;
-              color: #9a3412;
-              font-size: 14px;
+              background: #f8fafc;
+              border: 1px solid #e5e7eb;
+              color: #4b5563;
+              font-size: 13px;
               line-height: 1.7;
-              font-weight: 700;
             }
 
             @page {
-              size: A4 landscape;
+              size: A4 portrait;
               margin: 10mm;
             }
 
-            @media (max-width: 900px) {
-              .grid,
-              .topics ul {
+            @media (max-width: 860px) {
+              .header,
+              .signatures {
                 grid-template-columns: 1fr;
+                display: grid;
+              }
+
+              .doc-meta {
+                text-align: left;
               }
             }
 
             @media print {
               body {
-                background: #fff;
+                background: #ffffff;
                 padding: 0;
               }
-              .toolbar { display: none; }
-              .doc { box-shadow: none; }
+
+              .toolbar {
+                display: none;
+              }
+
+              .doc {
+                box-shadow: none;
+              }
             }
           </style>
         </head>
@@ -492,106 +511,127 @@ export async function GET(
             </div>
 
             <div class="doc">
-              <div class="top">
+              <div class="header">
                 <div>
                   <div class="brand-title">D-SEC</div>
                   <div class="brand-sub">Dijital Sağlık • Emniyet • Çevre</div>
                 </div>
-                <div class="badge">Eğitim Katılım Belgesi</div>
-              </div>
-
-              <h1>KATILIM BELGESİ</h1>
-
-              <div class="desc">
-                Bu belge, aşağıda bilgileri yer alan katılımcının ilgili eğitime katılım sağladığını
-                ve eğitim kaydının oluşturulduğunu göstermek amacıyla düzenlenmiştir.
-              </div>
-
-              <div style="text-align:center;">
-                <div class="result-chip">${resultBadge}</div>
-              </div>
-
-              <div class="result-box">
-                ${escapeHtml(resultText)}
-              </div>
-
-              <div class="person">
-                <div class="name">${safeUserFullName}</div>
-                <div class="mail">${safeUserEmail}</div>
-              </div>
-
-              <div class="training">
-                <div class="training-title">${trainingTitle}</div>
-                <div class="training-desc">${trainingDescription}</div>
-              </div>
-
-              <div class="grid">
-                <div class="card">
-                  <div class="label">Firma / Kurum</div>
-                  <div class="value">${safeCompanyName}</div>
-                </div>
-                <div class="card">
-                  <div class="label">Eğitim Tipi</div>
-                  <div class="value">${trainingType}</div>
-                </div>
-                <div class="card">
-                  <div class="label">Eğitim Süresi</div>
-                  <div class="value">${durationText}</div>
-                </div>
-                <div class="card">
-                  <div class="label">Başlangıç Kaydı</div>
-                  <div class="value">${startedDate}</div>
-                </div>
-                <div class="card">
-                  <div class="label">Tamamlanma / Kapanış Tarihi</div>
-                  <div class="value">${completedDate}</div>
-                </div>
-                <div class="card">
-                  <div class="label">Belge Düzenleme Tarihi</div>
-                  <div class="value">${issueDate}</div>
-                </div>
-                <div class="card">
-                  <div class="label">Final Sonucu</div>
-                  <div class="value">${finalPassed ? "Başarılı" : "Başarısız"}</div>
-                </div>
-                <div class="card">
-                  <div class="label">Final Puanı</div>
-                  <div class="value">${finalScore !== null ? "%" + finalScore : "-"}</div>
-                </div>
-                <div class="card">
-                  <div class="label">Kullanılan Final Hakkı</div>
-                  <div class="value">${attemptsText}</div>
+                <div class="doc-meta">
+                  <div class="doc-chip">Eğitim Katılım Formu</div>
+                  <div class="doc-no">
+                    Düzenlenme Tarihi: ${issueDate}<br/>
+                    Belge Türü: Katılım Kayıt Formu
+                  </div>
                 </div>
               </div>
 
-              <div class="topics">
-                <div class="topics-title">Katılım Sağlanan Eğitim Konuları</div>
-                <ul>
-                  ${topicsHtml}
-                </ul>
+              <h1>EĞİTİM KATILIM FORMU</h1>
+              <div class="subtitle">
+                Bu form, aşağıda bilgileri yer alan çalışanın ilgili eğitime katılım sağladığını,
+                eğitim kaydının oluşturulduğunu ve değerlendirme sonucunu göstermek amacıyla düzenlenmiştir.
               </div>
 
-              ${
-                finalPassed
-                  ? ""
-                  : `
-                    <div class="warning-note">
-                      Not: Bu belge yalnızca katılımı gösterir. Final sınavı başarısız olduğundan sertifika yerine geçmez ve başarılı tamamlanmış eğitim olarak değerlendirilmez.
-                    </div>
-                  `
-              }
+              <div class="status-wrap">
+                <div class="${resultClass}">
+                  ${escapeHtml(resultText)}
+                </div>
+              </div>
 
-              <div class="bottom">
-                <div>
+              <div class="section-title">Katılımcı Bilgileri</div>
+              <table class="info-table">
+                <tr>
+                  <th>Ad Soyad</th>
+                  <td>${safeUserFullName}</td>
+                  <th>Görevi / Rolü</th>
+                  <td>${safeUserRole}</td>
+                </tr>
+                <tr>
+                  <th>E-Posta</th>
+                  <td>${safeUserEmail}</td>
+                  <th>Firma / Kurum</th>
+                  <td>${safeCompanyName}</td>
+                </tr>
+              </table>
+
+              <div class="section-title">Eğitim Bilgileri</div>
+              <table class="info-table">
+                <tr>
+                  <th>Eğitim Adı</th>
+                  <td>${trainingTitle}</td>
+                  <th>Eğitim Tipi</th>
+                  <td>${trainingType}</td>
+                </tr>
+                <tr>
+                  <th>Eğitim Süresi</th>
+                  <td>${durationText}</td>
+                  <th>Başlangıç Tarihi</th>
+                  <td>${startedDate}</td>
+                </tr>
+                <tr>
+                  <th>Tamamlanma / Kapanış</th>
+                  <td>${completedDate}</td>
+                  <th>Belge Düzenleme Tarihi</th>
+                  <td>${issueDate}</td>
+                </tr>
+                <tr>
+                  <th>Final Sonucu</th>
+                  <td>${finalPassed ? "Başarılı" : "Başarısız"}</td>
+                  <th>Final Puanı</th>
+                  <td>${finalScore !== null ? finalScore : "-"}</td>
+                </tr>
+                <tr>
+                  <th>Kullanılan Final Hakkı</th>
+                  <td>${attemptsText}</td>
+                  <th>Belge Niteliği</th>
+                  <td>${finalPassed ? "Katılım + başarı kaydı" : "Yalnızca katılım kaydı"}</td>
+                </tr>
+              </table>
+
+              <div class="description-box">
+                <strong>Eğitim Açıklaması:</strong><br/>
+                ${trainingDescription}
+              </div>
+
+              <div class="section-title">Eğitim Konu Başlıkları</div>
+              <table class="topics-table">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Konu Başlığı</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${topicsRows}
+                </tbody>
+              </table>
+
+              <div class="signatures">
+                <div class="signature-card">
                   <div class="signature-line"></div>
-                  <div class="signature-title">D-SEC Eğitim Yetkilisi</div>
-                  <div class="signature-sub">Onay / İmza</div>
+                  <div class="signature-title">Katılımcı</div>
+                  <div class="signature-sub">
+                    Ad Soyad: ${safeUserFullName}<br/>
+                    İmza
+                  </div>
                 </div>
 
-                <div style="text-align:right;">
-                  <strong>D-SEC</strong><br/>
-                  Eğitim Kayıt Birimi
+                <div class="signature-card">
+                  <div class="signature-line"></div>
+                  <div class="signature-title">Eğitim Yetkilisi / Onay</div>
+                  <div class="signature-sub">
+                    D-SEC Eğitim Kayıt Birimi<br/>
+                    Kaşe / İmza
+                  </div>
                 </div>
+              </div>
+
+              <div class="footer-note">
+                Not: Bu form, eğitim katılımının kayıt altına alınması amacıyla düzenlenmiştir.
+                ${
+                  finalPassed
+                    ? " Katılımcı eğitim sürecini başarıyla tamamlamıştır."
+                    : " Katılımcı eğitime katılmış olmakla birlikte final değerlendirmesinde başarılı olamadığından bu çıktı sertifika yerine geçmez."
+                }
               </div>
             </div>
           </div>
@@ -605,7 +645,7 @@ export async function GET(
       },
     });
   } catch (err) {
-    console.error("Attendance certificate route hata:", err);
+    console.error("Attendance form route hata:", err);
     return new NextResponse("Sunucu hatası", { status: 500 });
   }
 }
