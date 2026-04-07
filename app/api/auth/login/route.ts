@@ -6,7 +6,7 @@ function getSupabase() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
-    throw new Error("SUPABASE_URL veya SUPABASE_SERVICE_ROLE_KEY tanımlı değil.");
+    throw new Error("SUPABASE ENV eksik.");
   }
 
   return createClient(url, serviceRoleKey);
@@ -67,28 +67,31 @@ export async function POST(request: Request) {
       },
     });
 
-    response.cookies.set("dsec_user_auth", "ok", {
+    // 🔥 CRITICAL FIX (PRODUCTION COOKIE)
+    const cookieOptions = {
       httpOnly: true,
-      sameSite: "lax",
+      secure: true,          // 🔥 zorunlu
+      sameSite: "none" as const, // 🔥 zorunlu
       path: "/",
       maxAge: 60 * 60 * 12,
-    });
+    };
 
-    response.cookies.set("dsec_user_role", String(data.role ?? "training_user"), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 12,
-    });
+    response.cookies.set("dsec_user_auth", "ok", cookieOptions);
 
-    response.cookies.set("dsec_user_id", String(data.id ?? ""), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 12,
-    });
+    response.cookies.set(
+      "dsec_user_role",
+      String(data.role ?? "training_user"),
+      cookieOptions
+    );
+
+    response.cookies.set(
+      "dsec_user_id",
+      String(data.id ?? ""),
+      cookieOptions
+    );
 
     return response;
+
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Bilinmeyen sunucu hatası";
