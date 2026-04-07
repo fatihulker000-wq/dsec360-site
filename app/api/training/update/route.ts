@@ -26,12 +26,14 @@ type TrainingAssignmentRow = {
   last_position_seconds: number | null;
   max_watched_seconds: number | null;
   locked_duration_seconds: number | null;
+  training_reset_required?: boolean | null;
+  pre_exam_completed?: boolean | null;
 };
 
 export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
-    const userId = cookieStore.get("dsec_user_id")?.value;
+    const userId = cookieStore.get("dsec_user_id")?.value?.trim();
 
     if (!userId) {
       return NextResponse.json({ error: "Kullanıcı yok." }, { status: 401 });
@@ -63,9 +65,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Kayıt bulunamadı." }, { status: 404 });
     }
 
-    if (action === "open") {
-      const now = new Date().toISOString();
+    const now = new Date().toISOString();
 
+    if (action === "open") {
       const payload: Record<string, unknown> = {
         last_opened_at: now,
       };
@@ -81,7 +83,8 @@ export async function POST(request: Request) {
       const { error } = await supabase
         .from("training_assignments")
         .update(payload)
-        .eq("id", assignmentId);
+        .eq("id", assignmentId)
+        .eq("user_id", userId);
 
       if (error) {
         return NextResponse.json(
@@ -94,21 +97,27 @@ export async function POST(request: Request) {
     }
 
     if (action === "heartbeat") {
-      const maxWatched = Math.max(
-        Number(row.max_watched_seconds || 0),
-        currentSecond
+      const currentMaxWatched = Math.max(0, Number(row.max_watched_seconds || 0));
+      const currentWatchSeconds = Math.max(0, Number(row.watch_seconds || 0));
+      const currentLockedDuration = Math.max(
+        0,
+        Number(row.locked_duration_seconds || 0)
       );
 
-      const watchSeconds = Math.max(
-        Number(row.watch_seconds || 0),
-        currentSecond
-      );
+      const maxWatched = Math.max(currentMaxWatched, currentSecond);
+      const watchSeconds = Math.max(currentWatchSeconds, currentSecond);
+      const lockedDuration =
+        currentLockedDuration > 0 ? currentLockedDuration : duration;
 
       const payload: Record<string, unknown> = {
-        last_opened_at: new Date().toISOString(),
-        last_position_seconds: currentSecond,
+        last_opened_at: now,
+        last_position_seconds: Math.max(
+          Number(row.last_position_seconds || 0),
+          currentSecond
+        ),
         max_watched_seconds: maxWatched,
         watch_seconds: watchSeconds,
+        locked_duration_seconds: lockedDuration,
       };
 
       if (row.status === "assigned" || row.status === "not_started") {
@@ -116,13 +125,14 @@ export async function POST(request: Request) {
       }
 
       if (!row.started_at) {
-        payload.started_at = new Date().toISOString();
+        payload.started_at = now;
       }
 
       const { error } = await supabase
         .from("training_assignments")
         .update(payload)
-        .eq("id", assignmentId);
+        .eq("id", assignmentId)
+        .eq("user_id", userId);
 
       if (error) {
         return NextResponse.json(
@@ -135,12 +145,11 @@ export async function POST(request: Request) {
         success: true,
         max_watched_seconds: maxWatched,
         watch_seconds: watchSeconds,
+        locked_duration_seconds: lockedDuration,
       });
     }
 
     if (action === "mark_watched") {
-      const now = new Date().toISOString();
-
       const safeWatchSeconds = Math.max(
         Number(row.watch_seconds || 0),
         Number(row.max_watched_seconds || 0),
@@ -148,19 +157,28 @@ export async function POST(request: Request) {
         duration
       );
 
+      const safeLockedDuration =
+        Number(row.locked_duration_seconds || 0) > 0
+          ? Number(row.locked_duration_seconds || 0)
+          : duration > 0
+          ? duration
+          : safeWatchSeconds;
+
       const payload: Record<string, unknown> = {
         watch_completed: true,
         watch_completed_at: now,
         watch_seconds: safeWatchSeconds,
         last_position_seconds: Math.max(
           Number(row.last_position_seconds || 0),
-          currentSecond
+          currentSecond,
+          safeWatchSeconds
         ),
         max_watched_seconds: Math.max(
           Number(row.max_watched_seconds || 0),
           currentSecond,
           safeWatchSeconds
         ),
+        locked_duration_seconds: safeLockedDuration,
       };
 
       if (!row.started_at) {
@@ -174,7 +192,8 @@ export async function POST(request: Request) {
       const { error } = await supabase
         .from("training_assignments")
         .update(payload)
-        .eq("id", assignmentId);
+        .eq("id", assignmentId)
+        .eq("user_id", userId);
 
       if (error) {
         return NextResponse.json(
@@ -187,12 +206,11 @@ export async function POST(request: Request) {
         success: true,
         watch_completed: true,
         watch_seconds: safeWatchSeconds,
+        locked_duration_seconds: safeLockedDuration,
       });
     }
 
     if (action === "complete") {
-      const now = new Date().toISOString();
-
       const safeWatchSeconds = Math.max(
         Number(row.watch_seconds || 0),
         Number(row.max_watched_seconds || 0),
@@ -200,9 +218,18 @@ export async function POST(request: Request) {
         duration
       );
 
+      const safeLockedDuration =
+        Number(row.locked_duration_seconds || 0) > 0
+          ? Number(row.locked_duration_seconds || 0)
+          : duration > 0
+          ? duration
+          : safeWatchSeconds;
+
+      // KRİTİK:
+      // Burada status completed yapılmaz.
+      // Video tamamlandı demek eğitim tamamen bitti demek değildir.
+      // Eğitim sadece final başarıyla geçilince completed olur.
       const payload: Record<string, unknown> = {
-        status: "completed",
-        completed_at: row.completed_at || now,
         watch_completed: true,
         watch_completed_at: row.watch_completed_at || now,
         watch_seconds: safeWatchSeconds,
@@ -216,22 +243,23 @@ export async function POST(request: Request) {
           currentSecond,
           safeWatchSeconds
         ),
-        locked_duration_seconds:
-          Number(row.locked_duration_seconds || 0) > 0
-            ? Number(row.locked_duration_seconds || 0)
-            : duration > 0
-            ? duration
-            : safeWatchSeconds,
+        locked_duration_seconds: safeLockedDuration,
+        last_opened_at: now,
       };
 
       if (!row.started_at) {
         payload.started_at = now;
       }
 
+      if (row.status === "assigned" || row.status === "not_started") {
+        payload.status = "in_progress";
+      }
+
       const { error } = await supabase
         .from("training_assignments")
         .update(payload)
-        .eq("id", assignmentId);
+        .eq("id", assignmentId)
+        .eq("user_id", userId);
 
       if (error) {
         return NextResponse.json(
@@ -242,9 +270,10 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         success: true,
-        status: "completed",
+        status: "in_progress",
         watch_completed: true,
         watch_seconds: safeWatchSeconds,
+        locked_duration_seconds: safeLockedDuration,
       });
     }
 

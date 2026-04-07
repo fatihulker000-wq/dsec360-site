@@ -113,11 +113,14 @@ export default function TrainingListPage() {
             const description =
               item.training?.description || "Açıklama bulunmuyor.";
             const type = normalizeType(item.training?.type);
-const completed = item.final_exam_passed === true;
-const videoCompleted =
-  item.status === "completed" || item.watch_completed === true;
-const finalAttempts = Number(item.final_exam_attempts || 0);
+
+            const completed = item.final_exam_passed === true;
+            const videoCompleted =
+              item.status === "completed" || item.watch_completed === true;
+
+            const finalAttempts = Number(item.final_exam_attempts || 0);
             const finalAttemptsLeft = Math.max(0, 3 - finalAttempts);
+
             const finalScore =
               item.final_exam_score !== null &&
               item.final_exam_score !== undefined
@@ -169,36 +172,43 @@ const finalAttempts = Number(item.final_exam_attempts || 0);
                     Tür: {type}
                   </span>
 
-                 <span
-  style={{
-    padding: "6px 10px",
-    borderRadius: "999px",
-    background: completed
-      ? "#dcfce7"
-      : videoCompleted
-      ? "#ecfccb"
-      : "#eff6ff",
-    border: completed
-      ? "1px solid #86efac"
-      : videoCompleted
-      ? "1px solid #bef264"
-      : "1px solid #bfdbfe",
-    color: completed
-      ? "#166534"
-      : videoCompleted
-      ? "#3f6212"
-      : "#1d4ed8",
-    fontSize: "12px",
-    fontWeight: 700,
-  }}
->
-  {completed ? "Tamamlandı" : videoCompleted ? "Eğitim Tamamlandı" : "Devam Ediyor"}
-</span>
                   <span
                     style={{
                       padding: "6px 10px",
                       borderRadius: "999px",
-                      background: item.pre_exam_completed ? "#eff6ff" : "#fef2f2",
+                      background: completed
+                        ? "#dcfce7"
+                        : videoCompleted
+                        ? "#ecfccb"
+                        : "#eff6ff",
+                      border: completed
+                        ? "1px solid #86efac"
+                        : videoCompleted
+                        ? "1px solid #bef264"
+                        : "1px solid #bfdbfe",
+                      color: completed
+                        ? "#166534"
+                        : videoCompleted
+                        ? "#3f6212"
+                        : "#1d4ed8",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {completed
+                      ? "Tamamlandı"
+                      : videoCompleted
+                      ? "Eğitim Tamamlandı"
+                      : "Devam Ediyor"}
+                  </span>
+
+                  <span
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "999px",
+                      background: item.pre_exam_completed
+                        ? "#eff6ff"
+                        : "#fef2f2",
                       border: item.pre_exam_completed
                         ? "1px solid #bfdbfe"
                         : "1px solid #fecaca",
@@ -207,7 +217,9 @@ const finalAttempts = Number(item.final_exam_attempts || 0);
                       fontWeight: 700,
                     }}
                   >
-                    {item.pre_exam_completed ? "Ön Sınav Tamam" : "Ön Sınav Bekliyor"}
+                    {item.pre_exam_completed
+                      ? "Ön Sınav Tamam"
+                      : "Ön Sınav Bekliyor"}
                   </span>
 
                   <span
@@ -239,8 +251,56 @@ const finalAttempts = Number(item.final_exam_attempts || 0);
                         fontWeight: 700,
                       }}
                     >
-                      Final: %{finalScore}
+                      Final: {finalScore}
                     </span>
+                  ) : null}
+
+                  {completed ? (
+                    <>
+                      <button
+                        onClick={() =>
+                          window.open(
+                            `/api/training/certificate/${item.id}`,
+                            "_blank",
+                            "noopener,noreferrer"
+                          )
+                        }
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: "999px",
+                          background: "#ede9fe",
+                          border: "1px solid #c4b5fd",
+                          color: "#5b21b6",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Sertifika
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          window.open(
+                            `/api/training/attendance-certificate/${item.id}`,
+                            "_blank",
+                            "noopener,noreferrer"
+                          )
+                        }
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: "999px",
+                          background: "#ecfeff",
+                          border: "1px solid #99f6e4",
+                          color: "#0f766e",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Katılım Belgesi
+                      </button>
+                    </>
                   ) : null}
                 </div>
 
@@ -249,7 +309,7 @@ const finalAttempts = Number(item.final_exam_attempts || 0);
                   style={{
                     width: "100%",
                     padding: "12px 16px",
-                    background: "#2563eb",
+                    background: completed ? "#16a34a" : "#2563eb",
                     color: "#fff",
                     border: "none",
                     borderRadius: "10px",
