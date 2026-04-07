@@ -172,7 +172,9 @@ export async function GET() {
       }));
 
     const inProgressUsers = assignmentRows
-      .filter((row) => row.status === "in_progress" && row.final_exam_passed !== true)
+      .filter(
+        (row) => row.status === "in_progress" && row.final_exam_passed !== true
+      )
       .map((row) => ({
         assignment_id: row.id,
         user_id: row.user_id,
@@ -185,7 +187,9 @@ export async function GET() {
       }));
 
     const completedUsers = assignmentRows
-      .filter((row) => row.final_exam_passed === true || row.status === "completed")
+      .filter(
+        (row) => row.final_exam_passed === true || row.status === "completed"
+      )
       .map((row) => ({
         assignment_id: row.id,
         user_id: row.user_id,
