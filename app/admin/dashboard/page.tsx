@@ -216,7 +216,8 @@ export default function AdminDashboardPage() {
           style={{
             borderRadius: "30px",
             padding: "30px",
-            background: "linear-gradient(135deg, #0f172a 0%, #1d4ed8 60%, #0f766e 100%)",
+            background:
+              "linear-gradient(135deg, #0f172a 0%, #1d4ed8 60%, #0f766e 100%)",
             color: "#ffffff",
             boxShadow: "0 26px 70px rgba(15,23,42,0.20)",
             marginBottom: "24px",
