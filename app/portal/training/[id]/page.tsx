@@ -213,9 +213,11 @@ export default function TrainingDetailPage() {
     } catch {}
   };
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const maxReachedRef = useRef(0);
-  const isProgrammaticSeekRef = useRef(false);
+ const videoRef = useRef<HTMLVideoElement | null>(null);
+const maxReachedRef = useRef(0);
+const lastAllowedTimeRef = useRef(0);
+const isProgrammaticSeekRef = useRef(false);
+const blockSeekRef = useRef(false);
 
   const [training, setTraining] = useState<TrainingDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -401,97 +403,126 @@ export default function TrainingDetailPage() {
     }
   }, [videoDuration]);
 
-  const handleLoadedMetadata = () => {
-    const player = videoRef.current;
-    if (!player) return;
+ const handleLoadedMetadata = () => {
+  const player = videoRef.current;
+  if (!player) return;
 
-    const duration = Math.floor(player.duration || 0);
-    setVideoDuration(duration);
+  const duration = Math.floor(player.duration || 0);
+  setVideoDuration(duration);
 
-    const shouldResume =
-      preExamCompleted &&
-      !resetRequired &&
-      maxReachedRef.current > 0 &&
-      maxReachedRef.current < duration;
+  const shouldResume =
+    preExamCompleted &&
+    !resetRequired &&
+    maxReachedRef.current > 0 &&
+    maxReachedRef.current < duration;
 
-    if (shouldResume) {
-      isProgrammaticSeekRef.current = true;
-      player.currentTime = maxReachedRef.current;
-    } else {
-      isProgrammaticSeekRef.current = true;
-      player.currentTime = 0;
-      maxReachedRef.current = 0;
-      setMaxReachedTime(0);
+  if (shouldResume) {
+    const safeResume = Math.floor(maxReachedRef.current);
+    isProgrammaticSeekRef.current = true;
+    player.currentTime = safeResume;
+    maxReachedRef.current = safeResume;
+    lastAllowedTimeRef.current = safeResume;
+    setMaxReachedTime(safeResume);
+  } else {
+    isProgrammaticSeekRef.current = true;
+    player.currentTime = 0;
+    maxReachedRef.current = 0;
+    lastAllowedTimeRef.current = 0;
+    setMaxReachedTime(0);
+  }
+
+  player.playbackRate = 1;
+
+  setPlaybackReady(true);
+  setVideoLoadError("");
+};
+
+ const handleTimeUpdate = () => {
+  const player = videoRef.current;
+  if (!player) return;
+
+  if (player.playbackRate !== 1) {
+    player.playbackRate = 1;
+  }
+
+  const current = Number(player.currentTime || 0);
+  const flooredCurrent = Math.floor(current);
+  const prevMax = Number(maxReachedRef.current || 0);
+  const allowedForwardGap = 1.2;
+
+  // İleri sarma / ani sıçrama engeli
+  if (!isProgrammaticSeekRef.current && current > prevMax + allowedForwardGap) {
+    blockSeekRef.current = true;
+    player.pause();
+    isProgrammaticSeekRef.current = true;
+    player.currentTime = prevMax;
+    return;
+  }
+
+  // Doğal ilerleme kabul edilir
+  if (current >= prevMax && current <= prevMax + allowedForwardGap) {
+    maxReachedRef.current = current;
+    lastAllowedTimeRef.current = current;
+    setMaxReachedTime(flooredCurrent);
+
+    try {
+      localStorage.setItem(
+        `training_watch_${assignmentId}`,
+        String(flooredCurrent)
+      );
+    } catch {}
+
+    if (flooredCurrent > 0 && flooredCurrent % 15 === 0) {
+      fetch("/api/training/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assignmentId,
+          action: "heartbeat",
+          currentSecond: flooredCurrent,
+          duration: Math.floor(videoDuration || 0),
+        }),
+      }).catch((err) => {
+        console.error("training heartbeat error:", err);
+      });
     }
+  }
 
-    setPlaybackReady(true);
-    setVideoLoadError("");
-  };
+  const checkpoints = checkpointsRef.current;
+  if (
+    checkpointIndex < checkpoints.length &&
+    flooredCurrent >= checkpoints[checkpointIndex] &&
+    !showPresencePopup
+  ) {
+    player.pause();
+    setShowPresencePopup(true);
+  }
+};
 
-  const handleTimeUpdate = () => {
-    const player = videoRef.current;
-    if (!player) return;
+const handleSeeking = () => {
+  const player = videoRef.current;
+  if (!player) return;
 
-    const current = Math.floor(player.currentTime || 0);
-    const prevMax = maxReachedRef.current;
+  if (isProgrammaticSeekRef.current) {
+    isProgrammaticSeekRef.current = false;
+    return;
+  }
 
-    if (current > prevMax) {
-      maxReachedRef.current = current;
-      setMaxReachedTime(current);
+  const current = Number(player.currentTime || 0);
+  const allowedMax = Number(maxReachedRef.current || 0);
 
-      try {
-        localStorage.setItem(
-          `training_watch_${assignmentId}`,
-          String(current)
-        );
-      } catch {}
+  if (current > allowedMax + 0.5) {
+    blockSeekRef.current = true;
+    player.pause();
+    isProgrammaticSeekRef.current = true;
+    player.currentTime = allowedMax;
+    return;
+  }
 
-      if (current > 0 && current % 15 === 0) {
-        fetch("/api/training/update", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            assignmentId,
-            action: "heartbeat",
-            currentSecond: current,
-            duration: Math.floor(videoDuration || 0),
-          }),
-        }).catch((err) => {
-          console.error("training heartbeat error:", err);
-        });
-      }
-    }
-
-    const checkpoints = checkpointsRef.current;
-    if (
-      checkpointIndex < checkpoints.length &&
-      current >= checkpoints[checkpointIndex] &&
-      !showPresencePopup
-    ) {
-      player.pause();
-      setShowPresencePopup(true);
-    }
-  };
-
-  const handleSeeking = () => {
-    const player = videoRef.current;
-    if (!player) return;
-
-    if (isProgrammaticSeekRef.current) {
-      isProgrammaticSeekRef.current = false;
-      return;
-    }
-
-    const current = Number(player.currentTime || 0);
-    const allowedMax = Number(maxReachedRef.current || 0);
-
-    if (current > allowedMax) {
-      isProgrammaticSeekRef.current = true;
-      player.currentTime = allowedMax;
-    }
-  };
+  lastAllowedTimeRef.current = current;
+};
 
   const effectiveWatchSeconds = Math.min(
     Math.max(Number(training?.watch_seconds || 0), Math.floor(maxReachedTime)),
@@ -1015,6 +1046,20 @@ export default function TrainingDetailPage() {
                     }}
                     onTimeUpdate={handleTimeUpdate}
                     onSeeking={handleSeeking}
+
+                    onSeeked={() => {
+  if (blockSeekRef.current) {
+    blockSeekRef.current = false;
+  }
+}}
+onRateChange={() => {
+  const player = videoRef.current;
+  if (!player) return;
+  if (player.playbackRate !== 1) {
+    player.playbackRate = 1;
+  }
+}}
+
                     onEnded={async () => {
                       maxReachedRef.current = Math.max(
                         maxReachedRef.current,
