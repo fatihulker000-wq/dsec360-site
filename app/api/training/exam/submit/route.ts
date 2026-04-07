@@ -24,12 +24,12 @@ type AssignmentRow = {
   training_id: string;
   status: TrainingStatus;
   watch_completed: boolean | null;
-  pre_exam_completed: boolean;
-  pre_exam_score: number;
-  final_exam_score: number;
-  final_exam_attempts: number;
-  final_exam_passed: boolean;
-  training_reset_required: boolean;
+  pre_exam_completed: boolean | null;
+  pre_exam_score: number | null;
+  final_exam_score: number | null;
+  final_exam_attempts: number | null;
+  final_exam_passed: boolean | null;
+  training_reset_required: boolean | null;
   watch_seconds?: number | null;
   click_count?: number | null;
   completed_at?: string | null;
@@ -41,6 +41,7 @@ type QuestionRow = {
   training_id: string;
   exam_type: ExamType;
   correct_option: "A" | "B" | "C" | "D";
+  sort_order?: number | null;
   is_active?: boolean | null;
 };
 
@@ -68,30 +69,20 @@ export async function POST(request: Request) {
     const body = await request.json();
     const assignmentId = String(body?.assignmentId || "").trim();
     const examType = body?.examType as ExamType | undefined;
-    const answers = (body?.answers || []) as AnswerItem[];
+    const answers = Array.isArray(body?.answers) ? (body.answers as AnswerItem[]) : [];
 
-    if (!assignmentId || !examType || !Array.isArray(answers)) {
+    if (!assignmentId || !examType || answers.length === 0) {
       return NextResponse.json({ error: "Eksik veri." }, { status: 400 });
     }
 
     if (examType !== "pre" && examType !== "final") {
-      return NextResponse.json(
-        { error: "Geçersiz sınav tipi." },
-        { status: 400 }
-      );
-    }
-
-    if (answers.length === 0) {
-      return NextResponse.json(
-        { error: "Cevaplar boş." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Geçersiz sınav tipi." }, { status: 400 });
     }
 
     const supabase = getSupabase();
 
-    // Önce assignment sadece id ile okunur
-    const { data: assignment, error: assignmentError } = await supabase
+    // 1) Önce id ile kaydı çek
+    const { data: assignmentById, error: assignmentByIdError } = await supabase
       .from("training_assignments")
       .select(
         "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count, completed_at, training_repeat_count"
@@ -99,29 +90,30 @@ export async function POST(request: Request) {
       .eq("id", assignmentId)
       .maybeSingle<AssignmentRow>();
 
-    if (assignmentError) {
-      console.error("assignment fetch hatası:", assignmentError);
+    if (assignmentByIdError) {
+      console.error("assignment by id fetch hatası:", assignmentByIdError);
       return NextResponse.json(
         { error: "Eğitim kaydı okunamadı." },
         { status: 500 }
       );
     }
 
-    if (!assignment) {
+    if (!assignmentById) {
       return NextResponse.json(
         { error: "Eğitim kaydı bulunamadı." },
         { status: 404 }
       );
     }
 
-    // Sahiplik kontrolü
-    // admin-1 ise tüm kaydı görebilsin
-    if (userId !== "admin-1" && assignment.user_id !== userId) {
+    // 2) Kullanıcıya ait mi kontrol et
+    if (String(assignmentById.user_id).trim() !== userId) {
       return NextResponse.json(
-        { error: "Bu eğitim kaydına erişim yetkiniz yok." },
+        { error: "Bu eğitim ataması bu kullanıcıya ait değil." },
         { status: 403 }
       );
     }
+
+    const assignment = assignmentById;
 
     const { data: trainingMeta, error: trainingMetaError } = await supabase
       .from("trainings")
@@ -141,7 +133,7 @@ export async function POST(request: Request) {
 
     const { data: questions, error: questionError } = await supabase
       .from("training_exam_questions")
-      .select("id, training_id, exam_type, correct_option, is_active")
+      .select("id, training_id, exam_type, correct_option, sort_order, is_active")
       .eq("training_id", assignment.training_id)
       .eq("exam_type", examType)
       .order("sort_order", { ascending: true })
@@ -155,9 +147,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const safeQuestions = (questions || []).filter(
-      (q) => q.is_active !== false
-    );
+    const safeQuestions = (questions || []).filter((q) => q.is_active !== false);
 
     if (safeQuestions.length === 0) {
       return NextResponse.json(
@@ -166,18 +156,18 @@ export async function POST(request: Request) {
       );
     }
 
-    if (examType === "pre" && assignment.pre_exam_completed) {
+    if (examType === "pre" && assignment.pre_exam_completed === true) {
       return NextResponse.json({
         success: true,
         examType: "pre",
-        score: assignment.pre_exam_score || 0,
+        score: Number(assignment.pre_exam_score || 0),
         passed: true,
         message: "Ön değerlendirme zaten tamamlanmış.",
       });
     }
 
     if (examType === "final") {
-      if (!assignment.pre_exam_completed) {
+      if (assignment.pre_exam_completed !== true) {
         return NextResponse.json(
           { error: "Final için önce ön sınav tamamlanmalıdır." },
           { status: 400 }
@@ -223,7 +213,7 @@ export async function POST(request: Request) {
         }
       }
 
-      if ((assignment.final_exam_attempts || 0) >= 3) {
+      if (Number(assignment.final_exam_attempts || 0) >= 3) {
         return NextResponse.json(
           { error: "Final sınav hakkı bitmiş. Eğitim yeniden alınmalı." },
           { status: 400 }
@@ -233,7 +223,7 @@ export async function POST(request: Request) {
 
     const answerMap = new Map(
       answers.map((item) => [
-        item.questionId,
+        String(item.questionId || "").trim(),
         String(item.selected_option || item.selectedOption || "")
           .toUpperCase()
           .trim(),
@@ -243,13 +233,8 @@ export async function POST(request: Request) {
     let correctCount = 0;
 
     for (const q of safeQuestions) {
-      const selected = String(answerMap.get(q.id) || "")
-        .toUpperCase()
-        .trim();
-
-      const correct = String(q.correct_option || "")
-        .toUpperCase()
-        .trim();
+      const selected = String(answerMap.get(q.id) || "").toUpperCase().trim();
+      const correct = String(q.correct_option || "").toUpperCase().trim();
 
       if (selected === correct) {
         correctCount += 1;
@@ -286,7 +271,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const nextAttempt = (assignment.final_exam_attempts || 0) + 1;
+    const nextAttempt = Number(assignment.final_exam_attempts || 0) + 1;
     const passed = score >= 60;
 
     if (passed) {
