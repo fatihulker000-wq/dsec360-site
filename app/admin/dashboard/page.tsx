@@ -47,6 +47,40 @@ type DetailPanelState = {
   tone: "risk" | "progress" | "done";
 };
 
+const BRAND = {
+  pageTop: "#fff4f5",
+  pageMid: "#fff8f8",
+  pageBottom: "#ffffff",
+
+  heroDark: "#5a0f1f",
+  heroMid: "#8f172c",
+  heroMain: "#c62828",
+  heroSoft: "#f14b4b",
+
+  textStrong: "#3b0a15",
+  textBody: "#6f4a53",
+  textMuted: "#8b6770",
+
+  white: "#ffffff",
+  border: "#f0d6da",
+  borderStrong: "#e8bcc4",
+
+  shadow: "0 18px 50px rgba(129, 19, 38, 0.10)",
+  shadowStrong: "0 28px 80px rgba(129, 19px, 38, 0.24)",
+
+  risk: "#a61b2b",
+  progress: "#c62828",
+  done: "#2e7d32",
+
+  riskSoft: "#fff5f6",
+  progressSoft: "#fff1f1",
+  doneSoft: "#f4fcf5",
+
+  riskBorder: "#efc7cf",
+  progressBorder: "#f2c3c3",
+  doneBorder: "#cfe8d1",
+};
+
 export default function AdminDashboardPage() {
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [riskyUsers, setRiskyUsers] = useState<RiskUser[]>([]);
@@ -242,17 +276,17 @@ export default function AdminDashboardPage() {
     {
       label: "Tamamlandı",
       value: completionRate,
-      color: "#2e7d32",
+      color: BRAND.done,
     },
     {
       label: "Devam Ediyor",
       value: inProgressRate,
-      color: "#1565c0",
+      color: BRAND.progress,
     },
     {
       label: "Başlamadı",
       value: riskRate,
-      color: "#8b1e2d",
+      color: BRAND.risk,
     },
   ];
 
@@ -261,7 +295,7 @@ export default function AdminDashboardPage() {
       <main
         style={{
           minHeight: "100vh",
-          background: "#fff8f8",
+          background: `linear-gradient(180deg, ${BRAND.pageTop} 0%, ${BRAND.pageMid} 45%, ${BRAND.pageBottom} 100%)`,
           padding: "36px",
           fontFamily: "Arial, sans-serif",
         }}
@@ -269,15 +303,27 @@ export default function AdminDashboardPage() {
         <div style={{ maxWidth: "1450px", margin: "0 auto" }}>
           <div
             style={{
-              background: "#ffffff",
-              border: "1px solid #f1d5d8",
-              borderRadius: "28px",
-              padding: "28px",
-              boxShadow: "0 18px 48px rgba(87, 14, 26, 0.08)",
+              background: BRAND.white,
+              border: `1px solid ${BRAND.border}`,
+              borderRadius: "30px",
+              padding: "30px",
+              boxShadow: BRAND.shadow,
             }}
           >
-            <h1 style={{ marginTop: 0, color: "#5f0f1f" }}>Yükleniyor...</h1>
-            <p style={{ color: "#7b5560" }}>Admin dashboard hazırlanıyor.</p>
+            <h1
+              style={{
+                marginTop: 0,
+                marginBottom: "10px",
+                color: BRAND.textStrong,
+                fontSize: "34px",
+                fontWeight: 900,
+              }}
+            >
+              Yükleniyor...
+            </h1>
+            <p style={{ color: BRAND.textBody, marginBottom: 0 }}>
+              Admin dashboard hazırlanıyor.
+            </p>
           </div>
         </div>
       </main>
@@ -289,7 +335,7 @@ export default function AdminDashboardPage() {
       <main
         style={{
           minHeight: "100vh",
-          background: "#fff8f8",
+          background: `linear-gradient(180deg, ${BRAND.pageTop} 0%, ${BRAND.pageMid} 45%, ${BRAND.pageBottom} 100%)`,
           padding: "36px",
           fontFamily: "Arial, sans-serif",
         }}
@@ -297,14 +343,24 @@ export default function AdminDashboardPage() {
         <div style={{ maxWidth: "1450px", margin: "0 auto" }}>
           <div
             style={{
-              background: "#ffffff",
-              border: "1px solid #ef9aa5",
-              borderRadius: "28px",
-              padding: "28px",
-              color: "#8b1e2d",
+              background: BRAND.white,
+              border: `1px solid ${BRAND.borderStrong}`,
+              borderRadius: "30px",
+              padding: "30px",
+              color: BRAND.risk,
+              boxShadow: BRAND.shadow,
             }}
           >
-            <h1 style={{ marginTop: 0 }}>Hata</h1>
+            <h1
+              style={{
+                marginTop: 0,
+                marginBottom: "10px",
+                fontSize: "34px",
+                fontWeight: 900,
+              }}
+            >
+              Hata
+            </h1>
             <p style={{ marginBottom: 0 }}>{error}</p>
           </div>
         </div>
@@ -317,8 +373,7 @@ export default function AdminDashboardPage() {
       <main
         style={{
           minHeight: "100vh",
-          background:
-            "linear-gradient(180deg, #fff5f6 0%, #fffafb 26%, #ffffff 100%)",
+          background: `linear-gradient(180deg, ${BRAND.pageTop} 0%, ${BRAND.pageMid} 32%, ${BRAND.pageBottom} 100%)`,
           padding: "32px 20px 48px",
           fontFamily: "Arial, sans-serif",
         }}
@@ -326,56 +381,62 @@ export default function AdminDashboardPage() {
         <div style={{ maxWidth: "1450px", margin: "0 auto" }}>
           <div
             style={{
-              borderRadius: "34px",
-              padding: "32px",
-              background:
-                "linear-gradient(135deg, #3f0b17 0%, #7f1734 48%, #b91c3c 100%)",
-              color: "#ffffff",
-              boxShadow: "0 26px 70px rgba(91, 19, 38, 0.26)",
+              borderRadius: "36px",
+              padding: "34px",
+              background: `linear-gradient(135deg, ${BRAND.heroDark} 0%, ${BRAND.heroMid} 42%, ${BRAND.heroMain} 76%, ${BRAND.heroSoft} 100%)`,
+              color: BRAND.white,
+              boxShadow: "0 28px 80px rgba(129, 19, 38, 0.24)",
               marginBottom: "24px",
               position: "relative",
               overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.10)",
             }}
           >
             <div
               style={{
                 position: "absolute",
-                right: "-80px",
-                top: "-80px",
-                width: "260px",
-                height: "260px",
-                borderRadius: "999px",
-                background: "rgba(255,255,255,0.08)",
+                inset: 0,
+                background:
+                  "radial-gradient(circle at top right, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 38%)",
+                pointerEvents: "none",
               }}
             />
             <div
               style={{
                 position: "absolute",
-                right: "140px",
-                bottom: "-90px",
-                width: "220px",
-                height: "220px",
+                right: "-90px",
+                top: "-90px",
+                width: "280px",
+                height: "280px",
                 borderRadius: "999px",
-                background: "rgba(255,255,255,0.06)",
+                background: "rgba(255,255,255,0.10)",
+                filter: "blur(2px)",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                left: "52%",
+                bottom: "-110px",
+                width: "260px",
+                height: "260px",
+                borderRadius: "999px",
+                background: "rgba(255,255,255,0.07)",
               }}
             />
 
-            <div
-              style={{
-                position: "relative",
-                zIndex: 2,
-              }}
-            >
+            <div style={{ position: "relative", zIndex: 2 }}>
               <div
                 style={{
                   display: "inline-flex",
                   padding: "8px 14px",
                   borderRadius: "999px",
                   background: "rgba(255,255,255,0.14)",
-                  border: "1px solid rgba(255,255,255,0.18)",
+                  border: "1px solid rgba(255,255,255,0.20)",
                   fontSize: "12px",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   marginBottom: "16px",
+                  letterSpacing: "0.2px",
                 }}
               >
                 D-SEC • Admin Eğitim Merkezi
@@ -384,11 +445,12 @@ export default function AdminDashboardPage() {
               <h1
                 style={{
                   margin: 0,
-                  fontSize: "50px",
-                  lineHeight: 1.03,
+                  fontSize: "52px",
+                  lineHeight: 1.02,
                   fontWeight: 900,
-                  letterSpacing: "-1px",
-                  maxWidth: "820px",
+                  letterSpacing: "-1.2px",
+                  maxWidth: "880px",
+                  textShadow: "0 6px 24px rgba(0,0,0,0.12)",
                 }}
               >
                 Eğitim Performans
@@ -399,16 +461,16 @@ export default function AdminDashboardPage() {
               <p
                 style={{
                   marginTop: "16px",
-                  marginBottom: "24px",
-                  maxWidth: "900px",
-                  color: "rgba(255,255,255,0.92)",
+                  marginBottom: "26px",
+                  maxWidth: "920px",
+                  color: "rgba(255,255,255,0.94)",
                   lineHeight: 1.8,
                   fontSize: "17px",
                 }}
               >
                 Eğitim atamaları, başlama oranları, riskli kullanıcı kümeleri,
                 firma bazlı yoğunluklar ve eğitim bazlı dağılımlar tek ekranda
-                kurumsal görünümle izlenir.
+                D-SEC kurumsal kırmızı görünümüyle izlenir.
               </p>
 
               <div
@@ -438,25 +500,25 @@ export default function AdminDashboardPage() {
               title="Toplam Atama"
               value={totals.assigned}
               sub="Sistemdeki tüm eğitim atamaları"
-              accent="#7f1734"
+              accent={BRAND.heroMid}
             />
             <KpiCard
               title="Tamamlanan"
               value={totals.completed}
               sub="Final başarıyla kapanan eğitimler"
-              accent="#2e7d32"
+              accent={BRAND.done}
             />
             <KpiCard
               title="Devam Eden"
               value={totals.inProgress}
               sub="Aktif süreci devam eden kullanıcılar"
-              accent="#1565c0"
+              accent={BRAND.progress}
             />
             <KpiCard
               title="Başlamayan"
               value={totals.notStarted}
               sub="Öncelikli takip edilmesi gereken riskli grup"
-              accent="#8b1e2d"
+              accent={BRAND.risk}
             />
           </div>
 
@@ -484,9 +546,10 @@ export default function AdminDashboardPage() {
                 style={{
                   borderRadius: "18px",
                   padding: "18px",
-                  background: "#fff7f8",
-                  border: "1px solid #f0d7dc",
-                  color: "#4f2831",
+                  background:
+                    "linear-gradient(180deg, rgba(255,245,246,1) 0%, rgba(255,251,251,1) 100%)",
+                  border: `1px solid ${BRAND.border}`,
+                  color: BRAND.textStrong,
                   lineHeight: 1.8,
                 }}
               >
@@ -517,7 +580,7 @@ export default function AdminDashboardPage() {
                     label={t.title}
                     value={Number(t.not_started_count || 0)}
                     total={Math.max(Number(t.assigned_count || 0), 1)}
-                    color="#8b1e2d"
+                    color={BRAND.risk}
                   />
                 ))
               )}
@@ -533,7 +596,7 @@ export default function AdminDashboardPage() {
                     label={item.title}
                     value={item.count}
                     total={Math.max(riskyUsers.length, 1)}
-                    color="#b4233c"
+                    color={BRAND.heroMain}
                   />
                 ))
               )}
@@ -596,7 +659,7 @@ export default function AdminDashboardPage() {
                     style={{
                       fontSize: "12px",
                       fontWeight: 800,
-                      color: "#64748b",
+                      color: BRAND.textMuted,
                       marginBottom: "10px",
                     }}
                   >
@@ -619,7 +682,7 @@ export default function AdminDashboardPage() {
                     style={{
                       fontSize: "12px",
                       fontWeight: 800,
-                      color: "#64748b",
+                      color: BRAND.textMuted,
                       marginTop: "16px",
                       marginBottom: "10px",
                     }}
@@ -711,21 +774,31 @@ function HeroMiniCard({
         borderRadius: "20px",
         padding: "18px",
         background: "rgba(255,255,255,0.12)",
-        border: "1px solid rgba(255,255,255,0.14)",
-        backdropFilter: "blur(8px)",
+        border: "1px solid rgba(255,255,255,0.18)",
+        backdropFilter: "blur(10px)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
       }}
     >
       <div
         style={{
           fontSize: "12px",
-          fontWeight: 700,
-          color: "rgba(255,255,255,0.82)",
+          fontWeight: 800,
+          color: "rgba(255,255,255,0.84)",
           marginBottom: "8px",
+          letterSpacing: "0.2px",
         }}
       >
         {label}
       </div>
-      <div style={{ fontSize: "32px", fontWeight: 900 }}>{value}</div>
+      <div
+        style={{
+          fontSize: "34px",
+          fontWeight: 900,
+          lineHeight: 1.1,
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -744,11 +817,11 @@ function KpiCard({
   return (
     <div
       style={{
-        background: "#ffffff",
-        border: "1px solid #eed9de",
-        borderRadius: "22px",
-        padding: "20px",
-        boxShadow: "0 12px 34px rgba(91, 19, 38, 0.06)",
+        background: BRAND.white,
+        border: `1px solid ${BRAND.border}`,
+        borderRadius: "24px",
+        padding: "22px",
+        boxShadow: BRAND.shadow,
         position: "relative",
         overflow: "hidden",
       }}
@@ -759,7 +832,7 @@ function KpiCard({
           left: 0,
           top: 0,
           width: "100%",
-          height: "4px",
+          height: "5px",
           background: accent,
         }}
       />
@@ -767,7 +840,7 @@ function KpiCard({
         style={{
           fontSize: "13px",
           fontWeight: 800,
-          color: "#7a5c63",
+          color: BRAND.textMuted,
           marginBottom: "8px",
         }}
       >
@@ -775,15 +848,16 @@ function KpiCard({
       </div>
       <div
         style={{
-          fontSize: "34px",
+          fontSize: "36px",
           fontWeight: 900,
-          color: "#3f0b17",
+          color: BRAND.textStrong,
           marginBottom: "10px",
+          lineHeight: 1.05,
         }}
       >
         {value}
       </div>
-      <div style={{ color: "#6f5560", lineHeight: 1.7, fontSize: "14px" }}>
+      <div style={{ color: BRAND.textBody, lineHeight: 1.7, fontSize: "14px" }}>
         {sub}
       </div>
     </div>
@@ -800,11 +874,11 @@ function Panel({
   return (
     <section
       style={{
-        background: "#ffffff",
-        border: "1px solid #eed9de",
-        borderRadius: "24px",
+        background: BRAND.white,
+        border: `1px solid ${BRAND.border}`,
+        borderRadius: "26px",
         padding: "22px",
-        boxShadow: "0 12px 34px rgba(91, 19, 38, 0.06)",
+        boxShadow: BRAND.shadow,
       }}
     >
       <h2
@@ -813,7 +887,8 @@ function Panel({
           marginBottom: "18px",
           fontSize: "22px",
           fontWeight: 900,
-          color: "#3f0b17",
+          color: BRAND.textStrong,
+          letterSpacing: "-0.3px",
         }}
       >
         {title}
@@ -840,8 +915,8 @@ function ProgressRow({
           justifyContent: "space-between",
           gap: "12px",
           marginBottom: "8px",
-          fontWeight: 700,
-          color: "#5e3d45",
+          fontWeight: 800,
+          color: BRAND.textBody,
         }}
       >
         <span>{label}</span>
@@ -852,7 +927,7 @@ function ProgressRow({
           width: "100%",
           height: "12px",
           borderRadius: "999px",
-          background: "#f2e6e9",
+          background: "#f4e5e8",
           overflow: "hidden",
         }}
       >
@@ -862,6 +937,7 @@ function ProgressRow({
             height: "100%",
             background: color,
             borderRadius: "999px",
+            boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
           }}
         />
       </div>
@@ -890,8 +966,8 @@ function ProgressCountRow({
           justifyContent: "space-between",
           gap: "12px",
           marginBottom: "8px",
-          color: "#5e3d45",
-          fontWeight: 700,
+          color: BRAND.textBody,
+          fontWeight: 800,
         }}
       >
         <span>{label}</span>
@@ -903,7 +979,7 @@ function ProgressCountRow({
           width: "100%",
           height: "10px",
           borderRadius: "999px",
-          background: "#f2e6e9",
+          background: "#f4e5e8",
           overflow: "hidden",
         }}
       >
@@ -945,23 +1021,23 @@ function SummaryGroupGrid({
         const styles =
           tone === "risk"
             ? {
-                bg: "#fff7f8",
-                border: "#f1c8d0",
+                bg: BRAND.riskSoft,
+                border: BRAND.riskBorder,
                 badgeBg: "#fee2e2",
-                badgeColor: "#8b1e2d",
+                badgeColor: BRAND.risk,
               }
             : tone === "progress"
             ? {
-                bg: "#f5f9ff",
-                border: "#cfe0fb",
-                badgeBg: "#e8f1ff",
-                badgeColor: "#1565c0",
+                bg: BRAND.progressSoft,
+                border: BRAND.progressBorder,
+                badgeBg: "#ffe3e3",
+                badgeColor: BRAND.progress,
               }
             : {
-                bg: "#f4fcf5",
-                border: "#cfe8d1",
+                bg: BRAND.doneSoft,
+                border: BRAND.doneBorder,
                 badgeBg: "#e4f6e6",
-                badgeColor: "#2e7d32",
+                badgeColor: BRAND.done,
               };
 
         return (
@@ -976,13 +1052,14 @@ function SummaryGroupGrid({
               borderRadius: "18px",
               padding: "16px",
               cursor: "pointer",
+              transition: "all 0.2s ease",
             }}
           >
             <div
               style={{
                 fontSize: "16px",
                 fontWeight: 900,
-                color: "#3f0b17",
+                color: BRAND.textStrong,
                 marginBottom: "6px",
               }}
             >
@@ -991,7 +1068,7 @@ function SummaryGroupGrid({
 
             <div
               style={{
-                color: "#6c525b",
+                color: BRAND.textBody,
                 fontSize: "13px",
                 lineHeight: 1.6,
                 marginBottom: "10px",
@@ -1032,23 +1109,23 @@ function DetailDrawer({
   const toneStyles =
     panel.tone === "risk"
       ? {
-          topBg: "linear-gradient(135deg, #4b0e1c 0%, #8b1e2d 100%)",
+          topBg: `linear-gradient(135deg, ${BRAND.heroDark} 0%, ${BRAND.risk} 100%)`,
           chipBg: "#fee2e2",
-          chipColor: "#8b1e2d",
-          rowBorder: "#f1d0d6",
+          chipColor: BRAND.risk,
+          rowBorder: BRAND.riskBorder,
         }
       : panel.tone === "progress"
       ? {
-          topBg: "linear-gradient(135deg, #0b3b78 0%, #1565c0 100%)",
-          chipBg: "#e8f1ff",
-          chipColor: "#1565c0",
-          rowBorder: "#d3e2fa",
+          topBg: `linear-gradient(135deg, ${BRAND.heroMid} 0%, ${BRAND.progress} 100%)`,
+          chipBg: "#ffe3e3",
+          chipColor: BRAND.progress,
+          rowBorder: BRAND.progressBorder,
         }
       : {
           topBg: "linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)",
           chipBg: "#e4f6e6",
-          chipColor: "#2e7d32",
-          rowBorder: "#d3e8d5",
+          chipColor: BRAND.done,
+          rowBorder: BRAND.doneBorder,
         };
 
   return (
@@ -1056,7 +1133,7 @@ function DetailDrawer({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(17,17,17,0.45)",
+        background: "rgba(23, 10, 12, 0.48)",
         zIndex: 9999,
         display: "flex",
         justifyContent: "flex-end",
@@ -1067,7 +1144,7 @@ function DetailDrawer({
           width: "560px",
           maxWidth: "100%",
           height: "100%",
-          background: "#ffffff",
+          background: BRAND.white,
           boxShadow: "-16px 0 40px rgba(0,0,0,0.18)",
           overflowY: "auto",
         }}
@@ -1094,6 +1171,7 @@ function DetailDrawer({
                   fontWeight: 800,
                   opacity: 0.9,
                   marginBottom: "10px",
+                  letterSpacing: "0.2px",
                 }}
               >
                 DETAY PANELİ
@@ -1124,12 +1202,12 @@ function DetailDrawer({
               onClick={onClose}
               style={{
                 background: "rgba(255,255,255,0.14)",
-                border: "1px solid rgba(255,255,255,0.22)",
+                border: "1px solid rgba(255,255,255,0.24)",
                 color: "#fff",
                 borderRadius: "12px",
                 padding: "10px 14px",
                 cursor: "pointer",
-                fontWeight: 700,
+                fontWeight: 800,
               }}
             >
               Kapat
@@ -1164,13 +1242,14 @@ function DetailDrawer({
                   borderRadius: "18px",
                   padding: "16px",
                   marginBottom: "12px",
-                  background: "#ffffff",
+                  background: BRAND.white,
+                  boxShadow: "0 6px 16px rgba(91, 19, 38, 0.04)",
                 }}
               >
                 <div
                   style={{
                     fontWeight: 900,
-                    color: "#3f0b17",
+                    color: BRAND.textStrong,
                     marginBottom: "6px",
                     fontSize: "16px",
                   }}
@@ -1181,7 +1260,7 @@ function DetailDrawer({
                 <div
                   style={{
                     fontSize: "13px",
-                    color: "#6f5560",
+                    color: BRAND.textBody,
                     lineHeight: 1.8,
                   }}
                 >
@@ -1206,9 +1285,9 @@ function EmptyText({ text }: { text: string }) {
       style={{
         borderRadius: "16px",
         padding: "16px",
-        background: "#fff7f8",
-        border: "1px solid #f0d7dc",
-        color: "#7a5c63",
+        background: BRAND.riskSoft,
+        border: `1px solid ${BRAND.border}`,
+        color: BRAND.textMuted,
       }}
     >
       {text}
