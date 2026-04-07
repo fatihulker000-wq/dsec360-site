@@ -36,7 +36,7 @@ type ExamStats = {
 export default function PreExamPage() {
   const params = useParams();
   const router = useRouter();
-  const assignmentId = params?.id as string;
+  const assignmentId = String(params?.id || "").trim();
 
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, "A" | "B" | "C" | "D">>(
@@ -72,6 +72,12 @@ export default function PreExamPage() {
       try {
         setLoading(true);
         setError("");
+
+        if (!assignmentId) {
+          setError("Geçersiz eğitim ataması.");
+          setQuestions([]);
+          return;
+        }
 
         const res = await fetch(
           `/api/training/exam/${assignmentId}?type=pre&_t=${Date.now()}`,
@@ -112,6 +118,9 @@ export default function PreExamPage() {
 
     if (assignmentId) {
       void fetchQuestions();
+    } else {
+      setLoading(false);
+      setError("Geçersiz eğitim ataması.");
     }
   }, [assignmentId]);
 
@@ -163,6 +172,11 @@ export default function PreExamPage() {
       setSubmitting(true);
       setError("");
 
+      if (!assignmentId) {
+        setError("Geçersiz eğitim ataması.");
+        return;
+      }
+
       if (questions.length === 0) {
         setError("Sınav sorusu bulunamadı.");
         return;
@@ -190,6 +204,7 @@ export default function PreExamPage() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
 
