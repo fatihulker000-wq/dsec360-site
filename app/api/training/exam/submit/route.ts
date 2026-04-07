@@ -59,7 +59,7 @@ function normalizeType(type?: string | null) {
 export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
-    const userId = cookieStore.get("dsec_user_id")?.value;
+    const userId = cookieStore.get("dsec_user_id")?.value?.trim();
 
     if (!userId) {
       return NextResponse.json({ error: "Kullanıcı yok." }, { status: 401 });
@@ -97,21 +97,36 @@ export async function POST(request: Request) {
       )
       .eq("id", assignmentId)
       .eq("user_id", userId)
-      .single<AssignmentRow>();
+      .maybeSingle<AssignmentRow>();
 
-    if (assignmentError || !assignment) {
+    if (assignmentError) {
       console.error("assignment fetch hatası:", assignmentError);
+      return NextResponse.json(
+        { error: "Eğitim kaydı okunamadı." },
+        { status: 500 }
+      );
+    }
+
+    if (!assignment) {
       return NextResponse.json(
         { error: "Eğitim kaydı bulunamadı." },
         { status: 404 }
       );
     }
 
-    const { data: trainingMeta } = await supabase
+    const { data: trainingMeta, error: trainingMetaError } = await supabase
       .from("trainings")
       .select("id, type")
       .eq("id", assignment.training_id)
       .maybeSingle<TrainingMetaRow>();
+
+    if (trainingMetaError) {
+      console.error("training meta fetch hatası:", trainingMetaError);
+      return NextResponse.json(
+        { error: "Eğitim tipi okunamadı." },
+        { status: 500 }
+      );
+    }
 
     const trainingType = normalizeType(trainingMeta?.type);
 
@@ -120,7 +135,7 @@ export async function POST(request: Request) {
       .select("id, training_id, exam_type, correct_option, is_active")
       .eq("training_id", assignment.training_id)
       .eq("exam_type", examType)
-      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true })
       .returns<QuestionRow[]>();
 
     if (questionError) {
@@ -131,9 +146,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const safeQuestions = (questions || []).filter(
-      (q) => q.is_active !== false
-    );
+    const safeQuestions = (questions || []).filter((q) => q.is_active !== false);
 
     if (safeQuestions.length === 0) {
       return NextResponse.json(
@@ -160,50 +173,29 @@ export async function POST(request: Request) {
         );
       }
 
+      if (assignment.training_reset_required === true) {
+        return NextResponse.json(
+          {
+            error:
+              "Bu eğitim yeniden başlatılmıştır. Ön sınavı tekrar tamamlayıp videoyu baştan izlemelisiniz.",
+          },
+          { status: 400 }
+        );
+      }
+
       if (trainingType === "asenkron") {
-        let watchSeconds = Math.max(0, Number(assignment.watch_seconds || 0));
-        let clickCount = Math.max(0, Number(assignment.click_count || 0));
-
-        const asyncTrainingCompleted =
-          assignment.watch_completed === true ||
-          assignment.status === "completed" ||
-          Boolean(assignment.completed_at) ||
-          (watchSeconds > 0 && clickCount > 0);
-
-        if (!asyncTrainingCompleted) {
+        if (assignment.watch_completed !== true) {
           return NextResponse.json(
-            { error: "Son değerlendirme için önce eğitimi tamamlamalısın." },
+            {
+              error:
+                "Asenkron eğitim kurallara uygun tamamlanmadan final sınavına girilemez.",
+            },
             { status: 400 }
           );
         }
 
-        if (watchSeconds <= 0 || clickCount <= 0) {
-          const healedWatch = Math.max(watchSeconds, 1);
-          const healedClick = Math.max(clickCount, 1);
-
-          const { error: healError } = await supabase
-            .from("training_assignments")
-            .update({
-              watch_seconds: healedWatch,
-              click_count: healedClick,
-              watch_completed: true,
-              status: "completed",
-              completed_at: assignment.completed_at || new Date().toISOString(),
-            })
-            .eq("id", assignmentId)
-            .eq("user_id", userId);
-
-          if (healError) {
-            console.error("final exam self-heal update hatası:", healError);
-            return NextResponse.json(
-              { error: "Eğitim ilerleme kaydı düzeltilemedi." },
-              { status: 500 }
-            );
-          }
-
-          watchSeconds = healedWatch;
-          clickCount = healedClick;
-        }
+        const watchSeconds = Math.max(0, Number(assignment.watch_seconds || 0));
+        const clickCount = Math.max(0, Number(assignment.click_count || 0));
 
         if (watchSeconds <= 0) {
           return NextResponse.json(
@@ -240,13 +232,8 @@ export async function POST(request: Request) {
     let correctCount = 0;
 
     for (const q of safeQuestions) {
-      const selected = String(answerMap.get(q.id) || "")
-        .toUpperCase()
-        .trim();
-
-      const correct = String(q.correct_option || "")
-        .toUpperCase()
-        .trim();
+      const selected = String(answerMap.get(q.id) || "").toUpperCase().trim();
+      const correct = String(q.correct_option || "").toUpperCase().trim();
 
       if (selected === correct) {
         correctCount += 1;
@@ -322,10 +309,8 @@ export async function POST(request: Request) {
     }
 
     if (nextAttempt >= 3) {
-      const nextRepeatCount = Math.max(
-        0,
-        Number(assignment.training_repeat_count || 0)
-      ) + 1;
+      const nextRepeatCount =
+        Math.max(0, Number(assignment.training_repeat_count || 0)) + 1;
 
       const { error: failResetError } = await supabase
         .from("training_assignments")

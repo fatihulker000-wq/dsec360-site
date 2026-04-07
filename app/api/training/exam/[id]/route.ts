@@ -69,7 +69,7 @@ export async function GET(
       .select("*")
       .eq("training_id", assignment.training_id)
       .eq("exam_type", examType)
-      .order("sort_order", { ascending: true });
+      .order("id", { ascending: true });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

@@ -11,7 +11,7 @@ function getSupabase() {
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const userId = cookieStore.get("dsec_user_id")?.value;
+    const userId = cookieStore.get("dsec_user_id")?.value?.trim();
 
     if (!userId) {
       return NextResponse.json(
@@ -22,43 +22,50 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    // 🔥 assignments
     const { data: assignments, error: assignmentsError } = await supabase
       .from("training_assignments")
       .select("*")
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
 
     if (assignmentsError) {
       return NextResponse.json(
-        { error: "Assignments hata", detail: assignmentsError },
+        { error: "Assignments hata", detail: assignmentsError.message },
         { status: 500 }
       );
     }
 
-    // 🔥 training detayları
-    const trainingIds = (assignments || [])
-      .map((a) => a.training_id)
-      .filter(Boolean);
-
-    const { data: trainings } = await supabase
-      .from("trainings")
-      .select("*")
-      .in("id", trainingIds);
-
-    const trainingsMap = Object.fromEntries(
-      (trainings || []).map((t) => [t.id, t])
+    const trainingIds = Array.from(
+      new Set((assignments || []).map((a) => a.training_id).filter(Boolean))
     );
+
+    let trainingsMap: Record<string, any> = {};
+
+    if (trainingIds.length > 0) {
+      const { data: trainings, error: trainingsError } = await supabase
+        .from("trainings")
+        .select("*")
+        .in("id", trainingIds);
+
+      if (trainingsError) {
+        return NextResponse.json(
+          { error: "Trainings hata", detail: trainingsError.message },
+          { status: 500 }
+        );
+      }
+
+      trainingsMap = Object.fromEntries((trainings || []).map((t) => [t.id, t]));
+    }
 
     const result = (assignments || []).map((item) => ({
       ...item,
-      training: trainingsMap[item.training_id] || null,
+      training: item.training_id ? trainingsMap[item.training_id] || null : null,
     }));
 
     return NextResponse.json({
       success: true,
       data: result,
     });
-
   } catch (err) {
     return NextResponse.json(
       { error: "Genel hata", detail: String(err) },
