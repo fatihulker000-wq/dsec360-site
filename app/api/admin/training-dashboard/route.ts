@@ -3,19 +3,22 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const url = process.env.SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(url, key);
 }
+
+type AssignmentRow = {
+  id: string;
+  user_id: string;
+  training_id: string;
+  status: "not_started" | "in_progress" | "completed" | null;
+  final_exam_passed?: boolean | null;
+};
 
 type TrainingRow = {
   id: string;
   title: string | null;
-  assigned_count: number;
-  not_started_count: number;
-  in_progress_count: number;
-  completed_count: number;
 };
 
 type UserRow = {
@@ -25,19 +28,13 @@ type UserRow = {
   company_id: string | null;
 };
 
-type AssignmentRow = {
-  id: string;
-  user_id: string;
-  training_id: string;
-  status: string | null;
-};
-
 export async function GET() {
   try {
     const cookieStore = await cookies();
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+    const adminRole = cookieStore.get("dsec_admin_role")?.value;
 
-    if (adminAuth !== "ok") {
+    if (adminAuth !== "ok" && adminRole !== "admin") {
       return NextResponse.json(
         { error: "Yetkisiz erişim." },
         { status: 401 }
@@ -46,140 +43,178 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    const { data: trainings, error: trainingsError } = await supabase
-      .from("trainings")
-      .select(
-        "id, title, assigned_count, not_started_count, in_progress_count, completed_count"
-      )
-      .order("title", { ascending: true });
-
-    if (trainingsError) {
-      console.error("TRAINING DASHBOARD trainings error:", trainingsError);
-      return NextResponse.json(
-        { error: "Eğitim verileri alınamadı." },
-        { status: 500 }
-      );
-    }
-
     const { data: assignments, error: assignmentsError } = await supabase
       .from("training_assignments")
-      .select("id, user_id, training_id, status")
-      .order("id", { ascending: false });
+      .select("id, user_id, training_id, status, final_exam_passed")
+      .returns<AssignmentRow[]>();
 
     if (assignmentsError) {
-      console.error("TRAINING DASHBOARD assignments error:", assignmentsError);
       return NextResponse.json(
-        { error: "Atama verileri alınamadı." },
+        {
+          error: "Eğitim atamaları alınamadı.",
+          detail: assignmentsError.message,
+        },
         { status: 500 }
       );
     }
 
-    const typedAssignments = (assignments || []) as AssignmentRow[];
-    const userIds = Array.from(new Set(typedAssignments.map((x) => String(x.user_id))));
+    const assignmentRows = assignments || [];
+
     const trainingIds = Array.from(
-      new Set(typedAssignments.map((x) => String(x.training_id)))
+      new Set(assignmentRows.map((a) => a.training_id).filter(Boolean))
     );
 
-    let usersMap = new Map<string, UserRow>();
-    let trainingTitleMap = new Map<string, string>();
+    const userIds = Array.from(
+      new Set(assignmentRows.map((a) => a.user_id).filter(Boolean))
+    );
+
+    let trainingsMap: Record<string, TrainingRow> = {};
+    let usersMap: Record<string, UserRow> = {};
+
+    if (trainingIds.length > 0) {
+      const { data: trainings, error: trainingsError } = await supabase
+        .from("trainings")
+        .select("id, title")
+        .in("id", trainingIds)
+        .returns<TrainingRow[]>();
+
+      if (trainingsError) {
+        return NextResponse.json(
+          {
+            error: "Eğitim detayları alınamadı.",
+            detail: trainingsError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      trainingsMap = Object.fromEntries(
+        (trainings || []).map((t) => [t.id, t])
+      );
+    }
 
     if (userIds.length > 0) {
       const { data: users, error: usersError } = await supabase
         .from("users")
         .select("id, full_name, email, company_id")
-        .in("id", userIds);
+        .in("id", userIds)
+        .returns<UserRow[]>();
 
       if (usersError) {
-        console.error("TRAINING DASHBOARD users error:", usersError);
-      } else {
-        for (const u of (users || []) as UserRow[]) {
-          usersMap.set(String(u.id), u);
-        }
+        return NextResponse.json(
+          {
+            error: "Kullanıcı detayları alınamadı.",
+            detail: usersError.message,
+          },
+          { status: 500 }
+        );
       }
+
+      usersMap = Object.fromEntries((users || []).map((u) => [u.id, u]));
     }
 
-    if (trainingIds.length > 0) {
-      const { data: trainingList, error: trainingListError } = await supabase
-        .from("trainings")
-        .select("id, title")
-        .in("id", trainingIds);
-
-      if (trainingListError) {
-        console.error("TRAINING DASHBOARD training list error:", trainingListError);
-      } else {
-        for (const t of (trainingList || []) as Array<{ id: string; title: string | null }>) {
-          trainingTitleMap.set(String(t.id), (t.title || "Adsız Eğitim").trim());
-        }
+    const trainingStatsMap = new Map<
+      string,
+      {
+        id: string;
+        title: string;
+        assigned_count: number;
+        not_started_count: number;
+        in_progress_count: number;
+        completed_count: number;
       }
+    >();
+
+    for (const row of assignmentRows) {
+      const trainingId = row.training_id;
+      if (!trainingId) continue;
+
+      const current = trainingStatsMap.get(trainingId) || {
+        id: trainingId,
+        title: trainingsMap[trainingId]?.title || "Eğitim",
+        assigned_count: 0,
+        not_started_count: 0,
+        in_progress_count: 0,
+        completed_count: 0,
+      };
+
+      current.assigned_count += 1;
+
+      const isCompleted =
+        row.final_exam_passed === true || row.status === "completed";
+
+      if (isCompleted) {
+        current.completed_count += 1;
+      } else if (row.status === "in_progress") {
+        current.in_progress_count += 1;
+      } else {
+        current.not_started_count += 1;
+      }
+
+      trainingStatsMap.set(trainingId, current);
     }
 
-    const riskyUsers = typedAssignments
-      .filter((a) => (a.status || "not_started") === "not_started")
-      .map((a) => {
-        const user = usersMap.get(String(a.user_id));
-        return {
-          assignment_id: String(a.id),
-          user_id: String(a.user_id),
-          training_id: String(a.training_id),
-          full_name: (user?.full_name || "Adsız Kullanıcı").trim(),
-          email: (user?.email || "").trim(),
-          company_id: user?.company_id ? String(user.company_id) : "",
-          training_title:
-            trainingTitleMap.get(String(a.training_id)) || "Adsız Eğitim",
-          status: "not_started",
-        };
-      });
+    const riskyUsers = assignmentRows
+      .filter((row) => {
+        const isCompleted =
+          row.final_exam_passed === true || row.status === "completed";
+        return !isCompleted && row.status !== "in_progress";
+      })
+      .map((row) => ({
+        assignment_id: row.id,
+        user_id: row.user_id,
+        training_id: row.training_id,
+        full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
+        email: usersMap[row.user_id]?.email || "",
+        company_id: usersMap[row.user_id]?.company_id || "",
+        training_title: trainingsMap[row.training_id]?.title || "Eğitim",
+        status: "not_started" as const,
+      }));
 
-    const inProgressUsers = typedAssignments
-      .filter((a) => (a.status || "") === "in_progress")
-      .map((a) => {
-        const user = usersMap.get(String(a.user_id));
-        return {
-          assignment_id: String(a.id),
-          user_id: String(a.user_id),
-          training_id: String(a.training_id),
-          full_name: (user?.full_name || "Adsız Kullanıcı").trim(),
-          email: (user?.email || "").trim(),
-          company_id: user?.company_id ? String(user.company_id) : "",
-          training_title:
-            trainingTitleMap.get(String(a.training_id)) || "Adsız Eğitim",
-          status: "in_progress",
-        };
-      });
+    const inProgressUsers = assignmentRows
+      .filter((row) => row.status === "in_progress" && row.final_exam_passed !== true)
+      .map((row) => ({
+        assignment_id: row.id,
+        user_id: row.user_id,
+        training_id: row.training_id,
+        full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
+        email: usersMap[row.user_id]?.email || "",
+        company_id: usersMap[row.user_id]?.company_id || "",
+        training_title: trainingsMap[row.training_id]?.title || "Eğitim",
+        status: "in_progress" as const,
+      }));
 
-    const completedUsers = typedAssignments
-      .filter((a) => (a.status || "") === "completed")
-      .map((a) => {
-        const user = usersMap.get(String(a.user_id));
-        return {
-          assignment_id: String(a.id),
-          user_id: String(a.user_id),
-          training_id: String(a.training_id),
-          full_name: (user?.full_name || "Adsız Kullanıcı").trim(),
-          email: (user?.email || "").trim(),
-          company_id: user?.company_id ? String(user.company_id) : "",
-          training_title:
-            trainingTitleMap.get(String(a.training_id)) || "Adsız Eğitim",
-          status: "completed",
-        };
-      });
+    const completedUsers = assignmentRows
+      .filter((row) => row.final_exam_passed === true || row.status === "completed")
+      .map((row) => ({
+        assignment_id: row.id,
+        user_id: row.user_id,
+        training_id: row.training_id,
+        full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
+        email: usersMap[row.user_id]?.email || "",
+        company_id: usersMap[row.user_id]?.company_id || "",
+        training_title: trainingsMap[row.training_id]?.title || "Eğitim",
+        status: "completed" as const,
+      }));
+
+    const trainings = Array.from(trainingStatsMap.values()).sort(
+      (a, b) => b.assigned_count - a.assigned_count
+    );
 
     return NextResponse.json({
-      trainings: (trainings || []) as TrainingRow[],
+      success: true,
+      trainings,
       risky_users: riskyUsers,
       in_progress_users: inProgressUsers,
       completed_users: completedUsers,
-      summary: {
-        total_trainings: (trainings || []).length,
-        total_risky_users: riskyUsers.length,
-        total_in_progress_users: inProgressUsers.length,
-        total_completed_users: completedUsers.length,
-      },
     });
-  } catch (error) {
-    console.error("TRAINING DASHBOARD general error:", error);
+  } catch (err) {
+    console.error("admin training dashboard route error:", err);
     return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
+      {
+        error: "Sunucu hatası.",
+        detail: String(err),
+      },
       { status: 500 }
     );
   }
