@@ -208,6 +208,8 @@ export default function TrainingDetailPage() {
     try {
       localStorage.removeItem(`training_watch_${assignmentId}`);
       localStorage.removeItem(`training_click_${assignmentId}`);
+      localStorage.removeItem(`preExamScore_${assignmentId}`);
+      localStorage.removeItem(`preExamCompleted_${assignmentId}`);
     } catch {}
   };
 
@@ -224,7 +226,7 @@ export default function TrainingDetailPage() {
   const [maxReachedTime, setMaxReachedTime] = useState(0);
   const [showPresencePopup, setShowPresencePopup] = useState(false);
   const [clickCount, setClickCount] = useState(0);
-  const [requiredClicks, setRequiredClicks] = useState(1);
+  const [requiredClicks, setRequiredClicks] = useState(0);
   const [videoCompleted, setVideoCompleted] = useState(false);
   const [playbackReady, setPlaybackReady] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState("");
@@ -307,8 +309,7 @@ export default function TrainingDetailPage() {
         ? Number(found.click_count || 0)
         : Math.max(Number(found.click_count || 0), localClicks);
 
-      const dbCompleted =
-        found.watch_completed === true || found.final_exam_passed === true;
+      const dbCompleted = found.watch_completed === true;
 
       setTraining(found);
       setMaxReachedTime(Math.max(0, dbWatch));
@@ -388,14 +389,15 @@ export default function TrainingDetailPage() {
 
   useEffect(() => {
     if (videoDuration > 0) {
-      const calculatedRequiredClicks = Math.max(1, Math.floor(videoDuration / 90));
-      setRequiredClicks(calculatedRequiredClicks);
-
       const arr: number[] = [];
       for (let sec = 90; sec < videoDuration; sec += 90) {
         arr.push(sec);
       }
       checkpointsRef.current = arr;
+      setRequiredClicks(arr.length);
+    } else {
+      checkpointsRef.current = [];
+      setRequiredClicks(0);
     }
   }, [videoDuration]);
 
@@ -418,6 +420,8 @@ export default function TrainingDetailPage() {
     } else {
       isProgrammaticSeekRef.current = true;
       player.currentTime = 0;
+      maxReachedRef.current = 0;
+      setMaxReachedTime(0);
     }
 
     setPlaybackReady(true);
@@ -431,12 +435,6 @@ export default function TrainingDetailPage() {
     const current = Math.floor(player.currentTime || 0);
     const prevMax = maxReachedRef.current;
 
-    if (current > prevMax + 1) {
-      isProgrammaticSeekRef.current = true;
-      player.currentTime = prevMax;
-      return;
-    }
-
     if (current > prevMax) {
       maxReachedRef.current = current;
       setMaxReachedTime(current);
@@ -448,7 +446,7 @@ export default function TrainingDetailPage() {
         );
       } catch {}
 
-      if (current % 15 === 0) {
+      if (current > 0 && current % 15 === 0) {
         fetch("/api/training/update", {
           method: "POST",
           headers: {
@@ -472,8 +470,6 @@ export default function TrainingDetailPage() {
       current >= checkpoints[checkpointIndex] &&
       !showPresencePopup
     ) {
-      maxReachedRef.current = Math.max(maxReachedRef.current, current);
-      setMaxReachedTime((prev) => Math.max(prev, current));
       player.pause();
       setShowPresencePopup(true);
     }
@@ -488,12 +484,12 @@ export default function TrainingDetailPage() {
       return;
     }
 
-    const current = Math.floor(player.currentTime || 0);
-    const allowedMax = maxReachedRef.current + 2;
+    const current = Number(player.currentTime || 0);
+    const allowedMax = Number(maxReachedRef.current || 0);
 
     if (current > allowedMax) {
       isProgrammaticSeekRef.current = true;
-      player.currentTime = maxReachedRef.current;
+      player.currentTime = allowedMax;
     }
   };
 
@@ -517,20 +513,14 @@ export default function TrainingDetailPage() {
     !videoLoadError &&
     canTryNativeVideo &&
     videoDuration > 0 &&
-    effectiveWatchSeconds >= Math.max(Math.floor(videoDuration - 2), 1) &&
+    effectiveWatchSeconds >= Math.max(Math.floor(videoDuration), 1) &&
     effectiveClickCount >= requiredClicks;
 
   const serverAsyncVideoCompleted =
-    !resetRequired &&
-    (training?.watch_completed === true ||
-      (training?.status === "completed" && !finalPassed) ||
-      Boolean(training?.completed_at && !finalPassed));
+    !resetRequired && training?.watch_completed === true;
 
   const videoWatchCompleted =
-    finalPassed ||
-    serverAsyncVideoCompleted ||
-    actualAsyncVideoCompleted ||
-    videoCompleted;
+    finalPassed || actualAsyncVideoCompleted || serverAsyncVideoCompleted;
 
   const trainingCompleted = finalPassed;
   const canShowCompletedState =
@@ -555,7 +545,7 @@ export default function TrainingDetailPage() {
       try {
         await completeTrainingFlow(
           Math.floor(videoDuration),
-          Math.max(effectiveClickCount, requiredClicks)
+          effectiveClickCount
         );
 
         setProgressSaved(true);
@@ -573,7 +563,6 @@ export default function TrainingDetailPage() {
     progressSaved,
     videoDuration,
     effectiveClickCount,
-    requiredClicks,
   ]);
 
   const canTakeFinalExam =
@@ -614,7 +603,7 @@ export default function TrainingDetailPage() {
       return "Zorunlu ekran başı onayları tamamlanmadı.";
     }
 
-    if (effectiveWatchSeconds < Math.floor(videoDuration - 2)) {
+    if (effectiveWatchSeconds < Math.floor(videoDuration)) {
       return "Eğitim süresi tamamlanmadan final açılmaz.";
     }
 
@@ -834,7 +823,7 @@ export default function TrainingDetailPage() {
                   fontWeight: 700,
                 }}
               >
-                Final Puanı: %{finalScore}
+                Final Puanı: {finalScore}
               </div>
             ) : null}
           </div>
@@ -1027,20 +1016,25 @@ export default function TrainingDetailPage() {
                     onTimeUpdate={handleTimeUpdate}
                     onSeeking={handleSeeking}
                     onEnded={async () => {
-                      setVideoCompleted(true);
-                      maxReachedRef.current = videoDuration;
-                      setMaxReachedTime(videoDuration);
+                      maxReachedRef.current = Math.max(
+                        maxReachedRef.current,
+                        Math.floor(videoDuration)
+                      );
+                      setMaxReachedTime(Math.max(maxReachedRef.current, Math.floor(videoDuration)));
 
                       try {
+                        if (effectiveClickCount < requiredClicks) {
+                          setVideoCompleted(false);
+                          return;
+                        }
+
+                        setVideoCompleted(true);
+
                         const finalWatchSeconds = Math.floor(videoDuration);
-                        const finalClicks = Math.max(
-                          effectiveClickCount,
-                          Math.max(1, Math.floor(videoDuration / 90))
-                        );
+                        const finalClicks = effectiveClickCount;
 
                         await completeTrainingFlow(finalWatchSeconds, finalClicks);
 
-                        setClickCount(finalClicks);
                         setProgressSaved(true);
                         await fetchTraining();
                         window.scrollTo({ top: 0, behavior: "smooth" });
