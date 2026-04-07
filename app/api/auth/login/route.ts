@@ -67,14 +67,15 @@ export async function POST(request: Request) {
       },
     });
 
-    // 🔥 CRITICAL FIX (PRODUCTION COOKIE)
-    const cookieOptions = {
-      httpOnly: true,
-      secure: true,          // 🔥 zorunlu
-      sameSite: "none" as const, // 🔥 zorunlu
-      path: "/",
-      maxAge: 60 * 60 * 12,
-    };
+   const isProd = process.env.NODE_ENV === "production";
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? "none" as const : "lax" as const,
+  path: "/",
+  maxAge: 60 * 60 * 12,
+};
 
     response.cookies.set("dsec_user_auth", "ok", cookieOptions);
 
@@ -90,8 +91,25 @@ export async function POST(request: Request) {
       cookieOptions
     );
 
-    return response;
+    response.cookies.set(
+      "dsec_user_email",
+      String(data.email ?? ""),
+      cookieOptions
+    );
 
+    response.cookies.set(
+      "dsec_user_full_name",
+      String(data.full_name ?? ""),
+      cookieOptions
+    );
+
+    response.cookies.set(
+      "dsec_user_name",
+      String(data.full_name ?? ""),
+      cookieOptions
+    );
+
+    return response;
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Bilinmeyen sunucu hatası";
