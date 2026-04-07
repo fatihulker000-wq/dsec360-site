@@ -19,7 +19,6 @@ export default function AdminLoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
         body: JSON.stringify({ password }),
       });
 
@@ -30,11 +29,11 @@ export default function AdminLoginPage() {
         return;
       }
 
-      router.push("/admin/training/dashboard");
+      router.push("/admin/dashboard");
       router.refresh();
     } catch (err) {
-      console.error("admin login error:", err);
-      setError("Bağlantı hatası oluştu.");
+      console.error("admin login hata:", err);
+      setError("Giriş sırasında bir hata oluştu.");
     } finally {
       setLoading(false);
     }
@@ -45,32 +44,33 @@ export default function AdminLoginPage() {
       style={{
         minHeight: "100vh",
         background:
-          "linear-gradient(135deg, #0f172a 0%, #1e3a8a 45%, #2563eb 100%)",
+          "linear-gradient(135deg, #0f172a 0%, #1d4ed8 45%, #60a5fa 100%)",
+        padding: "40px 20px",
+        fontFamily: "Arial, sans-serif",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: "24px",
-        fontFamily: "Arial, sans-serif",
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: "1100px",
+          maxWidth: "1200px",
           display: "grid",
-          gridTemplateColumns: "1.1fr 0.9fr",
+          gridTemplateColumns: "1.15fr 0.85fr",
           gap: "24px",
+          alignItems: "stretch",
         }}
       >
-        <div
+        <section
           style={{
             borderRadius: "28px",
-            padding: "34px",
+            padding: "36px",
+            color: "#ffffff",
             background: "rgba(255,255,255,0.10)",
-            border: "1px solid rgba(255,255,255,0.14)",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.20)",
-            color: "#fff",
-            backdropFilter: "blur(10px)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            boxShadow: "0 24px 60px rgba(0,0,0,0.18)",
+            backdropFilter: "blur(12px)",
           }}
         >
           <div
@@ -81,8 +81,8 @@ export default function AdminLoginPage() {
               background: "rgba(255,255,255,0.14)",
               border: "1px solid rgba(255,255,255,0.18)",
               fontSize: "12px",
-              fontWeight: 800,
-              marginBottom: "18px",
+              fontWeight: 700,
+              marginBottom: "20px",
             }}
           >
             D-SEC • Admin Paneli
@@ -91,9 +91,11 @@ export default function AdminLoginPage() {
           <h1
             style={{
               margin: 0,
-              fontSize: "clamp(30px, 4vw, 50px)",
-              lineHeight: 1.05,
+              fontSize: "56px",
+              lineHeight: 1.02,
               fontWeight: 900,
+              letterSpacing: "-1px",
+              maxWidth: "620px",
             }}
           >
             Eğitim Yönetim
@@ -103,104 +105,73 @@ export default function AdminLoginPage() {
 
           <p
             style={{
-              marginTop: "18px",
-              marginBottom: "26px",
-              color: "rgba(255,255,255,0.88)",
-              lineHeight: 1.8,
-              fontSize: "15px",
-              maxWidth: "620px",
+              marginTop: "20px",
+              marginBottom: "28px",
+              maxWidth: "760px",
+              fontSize: "20px",
+              lineHeight: 1.7,
+              color: "rgba(255,255,255,0.92)",
             }}
           >
             Eğitim atamaları, kullanıcı risk analizi, tamamlama oranları,
-            admin kontrolleri ve yönetim ekranlarına buradan güvenli şekilde
-            erişebilirsiniz.
+            yönetici kontrolleri ve kurumsal raporlama ekranlarına güvenli
+            şekilde buradan erişebilirsiniz.
           </p>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: "14px",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: "16px",
+              marginTop: "28px",
             }}
           >
-            <div
-              style={{
-                padding: "18px",
-                borderRadius: "18px",
-                background: "rgba(255,255,255,0.10)",
-                border: "1px solid rgba(255,255,255,0.14)",
-              }}
-            >
+            {[
+              { label: "Yönetim", value: "Eğitim Kontrolü" },
+              { label: "Analiz", value: "Risk Takibi" },
+              { label: "Dashboard", value: "Canlı Durum" },
+            ].map((item) => (
               <div
+                key={item.value}
                 style={{
-                  fontSize: "12px",
-                  color: "rgba(255,255,255,0.76)",
-                  marginBottom: "8px",
-                  fontWeight: 700,
+                  borderRadius: "22px",
+                  padding: "20px",
+                  background: "rgba(255,255,255,0.10)",
+                  border: "1px solid rgba(255,255,255,0.16)",
+                  minHeight: "110px",
                 }}
               >
-                Yönetim
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    color: "rgba(255,255,255,0.72)",
+                    marginBottom: "10px",
+                  }}
+                >
+                  {item.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: 800,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {item.value}
+                </div>
               </div>
-              <div style={{ fontSize: "22px", fontWeight: 900 }}>
-                Eğitim Kontrolü
-              </div>
-            </div>
-
-            <div
-              style={{
-                padding: "18px",
-                borderRadius: "18px",
-                background: "rgba(255,255,255,0.10)",
-                border: "1px solid rgba(255,255,255,0.14)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "rgba(255,255,255,0.76)",
-                  marginBottom: "8px",
-                  fontWeight: 700,
-                }}
-              >
-                Analiz
-              </div>
-              <div style={{ fontSize: "22px", fontWeight: 900 }}>
-                Risk Takibi
-              </div>
-            </div>
-
-            <div
-              style={{
-                padding: "18px",
-                borderRadius: "18px",
-                background: "rgba(255,255,255,0.10)",
-                border: "1px solid rgba(255,255,255,0.14)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "rgba(255,255,255,0.76)",
-                  marginBottom: "8px",
-                  fontWeight: 700,
-                }}
-              >
-                Dashboard
-              </div>
-              <div style={{ fontSize: "22px", fontWeight: 900 }}>
-                Canlı Durum
-              </div>
-            </div>
+            ))}
           </div>
-        </div>
+        </section>
 
-        <div
+        <section
           style={{
-            background: "#ffffff",
             borderRadius: "28px",
-            padding: "34px",
-            boxShadow: "0 22px 60px rgba(15,23,42,0.22)",
-            border: "1px solid #e5e7eb",
+            padding: "32px",
+            background: "#ffffff",
+            border: "1px solid rgba(255,255,255,0.45)",
+            boxShadow: "0 24px 60px rgba(0,0,0,0.16)",
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
@@ -217,7 +188,7 @@ export default function AdminLoginPage() {
               color: "#1d4ed8",
               fontSize: "12px",
               fontWeight: 800,
-              marginBottom: "16px",
+              marginBottom: "18px",
             }}
           >
             Güvenli Admin Girişi
@@ -226,10 +197,12 @@ export default function AdminLoginPage() {
           <h2
             style={{
               marginTop: 0,
-              marginBottom: "10px",
+              marginBottom: "12px",
+              fontSize: "44px",
+              lineHeight: 1.05,
               color: "#0f172a",
-              fontSize: "30px",
               fontWeight: 900,
+              letterSpacing: "-0.6px",
             }}
           >
             Hoş geldiniz
@@ -238,23 +211,23 @@ export default function AdminLoginPage() {
           <p
             style={{
               marginTop: 0,
-              marginBottom: "24px",
+              marginBottom: "28px",
               color: "#64748b",
+              fontSize: "17px",
               lineHeight: 1.7,
-              fontSize: "14px",
             }}
           >
             Yönetim paneline erişmek için admin şifrenizi girin.
           </p>
 
-          <div style={{ marginBottom: "18px" }}>
+          <div style={{ marginBottom: "10px" }}>
             <label
               style={{
                 display: "block",
-                marginBottom: "8px",
-                fontSize: "13px",
+                marginBottom: "10px",
+                fontSize: "15px",
                 fontWeight: 800,
-                color: "#334155",
+                color: "#1e293b",
               }}
             >
               Admin Şifresi
@@ -267,76 +240,74 @@ export default function AdminLoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !loading) {
-                  void handleLogin();
+                  handleLogin();
                 }
               }}
               style={{
                 width: "100%",
-                height: "54px",
-                borderRadius: "14px",
-                border: "1px solid #dbe3ef",
-                padding: "0 16px",
-                fontSize: "15px",
+                height: "58px",
+                borderRadius: "16px",
+                border: "1px solid #cbd5e1",
+                padding: "0 18px",
+                fontSize: "16px",
                 outline: "none",
-                color: "#0f172a",
-                background: "#f8fafc",
                 boxSizing: "border-box",
               }}
             />
           </div>
 
+          <button
+            onClick={handleLogin}
+            disabled={loading}
+            style={{
+              marginTop: "16px",
+              height: "58px",
+              width: "100%",
+              borderRadius: "16px",
+              border: "none",
+              background: loading
+                ? "#93c5fd"
+                : "linear-gradient(135deg, #2563eb, #1d4ed8)",
+              color: "#ffffff",
+              fontSize: "18px",
+              fontWeight: 800,
+              cursor: loading ? "not-allowed" : "pointer",
+              boxShadow: "0 16px 32px rgba(37,99,235,0.28)",
+            }}
+          >
+            {loading ? "Kontrol ediliyor..." : "Admin Paneline Giriş Yap"}
+          </button>
+
           {error ? (
             <div
               style={{
-                marginBottom: "16px",
-                padding: "12px 14px",
-                borderRadius: "12px",
+                marginTop: "16px",
+                padding: "14px 16px",
+                borderRadius: "14px",
                 background: "#fef2f2",
                 border: "1px solid #fecaca",
                 color: "#b91c1c",
-                fontSize: "14px",
                 lineHeight: 1.6,
+                fontWeight: 700,
               }}
             >
               {error}
             </div>
           ) : null}
 
-          <button
-            onClick={handleLogin}
-            disabled={loading}
+          <p
             style={{
-              width: "100%",
-              height: "54px",
-              borderRadius: "14px",
-              border: "none",
-              background: loading
-                ? "#93c5fd"
-                : "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
-              color: "#fff",
-              fontSize: "15px",
-              fontWeight: 800,
-              cursor: loading ? "not-allowed" : "pointer",
-              boxShadow: "0 16px 34px rgba(37,99,235,0.24)",
-            }}
-          >
-            {loading ? "Giriş Yapılıyor..." : "Admin Paneline Giriş Yap"}
-          </button>
-
-          <div
-            style={{
-              marginTop: "18px",
-              paddingTop: "18px",
-              borderTop: "1px solid #e5e7eb",
+              marginTop: "22px",
+              marginBottom: 0,
               color: "#64748b",
-              fontSize: "13px",
               lineHeight: 1.7,
+              fontSize: "14px",
             }}
           >
             Yetkisiz erişimler engellenir. Giriş başarılı olduğunda eğitim
             dashboard ekranına yönlendirilirsiniz.
-          </div>
-        </div>
+          </p>
+        </section>
       </div>
     </main>
   );
