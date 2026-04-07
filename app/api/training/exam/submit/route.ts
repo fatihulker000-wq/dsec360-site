@@ -69,19 +69,24 @@ export async function POST(request: Request) {
     const body = await request.json();
     const assignmentId = String(body?.assignmentId || "").trim();
     const examType = body?.examType as ExamType | undefined;
-    const answers = Array.isArray(body?.answers) ? (body.answers as AnswerItem[]) : [];
+    const answers = Array.isArray(body?.answers)
+      ? (body.answers as AnswerItem[])
+      : [];
 
     if (!assignmentId || !examType || answers.length === 0) {
       return NextResponse.json({ error: "Eksik veri." }, { status: 400 });
     }
 
     if (examType !== "pre" && examType !== "final") {
-      return NextResponse.json({ error: "Geçersiz sınav tipi." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Geçersiz sınav tipi." },
+        { status: 400 }
+      );
     }
 
     const supabase = getSupabase();
 
-    // 1) Önce id ile kaydı çek
+    // 1) Önce sadece id ile kaydı çek
     const { data: assignmentById, error: assignmentByIdError } = await supabase
       .from("training_assignments")
       .select(
@@ -93,7 +98,14 @@ export async function POST(request: Request) {
     if (assignmentByIdError) {
       console.error("assignment by id fetch hatası:", assignmentByIdError);
       return NextResponse.json(
-        { error: "Eğitim kaydı okunamadı." },
+        {
+          error: "Eğitim kaydı okunamadı.",
+          detail: assignmentByIdError.message,
+          code: assignmentByIdError.code,
+          hint: assignmentByIdError.hint,
+          assignmentId,
+          userId,
+        },
         { status: 500 }
       );
     }
@@ -105,10 +117,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2) Kullanıcıya ait mi kontrol et
+    // 2) Kullanıcı kontrolü
     if (String(assignmentById.user_id).trim() !== userId) {
       return NextResponse.json(
-        { error: "Bu eğitim ataması bu kullanıcıya ait değil." },
+        {
+          error: "Bu eğitim ataması bu kullanıcıya ait değil.",
+          assignmentId,
+          cookieUserId: userId,
+          rowUserId: String(assignmentById.user_id).trim(),
+        },
         { status: 403 }
       );
     }
