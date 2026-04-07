@@ -7,7 +7,7 @@ function getSupabase() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
-    throw new Error("SUPABASE_URL veya SUPABASE_SERVICE_ROLE_KEY tanımlı değil.");
+    throw new Error("Supabase ENV eksik.");
   }
 
   return createClient(url, serviceRoleKey);
@@ -47,211 +47,96 @@ type TrainingAssignmentRow = {
   training_repeat_count?: number | null;
 };
 
-function isHttpUrl(value: string) {
-  return /^https?:\/\//i.test(value);
-}
-
-function normalizeSlashes(value: string) {
-  return value.replace(/\\/g, "/").replace(/^\/+/, "");
-}
-
-function resolveTrainingContentUrl(
-  supabase: ReturnType<typeof getSupabase>,
-  rawValue?: string | null
-) {
-  const baseUrl = process.env.SUPABASE_URL?.replace(/\/+$/, "") || "";
-  const raw = String(rawValue || "").trim();
-
-  if (!raw) return null;
-
-  if (isHttpUrl(raw)) {
-    return raw;
-  }
-
-  if (raw.startsWith("/storage/v1/object/public/")) {
-    return `${baseUrl}${raw}`;
-  }
-
-  if (raw.startsWith("storage/v1/object/public/")) {
-    return `${baseUrl}/${raw}`;
-  }
-
-  if (raw.startsWith("public://")) {
-    const withoutPrefix = raw.replace("public://", "");
-    const normalized = normalizeSlashes(withoutPrefix);
-    const firstSlash = normalized.indexOf("/");
-
-    if (firstSlash === -1) return raw;
-
-    const bucket = normalized.slice(0, firstSlash);
-    const filePath = normalized.slice(firstSlash + 1);
-
-    if (!bucket || !filePath) return raw;
-
-    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
-    return data?.publicUrl || raw;
-  }
-
-  const normalized = normalizeSlashes(raw);
-
-  if (!normalized.includes("://") && normalized.includes("/")) {
-    const firstSlash = normalized.indexOf("/");
-    const bucket = normalized.slice(0, firstSlash);
-    const filePath = normalized.slice(firstSlash + 1);
-
-    if (bucket && filePath) {
-      const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
-      if (data?.publicUrl) {
-        return data.publicUrl;
-      }
-    }
-  }
-
-  return raw;
-}
-
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const userIdRaw = cookieStore.get("dsec_user_id")?.value;
-    const userId = userIdRaw ? userIdRaw.trim() : null;
+  
+   const userId = "d13323a8-a148-43fb-89f5-054ae56666c8"; // TEST
 
     if (!userId) {
       return NextResponse.json(
-        { error: "Kullanıcı oturumu bulunamadı." },
+        { error: "Kullanıcı yok" },
         { status: 401 }
       );
     }
 
     const supabase = getSupabase();
 
-    let user: UserRow | { id: string; full_name: string } | null = null;
+    // ---------------- USER ----------------
+    let user: UserRow | null = null;
 
-    if (userId === "admin-1") {
-      user = {
-        id: "admin-1",
-        full_name: "Admin Kullanıcı",
-      };
-    } else {
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("id, full_name")
-        .eq("id", userId)
-        .maybeSingle<UserRow>();
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("id, full_name")
+      .eq("id", userId)
+      .maybeSingle();
 
-      if (userError) {
-        console.error("users fetch hatası:", userError);
-        return NextResponse.json(
-          { error: "Kullanıcı bilgileri alınamadı." },
-          { status: 500 }
-        );
-      }
-
-      if (!userData) {
-        return NextResponse.json(
-          { error: "Kullanıcı kaydı bulunamadı." },
-          { status: 401 }
-        );
-      }
-
-      user = userData;
+    if (userError || !userData) {
+      return NextResponse.json(
+        { error: "Kullanıcı bulunamadı" },
+        { status: 401 }
+      );
     }
 
-    let assignmentsQuery = supabase
+    user = userData;
+
+    // ---------------- ASSIGNMENTS ----------------
+    const { data: assignments, error: assignmentsError } = await supabase
       .from("training_assignments")
-      .select(
-        "id, user_id, training_id, status, started_at, completed_at, watch_completed, watch_seconds, click_count, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, training_repeat_count"
-      )
-      .order("started_at", { ascending: false })
-      .order("id", { ascending: false });
-
-    if (userId !== "admin-1") {
-      assignmentsQuery = assignmentsQuery.eq("user_id", userId);
-    }
-
-    const { data: assignments, error: assignmentsError } =
-      await assignmentsQuery.returns<TrainingAssignmentRow[]>();
+      .select("*")
+      .eq("user_id", userId);
 
     if (assignmentsError) {
-      console.error("training_assignments fetch hatası:", assignmentsError);
+      console.error(assignmentsError);
       return NextResponse.json(
         { error: "Eğitim verileri alınamadı." },
         { status: 500 }
       );
     }
 
-    const safeAssignments = assignments || [];
+    const safeAssignments = (assignments || []) as TrainingAssignmentRow[];
 
-    const trainingIds = Array.from(
-      new Set(
-        safeAssignments
-          .map((item) => item.training_id)
-          .filter((id): id is string => Boolean(id))
-      )
-    );
+    // ---------------- TRAININGS ----------------
+    const trainingIds = safeAssignments
+      .map((x) => x.training_id)
+      .filter((id): id is string => !!id);
 
     let trainingsMap: Record<string, TrainingRow> = {};
 
     if (trainingIds.length > 0) {
-      const { data: trainings, error: trainingsError } = await supabase
+      const { data: trainings } = await supabase
         .from("trainings")
-        .select("id, title, description, content_url, type")
-        .in("id", trainingIds)
-        .returns<TrainingRow[]>();
-
-      if (trainingsError) {
-        console.error("trainings fetch hatası:", trainingsError);
-        return NextResponse.json(
-          { error: "Eğitim detayları alınamadı." },
-          { status: 500 }
-        );
-      }
+        .select("*")
+        .in("id", trainingIds);
 
       trainingsMap = Object.fromEntries(
-        (trainings || []).map((item) => [item.id, item])
+        (trainings || []).map((t) => [t.id, t])
       );
     }
 
+    // ---------------- RESULT ----------------
     const result = safeAssignments.map((item) => {
       const training = item.training_id
         ? trainingsMap[item.training_id] || null
         : null;
 
-      const rawContentUrl = training?.content_url || null;
-      const resolvedContentUrl = resolveTrainingContentUrl(
-        supabase,
-        rawContentUrl
-      );
-
       const isReset = item.training_reset_required === true;
 
       return {
         id: item.id,
-        user_id: item.user_id,
         training_id: item.training_id,
         status: isReset ? "not_started" : item.status || "not_started",
         started_at: isReset ? null : item.started_at,
         completed_at: isReset ? null : item.completed_at,
-        watch_completed: isReset ? false : Boolean(item.watch_completed),
+        watch_completed: isReset ? false : !!item.watch_completed,
         watch_seconds: isReset ? 0 : Number(item.watch_seconds || 0),
         click_count: isReset ? 0 : Number(item.click_count || 0),
-        pre_exam_completed: isReset ? false : Boolean(item.pre_exam_completed),
+        pre_exam_completed: isReset ? false : !!item.pre_exam_completed,
         pre_exam_score: isReset ? 0 : Number(item.pre_exam_score || 0),
-        final_exam_score:
-          item.final_exam_score !== null && item.final_exam_score !== undefined
-            ? Number(item.final_exam_score)
-            : null,
+        final_exam_score: item.final_exam_score ?? null,
         final_exam_attempts: isReset ? 0 : Number(item.final_exam_attempts || 0),
-        final_exam_passed: Boolean(item.final_exam_passed),
-        training_reset_required: Boolean(item.training_reset_required),
+        final_exam_passed: !!item.final_exam_passed,
         training_repeat_count: Number(item.training_repeat_count || 0),
-        training: training
-          ? {
-              ...training,
-              raw_content_url: rawContentUrl,
-              content_url: resolvedContentUrl,
-            }
-          : null,
+        training,
       };
     });
 
@@ -260,11 +145,12 @@ export async function GET() {
       user,
       data: result,
     });
+
   } catch (err) {
-    console.error("training/my genel hata:", err);
-
-    const message = err instanceof Error ? err.message : "Sunucu hatası";
-
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error(err);
+    return NextResponse.json(
+      { error: "Sunucu hatası" },
+      { status: 500 }
+    );
   }
 }
