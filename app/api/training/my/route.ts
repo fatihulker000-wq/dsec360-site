@@ -22,11 +22,17 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    const { data: assignments, error: assignmentsError } = await supabase
+    let assignmentsQuery = supabase
       .from("training_assignments")
       .select("*")
-      .eq("user_id", userId)
       .order("created_at", { ascending: false });
+
+    // admin-1 uuid değil, o yüzden user_id filtre uygulanmaz
+    if (userId !== "admin-1") {
+      assignmentsQuery = assignmentsQuery.eq("user_id", userId);
+    }
+
+    const { data: assignments, error: assignmentsError } = await assignmentsQuery;
 
     if (assignmentsError) {
       return NextResponse.json(
@@ -54,7 +60,9 @@ export async function GET() {
         );
       }
 
-      trainingsMap = Object.fromEntries((trainings || []).map((t) => [t.id, t]));
+      trainingsMap = Object.fromEntries(
+        (trainings || []).map((t) => [t.id, t])
+      );
     }
 
     const result = (assignments || []).map((item) => ({
