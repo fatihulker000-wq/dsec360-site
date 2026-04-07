@@ -23,18 +23,19 @@ export async function GET(
 ) {
   try {
     const cookieStore = await cookies();
-    const userId = cookieStore.get("dsec_user_id")?.value;
+    const userId = cookieStore.get("dsec_user_id")?.value?.trim();
 
     if (!userId) {
       return NextResponse.json({ error: "Kullanıcı yok." }, { status: 401 });
     }
 
     const { id: assignmentId } = await params;
+    const safeAssignmentId = String(assignmentId || "").trim();
 
     const url = new URL(req.url);
     const examType = url.searchParams.get("type") as ExamType | null;
 
-    if (!assignmentId) {
+    if (!safeAssignmentId) {
       return NextResponse.json(
         { error: "assignment id gerekli" },
         { status: 400 }
@@ -50,17 +51,33 @@ export async function GET(
 
     const supabase = getSupabase();
 
+    // Önce assignment sadece id ile okunur
     const { data: assignment, error: assignmentError } = await supabase
       .from("training_assignments")
       .select("id, user_id, training_id")
-      .eq("id", assignmentId)
-      .eq("user_id", userId)
-      .single<AssignmentRow>();
+      .eq("id", safeAssignmentId)
+      .maybeSingle<AssignmentRow>();
 
-    if (assignmentError || !assignment) {
+    if (assignmentError) {
+      console.error("exam route assignment fetch hatası:", assignmentError);
+      return NextResponse.json(
+        { error: "Eğitim ataması okunamadı." },
+        { status: 500 }
+      );
+    }
+
+    if (!assignment) {
       return NextResponse.json(
         { error: "Eğitim ataması bulunamadı." },
         { status: 404 }
+      );
+    }
+
+    // Sahiplik kontrolü
+    if (userId !== "admin-1" && assignment.user_id !== userId) {
+      return NextResponse.json(
+        { error: "Bu eğitim atamasına erişim yetkiniz yok." },
+        { status: 403 }
       );
     }
 
@@ -69,18 +86,19 @@ export async function GET(
       .select("*")
       .eq("training_id", assignment.training_id)
       .eq("exam_type", examType)
-      .order("id", { ascending: true });
+      .order("sort_order", { ascending: true });
 
     if (error) {
+      console.error("exam questions fetch hatası:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ data: data || [] });
   } catch (err: any) {
+    console.error("exam/[id] route genel hata:", err);
     return NextResponse.json(
       { error: err?.message || "sunucu hatası" },
       { status: 500 }
     );
   }
 }
-// TEST COMMIT
