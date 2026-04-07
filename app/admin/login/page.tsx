@@ -24,7 +24,6 @@ const BRAND = {
   inputBorder: "#dec7cc",
   inputFocus: "#c62828",
 
-  softBg: "#fff6f7",
   softChip: "#fff0f1",
 
   dangerBg: "#fef2f2",

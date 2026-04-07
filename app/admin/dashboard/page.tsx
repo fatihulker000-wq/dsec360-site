@@ -1,6 +1,15 @@
 "use client";
 
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import { useEffect, useMemo, useState } from "react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 type Training = {
   id: string;
@@ -66,7 +75,7 @@ const BRAND = {
   borderStrong: "#e8bcc4",
 
   shadow: "0 18px 50px rgba(129, 19, 38, 0.10)",
-  shadowStrong: "0 28px 80px rgba(129, 19px, 38, 0.24)",
+  shadowStrong: "0 28px 80px rgba(129, 19, 38, 0.24)",
 
   risk: "#a61b2b",
   progress: "#c62828",
@@ -79,6 +88,10 @@ const BRAND = {
   riskBorder: "#efc7cf",
   progressBorder: "#f2c3c3",
   doneBorder: "#cfe8d1",
+
+  panelTopSoft: "#fff7f8",
+  gold: "#c98a2e",
+  goldSoft: "#fff5df",
 };
 
 export default function AdminDashboardPage() {
@@ -88,8 +101,10 @@ export default function AdminDashboardPage() {
   const [completedUsers, setCompletedUsers] = useState<RiskUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [aiComment, setAiComment] = useState("");
 
   const [detailPanel, setDetailPanel] = useState<DetailPanelState>({
+    
     open: false,
     title: "",
     subtitle: "",
@@ -97,6 +112,8 @@ export default function AdminDashboardPage() {
     tone: "risk",
   });
 
+  const [selectedCompany, setSelectedCompany] = useState("all");
+  const [selectedChartItem, setSelectedChartItem] = useState<string | null>(null);
   const loadDashboard = async () => {
     try {
       setLoading(true);
@@ -164,8 +181,20 @@ export default function AdminDashboardPage() {
     : 0;
 
   const riskRate = totals.assigned
-    ? Math.round((totals.notStarted / totals.assigned) * 100)
+      ? Math.round((totals.notStarted / totals.assigned) * 100)
     : 0;
+
+    useEffect(() => {
+  const text =
+    riskRate > 60
+      ? "Risk çok yüksek. Eğitimler başlamıyor. Acil aksiyon gerekli."
+      : riskRate > 30
+      ? "Risk orta seviyede. Takip artırılmalı."
+      : "Genel durum iyi. Süreç sağlıklı ilerliyor.";
+
+  setAiComment(text);
+}, [riskRate]);
+
 
   const topRiskTrainings = useMemo(() => {
     return [...trainings]
@@ -247,6 +276,41 @@ export default function AdminDashboardPage() {
     [completedUsers]
   );
 
+// 🔥 FIRMA LİSTESİ
+const companies = useMemo(() => {
+  const set = new Set<string>();
+
+  riskyUsers.forEach((u) => u.company_id && set.add(u.company_id));
+  inProgressUsers.forEach((u) => u.company_id && set.add(u.company_id));
+  completedUsers.forEach((u) => u.company_id && set.add(u.company_id));
+
+  return Array.from(set);
+}, [riskyUsers, inProgressUsers, completedUsers]);
+
+// 🔥 FİLTRE
+const filteredUsers = useMemo(() => {
+  if (selectedCompany === "all") return riskyUsers;
+
+  return riskyUsers.filter(
+    (u) => u.company_id === selectedCompany
+  );
+}, [selectedCompany, riskyUsers]);
+
+// 🔥 CHART DATA
+const chartData = useMemo(() => {
+  const map = new Map<string, number>();
+
+  filteredUsers.forEach((u) => {
+    const key = u.training_title || "Eğitim";
+    map.set(key, (map.get(key) || 0) + 1);
+  });
+
+  return Array.from(map.entries()).map(([name, value]) => ({
+    name,
+    value,
+  }));
+}, [filteredUsers]);
+
   const openDetail = (
     title: string,
     subtitle: string,
@@ -272,23 +336,74 @@ export default function AdminDashboardPage() {
     });
   };
 
+  const exportPDF = async () => {
+  const element = document.body;
+
+  const canvas = await html2canvas(element);
+  const imgData = canvas.toDataURL("image/png");
+
+  const pdf = new jsPDF("p", "mm", "a4");
+
+  const imgWidth = 210;
+  const pageHeight = 295;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+  let heightLeft = imgHeight;
+  let position = 0;
+
+  pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+  heightLeft -= pageHeight;
+
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight;
+    pdf.addPage();
+    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+  }
+
+  pdf.save("dsec-dashboard.pdf");
+};
+
   const progressBars = [
     {
       label: "Tamamlandı",
       value: completionRate,
       color: BRAND.done,
+      soft: BRAND.doneSoft,
+      description: "Final başarıyla kapanan eğitim oranı",
     },
     {
       label: "Devam Ediyor",
       value: inProgressRate,
       color: BRAND.progress,
+      soft: BRAND.progressSoft,
+      description: "Aktif izleme ve devam eden süreçler",
     },
     {
       label: "Başlamadı",
       value: riskRate,
       color: BRAND.risk,
+      soft: BRAND.riskSoft,
+      description: "Öncelikli takip gerektiren riskli oran",
     },
   ];
+
+  const executiveTone =
+    riskRate >= 60 ? "critical" : riskRate >= 30 ? "watch" : "good";
+
+  const executiveLabel =
+    executiveTone === "critical"
+      ? "Kritik İzleme"
+      : executiveTone === "watch"
+      ? "Yakın Takip"
+      : "Kontrollü Düzey";
+
+  const executiveText =
+    executiveTone === "critical"
+      ? "Başlamayan eğitim oranı yüksek. Önceliklendirilmiş takip, firma bazlı aksiyon ve kullanıcı hatırlatma akışı önerilir."
+      : executiveTone === "watch"
+      ? "Risk dengeli ama dikkat gerektiriyor. Takip listeleri ve firma bazlı dağılım yakından izlenmeli."
+      : "Genel görünüm kontrollü. Tamamlama akışı korunurken düşük riskli alanlarda optimizasyon yapılabilir.";
 
   if (loading) {
     return (
@@ -385,7 +500,7 @@ export default function AdminDashboardPage() {
               padding: "34px",
               background: `linear-gradient(135deg, ${BRAND.heroDark} 0%, ${BRAND.heroMid} 42%, ${BRAND.heroMain} 76%, ${BRAND.heroSoft} 100%)`,
               color: BRAND.white,
-              boxShadow: "0 28px 80px rgba(129, 19, 38, 0.24)",
+              boxShadow: BRAND.shadowStrong,
               marginBottom: "24px",
               position: "relative",
               overflow: "hidden",
@@ -473,6 +588,25 @@ export default function AdminDashboardPage() {
                 D-SEC kurumsal kırmızı görünümüyle izlenir.
               </p>
 
+{/* 🔥 PDF BUTTON */}
+<div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+  <button
+    onClick={exportPDF}
+    style={{
+      padding: "12px 18px",
+      borderRadius: 12,
+      background: "#c62828",
+      color: "#fff",
+      fontWeight: 800,
+      border: "none",
+      cursor: "pointer",
+    }}
+  >
+    📄 PDF İndir
+  </button>
+</div>
+
+
               <div
                 style={{
                   display: "grid",
@@ -522,6 +656,143 @@ export default function AdminDashboardPage() {
             />
           </div>
 
+        <div style={{ marginTop: 20 }}>
+
+  {/* 🔥 FIRMA FİLTRE */}
+  <div style={{ marginBottom: 16 }}>
+    <select
+      value={selectedCompany}
+      onChange={(e) => setSelectedCompany(e.target.value)}
+      style={{
+        padding: "10px 14px",
+        borderRadius: 12,
+        border: "1px solid #e5e7eb",
+        fontWeight: 700,
+      }}
+    >
+      <option value="all">Tüm Firmalar</option>
+      {companies.map((c) => (
+        <option key={c} value={c}>
+          {c || "Firma Yok"}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  {/* 🔥 GERÇEK GRAFİK */}
+  <div
+    style={{
+      width: "100%",
+      height: 320,
+      background: "#fff",
+      borderRadius: 20,
+      padding: 16,
+      border: "1px solid #f0d6da",
+      boxShadow: BRAND.shadow,
+    }}
+  >
+    <ResponsiveContainer width="100%" height="100%">
+    <BarChart
+  data={chartData}
+  onClick={(e: any) => {
+    if (e && e.activeLabel) {
+      setSelectedChartItem(e.activeLabel);
+    }
+  }}
+>
+        <XAxis dataKey="name" />
+        <Tooltip />
+        <Bar dataKey="value" fill="#c62828" radius={[6, 6, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+</div>
+
+{/* 🔥 BURAYA EKLE (AI YORUM) */}
+<div
+  style={{
+    marginTop: 20,
+    padding: 16,
+    background: "#fff",
+    borderRadius: 16,
+    border: "1px solid #eee",
+  }}
+>
+  <div style={{ fontWeight: 900, marginBottom: 6 }}>
+    🤖 AI Yönetici Yorumu
+  </div>
+
+  <div style={{ fontSize: 14, color: "#444" }}>
+    {aiComment}
+  </div>
+</div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.2fr 0.8fr",
+              gap: "18px",
+              marginBottom: "24px",
+            }}
+          >
+            <PremiumPanel
+              eyebrow="OPERASYON GÖRÜNÜMÜ"
+              title="Genel Eğitim Durumu"
+              subtitle="Tamamlama, devam ve başlangıç riski tek bakışta izlenir."
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: "12px",
+                  marginBottom: "18px",
+                }}
+              >
+                <ExecutiveMiniMetric
+                  title="Tamamlandı"
+                  value={`${completionRate}%`}
+                  tone="done"
+                />
+                <ExecutiveMiniMetric
+                  title="Devam"
+                  value={`${inProgressRate}%`}
+                  tone="progress"
+                />
+                <ExecutiveMiniMetric
+                  title="Risk"
+                  value={`${riskRate}%`}
+                  tone="risk"
+                />
+              </div>
+
+              {progressBars.map((item) => (
+                <PremiumProgressRow
+                  key={item.label}
+                  label={item.label}
+                  description={item.description}
+                  value={item.value}
+                  color={item.color}
+                  soft={item.soft}
+                />
+              ))}
+            </PremiumPanel>
+
+            <PremiumPanel
+              eyebrow="YÖNETİM ÖZETİ"
+              title="Yönetici Yorumu"
+              subtitle="Durumu yorumlayan ve aksiyon önceliğini öne çıkaran özet alan."
+            >
+              <ExecutiveCommentCard
+                label={executiveLabel}
+                text={executiveText}
+                assigned={totals.assigned}
+                riskRate={riskRate}
+                completionRate={completionRate}
+                inProgressRate={inProgressRate}
+              />
+            </PremiumPanel>
+          </div>
+
           <div
             style={{
               display: "grid",
@@ -530,77 +801,47 @@ export default function AdminDashboardPage() {
               marginBottom: "24px",
             }}
           >
-            <Panel title="Genel Eğitim Durumu">
-              {progressBars.map((item) => (
-                <ProgressRow
-                  key={item.label}
-                  label={item.label}
-                  value={item.value}
-                  color={item.color}
-                />
-              ))}
-            </Panel>
-
-            <Panel title="Yönetici Yorumu">
-              <div
-                style={{
-                  borderRadius: "18px",
-                  padding: "18px",
-                  background:
-                    "linear-gradient(180deg, rgba(255,245,246,1) 0%, rgba(255,251,251,1) 100%)",
-                  border: `1px solid ${BRAND.border}`,
-                  color: BRAND.textStrong,
-                  lineHeight: 1.8,
-                }}
-              >
-                Sistemde toplam <b>{totals.assigned}</b> eğitim ataması var.
-                Bunların <b>%{riskRate}</b> kadarı henüz başlamamış durumda.
-                Tamamlanma oranı <b>%{completionRate}</b> seviyesinde. En yoğun
-                yönetim ihtiyacı, riskli kullanıcı kümelerinde ve firma bazlı
-                yoğunluk alanlarında görünüyor.
-              </div>
-            </Panel>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "18px",
-              marginBottom: "24px",
-            }}
-          >
-            <Panel title="En Riskli Eğitimler">
+            <PremiumPanel
+              eyebrow="RİSK ODAĞI"
+              title="En Riskli Eğitimler"
+              subtitle="Başlamayan kullanıcı sayısına göre en kritik eğitim başlıkları."
+            >
               {topRiskTrainings.length === 0 ? (
                 <EmptyText text="Risk verisi bulunamadı." />
               ) : (
-                topRiskTrainings.map((t) => (
-                  <ProgressCountRow
-                    key={t.id}
-                    label={t.title}
-                    value={Number(t.not_started_count || 0)}
-                    total={Math.max(Number(t.assigned_count || 0), 1)}
-                    color={BRAND.risk}
-                  />
-                ))
+                <PremiumRiskList
+                  items={topRiskTrainings.map((t) => ({
+                    id: t.id,
+                    label: t.title,
+                    value: Number(t.not_started_count || 0),
+                    total: Math.max(Number(t.assigned_count || 0), 1),
+                    color: BRAND.risk,
+                    tone: "risk" as const,
+                  }))}
+                />
               )}
-            </Panel>
+            </PremiumPanel>
 
-            <Panel title="Firma Bazlı Risk Yoğunluğu">
+            <PremiumPanel
+              eyebrow="FİRMA ANALİZİ"
+              title="Firma Bazlı Risk Yoğunluğu"
+              subtitle="Riskli kullanıcıların firma bazlı yoğunluk dağılımı."
+            >
               {riskyCompanyGroups.length === 0 ? (
                 <EmptyText text="Firma bazlı risk verisi bulunamadı." />
               ) : (
-                riskyCompanyGroups.slice(0, 6).map((item) => (
-                  <ProgressCountRow
-                    key={item.key}
-                    label={item.title}
-                    value={item.count}
-                    total={Math.max(riskyUsers.length, 1)}
-                    color={BRAND.heroMain}
-                  />
-                ))
+                <PremiumRiskList
+                  items={riskyCompanyGroups.slice(0, 6).map((item) => ({
+                    id: item.key,
+                    label: item.title,
+                    value: item.count,
+                    total: Math.max(riskyUsers.length, 1),
+                    color: BRAND.heroMain,
+                    tone: "progress" as const,
+                  }))}
+                />
               )}
-            </Panel>
+            </PremiumPanel>
           </div>
 
           <div
@@ -757,6 +998,44 @@ export default function AdminDashboardPage() {
       {detailPanel.open ? (
         <DetailDrawer panel={detailPanel} onClose={closeDetail} />
       ) : null}
+
+      {selectedChartItem && (
+  <div
+    style={{
+      position: "fixed",
+      bottom: 20,
+      right: 20,
+      background: "#fff",
+      padding: 16,
+      borderRadius: 16,
+      boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+      zIndex: 9999,
+      minWidth: 260,
+    }}
+  >
+    <div style={{ fontWeight: 900, marginBottom: 8 }}>
+      {selectedChartItem}
+    </div>
+
+    <div style={{ fontSize: 13, marginBottom: 10 }}>
+      Bu eğitime ait kullanıcı listesi
+    </div>
+
+    <button
+      onClick={() => setSelectedChartItem(null)}
+      style={{
+        padding: "8px 12px",
+        borderRadius: 10,
+        background: "#c62828",
+        color: "#fff",
+        border: "none",
+        cursor: "pointer",
+      }}
+    >
+      Kapat
+    </button>
+  </div>
+)}
     </>
   );
 }
@@ -898,46 +1177,244 @@ function Panel({
   );
 }
 
-function ProgressRow({
-  label,
-  value,
-  color,
+function PremiumPanel({
+  eyebrow,
+  title,
+  subtitle,
+  children,
 }: {
-  label: string;
-  value: number;
-  color: string;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div style={{ marginBottom: "16px" }}>
+    <section
+      style={{
+        position: "relative",
+        background: BRAND.white,
+        border: `1px solid ${BRAND.border}`,
+        borderRadius: "28px",
+        padding: "22px",
+        boxShadow: BRAND.shadow,
+        overflow: "hidden",
+      }}
+    >
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: "12px",
-          marginBottom: "8px",
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(180deg, rgba(255,250,250,1) 0%, rgba(255,255,255,0.95) 48%, rgba(255,255,255,1) 100%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          right: "-50px",
+          top: "-50px",
+          width: "180px",
+          height: "180px",
+          borderRadius: "999px",
+          background: "rgba(198, 40, 40, 0.05)",
+          pointerEvents: "none",
+        }}
+      />
+
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div
+          style={{
+            display: "inline-flex",
+            padding: "7px 12px",
+            borderRadius: "999px",
+            background: BRAND.goldSoft,
+            border: `1px solid ${BRAND.border}`,
+            color: BRAND.heroMid,
+            fontSize: "11px",
+            fontWeight: 900,
+            letterSpacing: "0.4px",
+            marginBottom: "12px",
+          }}
+        >
+          {eyebrow}
+        </div>
+
+        <h2
+          style={{
+            marginTop: 0,
+            marginBottom: "8px",
+            fontSize: "28px",
+            fontWeight: 900,
+            color: BRAND.textStrong,
+            letterSpacing: "-0.6px",
+          }}
+        >
+          {title}
+        </h2>
+
+        <p
+          style={{
+            marginTop: 0,
+            marginBottom: "18px",
+            color: BRAND.textBody,
+            lineHeight: 1.7,
+            fontSize: "14px",
+          }}
+        >
+          {subtitle}
+        </p>
+
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function ExecutiveMiniMetric({
+  title,
+  value,
+  tone,
+}: {
+  title: string;
+  value: string;
+  tone: "risk" | "progress" | "done";
+}) {
+  const toneMap =
+    tone === "risk"
+      ? {
+          bg: BRAND.riskSoft,
+          border: BRAND.riskBorder,
+          color: BRAND.risk,
+        }
+      : tone === "progress"
+      ? {
+          bg: BRAND.progressSoft,
+          border: BRAND.progressBorder,
+          color: BRAND.progress,
+        }
+      : {
+          bg: BRAND.doneSoft,
+          border: BRAND.doneBorder,
+          color: BRAND.done,
+        };
+
+  return (
+    <div
+      style={{
+        borderRadius: "18px",
+        padding: "16px",
+        background: toneMap.bg,
+        border: `1px solid ${toneMap.border}`,
+      }}
+    >
+      <div
+        style={{
+          fontSize: "12px",
           fontWeight: 800,
-          color: BRAND.textBody,
+          color: BRAND.textMuted,
+          marginBottom: "6px",
         }}
       >
-        <span>{label}</span>
-        <span>%{value}</span>
+        {title}
       </div>
       <div
         style={{
+          fontSize: "28px",
+          lineHeight: 1.05,
+          fontWeight: 900,
+          color: toneMap.color,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PremiumProgressRow({
+  label,
+  description,
+  value,
+  color,
+  soft,
+}: {
+  label: string;
+  description: string;
+  value: number;
+  color: string;
+  soft: string;
+}) {
+  return (
+    <div
+      style={{
+        borderRadius: "20px",
+        padding: "16px",
+        marginBottom: "14px",
+        background: soft,
+        border: `1px solid ${BRAND.border}`,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "14px",
+          marginBottom: "6px",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "17px",
+            fontWeight: 900,
+            color: BRAND.textStrong,
+          }}
+        >
+          {label}
+        </div>
+        <div
+          style={{
+            minWidth: "74px",
+            textAlign: "right",
+            fontSize: "24px",
+            fontWeight: 900,
+            color,
+          }}
+        >
+          %{value}
+        </div>
+      </div>
+
+      <div
+        style={{
+          fontSize: "13px",
+          color: BRAND.textBody,
+          lineHeight: 1.6,
+          marginBottom: "10px",
+        }}
+      >
+        {description}
+      </div>
+
+      <div
+        style={{
           width: "100%",
-          height: "12px",
+          height: "14px",
           borderRadius: "999px",
-          background: "#f4e5e8",
+          background: "#f2e7e9",
           overflow: "hidden",
+          boxShadow: "inset 0 2px 6px rgba(91, 19, 38, 0.06)",
         }}
       >
         <div
           style={{
             width: `${Math.max(0, Math.min(100, value))}%`,
             height: "100%",
-            background: color,
+            background: `linear-gradient(90deg, ${color} 0%, ${color}dd 100%)`,
             borderRadius: "999px",
-            boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+            boxShadow: `0 8px 18px ${hexToRgba(color, 0.28)}`,
           }}
         />
       </div>
@@ -945,53 +1422,268 @@ function ProgressRow({
   );
 }
 
-function ProgressCountRow({
+function ExecutiveCommentCard({
   label,
-  value,
-  total,
-  color,
+  text,
+  assigned,
+  riskRate,
+  completionRate,
+  inProgressRate,
 }: {
   label: string;
-  value: number;
-  total: number;
-  color: string;
+  text: string;
+  assigned: number;
+  riskRate: number;
+  completionRate: number;
+  inProgressRate: number;
 }) {
-  const percent = total > 0 ? Math.round((value / total) * 100) : 0;
-
   return (
-    <div style={{ marginBottom: "16px" }}>
+    <div
+      style={{
+        borderRadius: "22px",
+        border: `1px solid ${BRAND.border}`,
+        overflow: "hidden",
+        background: BRAND.white,
+        boxShadow: "0 14px 30px rgba(91, 19, 38, 0.05)",
+      }}
+    >
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: "12px",
-          marginBottom: "8px",
-          color: BRAND.textBody,
-          fontWeight: 800,
-        }}
-      >
-        <span>{label}</span>
-        <span>{value}</span>
-      </div>
-
-      <div
-        style={{
-          width: "100%",
-          height: "10px",
-          borderRadius: "999px",
-          background: "#f4e5e8",
-          overflow: "hidden",
+          padding: "16px 18px",
+          background: `linear-gradient(135deg, ${BRAND.heroDark} 0%, ${BRAND.heroMain} 100%)`,
+          color: BRAND.white,
         }}
       >
         <div
           style={{
-            width: `${Math.max(0, Math.min(100, percent))}%`,
-            height: "100%",
-            background: color,
+            display: "inline-flex",
+            padding: "6px 10px",
             borderRadius: "999px",
+            background: "rgba(255,255,255,0.14)",
+            border: "1px solid rgba(255,255,255,0.16)",
+            fontSize: "11px",
+            fontWeight: 900,
+            marginBottom: "10px",
+            letterSpacing: "0.3px",
           }}
-        />
+        >
+          {label}
+        </div>
+
+        <div
+          style={{
+            fontSize: "24px",
+            fontWeight: 900,
+            lineHeight: 1.1,
+          }}
+        >
+          Yönetim İçin Hızlı Değerlendirme
+        </div>
       </div>
+
+      <div
+        style={{
+          padding: "18px",
+          background:
+            "linear-gradient(180deg, rgba(255,250,250,1) 0%, rgba(255,255,255,1) 100%)",
+        }}
+      >
+        <p
+          style={{
+            marginTop: 0,
+            marginBottom: "16px",
+            color: BRAND.textStrong,
+            lineHeight: 1.8,
+            fontSize: "15px",
+          }}
+        >
+          {text}
+        </p>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: "10px",
+            marginBottom: "16px",
+          }}
+        >
+          <CommentMetric title="Toplam Atama" value={assigned} />
+          <CommentMetric title="Riskli Oran" value={`%${riskRate}`} />
+          <CommentMetric title="Tamamlama" value={`%${completionRate}`} />
+          <CommentMetric title="Devam Eden" value={`%${inProgressRate}`} />
+        </div>
+
+        <div
+          style={{
+            borderRadius: "16px",
+            padding: "14px",
+            background: BRAND.goldSoft,
+            border: `1px solid ${hexToRgba(BRAND.gold, 0.24)}`,
+            color: BRAND.textStrong,
+            lineHeight: 1.7,
+            fontSize: "13px",
+          }}
+        >
+          <b>Öneri:</b> Önceliklendirme sırası; başlatılmamış eğitimler →
+          firma bazlı yoğun kümeler → devam eden kullanıcıların kapanış takibi.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommentMetric({
+  title,
+  value,
+}: {
+  title: string;
+  value: string | number;
+}) {
+  return (
+    <div
+      style={{
+        borderRadius: "14px",
+        padding: "12px",
+        background: BRAND.panelTopSoft,
+        border: `1px solid ${BRAND.border}`,
+      }}
+    >
+      <div
+        style={{
+          fontSize: "12px",
+          fontWeight: 800,
+          color: BRAND.textMuted,
+          marginBottom: "5px",
+        }}
+      >
+        {title}
+      </div>
+      <div
+        style={{
+          fontSize: "22px",
+          fontWeight: 900,
+          color: BRAND.textStrong,
+          lineHeight: 1.05,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function PremiumRiskList({
+  items,
+}: {
+  items: Array<{
+    id: string;
+    label: string;
+    value: number;
+    total: number;
+    color: string;
+    tone: "risk" | "progress";
+  }>;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr",
+        gap: "12px",
+      }}
+    >
+      {items.map((item, index) => {
+        const percent =
+          item.total > 0 ? Math.round((item.value / item.total) * 100) : 0;
+
+        return (
+          <div
+            key={item.id}
+            style={{
+              borderRadius: "20px",
+              padding: "16px",
+              background: index === 0 ? BRAND.panelTopSoft : BRAND.white,
+              border: `1px solid ${
+                item.tone === "risk" ? BRAND.riskBorder : BRAND.progressBorder
+              }`,
+              boxShadow:
+                index === 0 ? "0 12px 24px rgba(91, 19, 38, 0.06)" : "none",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+                alignItems: "flex-start",
+                marginBottom: "8px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "18px",
+                  fontWeight: 900,
+                  color: BRAND.textStrong,
+                  lineHeight: 1.35,
+                  maxWidth: "78%",
+                }}
+              >
+                {item.label}
+              </div>
+
+              <div
+                style={{
+                  minWidth: "52px",
+                  height: "36px",
+                  padding: "0 10px",
+                  borderRadius: "999px",
+                  background: hexToRgba(item.color, 0.12),
+                  color: item.color,
+                  fontSize: "16px",
+                  fontWeight: 900,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {item.value}
+              </div>
+            </div>
+
+            <div
+              style={{
+                fontSize: "13px",
+                color: BRAND.textBody,
+                lineHeight: 1.6,
+                marginBottom: "10px",
+              }}
+            >
+              Toplam içindeki pay: %{percent}
+            </div>
+
+            <div
+              style={{
+                width: "100%",
+                height: "12px",
+                borderRadius: "999px",
+                background: "#f4e5e8",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.max(0, Math.min(100, percent))}%`,
+                  height: "100%",
+                  background: `linear-gradient(90deg, ${item.color} 0%, ${item.color}dd 100%)`,
+                  borderRadius: "999px",
+                  boxShadow: `0 10px 20px ${hexToRgba(item.color, 0.24)}`,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1293,4 +1985,22 @@ function EmptyText({ text }: { text: string }) {
       {text}
     </div>
   );
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  const value =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((char) => char + char)
+          .join("")
+      : normalized;
+
+  const int = parseInt(value, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

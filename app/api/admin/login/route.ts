@@ -5,17 +5,12 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function POST(request: Request) {
-  console.log("🔥 ADMIN LOGIN API CALISTI");
-
   try {
     const body = await request.json();
     const password = String(body?.password ?? "").trim();
 
     if (!password) {
-      return NextResponse.json(
-        { error: "Şifre gerekli." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Şifre gerekli." }, { status: 400 });
     }
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
@@ -33,10 +28,6 @@ export async function POST(request: Request) {
       .eq("email", "admin@dsec360.com")
       .eq("role", "super_admin")
       .maybeSingle();
-
-    console.log("OKUNAN EMAIL:", adminUser?.email);
-    console.log("DB ŞIFRE:", adminUser?.password);
-    console.log("GELEN ŞIFRE:", password);
 
     if (error) {
       console.error("Admin kullanıcı sorgu hatası:", error);
@@ -63,10 +54,7 @@ export async function POST(request: Request) {
     }
 
     if (password !== dbPassword) {
-      return NextResponse.json(
-        { error: "Hatalı şifre." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Hatalı şifre." }, { status: 401 });
     }
 
     const response = NextResponse.json({
@@ -79,9 +67,21 @@ export async function POST(request: Request) {
       },
     });
 
+    const secure = process.env.NODE_ENV === "production";
+    const roleValue = String(adminUser.role ?? "super_admin");
+
     response.cookies.set("dsec_admin_auth", "ok", {
       httpOnly: true,
       sameSite: "lax",
+      secure,
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
+
+    response.cookies.set("dsec_admin_role", roleValue, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
@@ -89,13 +89,15 @@ export async function POST(request: Request) {
     response.cookies.set("dsec_user_auth", "ok", {
       httpOnly: true,
       sameSite: "lax",
+      secure,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
 
-    response.cookies.set("dsec_user_role", String(adminUser.role), {
+    response.cookies.set("dsec_user_role", roleValue, {
       httpOnly: true,
       sameSite: "lax",
+      secure,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
@@ -103,6 +105,7 @@ export async function POST(request: Request) {
     response.cookies.set("dsec_user_id", String(adminUser.id), {
       httpOnly: true,
       sameSite: "lax",
+      secure,
       path: "/",
       maxAge: 60 * 60 * 12,
     });

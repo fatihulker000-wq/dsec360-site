@@ -34,7 +34,10 @@ export async function GET() {
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
     const adminRole = cookieStore.get("dsec_admin_role")?.value;
 
-    if (adminAuth !== "ok" && adminRole !== "admin") {
+    const isAllowedRole =
+      adminRole === "admin" || adminRole === "super_admin";
+
+    if (adminAuth !== "ok" || !isAllowedRole) {
       return NextResponse.json(
         { error: "Yetkisiz erişim." },
         { status: 401 }
@@ -88,9 +91,7 @@ export async function GET() {
         );
       }
 
-      trainingsMap = Object.fromEntries(
-        (trainings || []).map((t) => [t.id, t])
-      );
+      trainingsMap = Object.fromEntries((trainings || []).map((t) => [t.id, t]));
     }
 
     if (userIds.length > 0) {

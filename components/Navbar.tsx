@@ -117,9 +117,9 @@ export default function Navbar() {
                   left: 0,
                   minWidth: "240px",
                   background: "#ffffff",
-                  border: "1px solid #e5e7eb",
+                  border: "1px solid #ecd5da",
                   borderRadius: "18px",
-                  boxShadow: "0 18px 40px rgba(15, 23, 42, 0.12)",
+                  boxShadow: "0 18px 40px rgba(87, 14, 26, 0.12)",
                   padding: "10px",
                   display: "grid",
                   gap: "6px",
@@ -170,13 +170,14 @@ export default function Navbar() {
                 justifyContent: "center",
                 border: "none",
                 borderRadius: "14px",
-                background: "#111827",
+                background: "#2b0f16",
                 color: "#ffffff",
                 padding: "12px 16px",
                 fontSize: "14px",
                 fontWeight: 800,
                 cursor: loggingOut ? "not-allowed" : "pointer",
                 opacity: loggingOut ? 0.7 : 1,
+                boxShadow: "0 12px 24px rgba(43, 15, 22, 0.18)",
               }}
             >
               {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
@@ -196,9 +197,9 @@ export default function Navbar() {
               width: "42px",
               height: "42px",
               borderRadius: "12px",
-              border: "1px solid #e5e7eb",
+              border: "1px solid #ecd5da",
               background: "#ffffff",
-              color: "#111827",
+              color: "#3b0a15",
               fontSize: "18px",
               fontWeight: 700,
               cursor: "pointer",
@@ -213,7 +214,7 @@ export default function Navbar() {
       {mobileOpen && (
         <div
           style={{
-            borderTop: "1px solid #e5e7eb",
+            borderTop: "1px solid #ecd5da",
             background: "#ffffff",
           }}
           className="mobile-nav-panel"
@@ -300,7 +301,7 @@ export default function Navbar() {
                   width: "fit-content",
                   border: "none",
                   borderRadius: "14px",
-                  background: "#111827",
+                  background: "#2b0f16",
                   color: "#ffffff",
                   padding: "12px 16px",
                   fontSize: "14px",

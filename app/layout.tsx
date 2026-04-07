@@ -1,6 +1,5 @@
 import "./globals.css";
-import Navbar from "../components/Navbar";
-import Footer from "../components/Footer";
+import AppChrome from "../components/AppChrome";
 
 export const metadata = {
   title: "D-SEC",
@@ -15,9 +14,7 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <body>
-        <Navbar />
-        {children}
-        <Footer />
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );
