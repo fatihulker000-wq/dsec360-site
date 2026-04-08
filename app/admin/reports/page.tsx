@@ -105,6 +105,8 @@ export default function AdminReportsPage() {
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
   const [error, setError] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [showOnlyMissing, setShowOnlyMissing] = useState(false);
 
   const loadCompanies = async () => {
     try {
@@ -204,6 +206,100 @@ export default function AdminReportsPage() {
     return total ? Math.round((completed / total) * 100) : 0;
   }, [report]);
 
+  const filteredMatrix = useMemo(() => {
+    const rows = report?.matrix || [];
+    const q = employeeSearch.trim().toLowerCase();
+
+    return rows.filter((row) => {
+      const matchesSearch =
+        !q ||
+        row.full_name.toLowerCase().includes(q) ||
+        row.email.toLowerCase().includes(q);
+
+      const hasMissing = row.statuses.some(
+        (s) => s.status === "Başlamadı" || s.status === "Atanmadı"
+      );
+
+      const matchesMissing = showOnlyMissing ? hasMissing : true;
+
+      return matchesSearch && matchesMissing;
+    });
+  }, [report, employeeSearch, showOnlyMissing]);
+
+  const exportExcel = () => {
+    if (!report?.trainings || !filteredMatrix.length) return;
+
+    const headers = [
+      "Çalışan",
+      "E-Posta",
+      ...report.trainings.map((t) => t.title),
+    ];
+
+    const rows = filteredMatrix.map((row) => {
+      const statusMap = new Map(row.statuses.map((s) => [s.training_id, s.status]));
+      return [
+        row.full_name,
+        row.email,
+        ...report.trainings!.map((t) => statusMap.get(t.id) || "Atanmadı"),
+      ];
+    });
+
+    const csvContent = [headers, ...rows]
+      .map((r) =>
+        r.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
+      )
+      .join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "firma-egitim-matris-raporu.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = async () => {
+    const element = document.getElementById("report-export-area");
+    if (!element) return;
+
+    const { default: jsPDF } = await import("jspdf");
+    const { default: html2canvas } = await import("html2canvas");
+
+    const canvas = await html2canvas(element, {
+      scale: 1.2,
+      backgroundColor: "#ffffff",
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("l", "mm", "a4");
+
+    const pageWidth = 297;
+    const pageHeight = 210;
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    pdf.save("firma-egitim-raporu.pdf");
+  };
+
   return (
     <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
       <div style={{ maxWidth: 1500, margin: "0 auto" }}>
@@ -268,7 +364,7 @@ export default function AdminReportsPage() {
         ) : null}
 
         {!loadingReport && report?.company ? (
-          <>
+          <div id="report-export-area">
             <div
               style={{
                 display: "grid",
@@ -404,6 +500,84 @@ export default function AdminReportsPage() {
               </div>
             </div>
 
+            <div style={{ ...cardStyle(), marginBottom: 20 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1.3fr 1fr auto auto",
+                  gap: 12,
+                  alignItems: "end",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+                    Çalışan Ara
+                  </div>
+                  <input
+                    value={employeeSearch}
+                    onChange={(e) => setEmployeeSearch(e.target.value)}
+                    placeholder="Ad soyad veya e-posta ara..."
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border: `1px solid ${BRAND.border}`,
+                      fontSize: 14,
+                    }}
+                  />
+                </div>
+
+                <label
+                  style={{
+                    display: "inline-flex",
+                    gap: 8,
+                    alignItems: "center",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: BRAND.text,
+                    paddingBottom: 12,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showOnlyMissing}
+                    onChange={(e) => setShowOnlyMissing(e.target.checked)}
+                  />
+                  Sadece eksik eğitimleri göster
+                </label>
+
+                <button
+                  onClick={exportExcel}
+                  style={{
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "12px 16px",
+                    background: BRAND.blue,
+                    color: "#fff",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Excel / CSV
+                </button>
+
+                <button
+                  onClick={exportPDF}
+                  style={{
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "12px 16px",
+                    background: BRAND.red,
+                    color: "#fff",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  PDF İndir
+                </button>
+              </div>
+            </div>
+
             <div style={cardStyle()}>
               <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
                 Eğitim Durum Matrisi
@@ -451,7 +625,7 @@ export default function AdminReportsPage() {
                   </thead>
 
                   <tbody>
-                    {report.matrix?.map((row) => (
+                    {filteredMatrix.map((row) => (
                       <tr key={row.user_id}>
                         <td
                           style={{
@@ -500,8 +674,14 @@ export default function AdminReportsPage() {
                   </tbody>
                 </table>
               </div>
+
+              {filteredMatrix.length === 0 ? (
+                <div style={{ marginTop: 16, color: BRAND.muted }}>
+                  Filtreye uygun çalışan bulunamadı.
+                </div>
+              ) : null}
             </div>
-          </>
+          </div>
         ) : null}
       </div>
     </main>
