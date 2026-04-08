@@ -67,6 +67,17 @@ type AssignResponse = {
   error?: string;
 };
 
+const BRAND = {
+  bg: "#f7f8fb",
+  white: "#ffffff",
+  text: "#1f2937",
+  muted: "#6b7280",
+  border: "#e5e7eb",
+  red: "#c62828",
+  redDark: "#5a0f1f",
+  shadow: "0 10px 30px rgba(15,23,42,0.06)",
+};
+
 function getRoleLabel(role?: string | null) {
   if (role === "super_admin") return "Süper Admin";
   if (role === "company_admin") return "Firma Yöneticisi";
@@ -96,17 +107,17 @@ function parseTopicsCount(topicsText?: string | null) {
     .filter(Boolean).length;
 }
 
-function statCardStyle() {
+function cardStyle(): React.CSSProperties {
   return {
-    border: "1px solid #e5e7eb",
-    borderRadius: "18px",
-    background: "#ffffff",
-    padding: "18px",
-    boxShadow: "0 8px 24px rgba(15,23,42,0.04)",
-  } as const;
+    border: `1px solid ${BRAND.border}`,
+    borderRadius: 18,
+    background: BRAND.white,
+    padding: 18,
+    boxShadow: BRAND.shadow,
+  };
 }
 
-function smallBadgeStyle(
+function badgeStyle(
   bg: string,
   border: string,
   color: string
@@ -114,10 +125,10 @@ function smallBadgeStyle(
   return {
     display: "inline-flex",
     padding: "6px 10px",
-    borderRadius: "999px",
+    borderRadius: 999,
     background: bg,
     border: `1px solid ${border}`,
-    fontSize: "12px",
+    fontSize: 12,
     fontWeight: 700,
     color,
   };
@@ -131,12 +142,10 @@ export default function AdminTrainingPage() {
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState("");
-
   const [search, setSearch] = useState("");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [selectedTrainingInfo, setSelectedTrainingInfo] =
     useState<TrainingRow | null>(null);
-
   const [assignSummary, setAssignSummary] = useState<AssignResponse | null>(null);
 
   useEffect(() => {
@@ -146,9 +155,20 @@ export default function AdminTrainingPage() {
         setLoading(true);
 
         const [usersRes, trainingsRes] = await Promise.all([
-          fetch("/api/admin/users", { cache: "no-store" }),
-          fetch("/api/admin/trainings", { cache: "no-store" }),
+          fetch("/api/admin/users", {
+            cache: "no-store",
+            credentials: "include",
+          }),
+          fetch("/api/admin/trainings", {
+            cache: "no-store",
+            credentials: "include",
+          }),
         ]);
+
+        if (usersRes.status === 401 || trainingsRes.status === 401) {
+          window.location.href = "/admin/login";
+          return;
+        }
 
         const usersJson = await usersRes.json();
         const trainingsJson = await trainingsRes.json();
@@ -207,7 +227,7 @@ export default function AdminTrainingPage() {
       }
     };
 
-    load();
+    void load();
   }, []);
 
   useEffect(() => {
@@ -216,21 +236,15 @@ export default function AdminTrainingPage() {
   }, [trainingId, trainings]);
 
   const companies = useMemo(() => {
-    const list = Array.from(
-      new Set(users.map((u) => u.company.trim()).filter(Boolean))
-    );
-
+    const list = Array.from(new Set(users.map((u) => u.company.trim()).filter(Boolean)));
     return list.sort((a, b) => a.localeCompare(b, "tr"));
   }, [users]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       const text = `${u.full_name} ${u.email} ${u.company} ${u.role}`.toLowerCase();
-
       const matchesSearch = !search || text.includes(search.toLowerCase());
-      const matchesCompany =
-        companyFilter === "all" ? true : u.company === companyFilter;
-
+      const matchesCompany = companyFilter === "all" ? true : u.company === companyFilter;
       return matchesSearch && matchesCompany;
     });
   }, [users, search, companyFilter]);
@@ -240,26 +254,6 @@ export default function AdminTrainingPage() {
   const allFilteredSelected =
     filteredUsers.length > 0 &&
     filteredUsers.every((u) => selectedUsers.includes(u.id));
-
-  const activeUsersCount = useMemo(
-    () => users.filter((u) => u.is_active).length,
-    [users]
-  );
-
-  const passiveUsersCount = useMemo(
-    () => users.filter((u) => !u.is_active).length,
-    [users]
-  );
-
-  const filteredActiveCount = useMemo(
-    () => filteredUsers.filter((u) => u.is_active).length,
-    [filteredUsers]
-  );
-
-  const filteredPassiveCount = useMemo(
-    () => filteredUsers.filter((u) => !u.is_active).length,
-    [filteredUsers]
-  );
 
   const selectedUserDetails = useMemo(() => {
     const selectedSet = new Set(selectedUsers);
@@ -276,18 +270,9 @@ export default function AdminTrainingPage() {
 
   const trainingTotals = useMemo(() => {
     const totalAssigned = trainings.reduce((sum, t) => sum + t.assigned_count, 0);
-    const totalNotStarted = trainings.reduce(
-      (sum, t) => sum + t.not_started_count,
-      0
-    );
-    const totalInProgress = trainings.reduce(
-      (sum, t) => sum + t.in_progress_count,
-      0
-    );
-    const totalCompleted = trainings.reduce(
-      (sum, t) => sum + t.completed_count,
-      0
-    );
+    const totalNotStarted = trainings.reduce((sum, t) => sum + t.not_started_count, 0);
+    const totalInProgress = trainings.reduce((sum, t) => sum + t.in_progress_count, 0);
+    const totalCompleted = trainings.reduce((sum, t) => sum + t.completed_count, 0);
 
     return {
       totalAssigned,
@@ -299,9 +284,7 @@ export default function AdminTrainingPage() {
 
   const toggleUser = (userId: string, checked: boolean) => {
     if (checked) {
-      setSelectedUsers((prev) =>
-        prev.includes(userId) ? prev : [...prev, userId]
-      );
+      setSelectedUsers((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
     } else {
       setSelectedUsers((prev) => prev.filter((x) => x !== userId));
     }
@@ -347,6 +330,11 @@ export default function AdminTrainingPage() {
         }),
       });
 
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
       const data: AssignResponse = await res.json();
 
       if (!res.ok) {
@@ -358,6 +346,10 @@ export default function AdminTrainingPage() {
       setAssignSummary(data);
       alert(data?.message || "Eğitim atandı ✅");
       setSelectedUsers([]);
+      await Promise.all([
+        fetch("/api/admin/users", { cache: "no-store", credentials: "include" }),
+        fetch("/api/admin/trainings", { cache: "no-store", credentials: "include" }),
+      ]);
     } catch (err) {
       console.error(err);
       alert("Sunucu hatası oluştu.");
@@ -367,914 +359,520 @@ export default function AdminTrainingPage() {
   };
 
   return (
-    <main>
-      <section className="hero hero-compact">
-        <div className="hero-inner">
-          <div className="hero-badge">D-SEC Eğitim Yönetimi</div>
-          <h1 className="hero-title">Premium Eğitim Atama Paneli</h1>
-          <p className="hero-desc">
-            Eğitim seçin, çalışanları filtreleyin, toplu atama yapın ve gönderim
-            sonuçlarını tek ekranda izleyin.
+    <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+        <div
+          style={{
+            ...cardStyle(),
+            background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
+            color: "#fff",
+            marginBottom: 20,
+          }}
+        >
+          <div style={badgeStyle("rgba(255,255,255,0.16)", "rgba(255,255,255,0.22)", "#fff")}>
+            D-SEC Eğitim Yönetimi
+          </div>
+          <h1 style={{ marginTop: 14, marginBottom: 8, fontSize: 36, fontWeight: 900 }}>
+            Eğitim Atama Paneli
+          </h1>
+          <p style={{ margin: 0, color: "rgba(255,255,255,0.92)", lineHeight: 1.7 }}>
+            Eğitim seç, çalışan filtrele, toplu atama yap ve sonuçları tek ekranda izle.
           </p>
         </div>
-      </section>
 
-      <section className="section section-light">
-        <div className="page-container">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: "18px",
-              marginBottom: "24px",
-            }}
-          >
-            <div style={statCardStyle()}>
-              <div style={{ fontSize: "13px", color: "#6b7280" }}>Toplam Çalışan</div>
-              <div style={{ fontSize: "30px", fontWeight: 800, marginTop: "8px" }}>
-                {users.length}
-              </div>
-            </div>
+        {error ? (
+          <div style={{ ...cardStyle(), marginBottom: 20, color: BRAND.red, fontWeight: 700 }}>
+            {error}
+          </div>
+        ) : null}
 
-            <div style={statCardStyle()}>
-              <div style={{ fontSize: "13px", color: "#166534" }}>Aktif Çalışan</div>
-              <div style={{ fontSize: "30px", fontWeight: 800, marginTop: "8px" }}>
-                {activeUsersCount}
-              </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Çalışan</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{users.length}</div>
+          </div>
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Eğitim</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{trainings.length}</div>
+          </div>
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Atama</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
+              {trainingTotals.totalAssigned}
             </div>
+          </div>
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 13, color: BRAND.muted }}>Seçili Çalışan</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
+              {selectedCount}
+            </div>
+          </div>
+        </div>
 
-            <div style={statCardStyle()}>
-              <div style={{ fontSize: "13px", color: "#b91c1c" }}>Pasif Çalışan</div>
-              <div style={{ fontSize: "30px", fontWeight: 800, marginTop: "8px" }}>
-                {passiveUsersCount}
-              </div>
-            </div>
-
-            <div style={statCardStyle()}>
-              <div style={{ fontSize: "13px", color: "#92400e" }}>Toplam Eğitim</div>
-              <div style={{ fontSize: "30px", fontWeight: 800, marginTop: "8px" }}>
-                {trainings.length}
-              </div>
-            </div>
+        <div
+          style={{
+            ...cardStyle(),
+            marginBottom: 20,
+            display: "grid",
+            gridTemplateColumns: "1.3fr 1fr",
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Eğitim</div>
+            <select
+              value={trainingId}
+              onChange={(e) => setTrainingId(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                borderRadius: 12,
+                border: `1px solid ${BRAND.border}`,
+                background: "#fff",
+                fontSize: 14,
+              }}
+            >
+              <option value="">Eğitim seç</option>
+              {trainings.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: "18px",
-              marginBottom: "24px",
+              border: `1px solid ${BRAND.border}`,
+              borderRadius: 16,
+              padding: 14,
+              background: "#fafafa",
             }}
           >
-            <div style={statCardStyle()}>
-              <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                Toplam Eğitim Ataması
-              </div>
-              <div style={{ fontSize: "30px", fontWeight: 800, marginTop: "8px" }}>
-                {trainingTotals.totalAssigned}
-              </div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+              Seçilen Eğitim Özeti
             </div>
 
-            <div style={statCardStyle()}>
-              <div style={{ fontSize: "13px", color: "#92400e" }}>
-                Başlamayan Toplam
-              </div>
-              <div style={{ fontSize: "30px", fontWeight: 800, marginTop: "8px" }}>
-                {trainingTotals.totalNotStarted}
-              </div>
-            </div>
-
-            <div style={statCardStyle()}>
-              <div style={{ fontSize: "13px", color: "#1d4ed8" }}>
-                Devam Eden Toplam
-              </div>
-              <div style={{ fontSize: "30px", fontWeight: 800, marginTop: "8px" }}>
-                {trainingTotals.totalInProgress}
-              </div>
-            </div>
-
-            <div style={statCardStyle()}>
-              <div style={{ fontSize: "13px", color: "#166534" }}>
-                Tamamlanan Toplam
-              </div>
-              <div style={{ fontSize: "30px", fontWeight: 800, marginTop: "8px" }}>
-                {trainingTotals.totalCompleted}
-              </div>
-            </div>
-          </div>
-
-          {error ? (
-            <div className="card" style={{ marginBottom: "24px" }}>
-              <h3 className="card-title" style={{ marginBottom: "8px" }}>
-                Hata
-              </h3>
-              <p className="card-text">{error}</p>
-            </div>
-          ) : null}
-
-          <div className="card" style={{ marginBottom: "24px" }}>
-            <h3 className="card-title" style={{ marginBottom: "16px" }}>
-              Eğitim Seçimi
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1.3fr 1fr",
-                gap: "16px",
-                alignItems: "start",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "8px" }}>
-                  Eğitim
+            {selectedTrainingInfo ? (
+              <>
+                <div style={{ fontSize: 17, fontWeight: 900 }}>{selectedTrainingInfo.title}</div>
+                <div style={{ marginTop: 8, fontSize: 13, color: BRAND.muted, lineHeight: 1.6 }}>
+                  {selectedTrainingInfo.description}
                 </div>
-                <select
-                  value={trainingId}
-                  onChange={(e) => setTrainingId(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    borderRadius: "12px",
-                    border: "1px solid #d1d5db",
-                    outline: "none",
-                    fontSize: "14px",
-                    background: "#fff",
-                  }}
-                >
-                  <option value="">Eğitim seç</option>
-                  {trainings.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title}
-                    </option>
-                  ))}
-                </select>
-
-                <div
-                  style={{
-                    marginTop: "14px",
-                    fontSize: "12px",
-                    color: "#6b7280",
-                    lineHeight: 1.7,
-                  }}
-                >
-                  Eğitim listesi admin eğitim API’sinden canlı alınır. Seçim yapınca
-                  sağda özet ve aşağıda atama etkisi anlık görünür.
+                <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
+                    Tür: {selectedTrainingInfo.type}
+                  </span>
+                  <span style={badgeStyle("#eff6ff", "#bfdbfe", "#1d4ed8")}>
+                    Süre:{" "}
+                    {typeof selectedTrainingInfo.duration_minutes === "number"
+                      ? `${selectedTrainingInfo.duration_minutes} dk`
+                      : "Tanımlı değil"}
+                  </span>
+                  <span style={badgeStyle("#f0fdf4", "#86efac", "#166534")}>
+                    Konu: {parseTopicsCount(selectedTrainingInfo.topics_text)}
+                  </span>
                 </div>
-              </div>
-
-              <div
-                style={{
-                  background: "linear-gradient(180deg,#f8fafc,#ffffff)",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "16px",
-                  padding: "14px",
-                  minHeight: "100%",
-                }}
-              >
-                <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "8px" }}>
-                  Seçilen Eğitim Özeti
-                </div>
-
-                {selectedTrainingInfo ? (
-                  <>
-                    <div style={{ fontSize: "16px", fontWeight: 800, color: "#111827" }}>
-                      {selectedTrainingInfo.title}
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: "8px",
-                        fontSize: "13px",
-                        color: "#6b7280",
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {selectedTrainingInfo.description}
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: "10px",
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "8px",
-                      }}
-                    >
-                      <span style={smallBadgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
-                        Tür: {selectedTrainingInfo.type}
-                      </span>
-                      <span style={smallBadgeStyle("#eff6ff", "#bfdbfe", "#1d4ed8")}>
-                        Süre:{" "}
-                        {typeof selectedTrainingInfo.duration_minutes === "number"
-                          ? `${selectedTrainingInfo.duration_minutes} dk`
-                          : "Tanımlı değil"}
-                      </span>
-                      <span style={smallBadgeStyle("#f0fdf4", "#86efac", "#166534")}>
-                        Konu başlığı: {parseTopicsCount(selectedTrainingInfo.topics_text)}
-                      </span>
-                    </div>
-
-                    {selectedTrainingInfo.content_url ? (
-                      <div
-                        style={{
-                          marginTop: "12px",
-                          fontSize: "12px",
-                          color: "#6b7280",
-                          wordBreak: "break-all",
-                        }}
-                      >
-                        İçerik linki: {selectedTrainingInfo.content_url}
-                      </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                    Henüz eğitim seçilmedi.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {selectedTrainingInfo ? (
-            <div className="card" style={{ marginBottom: "24px" }}>
-              <h3 className="card-title" style={{ marginBottom: "16px" }}>
-                Seçilen Eğitimin İstatistikleri
-              </h3>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                  gap: "12px",
-                }}
-              >
-                <div
-                  style={{
-                    borderRadius: "14px",
-                    border: "1px solid #e5e7eb",
-                    padding: "14px",
-                    background: "#ffffff",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "#6b7280" }}>Toplam Atama</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                    {selectedTrainingInfo.assigned_count}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    borderRadius: "14px",
-                    border: "1px solid #e5e7eb",
-                    padding: "14px",
-                    background: "#fefce8",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "#854d0e" }}>Başlamayan</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                    {selectedTrainingInfo.not_started_count}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    borderRadius: "14px",
-                    border: "1px solid #e5e7eb",
-                    padding: "14px",
-                    background: "#eff6ff",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "#1d4ed8" }}>Devam Eden</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                    {selectedTrainingInfo.in_progress_count}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    borderRadius: "14px",
-                    border: "1px solid #e5e7eb",
-                    padding: "14px",
-                    background: "#f0fdf4",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "#166534" }}>Tamamlanan</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                    {selectedTrainingInfo.completed_count}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="card" style={{ marginBottom: "24px" }}>
-            <h3 className="card-title" style={{ marginBottom: "16px" }}>
-              Çalışan Filtreleme
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr",
-                gap: "14px",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "8px" }}>
-                  Ara
-                </div>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Ad soyad, e-posta, rol veya firma ara..."
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    borderRadius: "12px",
-                    border: "1px solid #d1d5db",
-                    outline: "none",
-                    fontSize: "14px",
-                  }}
-                />
-              </div>
-
-              <div>
-                <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "8px" }}>
-                  Firma
-                </div>
-                <select
-                  value={companyFilter}
-                  onChange={(e) => setCompanyFilter(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    borderRadius: "12px",
-                    border: "1px solid #d1d5db",
-                    outline: "none",
-                    fontSize: "14px",
-                    background: "#fff",
-                  }}
-                >
-                  <option value="all">Tüm Firmalar</option>
-                  {companies.map((company) => (
-                    <option key={company} value={company}>
-                      {company}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div
-              style={{
-                marginTop: "16px",
-                display: "grid",
-                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                gap: "12px",
-              }}
-            >
-              <div
-                style={{
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  padding: "14px",
-                  background: "#fafafa",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "#6b7280" }}>Filtrelenen Çalışan</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                  {filteredUsers.length}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  padding: "14px",
-                  background: "#f0fdf4",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "#166534" }}>Filtrelenen Aktif</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                  {filteredActiveCount}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  padding: "14px",
-                  background: "#fef2f2",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "#b91c1c" }}>Filtrelenen Pasif</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                  {filteredPassiveCount}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  padding: "14px",
-                  background: "#eff6ff",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "#1d4ed8" }}>Seçili Çalışan</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                  {selectedCount}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="card" style={{ marginBottom: "24px" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "12px",
-                alignItems: "center",
-                marginBottom: "16px",
-                flexWrap: "wrap",
-              }}
-            >
-              <h3 className="card-title" style={{ margin: 0 }}>
-                Çalışan Seçimi
-              </h3>
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: "10px",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                }}
-              >
-                <label
-                  style={{
-                    display: "inline-flex",
-                    gap: "8px",
-                    alignItems: "center",
-                    fontSize: "13px",
-                    color: "#374151",
-                    fontWeight: 700,
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={allFilteredSelected}
-                    onChange={(e) => toggleAllFiltered(e.target.checked)}
-                  />
-                  Filtrelenenleri toplu seç
-                </label>
-
-                <button
-                  type="button"
-                  onClick={clearSelection}
-                  style={{
-                    border: "none",
-                    borderRadius: "10px",
-                    padding: "10px 14px",
-                    background: "#111827",
-                    color: "#fff",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  Seçimi Temizle
-                </button>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="card-text">Yükleniyor...</div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="card-text">Uygun çalışan bulunamadı.</div>
+              </>
             ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  gap: "14px",
-                }}
-              >
-                {filteredUsers.map((u) => {
-                  const checked = selectedUsers.includes(u.id);
-
-                  return (
-                    <label
-                      key={u.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "12px",
-                        padding: "16px",
-                        borderRadius: "16px",
-                        border: checked ? "2px solid #2563eb" : "1px solid #e5e7eb",
-                        background: checked
-                          ? "linear-gradient(180deg,#eff6ff,#ffffff)"
-                          : "#f9fafb",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => toggleUser(u.id, e.target.checked)}
-                        style={{ marginTop: "4px" }}
-                      />
-
-                      <div style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            fontSize: "16px",
-                            fontWeight: 800,
-                            color: "#111827",
-                          }}
-                        >
-                          {u.full_name}
-                        </div>
-
-                        <div
-                          style={{
-                            marginTop: "6px",
-                            fontSize: "13px",
-                            color: "#6b7280",
-                            lineHeight: 1.6,
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {u.email}
-                        </div>
-
-                        <div
-                          style={{
-                            marginTop: "8px",
-                            display: "flex",
-                            gap: "8px",
-                            flexWrap: "wrap",
-                          }}
-                        >
-                          <span
-                            style={smallBadgeStyle("#fff", "#e5e7eb", "#374151")}
-                          >
-                            {u.company}
-                          </span>
-
-                          <span
-                            style={
-                              u.is_active
-                                ? smallBadgeStyle("#dcfce7", "#86efac", "#166534")
-                                : smallBadgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
-                            }
-                          >
-                            {u.is_active ? "Aktif" : "Pasif"}
-                          </span>
-
-                          <span
-                            style={smallBadgeStyle("#f3f4f6", "#d1d5db", "#374151")}
-                          >
-                            {u.role}
-                          </span>
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
+              <div style={{ fontSize: 13, color: BRAND.muted }}>Henüz eğitim seçilmedi.</div>
             )}
           </div>
+        </div>
 
-          <div className="card" style={{ marginBottom: "24px" }}>
-            <h3 className="card-title" style={{ marginBottom: "16px" }}>
-              Atama Ön İzleme
-            </h3>
-
-            <div
+        <div
+          style={{
+            ...cardStyle(),
+            marginBottom: 20,
+            display: "grid",
+            gridTemplateColumns: "2fr 1fr",
+            gap: 14,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Ara</div>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Ad soyad, e-posta, rol veya firma ara..."
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                gap: "12px",
+                width: "100%",
+                padding: "12px 14px",
+                borderRadius: 12,
+                border: `1px solid ${BRAND.border}`,
+                fontSize: 14,
               }}
-            >
-              <div
-                style={{
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  padding: "14px",
-                  background: "#ffffff",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "#6b7280" }}>Seçilen Eğitim</div>
-                <div style={{ fontSize: "15px", fontWeight: 800, marginTop: "8px" }}>
-                  {selectedTrainingInfo?.title || "-"}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  padding: "14px",
-                  background: "#eff6ff",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "#1d4ed8" }}>Seçilen Kişi</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                  {selectedCount}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  padding: "14px",
-                  background: "#f0fdf4",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "#166534" }}>Firma Sayısı</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                  {selectedCompanyCount}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  padding: "14px",
-                  background: "#fff7ed",
-                }}
-              >
-                <div style={{ fontSize: "12px", color: "#9a3412" }}>Mail Eksik</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                  {selectedWithoutEmailCount}
-                </div>
-              </div>
-            </div>
+            />
           </div>
 
-          <div className="card" style={{ marginBottom: assignSummary ? "24px" : "0" }}>
-            <div
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Firma</div>
+            <select
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "14px",
-                alignItems: "center",
-                flexWrap: "wrap",
+                width: "100%",
+                padding: "12px 14px",
+                borderRadius: 12,
+                border: `1px solid ${BRAND.border}`,
+                background: "#fff",
+                fontSize: 14,
               }}
             >
-              <div>
-                <div style={{ fontSize: "14px", fontWeight: 800, color: "#111827" }}>
-                  Atama Özeti
-                </div>
-                <div
-                  style={{
-                    marginTop: "6px",
-                    fontSize: "13px",
-                    color: "#6b7280",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Seçilen eğitim: {selectedTrainingInfo?.title || "-"}
-                  <br />
-                  Seçilen çalışan sayısı: {selectedCount}
-                </div>
-              </div>
+              <option value="all">Tüm Firmalar</option>
+              {companies.map((company) => (
+                <option key={company} value={company}>
+                  {company}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-              <button
-                onClick={assign}
-                disabled={!trainingId || selectedCount === 0 || assigning}
+        <div style={{ ...cardStyle(), marginBottom: 20 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "center",
+              marginBottom: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>Çalışan Seçimi</h2>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <label
                 style={{
-                  border: "none",
-                  borderRadius: "14px",
-                  padding: "14px 20px",
-                  background:
-                    !trainingId || selectedCount === 0 || assigning
-                      ? "#9ca3af"
-                      : "#16a34a",
-                  color: "#fff",
-                  fontWeight: 800,
-                  cursor:
-                    !trainingId || selectedCount === 0 || assigning
-                      ? "not-allowed"
-                      : "pointer",
-                  minWidth: "180px",
+                  display: "inline-flex",
+                  gap: 8,
+                  alignItems: "center",
+                  fontSize: 13,
+                  fontWeight: 700,
                 }}
               >
-                {assigning ? "Atanıyor..." : "Eğitimi Ata"}
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  onChange={(e) => toggleAllFiltered(e.target.checked)}
+                />
+                Filtrelenenleri seç
+              </label>
+
+              <button
+                type="button"
+                onClick={clearSelection}
+                style={{
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  background: "#111827",
+                  color: "#fff",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Seçimi Temizle
               </button>
             </div>
           </div>
 
-          {assignSummary ? (
-            <div className="card" style={{ marginTop: "24px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: "12px",
-                  flexWrap: "wrap",
-                  marginBottom: "16px",
-                }}
-              >
-                <div>
-                  <h3 className="card-title" style={{ marginBottom: "6px" }}>
-                    Son Atama Sonucu
-                  </h3>
-                  <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                    {assignSummary.message || "İşlem sonucu hazır."}
-                  </div>
-                </div>
+          {loading ? (
+            <div>Yükleniyor...</div>
+          ) : filteredUsers.length === 0 ? (
+            <div style={{ color: BRAND.muted }}>Uygun çalışan bulunamadı.</div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 14,
+              }}
+            >
+              {filteredUsers.map((u) => {
+                const checked = selectedUsers.includes(u.id);
 
-                <div
-                  style={
-                    assignSummary.success
-                      ? smallBadgeStyle("#dcfce7", "#86efac", "#166534")
-                      : smallBadgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
-                  }
-                >
-                  {assignSummary.success ? "Başarılı" : "Hata"}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                  gap: "12px",
-                  marginBottom: "18px",
-                }}
-              >
-                <div
-                  style={{
-                    borderRadius: "14px",
-                    border: "1px solid #e5e7eb",
-                    padding: "14px",
-                    background: "#ffffff",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "#6b7280" }}>Yeni Atama</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                    {assignSummary.insertedCount || 0}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    borderRadius: "14px",
-                    border: "1px solid #e5e7eb",
-                    padding: "14px",
-                    background: "#fefce8",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "#854d0e" }}>Atlandı</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                    {assignSummary.skippedCount || 0}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    borderRadius: "14px",
-                    border: "1px solid #e5e7eb",
-                    padding: "14px",
-                    background: "#f0fdf4",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "#166534" }}>Mail Başarılı</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                    {assignSummary.emailedCount || 0}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    borderRadius: "14px",
-                    border: "1px solid #e5e7eb",
-                    padding: "14px",
-                    background: "#fef2f2",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "#b91c1c" }}>Mail Başarısız</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                    {assignSummary.mailFailedCount || 0}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    borderRadius: "14px",
-                    border: "1px solid #e5e7eb",
-                    padding: "14px",
-                    background: "#fff7ed",
-                  }}
-                >
-                  <div style={{ fontSize: "12px", color: "#9a3412" }}>Mail Yok</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, marginTop: "6px" }}>
-                    {assignSummary.noEmailCount || 0}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  borderRadius: "16px",
-                  border: "1px solid #e5e7eb",
-                  overflow: "hidden",
-                  background: "#ffffff",
-                }}
-              >
-                <div
-                  style={{
-                    padding: "14px 16px",
-                    borderBottom: "1px solid #e5e7eb",
-                    background: "#f9fafb",
-                    fontSize: "13px",
-                    fontWeight: 800,
-                    color: "#111827",
-                  }}
-                >
-                  Mail Sonuç Listesi
-                </div>
-
-                {!assignSummary.mailResults || assignSummary.mailResults.length === 0 ? (
-                  <div style={{ padding: "16px", fontSize: "13px", color: "#6b7280" }}>
-                    Mail sonuç verisi bulunamadı.
-                  </div>
-                ) : (
-                  <div
+                return (
+                  <label
+                    key={u.id}
                     style={{
-                      display: "grid",
-                      gap: "0",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 12,
+                      padding: 16,
+                      borderRadius: 16,
+                      border: checked ? "2px solid #2563eb" : `1px solid ${BRAND.border}`,
+                      background: checked ? "#eff6ff" : "#f9fafb",
+                      cursor: "pointer",
                     }}
                   >
-                    {assignSummary.mailResults.map((item, index) => (
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => toggleUser(u.id, e.target.checked)}
+                      style={{ marginTop: 4 }}
+                    />
+
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 16, fontWeight: 900 }}>{u.full_name}</div>
                       <div
-                        key={`${item.userId}-${index}`}
                         style={{
-                          padding: "14px 16px",
-                          borderTop: index === 0 ? "none" : "1px solid #f1f5f9",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          alignItems: "center",
-                          flexWrap: "wrap",
+                          marginTop: 6,
+                          fontSize: 13,
+                          color: BRAND.muted,
+                          lineHeight: 1.6,
+                          wordBreak: "break-word",
                         }}
                       >
-                        <div style={{ flex: 1, minWidth: "240px" }}>
-                          <div
-                            style={{
-                              fontSize: "14px",
-                              fontWeight: 700,
-                              color: "#111827",
-                              wordBreak: "break-word",
-                            }}
-                          >
-                            {item.email || "Email tanımlı değil"}
-                          </div>
+                        {u.email}
+                      </div>
 
-                          {item.reason ? (
-                            <div
-                              style={{
-                                marginTop: "6px",
-                                fontSize: "12px",
-                                color: "#6b7280",
-                                lineHeight: 1.5,
-                              }}
-                            >
-                              {item.reason}
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div
+                      <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <span style={badgeStyle("#fff", "#e5e7eb", "#374151")}>
+                          {u.company}
+                        </span>
+                        <span
                           style={
-                            item.ok
-                              ? smallBadgeStyle("#dcfce7", "#86efac", "#166534")
-                              : smallBadgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
+                            u.is_active
+                              ? badgeStyle("#dcfce7", "#86efac", "#166534")
+                              : badgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
                           }
                         >
-                          {item.ok ? "Gönderildi" : "Başarısız"}
-                        </div>
+                          {u.is_active ? "Aktif" : "Pasif"}
+                        </span>
+                        <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
+                          {u.role}
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            ...cardStyle(),
+            marginBottom: assignSummary ? 20 : 0,
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 12,
+          }}
+        >
+          <div style={{ ...cardStyle(), padding: 14 }}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Seçilen Eğitim</div>
+            <div style={{ fontSize: 15, fontWeight: 900, marginTop: 8 }}>
+              {selectedTrainingInfo?.title || "-"}
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle(), padding: 14 }}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Seçilen Kişi</div>
+            <div style={{ fontSize: 24, fontWeight: 900, marginTop: 8 }}>{selectedCount}</div>
+          </div>
+
+          <div style={{ ...cardStyle(), padding: 14 }}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Firma Sayısı</div>
+            <div style={{ fontSize: 24, fontWeight: 900, marginTop: 8 }}>
+              {selectedCompanyCount}
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle(), padding: 14 }}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Mail Eksik</div>
+            <div style={{ fontSize: 24, fontWeight: 900, marginTop: 8 }}>
+              {selectedWithoutEmailCount}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ ...cardStyle(), marginTop: 20 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 14,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 900, color: BRAND.text }}>
+                Atama Özeti
+              </div>
+              <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted, lineHeight: 1.6 }}>
+                Seçilen eğitim: {selectedTrainingInfo?.title || "-"}
+                <br />
+                Seçilen çalışan sayısı: {selectedCount}
               </div>
             </div>
-          ) : null}
+
+            <button
+              onClick={assign}
+              disabled={!trainingId || selectedCount === 0 || assigning}
+              style={{
+                border: "none",
+                borderRadius: 14,
+                padding: "14px 20px",
+                background:
+                  !trainingId || selectedCount === 0 || assigning ? "#9ca3af" : "#16a34a",
+                color: "#fff",
+                fontWeight: 900,
+                cursor:
+                  !trainingId || selectedCount === 0 || assigning ? "not-allowed" : "pointer",
+                minWidth: 180,
+              }}
+            >
+              {assigning ? "Atanıyor..." : "Eğitimi Ata"}
+            </button>
+          </div>
         </div>
-      </section>
+
+        {assignSummary ? (
+          <div style={{ ...cardStyle(), marginTop: 20 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "center",
+                flexWrap: "wrap",
+                marginBottom: 16,
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>Son Atama Sonucu</h3>
+                <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
+                  {assignSummary.message || "İşlem sonucu hazır."}
+                </div>
+              </div>
+
+              <div
+                style={
+                  assignSummary.success
+                    ? badgeStyle("#dcfce7", "#86efac", "#166534")
+                    : badgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
+                }
+              >
+                {assignSummary.success ? "Başarılı" : "Hata"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                gap: 12,
+                marginBottom: 18,
+              }}
+            >
+              {[
+                ["Yeni Atama", assignSummary.insertedCount || 0],
+                ["Atlandı", assignSummary.skippedCount || 0],
+                ["Mail Başarılı", assignSummary.emailedCount || 0],
+                ["Mail Başarısız", assignSummary.mailFailedCount || 0],
+                ["Mail Yok", assignSummary.noEmailCount || 0],
+              ].map(([label, value]) => (
+                <div key={label as string} style={{ ...cardStyle(), padding: 14 }}>
+                  <div style={{ fontSize: 12, color: BRAND.muted }}>{label}</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, marginTop: 6 }}>{value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                borderRadius: 16,
+                border: `1px solid ${BRAND.border}`,
+                overflow: "hidden",
+                background: "#ffffff",
+              }}
+            >
+              <div
+                style={{
+                  padding: "14px 16px",
+                  borderBottom: `1px solid ${BRAND.border}`,
+                  background: "#f9fafb",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  color: BRAND.text,
+                }}
+              >
+                Mail Sonuç Listesi
+              </div>
+
+              {!assignSummary.mailResults || assignSummary.mailResults.length === 0 ? (
+                <div style={{ padding: 16, fontSize: 13, color: BRAND.muted }}>
+                  Mail sonuç verisi bulunamadı.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 0 }}>
+                  {assignSummary.mailResults.map((item, index) => (
+                    <div
+                      key={`${item.userId}-${index}`}
+                      style={{
+                        padding: "14px 16px",
+                        borderTop: index === 0 ? "none" : "1px solid #f1f5f9",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 240 }}>
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: BRAND.text,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {item.email || "Email tanımlı değil"}
+                        </div>
+
+                        {item.reason ? (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              fontSize: 12,
+                              color: BRAND.muted,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {item.reason}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div
+                        style={
+                          item.ok
+                            ? badgeStyle("#dcfce7", "#86efac", "#166534")
+                            : badgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
+                        }
+                      >
+                        {item.ok ? "Gönderildi" : "Başarısız"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </main>
   );
 }
