@@ -13,14 +13,13 @@ export default function AdminLayout({
   const menu = [
     { name: "Dashboard", href: "/admin/dashboard" },
     { name: "Eğitimler", href: "/admin/trainings" },
-    { name: "Kullanıcılar", href: "/admin/users" },
+    { name: "Eğitim Katılımcıları", href: "/admin/participants" },
+    { name: "Sistem Kullanıcıları", href: "/admin/users" },
     { name: "Firmalar", href: "/admin/companies" },
   ];
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
-      
-      {/* 🔥 SIDEBAR */}
       <div
         style={{
           width: 240,
@@ -34,29 +33,34 @@ export default function AdminLayout({
           bottom: 0,
         }}
       >
-        <div style={{ fontWeight: 900, marginBottom: 20 }}>
-          D-SEC Admin
-        </div>
+        <div style={{ fontWeight: 900, marginBottom: 20 }}>D-SEC Admin</div>
 
-        {menu.map((item) => (
-          <Link key={item.href} href={item.href}>
-            <div
-              style={{
-                padding: "10px 12px",
-                borderRadius: 8,
-                marginBottom: 8,
-                cursor: "pointer",
-                background:
-                  pathname === item.href ? "#c62828" : "transparent",
-              }}
+        {menu.map((item) => {
+          const isActive = pathname === item.href;
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{ textDecoration: "none", color: "inherit" }}
             >
-              {item.name}
-            </div>
-          </Link>
-        ))}
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  marginBottom: 8,
+                  cursor: "pointer",
+                  background: isActive ? "#c62828" : "transparent",
+                  fontWeight: isActive ? 800 : 600,
+                }}
+              >
+                {item.name}
+              </div>
+            </Link>
+          );
+        })}
       </div>
 
-      {/* 🔥 CONTENT */}
       <div
         style={{
           marginLeft: 240,
