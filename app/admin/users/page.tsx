@@ -172,37 +172,37 @@ export default function AdminUsersPage() {
         return;
       }
 
-      const json: UserResponse = await usersRes.json();
-      const companiesJson = await companiesRes.json();
+  const json: UserResponse = await usersRes.json();
+const companiesJson = await companiesRes.json();
 
-      if (!usersRes.ok) {
-        setError(json?.error || "Kullanıcılar alınamadı.");
-        setUsers([]);
-        return;
-      }
+setCompanies(
+  Array.isArray(companiesJson?.data)
+    ? companiesJson.data.map((c: { id: string; name: string }) => ({
+        id: String(c.id),
+        name: String(c.name || "").trim(),
+      }))
+    : []
+);
 
-      const normalized: UserRow[] = Array.isArray(json.data)
-        ? json.data.map((u) => ({
-            id: String(u.id || ""),
-            full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
-            email: String(u.email || "-").trim(),
-            role: getRoleLabel(u.role),
-            company_id: String(u.company_id || "").trim(),
-            is_active: Boolean(u.is_active),
-            created_at: String(u.created_at || ""),
-          }))
-        : [];
+if (!usersRes.ok) {
+  setError(json?.error || "Kullanıcılar alınamadı.");
+  setUsers([]);
+  return;
+}
 
-      setUsers(normalized);
+const normalized: UserRow[] = Array.isArray(json.data)
+  ? json.data.map((u) => ({
+      id: String(u.id || ""),
+      full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
+      email: String(u.email || "-").trim(),
+      role: getRoleLabel(u.role),
+      company_id: String(u.company_id || "").trim(),
+      is_active: Boolean(u.is_active),
+      created_at: String(u.created_at || ""),
+    }))
+  : [];
 
-      setCompanies(
-        Array.isArray(companiesJson?.data)
-          ? companiesJson.data.map((c: { id: string; name: string }) => ({
-              id: String(c.id),
-              name: String(c.name || "").trim(),
-            }))
-          : []
-      );
+setUsers(normalized);
     } catch (err) {
       console.error(err);
       setError("Kullanıcılar alınamadı.");
