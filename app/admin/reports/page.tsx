@@ -7,8 +7,18 @@ type CompanyRow = {
   name: string;
 };
 
+type ScopeResponse = {
+  success?: boolean;
+  role?: string;
+  can_select_company?: boolean;
+  allowed_company_id?: string | null;
+  allowed_company_name?: string | null;
+  error?: string;
+};
+
 type ReportResponse = {
   success?: boolean;
+  role?: string;
   company?: {
     id: string;
     name: string;
@@ -108,6 +118,46 @@ export default function AdminReportsPage() {
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [showOnlyMissing, setShowOnlyMissing] = useState(false);
 
+  const [scope, setScope] = useState<ScopeResponse | null>(null);
+  const [loadingScope, setLoadingScope] = useState(true);
+
+  const loadScope = async () => {
+    try {
+      setLoadingScope(true);
+
+      const res = await fetch("/api/admin/reports/scope", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      });
+
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      const json: ScopeResponse = await res.json();
+
+      if (!res.ok) {
+        setError(json?.error || "Rapor yetki bilgisi alınamadı.");
+        setScope(null);
+        return;
+      }
+
+      setScope(json);
+
+      if (!json.can_select_company && json.allowed_company_id) {
+        setSelectedCompanyId(String(json.allowed_company_id));
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Rapor yetki bilgisi alınamadı.");
+      setScope(null);
+    } finally {
+      setLoadingScope(false);
+    }
+  };
+
   const loadCompanies = async () => {
     try {
       setLoadingCompanies(true);
@@ -191,8 +241,18 @@ export default function AdminReportsPage() {
   };
 
   useEffect(() => {
-    void loadCompanies();
+    void loadScope();
   }, []);
+
+  useEffect(() => {
+    if (!scope) return;
+
+    if (scope.can_select_company) {
+      void loadCompanies();
+    } else {
+      setLoadingCompanies(false);
+    }
+  }, [scope]);
 
   useEffect(() => {
     if (selectedCompanyId) {
@@ -325,37 +385,60 @@ export default function AdminReportsPage() {
           </p>
         </div>
 
-        <div style={{ ...cardStyle(), marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-            Firma Seç
-          </div>
-
-          <select
-            value={selectedCompanyId}
-            onChange={(e) => setSelectedCompanyId(e.target.value)}
-            disabled={loadingCompanies}
-            style={{
-              width: "100%",
-              maxWidth: 420,
-              padding: "12px 14px",
-              borderRadius: 12,
-              border: `1px solid ${BRAND.border}`,
-              background: "#fff",
-              fontSize: 14,
-            }}
-          >
-            <option value="">Firma seç</option>
-            {companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {error ? (
           <div style={{ ...cardStyle(), marginBottom: 20, color: BRAND.red, fontWeight: 700 }}>
             {error}
+          </div>
+        ) : null}
+
+        {loadingScope ? (
+          <div style={cardStyle()}>Yetki bilgisi yükleniyor...</div>
+        ) : null}
+
+        {!loadingScope && scope ? (
+          <div style={{ ...cardStyle(), marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+              Firma Seç
+            </div>
+
+            {scope.can_select_company ? (
+              <select
+                value={selectedCompanyId}
+                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                disabled={loadingCompanies}
+                style={{
+                  width: "100%",
+                  maxWidth: 420,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  background: "#fff",
+                  fontSize: 14,
+                }}
+              >
+                <option value="">Firma seç</option>
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div
+                style={{
+                  maxWidth: 420,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  background: "#f9fafb",
+                  fontSize: 14,
+                  fontWeight: 800,
+                  color: BRAND.text,
+                }}
+              >
+                {scope.allowed_company_name || "Bağlı Firma"}
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -495,7 +578,8 @@ export default function AdminReportsPage() {
                     color: BRAND.amber,
                   }}
                 >
-                  {(report.summary?.in_progress_count || 0) + (report.summary?.not_started_count || 0)}
+                  {(report.summary?.in_progress_count || 0) +
+                    (report.summary?.not_started_count || 0)}
                 </div>
               </div>
             </div>

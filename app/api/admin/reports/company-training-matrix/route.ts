@@ -9,17 +9,6 @@ function getSupabase() {
   );
 }
 
-async function checkAdmin() {
-  const cookieStore = await cookies();
-  const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-  const adminRole = cookieStore.get("dsec_admin_role")?.value;
-
-  return (
-    adminAuth === "ok" &&
-    (adminRole === "admin" || adminRole === "super_admin")
-  );
-}
-
 type CompanyAnyRow = Record<string, unknown>;
 
 type UserRow = {
@@ -55,30 +44,75 @@ function pickText(row: CompanyAnyRow, keys: string[]) {
 
 export async function GET(req: NextRequest) {
   try {
-    const allowed = await checkAdmin();
+    const cookieStore = await cookies();
+    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+    const adminRole = cookieStore.get("dsec_admin_role")?.value;
+    const userId = cookieStore.get("dsec_user_id")?.value;
 
-    if (!allowed) {
+    if (adminAuth !== "ok") {
       return NextResponse.json(
         { error: "Yetkisiz erişim." },
         { status: 401 }
       );
     }
 
-    const companyId = String(req.nextUrl.searchParams.get("companyId") || "").trim();
+    const supabase = getSupabase();
 
-    if (!companyId) {
+    let requestedCompanyId = String(
+      req.nextUrl.searchParams.get("companyId") || ""
+    ).trim();
+
+    if (adminRole === "company_admin") {
+      if (!userId) {
+        return NextResponse.json(
+          { error: "Kullanıcı bilgisi bulunamadı." },
+          { status: 401 }
+        );
+      }
+
+      const { data: userRow, error: userError } = await supabase
+        .from("users")
+        .select("id, company_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (userError || !userRow) {
+        return NextResponse.json(
+          { error: "Kullanıcı firma bilgisi alınamadı." },
+          { status: 500 }
+        );
+      }
+
+      const ownCompanyId = String(
+        (userRow as { company_id?: string | null }).company_id || ""
+      ).trim();
+
+      if (!ownCompanyId) {
+        return NextResponse.json(
+          { error: "Bu kullanıcıya bağlı firma bulunamadı." },
+          { status: 403 }
+        );
+      }
+
+      requestedCompanyId = ownCompanyId;
+    } else if (!(adminRole === "super_admin" || adminRole === "admin")) {
+      return NextResponse.json(
+        { error: "Bu rol raporlara erişemez." },
+        { status: 403 }
+      );
+    }
+
+    if (!requestedCompanyId) {
       return NextResponse.json(
         { error: "Firma seçilmedi." },
         { status: 400 }
       );
     }
 
-    const supabase = getSupabase();
-
     const { data: companyData, error: companyError } = await supabase
       .from("companies")
       .select("*")
-      .eq("id", companyId)
+      .eq("id", requestedCompanyId)
       .maybeSingle();
 
     if (companyError || !companyData) {
@@ -93,7 +127,7 @@ export async function GET(req: NextRequest) {
     const { data: usersData, error: usersError } = await supabase
       .from("users")
       .select("id, full_name, email, company_id, role, is_active")
-      .eq("company_id", companyId)
+      .eq("company_id", requestedCompanyId)
       .eq("role", "training_user")
       .order("full_name", { ascending: true });
 
@@ -197,8 +231,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      role: adminRole,
       company: {
-        id: String(companyRow.id || companyId),
+        id: String(companyRow.id || requestedCompanyId),
         name: pickText(companyRow, ["name", "company_name", "firma_adi"]),
         company_title: pickText(companyRow, [
           "company_title",
