@@ -144,10 +144,15 @@ export default function AdminUsersPage() {
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      const text = `${u.full_name} ${u.email} ${u.role} ${u.company_id}`.toLowerCase();
+      const text =
+        `${u.full_name} ${u.email} ${u.role} ${u.company_id}`.toLowerCase();
 
-      const matchesSearch = !search || text.includes(search.toLowerCase());
-      const matchesRole = roleFilter === "all" ? true : u.role === roleFilter;
+      const matchesSearch =
+        !search || text.includes(search.toLowerCase());
+
+      const matchesRole =
+        roleFilter === "all" ? true : u.role === roleFilter;
+
       const matchesStatus =
         statusFilter === "all"
           ? true
@@ -175,16 +180,37 @@ export default function AdminUsersPage() {
             marginBottom: 20,
           }}
         >
-          <h1 style={{ marginTop: 0, marginBottom: 8, fontSize: 36, fontWeight: 900 }}>
+          <h1
+            style={{
+              marginTop: 0,
+              marginBottom: 8,
+              fontSize: 36,
+              fontWeight: 900,
+            }}
+          >
             Kullanıcı Yönetimi
           </h1>
-          <p style={{ margin: 0, color: "rgba(255,255,255,0.92)", lineHeight: 1.7 }}>
+
+          <p
+            style={{
+              margin: 0,
+              color: "rgba(255,255,255,0.92)",
+              lineHeight: 1.7,
+            }}
+          >
             Kullanıcıları listele, ara, rol ve durum bazlı filtrele.
           </p>
         </div>
 
         {error ? (
-          <div style={{ ...cardStyle(), marginBottom: 20, color: BRAND.red, fontWeight: 700 }}>
+          <div
+            style={{
+              ...cardStyle(),
+              marginBottom: 20,
+              color: BRAND.red,
+              fontWeight: 700,
+            }}
+          >
             {error}
           </div>
         ) : null}
@@ -198,23 +224,35 @@ export default function AdminUsersPage() {
           }}
         >
           <div style={cardStyle()}>
-            <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Kullanıcı</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{totalCount}</div>
+            <div style={{ fontSize: 13, color: BRAND.muted }}>
+              Toplam Kullanıcı
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
+              {totalCount}
+            </div>
           </div>
 
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Aktif</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{activeCount}</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
+              {activeCount}
+            </div>
           </div>
 
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Pasif</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{passiveCount}</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
+              {passiveCount}
+            </div>
           </div>
 
           <div style={cardStyle()}>
-            <div style={{ fontSize: 13, color: BRAND.muted }}>Firma Sayısı</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{companyCount}</div>
+            <div style={{ fontSize: 13, color: BRAND.muted }}>
+              Firma Sayısı
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
+              {companyCount}
+            </div>
           </div>
         </div>
 
@@ -228,7 +266,9 @@ export default function AdminUsersPage() {
           }}
         >
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Ara</div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+              Ara
+            </div>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -244,7 +284,9 @@ export default function AdminUsersPage() {
           </div>
 
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Rol</div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+              Rol
+            </div>
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
@@ -267,7 +309,9 @@ export default function AdminUsersPage() {
           </div>
 
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Durum</div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+              Durum
+            </div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -298,7 +342,10 @@ export default function AdminUsersPage() {
               flexWrap: "wrap",
             }}
           >
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>Kullanıcı Listesi</h2>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
+              Kullanıcı Listesi
+            </h2>
+
             <div style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
               {filteredUsers.length} kayıt
             </div>
@@ -330,10 +377,23 @@ export default function AdminUsersPage() {
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: 17, fontWeight: 900, color: BRAND.text }}>
+                      <div
+                        style={{
+                          fontSize: 17,
+                          fontWeight: 900,
+                          color: BRAND.text,
+                        }}
+                      >
                         {u.full_name}
                       </div>
-                      <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
+
+                      <div
+                        style={{
+                          marginTop: 6,
+                          fontSize: 13,
+                          color: BRAND.muted,
+                        }}
+                      >
                         {u.email || "-"}
                       </div>
                     </div>
@@ -342,6 +402,7 @@ export default function AdminUsersPage() {
                       <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
                         {u.role}
                       </span>
+
                       <span
                         style={
                           u.is_active
@@ -351,6 +412,7 @@ export default function AdminUsersPage() {
                       >
                         {u.is_active ? "Aktif" : "Pasif"}
                       </span>
+
                       <span style={badgeStyle("#fff7ed", "#fed7aa", "#9a3412")}>
                         {u.company_id || "Firma bilgisi yok"}
                       </span>
@@ -364,7 +426,10 @@ export default function AdminUsersPage() {
                       color: BRAND.muted,
                     }}
                   >
-                    Kayıt tarihi: {u.created_at ? new Date(u.created_at).toLocaleString("tr-TR") : "-"}
+                    Kayıt tarihi:{" "}
+                    {u.created_at
+                      ? new Date(u.created_at).toLocaleString("tr-TR")
+                      : "-"}
                   </div>
                 </div>
               ))}

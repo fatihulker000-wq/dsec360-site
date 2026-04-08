@@ -14,6 +14,7 @@ export default function AdminLayout({
     { name: "Dashboard", href: "/admin/dashboard" },
     { name: "Eğitimler", href: "/admin/trainings" },
     { name: "Kullanıcılar", href: "/admin/users" },
+    { name: "Firmalar", href: "/admin/companies" },
   ];
 
   return (
