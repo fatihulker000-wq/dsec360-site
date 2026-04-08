@@ -51,12 +51,23 @@ export async function GET() {
         { status: 500 }
       );
     }
+const { data: users } = await supabase
+  .from("users")
+  .select("id, company_id");
 
-    const normalized = ((data || []) as CompanyRow[]).map((item) => ({
-      id: String(item.id),
-      name: String(item.name || "").trim(),
-      created_at: item.created_at || null,
-    }));
+const counts: Record<string, number> = {};
+
+(users || []).forEach((u: { id: string; company_id: string | null }) => {
+  if (!u.company_id) return;
+  counts[u.company_id] = (counts[u.company_id] || 0) + 1;
+});
+
+ const normalized = ((data || []) as CompanyRow[]).map((item) => ({
+  id: String(item.id),
+  name: String(item.name || "").trim(),
+  created_at: item.created_at || null,
+  user_count: counts[String(item.id)] || 0,
+}));
 
     return NextResponse.json({ data: normalized });
   } catch (error) {

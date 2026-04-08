@@ -6,6 +6,7 @@ type CompanyRow = {
   id: string;
   name: string;
   created_at?: string | null;
+  user_count?: number;
 };
 
 type CompanyResponse = {
@@ -466,6 +467,9 @@ export default function AdminCompaniesPage() {
                           {company.name}
                         </div>
 
+<div style={{ marginTop: 10, fontSize: 13, color: BRAND.muted }}>
+  👥 Çalışanlar: {company.user_count || 0}
+</div>
                         <div
                           style={{
                             marginTop: 6,

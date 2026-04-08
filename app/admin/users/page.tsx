@@ -80,6 +80,7 @@ function badgeStyle(
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -91,20 +92,28 @@ export default function AdminUsersPage() {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/admin/users", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "include",
-      });
+     const [usersRes, companiesRes] = await Promise.all([
+  fetch("/api/admin/users", {
+    method: "GET",
+    cache: "no-store",
+    credentials: "include",
+  }),
+  fetch("/api/admin/companies", {
+    method: "GET",
+    cache: "no-store",
+    credentials: "include",
+  }),
+]);
 
-      if (res.status === 401) {
-        window.location.href = "/admin/login";
-        return;
-      }
+if (usersRes.status === 401 || companiesRes.status === 401) {
+  window.location.href = "/admin/login";
+  return;
+}
 
-      const json: UserResponse = await res.json();
+const json: UserResponse = await usersRes.json();
+const companiesJson = await companiesRes.json();
 
-      if (!res.ok) {
+      if (!usersRes.ok) {
         setError(json?.error || "Kullanıcılar alınamadı.");
         setUsers([]);
         return;
@@ -123,6 +132,14 @@ export default function AdminUsersPage() {
         : [];
 
       setUsers(normalized);
+      setCompanies(
+  Array.isArray(companiesJson?.data)
+    ? companiesJson.data.map((c: { id: string; name: string }) => ({
+        id: String(c.id),
+        name: String(c.name || "").trim(),
+      }))
+    : []
+);
     } catch (err) {
       console.error(err);
       setError("Kullanıcılar alınamadı.");
@@ -418,6 +435,42 @@ export default function AdminUsersPage() {
                       </span>
                     </div>
                   </div>
+
+<div style={{ marginTop: 10 }}>
+  <select
+    defaultValue={u.company_id || ""}
+    onChange={async (e) => {
+      const companyId = e.target.value;
+
+      await fetch("/api/admin/users/update-company", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: u.id,
+          companyId,
+        }),
+      });
+
+      location.reload();
+    }}
+    style={{
+      padding: "10px 12px",
+      borderRadius: 10,
+      border: "1px solid #d1d5db",
+      fontSize: 13,
+      minWidth: 220,
+    }}
+  >
+    <option value="">Firma yok</option>
+    {companies.map((c) => (
+      <option key={c.id} value={c.id}>
+        {c.name}
+      </option>
+    ))}
+  </select>
+</div>
 
                   <div
                     style={{

@@ -17,6 +17,9 @@ type UserRow = {
   company_id: string | null;
   is_active: boolean | null;
   created_at: string | null;
+  companies?: {
+    name?: string | null;
+  } | null;
 };
 
 export async function GET() {
@@ -33,10 +36,19 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, full_name, email, role, company_id, is_active, created_at")
-      .order("created_at", { ascending: false });
+   const { data, error } = await supabase
+  .from("users")
+  .select(`
+    id,
+    full_name,
+    email,
+    role,
+    company_id,
+    is_active,
+    created_at,
+    companies(name)
+  `)
+  .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Admin users fetch hatası:", error);
@@ -46,15 +58,19 @@ export async function GET() {
       );
     }
 
-    const normalized = ((data || []) as UserRow[]).map((user) => ({
-      id: String(user.id),
-      full_name: (user.full_name || "Adsız Kullanıcı").trim(),
-      email: (user.email || "").trim(),
-      role: (user.role || "").trim(),
-      company_id: user.company_id ? String(user.company_id).trim() : null,
-      is_active: Boolean(user.is_active),
-      created_at: user.created_at || null,
-    }));
+   const normalized = ((data || []) as UserRow[]).map((user) => ({
+  id: String(user.id),
+  full_name: (user.full_name || "Adsız Kullanıcı").trim(),
+  email: (user.email || "").trim(),
+  role: (user.role || "").trim(),
+  company_id: user.company_id ? String(user.company_id).trim() : null,
+  company:
+  user.companies && user.companies.name
+    ? String(user.companies.name).trim()
+    : null,
+  is_active: Boolean(user.is_active),
+  created_at: user.created_at || null,
+}));
 
     return NextResponse.json({
       data: normalized,
