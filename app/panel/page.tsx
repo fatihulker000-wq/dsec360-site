@@ -48,7 +48,7 @@ const panelCards = [
   },
   {
     title: "Raporlama",
-    desc: "Kurumsal analiz ve raporları görüntüleyin.",
+    desc: "Firmanızın eğitim durumunu, eksik eğitimleri ve çalışan bazlı matrisi görüntüleyin.",
     badge: "Analiz",
     href: "/panel/reports",
     buttonText: "Raporlara Git",

@@ -84,10 +84,15 @@ const BRAND = {
   border: "#e5e7eb",
   red: "#c62828",
   redDark: "#5a0f1f",
+  redSoft: "#fff1f1",
   green: "#166534",
+  greenSoft: "#f0fdf4",
   blue: "#1d4ed8",
+  blueSoft: "#eff6ff",
   amber: "#92400e",
+  amberSoft: "#fff7ed",
   slate: "#374151",
+  slateSoft: "#f3f4f6",
   shadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
 
@@ -174,6 +179,65 @@ function matchesStatusFilter(status: string, filter: string) {
   if (filter === "unassigned") return status === "Atanmadı";
   if (filter === "missing") return status === "Başlamadı" || status === "Atanmadı";
   return true;
+}
+
+function MiniBar({
+  label,
+  value,
+  total,
+  color,
+  soft,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  color: string;
+  soft: string;
+}) {
+  const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${BRAND.border}`,
+        borderRadius: 16,
+        padding: 14,
+        background: soft,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 8,
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 800, color: BRAND.text }}>{label}</div>
+        <div style={{ fontSize: 13, fontWeight: 900, color }}>{value}</div>
+      </div>
+
+      <div
+        style={{
+          height: 10,
+          borderRadius: 999,
+          background: "#e5e7eb",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.max(4, percent)}%`,
+            height: "100%",
+            background: color,
+            borderRadius: 999,
+          }}
+        />
+      </div>
+
+      <div style={{ marginTop: 8, fontSize: 12, color: BRAND.muted }}>%{percent}</div>
+    </div>
+  );
 }
 
 export default function AdminReportsPage() {
@@ -444,7 +508,8 @@ export default function AdminReportsPage() {
             return;
           }
 
-          const status = row.statuses.find((s) => s.training_id === training.id)?.status || "Atanmadı";
+          const status =
+            row.statuses.find((s) => s.training_id === training.id)?.status || "Atanmadı";
 
           if (status === "Tamamlandı") completed += 1;
           else if (status === "Devam Ediyor") inProgress += 1;
@@ -522,6 +587,41 @@ export default function AdminReportsPage() {
       unassigned,
     };
   }, [filteredMatrix, filteredTrainings]);
+
+  const executiveTone = useMemo(() => {
+    const total = dynamicStats.completed + dynamicStats.inProgress + dynamicStats.notStarted;
+    const missing = dynamicStats.notStarted + dynamicStats.unassigned;
+    const missingRate = total > 0 ? Math.round((missing / total) * 100) : 0;
+
+    if (missingRate >= 45) {
+      return {
+        label: "Kritik İzleme",
+        bg: "linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)",
+        text: "Eksik ve atanmamış eğitim oranı yüksek. Acil aksiyon ve firma bazlı takip önerilir.",
+      };
+    }
+
+    if (missingRate >= 20) {
+      return {
+        label: "Yakın Takip",
+        bg: "linear-gradient(135deg, #92400e 0%, #f59e0b 100%)",
+        text: "Genel durum orta seviyede. Eksik eğitimlerin kapatılması için yakın takip gerekli.",
+      };
+    }
+
+    return {
+      label: "Kontrollü Düzey",
+      bg: "linear-gradient(135deg, #166534 0%, #22c55e 100%)",
+      text: "Eğitim durumu kontrollü görünüyor. Tamamlanma performansı güçlü şekilde ilerliyor.",
+    };
+  }, [dynamicStats]);
+
+  const chartTrainingTop = useMemo(() => {
+    return trainingBasedRows
+      .slice()
+      .sort((a, b) => b.notStarted + b.unassigned - (a.notStarted + a.unassigned))
+      .slice(0, 6);
+  }, [trainingBasedRows]);
 
   const openEmployeeDetail = (row: MatrixRow) => {
     const rows = row.statuses
@@ -647,9 +747,7 @@ export default function AdminReportsPage() {
     if (!rows.length) return;
 
     const csvContent = [headers, ...rows]
-      .map((r) =>
-        r.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")
-      )
+      .map((r) => r.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
       .join("\n");
 
     const blob = new Blob(["\uFEFF" + csvContent], {
@@ -676,6 +774,7 @@ export default function AdminReportsPage() {
     const canvas = await html2canvas(element, {
       scale: 1.2,
       backgroundColor: "#ffffff",
+      useCORS: true,
     });
 
     const imgData = canvas.toDataURL("image/png");
@@ -699,7 +798,9 @@ export default function AdminReportsPage() {
       heightLeft -= pageHeight;
     }
 
-    pdf.save(`firma-egitim-raporu-${activeTab}.pdf`);
+    pdf.save(
+      `${(report?.company?.name || "firma").replace(/\s+/g, "-").toLowerCase()}-${activeTab}-raporu.pdf`
+    );
   };
 
   return (
@@ -713,18 +814,87 @@ export default function AdminReportsPage() {
             marginBottom: 20,
           }}
         >
-          <h1 style={{ marginTop: 0, marginBottom: 8, fontSize: 36, fontWeight: 900 }}>
-            Firma Eğitim Raporları
-          </h1>
-          <p
+          <div
             style={{
-              margin: 0,
-              color: "rgba(255,255,255,0.92)",
-              lineHeight: 1.7,
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: "flex-start",
+              flexWrap: "wrap",
             }}
           >
-            Firma seç, filtrele, detay aç ve çalışan / eğitim bazlı interaktif rapor üret.
-          </p>
+            <div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.14)",
+                  border: "1px solid rgba(255,255,255,0.22)",
+                  fontSize: 12,
+                  fontWeight: 900,
+                  marginBottom: 12,
+                }}
+              >
+                {scope?.role === "company_admin"
+                  ? "Firma Eğitim Sorumlusu Görünümü"
+                  : "Admin Raporlama Merkezi"}
+              </div>
+
+              <h1 style={{ marginTop: 0, marginBottom: 8, fontSize: 36, fontWeight: 900 }}>
+                Firma Eğitim Raporları
+              </h1>
+              <p
+                style={{
+                  margin: 0,
+                  color: "rgba(255,255,255,0.92)",
+                  lineHeight: 1.7,
+                }}
+              >
+                Firma seç, filtrele, detay aç ve çalışan / eğitim bazlı interaktif rapor üret.
+              </p>
+            </div>
+
+            {report?.company ? (
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  minWidth: 250,
+                }}
+              >
+                <button
+                  onClick={exportExcel}
+                  style={{
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "12px 16px",
+                    background: "#ffffff",
+                    color: BRAND.blue,
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                >
+                  Excel / CSV
+                </button>
+
+                <button
+                  onClick={exportPDF}
+                  style={{
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "12px 16px",
+                    background: "#111827",
+                    color: "#ffffff",
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                >
+                  Kurumsal PDF
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {error ? (
@@ -733,15 +903,11 @@ export default function AdminReportsPage() {
           </div>
         ) : null}
 
-        {loadingScope ? (
-          <div style={cardStyle()}>Yetki bilgisi yükleniyor...</div>
-        ) : null}
+        {loadingScope ? <div style={cardStyle()}>Yetki bilgisi yükleniyor...</div> : null}
 
         {!loadingScope && scope ? (
           <div style={{ ...cardStyle(), marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-              Firma Seç
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Firma Seç</div>
 
             {scope.can_select_company ? (
               <select
@@ -791,7 +957,7 @@ export default function AdminReportsPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1.3fr 0.7fr",
+                gridTemplateColumns: "1.2fr 0.8fr",
                 gap: 20,
                 marginBottom: 20,
               }}
@@ -832,34 +998,78 @@ export default function AdminReportsPage() {
                 </div>
               </div>
 
-              <div style={cardStyle()}>
-                <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
-                  Eğitim Özeti
-                </h2>
+              <div
+                style={{
+                  ...cardStyle(),
+                  background: executiveTone.bg,
+                  color: "#fff",
+                  border: "none",
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-flex",
+                    padding: "7px 12px",
+                    borderRadius: 999,
+                    background: "rgba(255,255,255,0.18)",
+                    border: "1px solid rgba(255,255,255,0.22)",
+                    fontSize: 12,
+                    fontWeight: 900,
+                    marginBottom: 14,
+                  }}
+                >
+                  {executiveTone.label}
+                </div>
 
-                <div style={{ display: "grid", gap: 14 }}>
-                  <div>
-                    <div style={{ fontSize: 12, color: BRAND.muted }}>Çalışan Sayısı</div>
-                    <div style={{ marginTop: 4, fontSize: 28, fontWeight: 900 }}>
+                <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1 }}>
+                  Yönetici Dashboard
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 12,
+                    lineHeight: 1.8,
+                    color: "rgba(255,255,255,0.95)",
+                    fontSize: 14,
+                  }}
+                >
+                  {executiveTone.text}
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 12,
+                    marginTop: 18,
+                  }}
+                >
+                  <div
+                    style={{
+                      borderRadius: 14,
+                      padding: 14,
+                      background: "rgba(255,255,255,0.12)",
+                      border: "1px solid rgba(255,255,255,0.16)",
+                    }}
+                  >
+                    <div style={{ fontSize: 12, opacity: 0.9 }}>Çalışan Sayısı</div>
+                    <div style={{ marginTop: 6, fontSize: 24, fontWeight: 900 }}>
                       {report.company.employee_count}
                     </div>
                   </div>
 
-                  <div>
-                    <div style={{ fontSize: 12, color: BRAND.muted }}>Tamamlama Oranı</div>
-                    <div style={{ marginTop: 4, fontSize: 28, fontWeight: 900, color: BRAND.green }}>
+                  <div
+                    style={{
+                      borderRadius: 14,
+                      padding: 14,
+                      background: "rgba(255,255,255,0.12)",
+                      border: "1px solid rgba(255,255,255,0.16)",
+                    }}
+                  >
+                    <div style={{ fontSize: 12, opacity: 0.9 }}>Tamamlama</div>
+                    <div style={{ marginTop: 6, fontSize: 24, fontWeight: 900 }}>
                       %{completionRate}
                     </div>
-                  </div>
-
-                  <div style={{ fontSize: 13, color: BRAND.muted, lineHeight: 1.7 }}>
-                    Toplam Atama: {report.summary?.total_assignments || 0}
-                    <br />
-                    Tamamlandı: {report.summary?.completed_count || 0}
-                    <br />
-                    Devam Ediyor: {report.summary?.in_progress_count || 0}
-                    <br />
-                    Başlamadı: {report.summary?.not_started_count || 0}
                   </div>
                 </div>
               </div>
@@ -916,6 +1126,153 @@ export default function AdminReportsPage() {
               </div>
             </div>
 
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 20,
+                marginBottom: 20,
+              }}
+            >
+              <div style={cardStyle()}>
+                <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
+                  Durum Dağılımı
+                </h3>
+
+                <div style={{ display: "grid", gap: 12 }}>
+                  <MiniBar
+                    label="Tamamlandı"
+                    value={dynamicStats.completed}
+                    total={
+                      dynamicStats.completed +
+                      dynamicStats.inProgress +
+                      dynamicStats.notStarted +
+                      dynamicStats.unassigned
+                    }
+                    color={BRAND.green}
+                    soft={BRAND.greenSoft}
+                  />
+                  <MiniBar
+                    label="Devam Ediyor"
+                    value={dynamicStats.inProgress}
+                    total={
+                      dynamicStats.completed +
+                      dynamicStats.inProgress +
+                      dynamicStats.notStarted +
+                      dynamicStats.unassigned
+                    }
+                    color={BRAND.blue}
+                    soft={BRAND.blueSoft}
+                  />
+                  <MiniBar
+                    label="Başlamadı"
+                    value={dynamicStats.notStarted}
+                    total={
+                      dynamicStats.completed +
+                      dynamicStats.inProgress +
+                      dynamicStats.notStarted +
+                      dynamicStats.unassigned
+                    }
+                    color={BRAND.amber}
+                    soft={BRAND.amberSoft}
+                  />
+                  <MiniBar
+                    label="Atanmadı"
+                    value={dynamicStats.unassigned}
+                    total={
+                      dynamicStats.completed +
+                      dynamicStats.inProgress +
+                      dynamicStats.notStarted +
+                      dynamicStats.unassigned
+                    }
+                    color={BRAND.slate}
+                    soft={BRAND.slateSoft}
+                  />
+                </div>
+              </div>
+
+              <div style={cardStyle()}>
+                <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
+                  En Kritik Eğitimler
+                </h3>
+
+                {chartTrainingTop.length === 0 ? (
+                  <div style={{ color: BRAND.muted }}>Veri bulunamadı.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {chartTrainingTop.map((item) => {
+                      const critical = item.notStarted + item.unassigned;
+                      const total =
+                        item.completed + item.inProgress + item.notStarted + item.unassigned;
+                      const percent = total > 0 ? Math.round((critical / total) * 100) : 0;
+
+                      return (
+                        <div
+                          key={item.training_id}
+                          style={{
+                            border: `1px solid ${BRAND.border}`,
+                            borderRadius: 16,
+                            padding: 14,
+                            background: "#fff",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 12,
+                              marginBottom: 8,
+                            }}
+                          >
+                            <button
+                              onClick={() => openTrainingDetail(item.training_id, item.title)}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                padding: 0,
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                color: BRAND.text,
+                                textAlign: "left",
+                              }}
+                            >
+                              {item.title}
+                            </button>
+
+                            <div style={{ fontSize: 13, fontWeight: 900, color: BRAND.red }}>
+                              {critical}
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              height: 10,
+                              borderRadius: 999,
+                              background: "#e5e7eb",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${Math.max(4, percent)}%`,
+                                height: "100%",
+                                background: BRAND.red,
+                                borderRadius: 999,
+                              }}
+                            />
+                          </div>
+
+                          <div style={{ marginTop: 8, fontSize: 12, color: BRAND.muted }}>
+                            Kritik oran %{percent}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div style={{ ...cardStyle(), marginBottom: 20 }}>
               <div
                 style={{
@@ -962,9 +1319,7 @@ export default function AdminReportsPage() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-                    Durum
-                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Durum</div>
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
@@ -1066,10 +1421,16 @@ export default function AdminReportsPage() {
                 <button style={pillStyle(activeTab === "matrix")} onClick={() => setActiveTab("matrix")}>
                   Eğitim Matrisi
                 </button>
-                <button style={pillStyle(activeTab === "employee")} onClick={() => setActiveTab("employee")}>
+                <button
+                  style={pillStyle(activeTab === "employee")}
+                  onClick={() => setActiveTab("employee")}
+                >
                   Çalışan Bazlı
                 </button>
-                <button style={pillStyle(activeTab === "training")} onClick={() => setActiveTab("training")}>
+                <button
+                  style={pillStyle(activeTab === "training")}
+                  onClick={() => setActiveTab("training")}
+                >
                   Eğitim Bazlı
                 </button>
               </div>
@@ -1246,13 +1607,27 @@ export default function AdminReportsPage() {
                           <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
                             <div style={{ fontWeight: 800 }}>{row.full_name}</div>
                           </td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}`, color: BRAND.muted }}>
+                          <td
+                            style={{
+                              padding: 12,
+                              borderBottom: `1px solid ${BRAND.border}`,
+                              color: BRAND.muted,
+                            }}
+                          >
                             {row.email || "-"}
                           </td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.completed}</td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.inProgress}</td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.notStarted}</td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.unassigned}</td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            {row.completed}
+                          </td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            {row.inProgress}
+                          </td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            {row.notStarted}
+                          </td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            {row.unassigned}
+                          </td>
                           <td
                             style={{
                               padding: 12,
@@ -1329,10 +1704,18 @@ export default function AdminReportsPage() {
                           <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
                             <div style={{ fontWeight: 800 }}>{row.title}</div>
                           </td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.completed}</td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.inProgress}</td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.notStarted}</td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.unassigned}</td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            {row.completed}
+                          </td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            {row.inProgress}
+                          </td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            {row.notStarted}
+                          </td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            {row.unassigned}
+                          </td>
                           <td
                             style={{
                               padding: 12,
@@ -1489,9 +1872,7 @@ export default function AdminReportsPage() {
               </div>
 
               {detailModal.rows.length === 0 ? (
-                <div style={{ marginTop: 16, color: BRAND.muted }}>
-                  Detay bulunamadı.
-                </div>
+                <div style={{ marginTop: 16, color: BRAND.muted }}>Detay bulunamadı.</div>
               ) : null}
             </div>
           </div>
