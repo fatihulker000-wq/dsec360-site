@@ -16,6 +16,24 @@ type ScopeResponse = {
   error?: string;
 };
 
+type MatrixStatus = {
+  training_id: string;
+  status: string;
+};
+
+type MatrixRow = {
+  user_id: string;
+  full_name: string;
+  email: string;
+  is_active: boolean;
+  statuses: MatrixStatus[];
+};
+
+type TrainingMini = {
+  id: string;
+  title: string;
+};
+
 type ReportResponse = {
   success?: boolean;
   role?: string;
@@ -35,22 +53,28 @@ type ReportResponse = {
     in_progress_count: number;
     not_started_count: number;
   };
-  trainings?: Array<{
-    id: string;
-    title: string;
-  }>;
-  matrix?: Array<{
-    user_id: string;
-    full_name: string;
-    email: string;
-    is_active: boolean;
-    statuses: Array<{
-      training_id: string;
-      status: string;
-    }>;
-  }>;
+  trainings?: TrainingMini[];
+  matrix?: MatrixRow[];
   error?: string;
 };
+
+type DetailModalState =
+  | {
+      open: false;
+    }
+  | {
+      open: true;
+      title: string;
+      subtitle?: string;
+      rows: Array<{
+        employee: string;
+        email: string;
+        training: string;
+        status: string;
+      }>;
+    };
+
+type ReportTab = "matrix" | "employee" | "training";
 
 const BRAND = {
   bg: "#f7f8fb",
@@ -63,6 +87,7 @@ const BRAND = {
   green: "#166534",
   blue: "#1d4ed8",
   amber: "#92400e",
+  slate: "#374151",
   shadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
 
@@ -73,6 +98,19 @@ function cardStyle(): React.CSSProperties {
     background: BRAND.white,
     padding: 18,
     boxShadow: BRAND.shadow,
+  };
+}
+
+function pillStyle(active: boolean): React.CSSProperties {
+  return {
+    border: "none",
+    borderRadius: 999,
+    padding: "10px 14px",
+    fontSize: 13,
+    fontWeight: 800,
+    cursor: "pointer",
+    background: active ? BRAND.red : "#f3f4f6",
+    color: active ? "#fff" : BRAND.text,
   };
 }
 
@@ -108,6 +146,36 @@ function statusStyle(status: string): React.CSSProperties {
   };
 }
 
+function badge(status: string) {
+  return (
+    <span
+      style={{
+        ...statusStyle(status),
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "6px 10px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 800,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {status}
+    </span>
+  );
+}
+
+function matchesStatusFilter(status: string, filter: string) {
+  if (filter === "all") return true;
+  if (filter === "completed") return status === "Tamamlandı";
+  if (filter === "in_progress") return status === "Devam Ediyor";
+  if (filter === "not_started") return status === "Başlamadı";
+  if (filter === "unassigned") return status === "Atanmadı";
+  if (filter === "missing") return status === "Başlamadı" || status === "Atanmadı";
+  return true;
+}
+
 export default function AdminReportsPage() {
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
@@ -115,11 +183,20 @@ export default function AdminReportsPage() {
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
   const [error, setError] = useState("");
-  const [employeeSearch, setEmployeeSearch] = useState("");
-  const [showOnlyMissing, setShowOnlyMissing] = useState(false);
 
   const [scope, setScope] = useState<ScopeResponse | null>(null);
   const [loadingScope, setLoadingScope] = useState(true);
+
+  const [activeTab, setActiveTab] = useState<ReportTab>("matrix");
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [trainingSearch, setTrainingSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [showOnlyMissing, setShowOnlyMissing] = useState(false);
+  const [showOnlyActiveEmployees, setShowOnlyActiveEmployees] = useState(false);
+
+  const [detailModal, setDetailModal] = useState<DetailModalState>({
+    open: false,
+  });
 
   const loadScope = async () => {
     try {
@@ -266,43 +343,308 @@ export default function AdminReportsPage() {
     return total ? Math.round((completed / total) * 100) : 0;
   }, [report]);
 
+  const trainings = report?.trainings || [];
+  const matrix = report?.matrix || [];
+
+  const filteredTrainings = useMemo(() => {
+    const q = trainingSearch.trim().toLowerCase();
+    return trainings.filter((t) => !q || t.title.toLowerCase().includes(q));
+  }, [trainings, trainingSearch]);
+
+  const visibleTrainingIds = useMemo(
+    () => new Set(filteredTrainings.map((t) => t.id)),
+    [filteredTrainings]
+  );
+
   const filteredMatrix = useMemo(() => {
-    const rows = report?.matrix || [];
+    const rows = matrix;
     const q = employeeSearch.trim().toLowerCase();
 
-    return rows.filter((row) => {
-      const matchesSearch =
-        !q ||
-        row.full_name.toLowerCase().includes(q) ||
-        row.email.toLowerCase().includes(q);
+    return rows
+      .filter((row) => {
+        const matchesSearch =
+          !q ||
+          row.full_name.toLowerCase().includes(q) ||
+          row.email.toLowerCase().includes(q);
 
-      const hasMissing = row.statuses.some(
-        (s) => s.status === "Başlamadı" || s.status === "Atanmadı"
+        const matchesActive = showOnlyActiveEmployees ? row.is_active : true;
+
+        const statusesInVisibleTrainings = row.statuses.filter((s) =>
+          visibleTrainingIds.has(s.training_id)
+        );
+
+        const hasFilteredStatus =
+          statusFilter === "all"
+            ? true
+            : statusesInVisibleTrainings.some((s) =>
+                matchesStatusFilter(s.status, statusFilter)
+              );
+
+        const hasMissing = statusesInVisibleTrainings.some(
+          (s) => s.status === "Başlamadı" || s.status === "Atanmadı"
+        );
+
+        const matchesMissing = showOnlyMissing ? hasMissing : true;
+
+        return matchesSearch && matchesActive && hasFilteredStatus && matchesMissing;
+      })
+      .map((row) => ({
+        ...row,
+        statuses: row.statuses.filter((s) => visibleTrainingIds.has(s.training_id)),
+      }));
+  }, [
+    matrix,
+    employeeSearch,
+    showOnlyMissing,
+    showOnlyActiveEmployees,
+    statusFilter,
+    visibleTrainingIds,
+  ]);
+
+  const employeeBasedRows = useMemo(() => {
+    return filteredMatrix.map((row) => {
+      const completed = row.statuses.filter((s) => s.status === "Tamamlandı").length;
+      const inProgress = row.statuses.filter((s) => s.status === "Devam Ediyor").length;
+      const notStarted = row.statuses.filter((s) => s.status === "Başlamadı").length;
+      const unassigned = row.statuses.filter((s) => s.status === "Atanmadı").length;
+
+      return {
+        ...row,
+        completed,
+        inProgress,
+        notStarted,
+        unassigned,
+      };
+    });
+  }, [filteredMatrix]);
+
+  const trainingBasedRows = useMemo(() => {
+    return filteredTrainings
+      .map((training) => {
+        let completed = 0;
+        let inProgress = 0;
+        let notStarted = 0;
+        let unassigned = 0;
+
+        const participants: Array<{
+          employee: string;
+          email: string;
+          training: string;
+          status: string;
+        }> = [];
+
+        matrix.forEach((row) => {
+          if (showOnlyActiveEmployees && !row.is_active) return;
+
+          if (
+            employeeSearch.trim() &&
+            !row.full_name.toLowerCase().includes(employeeSearch.trim().toLowerCase()) &&
+            !row.email.toLowerCase().includes(employeeSearch.trim().toLowerCase())
+          ) {
+            return;
+          }
+
+          const status = row.statuses.find((s) => s.training_id === training.id)?.status || "Atanmadı";
+
+          if (status === "Tamamlandı") completed += 1;
+          else if (status === "Devam Ediyor") inProgress += 1;
+          else if (status === "Başlamadı") notStarted += 1;
+          else unassigned += 1;
+
+          participants.push({
+            employee: row.full_name,
+            email: row.email,
+            training: training.title,
+            status,
+          });
+        });
+
+        return {
+          training_id: training.id,
+          title: training.title,
+          completed,
+          inProgress,
+          notStarted,
+          unassigned,
+          participants,
+        };
+      })
+      .filter((item) => {
+        const matchesFilter =
+          statusFilter === "all"
+            ? true
+            : statusFilter === "completed"
+            ? item.completed > 0
+            : statusFilter === "in_progress"
+            ? item.inProgress > 0
+            : statusFilter === "not_started"
+            ? item.notStarted > 0
+            : statusFilter === "unassigned"
+            ? item.unassigned > 0
+            : item.notStarted > 0 || item.unassigned > 0;
+
+        const matchesMissing = showOnlyMissing
+          ? item.notStarted > 0 || item.unassigned > 0
+          : true;
+
+        return matchesFilter && matchesMissing;
+      });
+  }, [
+    filteredTrainings,
+    matrix,
+    employeeSearch,
+    showOnlyActiveEmployees,
+    statusFilter,
+    showOnlyMissing,
+  ]);
+
+  const dynamicStats = useMemo(() => {
+    let completed = 0;
+    let inProgress = 0;
+    let notStarted = 0;
+    let unassigned = 0;
+
+    filteredMatrix.forEach((row) => {
+      row.statuses.forEach((s) => {
+        if (s.status === "Tamamlandı") completed += 1;
+        else if (s.status === "Devam Ediyor") inProgress += 1;
+        else if (s.status === "Başlamadı") notStarted += 1;
+        else unassigned += 1;
+      });
+    });
+
+    return {
+      employees: filteredMatrix.length,
+      trainings: filteredTrainings.length,
+      completed,
+      inProgress,
+      notStarted,
+      unassigned,
+    };
+  }, [filteredMatrix, filteredTrainings]);
+
+  const openEmployeeDetail = (row: MatrixRow) => {
+    const rows = row.statuses
+      .map((s) => ({
+        employee: row.full_name,
+        email: row.email,
+        training: trainings.find((t) => t.id === s.training_id)?.title || "Eğitim",
+        status: s.status,
+      }))
+      .filter((item) => matchesStatusFilter(item.status, statusFilter))
+      .filter((item) =>
+        showOnlyMissing ? item.status === "Başlamadı" || item.status === "Atanmadı" : true
       );
 
-      const matchesMissing = showOnlyMissing ? hasMissing : true;
-
-      return matchesSearch && matchesMissing;
+    setDetailModal({
+      open: true,
+      title: row.full_name,
+      subtitle: "Çalışan eğitim detayları",
+      rows,
     });
-  }, [report, employeeSearch, showOnlyMissing]);
+  };
+
+  const openTrainingDetail = (trainingId: string, title: string) => {
+    const rows = matrix
+      .filter((row) => (showOnlyActiveEmployees ? row.is_active : true))
+      .filter((row) => {
+        const q = employeeSearch.trim().toLowerCase();
+        return (
+          !q ||
+          row.full_name.toLowerCase().includes(q) ||
+          row.email.toLowerCase().includes(q)
+        );
+      })
+      .map((row) => ({
+        employee: row.full_name,
+        email: row.email,
+        training: title,
+        status: row.statuses.find((s) => s.training_id === trainingId)?.status || "Atanmadı",
+      }))
+      .filter((item) => matchesStatusFilter(item.status, statusFilter))
+      .filter((item) =>
+        showOnlyMissing ? item.status === "Başlamadı" || item.status === "Atanmadı" : true
+      );
+
+    setDetailModal({
+      open: true,
+      title,
+      subtitle: "Eğitim katılımcı detayları",
+      rows,
+    });
+  };
+
+  const openCellDetail = (row: MatrixRow, trainingId: string) => {
+    const trainingTitle = trainings.find((t) => t.id === trainingId)?.title || "Eğitim";
+    const status = row.statuses.find((s) => s.training_id === trainingId)?.status || "Atanmadı";
+
+    setDetailModal({
+      open: true,
+      title: `${row.full_name} • ${trainingTitle}`,
+      subtitle: "Tekil eğitim durumu",
+      rows: [
+        {
+          employee: row.full_name,
+          email: row.email,
+          training: trainingTitle,
+          status,
+        },
+      ],
+    });
+  };
 
   const exportExcel = () => {
-    if (!report?.trainings || !filteredMatrix.length) return;
+    let headers: string[] = [];
+    let rows: string[][] = [];
 
-    const headers = [
-      "Çalışan",
-      "E-Posta",
-      ...report.trainings.map((t) => t.title),
-    ];
+    if (activeTab === "matrix") {
+      headers = ["Çalışan", "E-Posta", ...filteredTrainings.map((t) => t.title)];
 
-    const rows = filteredMatrix.map((row) => {
-      const statusMap = new Map(row.statuses.map((s) => [s.training_id, s.status]));
-      return [
+      rows = filteredMatrix.map((row) => {
+        const statusMap = new Map(row.statuses.map((s) => [s.training_id, s.status]));
+        return [
+          row.full_name,
+          row.email,
+          ...filteredTrainings.map((t) => statusMap.get(t.id) || "Atanmadı"),
+        ];
+      });
+    } else if (activeTab === "employee") {
+      headers = [
+        "Çalışan",
+        "E-Posta",
+        "Tamamlandı",
+        "Devam Ediyor",
+        "Başlamadı",
+        "Atanmadı",
+      ];
+
+      rows = employeeBasedRows.map((row) => [
         row.full_name,
         row.email,
-        ...report.trainings!.map((t) => statusMap.get(t.id) || "Atanmadı"),
+        String(row.completed),
+        String(row.inProgress),
+        String(row.notStarted),
+        String(row.unassigned),
+      ]);
+    } else {
+      headers = [
+        "Eğitim",
+        "Tamamlandı",
+        "Devam Ediyor",
+        "Başlamadı",
+        "Atanmadı",
       ];
-    });
+
+      rows = trainingBasedRows.map((row) => [
+        row.title,
+        String(row.completed),
+        String(row.inProgress),
+        String(row.notStarted),
+        String(row.unassigned),
+      ]);
+    }
+
+    if (!rows.length) return;
 
     const csvContent = [headers, ...rows]
       .map((r) =>
@@ -317,7 +659,7 @@ export default function AdminReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "firma-egitim-matris-raporu.csv";
+    link.download = `firma-egitim-raporu-${activeTab}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -357,12 +699,12 @@ export default function AdminReportsPage() {
       heightLeft -= pageHeight;
     }
 
-    pdf.save("firma-egitim-raporu.pdf");
+    pdf.save(`firma-egitim-raporu-${activeTab}.pdf`);
   };
 
   return (
     <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
-      <div style={{ maxWidth: 1500, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1600, margin: "0 auto" }}>
         <div
           style={{
             ...cardStyle(),
@@ -381,7 +723,7 @@ export default function AdminReportsPage() {
               lineHeight: 1.7,
             }}
           >
-            Firma seç, künye bilgilerini görüntüle ve çalışan x eğitim durum matrisini incele.
+            Firma seç, filtrele, detay aç ve çalışan / eğitim bazlı interaktif rapor üret.
           </p>
         </div>
 
@@ -442,9 +784,7 @@ export default function AdminReportsPage() {
           </div>
         ) : null}
 
-        {loadingReport ? (
-          <div style={cardStyle()}>Rapor yükleniyor...</div>
-        ) : null}
+        {loadingReport ? <div style={cardStyle()}>Rapor yükleniyor...</div> : null}
 
         {!loadingReport && report?.company ? (
           <div id="report-export-area">
@@ -528,58 +868,50 @@ export default function AdminReportsPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
                 gap: 16,
                 marginBottom: 20,
               }}
             >
               <div style={cardStyle()}>
-                <div style={{ fontSize: 12, color: BRAND.muted }}>Toplam Çalışan</div>
+                <div style={{ fontSize: 12, color: BRAND.muted }}>Filtrelenen Çalışan</div>
                 <div style={{ marginTop: 8, fontSize: 28, fontWeight: 900 }}>
-                  {report.summary?.total_employees || 0}
+                  {dynamicStats.employees}
                 </div>
               </div>
 
               <div style={cardStyle()}>
-                <div style={{ fontSize: 12, color: BRAND.muted }}>Toplam Eğitim</div>
+                <div style={{ fontSize: 12, color: BRAND.muted }}>Eğitim</div>
                 <div style={{ marginTop: 8, fontSize: 28, fontWeight: 900 }}>
-                  {report.summary?.total_trainings || 0}
+                  {dynamicStats.trainings}
                 </div>
               </div>
 
               <div style={cardStyle()}>
-                <div style={{ fontSize: 12, color: BRAND.muted }}>Toplam Atama</div>
-                <div style={{ marginTop: 8, fontSize: 28, fontWeight: 900 }}>
-                  {report.summary?.total_assignments || 0}
+                <div style={{ fontSize: 12, color: BRAND.muted }}>Tamamlandı</div>
+                <div style={{ marginTop: 8, fontSize: 28, fontWeight: 900, color: BRAND.green }}>
+                  {dynamicStats.completed}
                 </div>
               </div>
 
               <div style={cardStyle()}>
-                <div style={{ fontSize: 12, color: BRAND.muted }}>Tamamlanan</div>
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 28,
-                    fontWeight: 900,
-                    color: BRAND.green,
-                  }}
-                >
-                  {report.summary?.completed_count || 0}
+                <div style={{ fontSize: 12, color: BRAND.muted }}>Devam Ediyor</div>
+                <div style={{ marginTop: 8, fontSize: 28, fontWeight: 900, color: BRAND.blue }}>
+                  {dynamicStats.inProgress}
                 </div>
               </div>
 
               <div style={cardStyle()}>
-                <div style={{ fontSize: 12, color: BRAND.muted }}>Devam / Başlamadı</div>
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 28,
-                    fontWeight: 900,
-                    color: BRAND.amber,
-                  }}
-                >
-                  {(report.summary?.in_progress_count || 0) +
-                    (report.summary?.not_started_count || 0)}
+                <div style={{ fontSize: 12, color: BRAND.muted }}>Başlamadı</div>
+                <div style={{ marginTop: 8, fontSize: 28, fontWeight: 900, color: BRAND.amber }}>
+                  {dynamicStats.notStarted}
+                </div>
+              </div>
+
+              <div style={cardStyle()}>
+                <div style={{ fontSize: 12, color: BRAND.muted }}>Atanmadı</div>
+                <div style={{ marginTop: 8, fontSize: 28, fontWeight: 900, color: BRAND.slate }}>
+                  {dynamicStats.unassigned}
                 </div>
               </div>
             </div>
@@ -588,7 +920,7 @@ export default function AdminReportsPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.3fr 1fr auto auto",
+                  gridTemplateColumns: "1.2fr 1.2fr 1fr 1fr auto auto",
                   gap: 12,
                   alignItems: "end",
                 }}
@@ -611,24 +943,86 @@ export default function AdminReportsPage() {
                   />
                 </div>
 
-                <label
-                  style={{
-                    display: "inline-flex",
-                    gap: 8,
-                    alignItems: "center",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: BRAND.text,
-                    paddingBottom: 12,
-                  }}
-                >
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+                    Eğitim Ara
+                  </div>
                   <input
-                    type="checkbox"
-                    checked={showOnlyMissing}
-                    onChange={(e) => setShowOnlyMissing(e.target.checked)}
+                    value={trainingSearch}
+                    onChange={(e) => setTrainingSearch(e.target.value)}
+                    placeholder="Eğitim adı ara..."
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border: `1px solid ${BRAND.border}`,
+                      fontSize: 14,
+                    }}
                   />
-                  Sadece eksik eğitimleri göster
-                </label>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+                    Durum
+                  </div>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border: `1px solid ${BRAND.border}`,
+                      background: "#fff",
+                      fontSize: 14,
+                    }}
+                  >
+                    <option value="all">Tümü</option>
+                    <option value="completed">Tamamlandı</option>
+                    <option value="in_progress">Devam Ediyor</option>
+                    <option value="not_started">Başlamadı</option>
+                    <option value="unassigned">Atanmadı</option>
+                    <option value="missing">Eksikler</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gap: 10 }}>
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      gap: 8,
+                      alignItems: "center",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: BRAND.text,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={showOnlyMissing}
+                      onChange={(e) => setShowOnlyMissing(e.target.checked)}
+                    />
+                    Sadece eksik eğitimler
+                  </label>
+
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      gap: 8,
+                      alignItems: "center",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: BRAND.text,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={showOnlyActiveEmployees}
+                      onChange={(e) => setShowOnlyActiveEmployees(e.target.checked)}
+                    />
+                    Sadece aktif çalışanlar
+                  </label>
+                </div>
 
                 <button
                   onClick={exportExcel}
@@ -660,114 +1054,449 @@ export default function AdminReportsPage() {
                   PDF İndir
                 </button>
               </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  marginTop: 16,
+                }}
+              >
+                <button style={pillStyle(activeTab === "matrix")} onClick={() => setActiveTab("matrix")}>
+                  Eğitim Matrisi
+                </button>
+                <button style={pillStyle(activeTab === "employee")} onClick={() => setActiveTab("employee")}>
+                  Çalışan Bazlı
+                </button>
+                <button style={pillStyle(activeTab === "training")} onClick={() => setActiveTab("training")}>
+                  Eğitim Bazlı
+                </button>
+              </div>
             </div>
 
-            <div style={cardStyle()}>
-              <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
-                Eğitim Durum Matrisi
-              </h2>
+            {activeTab === "matrix" ? (
+              <div style={cardStyle()}>
+                <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
+                  Eğitim Durum Matrisi
+                </h2>
 
-              <div style={{ overflowX: "auto" }}>
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    minWidth: 900,
-                  }}
-                >
-                  <thead>
-                    <tr>
-                      <th
-                        style={{
-                          textAlign: "left",
-                          padding: 12,
-                          borderBottom: `1px solid ${BRAND.border}`,
-                          background: "#f9fafb",
-                          position: "sticky",
-                          left: 0,
-                          zIndex: 1,
-                        }}
-                      >
-                        Çalışan
-                      </th>
-
-                      {report.trainings?.map((training) => (
+                <div style={{ overflowX: "auto" }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      minWidth: 1000,
+                    }}
+                  >
+                    <thead>
+                      <tr>
                         <th
-                          key={training.id}
                           style={{
-                            textAlign: "center",
+                            textAlign: "left",
                             padding: 12,
                             borderBottom: `1px solid ${BRAND.border}`,
                             background: "#f9fafb",
-                            minWidth: 160,
-                          }}
-                        >
-                          {training.title}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {filteredMatrix.map((row) => (
-                      <tr key={row.user_id}>
-                        <td
-                          style={{
-                            padding: 12,
-                            borderBottom: `1px solid ${BRAND.border}`,
-                            background: "#fff",
                             position: "sticky",
                             left: 0,
                             zIndex: 1,
-                            minWidth: 220,
                           }}
                         >
-                          <div style={{ fontWeight: 800, color: BRAND.text }}>
-                            {row.full_name}
-                          </div>
-                          <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 4 }}>
-                            {row.email || "-"}
-                          </div>
-                        </td>
+                          Çalışan
+                        </th>
 
-                        {row.statuses.map((cell) => (
+                        {filteredTrainings.map((training) => (
+                          <th
+                            key={training.id}
+                            style={{
+                              textAlign: "center",
+                              padding: 12,
+                              borderBottom: `1px solid ${BRAND.border}`,
+                              background: "#f9fafb",
+                              minWidth: 160,
+                            }}
+                          >
+                            <button
+                              onClick={() => openTrainingDetail(training.id, training.title)}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                color: BRAND.text,
+                              }}
+                            >
+                              {training.title}
+                            </button>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filteredMatrix.map((row) => (
+                        <tr key={row.user_id}>
                           <td
-                            key={`${row.user_id}-${cell.training_id}`}
+                            style={{
+                              padding: 12,
+                              borderBottom: `1px solid ${BRAND.border}`,
+                              background: "#fff",
+                              position: "sticky",
+                              left: 0,
+                              zIndex: 1,
+                              minWidth: 240,
+                            }}
+                          >
+                            <div style={{ fontWeight: 800, color: BRAND.text }}>
+                              {row.full_name}
+                            </div>
+                            <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 4 }}>
+                              {row.email || "-"}
+                            </div>
+                            <button
+                              onClick={() => openEmployeeDetail(row)}
+                              style={{
+                                marginTop: 8,
+                                border: "none",
+                                borderRadius: 10,
+                                padding: "8px 10px",
+                                background: "#f3f4f6",
+                                color: BRAND.text,
+                                fontSize: 12,
+                                fontWeight: 800,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Detay
+                            </button>
+                          </td>
+
+                          {row.statuses.map((cell) => (
+                            <td
+                              key={`${row.user_id}-${cell.training_id}`}
+                              style={{
+                                padding: 12,
+                                borderBottom: `1px solid ${BRAND.border}`,
+                                textAlign: "center",
+                              }}
+                            >
+                              <button
+                                onClick={() => openCellDetail(row, cell.training_id)}
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {badge(cell.status)}
+                              </button>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {filteredMatrix.length === 0 ? (
+                  <div style={{ marginTop: 16, color: BRAND.muted }}>
+                    Filtreye uygun çalışan bulunamadı.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {activeTab === "employee" ? (
+              <div style={cardStyle()}>
+                <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
+                  Çalışan Bazlı Rapor
+                </h2>
+
+                <div style={{ overflowX: "auto" }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      minWidth: 900,
+                    }}
+                  >
+                    <thead>
+                      <tr>
+                        {["Çalışan", "E-Posta", "Tamamlandı", "Devam Ediyor", "Başlamadı", "Atanmadı", "İşlem"].map(
+                          (head) => (
+                            <th
+                              key={head}
+                              style={{
+                                textAlign: head === "İşlem" ? "center" : "left",
+                                padding: 12,
+                                borderBottom: `1px solid ${BRAND.border}`,
+                                background: "#f9fafb",
+                              }}
+                            >
+                              {head}
+                            </th>
+                          )
+                        )}
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {employeeBasedRows.map((row) => (
+                        <tr key={row.user_id}>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            <div style={{ fontWeight: 800 }}>{row.full_name}</div>
+                          </td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}`, color: BRAND.muted }}>
+                            {row.email || "-"}
+                          </td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.completed}</td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.inProgress}</td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.notStarted}</td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.unassigned}</td>
+                          <td
                             style={{
                               padding: 12,
                               borderBottom: `1px solid ${BRAND.border}`,
                               textAlign: "center",
                             }}
                           >
-                            <span
+                            <button
+                              onClick={() => openEmployeeDetail(row)}
                               style={{
-                                ...statusStyle(cell.status),
-                                display: "inline-flex",
-                                padding: "6px 10px",
-                                borderRadius: 999,
-                                fontSize: 12,
+                                border: "none",
+                                borderRadius: 10,
+                                padding: "8px 12px",
+                                background: BRAND.red,
+                                color: "#fff",
                                 fontWeight: 800,
+                                cursor: "pointer",
                               }}
                             >
-                              {cell.status}
-                            </span>
+                              Aç
+                            </button>
                           </td>
-                        ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {employeeBasedRows.length === 0 ? (
+                  <div style={{ marginTop: 16, color: BRAND.muted }}>
+                    Filtreye uygun çalışan bulunamadı.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {activeTab === "training" ? (
+              <div style={cardStyle()}>
+                <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
+                  Eğitim Bazlı Rapor
+                </h2>
+
+                <div style={{ overflowX: "auto" }}>
+                  <table
+                    style={{
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      minWidth: 900,
+                    }}
+                  >
+                    <thead>
+                      <tr>
+                        {["Eğitim", "Tamamlandı", "Devam Ediyor", "Başlamadı", "Atanmadı", "İşlem"].map(
+                          (head) => (
+                            <th
+                              key={head}
+                              style={{
+                                textAlign: head === "İşlem" ? "center" : "left",
+                                padding: 12,
+                                borderBottom: `1px solid ${BRAND.border}`,
+                                background: "#f9fafb",
+                              }}
+                            >
+                              {head}
+                            </th>
+                          )
+                        )}
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {trainingBasedRows.map((row) => (
+                        <tr key={row.training_id}>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                            <div style={{ fontWeight: 800 }}>{row.title}</div>
+                          </td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.completed}</td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.inProgress}</td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.notStarted}</td>
+                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>{row.unassigned}</td>
+                          <td
+                            style={{
+                              padding: 12,
+                              borderBottom: `1px solid ${BRAND.border}`,
+                              textAlign: "center",
+                            }}
+                          >
+                            <button
+                              onClick={() => openTrainingDetail(row.training_id, row.title)}
+                              style={{
+                                border: "none",
+                                borderRadius: 10,
+                                padding: "8px 12px",
+                                background: BRAND.red,
+                                color: "#fff",
+                                fontWeight: 800,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Aç
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {trainingBasedRows.length === 0 ? (
+                  <div style={{ marginTop: 16, color: BRAND.muted }}>
+                    Filtreye uygun eğitim bulunamadı.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {detailModal.open ? (
+        <div
+          onClick={() => setDetailModal({ open: false })}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.45)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 980,
+              maxHeight: "86vh",
+              overflow: "auto",
+              background: "#fff",
+              borderRadius: 20,
+              boxShadow: "0 24px 64px rgba(15,23,42,0.20)",
+              border: `1px solid ${BRAND.border}`,
+            }}
+          >
+            <div
+              style={{
+                padding: 20,
+                borderBottom: `1px solid ${BRAND.border}`,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "flex-start",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 900, color: BRAND.text }}>
+                  {detailModal.title}
+                </div>
+                {detailModal.subtitle ? (
+                  <div style={{ marginTop: 6, color: BRAND.muted }}>{detailModal.subtitle}</div>
+                ) : null}
+              </div>
+
+              <button
+                onClick={() => setDetailModal({ open: false })}
+                style={{
+                  border: "none",
+                  borderRadius: 12,
+                  padding: "10px 14px",
+                  background: BRAND.red,
+                  color: "#fff",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Kapat
+              </button>
+            </div>
+
+            <div style={{ padding: 20 }}>
+              <div style={{ overflowX: "auto" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    minWidth: 700,
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      {["Çalışan", "E-Posta", "Eğitim", "Durum"].map((head) => (
+                        <th
+                          key={head}
+                          style={{
+                            textAlign: "left",
+                            padding: 12,
+                            borderBottom: `1px solid ${BRAND.border}`,
+                            background: "#f9fafb",
+                          }}
+                        >
+                          {head}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {detailModal.rows.map((row, index) => (
+                      <tr key={`${row.employee}-${row.training}-${index}`}>
+                        <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                          {row.employee}
+                        </td>
+                        <td
+                          style={{
+                            padding: 12,
+                            borderBottom: `1px solid ${BRAND.border}`,
+                            color: BRAND.muted,
+                          }}
+                        >
+                          {row.email || "-"}
+                        </td>
+                        <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                          {row.training}
+                        </td>
+                        <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                          {badge(row.status)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {filteredMatrix.length === 0 ? (
+              {detailModal.rows.length === 0 ? (
                 <div style={{ marginTop: 16, color: BRAND.muted }}>
-                  Filtreye uygun çalışan bulunamadı.
+                  Detay bulunamadı.
                 </div>
               ) : null}
             </div>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </main>
   );
 }
