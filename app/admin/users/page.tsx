@@ -32,6 +32,19 @@ type UserRow = {
   created_at: string;
 };
 
+type CompanyOption = {
+  id: string;
+  name: string;
+};
+
+type CsvImportRow = {
+  full_name: string;
+  email: string;
+  role?: string;
+  password?: string;
+  is_active?: boolean;
+};
+
 const BRAND = {
   bg: "#f7f8fb",
   white: "#ffffff",
@@ -40,6 +53,8 @@ const BRAND = {
   border: "#e5e7eb",
   red: "#c62828",
   redDark: "#5a0f1f",
+  green: "#166534",
+  blue: "#1d4ed8",
   shadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
 
@@ -78,40 +93,87 @@ function badgeStyle(
   };
 }
 
+function parseCsv(text: string): CsvImportRow[] {
+  const lines = text
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length <= 1) return [];
+
+  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+
+  const fullNameIndex = headers.findIndex((h) =>
+    ["full_name", "fullname", "adsoyad", "ad_soyad", "name"].includes(h)
+  );
+  const emailIndex = headers.findIndex((h) => ["email", "e-mail", "mail"].includes(h));
+  const roleIndex = headers.findIndex((h) => ["role", "rol"].includes(h));
+  const passwordIndex = headers.findIndex((h) => ["password", "şifre", "sifre"].includes(h));
+  const activeIndex = headers.findIndex((h) => ["is_active", "active", "aktif"].includes(h));
+
+  const dataRows = lines.slice(1);
+
+  return dataRows
+    .map((line): CsvImportRow => {
+      const cols = line.split(",").map((c) => c.trim());
+      const activeRaw =
+        activeIndex >= 0 ? String(cols[activeIndex] || "").toLowerCase() : "";
+
+      return {
+        full_name: fullNameIndex >= 0 ? String(cols[fullNameIndex] || "").trim() : "",
+        email: emailIndex >= 0 ? String(cols[emailIndex] || "").trim() : "",
+        role: roleIndex >= 0 ? String(cols[roleIndex] || "").trim() : "",
+        password: passwordIndex >= 0 ? String(cols[passwordIndex] || "").trim() : "",
+        is_active:
+          activeIndex >= 0
+            ? ["1", "true", "evet", "aktif", "yes"].includes(activeRaw)
+            : true,
+      };
+    })
+    .filter((row) => row.full_name || row.email);
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
-  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  const [csvRows, setCsvRows] = useState<CsvImportRow[]>([]);
+  const [selectedImportCompanyId, setSelectedImportCompanyId] = useState("");
+  const [defaultImportRole, setDefaultImportRole] = useState("training_user");
+  const [defaultImportPassword, setDefaultImportPassword] = useState("123456");
+  const [importing, setImporting] = useState(false);
+
   const loadUsers = async () => {
     try {
       setLoading(true);
       setError("");
 
-     const [usersRes, companiesRes] = await Promise.all([
-  fetch("/api/admin/users", {
-    method: "GET",
-    cache: "no-store",
-    credentials: "include",
-  }),
-  fetch("/api/admin/companies", {
-    method: "GET",
-    cache: "no-store",
-    credentials: "include",
-  }),
-]);
+      const [usersRes, companiesRes] = await Promise.all([
+        fetch("/api/admin/users", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        }),
+        fetch("/api/admin/companies", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        }),
+      ]);
 
-if (usersRes.status === 401 || companiesRes.status === 401) {
-  window.location.href = "/admin/login";
-  return;
-}
+      if (usersRes.status === 401 || companiesRes.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
 
-const json: UserResponse = await usersRes.json();
-const companiesJson = await companiesRes.json();
+      const json: UserResponse = await usersRes.json();
+      const companiesJson = await companiesRes.json();
 
       if (!usersRes.ok) {
         setError(json?.error || "Kullanıcılar alınamadı.");
@@ -125,21 +187,22 @@ const companiesJson = await companiesRes.json();
             full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
             email: String(u.email || "-").trim(),
             role: getRoleLabel(u.role),
-            company_id: String(u.company_id || "Firma bilgisi yok").trim(),
+            company_id: String(u.company_id || "").trim(),
             is_active: Boolean(u.is_active),
             created_at: String(u.created_at || ""),
           }))
         : [];
 
       setUsers(normalized);
+
       setCompanies(
-  Array.isArray(companiesJson?.data)
-    ? companiesJson.data.map((c: { id: string; name: string }) => ({
-        id: String(c.id),
-        name: String(c.name || "").trim(),
-      }))
-    : []
-);
+        Array.isArray(companiesJson?.data)
+          ? companiesJson.data.map((c: { id: string; name: string }) => ({
+              id: String(c.id),
+              name: String(c.name || "").trim(),
+            }))
+          : []
+      );
     } catch (err) {
       console.error(err);
       setError("Kullanıcılar alınamadı.");
@@ -161,15 +224,10 @@ const companiesJson = await companiesRes.json();
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      const text =
-        `${u.full_name} ${u.email} ${u.role} ${u.company_id}`.toLowerCase();
+      const text = `${u.full_name} ${u.email} ${u.role} ${u.company_id}`.toLowerCase();
 
-      const matchesSearch =
-        !search || text.includes(search.toLowerCase());
-
-      const matchesRole =
-        roleFilter === "all" ? true : u.role === roleFilter;
-
+      const matchesSearch = !search || text.includes(search.toLowerCase());
+      const matchesRole = roleFilter === "all" ? true : u.role === roleFilter;
       const matchesStatus =
         statusFilter === "all"
           ? true
@@ -184,7 +242,64 @@ const companiesJson = await companiesRes.json();
   const totalCount = users.length;
   const activeCount = users.filter((u) => u.is_active).length;
   const passiveCount = users.filter((u) => !u.is_active).length;
-  const companyCount = new Set(users.map((u) => u.company_id)).size;
+  const companyCount = new Set(users.map((u) => u.company_id).filter(Boolean)).size;
+
+  const handleCsvFile = async (file: File) => {
+    const text = await file.text();
+    const parsed = parseCsv(text);
+    setCsvRows(parsed);
+  };
+
+  const importCsvRows = async () => {
+    if (!csvRows.length) {
+      alert("Önce CSV seç.");
+      return;
+    }
+
+    try {
+      setImporting(true);
+
+      const res = await fetch("/api/admin/users/bulk-import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          companyId: selectedImportCompanyId,
+          defaultRole: defaultImportRole,
+          defaultPassword: defaultImportPassword,
+          rows: csvRows,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      if (!res.ok) {
+        alert(json?.error || "Toplu yükleme başarısız.");
+        return;
+      }
+
+      alert(
+        `İçe aktarma tamamlandı.\nYeni: ${json?.insertedCount || 0}\nAtlanan: ${
+          json?.skippedCount || 0
+        }`
+      );
+
+      setCsvRows([]);
+      await loadUsers();
+    } catch (err) {
+      console.error(err);
+      alert("Toplu yükleme başarısız.");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   return (
     <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
@@ -197,25 +312,12 @@ const companiesJson = await companiesRes.json();
             marginBottom: 20,
           }}
         >
-          <h1
-            style={{
-              marginTop: 0,
-              marginBottom: 8,
-              fontSize: 36,
-              fontWeight: 900,
-            }}
-          >
+          <h1 style={{ marginTop: 0, marginBottom: 8, fontSize: 36, fontWeight: 900 }}>
             Kullanıcı Yönetimi
           </h1>
 
-          <p
-            style={{
-              margin: 0,
-              color: "rgba(255,255,255,0.92)",
-              lineHeight: 1.7,
-            }}
-          >
-            Kullanıcıları listele, ara, rol ve durum bazlı filtrele.
+          <p style={{ margin: 0, color: "rgba(255,255,255,0.92)", lineHeight: 1.7 }}>
+            Kullanıcıları listele, ara, rol ve durum bazlı filtrele. CSV ile toplu çalışan yükle.
           </p>
         </div>
 
@@ -232,6 +334,166 @@ const companiesJson = await companiesRes.json();
           </div>
         ) : null}
 
+        <div style={{ ...cardStyle(), marginBottom: 20 }}>
+          <h2 style={{ marginTop: 0, fontSize: 24, fontWeight: 900 }}>
+            Toplu Çalışan Yükleme (CSV)
+          </h2>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.2fr 1fr 1fr 1fr",
+              gap: 12,
+              marginBottom: 14,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>CSV Dosyası</div>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleCsvFile(file);
+                }}
+              />
+            </div>
+
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Firma</div>
+              <select
+                value={selectedImportCompanyId}
+                onChange={(e) => setSelectedImportCompanyId(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  background: "#fff",
+                  fontSize: 14,
+                }}
+              >
+                <option value="">Firma seç</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Varsayılan Rol</div>
+              <select
+                value={defaultImportRole}
+                onChange={(e) => setDefaultImportRole(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  background: "#fff",
+                  fontSize: 14,
+                }}
+              >
+                <option value="training_user">Eğitim Kullanıcısı</option>
+                <option value="operator">Operatör</option>
+                <option value="company_admin">Firma Yöneticisi</option>
+              </select>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Varsayılan Şifre</div>
+              <input
+                value={defaultImportPassword}
+                onChange={(e) => setDefaultImportPassword(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  fontSize: 14,
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14, fontSize: 13, color: BRAND.muted, lineHeight: 1.7 }}>
+            CSV başlık örneği: <b>full_name,email,role,password,is_active</b>
+          </div>
+
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              onClick={importCsvRows}
+              disabled={!csvRows.length || importing}
+              style={{
+                border: "none",
+                borderRadius: 12,
+                padding: "12px 18px",
+                background: BRAND.green,
+                color: "#fff",
+                fontWeight: 800,
+                cursor: !csvRows.length || importing ? "not-allowed" : "pointer",
+              }}
+            >
+              {importing ? "Yükleniyor..." : "CSV İçeri Aktar"}
+            </button>
+
+            <div style={badgeStyle("#eff6ff", "#bfdbfe", BRAND.blue)}>
+              Önizleme satırı: {csvRows.length}
+            </div>
+          </div>
+
+          {csvRows.length > 0 ? (
+            <div
+              style={{
+                marginTop: 16,
+                border: `1px solid ${BRAND.border}`,
+                borderRadius: 14,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "2fr 2fr 1fr 1fr 1fr",
+                  gap: 12,
+                  padding: "12px 14px",
+                  background: "#f9fafb",
+                  fontWeight: 800,
+                  fontSize: 13,
+                }}
+              >
+                <div>Ad Soyad</div>
+                <div>Email</div>
+                <div>Rol</div>
+                <div>Şifre</div>
+                <div>Aktif</div>
+              </div>
+
+              {csvRows.slice(0, 10).map((row, index) => (
+                <div
+                  key={`${row.email}-${index}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "2fr 2fr 1fr 1fr 1fr",
+                    gap: 12,
+                    padding: "12px 14px",
+                    borderTop: `1px solid ${BRAND.border}`,
+                    fontSize: 13,
+                  }}
+                >
+                  <div>{row.full_name || "-"}</div>
+                  <div>{row.email || "-"}</div>
+                  <div>{row.role || defaultImportRole}</div>
+                  <div>{row.password || defaultImportPassword}</div>
+                  <div>{row.is_active === false ? "Pasif" : "Aktif"}</div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
         <div
           style={{
             display: "grid",
@@ -241,35 +503,23 @@ const companiesJson = await companiesRes.json();
           }}
         >
           <div style={cardStyle()}>
-            <div style={{ fontSize: 13, color: BRAND.muted }}>
-              Toplam Kullanıcı
-            </div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
-              {totalCount}
-            </div>
+            <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Kullanıcı</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{totalCount}</div>
           </div>
 
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Aktif</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
-              {activeCount}
-            </div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{activeCount}</div>
           </div>
 
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Pasif</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
-              {passiveCount}
-            </div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{passiveCount}</div>
           </div>
 
           <div style={cardStyle()}>
-            <div style={{ fontSize: 13, color: BRAND.muted }}>
-              Firma Sayısı
-            </div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
-              {companyCount}
-            </div>
+            <div style={{ fontSize: 13, color: BRAND.muted }}>Firma Sayısı</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{companyCount}</div>
           </div>
         </div>
 
@@ -283,9 +533,7 @@ const companiesJson = await companiesRes.json();
           }}
         >
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-              Ara
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Ara</div>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -301,9 +549,7 @@ const companiesJson = await companiesRes.json();
           </div>
 
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-              Rol
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Rol</div>
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
@@ -326,9 +572,7 @@ const companiesJson = await companiesRes.json();
           </div>
 
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-              Durum
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Durum</div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -359,9 +603,7 @@ const companiesJson = await companiesRes.json();
               flexWrap: "wrap",
             }}
           >
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
-              Kullanıcı Listesi
-            </h2>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>Kullanıcı Listesi</h2>
 
             <div style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
               {filteredUsers.length} kayıt
@@ -436,41 +678,41 @@ const companiesJson = await companiesRes.json();
                     </div>
                   </div>
 
-<div style={{ marginTop: 10 }}>
-  <select
-    defaultValue={u.company_id || ""}
-    onChange={async (e) => {
-      const companyId = e.target.value;
+                  <div style={{ marginTop: 10 }}>
+                    <select
+                      defaultValue={u.company_id || ""}
+                      onChange={async (e) => {
+                        const companyId = e.target.value;
 
-      await fetch("/api/admin/users/update-company", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: u.id,
-          companyId,
-        }),
-      });
+                        await fetch("/api/admin/users/update-company", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            userId: u.id,
+                            companyId,
+                          }),
+                        });
 
-      location.reload();
-    }}
-    style={{
-      padding: "10px 12px",
-      borderRadius: 10,
-      border: "1px solid #d1d5db",
-      fontSize: 13,
-      minWidth: 220,
-    }}
-  >
-    <option value="">Firma yok</option>
-    {companies.map((c) => (
-      <option key={c.id} value={c.id}>
-        {c.name}
-      </option>
-    ))}
-  </select>
-</div>
+                        location.reload();
+                      }}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 10,
+                        border: "1px solid #d1d5db",
+                        fontSize: 13,
+                        minWidth: 220,
+                      }}
+                    >
+                      <option value="">Firma yok</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                   <div
                     style={{
