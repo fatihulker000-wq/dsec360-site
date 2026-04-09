@@ -451,7 +451,7 @@ export async function POST(req: Request) {
         email: user.email,
         phone: user.phone,
         training: training.title,
-        link: `${process.env.NEXT_PUBLIC_APP_URL || "http://dsec360.com"}/login`,
+       link: `${process.env.NEXT_PUBLIC_APP_URL || "https://dsec360.com"}/login`,
         mailOk: mailResult.ok,
       });
     }
