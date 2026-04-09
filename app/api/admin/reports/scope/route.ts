@@ -13,95 +13,86 @@ export async function GET() {
   try {
     const cookieStore = await cookies();
 
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
-
     const userAuth = cookieStore.get("dsec_user_auth")?.value;
     const userRole = cookieStore.get("dsec_user_role")?.value;
     const userId = cookieStore.get("dsec_user_id")?.value;
 
-    const resolvedRole =
-      adminAuth === "ok" && adminRole
-        ? adminRole
-        : userAuth === "ok" && userRole
-        ? userRole
-        : null;
-
-    if (!resolvedRole) {
+    if (!(userAuth === "ok" && userRole)) {
       return NextResponse.json(
         { error: "Yetkisiz erişim." },
         { status: 401 }
       );
     }
 
-    if (resolvedRole === "super_admin" || resolvedRole === "admin") {
+    const supabase = getSupabase();
+
+    // ADMIN → firma seçebilir
+    if (userRole === "super_admin" || userRole === "admin") {
       return NextResponse.json({
         success: true,
-        role: resolvedRole,
+        role: userRole,
         can_select_company: true,
         allowed_company_id: null,
         allowed_company_name: null,
       });
     }
 
-    if (resolvedRole === "company_admin") {
+    // COMPANY ADMIN → firmaya sabit
+    if (userRole === "company_admin") {
       if (!userId) {
         return NextResponse.json(
-          { error: "Kullanıcı bilgisi bulunamadı." },
+          { error: "Kullanıcı bilgisi yok." },
           { status: 401 }
         );
       }
 
-      const supabase = getSupabase();
-
+      // 🔥 USER ÇEK
       const { data: userRow, error: userError } = await supabase
         .from("users")
-        .select("id, company_id, companies(name)")
+        .select("id, company_id")
         .eq("id", userId)
         .maybeSingle();
 
       if (userError || !userRow) {
         return NextResponse.json(
-          { error: "Kullanıcı firma bilgisi alınamadı." },
+          { error: "Kullanıcı bulunamadı." },
           { status: 500 }
         );
       }
 
-      const companyId = String(
-        (userRow as { company_id?: string | null }).company_id || ""
-      ).trim();
+      const companyId = userRow.company_id;
 
       if (!companyId) {
         return NextResponse.json(
-          { error: "Bu kullanıcıya bağlı firma bulunamadı." },
+          { error: "Firma atanmamış." },
           { status: 403 }
         );
       }
 
-      const companyName =
-        (
-          userRow as {
-            companies?: { name?: string | null } | null;
-          }
-        ).companies?.name || null;
+      // 🔥 COMPANY AYRI ÇEK (join yok!)
+      const { data: companyRow } = await supabase
+        .from("companies")
+        .select("name")
+        .eq("id", companyId)
+        .maybeSingle();
 
       return NextResponse.json({
         success: true,
-        role: resolvedRole,
+        role: userRole,
         can_select_company: false,
         allowed_company_id: companyId,
-        allowed_company_name: companyName ? String(companyName).trim() : null,
+        allowed_company_name: companyRow?.name || null,
       });
     }
 
     return NextResponse.json(
-      { error: "Bu rol raporlara erişemez." },
+      { error: "Bu rol erişemez." },
       { status: 403 }
     );
   } catch (error) {
-    console.error("reports scope error:", error);
+    console.error("scope error:", error);
     return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
+      { error: "Sunucu hatası." },
       { status: 500 }
     );
   }
