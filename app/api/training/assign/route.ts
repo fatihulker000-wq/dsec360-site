@@ -96,7 +96,7 @@ async function sendTrainingInviteEmail(params: {
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   const emailFrom = process.env.EMAIL_FROM;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://dsec360.com";
 
   if (!apiKey || !emailFrom) {
     return {
@@ -106,7 +106,7 @@ async function sendTrainingInviteEmail(params: {
     };
   }
 
-  const loginUrl = `${appUrl}/login`;
+  const loginUrl = `${appUrl.replace(/\/$/, "")}/login`;
   const safeName = escapeHtml(params.fullName);
   const safeTraining = escapeHtml(params.trainingTitle);
   const safePassword = escapeHtml(params.tempPassword);
