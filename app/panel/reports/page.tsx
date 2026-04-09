@@ -558,69 +558,59 @@ export default function PanelReportsPage() {
   };
 
  const exportPDF = async () => {
-  const summaryEl = document.getElementById("panel-report-pdf");
-  const matrixEl = document.getElementById("panel-report-matrix");
-
-  if (!summaryEl || !matrixEl) return;
-
   const { default: jsPDF } = await import("jspdf");
   const { default: html2canvas } = await import("html2canvas");
 
   const pdf = new jsPDF("p", "mm", "a4");
 
-  // ======================
-  // 1️⃣ ÖZET SAYFA
-  // ======================
-  const canvasSummary = await html2canvas(summaryEl, { scale: 2 });
-  const imgSummary = canvasSummary.toDataURL("image/png");
+  // 1. sayfa: üst özet alanı
+  const topSection = document.getElementById("panel-report-top");
+  if (topSection) {
+    const canvasTop = await html2canvas(topSection, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+    });
 
-  const pageWidth = 210;
-  const margin = 8;
-  const usableWidth = pageWidth - margin * 2;
-  const imgHeight = (canvasSummary.height * usableWidth) / canvasSummary.width;
+    const imgTop = canvasTop.toDataURL("image/png");
 
-  pdf.addImage(imgSummary, "PNG", margin, margin, usableWidth, imgHeight);
+    const pageWidth = 210;
+    const margin = 8;
+    const usableWidth = pageWidth - margin * 2;
+    const imgTopHeight = (canvasTop.height * usableWidth) / canvasTop.width;
 
-  // ======================
-  // 2️⃣ MATRIX (PARÇALI)
-  // ======================
-  const canvasMatrix = await html2canvas(matrixEl, {
-    scale: 2,
-    windowWidth: 2000, // genişliği koru
-  });
+    pdf.addImage(imgTop, "PNG", margin, margin, usableWidth, imgTopHeight);
+  }
 
-  const imgMatrix = canvasMatrix.toDataURL("image/png");
+  // 2. sayfa: sadece matrix alanı, yatay
+  const matrixSection = document.getElementById("panel-report-matrix");
+  if (matrixSection) {
+    const canvasMatrix = await html2canvas(matrixSection, {
+      scale: 2,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      windowWidth: matrixSection.scrollWidth,
+      width: matrixSection.scrollWidth,
+    });
 
-  // YATAY SAYFA
-  const pageWidthL = 297;
-  const pageHeightL = 210;
-  const usableWidthL = pageWidthL - margin * 2;
+    const imgMatrix = canvasMatrix.toDataURL("image/png");
 
-  const imgHeightFull =
-    (canvasMatrix.height * usableWidthL) / canvasMatrix.width;
+    pdf.addPage("a4", "landscape");
 
-  let heightLeft = imgHeightFull;
-  let position = 0;
+    const pageWidthL = 297;
+    const marginL = 8;
+    const usableWidthL = pageWidthL - marginL * 2;
+    const imgMatrixHeight =
+      (canvasMatrix.height * usableWidthL) / canvasMatrix.width;
 
-  pdf.addPage("a4", "l");
-
-  // 🔥 PARÇA PARÇA BÖL
-  while (heightLeft > 0) {
     pdf.addImage(
       imgMatrix,
       "PNG",
-      margin,
-      position,
+      marginL,
+      marginL,
       usableWidthL,
-      imgHeightFull
+      imgMatrixHeight
     );
-
-    heightLeft -= pageHeightL;
-
-    if (heightLeft > 0) {
-      pdf.addPage("a4", "l");
-      position = position - pageHeightL;
-    }
   }
 
   pdf.save("firma-egitim-raporu.pdf");
@@ -629,6 +619,8 @@ export default function PanelReportsPage() {
   return (
     <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
       <div style={{ maxWidth: 1500, margin: "0 auto" }}>
+        
+
         <div
           style={{
             display: "flex",
@@ -744,6 +736,7 @@ export default function PanelReportsPage() {
         </div>
 
         <div
+        id="panel-report-top"
           style={{
             display: "grid",
             gridTemplateColumns: "1.05fr 0.95fr",
@@ -751,7 +744,7 @@ export default function PanelReportsPage() {
             marginBottom: 20,
           }}
         >
-          <div style={cardStyle()} id="panel-report-matrix">
+          <div style={cardStyle()}>
             <h2
               style={{
                 marginTop: 0,
@@ -1230,116 +1223,119 @@ export default function PanelReportsPage() {
           </div>
         </div>
 
-        <div style={cardStyle()}>
-          <h2
+<div style={cardStyle()} id="panel-report-matrix">
+  <h2
+    style={{
+      marginTop: 0,
+      marginBottom: 16,
+      fontSize: 24,
+      fontWeight: 900,
+    }}
+  >
+    Eğitim Durum Matrisi
+  </h2>
+
+  <div style={{ overflowX: "auto", width: "100%" }}>
+    <table
+      style={{
+        width: "100%",
+        borderCollapse: "collapse",
+        minWidth: 900,
+      }}
+    >
+      <thead>
+        <tr>
+          <th
             style={{
-              marginTop: 0,
-              marginBottom: 16,
-              fontSize: 24,
-              fontWeight: 900,
+              textAlign: "left",
+              padding: 12,
+              borderBottom: `1px solid ${BRAND.border}`,
+              background: "#f9fafb",
+              position: "sticky",
+              left: 0,
+              zIndex: 1,
             }}
           >
-            Eğitim Durum Matrisi
-          </h2>
+            Çalışan
+          </th>
 
-          <div style={{ overflowX: "auto" }}>
-            <table
+          {(report?.trainings || []).map((training) => (
+            <th
+              key={training.id}
               style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                minWidth: 900,
+                textAlign: "center",
+                padding: 12,
+                borderBottom: `1px solid ${BRAND.border}`,
+                background: "#f9fafb",
+                minWidth: 160,
               }}
             >
-              <thead>
-                <tr>
-                  <th
-                    style={{
-                      textAlign: "left",
-                      padding: 12,
-                      borderBottom: `1px solid ${BRAND.border}`,
-                      background: "#f9fafb",
-                      position: "sticky",
-                      left: 0,
-                      zIndex: 1,
-                    }}
-                  >
-                    Çalışan
-                  </th>
+              {training.title}
+            </th>
+          ))}
+        </tr>
+      </thead>
 
-                  {(report?.trainings || []).map((training) => (
-                    <th
-                      key={training.id}
-                      style={{
-                        textAlign: "center",
-                        padding: 12,
-                        borderBottom: `1px solid ${BRAND.border}`,
-                        background: "#f9fafb",
-                        minWidth: 160,
-                      }}
-                    >
-                      {training.title}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+      <tbody>
+        {filteredMatrix.map((row) => (
+          <tr key={row.user_id}>
+            <td
+              style={{
+                padding: 12,
+                borderBottom: `1px solid ${BRAND.border}`,
+                background: "#fff",
+                position: "sticky",
+                left: 0,
+                zIndex: 1,
+                minWidth: 220,
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 800,
+                  color: BRAND.text,
+                }}
+              >
+                {row.full_name}
+              </div>
 
-              <tbody>
-                {filteredMatrix.map((row) => (
-                  <tr key={row.user_id}>
-                    <td
-                      style={{
-                        padding: 12,
-                        borderBottom: `1px solid ${BRAND.border}`,
-                        background: "#fff",
-                        position: "sticky",
-                        left: 0,
-                        zIndex: 1,
-                        minWidth: 220,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 800,
-                          color: BRAND.text,
-                        }}
-                      >
-                        {row.full_name}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: BRAND.muted,
-                          marginTop: 4,
-                        }}
-                      >
-                        {row.email || "-"}
-                      </div>
-                    </td>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: BRAND.muted,
+                  marginTop: 4,
+                }}
+              >
+                {row.email || "-"}
+              </div>
+            </td>
 
-                    {row.statuses.map((cell) => (
-                      <td
-                        key={`${row.user_id}-${cell.training_id}`}
-                        style={{
-                          padding: 12,
-                          borderBottom: `1px solid ${BRAND.border}`,
-                          textAlign: "center",
-                        }}
-                      >
-                        {badge(cell.status)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+            {row.statuses.map((cell) => (
+              <td
+                key={`${row.user_id}-${cell.training_id}`}
+                style={{
+                  padding: 12,
+                  borderBottom: `1px solid ${BRAND.border}`,
+                  textAlign: "center",
+                }}
+              >
+                {badge(cell.status)}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
 
-          {filteredMatrix.length === 0 ? (
-            <div style={{ marginTop: 16, color: BRAND.muted }}>
-              Filtreye uygun çalışan bulunamadı.
-            </div>
-          ) : null}
-        </div>
+  {filteredMatrix.length === 0 ? (
+    <div style={{ marginTop: 16, color: BRAND.muted }}>
+      Filtreye uygun çalışan bulunamadı.
+    </div>
+  ) : null}
+</div>
+
+
 
         <div
           id="panel-report-pdf"
