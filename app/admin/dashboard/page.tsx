@@ -33,12 +33,24 @@ type DashboardSummary = {
   risk_status: "KRITIK" | "ORTA" | "IYI";
 };
 
+type CompanyDistributionItem = {
+  name: string;
+  count: number;
+};
+
+type TrendItem = {
+  label: string;
+  value: number;
+};
+
 type DashboardResponse = {
   success?: boolean;
   trainings?: Training[];
   risky_users?: RiskUser[];
   in_progress_users?: RiskUser[];
   completed_users?: RiskUser[];
+  company_distribution?: CompanyDistributionItem[];
+  trend?: TrendItem[];
   summary?: DashboardSummary;
   error?: string;
   detail?: string;
@@ -90,6 +102,61 @@ function badgeStyle(
   };
 }
 
+function MiniBarChart({
+  items,
+  color,
+}: {
+  items: { label: string; value: number }[];
+  color: string;
+}) {
+  const max = Math.max(...items.map((x) => x.value), 1);
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {items.map((item) => {
+        const width = Math.max(6, Math.round((item.value / max) * 100));
+        return (
+          <div key={item.label}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                marginBottom: 6,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.text }}>
+                {item.label}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 800, color }}>
+                {item.value}
+              </div>
+            </div>
+
+            <div
+              style={{
+                height: 10,
+                borderRadius: 999,
+                background: "#f3f4f6",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${width}%`,
+                  height: "100%",
+                  background: color,
+                  borderRadius: 999,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function AdminDashboardPage() {
   useEffect(() => {
     const check = async () => {
@@ -109,6 +176,8 @@ export default function AdminDashboardPage() {
   const [riskyUsers, setRiskyUsers] = useState<RiskUser[]>([]);
   const [inProgressUsers, setInProgressUsers] = useState<RiskUser[]>([]);
   const [completedUsers, setCompletedUsers] = useState<RiskUser[]>([]);
+  const [companyDistribution, setCompanyDistribution] = useState<CompanyDistributionItem[]>([]);
+  const [trend, setTrend] = useState<TrendItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -138,6 +207,8 @@ export default function AdminDashboardPage() {
         setRiskyUsers([]);
         setInProgressUsers([]);
         setCompletedUsers([]);
+        setCompanyDistribution([]);
+        setTrend([]);
         setSummary(null);
         return;
       }
@@ -146,6 +217,8 @@ export default function AdminDashboardPage() {
       setRiskyUsers(json.risky_users || []);
       setInProgressUsers(json.in_progress_users || []);
       setCompletedUsers(json.completed_users || []);
+      setCompanyDistribution(json.company_distribution || []);
+      setTrend(json.trend || []);
       setSummary(json.summary || null);
     } catch (err) {
       console.error(err);
@@ -154,6 +227,8 @@ export default function AdminDashboardPage() {
       setRiskyUsers([]);
       setInProgressUsers([]);
       setCompletedUsers([]);
+      setCompanyDistribution([]);
+      setTrend([]);
       setSummary(null);
     } finally {
       setLoading(false);
@@ -304,6 +379,28 @@ export default function AdminDashboardPage() {
       ? "Risk orta seviyede. Devam eden ve başlamayan kullanıcı kümeleri yakından izlenmeli."
       : "Genel görünüm kontrollü. Tamamlanma oranı desteklenerek süreç sürdürülebilir.";
 
+  const topEmployees = useMemo(() => {
+    const map = new Map<
+      string,
+      { full_name: string; email: string; count: number }
+    >();
+
+    riskyUsers.forEach((u) => {
+      const key = u.user_id;
+      const current = map.get(key) || {
+        full_name: u.full_name,
+        email: u.email,
+        count: 0,
+      };
+      current.count += 1;
+      map.set(key, current);
+    });
+
+    return Array.from(map.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [riskyUsers]);
+
   if (loading) {
     return <div style={{ padding: 24 }}>Yükleniyor...</div>;
   }
@@ -370,8 +467,8 @@ export default function AdminDashboardPage() {
                   lineHeight: 1.7,
                 }}
               >
-                Eğitim atamaları, riskli kullanıcılar, firma yoğunluğu ve
-                tamamlanma oranları tek panelde izlenir.
+                Eğitim atamaları, riskli kullanıcılar, firma yoğunluğu, KPI alanı
+                ve yönetici özeti tek panelde izlenir.
               </p>
             </div>
 
@@ -496,6 +593,51 @@ export default function AdminDashboardPage() {
               ))}
             </select>
           </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.1fr 0.9fr",
+            gap: 20,
+            marginBottom: 20,
+          }}
+        >
+          <section style={cardStyle()}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 24,
+                fontWeight: 900,
+              }}
+            >
+              Eğitim Durum Özeti
+            </h2>
+
+            <MiniBarChart items={trend} color={BRAND.red} />
+          </section>
+
+          <section style={cardStyle()}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 24,
+                fontWeight: 900,
+              }}
+            >
+              Firma Risk Yoğunluğu
+            </h2>
+
+         <MiniBarChart
+  items={companyDistribution.map((item) => ({
+    label: item.name,
+    value: item.count,
+  }))}
+  color={BRAND.amber}
+/>
+          </section>
         </div>
 
         <div
@@ -731,46 +873,112 @@ export default function AdminDashboardPage() {
           </section>
         </div>
 
-        <section style={{ ...cardStyle(), marginTop: 20 }}>
-          <h2
-            style={{
-              marginTop: 0,
-              marginBottom: 16,
-              fontSize: 24,
-              fontWeight: 900,
-            }}
-          >
-            Riskli Eğitim Dağılımı
-          </h2>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 20,
+            marginTop: 20,
+          }}
+        >
+          <section style={cardStyle()}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 24,
+                fontWeight: 900,
+              }}
+            >
+              En Riskli Çalışanlar
+            </h2>
 
-          {groupedRiskTrainings.length === 0 ? (
-            <div style={{ color: BRAND.muted }}>Veri bulunamadı.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
-              {groupedRiskTrainings.map((item) => (
-                <div
-                  key={item.name}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 14,
-                    borderBottom: `1px solid ${BRAND.border}`,
-                    paddingBottom: 10,
-                  }}
-                >
-                  <div style={{ fontWeight: 700, color: BRAND.text }}>
-                    {item.name}
-                  </div>
+            {topEmployees.length === 0 ? (
+              <div style={{ color: BRAND.muted }}>Veri bulunamadı.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 10 }}>
+                {topEmployees.map((item, index) => (
                   <div
-                    style={badgeStyle(BRAND.redSoft, BRAND.red, "#f3c8c8")}
+                    key={`${item.email}-${index}`}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 14,
+                      borderBottom: `1px solid ${BRAND.border}`,
+                      paddingBottom: 10,
+                    }}
                   >
-                    {item.count} kişi
+                    <div>
+                      <div style={{ fontWeight: 800, color: BRAND.text }}>
+                        {item.full_name}
+                      </div>
+                      <div
+                        style={{
+                          marginTop: 4,
+                          color: BRAND.muted,
+                          fontSize: 13,
+                        }}
+                      >
+                        {item.email || "-"}
+                      </div>
+                    </div>
+
+                    <div
+                      style={badgeStyle(
+                        BRAND.redSoft,
+                        BRAND.red,
+                        "#f3c8c8"
+                      )}
+                    >
+                      {item.count} eksik
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section style={cardStyle()}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 24,
+                fontWeight: 900,
+              }}
+            >
+              Riskli Eğitim Dağılımı
+            </h2>
+
+            {groupedRiskTrainings.length === 0 ? (
+              <div style={{ color: BRAND.muted }}>Veri bulunamadı.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 10 }}>
+                {groupedRiskTrainings.map((item) => (
+                  <div
+                    key={item.name}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 14,
+                      borderBottom: `1px solid ${BRAND.border}`,
+                      paddingBottom: 10,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: BRAND.text }}>
+                      {item.name}
+                    </div>
+                    <div
+                      style={badgeStyle(BRAND.redSoft, BRAND.red, "#f3c8c8")}
+                    >
+                      {item.count} kişi
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </main>
   );
