@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+
 type Training = {
   id: string;
   title: string;
@@ -79,6 +80,22 @@ function badgeStyle(
 }
 
 export default function AdminDashboardPage() {
+
+
+    useEffect(() => {
+  const check = async () => {
+    const res = await fetch("/api/admin/me", {
+      credentials: "include",
+    });
+
+    if (res.status === 401) {
+      window.location.href = "/admin/login";
+    }
+  };
+
+  check();
+}, []);
+
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [riskyUsers, setRiskyUsers] = useState<RiskUser[]>([]);
   const [inProgressUsers, setInProgressUsers] = useState<RiskUser[]>([]);
