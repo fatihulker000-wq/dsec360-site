@@ -28,6 +28,11 @@ type UserRow = {
   company_id: string | null;
 };
 
+type CompanyRow = {
+  id: string;
+  name: string | null;
+};
+
 export async function GET() {
   try {
     const cookieStore = await cookies();
@@ -73,6 +78,7 @@ export async function GET() {
 
     let trainingsMap: Record<string, TrainingRow> = {};
     let usersMap: Record<string, UserRow> = {};
+    let companyMap: Record<string, string> = {};
 
     if (trainingIds.length > 0) {
       const { data: trainings, error: trainingsError } = await supabase
@@ -112,6 +118,36 @@ export async function GET() {
       }
 
       usersMap = Object.fromEntries((users || []).map((u) => [u.id, u]));
+
+      const companyIds = Array.from(
+        new Set(
+          (users || [])
+            .map((u) => String(u.company_id || "").trim())
+            .filter(Boolean)
+        )
+      );
+
+      if (companyIds.length > 0) {
+        const { data: companies, error: companiesError } = await supabase
+          .from("companies")
+          .select("id, name")
+          .in("id", companyIds)
+          .returns<CompanyRow[]>();
+
+        if (companiesError) {
+          return NextResponse.json(
+            {
+              error: "Firma detayları alınamadı.",
+              detail: companiesError.message,
+            },
+            { status: 500 }
+          );
+        }
+
+        companyMap = Object.fromEntries(
+          (companies || []).map((c) => [c.id, String(c.name || "Firma Yok").trim() || "Firma Yok"])
+        );
+      }
     }
 
     const trainingStatsMap = new Map<
@@ -170,46 +206,55 @@ export async function GET() {
           row.final_exam_passed === true || row.status === "completed";
         return !isCompleted && row.status !== "in_progress";
       })
-      .map((row) => ({
-        assignment_id: row.id,
-        user_id: row.user_id,
-        training_id: row.training_id,
-        full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
-        email: usersMap[row.user_id]?.email || "",
-        company_id: usersMap[row.user_id]?.company_id || "",
-        training_title: trainingsMap[row.training_id]?.title || "Eğitim",
-        status: "not_started" as const,
-      }));
+      .map((row) => {
+        const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
+        return {
+          assignment_id: row.id,
+          user_id: row.user_id,
+          training_id: row.training_id,
+          full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
+          email: usersMap[row.user_id]?.email || "",
+          company_id: companyMap[rawCompanyId] || "Firma Yok",
+          training_title: trainingsMap[row.training_id]?.title || "Eğitim",
+          status: "not_started" as const,
+        };
+      });
 
     const inProgressUsers = assignmentRows
       .filter(
         (row) => row.status === "in_progress" && row.final_exam_passed !== true
       )
-      .map((row) => ({
-        assignment_id: row.id,
-        user_id: row.user_id,
-        training_id: row.training_id,
-        full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
-        email: usersMap[row.user_id]?.email || "",
-        company_id: usersMap[row.user_id]?.company_id || "",
-        training_title: trainingsMap[row.training_id]?.title || "Eğitim",
-        status: "in_progress" as const,
-      }));
+      .map((row) => {
+        const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
+        return {
+          assignment_id: row.id,
+          user_id: row.user_id,
+          training_id: row.training_id,
+          full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
+          email: usersMap[row.user_id]?.email || "",
+          company_id: companyMap[rawCompanyId] || "Firma Yok",
+          training_title: trainingsMap[row.training_id]?.title || "Eğitim",
+          status: "in_progress" as const,
+        };
+      });
 
     const completedUsers = assignmentRows
       .filter(
         (row) => row.final_exam_passed === true || row.status === "completed"
       )
-      .map((row) => ({
-        assignment_id: row.id,
-        user_id: row.user_id,
-        training_id: row.training_id,
-        full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
-        email: usersMap[row.user_id]?.email || "",
-        company_id: usersMap[row.user_id]?.company_id || "",
-        training_title: trainingsMap[row.training_id]?.title || "Eğitim",
-        status: "completed" as const,
-      }));
+      .map((row) => {
+        const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
+        return {
+          assignment_id: row.id,
+          user_id: row.user_id,
+          training_id: row.training_id,
+          full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
+          email: usersMap[row.user_id]?.email || "",
+          company_id: companyMap[rawCompanyId] || "Firma Yok",
+          training_title: trainingsMap[row.training_id]?.title || "Eğitim",
+          status: "completed" as const,
+        };
+      });
 
     const trainings = Array.from(trainingStatsMap.values()).sort(
       (a, b) => b.assigned_count - a.assigned_count
@@ -234,12 +279,40 @@ export async function GET() {
         ? "ORTA"
         : "IYI";
 
+    const companyRiskMap = new Map<string, number>();
+    riskyUsers.forEach((u) => {
+      const key = u.company_id || "Firma Yok";
+      companyRiskMap.set(key, (companyRiskMap.get(key) || 0) + 1);
+    });
+
+    const companyDistribution = Array.from(companyRiskMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const monthlyTrend = [
+      {
+        label: "Tamamlandı",
+        value: totalCompleted,
+      },
+      {
+        label: "Devam",
+        value: totalInProgress,
+      },
+      {
+        label: "Başlamadı",
+        value: totalNotStarted,
+      },
+    ];
+
     return NextResponse.json({
       success: true,
       trainings,
       risky_users: riskyUsers,
       in_progress_users: inProgressUsers,
       completed_users: completedUsers,
+      company_distribution: companyDistribution,
+      trend: monthlyTrend,
       summary: {
         total_assignments: totalAssigned,
         completed_count: totalCompleted,
