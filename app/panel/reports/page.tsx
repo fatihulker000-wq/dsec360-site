@@ -557,45 +557,54 @@ export default function PanelReportsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const exportPDF = async () => {
-    const element = document.getElementById("panel-report-pdf");
-    if (!element) return;
+ const exportPDF = async () => {
+  const summaryEl = document.getElementById("panel-report-pdf");
+  const matrixEl = document.getElementById("panel-report-matrix");
 
-    const { default: jsPDF } = await import("jspdf");
-    const { default: html2canvas } = await import("html2canvas");
+  if (!summaryEl || !matrixEl) return;
 
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      windowWidth: 1240,
-    });
+  const { default: jsPDF } = await import("jspdf");
+  const { default: html2canvas } = await import("html2canvas");
 
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
+  // 1️⃣ SAYFA (DİKEY)
+  const canvas1 = await html2canvas(summaryEl, {
+    scale: 2,
+    backgroundColor: "#ffffff",
+  });
 
-    const pageWidth = 210;
-    const pageHeight = 297;
-    const margin = 8;
-    const usableWidth = pageWidth - margin * 2;
-    const usableHeight = pageHeight - margin * 2;
-    const imgHeight = (canvas.height * usableWidth) / canvas.width;
+  const img1 = canvas1.toDataURL("image/png");
 
-    let heightLeft = imgHeight;
-    let position = margin;
+  const pdf = new jsPDF("p", "mm", "a4");
 
-    pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
-    heightLeft -= usableHeight;
+  const pageWidth = 210;
+  const margin = 8;
+  const usableWidth = pageWidth - margin * 2;
 
-    while (heightLeft > 0) {
-      position = margin - (imgHeight - heightLeft);
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
-      heightLeft -= usableHeight;
-    }
+  const imgHeight1 = (canvas1.height * usableWidth) / canvas1.width;
 
-    pdf.save("firma-egitim-sorumlusu-raporu.pdf");
-  };
+  pdf.addImage(img1, "PNG", margin, margin, usableWidth, imgHeight1);
+
+  // 2️⃣ SAYFA (YATAY - MATRİX)
+  const canvas2 = await html2canvas(matrixEl, {
+    scale: 2,
+    backgroundColor: "#ffffff",
+    windowWidth: 2000, // 🔥 GENİŞ TABLOYU ZORLA
+  });
+
+  const img2 = canvas2.toDataURL("image/png");
+
+  pdf.addPage("a4", "l"); // 🔥 YATAY
+
+  const pageWidthL = 297;
+  const pageHeightL = 210;
+
+  const usableWidthL = pageWidthL - margin * 2;
+  const imgHeight2 = (canvas2.height * usableWidthL) / canvas2.width;
+
+  pdf.addImage(img2, "PNG", margin, margin, usableWidthL, imgHeight2);
+
+  pdf.save("firma-egitim-raporu.pdf");
+};
 
   if (loadingScope) {
     return (
@@ -748,7 +757,7 @@ export default function PanelReportsPage() {
             marginBottom: 20,
           }}
         >
-          <div style={cardStyle()}>
+          <div style={cardStyle()} id="panel-report-matrix">
             <h2
               style={{
                 marginTop: 0,
