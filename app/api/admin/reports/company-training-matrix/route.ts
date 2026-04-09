@@ -45,11 +45,22 @@ function pickText(row: CompanyAnyRow, keys: string[]) {
 export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
+
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
     const adminRole = cookieStore.get("dsec_admin_role")?.value;
+
+    const userAuth = cookieStore.get("dsec_user_auth")?.value;
+    const userRole = cookieStore.get("dsec_user_role")?.value;
     const userId = cookieStore.get("dsec_user_id")?.value;
 
-    if (adminAuth !== "ok") {
+    const resolvedRole =
+      adminAuth === "ok" && adminRole
+        ? adminRole
+        : userAuth === "ok" && userRole
+        ? userRole
+        : null;
+
+    if (!resolvedRole) {
       return NextResponse.json(
         { error: "Yetkisiz erişim." },
         { status: 401 }
@@ -62,7 +73,7 @@ export async function GET(req: NextRequest) {
       req.nextUrl.searchParams.get("companyId") || ""
     ).trim();
 
-    if (adminRole === "company_admin") {
+    if (resolvedRole === "company_admin") {
       if (!userId) {
         return NextResponse.json(
           { error: "Kullanıcı bilgisi bulunamadı." },
@@ -95,7 +106,7 @@ export async function GET(req: NextRequest) {
       }
 
       requestedCompanyId = ownCompanyId;
-    } else if (!(adminRole === "super_admin" || adminRole === "admin")) {
+    } else if (!(resolvedRole === "super_admin" || resolvedRole === "admin")) {
       return NextResponse.json(
         { error: "Bu rol raporlara erişemez." },
         { status: 403 }
@@ -231,7 +242,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      role: adminRole,
+      role: resolvedRole,
       company: {
         id: String(companyRow.id || requestedCompanyId),
         name: pickText(companyRow, ["name", "company_name", "firma_adi"]),
