@@ -12,28 +12,39 @@ function getSupabase() {
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
-    const userId = cookieStore.get("dsec_user_id")?.value;
 
-    if (adminAuth !== "ok") {
-      return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
-      );
-    }
+ const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+const adminRole = cookieStore.get("dsec_admin_role")?.value;
 
-    if (adminRole === "super_admin" || adminRole === "admin") {
+const userAuth = cookieStore.get("dsec_user_auth")?.value;
+const userRole = cookieStore.get("dsec_user_role")?.value;
+
+
+const resolvedRole =
+  adminAuth === "ok" && adminRole
+    ? adminRole
+    : userAuth === "ok" && userRole
+    ? userRole
+    : null;
+
+if (!resolvedRole) {
+  return NextResponse.json(
+    { error: "Yetkisiz erişim." },
+    { status: 401 }
+  );
+}
+
+    if (resolvedRole === "super_admin" || resolvedRole === "admin") {
       return NextResponse.json({
         success: true,
-        role: adminRole,
+        role: resolvedRole,
         can_select_company: true,
         allowed_company_id: null,
         allowed_company_name: null,
       });
     }
 
-    if (adminRole === "company_admin") {
+    if (resolvedRole === "company_admin") {
       if (!userId) {
         return NextResponse.json(
           { error: "Kullanıcı bilgisi bulunamadı." },
@@ -56,7 +67,9 @@ export async function GET() {
         );
       }
 
-      const companyId = String((userRow as { company_id?: string | null }).company_id || "").trim();
+      const companyId = String(
+        (userRow as { company_id?: string | null }).company_id || ""
+      ).trim();
 
       if (!companyId) {
         return NextResponse.json(
@@ -74,7 +87,7 @@ export async function GET() {
 
       return NextResponse.json({
         success: true,
-        role: adminRole,
+        role: resolvedRole,
         can_select_company: false,
         allowed_company_id: companyId,
         allowed_company_name: companyName ? String(companyName).trim() : null,
