@@ -30,6 +30,25 @@ export default function TrainingListPage() {
   const [items, setItems] = useState<TrainingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => null);
+
+      await fetch("/api/admin/logout", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => null);
+    } finally {
+      window.location.href = "/login";
+    }
+  };
 
   useEffect(() => {
     const fetchTrainings = async () => {
@@ -42,6 +61,11 @@ export default function TrainingListPage() {
           cache: "no-store",
           credentials: "include",
         });
+
+        if (res.status === 401) {
+          window.location.href = "/login";
+          return;
+        }
 
         if (!res.ok) {
           setError(`API hata verdi: ${res.status}`);
@@ -72,15 +96,91 @@ export default function TrainingListPage() {
 
   if (loading) {
     return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Yükleniyor...</h1>
+      <main
+        style={{
+          padding: "40px",
+          fontFamily: "Arial",
+          background: "#f8fafc",
+          minHeight: "100vh",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1100px",
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "24px",
+          }}
+        >
+          <h1 style={{ margin: 0 }}>Eğitim Portalı</h1>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={{
+              padding: "12px 18px",
+              borderRadius: "10px",
+              border: "none",
+              background: loggingOut ? "#9ca3af" : "#111827",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: loggingOut ? "not-allowed" : "pointer",
+            }}
+          >
+            {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+          </button>
+        </div>
+
+        <h2>Yükleniyor...</h2>
       </main>
     );
   }
 
   if (error) {
     return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
+      <main
+        style={{
+          padding: "40px",
+          fontFamily: "Arial",
+          background: "#f8fafc",
+          minHeight: "100vh",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1100px",
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "24px",
+          }}
+        >
+          <h1 style={{ margin: 0 }}>Eğitim Portalı</h1>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={{
+              padding: "12px 18px",
+              borderRadius: "10px",
+              border: "none",
+              background: loggingOut ? "#9ca3af" : "#111827",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: loggingOut ? "not-allowed" : "pointer",
+            }}
+          >
+            {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+          </button>
+        </div>
+
         <h1>Hata</h1>
         <p>{error}</p>
       </main>
@@ -89,17 +189,89 @@ export default function TrainingListPage() {
 
   if (items.length === 0) {
     return (
-      <main style={{ padding: "40px", fontFamily: "Arial" }}>
-        <h1>Eğitimlerim</h1>
+      <main
+        style={{
+          padding: "40px",
+          fontFamily: "Arial",
+          background: "#f8fafc",
+          minHeight: "100vh",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1100px",
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "24px",
+          }}
+        >
+          <h1 style={{ margin: 0 }}>Eğitim Portalı</h1>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={{
+              padding: "12px 18px",
+              borderRadius: "10px",
+              border: "none",
+              background: loggingOut ? "#9ca3af" : "#111827",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: loggingOut ? "not-allowed" : "pointer",
+            }}
+          >
+            {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+          </button>
+        </div>
+
         <p>Size atanmış eğitim bulunamadı.</p>
       </main>
     );
   }
 
   return (
-    <main style={{ padding: "40px", fontFamily: "Arial" }}>
+    <main
+      style={{
+        padding: "40px",
+        fontFamily: "Arial",
+        background: "#f8fafc",
+        minHeight: "100vh",
+      }}
+    >
       <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
-        <h1 style={{ marginBottom: "20px" }}>Eğitimlerim</h1>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "12px",
+            alignItems: "center",
+            marginBottom: "20px",
+            flexWrap: "wrap",
+          }}
+        >
+          <h1 style={{ margin: 0 }}>Eğitimlerim</h1>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={{
+              padding: "12px 18px",
+              borderRadius: "10px",
+              border: "none",
+              background: loggingOut ? "#9ca3af" : "#111827",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: loggingOut ? "not-allowed" : "pointer",
+            }}
+          >
+            {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+          </button>
+        </div>
 
         <div
           style={{
