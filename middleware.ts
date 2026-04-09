@@ -19,6 +19,10 @@ export function middleware(request: NextRequest) {
   // ADMIN ALANI
   if (isAdminPage) {
     if (isAdminLoginPage) {
+      if (adminAuthCookie === "ok") {
+        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+      }
+
       return NextResponse.next();
     }
 
@@ -33,7 +37,7 @@ export function middleware(request: NextRequest) {
   if (isLoginPage) {
     if (userAuthCookie === "ok") {
       if (userRoleCookie === "super_admin") {
-        return NextResponse.redirect(new URL("/admin/cbs", request.url));
+        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
       }
 
       if (
