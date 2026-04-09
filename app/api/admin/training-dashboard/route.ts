@@ -126,6 +126,11 @@ export async function GET() {
       }
     >();
 
+    let totalAssigned = 0;
+    let totalCompleted = 0;
+    let totalInProgress = 0;
+    let totalNotStarted = 0;
+
     for (const row of assignmentRows) {
       const trainingId = row.training_id;
       if (!trainingId) continue;
@@ -140,16 +145,20 @@ export async function GET() {
       };
 
       current.assigned_count += 1;
+      totalAssigned += 1;
 
       const isCompleted =
         row.final_exam_passed === true || row.status === "completed";
 
       if (isCompleted) {
         current.completed_count += 1;
+        totalCompleted += 1;
       } else if (row.status === "in_progress") {
         current.in_progress_count += 1;
+        totalInProgress += 1;
       } else {
         current.not_started_count += 1;
+        totalNotStarted += 1;
       }
 
       trainingStatsMap.set(trainingId, current);
@@ -206,12 +215,41 @@ export async function GET() {
       (a, b) => b.assigned_count - a.assigned_count
     );
 
+    const completionRate = totalAssigned
+      ? Number(((totalCompleted / totalAssigned) * 100).toFixed(2))
+      : 0;
+
+    const inProgressRate = totalAssigned
+      ? Number(((totalInProgress / totalAssigned) * 100).toFixed(2))
+      : 0;
+
+    const riskRate = totalAssigned
+      ? Number(((totalNotStarted / totalAssigned) * 100).toFixed(2))
+      : 0;
+
+    const riskStatus =
+      totalNotStarted > 20
+        ? "KRITIK"
+        : totalNotStarted > 10
+        ? "ORTA"
+        : "IYI";
+
     return NextResponse.json({
       success: true,
       trainings,
       risky_users: riskyUsers,
       in_progress_users: inProgressUsers,
       completed_users: completedUsers,
+      summary: {
+        total_assignments: totalAssigned,
+        completed_count: totalCompleted,
+        in_progress_count: totalInProgress,
+        not_started_count: totalNotStarted,
+        completion_rate: completionRate,
+        in_progress_rate: inProgressRate,
+        risk_rate: riskRate,
+        risk_status: riskStatus,
+      },
     });
   } catch (err) {
     console.error("admin training dashboard route error:", err);

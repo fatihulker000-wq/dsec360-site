@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-
 type Training = {
   id: string;
   title: string;
@@ -23,12 +22,24 @@ type RiskUser = {
   status: "not_started" | "in_progress" | "completed";
 };
 
+type DashboardSummary = {
+  total_assignments: number;
+  completed_count: number;
+  in_progress_count: number;
+  not_started_count: number;
+  completion_rate: number;
+  in_progress_rate: number;
+  risk_rate: number;
+  risk_status: "KRITIK" | "ORTA" | "IYI";
+};
+
 type DashboardResponse = {
   success?: boolean;
   trainings?: Training[];
   risky_users?: RiskUser[];
   in_progress_users?: RiskUser[];
   completed_users?: RiskUser[];
+  summary?: DashboardSummary;
   error?: string;
   detail?: string;
 };
@@ -80,26 +91,25 @@ function badgeStyle(
 }
 
 export default function AdminDashboardPage() {
+  useEffect(() => {
+    const check = async () => {
+      const res = await fetch("/api/admin/me", {
+        credentials: "include",
+      });
 
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+      }
+    };
 
-    useEffect(() => {
-  const check = async () => {
-    const res = await fetch("/api/admin/me", {
-      credentials: "include",
-    });
-
-    if (res.status === 401) {
-      window.location.href = "/admin/login";
-    }
-  };
-
-  check();
-}, []);
+    void check();
+  }, []);
 
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [riskyUsers, setRiskyUsers] = useState<RiskUser[]>([]);
   const [inProgressUsers, setInProgressUsers] = useState<RiskUser[]>([]);
   const [completedUsers, setCompletedUsers] = useState<RiskUser[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("all");
@@ -128,6 +138,7 @@ export default function AdminDashboardPage() {
         setRiskyUsers([]);
         setInProgressUsers([]);
         setCompletedUsers([]);
+        setSummary(null);
         return;
       }
 
@@ -135,6 +146,7 @@ export default function AdminDashboardPage() {
       setRiskyUsers(json.risky_users || []);
       setInProgressUsers(json.in_progress_users || []);
       setCompletedUsers(json.completed_users || []);
+      setSummary(json.summary || null);
     } catch (err) {
       console.error(err);
       setError("Veri alınamadı.");
@@ -142,6 +154,7 @@ export default function AdminDashboardPage() {
       setRiskyUsers([]);
       setInProgressUsers([]);
       setCompletedUsers([]);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -203,21 +216,37 @@ export default function AdminDashboardPage() {
     return { assigned, completed, notStarted, inProgress };
   }, [trainings]);
 
-  const completionRate = totals.assigned
-    ? Math.round((totals.completed / totals.assigned) * 100)
-    : 0;
+  const completionRate =
+    summary?.completion_rate ??
+    (totals.assigned
+      ? Number(((totals.completed / totals.assigned) * 100).toFixed(2))
+      : 0);
 
-  const inProgressRate = totals.assigned
-    ? Math.round((totals.inProgress / totals.assigned) * 100)
-    : 0;
+  const inProgressRate =
+    summary?.in_progress_rate ??
+    (totals.assigned
+      ? Number(((totals.inProgress / totals.assigned) * 100).toFixed(2))
+      : 0);
 
-  const riskRate = totals.assigned
-    ? Math.round((totals.notStarted / totals.assigned) * 100)
-    : 0;
+  const riskRate =
+    summary?.risk_rate ??
+    (totals.assigned
+      ? Number(((totals.notStarted / totals.assigned) * 100).toFixed(2))
+      : 0);
+
+  const riskStatus =
+    summary?.risk_status ??
+    (totals.notStarted > 20
+      ? "KRITIK"
+      : totals.notStarted > 10
+      ? "ORTA"
+      : "IYI");
 
   const companies = useMemo(() => {
     const set = new Set<string>();
-    riskyUsers.forEach((u) => set.add((u.company_id || "Firma Yok").trim() || "Firma Yok"));
+    riskyUsers.forEach((u) =>
+      set.add((u.company_id || "Firma Yok").trim() || "Firma Yok")
+    );
     inProgressUsers.forEach((u) =>
       set.add((u.company_id || "Firma Yok").trim() || "Firma Yok")
     );
@@ -230,7 +259,9 @@ export default function AdminDashboardPage() {
   const filteredRiskUsers = useMemo(() => {
     if (selectedCompany === "all") return riskyUsers;
     return riskyUsers.filter(
-      (u) => ((u.company_id || "Firma Yok").trim() || "Firma Yok") === selectedCompany
+      (u) =>
+        ((u.company_id || "Firma Yok").trim() || "Firma Yok") ===
+        selectedCompany
     );
   }, [selectedCompany, riskyUsers]);
 
@@ -278,7 +309,11 @@ export default function AdminDashboardPage() {
   }
 
   if (error) {
-    return <div style={{ padding: 24, color: BRAND.red, fontWeight: 700 }}>{error}</div>;
+    return (
+      <div style={{ padding: 24, color: BRAND.red, fontWeight: 700 }}>
+        {error}
+      </div>
+    );
   }
 
   return (
@@ -289,7 +324,10 @@ export default function AdminDashboardPage() {
         padding: 24,
       }}
     >
-      <div id="admin-dashboard-pdf" style={{ maxWidth: 1400, margin: "0 auto" }}>
+      <div
+        id="admin-dashboard-pdf"
+        style={{ maxWidth: 1400, margin: "0 auto" }}
+      >
         <div
           style={{
             ...cardStyle(),
@@ -310,7 +348,11 @@ export default function AdminDashboardPage() {
             <div>
               <div
                 style={{
-                  ...badgeStyle("rgba(255,255,255,0.16)", "#fff", "rgba(255,255,255,0.22)"),
+                  ...badgeStyle(
+                    "rgba(255,255,255,0.16)",
+                    "#fff",
+                    "rgba(255,255,255,0.22)"
+                  ),
                   marginBottom: 12,
                 }}
               >
@@ -328,25 +370,51 @@ export default function AdminDashboardPage() {
                   lineHeight: 1.7,
                 }}
               >
-                Eğitim atamaları, riskli kullanıcılar, firma yoğunluğu ve tamamlanma
-                oranları tek panelde izlenir.
+                Eğitim atamaları, riskli kullanıcılar, firma yoğunluğu ve
+                tamamlanma oranları tek panelde izlenir.
               </p>
             </div>
 
-            <button
-              onClick={exportPDF}
+            <div
               style={{
-                border: "none",
-                borderRadius: 14,
-                padding: "12px 18px",
-                background: "#fff",
-                color: BRAND.red,
-                fontWeight: 900,
-                cursor: "pointer",
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+                flexWrap: "wrap",
               }}
             >
-              PDF İndir
-            </button>
+              <div
+                style={{
+                  ...badgeStyle(
+                    riskStatus === "KRITIK"
+                      ? "#7f1d1d"
+                      : riskStatus === "ORTA"
+                      ? "#92400e"
+                      : "#166534",
+                    "#ffffff"
+                  ),
+                  fontSize: 13,
+                  padding: "8px 12px",
+                }}
+              >
+                Risk Durumu: {riskStatus}
+              </div>
+
+              <button
+                onClick={exportPDF}
+                style={{
+                  border: "none",
+                  borderRadius: 14,
+                  padding: "12px 18px",
+                  background: "#fff",
+                  color: BRAND.red,
+                  fontWeight: 900,
+                  cursor: "pointer",
+                }}
+              >
+                PDF İndir
+              </button>
+            </div>
           </div>
         </div>
 
@@ -361,7 +429,7 @@ export default function AdminDashboardPage() {
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Atama</div>
             <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
-              {totals.assigned}
+              {summary?.total_assignments ?? totals.assigned}
             </div>
           </div>
 
@@ -439,7 +507,14 @@ export default function AdminDashboardPage() {
           }}
         >
           <section style={cardStyle()}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 24,
+                fontWeight: 900,
+              }}
+            >
               En Riskli Eğitimler
             </h2>
 
@@ -448,9 +523,14 @@ export default function AdminDashboardPage() {
             ) : (
               <div style={{ display: "grid", gap: 12 }}>
                 {topRiskTrainings.map((item) => {
-                  const percent = totals.notStarted
-                    ? Math.round((item.not_started_count / totals.notStarted) * 100)
-                    : 0;
+                  const percent =
+                    (summary?.not_started_count ?? totals.notStarted) > 0
+                      ? Math.round(
+                          (item.not_started_count /
+                            (summary?.not_started_count ?? totals.notStarted)) *
+                            100
+                        )
+                      : 0;
 
                   return (
                     <div
@@ -470,8 +550,18 @@ export default function AdminDashboardPage() {
                           marginBottom: 8,
                         }}
                       >
-                        <div style={{ fontWeight: 800, color: BRAND.text }}>{item.title}</div>
-                        <div style={badgeStyle(BRAND.redSoft, BRAND.red, "#f3c8c8")}>
+                        <div
+                          style={{ fontWeight: 800, color: BRAND.text }}
+                        >
+                          {item.title}
+                        </div>
+                        <div
+                          style={badgeStyle(
+                            BRAND.redSoft,
+                            BRAND.red,
+                            "#f3c8c8"
+                          )}
+                        >
                           {item.not_started_count}
                         </div>
                       </div>
@@ -501,7 +591,14 @@ export default function AdminDashboardPage() {
           </section>
 
           <section style={cardStyle()}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 24,
+                fontWeight: 900,
+              }}
+            >
               Firma Bazlı Risk
             </h2>
 
@@ -524,10 +621,22 @@ export default function AdminDashboardPage() {
                           gap: 10,
                         }}
                       >
-                        <div style={{ fontSize: 14, fontWeight: 800, color: BRAND.text }}>
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 800,
+                            color: BRAND.text,
+                          }}
+                        >
                           {item.name}
                         </div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: BRAND.red }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 800,
+                            color: BRAND.red,
+                          }}
+                        >
                           {item.count}
                         </div>
                       </div>
@@ -565,7 +674,14 @@ export default function AdminDashboardPage() {
           }}
         >
           <section style={cardStyle()}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 22,
+                fontWeight: 900,
+              }}
+            >
               Riskli Kullanıcılar
             </h2>
             <div style={{ fontSize: 32, fontWeight: 900, color: BRAND.red }}>
@@ -577,11 +693,18 @@ export default function AdminDashboardPage() {
           </section>
 
           <section style={cardStyle()}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 22,
+                fontWeight: 900,
+              }}
+            >
               Devam Eden
             </h2>
             <div style={{ fontSize: 32, fontWeight: 900, color: BRAND.blue }}>
-              {inProgressUsers.length}
+              {summary?.in_progress_count ?? inProgressUsers.length}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted }}>
               Süreci devam eden kullanıcı sayısı
@@ -589,11 +712,18 @@ export default function AdminDashboardPage() {
           </section>
 
           <section style={cardStyle()}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 22,
+                fontWeight: 900,
+              }}
+            >
               Tamamlayanlar
             </h2>
             <div style={{ fontSize: 32, fontWeight: 900, color: BRAND.green }}>
-              {completedUsers.length}
+              {summary?.completed_count ?? completedUsers.length}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted }}>
               Final başarıyla kapanan kullanıcı sayısı
@@ -602,7 +732,14 @@ export default function AdminDashboardPage() {
         </div>
 
         <section style={{ ...cardStyle(), marginTop: 20 }}>
-          <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
+          <h2
+            style={{
+              marginTop: 0,
+              marginBottom: 16,
+              fontSize: 24,
+              fontWeight: 900,
+            }}
+          >
             Riskli Eğitim Dağılımı
           </h2>
 
@@ -621,8 +758,12 @@ export default function AdminDashboardPage() {
                     paddingBottom: 10,
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: BRAND.text }}>{item.name}</div>
-                  <div style={badgeStyle(BRAND.redSoft, BRAND.red, "#f3c8c8")}>
+                  <div style={{ fontWeight: 700, color: BRAND.text }}>
+                    {item.name}
+                  </div>
+                  <div
+                    style={badgeStyle(BRAND.redSoft, BRAND.red, "#f3c8c8")}
+                  >
                     {item.count} kişi
                   </div>
                 </div>

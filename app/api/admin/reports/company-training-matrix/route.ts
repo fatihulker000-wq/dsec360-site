@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
 
     const userAuth = cookieStore.get("dsec_user_auth")?.value;
     const userRole = cookieStore.get("dsec_user_role")?.value;
-    const userId = cookieStore.get("dsec_user_id")?.value;
+    const userId = cookieStore.get("dsec_user_id")?.value; // 🔥 BU YOK ŞU AN
 
     const resolvedRole =
       adminAuth === "ok" && adminRole
