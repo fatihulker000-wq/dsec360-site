@@ -154,45 +154,21 @@ export default function AdminParticipantsPage() {
         setError("");
         setLoading(true);
 
-        const [usersRes, trainingsRes] = await Promise.all([
-          fetch("/api/admin/users", {
-            cache: "no-store",
-            credentials: "include",
-          }),
-          fetch("/api/admin/trainings", {
-            cache: "no-store",
-            credentials: "include",
-          }),
-        ]);
+        const trainingsRes = await fetch("/api/admin/trainings", {
+          cache: "no-store",
+          credentials: "include",
+        });
 
-        if (usersRes.status === 401 || trainingsRes.status === 401) {
+        if (trainingsRes.status === 401) {
           window.location.href = "/admin/login";
           return;
         }
 
-        const usersJson = await usersRes.json();
         const trainingsJson = await trainingsRes.json();
-
-        if (!usersRes.ok) {
-          throw new Error(usersJson?.error || "Katılımcı listesi alınamadı.");
-        }
 
         if (!trainingsRes.ok) {
           throw new Error(trainingsJson?.error || "Eğitim listesi alınamadı.");
         }
-
-        const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
-          ? usersJson.data
-              .filter((u: UserApiRow) => String(u.role || "") === "training_user")
-              .map((u: UserApiRow) => ({
-                id: String(u.id),
-                full_name: (u.full_name || "Adsız Kullanıcı").trim(),
-                email: (u.email || "-").trim(),
-                company: buildCompanyLabel(u),
-                role: getRoleLabel(u.role),
-                is_active: Boolean(u.is_active),
-              }))
-          : [];
 
         const normalizedTrainings: TrainingRow[] = Array.isArray(trainingsJson?.data)
           ? trainingsJson.data.map((t: TrainingApiRow) => ({
@@ -215,12 +191,42 @@ export default function AdminParticipantsPage() {
             }))
           : [];
 
-        setUsers(normalizedUsers);
         setTrainings(normalizedTrainings);
+
+        const usersRes = await fetch("/api/admin/users", {
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        if (usersRes.status === 401) {
+          window.location.href = "/admin/login";
+          return;
+        }
+
+        const usersJson = await usersRes.json();
+
+        if (!usersRes.ok) {
+          setError(usersJson?.error || "Katılımcı listesi alınamadı.");
+          setUsers([]);
+          return;
+        }
+
+        const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
+          ? usersJson.data
+              .filter((u: UserApiRow) => String(u.role || "") === "training_user")
+              .map((u: UserApiRow) => ({
+                id: String(u.id),
+                full_name: (u.full_name || "Adsız Kullanıcı").trim(),
+                email: (u.email || "-").trim(),
+                company: buildCompanyLabel(u),
+                role: getRoleLabel(u.role),
+                is_active: Boolean(u.is_active),
+              }))
+          : [];
+
+        setUsers(normalizedUsers);
       } catch (err) {
         console.error(err);
-        setUsers([]);
-        setTrainings([]);
         setError(
           err instanceof Error ? err.message : "Veriler alınırken hata oluştu."
         );
@@ -348,6 +354,34 @@ export default function AdminParticipantsPage() {
       setAssignSummary(data);
       alert(data?.message || "Eğitim atandı ✅");
       setSelectedUsers([]);
+
+      // yeniden yükle
+      const trainingsRes = await fetch("/api/admin/trainings", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      const trainingsJson = await trainingsRes.json();
+      if (trainingsRes.ok && Array.isArray(trainingsJson?.data)) {
+        const normalizedTrainings: TrainingRow[] = trainingsJson.data.map((t: TrainingApiRow) => ({
+          id: String(t.id),
+          title: (t.title || "Adsız Eğitim").trim(),
+          description: (t.description || "Açıklama bulunmuyor.").trim(),
+          type: (t.type || "online").trim(),
+          duration_minutes:
+            typeof t.duration_minutes === "number" ? t.duration_minutes : null,
+          content_url: (t.content_url || "").trim(),
+          topics_text: (t.topics_text || "").trim(),
+          assigned_count:
+            typeof t.assigned_count === "number" ? t.assigned_count : 0,
+          not_started_count:
+            typeof t.not_started_count === "number" ? t.not_started_count : 0,
+          in_progress_count:
+            typeof t.in_progress_count === "number" ? t.in_progress_count : 0,
+          completed_count:
+            typeof t.completed_count === "number" ? t.completed_count : 0,
+        }));
+        setTrainings(normalizedTrainings);
+      }
     } catch (err) {
       console.error(err);
       alert("Sunucu hatası oluştu.");
