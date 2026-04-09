@@ -33,25 +33,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
 
-  // LOGIN SAYFASI
+  // KULLANICI LOGIN SAYFASI
+  // Kurumsal akış:
+  // /login her zaman formu açsın
+  // aktif admin/user oturumu olsa bile otomatik redirect yapmasın
   if (isLoginPage) {
-    if (userAuthCookie === "ok") {
-      if (userRoleCookie === "super_admin") {
-        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
-      }
-
-      if (
-        userRoleCookie === "company_admin" ||
-        userRoleCookie === "operator"
-      ) {
-        return NextResponse.redirect(new URL("/panel", request.url));
-      }
-
-      if (userRoleCookie === "training_user") {
-        return NextResponse.redirect(new URL("/portal/training", request.url));
-      }
-    }
-
     return NextResponse.next();
   }
 
