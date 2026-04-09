@@ -566,71 +566,65 @@ export default function PanelReportsPage() {
   const { default: jsPDF } = await import("jspdf");
   const { default: html2canvas } = await import("html2canvas");
 
-  // 1️⃣ SAYFA (DİKEY)
-  const canvas1 = await html2canvas(summaryEl, {
-    scale: 2,
-    backgroundColor: "#ffffff",
-  });
-
-  const img1 = canvas1.toDataURL("image/png");
-
   const pdf = new jsPDF("p", "mm", "a4");
+
+  // ======================
+  // 1️⃣ ÖZET SAYFA
+  // ======================
+  const canvasSummary = await html2canvas(summaryEl, { scale: 2 });
+  const imgSummary = canvasSummary.toDataURL("image/png");
 
   const pageWidth = 210;
   const margin = 8;
   const usableWidth = pageWidth - margin * 2;
+  const imgHeight = (canvasSummary.height * usableWidth) / canvasSummary.width;
 
-  const imgHeight1 = (canvas1.height * usableWidth) / canvas1.width;
+  pdf.addImage(imgSummary, "PNG", margin, margin, usableWidth, imgHeight);
 
-  pdf.addImage(img1, "PNG", margin, margin, usableWidth, imgHeight1);
-
-  // 2️⃣ SAYFA (YATAY - MATRİX)
-  const canvas2 = await html2canvas(matrixEl, {
+  // ======================
+  // 2️⃣ MATRIX (PARÇALI)
+  // ======================
+  const canvasMatrix = await html2canvas(matrixEl, {
     scale: 2,
-    backgroundColor: "#ffffff",
-    windowWidth: 2000, // 🔥 GENİŞ TABLOYU ZORLA
+    windowWidth: 2000, // genişliği koru
   });
 
-  const img2 = canvas2.toDataURL("image/png");
+  const imgMatrix = canvasMatrix.toDataURL("image/png");
 
-  pdf.addPage("a4", "l"); // 🔥 YATAY
-
+  // YATAY SAYFA
   const pageWidthL = 297;
   const pageHeightL = 210;
-
   const usableWidthL = pageWidthL - margin * 2;
-  const imgHeight2 = (canvas2.height * usableWidthL) / canvas2.width;
 
-  pdf.addImage(img2, "PNG", margin, margin, usableWidthL, imgHeight2);
+  const imgHeightFull =
+    (canvasMatrix.height * usableWidthL) / canvasMatrix.width;
+
+  let heightLeft = imgHeightFull;
+  let position = 0;
+
+  pdf.addPage("a4", "l");
+
+  // 🔥 PARÇA PARÇA BÖL
+  while (heightLeft > 0) {
+    pdf.addImage(
+      imgMatrix,
+      "PNG",
+      margin,
+      position,
+      usableWidthL,
+      imgHeightFull
+    );
+
+    heightLeft -= pageHeightL;
+
+    if (heightLeft > 0) {
+      pdf.addPage("a4", "l");
+      position = position - pageHeightL;
+    }
+  }
 
   pdf.save("firma-egitim-raporu.pdf");
 };
-
-  if (loadingScope) {
-    return (
-      <main style={{ padding: 24 }}>
-        <div style={cardStyle()}>Yetki bilgisi yükleniyor...</div>
-      </main>
-    );
-  }
-
-  if (loadingReport) {
-    return (
-      <main style={{ padding: 24 }}>
-        <div style={cardStyle()}>Rapor yükleniyor...</div>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main style={{ padding: 24 }}>
-        <div style={{ ...cardStyle(), color: BRAND.red, fontWeight: 700 }}>
-          {error}
-        </div>
-      </main>
-    );
-  }
 
   return (
     <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
