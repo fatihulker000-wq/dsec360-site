@@ -83,6 +83,27 @@ const processSteps = [
   },
 ];
 
+const entryPoints = [
+  {
+    title: "Kullanıcı Girişi",
+    desc: "Çalışan, eğitim kullanıcısı, operatör ve firma yöneticileri tek kullanıcı giriş ekranından sisteme erişir.",
+    href: "/login",
+    cta: "Kullanıcı Girişine Git",
+  },
+  {
+    title: "Admin Girişi",
+    desc: "Sistem yönetimi, eğitim atamaları, katılımcı ekranları ve rapor alanları için güvenli admin erişimi kullanılır.",
+    href: "/admin/login",
+    cta: "Admin Girişine Git",
+  },
+  {
+    title: "Demo Alanı",
+    desc: "Kurumsal yapıyı ve ekran kurgusunu hızlıca incelemek için demo görünümü kullanılabilir.",
+    href: "/demo",
+    cta: "Demoyu İncele",
+  },
+];
+
 export default function HomePage() {
   return (
     <main>
@@ -100,17 +121,45 @@ export default function HomePage() {
           </p>
 
           <div className="hero-actions">
-            <Link href="/contact" className="btn-primary">
-              Demo Talep Et
+            <Link href="/login" className="btn-primary">
+              Kullanıcı Girişi
             </Link>
-            <Link href="/services" className="btn-outline-light">
-              Modülleri İncele
+            <Link href="/admin/login" className="btn-outline-light">
+              Admin Girişi
             </Link>
           </div>
         </div>
       </section>
 
       <section className="section section-light">
+        <div className="page-container">
+          <div className="section-title-wrap">
+            <h2 className="section-title">Giriş Noktaları</h2>
+            <p className="section-subtitle">
+              Platform içinde kimin hangi ekrandan giriş yapacağı net ve sade
+              şekilde ayrıştırılmıştır
+            </p>
+          </div>
+
+          <div className="grid-3">
+            {entryPoints.map((item) => (
+              <div key={item.title} className="card">
+                <div className="card-icon" />
+                <h3 className="card-title">{item.title}</h3>
+                <p className="card-text">{item.desc}</p>
+
+                <div style={{ marginTop: 18 }}>
+                  <Link href={item.href} className="nav-cta">
+                    {item.cta}
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="section section-soft">
         <div className="page-container">
           <div className="grid-3">
             <div className="card">
@@ -148,7 +197,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="section section-soft">
+      <section className="section section-light">
         <div className="page-container">
           <div className="section-title-wrap">
             <h2 className="section-title">D-SEC Modülleri</h2>
@@ -169,7 +218,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="section section-light">
+      <section className="section section-soft">
         <div className="page-container">
           <div className="section-title-wrap">
             <h2 className="section-title">Eğitim Modülü Öne Çıkan Yapılar</h2>
@@ -203,7 +252,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="section section-soft">
+      <section className="section section-light">
         <div className="page-container">
           <div className="section-title-wrap">
             <h2 className="section-title">D-SEC Nasıl Çalışır?</h2>
@@ -241,7 +290,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="section section-light">
+      <section className="section section-soft">
         <div className="page-container">
           <div className="section-title-wrap">
             <h2 className="section-title">Neden D-SEC?</h2>
