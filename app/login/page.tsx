@@ -54,7 +54,7 @@ export default function LoginPage() {
       }
 
       if (data.role === "super_admin") {
-        router.push("/admin/cbs");
+        router.push("/admin/dashboard");
       } else if (data.role === "company_admin" || data.role === "operator") {
         router.push("/panel");
       } else if (data.role === "training_user") {
