@@ -518,6 +518,14 @@ export default function PanelReportsPage() {
       .slice(0, 12);
   }, [filteredMatrix]);
 
+  const pdfMatrixRows = useMemo(() => {
+    return filteredMatrix.slice(0, 20);
+  }, [filteredMatrix]);
+
+  const pdfTrainings = useMemo(() => {
+    return (report?.trainings || []).slice(0, 8);
+  }, [report]);
+
   const exportExcel = () => {
     if (!report?.trainings || !filteredMatrix.length) return;
 
@@ -1154,8 +1162,8 @@ export default function PanelReportsPage() {
             >
               Bu ekran; firma eğitim sorumlusunun hızlı aksiyon alabilmesi için
               eksik eğitim yoğunluğu, çalışan bazlı durum ve eğitim tamamlama
-              seviyesini tek alanda birleştirir. PDF çıktısı daha sade ve A4’e
-              uygun rapor düzeni ile oluşturulur.
+              seviyesini tek alanda birleştirir. PDF çıktısında artık matris
+              bölümü de ayrıca rapora eklenir.
             </div>
           </div>
         </div>
@@ -1639,6 +1647,7 @@ export default function PanelReportsPage() {
                   border: "1px solid #e5e7eb",
                   borderRadius: 14,
                   padding: 16,
+                  marginBottom: 22,
                 }}
               >
                 <div
@@ -1732,6 +1741,141 @@ export default function PanelReportsPage() {
                           }}
                         >
                           Eksik eğitim verisi bulunamadı.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 14,
+                  padding: 16,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 900,
+                    marginBottom: 12,
+                  }}
+                >
+                  Eğitim Durum Matrisi
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#6b7280",
+                    marginBottom: 10,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  PDF görünümünde okunabilirlik için ilk 20 çalışan ve ilk 8 eğitim
+                  başlığı gösterilir.
+                </div>
+
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 11,
+                    tableLayout: "fixed",
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      <th
+                        style={{
+                          textAlign: "left",
+                          padding: "8px 6px",
+                          borderBottom: "1px solid #e5e7eb",
+                          width: 170,
+                        }}
+                      >
+                        Çalışan
+                      </th>
+
+                      {pdfTrainings.map((training) => (
+                        <th
+                          key={training.id}
+                          style={{
+                            textAlign: "center",
+                            padding: "8px 4px",
+                            borderBottom: "1px solid #e5e7eb",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {training.title}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {pdfMatrixRows.map((row) => (
+                      <tr key={row.user_id}>
+                        <td
+                          style={{
+                            padding: "8px 6px",
+                            borderBottom: "1px solid #f1f5f9",
+                            verticalAlign: "top",
+                          }}
+                        >
+                          <div style={{ fontWeight: 800 }}>{row.full_name}</div>
+                          <div style={{ color: "#6b7280", marginTop: 2 }}>
+                            {row.email}
+                          </div>
+                        </td>
+
+                        {pdfTrainings.map((training) => {
+                          const found = row.statuses.find(
+                            (s) => s.training_id === training.id
+                          );
+
+                          const value = found?.status || "Atanmadı";
+
+                          return (
+                            <td
+                              key={`${row.user_id}-${training.id}`}
+                              style={{
+                                padding: "8px 4px",
+                                borderBottom: "1px solid #f1f5f9",
+                                textAlign: "center",
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  ...statusStyle(value),
+                                  display: "inline-block",
+                                  borderRadius: 999,
+                                  padding: "4px 6px",
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {value}
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+
+                    {pdfMatrixRows.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={pdfTrainings.length + 1}
+                          style={{
+                            padding: "10px 6px",
+                            color: "#6b7280",
+                          }}
+                        >
+                          Matris verisi bulunamadı.
                         </td>
                       </tr>
                     ) : null}
