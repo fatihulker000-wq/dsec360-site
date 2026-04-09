@@ -66,13 +66,9 @@ const BRAND = {
   border: "#e5e7eb",
   red: "#c62828",
   redDark: "#5a0f1f",
-  redSoft: "#fff1f1",
   green: "#166534",
-  greenSoft: "#f0fdf4",
   blue: "#1d4ed8",
-  blueSoft: "#eff6ff",
   amber: "#92400e",
-  amberSoft: "#fff7ed",
   slate: "#374151",
   shadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
@@ -178,7 +174,8 @@ function MiniBarChart({
       ) : (
         <div style={{ display: "grid", gap: 14 }}>
           {items.map((item) => {
-            const width = maxValue > 0 ? Math.max((item.value / maxValue) * 100, 6) : 6;
+            const width =
+              maxValue > 0 ? Math.max((item.value / maxValue) * 100, 6) : 6;
 
             return (
               <div key={item.label}>
@@ -205,7 +202,7 @@ function MiniBarChart({
                     style={{
                       minWidth: 36,
                       textAlign: "right",
-                      color: color,
+                      color,
                       fontWeight: 900,
                       fontSize: 13,
                     }}
@@ -604,6 +601,14 @@ export default function PanelReportsPage() {
     return (
       <main style={{ padding: 24 }}>
         <div style={cardStyle()}>Yetki bilgisi yükleniyor...</div>
+      </main>
+    );
+  }
+
+  if (loadingReport) {
+    return (
+      <main style={{ padding: 24 }}>
+        <div style={cardStyle()}>Rapor yükleniyor...</div>
       </main>
     );
   }
@@ -1162,8 +1167,8 @@ export default function PanelReportsPage() {
             >
               Bu ekran; firma eğitim sorumlusunun hızlı aksiyon alabilmesi için
               eksik eğitim yoğunluğu, çalışan bazlı durum ve eğitim tamamlama
-              seviyesini tek alanda birleştirir. PDF çıktısında artık matris
-              bölümü de ayrıca rapora eklenir.
+              seviyesini tek alanda birleştirir. PDF çıktısında matris bölümü de
+              rapora dahil edilir.
             </div>
           </div>
         </div>
@@ -1172,7 +1177,7 @@ export default function PanelReportsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1.4fr auto auto auto",
+              gridTemplateColumns: "1.4fr auto",
               gap: 12,
               alignItems: "end",
             }}
@@ -1219,36 +1224,6 @@ export default function PanelReportsPage() {
               />
               Sadece eksik eğitimler
             </label>
-
-            <button
-              onClick={exportExcel}
-              style={{
-                border: "none",
-                borderRadius: 12,
-                padding: "12px 16px",
-                background: BRAND.blue,
-                color: "#fff",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              Excel / CSV
-            </button>
-
-            <button
-              onClick={exportPDF}
-              style={{
-                border: "none",
-                borderRadius: 12,
-                padding: "12px 16px",
-                background: BRAND.red,
-                color: "#fff",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              PDF İndir
-            </button>
           </div>
         </div>
 
@@ -1411,8 +1386,7 @@ export default function PanelReportsPage() {
                   opacity: 0.95,
                 }}
               >
-                Firma bazlı eğitim tamamlama, eksik eğitim yoğunluğu ve aksiyon
-                özeti
+                Firma bazlı eğitim tamamlama, eksik eğitim yoğunluğu ve aksiyon özeti
               </div>
             </div>
 
