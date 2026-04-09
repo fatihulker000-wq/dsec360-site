@@ -10,14 +10,19 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
 
- const menu = [
-  { name: "Dashboard", href: "/admin/dashboard" },
-  { name: "Eğitimler", href: "/admin/trainings" },
-  { name: "Eğitim Katılımcıları", href: "/admin/participants" },
-  { name: "Sistem Kullanıcıları", href: "/admin/users" },
-  { name: "Firmalar", href: "/admin/companies" },
-  { name: "Raporlar", href: "/admin/reports" },
-];
+  // Admin login ekranında sidebar gösterme
+  if (pathname === "/admin/login") {
+    return <>{children}</>;
+  }
+
+  const menu = [
+    { name: "Dashboard", href: "/admin/dashboard" },
+    { name: "Eğitimler", href: "/admin/trainings" },
+    { name: "Eğitim Katılımcıları", href: "/admin/participants" },
+    { name: "Sistem Kullanıcıları", href: "/admin/users" },
+    { name: "Firmalar", href: "/admin/companies" },
+    { name: "Raporlar", href: "/admin/reports" },
+  ];
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
