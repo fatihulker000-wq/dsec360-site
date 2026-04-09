@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 const panelCards = [
   {
@@ -58,15 +62,67 @@ const panelCards = [
 ];
 
 export default function PanelPage() {
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => null);
+
+      await fetch("/api/admin/logout", {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => null);
+    } finally {
+      router.push("/login");
+      router.refresh();
+    }
+  };
+
   return (
     <main>
       <section className="hero hero-compact">
         <div className="hero-inner">
-          <div className="hero-badge">D-SEC Kullanıcı Paneli</div>
-          <h1 className="hero-title">Kurumsal Yönetim Paneli</h1>
-          <p className="hero-desc">
-            Denetim, eğitim, sağlık ve ÇBS süreçlerinizi tek ekrandan yönetin.
-          </p>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "16px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div className="hero-badge">D-SEC Kullanıcı Paneli</div>
+              <h1 className="hero-title">Kurumsal Yönetim Paneli</h1>
+              <p className="hero-desc">
+                Denetim, eğitim, sağlık ve ÇBS süreçlerinizi tek ekrandan yönetin.
+              </p>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              style={{
+                border: "none",
+                borderRadius: "14px",
+                padding: "12px 18px",
+                background: "#111827",
+                color: "#ffffff",
+                fontWeight: 800,
+                fontSize: "14px",
+                cursor: loggingOut ? "not-allowed" : "pointer",
+                opacity: loggingOut ? 0.7 : 1,
+              }}
+            >
+              {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+            </button>
+          </div>
         </div>
       </section>
 
