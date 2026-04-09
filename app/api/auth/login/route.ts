@@ -66,7 +66,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // super_admin için sadece tek admin hesabı geçerli olsun
     if (userRole === "super_admin" && userEmail !== "admin@dsec360.com") {
       return NextResponse.json(
         { error: "Bu yönetici hesabı ile giriş izni yok." },
@@ -91,41 +90,34 @@ export async function POST(request: Request) {
       },
     });
 
-    response.cookies.set("dsec_user_auth", "ok", {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 12,
-    });
+    const secure = process.env.NODE_ENV === "production";
 
-    response.cookies.set("dsec_user_role", userRole, {
+    const activeCookieBase = {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: "lax" as const,
+      secure,
       path: "/",
       maxAge: 60 * 60 * 12,
-    });
+    };
 
-    response.cookies.set("dsec_user_id", String(user.id ?? ""), {
+    const clearCookieBase = {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: "lax" as const,
+      secure,
       path: "/",
-      maxAge: 60 * 60 * 12,
-    });
+      expires: new Date(0),
+    };
+
+    response.cookies.set("dsec_user_auth", "ok", activeCookieBase);
+    response.cookies.set("dsec_user_role", userRole, activeCookieBase);
+    response.cookies.set("dsec_user_id", String(user.id ?? ""), activeCookieBase);
 
     if (userRole === "super_admin") {
-      response.cookies.set("dsec_admin_auth", "ok", {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 12,
-      });
+      response.cookies.set("dsec_admin_auth", "ok", activeCookieBase);
+      response.cookies.set("dsec_admin_role", userRole, activeCookieBase);
     } else {
-      response.cookies.set("dsec_admin_auth", "", {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      });
+      response.cookies.set("dsec_admin_auth", "", clearCookieBase);
+      response.cookies.set("dsec_admin_role", "", clearCookieBase);
     }
 
     return response;
