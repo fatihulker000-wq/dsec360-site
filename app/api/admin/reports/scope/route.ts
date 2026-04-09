@@ -13,26 +13,26 @@ export async function GET() {
   try {
     const cookieStore = await cookies();
 
- const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-const adminRole = cookieStore.get("dsec_admin_role")?.value;
+    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+    const adminRole = cookieStore.get("dsec_admin_role")?.value;
 
-const userAuth = cookieStore.get("dsec_user_auth")?.value;
-const userRole = cookieStore.get("dsec_user_role")?.value;
+    const userAuth = cookieStore.get("dsec_user_auth")?.value;
+    const userRole = cookieStore.get("dsec_user_role")?.value;
+    const userId = cookieStore.get("dsec_user_id")?.value;
 
+    const resolvedRole =
+      adminAuth === "ok" && adminRole
+        ? adminRole
+        : userAuth === "ok" && userRole
+        ? userRole
+        : null;
 
-const resolvedRole =
-  adminAuth === "ok" && adminRole
-    ? adminRole
-    : userAuth === "ok" && userRole
-    ? userRole
-    : null;
-
-if (!resolvedRole) {
-  return NextResponse.json(
-    { error: "Yetkisiz erişim." },
-    { status: 401 }
-  );
-}
+    if (!resolvedRole) {
+      return NextResponse.json(
+        { error: "Yetkisiz erişim." },
+        { status: 401 }
+      );
+    }
 
     if (resolvedRole === "super_admin" || resolvedRole === "admin") {
       return NextResponse.json({
