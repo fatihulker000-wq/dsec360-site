@@ -616,31 +616,36 @@ const exportPDF = async () => {
   }
 
   const matrixSection = document.getElementById("panel-report-matrix");
-  if (matrixSection) {
-    const canvasMatrix = await html2canvas(matrixSection, {
-      scale: 2,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      windowWidth: matrixSection.scrollWidth,
-      windowHeight: matrixSection.scrollHeight,
-      width: matrixSection.scrollWidth,
-      height: matrixSection.scrollHeight,
-    });
+if (matrixSection) {
+  const canvasMatrix = await html2canvas(matrixSection, {
+    scale: 2,
+    backgroundColor: "#ffffff",
+    useCORS: true,
+  });
 
-    const imgMatrix = canvasMatrix.toDataURL("image/png");
+  const imgMatrix = canvasMatrix.toDataURL("image/png");
 
-    pdf.addPage("a4", "landscape");
+  pdf.addPage();
 
-    addContainImage(
-      pdf,
-      imgMatrix,
-      canvasMatrix.width,
-      canvasMatrix.height,
-      297,
-      210,
-      8
-    );
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const margin = 8;
+  const usableWidth = pageWidth - margin * 2;
+  const usableHeight = pageHeight - margin * 2;
+
+  let imgWidth = usableWidth;
+  let imgHeight = (canvasMatrix.height * imgWidth) / canvasMatrix.width;
+
+  if (imgHeight > usableHeight) {
+    imgHeight = usableHeight;
+    imgWidth = (canvasMatrix.width * imgHeight) / canvasMatrix.height;
   }
+
+  const x = (pageWidth - imgWidth) / 2;
+  const y = margin;
+
+  pdf.addImage(imgMatrix, "PNG", x, y, imgWidth, imgHeight);
+}
 
   pdf.save("firma-egitim-raporu.pdf");
 };
