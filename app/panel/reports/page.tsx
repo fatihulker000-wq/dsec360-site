@@ -557,32 +557,64 @@ export default function PanelReportsPage() {
     URL.revokeObjectURL(url);
   };
 
- const exportPDF = async () => {
+const exportPDF = async () => {
   const { default: jsPDF } = await import("jspdf");
   const { default: html2canvas } = await import("html2canvas");
 
   const pdf = new jsPDF("p", "mm", "a4");
 
-  // 1. sayfa: üst özet alanı
-  const topSection = document.getElementById("panel-report-top");
-  if (topSection) {
-    const canvasTop = await html2canvas(topSection, {
+  const renderCanvas = async (element: HTMLElement) => {
+    return html2canvas(element, {
       scale: 2,
       backgroundColor: "#ffffff",
       useCORS: true,
+      windowWidth: Math.max(element.scrollWidth, element.clientWidth),
+      windowHeight: Math.max(element.scrollHeight, element.clientHeight),
     });
+  };
 
+  const addContainImage = (
+    pdfDoc: any,
+    imgData: string,
+    canvasWidth: number,
+    canvasHeight: number,
+    pageWidth: number,
+    pageHeight: number,
+    margin: number
+  ) => {
+    const usableWidth = pageWidth - margin * 2;
+    const usableHeight = pageHeight - margin * 2;
+
+    let imgWidth = usableWidth;
+    let imgHeight = (canvasHeight * imgWidth) / canvasWidth;
+
+    if (imgHeight > usableHeight) {
+      imgHeight = usableHeight;
+      imgWidth = (canvasWidth * imgHeight) / canvasHeight;
+    }
+
+    const x = (pageWidth - imgWidth) / 2;
+    const y = (pageHeight - imgHeight) / 2;
+
+    pdfDoc.addImage(imgData, "PNG", x, y, imgWidth, imgHeight);
+  };
+
+  const topSection = document.getElementById("panel-report-top");
+  if (topSection) {
+    const canvasTop = await renderCanvas(topSection);
     const imgTop = canvasTop.toDataURL("image/png");
 
-    const pageWidth = 210;
-    const margin = 8;
-    const usableWidth = pageWidth - margin * 2;
-    const imgTopHeight = (canvasTop.height * usableWidth) / canvasTop.width;
-
-    pdf.addImage(imgTop, "PNG", margin, margin, usableWidth, imgTopHeight);
+    addContainImage(
+      pdf,
+      imgTop,
+      canvasTop.width,
+      canvasTop.height,
+      210,
+      297,
+      8
+    );
   }
 
-  // 2. sayfa: sadece matrix alanı, yatay
   const matrixSection = document.getElementById("panel-report-matrix");
   if (matrixSection) {
     const canvasMatrix = await html2canvas(matrixSection, {
@@ -590,26 +622,23 @@ export default function PanelReportsPage() {
       backgroundColor: "#ffffff",
       useCORS: true,
       windowWidth: matrixSection.scrollWidth,
+      windowHeight: matrixSection.scrollHeight,
       width: matrixSection.scrollWidth,
+      height: matrixSection.scrollHeight,
     });
 
     const imgMatrix = canvasMatrix.toDataURL("image/png");
 
     pdf.addPage("a4", "landscape");
 
-    const pageWidthL = 297;
-    const marginL = 8;
-    const usableWidthL = pageWidthL - marginL * 2;
-    const imgMatrixHeight =
-      (canvasMatrix.height * usableWidthL) / canvasMatrix.width;
-
-    pdf.addImage(
+    addContainImage(
+      pdf,
       imgMatrix,
-      "PNG",
-      marginL,
-      marginL,
-      usableWidthL,
-      imgMatrixHeight
+      canvasMatrix.width,
+      canvasMatrix.height,
+      297,
+      210,
+      8
     );
   }
 
@@ -741,7 +770,7 @@ export default function PanelReportsPage() {
             display: "grid",
             gridTemplateColumns: "1.05fr 0.95fr",
             gap: 20,
-            marginBottom: 20,
+            marginBottom: 16,
           }}
         >
           <div style={cardStyle()}>
@@ -944,6 +973,8 @@ export default function PanelReportsPage() {
             marginBottom: 20,
           }}
         >
+
+         
           <MiniBarChart
             title="Atama Durum Dağılımı"
             items={trainingStatusDistribution}
@@ -1169,7 +1200,8 @@ export default function PanelReportsPage() {
           </div>
         </div>
 
-        <div style={{ ...cardStyle(), marginBottom: 20 }}>
+        
+          <div style={{ ...cardStyle(), marginBottom: 20 }}>
           <div
             style={{
               display: "grid",
@@ -1334,7 +1366,6 @@ export default function PanelReportsPage() {
     </div>
   ) : null}
 </div>
-
 
 
         <div
