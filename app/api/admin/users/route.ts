@@ -27,6 +27,7 @@ type CompanyRow = {
 export async function GET() {
   try {
     const cookieStore = await cookies();
+
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
     const adminRole = cookieStore.get("dsec_admin_role")?.value;
     const companyIdFromCookie = String(
@@ -37,7 +38,10 @@ export async function GET() {
       adminRole === "super_admin" || adminRole === "company_admin";
 
     if (adminAuth !== "ok" || !isAllowedRole) {
-      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Yetkisiz erişim." },
+        { status: 401 }
+      );
     }
 
     if (adminRole === "company_admin" && !companyIdFromCookie) {

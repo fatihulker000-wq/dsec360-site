@@ -96,6 +96,7 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [role, setRole] = useState<string | null>(null);
 
   const loadUsers = async () => {
     try {
@@ -163,9 +164,16 @@ export default function AdminUsersPage() {
     }
   };
 
-  useEffect(() => {
-    void loadUsers();
-  }, []);
+useEffect(() => {
+  void loadUsers();
+
+  const r = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("dsec_admin_role="))
+    ?.split("=")[1];
+
+  setRole(r || null);
+}, []);
 
   const roles = useMemo(() => {
     return Array.from(new Set(users.map((u) => u.role))).sort((a, b) =>
@@ -482,40 +490,42 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
 
-                  <div style={{ marginTop: 10 }}>
-                    <select
-                      defaultValue={u.company_id || ""}
-                      onChange={(e) => void updateCompany(u.id, e.target.value)}
-                      disabled={savingCompany}
-                      style={{
-                        padding: "10px 12px",
-                        borderRadius: 10,
-                        border: "1px solid #d1d5db",
-                        fontSize: 13,
-                        minWidth: 220,
-                      }}
-                    >
-                      <option value="">Firma yok</option>
-                      {companies.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+<div style={{ marginTop: 10 }}>
+  {role !== "company_admin" && (
+    <select
+      defaultValue={u.company_id || ""}
+      onChange={(e) => void updateCompany(u.id, e.target.value)}
+      disabled={savingCompany}
+      style={{
+        padding: "10px 12px",
+        borderRadius: 10,
+        border: "1px solid #d1d5db",
+        fontSize: 13,
+        minWidth: 220,
+      }}
+    >
+      <option value="">Firma yok</option>
+      {companies.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name}
+        </option>
+      ))}
+    </select>
+  )}
+</div>
 
-                  <div
-                    style={{
-                      marginTop: 12,
-                      fontSize: 12,
-                      color: BRAND.muted,
-                    }}
-                  >
-                    Kayıt tarihi:{" "}
-                    {u.created_at
-                      ? new Date(u.created_at).toLocaleString("tr-TR")
-                      : "-"}
-                  </div>
+<div
+  style={{
+    marginTop: 12,
+    fontSize: 12,
+    color: BRAND.muted,
+  }}
+>
+  Kayıt tarihi:{" "}
+  {u.created_at
+    ? new Date(u.created_at).toLocaleString("tr-TR")
+    : "-"}
+</div>
                 </div>
               ))}
             </div>

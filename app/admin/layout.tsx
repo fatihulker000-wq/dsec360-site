@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function AdminLayout({
   children,
@@ -11,6 +11,17 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+
+  // 🔥 ROLE AL
+  useEffect(() => {
+    const r = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("dsec_admin_role="))
+      ?.split("=")[1];
+
+    setRole(r || null);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -34,12 +45,20 @@ export default function AdminLayout({
     return <>{children}</>;
   }
 
+  // 🔥 ROLE BASE MENU
   const menu = [
     { name: "Dashboard", href: "/admin/dashboard" },
     { name: "Eğitimler", href: "/admin/trainings" },
     { name: "Eğitim Katılımcıları", href: "/admin/participants" },
+
+    // ✅ HERKES GÖRÜR
     { name: "Sistem Kullanıcıları", href: "/admin/users" },
-    { name: "Firmalar", href: "/admin/companies" },
+
+    // ❌ SADECE SUPER ADMIN GÖRÜR
+    ...(role === "super_admin"
+      ? [{ name: "Firmalar", href: "/admin/companies" }]
+      : []),
+
     { name: "Raporlar", href: "/admin/reports" },
   ];
 
@@ -78,33 +97,6 @@ export default function AdminLayout({
           </div>
 
           <div style={{ fontWeight: 900, fontSize: 24 }}>Admin Panel</div>
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 13,
-              color: "rgba(255,255,255,0.74)",
-              lineHeight: 1.6,
-            }}
-          >
-            Eğitim yönetimi, kullanıcı takibi ve karar destek görünümü.
-          </div>
-        </div>
-
-        <div
-          style={{
-            borderRadius: 16,
-            padding: 14,
-            marginBottom: 20,
-            background: "rgba(255,255,255,0.08)",
-            border: "1px solid rgba(255,255,255,0.12)",
-          }}
-        >
-          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
-            AKTİF BÖLÜM
-          </div>
-          <div style={{ fontWeight: 800 }}>
-            {menu.find((x) => x.href === pathname)?.name || "Yönetim"}
-          </div>
         </div>
 
         <div style={{ flex: 1 }}>
@@ -112,11 +104,7 @@ export default function AdminLayout({
             const isActive = pathname === item.href;
 
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                style={{ textDecoration: "none", color: "inherit" }}
-              >
+              <Link key={item.href} href={item.href}>
                 <div
                   style={{
                     padding: "12px 14px",
@@ -124,11 +112,7 @@ export default function AdminLayout({
                     marginBottom: 8,
                     cursor: "pointer",
                     background: isActive ? "#c62828" : "transparent",
-                    border: isActive
-                      ? "1px solid rgba(255,255,255,0.16)"
-                      : "1px solid transparent",
                     fontWeight: isActive ? 800 : 600,
-                    transition: "all 0.2s ease",
                   }}
                 >
                   {item.name}
@@ -138,37 +122,12 @@ export default function AdminLayout({
           })}
         </div>
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={loggingOut}
-          style={{
-            width: "100%",
-            border: "1px solid rgba(255,255,255,0.18)",
-            background: loggingOut ? "#7f1d1d" : "#111827",
-            color: "#fff",
-            borderRadius: 12,
-            padding: "12px 14px",
-            fontWeight: 800,
-            cursor: loggingOut ? "not-allowed" : "pointer",
-            marginTop: 16,
-          }}
-        >
-          {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+        <button onClick={handleLogout}>
+          {loggingOut ? "Çıkış..." : "Çıkış Yap"}
         </button>
       </div>
 
-      <div
-        style={{
-          marginLeft: 260,
-          width: "100%",
-          minHeight: "100vh",
-          overflowY: "auto",
-          background: "#fafafa",
-        }}
-      >
-        {children}
-      </div>
+      <div style={{ marginLeft: 260, width: "100%" }}>{children}</div>
     </div>
   );
 }
