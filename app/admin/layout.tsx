@@ -216,7 +216,7 @@ export default function AdminLayout({
                 }}
                 onClick={(e) => {
                   e.preventDefault();
-                  router.push(item.href);
+                  window.location.href = item.href;
                 }}
               >
                 {item.name}
