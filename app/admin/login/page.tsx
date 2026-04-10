@@ -1,390 +1,408 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+"use client";
 
-function getSupabase() {
-  const url = process.env.SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, key);
+import { useState } from "react";
+
+const BRAND = {
+  pageTop: "#fff4f5",
+  pageMid: "#fff8f8",
+  pageBottom: "#ffffff",
+
+  heroDark: "#5a0f1f",
+  heroMid: "#8f172c",
+  heroMain: "#c62828",
+  heroSoft: "#ef5350",
+
+  white: "#ffffff",
+  textStrong: "#3b0a15",
+  textBody: "#6f4a53",
+  textMuted: "#8b6770",
+
+  border: "#efd8dc",
+  borderStrong: "#e7c0c7",
+
+  inputBorder: "#dec7cc",
+
+  softChip: "#fff0f1",
+
+  dangerBg: "#fef2f2",
+  dangerBorder: "#fecaca",
+  dangerText: "#b91c1c",
+
+  shadowSoft: "0 24px 60px rgba(87, 14, 26, 0.10)",
+  shadowStrong: "0 30px 80px rgba(87, 14, 26, 0.24)",
+};
+
+export default function AdminLoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data?.error || "Giriş başarısız.");
+        return;
+      }
+
+      window.location.href = "/admin/dashboard";
+    } catch (err) {
+      console.error("admin login error:", err);
+      setError("Giriş sırasında bağlantı hatası oluştu.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: `linear-gradient(180deg, ${BRAND.pageTop} 0%, ${BRAND.pageMid} 45%, ${BRAND.pageBottom} 100%)`,
+        padding: "48px 20px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "1180px",
+          display: "grid",
+          gridTemplateColumns: "1.15fr 0.85fr",
+          gap: "24px",
+        }}
+      >
+        <div
+          style={{
+            background: `linear-gradient(135deg, ${BRAND.heroDark} 0%, ${BRAND.heroMid} 44%, ${BRAND.heroMain} 78%, ${BRAND.heroSoft} 100%)`,
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: "30px",
+            padding: "36px",
+            color: "#ffffff",
+            boxShadow: BRAND.shadowStrong,
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "radial-gradient(circle at top right, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 38%)",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              right: "-90px",
+              top: "-90px",
+              width: "280px",
+              height: "280px",
+              borderRadius: "999px",
+              background: "rgba(255,255,255,0.10)",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: "58%",
+              bottom: "-120px",
+              width: "240px",
+              height: "240px",
+              borderRadius: "999px",
+              background: "rgba(255,255,255,0.07)",
+            }}
+          />
+
+          <div style={{ position: "relative", zIndex: 2 }}>
+            <div
+              style={{
+                display: "inline-flex",
+                padding: "8px 14px",
+                borderRadius: "999px",
+                background: "rgba(255,255,255,0.14)",
+                border: "1px solid rgba(255,255,255,0.18)",
+                fontSize: "12px",
+                fontWeight: 800,
+                marginBottom: "18px",
+                letterSpacing: "0.2px",
+              }}
+            >
+              D-SEC • Yönetim Girişi
+            </div>
+
+            <h1
+              style={{
+                fontSize: "56px",
+                lineHeight: 1.02,
+                fontWeight: 900,
+                margin: 0,
+                letterSpacing: "-1.2px",
+                textShadow: "0 6px 24px rgba(0,0,0,0.12)",
+              }}
+            >
+              Eğitim Yönetim
+              <br />
+              Merkezine Giriş
+            </h1>
+
+            <p
+              style={{
+                marginTop: "18px",
+                marginBottom: "28px",
+                fontSize: "20px",
+                lineHeight: 1.7,
+                color: "rgba(255,255,255,0.92)",
+                maxWidth: "760px",
+              }}
+            >
+              Firma admini ve süper admin; eğitim atama, takip, risk analizi ve
+              yönetim görünümüne bu giriş üzerinden erişir.
+            </p>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: "14px",
+              }}
+            >
+              <FeatureCard title="Yönetim" value="Eğitim Kontrolü" />
+              <FeatureCard title="Firma" value="Kendi Verin" />
+              <FeatureCard title="Dashboard" value="Canlı Durum" />
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: BRAND.white,
+            borderRadius: "30px",
+            padding: "34px",
+            border: `1px solid ${BRAND.border}`,
+            boxShadow: BRAND.shadowSoft,
+            alignSelf: "center",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              padding: "8px 12px",
+              borderRadius: "999px",
+              background: BRAND.softChip,
+              border: `1px solid ${BRAND.borderStrong}`,
+              color: BRAND.heroMain,
+              fontWeight: 800,
+              fontSize: "12px",
+              marginBottom: "16px",
+            }}
+          >
+            Güvenli Yönetim Girişi
+          </div>
+
+          <h2
+            style={{
+              margin: 0,
+              fontSize: "42px",
+              fontWeight: 900,
+              color: BRAND.textStrong,
+              letterSpacing: "-0.8px",
+            }}
+          >
+            Hoş geldiniz
+          </h2>
+
+          <p
+            style={{
+              marginTop: "14px",
+              marginBottom: "26px",
+              color: BRAND.textBody,
+              lineHeight: 1.8,
+              fontSize: "16px",
+            }}
+          >
+            Yönetim paneline erişmek için kurumsal email ve şifrenizi girin.
+          </p>
+
+          <div style={{ marginBottom: "16px" }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: "14px",
+                fontWeight: 800,
+                color: BRAND.textStrong,
+                marginBottom: "10px",
+              }}
+            >
+              Email
+            </label>
+
+            <input
+              type="email"
+              placeholder="firma@dsec360.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{
+                width: "100%",
+                height: "56px",
+                borderRadius: "15px",
+                border: `1px solid ${BRAND.inputBorder}`,
+                padding: "0 16px",
+                fontSize: "16px",
+                outline: "none",
+                boxSizing: "border-box",
+                background: BRAND.white,
+                color: BRAND.textStrong,
+                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "18px" }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: "14px",
+                fontWeight: 800,
+                color: BRAND.textStrong,
+                marginBottom: "10px",
+              }}
+            >
+              Şifre
+            </label>
+
+            <input
+              type="password"
+              placeholder="Şifreyi girin"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void handleLogin();
+                }
+              }}
+              style={{
+                width: "100%",
+                height: "56px",
+                borderRadius: "15px",
+                border: `1px solid ${BRAND.inputBorder}`,
+                padding: "0 16px",
+                fontSize: "16px",
+                outline: "none",
+                boxSizing: "border-box",
+                background: BRAND.white,
+                color: BRAND.textStrong,
+                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)",
+              }}
+            />
+          </div>
+
+          <button
+            onClick={handleLogin}
+            disabled={loading}
+            style={{
+              width: "100%",
+              height: "58px",
+              borderRadius: "15px",
+              border: "none",
+              background: loading
+                ? "#d98b8b"
+                : `linear-gradient(135deg, ${BRAND.heroSoft} 0%, ${BRAND.heroMain} 55%, ${BRAND.heroMid} 100%)`,
+              color: "#ffffff",
+              fontSize: "17px",
+              fontWeight: 800,
+              cursor: loading ? "not-allowed" : "pointer",
+              boxShadow: "0 18px 36px rgba(198, 40, 40, 0.22)",
+            }}
+          >
+            {loading ? "Kontrol ediliyor..." : "Yönetim Paneline Giriş Yap"}
+          </button>
+
+          {error ? (
+            <div
+              style={{
+                marginTop: "16px",
+                padding: "14px 16px",
+                borderRadius: "14px",
+                background: BRAND.dangerBg,
+                border: `1px solid ${BRAND.dangerBorder}`,
+                color: BRAND.dangerText,
+                lineHeight: 1.7,
+                fontWeight: 700,
+              }}
+            >
+              {error}
+            </div>
+          ) : null}
+
+          <p
+            style={{
+              marginTop: "18px",
+              marginBottom: 0,
+              fontSize: "13px",
+              color: BRAND.textMuted,
+              lineHeight: 1.7,
+            }}
+          >
+            Firma admini yalnız kendi firmasının eğitim atama ve takip verilerini
+            görür. Süper admin tüm firmaları görür.
+          </p>
+        </div>
+      </div>
+    </main>
+  );
 }
 
-type AssignmentRow = {
-  id: string;
-  user_id: string;
-  training_id: string;
-  status: "not_started" | "in_progress" | "completed" | null;
-  final_exam_passed?: boolean | null;
-};
-
-type TrainingRow = {
-  id: string;
-  title: string | null;
-};
-
-type UserRow = {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  company_id: string | null;
-};
-
-type CompanyRow = {
-  id: string;
-  name: string | null;
-};
-
-type AdminUserScopeRow = {
-  id: string;
-  company_id: string | null;
-};
-
-export async function GET() {
-  try {
-    const cookieStore = await cookies();
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
-    const userIdFromCookie = String(
-      cookieStore.get("dsec_user_id")?.value || ""
-    ).trim();
-
-    let companyIdFromCookie = String(
-      cookieStore.get("dsec_company_id")?.value || ""
-    ).trim();
-
-    const isAllowedRole =
-      adminRole === "super_admin" || adminRole === "company_admin";
-
-    if (adminAuth !== "ok" || !isAllowedRole) {
-      return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
-      );
-    }
-
-    const supabase = getSupabase();
-
-    if (adminRole === "company_admin" && !companyIdFromCookie) {
-      if (!userIdFromCookie) {
-        return NextResponse.json(
-          { error: "Firma yöneticisi için kullanıcı bilgisi bulunamadı." },
-          { status: 403 }
-        );
-      }
-
-      const { data: adminUser, error: adminUserError } = await supabase
-        .from("users")
-        .select("id, company_id")
-        .eq("id", userIdFromCookie)
-        .maybeSingle<AdminUserScopeRow>();
-
-      if (adminUserError) {
-        return NextResponse.json(
-          {
-            error: "Firma yöneticisi kapsam bilgisi alınamadı.",
-            detail: adminUserError.message,
-          },
-          { status: 500 }
-        );
-      }
-
-      companyIdFromCookie = String(adminUser?.company_id || "").trim();
-
-      if (!companyIdFromCookie) {
-        return NextResponse.json(
-          { error: "Firma yöneticisi için firma bilgisi bulunamadı." },
-          { status: 403 }
-        );
-      }
-    }
-
-    const { data: assignments, error: assignmentsError } = await supabase
-      .from("training_assignments")
-      .select("id, user_id, training_id, status, final_exam_passed")
-      .returns<AssignmentRow[]>();
-
-    if (assignmentsError) {
-      return NextResponse.json(
-        {
-          error: "Eğitim atamaları alınamadı.",
-          detail: assignmentsError.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    const allAssignmentRows = assignments || [];
-
-    const trainingIds = Array.from(
-      new Set(allAssignmentRows.map((a) => a.training_id).filter(Boolean))
-    );
-
-    const userIds = Array.from(
-      new Set(allAssignmentRows.map((a) => a.user_id).filter(Boolean))
-    );
-
-    let trainingsMap: Record<string, TrainingRow> = {};
-    let usersMap: Record<string, UserRow> = {};
-    let companyMap: Record<string, string> = {};
-
-    if (trainingIds.length > 0) {
-      const { data: trainings, error: trainingsError } = await supabase
-        .from("trainings")
-        .select("id, title")
-        .in("id", trainingIds)
-        .returns<TrainingRow[]>();
-
-      if (trainingsError) {
-        return NextResponse.json(
-          {
-            error: "Eğitim detayları alınamadı.",
-            detail: trainingsError.message,
-          },
-          { status: 500 }
-        );
-      }
-
-      trainingsMap = Object.fromEntries((trainings || []).map((t) => [t.id, t]));
-    }
-
-    if (userIds.length > 0) {
-      let userQuery = supabase
-        .from("users")
-        .select("id, full_name, email, company_id")
-        .in("id", userIds);
-
-      if (adminRole === "company_admin") {
-        userQuery = userQuery.eq("company_id", companyIdFromCookie);
-      }
-
-      const { data: users, error: usersError } = await userQuery.returns<UserRow[]>();
-
-      if (usersError) {
-        return NextResponse.json(
-          {
-            error: "Kullanıcı detayları alınamadı.",
-            detail: usersError.message,
-          },
-          { status: 500 }
-        );
-      }
-
-      usersMap = Object.fromEntries((users || []).map((u) => [u.id, u]));
-
-      const companyIds = Array.from(
-        new Set(
-          (users || [])
-            .map((u) => String(u.company_id || "").trim())
-            .filter(Boolean)
-        )
-      );
-
-      if (companyIds.length > 0) {
-        const { data: companies, error: companiesError } = await supabase
-          .from("companies")
-          .select("id, name")
-          .in("id", companyIds)
-          .returns<CompanyRow[]>();
-
-        if (companiesError) {
-          return NextResponse.json(
-            {
-              error: "Firma detayları alınamadı.",
-              detail: companiesError.message,
-            },
-            { status: 500 }
-          );
-        }
-
-        companyMap = Object.fromEntries(
-          (companies || []).map((c) => [
-            c.id,
-            String(c.name || "Firma Yok").trim() || "Firma Yok",
-          ])
-        );
-      }
-    }
-
-    const allowedUserIds = new Set(Object.keys(usersMap));
-    const assignmentRows = allAssignmentRows.filter((row) =>
-      allowedUserIds.has(row.user_id)
-    );
-
-    const trainingStatsMap = new Map<
-      string,
-      {
-        id: string;
-        title: string;
-        assigned_count: number;
-        not_started_count: number;
-        in_progress_count: number;
-        completed_count: number;
-      }
-    >();
-
-    let totalAssigned = 0;
-    let totalCompleted = 0;
-    let totalInProgress = 0;
-    let totalNotStarted = 0;
-
-    for (const row of assignmentRows) {
-      const trainingId = row.training_id;
-      if (!trainingId) continue;
-
-      const current = trainingStatsMap.get(trainingId) || {
-        id: trainingId,
-        title: trainingsMap[trainingId]?.title || "Eğitim",
-        assigned_count: 0,
-        not_started_count: 0,
-        in_progress_count: 0,
-        completed_count: 0,
-      };
-
-      current.assigned_count += 1;
-      totalAssigned += 1;
-
-      const isCompleted =
-        row.final_exam_passed === true || row.status === "completed";
-
-      if (isCompleted) {
-        current.completed_count += 1;
-        totalCompleted += 1;
-      } else if (row.status === "in_progress") {
-        current.in_progress_count += 1;
-        totalInProgress += 1;
-      } else {
-        current.not_started_count += 1;
-        totalNotStarted += 1;
-      }
-
-      trainingStatsMap.set(trainingId, current);
-    }
-
-    const riskyUsers = assignmentRows
-      .filter((row) => {
-        const isCompleted =
-          row.final_exam_passed === true || row.status === "completed";
-        return !isCompleted && row.status !== "in_progress";
-      })
-      .map((row) => {
-        const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
-
-        return {
-          assignment_id: row.id,
-          user_id: row.user_id,
-          training_id: row.training_id,
-          full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
-          email: usersMap[row.user_id]?.email || "",
-          company_id: companyMap[rawCompanyId] || "Firma Yok",
-          training_title: trainingsMap[row.training_id]?.title || "Eğitim",
-          status: "not_started" as const,
-        };
-      });
-
-    const inProgressUsers = assignmentRows
-      .filter(
-        (row) => row.status === "in_progress" && row.final_exam_passed !== true
-      )
-      .map((row) => {
-        const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
-
-        return {
-          assignment_id: row.id,
-          user_id: row.user_id,
-          training_id: row.training_id,
-          full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
-          email: usersMap[row.user_id]?.email || "",
-          company_id: companyMap[rawCompanyId] || "Firma Yok",
-          training_title: trainingsMap[row.training_id]?.title || "Eğitim",
-          status: "in_progress" as const,
-        };
-      });
-
-    const completedUsers = assignmentRows
-      .filter(
-        (row) => row.final_exam_passed === true || row.status === "completed"
-      )
-      .map((row) => {
-        const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
-
-        return {
-          assignment_id: row.id,
-          user_id: row.user_id,
-          training_id: row.training_id,
-          full_name: usersMap[row.user_id]?.full_name || "Kullanıcı",
-          email: usersMap[row.user_id]?.email || "",
-          company_id: companyMap[rawCompanyId] || "Firma Yok",
-          training_title: trainingsMap[row.training_id]?.title || "Eğitim",
-          status: "completed" as const,
-        };
-      });
-
-    const trainings = Array.from(trainingStatsMap.values()).sort(
-      (a, b) => b.assigned_count - a.assigned_count
-    );
-
-    const completionRate = totalAssigned
-      ? Number(((totalCompleted / totalAssigned) * 100).toFixed(2))
-      : 0;
-
-    const inProgressRate = totalAssigned
-      ? Number(((totalInProgress / totalAssigned) * 100).toFixed(2))
-      : 0;
-
-    const riskRate = totalAssigned
-      ? Number(((totalNotStarted / totalAssigned) * 100).toFixed(2))
-      : 0;
-
-    const riskStatus =
-      totalNotStarted > 20
-        ? "KRITIK"
-        : totalNotStarted > 10
-        ? "ORTA"
-        : "IYI";
-
-    const companyRiskMap = new Map<string, number>();
-    riskyUsers.forEach((u) => {
-      const key = u.company_id || "Firma Yok";
-      companyRiskMap.set(key, (companyRiskMap.get(key) || 0) + 1);
-    });
-
-    const companyDistribution = Array.from(companyRiskMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-
-    const monthlyTrend = [
-      { label: "Tamamlandı", value: totalCompleted },
-      { label: "Devam", value: totalInProgress },
-      { label: "Başlamadı", value: totalNotStarted },
-    ];
-
-    return NextResponse.json({
-      success: true,
-      trainings,
-      risky_users: riskyUsers,
-      in_progress_users: inProgressUsers,
-      completed_users: completedUsers,
-      company_distribution: companyDistribution,
-      trend: monthlyTrend,
-      summary: {
-        total_assignments: totalAssigned,
-        completed_count: totalCompleted,
-        in_progress_count: totalInProgress,
-        not_started_count: totalNotStarted,
-        completion_rate: completionRate,
-        in_progress_rate: inProgressRate,
-        risk_rate: riskRate,
-        risk_status: riskStatus,
-      },
-    });
-  } catch (err) {
-    console.error("admin training dashboard route error:", err);
-    return NextResponse.json(
-      {
-        error: "Sunucu hatası.",
-        detail: String(err),
-      },
-      { status: 500 }
-    );
-  }
+function FeatureCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string;
+}) {
+  return (
+    <div
+      style={{
+        borderRadius: "20px",
+        padding: "18px",
+        background: "rgba(255,255,255,0.11)",
+        border: "1px solid rgba(255,255,255,0.16)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "12px",
+          opacity: 0.84,
+          fontWeight: 800,
+          marginBottom: "8px",
+        }}
+      >
+        {title}
+      </div>
+      <div style={{ fontSize: "18px", fontWeight: 900 }}>{value}</div>
+    </div>
+  );
 }
