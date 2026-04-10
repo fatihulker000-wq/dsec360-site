@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextResponse } from "@next/server";
 import { cookies } from "next/headers";
 
 function getSupabase() {
@@ -9,19 +9,19 @@ function getSupabase() {
   );
 }
 
-type TrainingRow = {
+type UserRow = {
   id: string;
-  title: string | null;
-  description: string | null;
-  type: string | null;
-  duration_minutes: number | null;
-  content_url: string | null;
-  topics_text: string | null;
+  full_name: string | null;
+  email: string | null;
+  role: string | null;
+  company_id: string | null;
+  is_active: boolean | null;
+  created_at: string | null;
 };
 
-type AssignmentStatRow = {
-  training_id: string;
-  status: string | null;
+type CompanyRow = {
+  id: string;
+  name: string | null;
 };
 
 export async function GET() {
@@ -38,99 +38,87 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    const { data: trainings, error: trainingsError } = await supabase
-      .from("trainings")
-      .select(
-        "id, title, description, type, duration_minutes, content_url, topics_text"
-      )
-      .order("title", { ascending: true });
+    const { data, error } = await supabase
+      .from("users")
+      .select(`
+        id,
+        full_name,
+        email,
+        role,
+        company_id,
+        is_active,
+        created_at
+      `)
+      .order("created_at", { ascending: false });
 
-    if (trainingsError) {
-      console.error("Admin trainings fetch hatası:", trainingsError);
+    if (error) {
+      console.error("Admin users fetch hatası:", error);
       return NextResponse.json(
-        { error: "Eğitimler alınamadı." },
+        { error: "Kullanıcılar alınamadı." },
         { status: 500 }
       );
     }
 
-    const trainingRows = (trainings || []) as TrainingRow[];
+    const userRows = (data || []) as UserRow[];
 
-    const trainingIds = trainingRows.map((t) => t.id).filter(Boolean);
+    const companyIds = Array.from(
+      new Set(
+        userRows
+          .map((user) => (user.company_id ? String(user.company_id).trim() : ""))
+          .filter(Boolean)
+      )
+    );
 
-    let statsMap = new Map<
-      string,
-      {
-        assigned_count: number;
-        not_started_count: number;
-        in_progress_count: number;
-        completed_count: number;
-      }
-    >();
+    let companyMap = new Map<string, string>();
 
-    if (trainingIds.length > 0) {
-      const { data: assignmentStats, error: assignmentStatsError } = await supabase
-        .from("training_assignments")
-        .select("training_id, status")
-        .in("training_id", trainingIds);
+    if (companyIds.length > 0) {
+      const { data: companiesData, error: companiesError } = await supabase
+        .from("companies")
+        .select("id, name")
+        .in("id", companyIds);
 
-      if (assignmentStatsError) {
-        console.error("Training assignment stats fetch hatası:", assignmentStatsError);
+      if (companiesError) {
+        console.error("Companies fetch hatası:", companiesError);
       } else {
-        for (const row of (assignmentStats || []) as AssignmentStatRow[]) {
-          const trainingId = String(row.training_id);
-          const status = String(row.status || "not_started");
-
-          const current = statsMap.get(trainingId) || {
-            assigned_count: 0,
-            not_started_count: 0,
-            in_progress_count: 0,
-            completed_count: 0,
-          };
-
-          current.assigned_count += 1;
-
-          if (status === "completed") {
-            current.completed_count += 1;
-          } else if (status === "in_progress") {
-            current.in_progress_count += 1;
-          } else {
-            current.not_started_count += 1;
-          }
-
-          statsMap.set(trainingId, current);
-        }
+        const companies = (companiesData || []) as CompanyRow[];
+        companyMap = new Map(
+          companies.map((company) => [
+            String(company.id).trim(),
+            String(company.name || "").trim(),
+          ])
+        );
       }
     }
 
-    const normalized = trainingRows.map((t) => {
-      const stat = statsMap.get(String(t.id)) || {
-        assigned_count: 0,
-        not_started_count: 0,
-        in_progress_count: 0,
-        completed_count: 0,
-      };
+    const normalized = userRows.map((user) => {
+      const companyId = user.company_id ? String(user.company_id).trim() : null;
+      const companyName =
+        companyId && companyMap.get(companyId)
+          ? String(companyMap.get(companyId)).trim()
+          : null;
 
       return {
-        id: String(t.id),
-        title: (t.title || "Adsız Eğitim").trim(),
-        description: (t.description || "Açıklama bulunmuyor.").trim(),
-        type: (t.type || "online").trim(),
-        duration_minutes:
-          typeof t.duration_minutes === "number" ? t.duration_minutes : null,
-        content_url: (t.content_url || "").trim(),
-        topics_text: (t.topics_text || "").trim(),
-        assigned_count: stat.assigned_count,
-        not_started_count: stat.not_started_count,
-        in_progress_count: stat.in_progress_count,
-        completed_count: stat.completed_count,
+        id: String(user.id),
+        full_name: (user.full_name || "Adsız Kullanıcı").trim(),
+        email: (user.email || "").trim(),
+        role: (user.role || "").trim(),
+        company_id: companyId,
+        company: companyName || null,
+        is_active: Boolean(user.is_active),
+        created_at: user.created_at || null,
       };
     });
 
     return NextResponse.json({
       data: normalized,
+      stats: {
+        total_count: normalized.length,
+        active_count: normalized.filter((u) => u.is_active).length,
+        passive_count: normalized.filter((u) => !u.is_active).length,
+      },
     });
   } catch (error) {
-    console.error("Admin trainings genel hata:", error);
+    console.error("Admin users genel hata:", error);
     return NextResponse.json(
       { error: "Sunucu hatası oluştu." },
       { status: 500 }
