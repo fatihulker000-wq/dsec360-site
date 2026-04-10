@@ -19,6 +19,11 @@ type UserRow = {
   created_at: string | null;
 };
 
+type CompanyRow = {
+  id: string;
+  name: string | null;
+};
+
 export async function GET() {
   try {
     const cookieStore = await cookies();
@@ -33,18 +38,18 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-const { data, error } = await supabase
-  .from("users")
-  .select(`
-    id,
-    full_name,
-    email,
-    role,
-    company_id,
-    is_active,
-    created_at
-  `)
-  .order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("users")
+      .select(`
+        id,
+        full_name,
+        email,
+        role,
+        company_id,
+        is_active,
+        created_at
+      `)
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Admin users fetch hatası:", error);
@@ -54,16 +59,55 @@ const { data, error } = await supabase
       );
     }
 
-const normalized = ((data || []) as UserRow[]).map((user) => ({
-  id: String(user.id),
-  full_name: (user.full_name || "Adsız Kullanıcı").trim(),
-  email: (user.email || "").trim(),
-  role: (user.role || "").trim(),
-  company_id: user.company_id ? String(user.company_id).trim() : null,
-  company: null,
-  is_active: Boolean(user.is_active),
-  created_at: user.created_at || null,
-}));
+    const userRows = (data || []) as UserRow[];
+
+    const companyIds = Array.from(
+      new Set(
+        userRows
+          .map((user) => (user.company_id ? String(user.company_id).trim() : ""))
+          .filter(Boolean)
+      )
+    );
+
+    let companyMap = new Map<string, string>();
+
+    if (companyIds.length > 0) {
+      const { data: companiesData, error: companiesError } = await supabase
+        .from("companies")
+        .select("id, name")
+        .in("id", companyIds);
+
+      if (companiesError) {
+        console.error("Companies fetch hatası:", companiesError);
+      } else {
+        const companies = (companiesData || []) as CompanyRow[];
+        companyMap = new Map(
+          companies.map((company) => [
+            String(company.id).trim(),
+            String(company.name || "").trim(),
+          ])
+        );
+      }
+    }
+
+    const normalized = userRows.map((user) => {
+      const companyId = user.company_id ? String(user.company_id).trim() : null;
+      const companyName =
+        companyId && companyMap.get(companyId)
+          ? String(companyMap.get(companyId)).trim()
+          : null;
+
+      return {
+        id: String(user.id),
+        full_name: (user.full_name || "Adsız Kullanıcı").trim(),
+        email: (user.email || "").trim(),
+        role: (user.role || "").trim(),
+        company_id: companyId,
+        company: companyName || null,
+        is_active: Boolean(user.is_active),
+        created_at: user.created_at || null,
+      };
+    });
 
     return NextResponse.json({
       data: normalized,

@@ -13,7 +13,7 @@ type UserApiRow = {
 };
 
 type TrainingApiRow = {
-  id: string;
+  id?: string | null;
   title?: string | null;
   description?: string | null;
   type?: string | null;
@@ -87,11 +87,11 @@ function getRoleLabel(role?: string | null) {
 }
 
 function buildCompanyLabel(user: UserApiRow) {
-  if (user.company && user.company.trim()) return user.company.trim();
-  if (user.company_id && user.company_id.trim()) {
-    return `Firma ID: ${user.company_id.trim()}`;
+  if (user.company && user.company.trim()) {
+    return user.company.trim();
   }
-  return "Firma bilgisi yok";
+
+  return "Firma atanmamış";
 }
 
 function parseTopicsCount(topicsText?: string | null) {
@@ -148,94 +148,94 @@ export default function AdminParticipantsPage() {
     useState<TrainingRow | null>(null);
   const [assignSummary, setAssignSummary] = useState<AssignResponse | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setError("");
-        setLoading(true);
+  const loadAll = async () => {
+    try {
+      setError("");
+      setLoading(true);
 
-        const trainingsRes = await fetch("/api/admin/trainings", {
-          cache: "no-store",
-          credentials: "include",
-        });
+      const trainingsRes = await fetch("/api/admin/trainings", {
+        cache: "no-store",
+        credentials: "include",
+      });
 
-        if (trainingsRes.status === 401) {
-          window.location.href = "/admin/login";
-          return;
-        }
-
-        const trainingsJson = await trainingsRes.json();
-
-        if (!trainingsRes.ok) {
-          throw new Error(trainingsJson?.error || "Eğitim listesi alınamadı.");
-        }
-
-        const normalizedTrainings: TrainingRow[] = Array.isArray(trainingsJson?.data)
-          ? trainingsJson.data.map((t: TrainingApiRow) => ({
-              id: String(t.id),
-              title: (t.title || "Adsız Eğitim").trim(),
-              description: (t.description || "Açıklama bulunmuyor.").trim(),
-              type: (t.type || "online").trim(),
-              duration_minutes:
-                typeof t.duration_minutes === "number" ? t.duration_minutes : null,
-              content_url: (t.content_url || "").trim(),
-              topics_text: (t.topics_text || "").trim(),
-              assigned_count:
-                typeof t.assigned_count === "number" ? t.assigned_count : 0,
-              not_started_count:
-                typeof t.not_started_count === "number" ? t.not_started_count : 0,
-              in_progress_count:
-                typeof t.in_progress_count === "number" ? t.in_progress_count : 0,
-              completed_count:
-                typeof t.completed_count === "number" ? t.completed_count : 0,
-            }))
-          : [];
-
-        setTrainings(normalizedTrainings);
-
-        const usersRes = await fetch("/api/admin/users", {
-          cache: "no-store",
-          credentials: "include",
-        });
-
-        if (usersRes.status === 401) {
-          window.location.href = "/admin/login";
-          return;
-        }
-
-        const usersJson = await usersRes.json();
-
-        if (!usersRes.ok) {
-          setError(usersJson?.error || "Katılımcı listesi alınamadı.");
-          setUsers([]);
-          return;
-        }
-
-        const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
-          ? usersJson.data
-              .filter((u: UserApiRow) => String(u.role || "") === "training_user")
-              .map((u: UserApiRow) => ({
-                id: String(u.id),
-                full_name: (u.full_name || "Adsız Kullanıcı").trim(),
-                email: (u.email || "-").trim(),
-                company: buildCompanyLabel(u),
-                role: getRoleLabel(u.role),
-                is_active: Boolean(u.is_active),
-              }))
-          : [];
-
-        setUsers(normalizedUsers);
-      } catch (err) {
-        console.error(err);
-        setError(
-          err instanceof Error ? err.message : "Veriler alınırken hata oluştu."
-        );
-      } finally {
-        setLoading(false);
+      if (trainingsRes.status === 401) {
+        window.location.href = "/admin/login";
+        return;
       }
-    };
 
-    void load();
+      const trainingsJson = await trainingsRes.json();
+
+      if (!trainingsRes.ok) {
+        throw new Error(trainingsJson?.error || "Eğitim listesi alınamadı.");
+      }
+
+      const normalizedTrainings: TrainingRow[] = Array.isArray(trainingsJson?.data)
+        ? trainingsJson.data.map((t: TrainingApiRow) => ({
+            id: String(t.id || ""),
+            title: (t.title || "Adsız Eğitim").trim(),
+            description: (t.description || "Açıklama bulunmuyor.").trim(),
+            type: (t.type || "online").trim(),
+            duration_minutes:
+              typeof t.duration_minutes === "number" ? t.duration_minutes : null,
+            content_url: (t.content_url || "").trim(),
+            topics_text: (t.topics_text || "").trim(),
+            assigned_count:
+              typeof t.assigned_count === "number" ? t.assigned_count : 0,
+            not_started_count:
+              typeof t.not_started_count === "number" ? t.not_started_count : 0,
+            in_progress_count:
+              typeof t.in_progress_count === "number" ? t.in_progress_count : 0,
+            completed_count:
+              typeof t.completed_count === "number" ? t.completed_count : 0,
+          }))
+        : [];
+
+      setTrainings(normalizedTrainings);
+
+      const usersRes = await fetch("/api/admin/users", {
+        cache: "no-store",
+        credentials: "include",
+      });
+
+      if (usersRes.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      const usersJson = await usersRes.json();
+
+      if (!usersRes.ok) {
+        setError(usersJson?.error || "Katılımcı listesi alınamadı.");
+        setUsers([]);
+        return;
+      }
+
+      const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
+        ? usersJson.data
+            .filter((u: UserApiRow) => String(u.role || "") === "training_user")
+            .map((u: UserApiRow) => ({
+              id: String(u.id || ""),
+              full_name: (u.full_name || "Adsız Kullanıcı").trim(),
+              email: (u.email || "-").trim(),
+              company: buildCompanyLabel(u),
+              role: getRoleLabel(u.role),
+              is_active: Boolean(u.is_active),
+            }))
+        : [];
+
+      setUsers(normalizedUsers);
+    } catch (err) {
+      console.error(err);
+      setError(
+        err instanceof Error ? err.message : "Veriler alınırken hata oluştu."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadAll();
   }, []);
 
   useEffect(() => {
@@ -244,7 +244,9 @@ export default function AdminParticipantsPage() {
   }, [trainingId, trainings]);
 
   const companies = useMemo(() => {
-    const list = Array.from(new Set(users.map((u) => u.company.trim()).filter(Boolean)));
+    const list = Array.from(
+      new Set(users.map((u) => u.company.trim()).filter(Boolean))
+    );
     return list.sort((a, b) => a.localeCompare(b, "tr"));
   }, [users]);
 
@@ -252,7 +254,9 @@ export default function AdminParticipantsPage() {
     return users.filter((u) => {
       const text = `${u.full_name} ${u.email} ${u.company} ${u.role}`.toLowerCase();
       const matchesSearch = !search || text.includes(search.toLowerCase());
-      const matchesCompany = companyFilter === "all" ? true : u.company === companyFilter;
+      const matchesCompany =
+        companyFilter === "all" ? true : u.company === companyFilter;
+
       return matchesSearch && matchesCompany;
     });
   }, [users, search, companyFilter]);
@@ -278,9 +282,18 @@ export default function AdminParticipantsPage() {
 
   const trainingTotals = useMemo(() => {
     const totalAssigned = trainings.reduce((sum, t) => sum + t.assigned_count, 0);
-    const totalNotStarted = trainings.reduce((sum, t) => sum + t.not_started_count, 0);
-    const totalInProgress = trainings.reduce((sum, t) => sum + t.in_progress_count, 0);
-    const totalCompleted = trainings.reduce((sum, t) => sum + t.completed_count, 0);
+    const totalNotStarted = trainings.reduce(
+      (sum, t) => sum + t.not_started_count,
+      0
+    );
+    const totalInProgress = trainings.reduce(
+      (sum, t) => sum + t.in_progress_count,
+      0
+    );
+    const totalCompleted = trainings.reduce(
+      (sum, t) => sum + t.completed_count,
+      0
+    );
 
     return {
       totalAssigned,
@@ -292,7 +305,9 @@ export default function AdminParticipantsPage() {
 
   const toggleUser = (userId: string, checked: boolean) => {
     if (checked) {
-      setSelectedUsers((prev) => (prev.includes(userId) ? prev : [...prev, userId]));
+      setSelectedUsers((prev) =>
+        prev.includes(userId) ? prev : [...prev, userId]
+      );
     } else {
       setSelectedUsers((prev) => prev.filter((x) => x !== userId));
     }
@@ -354,34 +369,7 @@ export default function AdminParticipantsPage() {
       setAssignSummary(data);
       alert(data?.message || "Eğitim atandı ✅");
       setSelectedUsers([]);
-
-      // yeniden yükle
-      const trainingsRes = await fetch("/api/admin/trainings", {
-        cache: "no-store",
-        credentials: "include",
-      });
-      const trainingsJson = await trainingsRes.json();
-      if (trainingsRes.ok && Array.isArray(trainingsJson?.data)) {
-        const normalizedTrainings: TrainingRow[] = trainingsJson.data.map((t: TrainingApiRow) => ({
-          id: String(t.id),
-          title: (t.title || "Adsız Eğitim").trim(),
-          description: (t.description || "Açıklama bulunmuyor.").trim(),
-          type: (t.type || "online").trim(),
-          duration_minutes:
-            typeof t.duration_minutes === "number" ? t.duration_minutes : null,
-          content_url: (t.content_url || "").trim(),
-          topics_text: (t.topics_text || "").trim(),
-          assigned_count:
-            typeof t.assigned_count === "number" ? t.assigned_count : 0,
-          not_started_count:
-            typeof t.not_started_count === "number" ? t.not_started_count : 0,
-          in_progress_count:
-            typeof t.in_progress_count === "number" ? t.in_progress_count : 0,
-          completed_count:
-            typeof t.completed_count === "number" ? t.completed_count : 0,
-        }));
-        setTrainings(normalizedTrainings);
-      }
+      await loadAll();
     } catch (err) {
       console.error(err);
       alert("Sunucu hatası oluştu.");
@@ -401,19 +389,40 @@ export default function AdminParticipantsPage() {
             marginBottom: 20,
           }}
         >
-          <div style={badgeStyle("rgba(255,255,255,0.16)", "rgba(255,255,255,0.22)", "#fff")}>
+          <div
+            style={badgeStyle(
+              "rgba(255,255,255,0.16)",
+              "rgba(255,255,255,0.22)",
+              "#fff"
+            )}
+          >
             D-SEC Eğitim Yönetimi
           </div>
-          <h1 style={{ marginTop: 14, marginBottom: 8, fontSize: 36, fontWeight: 900 }}>
+          <h1
+            style={{ marginTop: 14, marginBottom: 8, fontSize: 36, fontWeight: 900 }}
+          >
             Eğitim Katılımcıları
           </h1>
-          <p style={{ margin: 0, color: "rgba(255,255,255,0.92)", lineHeight: 1.7 }}>
+          <p
+            style={{
+              margin: 0,
+              color: "rgba(255,255,255,0.92)",
+              lineHeight: 1.7,
+            }}
+          >
             Sadece eğitim alacak çalışanları listele, filtrele ve eğitime ata.
           </p>
         </div>
 
         {error ? (
-          <div style={{ ...cardStyle(), marginBottom: 20, color: BRAND.red, fontWeight: 700 }}>
+          <div
+            style={{
+              ...cardStyle(),
+              marginBottom: 20,
+              color: BRAND.red,
+              fontWeight: 700,
+            }}
+          >
             {error}
           </div>
         ) : null}
@@ -428,11 +437,15 @@ export default function AdminParticipantsPage() {
         >
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Katılımcı</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{users.length}</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
+              {users.length}
+            </div>
           </div>
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Eğitim</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>{trainings.length}</div>
+            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
+              {trainings.length}
+            </div>
           </div>
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Atama</div>
@@ -458,7 +471,9 @@ export default function AdminParticipantsPage() {
           }}
         >
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Eğitim</div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+              Eğitim
+            </div>
             <select
               value={trainingId}
               onChange={(e) => setTrainingId(e.target.value)}
@@ -494,11 +509,27 @@ export default function AdminParticipantsPage() {
 
             {selectedTrainingInfo ? (
               <>
-                <div style={{ fontSize: 17, fontWeight: 900 }}>{selectedTrainingInfo.title}</div>
-                <div style={{ marginTop: 8, fontSize: 13, color: BRAND.muted, lineHeight: 1.6 }}>
+                <div style={{ fontSize: 17, fontWeight: 900 }}>
+                  {selectedTrainingInfo.title}
+                </div>
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 13,
+                    color: BRAND.muted,
+                    lineHeight: 1.6,
+                  }}
+                >
                   {selectedTrainingInfo.description}
                 </div>
-                <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <div
+                  style={{
+                    marginTop: 10,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
                   <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
                     Tür: {selectedTrainingInfo.type}
                   </span>
@@ -514,7 +545,9 @@ export default function AdminParticipantsPage() {
                 </div>
               </>
             ) : (
-              <div style={{ fontSize: 13, color: BRAND.muted }}>Henüz eğitim seçilmedi.</div>
+              <div style={{ fontSize: 13, color: BRAND.muted }}>
+                Henüz eğitim seçilmedi.
+              </div>
             )}
           </div>
         </div>
@@ -529,7 +562,9 @@ export default function AdminParticipantsPage() {
           }}
         >
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Ara</div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+              Ara
+            </div>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -545,7 +580,9 @@ export default function AdminParticipantsPage() {
           </div>
 
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Firma</div>
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+              Firma
+            </div>
             <select
               value={companyFilter}
               onChange={(e) => setCompanyFilter(e.target.value)}
@@ -579,7 +616,9 @@ export default function AdminParticipantsPage() {
               flexWrap: "wrap",
             }}
           >
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>Katılımcı Seçimi</h2>
+            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
+              Katılımcı Seçimi
+            </h2>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <label
@@ -641,7 +680,9 @@ export default function AdminParticipantsPage() {
                       gap: 12,
                       padding: 16,
                       borderRadius: 16,
-                      border: checked ? "2px solid #2563eb" : `1px solid ${BRAND.border}`,
+                      border: checked
+                        ? "2px solid #2563eb"
+                        : `1px solid ${BRAND.border}`,
                       background: checked ? "#eff6ff" : "#f9fafb",
                       cursor: "pointer",
                     }}
@@ -654,7 +695,9 @@ export default function AdminParticipantsPage() {
                     />
 
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 16, fontWeight: 900 }}>{u.full_name}</div>
+                      <div style={{ fontSize: 16, fontWeight: 900 }}>
+                        {u.full_name}
+                      </div>
                       <div
                         style={{
                           marginTop: 6,
@@ -667,7 +710,14 @@ export default function AdminParticipantsPage() {
                         {u.email}
                       </div>
 
-                      <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <div
+                        style={{
+                          marginTop: 8,
+                          display: "flex",
+                          gap: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
                         <span style={badgeStyle("#fff", "#e5e7eb", "#374151")}>
                           {u.company}
                         </span>
@@ -710,7 +760,9 @@ export default function AdminParticipantsPage() {
 
           <div style={{ ...cardStyle(), padding: 14 }}>
             <div style={{ fontSize: 12, color: BRAND.muted }}>Seçilen Kişi</div>
-            <div style={{ fontSize: 24, fontWeight: 900, marginTop: 8 }}>{selectedCount}</div>
+            <div style={{ fontSize: 24, fontWeight: 900, marginTop: 8 }}>
+              {selectedCount}
+            </div>
           </div>
 
           <div style={{ ...cardStyle(), padding: 14 }}>
@@ -742,7 +794,14 @@ export default function AdminParticipantsPage() {
               <div style={{ fontSize: 14, fontWeight: 900, color: BRAND.text }}>
                 Atama Özeti
               </div>
-              <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted, lineHeight: 1.6 }}>
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 13,
+                  color: BRAND.muted,
+                  lineHeight: 1.6,
+                }}
+              >
                 Seçilen eğitim: {selectedTrainingInfo?.title || "-"}
                 <br />
                 Seçilen katılımcı sayısı: {selectedCount}
@@ -757,11 +816,15 @@ export default function AdminParticipantsPage() {
                 borderRadius: 14,
                 padding: "14px 20px",
                 background:
-                  !trainingId || selectedCount === 0 || assigning ? "#9ca3af" : "#16a34a",
+                  !trainingId || selectedCount === 0 || assigning
+                    ? "#9ca3af"
+                    : "#16a34a",
                 color: "#fff",
                 fontWeight: 900,
                 cursor:
-                  !trainingId || selectedCount === 0 || assigning ? "not-allowed" : "pointer",
+                  !trainingId || selectedCount === 0 || assigning
+                    ? "not-allowed"
+                    : "pointer",
                 minWidth: 180,
               }}
             >
@@ -783,7 +846,9 @@ export default function AdminParticipantsPage() {
               }}
             >
               <div>
-                <h3 style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>Son Atama Sonucu</h3>
+                <h3 style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>
+                  Son Atama Sonucu
+                </h3>
                 <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
                   {assignSummary.message || "İşlem sonucu hazır."}
                 </div>
@@ -817,7 +882,9 @@ export default function AdminParticipantsPage() {
               ].map(([label, value]) => (
                 <div key={label as string} style={{ ...cardStyle(), padding: 14 }}>
                   <div style={{ fontSize: 12, color: BRAND.muted }}>{label}</div>
-                  <div style={{ fontSize: 24, fontWeight: 900, marginTop: 6 }}>{value}</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, marginTop: 6 }}>
+                    {value}
+                  </div>
                 </div>
               ))}
             </div>
@@ -854,7 +921,8 @@ export default function AdminParticipantsPage() {
                       key={`${item.userId}-${index}`}
                       style={{
                         padding: "14px 16px",
-                        borderTop: index === 0 ? "none" : "1px solid #f1f5f9",
+                        borderTop:
+                          index === 0 ? "none" : "1px solid #f1f5f9",
                         display: "flex",
                         justifyContent: "space-between",
                         gap: 12,

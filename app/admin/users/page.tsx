@@ -8,6 +8,7 @@ type UserApiRow = {
   email?: string | null;
   role?: string | null;
   company_id?: string | null;
+  company?: string | null;
   is_active?: boolean | null;
   created_at?: string | null;
 };
@@ -28,6 +29,7 @@ type UserRow = {
   email: string;
   role: string;
   company_id: string;
+  company: string;
   is_active: boolean;
   created_at: string;
 };
@@ -124,7 +126,7 @@ export default function AdminUsersPage() {
       setCompanies(
         Array.isArray(companiesJson?.data)
           ? companiesJson.data.map((c: { id: string; name: string }) => ({
-              id: String(c.id),
+              id: String(c.id || ""),
               name: String(c.name || "").trim(),
             }))
           : []
@@ -145,6 +147,7 @@ export default function AdminUsersPage() {
               email: String(u.email || "-").trim(),
               role: String(u.role || "").trim(),
               company_id: String(u.company_id || "").trim(),
+              company: String(u.company || "").trim(),
               is_active: Boolean(u.is_active),
               created_at: String(u.created_at || ""),
             }))
@@ -172,8 +175,7 @@ export default function AdminUsersPage() {
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      const text =
-        `${u.full_name} ${u.email} ${u.role} ${u.company_id}`.toLowerCase();
+      const text = `${u.full_name} ${u.email} ${u.role} ${u.company}`.toLowerCase();
 
       const matchesSearch = !search || text.includes(search.toLowerCase());
       const matchesRole = roleFilter === "all" ? true : u.role === roleFilter;
@@ -475,7 +477,7 @@ export default function AdminUsersPage() {
                       </span>
 
                       <span style={badgeStyle("#fff7ed", "#fed7aa", "#9a3412")}>
-                        {u.company_id || "Firma yok"}
+                        {u.company || "Firma yok"}
                       </span>
                     </div>
                   </div>
