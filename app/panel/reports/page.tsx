@@ -238,6 +238,85 @@ function MiniBarChart({
   );
 }
 
+function PdfMiniBarCard({
+  title,
+  items,
+  color,
+}: {
+  title: string;
+  items: ChartItem[];
+  color: string;
+}) {
+  const maxValue = Math.max(...items.map((item) => item.value), 0);
+
+  return (
+    <div
+      style={{
+        border: "1px solid #e5e7eb",
+        borderRadius: 14,
+        padding: 14,
+        background: "#fff",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 16,
+          fontWeight: 900,
+          marginBottom: 12,
+          color: "#111827",
+        }}
+      >
+        {title}
+      </div>
+
+      {items.length === 0 ? (
+        <div style={{ fontSize: 12, color: "#6b7280" }}>Veri bulunamadı.</div>
+      ) : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {items.map((item) => {
+            const width =
+              maxValue > 0 ? Math.max((item.value / maxValue) * 100, 6) : 6;
+
+            return (
+              <div key={item.label}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    marginBottom: 5,
+                    fontSize: 12,
+                  }}
+                >
+                  <span>{item.label}</span>
+                  <strong style={{ color }}>{item.value}</strong>
+                </div>
+
+                <div
+                  style={{
+                    height: 8,
+                    borderRadius: 999,
+                    background: "#eef2f7",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${width}%`,
+                      height: "100%",
+                      background: color,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PanelReportsPage() {
   const [scope, setScope] = useState<ScopeResponse | null>(null);
   const [report, setReport] = useState<ReportResponse | null>(null);
@@ -287,7 +366,9 @@ export default function PanelReportsPage() {
       setError("");
 
       const res = await fetch(
-        `/api/admin/reports/company-training-matrix?companyId=${encodeURIComponent(companyId)}`,
+        `/api/admin/reports/company-training-matrix?companyId=${encodeURIComponent(
+          companyId
+        )}`,
         {
           method: "GET",
           cache: "no-store",
@@ -368,9 +449,9 @@ export default function PanelReportsPage() {
     const total = report?.summary?.total_assignments || 0;
     const missing =
       (report?.summary?.not_started_count || 0) +
-      ((report?.summary?.total_employees || 0) *
+      (report?.summary?.total_employees || 0) *
         (report?.summary?.total_trainings || 0) -
-        (report?.summary?.total_assignments || 0));
+      (report?.summary?.total_assignments || 0);
 
     const rate = total > 0 ? Math.round((missing / total) * 100) : 0;
 
@@ -460,7 +541,11 @@ export default function PanelReportsPage() {
 
         report.matrix?.forEach((row) => {
           const found = row.statuses.find((s) => s.training_id === training.id);
-          if (!found || found.status === "Başlamadı" || found.status === "Atanmadı") {
+          if (
+            !found ||
+            found.status === "Başlamadı" ||
+            found.status === "Atanmadı"
+          ) {
             missingCount += 1;
           }
         });
@@ -497,24 +582,6 @@ export default function PanelReportsPage() {
       .slice(0, 6);
   }, [report]);
 
-  const missingEmployeesForPdf = useMemo(() => {
-    return filteredMatrix
-      .map((row) => {
-        const missingItems = row.statuses.filter(
-          (s) => s.status === "Başlamadı" || s.status === "Atanmadı"
-        );
-
-        return {
-          full_name: row.full_name,
-          email: row.email,
-          missing_count: missingItems.length,
-        };
-      })
-      .filter((item) => item.missing_count > 0)
-      .sort((a, b) => b.missing_count - a.missing_count)
-      .slice(0, 12);
-  }, [filteredMatrix]);
-
   const pdfMatrixRows = useMemo(() => {
     return filteredMatrix.slice(0, 20);
   }, [filteredMatrix]);
@@ -526,10 +593,17 @@ export default function PanelReportsPage() {
   const exportExcel = () => {
     if (!report?.trainings || !filteredMatrix.length) return;
 
-    const headers = ["Çalışan", "E-Posta", ...report.trainings.map((t) => t.title)];
+    const headers = [
+      "Çalışan",
+      "E-Posta",
+      ...report.trainings.map((t) => t.title),
+    ];
 
     const rows = filteredMatrix.map((row) => {
-      const statusMap = new Map(row.statuses.map((s) => [s.training_id, s.status]));
+      const statusMap = new Map(
+        row.statuses.map((s) => [s.training_id, s.status])
+      );
+
       return [
         row.full_name,
         row.email,
@@ -557,85 +631,105 @@ export default function PanelReportsPage() {
     URL.revokeObjectURL(url);
   };
 
-const exportPDF = async () => {
-  const { default: jsPDF } = await import("jspdf");
-  const { default: html2canvas } = await import("html2canvas");
+  const exportPDF = async () => {
+    const { default: jsPDF } = await import("jspdf");
+    const { default: html2canvas } = await import("html2canvas");
 
-  const pdf = new jsPDF("p", "mm", "a4");
+    const pdf = new jsPDF("p", "mm", "a4");
 
-  const summarySection = document.getElementById("panel-report-pdf-summary");
-  const matrixSection = document.getElementById("panel-report-pdf-matrix");
+    const summarySection = document.getElementById("panel-report-pdf-summary");
+    const matrixSection = document.getElementById("panel-report-pdf-matrix");
 
-  if (summarySection) {
-    const canvasSummary = await html2canvas(summarySection, {
-      scale: 2,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      windowWidth: summarySection.scrollWidth,
-    });
+    if (summarySection) {
+      const canvasSummary = await html2canvas(summarySection, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        windowWidth: summarySection.scrollWidth,
+      });
 
-    const imgSummary = canvasSummary.toDataURL("image/png");
+      const imgSummary = canvasSummary.toDataURL("image/png");
 
-    const pageWidth = 210;
-    const pageHeight = 297;
-    const margin = 8;
-    const usableWidth = pageWidth - margin * 2;
-    const usableHeight = pageHeight - margin * 2;
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 8;
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2;
 
-    let imgWidth = usableWidth;
-    let imgHeight = (canvasSummary.height * imgWidth) / canvasSummary.width;
+      let imgWidth = usableWidth;
+      let imgHeight = (canvasSummary.height * imgWidth) / canvasSummary.width;
 
-    if (imgHeight > usableHeight) {
-      imgHeight = usableHeight;
-      imgWidth = (canvasSummary.width * imgHeight) / canvasSummary.height;
+      if (imgHeight > usableHeight) {
+        imgHeight = usableHeight;
+        imgWidth = (canvasSummary.width * imgHeight) / canvasSummary.height;
+      }
+
+      const x = (pageWidth - imgWidth) / 2;
+      const y = margin;
+
+      pdf.addImage(imgSummary, "PNG", x, y, imgWidth, imgHeight);
     }
 
-    const x = (pageWidth - imgWidth) / 2;
-    const y = margin;
+    if (matrixSection) {
+      const canvasMatrix = await html2canvas(matrixSection, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        windowWidth: matrixSection.scrollWidth,
+      });
 
-    pdf.addImage(imgSummary, "PNG", x, y, imgWidth, imgHeight);
-  }
+      const imgMatrix = canvasMatrix.toDataURL("image/png");
 
-  if (matrixSection) {
-    const canvasMatrix = await html2canvas(matrixSection, {
-      scale: 2,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      windowWidth: matrixSection.scrollWidth,
-    });
+      pdf.addPage();
 
-    const imgMatrix = canvasMatrix.toDataURL("image/png");
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 8;
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2;
 
-    pdf.addPage();
+      let imgWidth = usableWidth;
+      let imgHeight = (canvasMatrix.height * imgWidth) / canvasMatrix.width;
 
-    const pageWidth = 210;
-    const pageHeight = 297;
-    const margin = 8;
-    const usableWidth = pageWidth - margin * 2;
-    const usableHeight = pageHeight - margin * 2;
+      if (imgHeight > usableHeight) {
+        imgHeight = usableHeight;
+        imgWidth = (canvasMatrix.width * imgHeight) / canvasMatrix.height;
+      }
 
-    let imgWidth = usableWidth;
-    let imgHeight = (canvasMatrix.height * imgWidth) / canvasMatrix.width;
+      const x = (pageWidth - imgWidth) / 2;
+      const y = margin;
 
-    if (imgHeight > usableHeight) {
-      imgHeight = usableHeight;
-      imgWidth = (canvasMatrix.width * imgHeight) / canvasMatrix.height;
+      pdf.addImage(imgMatrix, "PNG", x, y, imgWidth, imgHeight);
     }
 
-    const x = (pageWidth - imgWidth) / 2;
-    const y = margin;
+    pdf.save("firma-egitim-raporu.pdf");
+  };
 
-    pdf.addImage(imgMatrix, "PNG", x, y, imgWidth, imgHeight);
+  if (loadingScope || loadingReport) {
+    return (
+      <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
+        <div style={{ maxWidth: 1500, margin: "0 auto" }}>
+          <div style={cardStyle()}>Yükleniyor...</div>
+        </div>
+      </main>
+    );
   }
 
-  pdf.save("firma-egitim-raporu.pdf");
-};
+  if (error) {
+    return (
+      <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
+        <div style={{ maxWidth: 1500, margin: "0 auto" }}>
+          <div style={{ ...cardStyle(), color: BRAND.red, fontWeight: 800 }}>
+            {error}
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
       <div style={{ maxWidth: 1500, margin: "0 auto" }}>
-        
-
         <div
           style={{
             display: "flex",
@@ -751,7 +845,6 @@ const exportPDF = async () => {
         </div>
 
         <div
-        id="panel-report-top"
           style={{
             display: "grid",
             gridTemplateColumns: "1.05fr 0.95fr",
@@ -959,8 +1052,6 @@ const exportPDF = async () => {
             marginBottom: 20,
           }}
         >
-
-         
           <MiniBarChart
             title="Atama Durum Dağılımı"
             items={trainingStatusDistribution}
@@ -1011,7 +1102,9 @@ const exportPDF = async () => {
                   gap: 12,
                 }}
               >
-                <span style={{ color: BRAND.muted }}>Tüm eğitimleri tamamlayan</span>
+                <span style={{ color: BRAND.muted }}>
+                  Tüm eğitimleri tamamlayan
+                </span>
                 <strong style={{ color: BRAND.green }}>
                   {employeeStatusSummary.completed}
                 </strong>
@@ -1024,7 +1117,9 @@ const exportPDF = async () => {
                   gap: 12,
                 }}
               >
-                <span style={{ color: BRAND.muted }}>En az bir eğitimde devam eden</span>
+                <span style={{ color: BRAND.muted }}>
+                  En az bir eğitimde devam eden
+                </span>
                 <strong style={{ color: BRAND.blue }}>
                   {employeeStatusSummary.inProgress}
                 </strong>
@@ -1186,8 +1281,7 @@ const exportPDF = async () => {
           </div>
         </div>
 
-        
-          <div style={{ ...cardStyle(), marginBottom: 20 }}>
+        <div style={{ ...cardStyle(), marginBottom: 20 }}>
           <div
             style={{
               display: "grid",
@@ -1241,142 +1335,531 @@ const exportPDF = async () => {
           </div>
         </div>
 
-<div style={cardStyle()} id="panel-report-matrix">
-  <h2
-    style={{
-      marginTop: 0,
-      marginBottom: 16,
-      fontSize: 24,
-      fontWeight: 900,
-    }}
-  >
-    Eğitim Durum Matrisi
-  </h2>
-
-  <div style={{ overflowX: "auto", width: "100%" }}>
-    <table
-      style={{
-        width: "100%",
-        borderCollapse: "collapse",
-        minWidth: 900,
-      }}
-    >
-      <thead>
-        <tr>
-          <th
+        <div style={cardStyle()} id="panel-report-matrix">
+          <h2
             style={{
-              textAlign: "left",
-              padding: 12,
-              borderBottom: `1px solid ${BRAND.border}`,
-              background: "#f9fafb",
-              position: "sticky",
-              left: 0,
-              zIndex: 1,
+              marginTop: 0,
+              marginBottom: 16,
+              fontSize: 24,
+              fontWeight: 900,
             }}
           >
-            Çalışan
-          </th>
+            Eğitim Durum Matrisi
+          </h2>
 
-          {(report?.trainings || []).map((training) => (
-            <th
-              key={training.id}
+          <div style={{ overflowX: "auto", width: "100%" }}>
+            <table
               style={{
-                textAlign: "center",
-                padding: 12,
-                borderBottom: `1px solid ${BRAND.border}`,
-                background: "#f9fafb",
-                minWidth: 160,
+                width: "100%",
+                borderCollapse: "collapse",
+                minWidth: 900,
               }}
             >
-              {training.title}
-            </th>
-          ))}
-        </tr>
-      </thead>
+              <thead>
+                <tr>
+                  <th
+                    style={{
+                      textAlign: "left",
+                      padding: 12,
+                      borderBottom: `1px solid ${BRAND.border}`,
+                      background: "#f9fafb",
+                      position: "sticky",
+                      left: 0,
+                      zIndex: 1,
+                    }}
+                  >
+                    Çalışan
+                  </th>
 
-      <tbody>
-        {filteredMatrix.map((row) => (
-          <tr key={row.user_id}>
-            <td
+                  {(report?.trainings || []).map((training) => (
+                    <th
+                      key={training.id}
+                      style={{
+                        textAlign: "center",
+                        padding: 12,
+                        borderBottom: `1px solid ${BRAND.border}`,
+                        background: "#f9fafb",
+                        minWidth: 160,
+                      }}
+                    >
+                      {training.title}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredMatrix.map((row) => (
+                  <tr key={row.user_id}>
+                    <td
+                      style={{
+                        padding: 12,
+                        borderBottom: `1px solid ${BRAND.border}`,
+                        background: "#fff",
+                        position: "sticky",
+                        left: 0,
+                        zIndex: 1,
+                        minWidth: 220,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 800,
+                          color: BRAND.text,
+                        }}
+                      >
+                        {row.full_name}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: BRAND.muted,
+                          marginTop: 4,
+                        }}
+                      >
+                        {row.email || "-"}
+                      </div>
+                    </td>
+
+                    {row.statuses.map((cell) => (
+                      <td
+                        key={`${row.user_id}-${cell.training_id}`}
+                        style={{
+                          padding: 12,
+                          borderBottom: `1px solid ${BRAND.border}`,
+                          textAlign: "center",
+                        }}
+                      >
+                        {badge(cell.status)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {filteredMatrix.length === 0 ? (
+            <div style={{ marginTop: 16, color: BRAND.muted }}>
+              Filtreye uygun çalışan bulunamadı.
+            </div>
+          ) : null}
+        </div>
+
+        <div
+          id="panel-report-pdf-summary"
+          style={{
+            position: "fixed",
+            left: "-10000px",
+            top: 0,
+            width: "794px",
+            background: "#ffffff",
+            padding: "18px",
+            color: "#111827",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{ width: "100%", background: "#ffffff" }}>
+            <div
               style={{
-                padding: 12,
-                borderBottom: `1px solid ${BRAND.border}`,
-                background: "#fff",
-                position: "sticky",
-                left: 0,
-                zIndex: 1,
-                minWidth: 220,
+                borderRadius: 14,
+                padding: 16,
+                marginBottom: 12,
+                color: "#fff",
+                background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
               }}
             >
               <div
                 style={{
-                  fontWeight: 800,
-                  color: BRAND.text,
+                  fontSize: 11,
+                  fontWeight: 900,
+                  opacity: 0.95,
+                  marginBottom: 8,
                 }}
               >
-                {row.full_name}
+                D-SEC • Firma Eğitim Raporu
+              </div>
+
+              <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 6 }}>
+                Kurumsal Eğitim Durum Özeti
               </div>
 
               <div
                 style={{
                   fontSize: 12,
-                  color: BRAND.muted,
-                  marginTop: 4,
+                  lineHeight: 1.55,
+                  opacity: 0.95,
                 }}
               >
-                {row.email || "-"}
+                Firma bazlı eğitim tamamlama, eksik eğitim yoğunluğu ve aksiyon
+                özeti
               </div>
-            </td>
+            </div>
 
-            {row.statuses.map((cell) => (
-              <td
-                key={`${row.user_id}-${cell.training_id}`}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+                marginBottom: 10,
+              }}
+            >
+              <div
                 style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
                   padding: 12,
-                  borderBottom: `1px solid ${BRAND.border}`,
-                  textAlign: "center",
+                  background: "#fff",
                 }}
               >
-                {badge(cell.status)}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
+                <div
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 900,
+                    marginBottom: 10,
+                  }}
+                >
+                  Firma Künyesi
+                </div>
 
-  {filteredMatrix.length === 0 ? (
-    <div style={{ marginTop: 16, color: BRAND.muted }}>
-      Filtreye uygun çalışan bulunamadı.
-    </div>
-  ) : null}
-</div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                    fontSize: 12,
+                  }}
+                >
+                  <div>
+                    <div style={{ color: "#6b7280", fontSize: 10 }}>Firma</div>
+                    <div style={{ marginTop: 3, fontWeight: 800 }}>
+                      {report?.company?.name || "-"}
+                    </div>
+                  </div>
 
-<div
-        id="panel-report-pdf-summary"
-        style={{
-          position: "fixed",
-          left: "-10000px",
-          top: 0,
-          width: "794px",
-          background: "#ffffff",
-          padding: "24px",
-          color: "#111827",
-          boxSizing: "border-box",
-        }}
-      >
+                  <div>
+                    <div style={{ color: "#6b7280", fontSize: 10 }}>
+                      Şirket Ünvanı
+                    </div>
+                    <div style={{ marginTop: 3, fontWeight: 700 }}>
+                      {report?.company?.company_title || "-"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ color: "#6b7280", fontSize: 10 }}>Adres</div>
+                    <div style={{ marginTop: 3, fontWeight: 700 }}>
+                      {report?.company?.address || "-"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ color: "#6b7280", fontSize: 10 }}>
+                      İşveren Vekili
+                    </div>
+                    <div style={{ marginTop: 3, fontWeight: 700 }}>
+                      {report?.company?.employer_representative || "-"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  borderRadius: 12,
+                  padding: 12,
+                  color: "#fff",
+                  background: executiveTone.bg,
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-flex",
+                    padding: "5px 9px",
+                    borderRadius: 999,
+                    background: "rgba(255,255,255,0.14)",
+                    border: "1px solid rgba(255,255,255,0.22)",
+                    fontSize: 10,
+                    fontWeight: 900,
+                    marginBottom: 10,
+                  }}
+                >
+                  {executiveTone.label}
+                </div>
+
+                <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 8 }}>
+                  Yönetici Özeti
+                </div>
+
+                <div style={{ fontSize: 12, lineHeight: 1.55 }}>
+                  {executiveTone.text}
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gap: 8,
+                    marginTop: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      borderRadius: 10,
+                      padding: 10,
+                      background: "rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    <div style={{ fontSize: 10, opacity: 0.95 }}>Çalışan</div>
+                    <div style={{ marginTop: 4, fontWeight: 900, fontSize: 18 }}>
+                      {report?.company?.employee_count || 0}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      borderRadius: 10,
+                      padding: 10,
+                      background: "rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    <div style={{ fontSize: 10, opacity: 0.95 }}>Tamamlama</div>
+                    <div style={{ marginTop: 4, fontWeight: 900, fontSize: 18 }}>
+                      %{formatPercent(completionRate)}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      borderRadius: 10,
+                      padding: 10,
+                      background: "rgba(255,255,255,0.12)",
+                    }}
+                  >
+                    <div style={{ fontSize: 10, opacity: 0.95 }}>Eksik Oran</div>
+                    <div style={{ marginTop: 4, fontWeight: 900, fontSize: 18 }}>
+                      %{formatPercent(missingRate)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: 8,
+                marginBottom: 10,
+              }}
+            >
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 10,
+                  background: "#fff",
+                }}
+              >
+                <div style={{ fontSize: 10, color: "#6b7280" }}>Toplam Atama</div>
+                <div style={{ marginTop: 4, fontSize: 20, fontWeight: 900 }}>
+                  {report?.summary?.total_assignments || 0}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 10,
+                  background: "#fff",
+                }}
+              >
+                <div style={{ fontSize: 10, color: "#6b7280" }}>Tamamlandı</div>
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 20,
+                    fontWeight: 900,
+                    color: BRAND.green,
+                  }}
+                >
+                  {report?.summary?.completed_count || 0}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 10,
+                  background: "#fff",
+                }}
+              >
+                <div style={{ fontSize: 10, color: "#6b7280" }}>Devam Ediyor</div>
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 20,
+                    fontWeight: 900,
+                    color: BRAND.blue,
+                  }}
+                >
+                  {report?.summary?.in_progress_count || 0}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 10,
+                  background: "#fff",
+                }}
+              >
+                <div style={{ fontSize: 10, color: "#6b7280" }}>Başlamadı</div>
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 20,
+                    fontWeight: 900,
+                    color: BRAND.amber,
+                  }}
+                >
+                  {report?.summary?.not_started_count || 0}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+                marginBottom: 10,
+              }}
+            >
+              <PdfMiniBarCard
+                title="Atama Durum Dağılımı"
+                items={trainingStatusDistribution}
+                color={BRAND.red}
+              />
+
+              <PdfMiniBarCard
+                title="Eksik Eğitim Yoğunluğu"
+                items={missingByTraining}
+                color={BRAND.amber}
+              />
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+                marginBottom: 10,
+              }}
+            >
+              <PdfMiniBarCard
+                title="Tamamlama Gücü"
+                items={progressByTraining}
+                color={BRAND.green}
+              />
+
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 14,
+                  padding: 14,
+                  background: "#fff",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 900,
+                    marginBottom: 12,
+                  }}
+                >
+                  Çalışan Bazlı Görünüm
+                </div>
+
+                <div style={{ display: "grid", gap: 10, fontSize: 12 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span>Tüm eğitimleri tamamlayan</span>
+                    <strong style={{ color: BRAND.green }}>
+                      {employeeStatusSummary.completed}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span>En az bir eğitimde devam eden</span>
+                    <strong style={{ color: BRAND.blue }}>
+                      {employeeStatusSummary.inProgress}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span>Eksik eğitimi olan</span>
+                    <strong style={{ color: BRAND.amber }}>
+                      {employeeStatusSummary.missing}
+                    </strong>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 8,
+                      paddingTop: 8,
+                      borderTop: "1px solid #eef2f7",
+                      color: "#6b7280",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Bu rapor; firma eğitim sorumlusunun eksik eğitim yoğunluğu,
+                    çalışan bazlı durum ve eğitim tamamlama seviyesini tek alanda
+                    görmesini sağlar.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div
+          id="panel-report-pdf-matrix"
           style={{
-            width: "100%",
+            position: "fixed",
+            left: "-10000px",
+            top: 0,
+            width: "794px",
             background: "#ffffff",
+            padding: "18px",
+            color: "#111827",
+            boxSizing: "border-box",
           }}
         >
           <div
             style={{
-              ...cardStyle(),
-              marginBottom: 16,
-              padding: 16,
+              border: "1px solid #e5e7eb",
+              borderRadius: 14,
+              padding: 14,
+              background: "#fff",
             }}
           >
             <h2
@@ -1387,392 +1870,107 @@ const exportPDF = async () => {
                 fontWeight: 900,
               }}
             >
-              Firma Künyesi
+              Eğitim Durum Matrisi
             </h2>
 
-            <div
+            <table
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12,
+                width: "100%",
+                borderCollapse: "collapse",
+                tableLayout: "fixed",
+                fontSize: 9,
               }}
             >
-              <div>
-                <div style={{ fontSize: 11, color: BRAND.muted }}>Firma</div>
-                <div style={{ marginTop: 4, fontWeight: 800 }}>
-                  {report?.company?.name || "-"}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: 11, color: BRAND.muted }}>
-                  Şirket Ünvanı
-                </div>
-                <div style={{ marginTop: 4, fontWeight: 700 }}>
-                  {report?.company?.company_title || "-"}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: 11, color: BRAND.muted }}>Adres</div>
-                <div style={{ marginTop: 4, fontWeight: 700 }}>
-                  {report?.company?.address || "-"}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: 11, color: BRAND.muted }}>
-                  İşveren Vekili
-                </div>
-                <div style={{ marginTop: 4, fontWeight: 700 }}>
-                  {report?.company?.employer_representative || "-"}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              ...cardStyle(),
-              marginBottom: 16,
-              background: executiveTone.bg,
-              color: "#fff",
-              border: "none",
-              padding: 16,
-            }}
-          >
-            <div
-              style={{
-                display: "inline-flex",
-                padding: "6px 10px",
-                borderRadius: 999,
-                background: "rgba(255,255,255,0.14)",
-                border: "1px solid rgba(255,255,255,0.22)",
-                fontSize: 11,
-                fontWeight: 900,
-                marginBottom: 10,
-              }}
-            >
-              {executiveTone.label}
-            </div>
-
-            <div style={{ fontSize: 22, fontWeight: 900 }}>Yönetici Özeti</div>
-            <div style={{ marginTop: 8, lineHeight: 1.6, fontSize: 13 }}>
-              {executiveTone.text}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: 10,
-              marginBottom: 16,
-            }}
-          >
-            <div style={{ ...cardStyle(), padding: 14 }}>
-              <div style={{ fontSize: 11, color: BRAND.muted }}>Toplam Atama</div>
-              <div style={{ marginTop: 6, fontSize: 22, fontWeight: 900 }}>
-                {report?.summary?.total_assignments || 0}
-              </div>
-            </div>
-
-            <div style={{ ...cardStyle(), padding: 14 }}>
-              <div style={{ fontSize: 11, color: BRAND.muted }}>Tamamlandı</div>
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 22,
-                  fontWeight: 900,
-                  color: BRAND.green,
-                }}
-              >
-                {report?.summary?.completed_count || 0}
-              </div>
-            </div>
-
-            <div style={{ ...cardStyle(), padding: 14 }}>
-              <div style={{ fontSize: 11, color: BRAND.muted }}>Devam Ediyor</div>
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 22,
-                  fontWeight: 900,
-                  color: BRAND.blue,
-                }}
-              >
-                {report?.summary?.in_progress_count || 0}
-              </div>
-            </div>
-
-            <div style={{ ...cardStyle(), padding: 14 }}>
-              <div style={{ fontSize: 11, color: BRAND.muted }}>Başlamadı</div>
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 22,
-                  fontWeight: 900,
-                  color: BRAND.amber,
-                }}
-              >
-                {report?.summary?.not_started_count || 0}
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-              marginBottom: 16,
-            }}
-          >
-            <MiniBarChart
-              title="Atama Durum Dağılımı"
-              items={trainingStatusDistribution}
-              color={BRAND.red}
-              emptyText="Durum verisi bulunamadı."
-            />
-
-            <MiniBarChart
-              title="Eksik Eğitim Yoğunluğu"
-              items={missingByTraining}
-              color={BRAND.amber}
-              emptyText="Eksik eğitim verisi bulunamadı."
-            />
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-            }}
-          >
-            <div style={{ ...cardStyle(), padding: 14 }}>
-              <h3
-                style={{
-                  marginTop: 0,
-                  marginBottom: 12,
-                  fontSize: 18,
-                  fontWeight: 900,
-                }}
-              >
-                Çalışan Bazlı Görünüm
-              </h3>
-
-              <div style={{ display: "grid", gap: 10 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 10,
-                  }}
-                >
-                  <span style={{ color: BRAND.muted }}>Tüm eğitimleri tamamlayan</span>
-                  <strong style={{ color: BRAND.green }}>
-                    {employeeStatusSummary.completed}
-                  </strong>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 10,
-                  }}
-                >
-                  <span style={{ color: BRAND.muted }}>En az bir eğitimde devam eden</span>
-                  <strong style={{ color: BRAND.blue }}>
-                    {employeeStatusSummary.inProgress}
-                  </strong>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 10,
-                  }}
-                >
-                  <span style={{ color: BRAND.muted }}>Eksik eğitimi olan</span>
-                  <strong style={{ color: BRAND.amber }}>
-                    {employeeStatusSummary.missing}
-                  </strong>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ ...cardStyle(), padding: 14 }}>
-              <h3
-                style={{
-                  marginTop: 0,
-                  marginBottom: 12,
-                  fontSize: 18,
-                  fontWeight: 900,
-                }}
-              >
-                Hızlı Oranlar
-              </h3>
-
-              <div style={{ display: "grid", gap: 12 }}>
-                {[
-                  { label: "Tamamlama", value: completionRate, color: BRAND.green },
-                  { label: "Devam Eden", value: inProgressRate, color: BRAND.blue },
-                  { label: "Başlamadı", value: missingRate, color: BRAND.amber },
-                ].map((item) => (
-                  <div key={item.label}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: 6,
-                        fontSize: 12,
-                      }}
-                    >
-                      <span>{item.label}</span>
-                      <strong>%{formatPercent(item.value)}</strong>
-                    </div>
-
-                    <div
-                      style={{
-                        height: 10,
-                        borderRadius: 999,
-                        background: "#eef2f7",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${Math.max(item.value, 4)}%`,
-                          height: "100%",
-                          background: item.color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div
-        id="panel-report-pdf-matrix"
-        style={{
-          position: "fixed",
-          left: "-10000px",
-          top: 0,
-          width: "794px",
-          background: "#ffffff",
-          padding: "24px",
-          color: "#111827",
-          boxSizing: "border-box",
-        }}
-      >
-        <div style={{ ...cardStyle(), padding: 14 }}>
-          <h2
-            style={{
-              marginTop: 0,
-              marginBottom: 14,
-              fontSize: 22,
-              fontWeight: 900,
-            }}
-          >
-            Eğitim Durum Matrisi
-          </h2>
-
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              tableLayout: "fixed",
-              fontSize: 10,
-            }}
-          >
-            <thead>
-              <tr>
-                <th
-                  style={{
-                    textAlign: "left",
-                    padding: "8px 6px",
-                    borderBottom: "1px solid #e5e7eb",
-                    width: 140,
-                  }}
-                >
-                  Çalışan
-                </th>
-
-                {pdfTrainings.map((training) => (
+              <thead>
+                <tr>
                   <th
-                    key={training.id}
                     style={{
-                      textAlign: "center",
-                      padding: "8px 4px",
-                      borderBottom: "1px solid #e5e7eb",
-                      fontWeight: 800,
-                    }}
-                  >
-                    {training.title}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {pdfMatrixRows.map((row) => (
-                <tr key={row.user_id}>
-                  <td
-                    style={{
+                      textAlign: "left",
                       padding: "8px 6px",
-                      borderBottom: "1px solid #f1f5f9",
-                      verticalAlign: "top",
+                      borderBottom: "1px solid #e5e7eb",
+                      width: 130,
                     }}
                   >
-                    <div style={{ fontWeight: 800 }}>{row.full_name}</div>
-                    <div style={{ color: "#6b7280", marginTop: 2 }}>{row.email}</div>
-                  </td>
+                    Çalışan
+                  </th>
 
-                  {pdfTrainings.map((training) => {
-                    const found = row.statuses.find(
-                      (s) => s.training_id === training.id
-                    );
-                    const value = found?.status || "Atanmadı";
+                  {pdfTrainings.map((training) => (
+                    <th
+                      key={training.id}
+                      style={{
+                        textAlign: "center",
+                        padding: "8px 4px",
+                        borderBottom: "1px solid #e5e7eb",
+                        fontWeight: 800,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {training.title}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
 
-                    return (
-                      <td
-                        key={`${row.user_id}-${training.id}`}
-                        style={{
-                          padding: "8px 4px",
-                          borderBottom: "1px solid #f1f5f9",
-                          textAlign: "center",
-                          verticalAlign: "middle",
-                        }}
-                      >
-                        <span
+              <tbody>
+                {pdfMatrixRows.map((row) => (
+                  <tr key={row.user_id}>
+                    <td
+                      style={{
+                        padding: "8px 6px",
+                        borderBottom: "1px solid #f1f5f9",
+                        verticalAlign: "top",
+                      }}
+                    >
+                      <div style={{ fontWeight: 800 }}>{row.full_name}</div>
+                      <div style={{ color: "#6b7280", marginTop: 2 }}>
+                        {row.email}
+                      </div>
+                    </td>
+
+                    {pdfTrainings.map((training) => {
+                      const found = row.statuses.find(
+                        (s) => s.training_id === training.id
+                      );
+                      const value = found?.status || "Atanmadı";
+
+                      return (
+                        <td
+                          key={`${row.user_id}-${training.id}`}
                           style={{
-                            ...statusStyle(value),
-                            display: "inline-block",
-                            borderRadius: 999,
-                            padding: "4px 6px",
-                            fontSize: 9,
-                            fontWeight: 800,
-                            whiteSpace: "nowrap",
+                            padding: "8px 4px",
+                            borderBottom: "1px solid #f1f5f9",
+                            textAlign: "center",
+                            verticalAlign: "middle",
                           }}
                         >
-                          {value}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                          <span
+                            style={{
+                              ...statusStyle(value),
+                              display: "inline-block",
+                              borderRadius: 999,
+                              padding: "3px 5px",
+                              fontSize: 8,
+                              fontWeight: 800,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {value}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {pdfMatrixRows.length === 0 ? (
+              <div style={{ marginTop: 12, color: "#6b7280", fontSize: 12 }}>
+                Matris verisi bulunamadı.
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
       </div>
     </main>
   );
