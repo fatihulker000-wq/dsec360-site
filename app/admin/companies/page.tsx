@@ -7,6 +7,10 @@ type CompanyRow = {
   name: string;
   created_at?: string | null;
   user_count?: number;
+  yetkili?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
 };
 
 type CompanyResponse = {
@@ -23,6 +27,7 @@ const BRAND = {
   red: "#c62828",
   redDark: "#5a0f1f",
   green: "#166534",
+  blue: "#1d4ed8",
   shadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
 
@@ -60,9 +65,16 @@ export default function AdminCompaniesPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
-  const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+
+  const [newCompany, setNewCompany] = useState({
+    name: "",
+    yetkili: "",
+    phone: "",
+    email: "",
+    address: "",
+  });
 
   const loadCompanies = async () => {
     try {
@@ -105,11 +117,25 @@ export default function AdminCompaniesPage() {
   const filteredCompanies = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return companies;
-    return companies.filter((c) => c.name.toLowerCase().includes(q));
+
+    return companies.filter((c) => {
+      const text = [
+        c.name,
+        c.yetkili || "",
+        c.phone || "",
+        c.email || "",
+        c.address || "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return text.includes(q);
+    });
   }, [companies, search]);
 
   const addCompany = async () => {
-    const name = newName.trim();
+    const name = newCompany.name.trim();
+
     if (!name) {
       alert("Firma adı gir.");
       return;
@@ -124,7 +150,13 @@ export default function AdminCompaniesPage() {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({
+          name: newCompany.name.trim(),
+          yetkili: newCompany.yetkili.trim(),
+          phone: newCompany.phone.trim(),
+          email: newCompany.email.trim(),
+          address: newCompany.address.trim(),
+        }),
       });
 
       const json = await res.json();
@@ -139,7 +171,14 @@ export default function AdminCompaniesPage() {
         return;
       }
 
-      setNewName("");
+      setNewCompany({
+        name: "",
+        yetkili: "",
+        phone: "",
+        email: "",
+        address: "",
+      });
+
       await loadCompanies();
     } catch (err) {
       console.error(err);
@@ -161,6 +200,7 @@ export default function AdminCompaniesPage() {
 
   const saveEdit = async () => {
     const name = editingName.trim();
+
     if (!editingId || !name) {
       alert("Firma adı boş olamaz.");
       return;
@@ -210,10 +250,13 @@ export default function AdminCompaniesPage() {
     try {
       setSaving(true);
 
-      const res = await fetch(`/api/admin/companies?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
+      const res = await fetch(
+        `/api/admin/companies?id=${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
 
       const json = await res.json();
 
@@ -302,14 +345,15 @@ export default function AdminCompaniesPage() {
               Yeni Firma Ekle
             </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "grid", gap: 10 }}>
               <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Firma adı gir..."
+                value={newCompany.name}
+                onChange={(e) =>
+                  setNewCompany({ ...newCompany, name: e.target.value })
+                }
+                placeholder="Firma Adı *"
                 style={{
-                  flex: 1,
-                  minWidth: 260,
+                  width: "100%",
                   padding: "12px 14px",
                   borderRadius: 12,
                   border: `1px solid ${BRAND.border}`,
@@ -317,21 +361,86 @@ export default function AdminCompaniesPage() {
                 }}
               />
 
-              <button
-                onClick={addCompany}
-                disabled={saving}
+              <input
+                value={newCompany.yetkili}
+                onChange={(e) =>
+                  setNewCompany({ ...newCompany, yetkili: e.target.value })
+                }
+                placeholder="Yetkili Kişi"
                 style={{
-                  border: "none",
+                  width: "100%",
+                  padding: "12px 14px",
                   borderRadius: 12,
-                  padding: "12px 18px",
-                  background: BRAND.green,
-                  color: "#fff",
-                  fontWeight: 800,
-                  cursor: saving ? "not-allowed" : "pointer",
+                  border: `1px solid ${BRAND.border}`,
+                  fontSize: 14,
                 }}
-              >
-                Firma Ekle
-              </button>
+              />
+
+              <input
+                value={newCompany.phone}
+                onChange={(e) =>
+                  setNewCompany({ ...newCompany, phone: e.target.value })
+                }
+                placeholder="Telefon"
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  fontSize: 14,
+                }}
+              />
+
+              <input
+                value={newCompany.email}
+                onChange={(e) =>
+                  setNewCompany({ ...newCompany, email: e.target.value })
+                }
+                placeholder="E-Posta"
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  fontSize: 14,
+                }}
+              />
+
+              <textarea
+                value={newCompany.address}
+                onChange={(e) =>
+                  setNewCompany({ ...newCompany, address: e.target.value })
+                }
+                placeholder="Adres"
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  fontSize: 14,
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                }}
+              />
+
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={addCompany}
+                  disabled={saving}
+                  style={{
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "12px 18px",
+                    background: BRAND.green,
+                    color: "#fff",
+                    fontWeight: 800,
+                    cursor: saving ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Firma Ekle
+                </button>
+              </div>
             </div>
           </div>
 
@@ -399,53 +508,51 @@ export default function AdminCompaniesPage() {
                   }}
                 >
                   {editingId === company.id ? (
-                    <>
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        <input
-                          value={editingName}
-                          onChange={(e) => setEditingName(e.target.value)}
-                          style={{
-                            flex: 1,
-                            minWidth: 240,
-                            padding: "12px 14px",
-                            borderRadius: 12,
-                            border: `1px solid ${BRAND.border}`,
-                            fontSize: 14,
-                          }}
-                        />
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <input
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        style={{
+                          flex: 1,
+                          minWidth: 240,
+                          padding: "12px 14px",
+                          borderRadius: 12,
+                          border: `1px solid ${BRAND.border}`,
+                          fontSize: 14,
+                        }}
+                      />
 
-                        <button
-                          onClick={saveEdit}
-                          disabled={saving}
-                          style={{
-                            border: "none",
-                            borderRadius: 12,
-                            padding: "12px 16px",
-                            background: BRAND.green,
-                            color: "#fff",
-                            fontWeight: 800,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Kaydet
-                        </button>
+                      <button
+                        onClick={saveEdit}
+                        disabled={saving}
+                        style={{
+                          border: "none",
+                          borderRadius: 12,
+                          padding: "12px 16px",
+                          background: BRAND.green,
+                          color: "#fff",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Kaydet
+                      </button>
 
-                        <button
-                          onClick={cancelEdit}
-                          style={{
-                            border: "none",
-                            borderRadius: 12,
-                            padding: "12px 16px",
-                            background: "#6b7280",
-                            color: "#fff",
-                            fontWeight: 800,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Vazgeç
-                        </button>
-                      </div>
-                    </>
+                      <button
+                        onClick={cancelEdit}
+                        style={{
+                          border: "none",
+                          borderRadius: 12,
+                          padding: "12px 16px",
+                          background: "#6b7280",
+                          color: "#fff",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Vazgeç
+                      </button>
+                    </div>
                   ) : (
                     <div
                       style={{
@@ -456,10 +563,10 @@ export default function AdminCompaniesPage() {
                         flexWrap: "wrap",
                       }}
                     >
-                      <div>
+                      <div style={{ flex: 1, minWidth: 260 }}>
                         <div
                           style={{
-                            fontSize: 18,
+                            fontSize: 20,
                             fontWeight: 900,
                             color: BRAND.text,
                           }}
@@ -467,9 +574,69 @@ export default function AdminCompaniesPage() {
                           {company.name}
                         </div>
 
-<div style={{ marginTop: 10, fontSize: 13, color: BRAND.muted }}>
-  👥 Çalışanlar: {company.user_count || 0}
-</div>
+                        <div
+                          style={{
+                            marginTop: 6,
+                            display: "inline-block",
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            background: (company.user_count || 0) > 0 ? "#dcfce7" : "#fee2e2",
+                            color: (company.user_count || 0) > 0 ? "#166534" : "#991b1b",
+                          }}
+                        >
+                          {(company.user_count || 0) > 0 ? "AKTİF" : "PASİF"}
+                        </div>
+
+                        {company.yetkili && (
+                          <div style={{ marginTop: 8, fontSize: 13, color: BRAND.text }}>
+                            👤 {company.yetkili}
+                          </div>
+                        )}
+
+                        {company.phone && (
+                          <div style={{ marginTop: 4, fontSize: 13, color: BRAND.text }}>
+                            📞 {company.phone}
+                          </div>
+                        )}
+
+                        {company.email && (
+                          <div style={{ marginTop: 4, fontSize: 13, color: BRAND.text }}>
+                            📧 {company.email}
+                          </div>
+                        )}
+
+                        {company.address && (
+                          <div style={{ marginTop: 4, fontSize: 13, color: BRAND.muted }}>
+                            📍 {company.address}
+                          </div>
+                        )}
+
+                        <div style={{ marginTop: 10, fontSize: 13, color: BRAND.muted }}>
+                          👥 Çalışanlar: {company.user_count || 0}
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 6,
+                            height: 6,
+                            width: "100%",
+                            maxWidth: 280,
+                            background: "#e5e7eb",
+                            borderRadius: 6,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.min((company.user_count || 0) * 10, 100)}%`,
+                              background: BRAND.red,
+                              height: "100%",
+                            }}
+                          />
+                        </div>
+
                         <div
                           style={{
                             marginTop: 6,
@@ -491,7 +658,7 @@ export default function AdminCompaniesPage() {
                             border: "none",
                             borderRadius: 10,
                             padding: "10px 14px",
-                            background: "#1d4ed8",
+                            background: BRAND.blue,
                             color: "#fff",
                             fontWeight: 800,
                             cursor: "pointer",
