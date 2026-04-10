@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 type MeResponse = {
@@ -18,10 +18,27 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+
   const [loggingOut, setLoggingOut] = useState(false);
   const [role, setRole] = useState<string>("");
+  const [roleLoaded, setRoleLoaded] = useState(false);
 
   useEffect(() => {
+    if (pathname === "/admin/login") {
+      setRoleLoaded(true);
+      return;
+    }
+
+    const cachedRole =
+      typeof window !== "undefined"
+        ? sessionStorage.getItem("dsec_admin_role_cached") || ""
+        : "";
+
+    if (cachedRole) {
+      setRole(cachedRole);
+    }
+
     const loadRole = async () => {
       try {
         const res = await fetch("/api/admin/me", {
@@ -32,20 +49,33 @@ export default function AdminLayout({
 
         if (!res.ok) {
           setRole("");
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("dsec_admin_role_cached");
+          }
+          setRoleLoaded(true);
           return;
         }
 
-        const json: MeResponse = await res.json();
-        setRole(String(json?.user?.role || "").trim());
+        const json: MeResponse = await res.json().catch(() => ({}));
+        const nextRole = String(json?.user?.role || "").trim();
+
+        setRole(nextRole);
+
+        if (typeof window !== "undefined") {
+          if (nextRole) {
+            sessionStorage.setItem("dsec_admin_role_cached", nextRole);
+          } else {
+            sessionStorage.removeItem("dsec_admin_role_cached");
+          }
+        }
       } catch (error) {
         console.error("admin role load error:", error);
-        setRole("");
+      } finally {
+        setRoleLoaded(true);
       }
     };
 
-    if (pathname !== "/admin/login") {
-      void loadRole();
-    }
+    void loadRole();
   }, [pathname]);
 
   const handleLogout = async () => {
@@ -62,6 +92,9 @@ export default function AdminLayout({
         credentials: "include",
       }).catch(() => null);
     } finally {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("dsec_admin_role_cached");
+      }
       window.location.href = "/admin/login";
     }
   };
@@ -76,13 +109,12 @@ export default function AdminLayout({
       { name: "Eğitimler", href: "/admin/trainings" },
       { name: "Eğitim Katılımcıları", href: "/admin/participants" },
       { name: "Sistem Kullanıcıları", href: "/admin/users" },
+      { name: "Raporlar", href: "/admin/reports" },
     ];
 
     if (role === "super_admin") {
-      items.push({ name: "Firmalar", href: "/admin/companies" });
+      items.splice(4, 0, { name: "Firmalar", href: "/admin/companies" });
     }
-
-    items.push({ name: "Raporlar", href: "/admin/reports" });
 
     return items;
   }, [role]);
@@ -98,7 +130,7 @@ export default function AdminLayout({
         overflowX: "hidden",
       }}
     >
-      <div
+      <aside
         style={{
           width: 260,
           background: "linear-gradient(180deg, #4a0d1a 0%, #5a0f1f 100%)",
@@ -147,9 +179,18 @@ export default function AdminLayout({
             AKTİF BÖLÜM
           </div>
           <div style={{ fontWeight: 800 }}>{activeLabel}</div>
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 12,
+              opacity: 0.8,
+            }}
+          >
+            {!roleLoaded ? "Yetki okunuyor..." : role === "super_admin" ? "Süper Admin" : "Firma Admin"}
+          </div>
         </div>
 
-        <div style={{ flex: 1 }}>
+        <nav style={{ flex: 1 }}>
           {menu.map((item) => {
             const isActive = pathname === item.href;
 
@@ -157,28 +198,32 @@ export default function AdminLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                style={{ textDecoration: "none", color: "inherit" }}
+                prefetch={false}
+                style={{
+                  display: "block",
+                  textDecoration: "none",
+                  color: "inherit",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  marginBottom: 8,
+                  cursor: "pointer",
+                  background: isActive ? "#c62828" : "transparent",
+                  border: isActive
+                    ? "1px solid rgba(255,255,255,0.16)"
+                    : "1px solid transparent",
+                  fontWeight: isActive ? 800 : 600,
+                  transition: "all 0.2s ease",
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  router.push(item.href);
+                }}
               >
-                <div
-                  style={{
-                    padding: "12px 14px",
-                    borderRadius: 12,
-                    marginBottom: 8,
-                    cursor: "pointer",
-                    background: isActive ? "#c62828" : "transparent",
-                    border: isActive
-                      ? "1px solid rgba(255,255,255,0.16)"
-                      : "1px solid transparent",
-                    fontWeight: isActive ? 800 : 600,
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  {item.name}
-                </div>
+                {item.name}
               </Link>
             );
           })}
-        </div>
+        </nav>
 
         <button
           type="button"
@@ -198,9 +243,9 @@ export default function AdminLayout({
         >
           {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
         </button>
-      </div>
+      </aside>
 
-      <div
+      <main
         style={{
           marginLeft: 260,
           width: "calc(100% - 260px)",
@@ -210,7 +255,7 @@ export default function AdminLayout({
         }}
       >
         {children}
-      </div>
+      </main>
     </div>
   );
 }
