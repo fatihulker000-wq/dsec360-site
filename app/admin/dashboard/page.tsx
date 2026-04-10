@@ -308,31 +308,34 @@ export default function AdminDashboardPage() {
   const [adminRole, setAdminRole] = useState<string>("");
   const [adminCompanyId, setAdminCompanyId] = useState<string>("");
 
-  useEffect(() => {
-    const check = async () => {
+ useEffect(() => {
+  const loadAdminContext = async () => {
+    try {
       const res = await fetch("/api/admin/me", {
+        method: "GET",
         credentials: "include",
         cache: "no-store",
       });
 
-      if (res.status === 401) {
-        window.location.href = "/admin/login";
+      if (!res.ok) {
+        setAdminRole("");
+        setAdminCompanyId("");
         return;
       }
 
       const json: MeResponse = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        window.location.href = "/admin/login";
-        return;
-      }
-
       setAdminRole(String(json?.user?.role || "").trim());
       setAdminCompanyId(String(json?.user?.company_id || "").trim());
-    };
+    } catch (error) {
+      console.error("admin me load error:", error);
+      setAdminRole("");
+      setAdminCompanyId("");
+    }
+  };
 
-    void check();
-  }, []);
+  void loadAdminContext();
+}, []);
 
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [riskyUsers, setRiskyUsers] = useState<RiskUser[]>([]);
