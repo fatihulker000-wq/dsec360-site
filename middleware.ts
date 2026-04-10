@@ -12,36 +12,34 @@ export function middleware(request: NextRequest) {
   const isLoginPage = pathname === "/login";
 
   const adminAuthCookie = request.cookies.get("dsec_admin_auth")?.value;
+  const adminRoleCookie = request.cookies.get("dsec_admin_role")?.value;
 
   const userAuthCookie = request.cookies.get("dsec_user_auth")?.value;
   const userRoleCookie = request.cookies.get("dsec_user_role")?.value;
 
-  // ADMIN ALANI
+  const isAllowedAdminRole =
+    adminRoleCookie === "super_admin" || adminRoleCookie === "company_admin";
+
   if (isAdminPage) {
     if (isAdminLoginPage) {
-      if (adminAuthCookie === "ok") {
+      if (adminAuthCookie === "ok" && isAllowedAdminRole) {
         return NextResponse.redirect(new URL("/admin/dashboard", request.url));
       }
 
       return NextResponse.next();
     }
 
-    if (adminAuthCookie === "ok") {
+    if (adminAuthCookie === "ok" && isAllowedAdminRole) {
       return NextResponse.next();
     }
 
     return NextResponse.redirect(new URL("/admin/login", request.url));
   }
 
-  // KULLANICI LOGIN SAYFASI
-  // Kurumsal akış:
-  // /login her zaman formu açsın
-  // aktif admin/user oturumu olsa bile otomatik redirect yapmasın
   if (isLoginPage) {
     return NextResponse.next();
   }
 
-  // PANEL ALANI
   if (isPanelPage) {
     if (userAuthCookie !== "ok") {
       return NextResponse.redirect(new URL("/login", request.url));
@@ -58,7 +56,6 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // EĞİTİM PORTALI
   if (isPortalTrainingPage) {
     if (userAuthCookie !== "ok") {
       return NextResponse.redirect(new URL("/login", request.url));

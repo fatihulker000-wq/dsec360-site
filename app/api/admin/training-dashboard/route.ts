@@ -38,14 +38,24 @@ export async function GET() {
     const cookieStore = await cookies();
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
     const adminRole = cookieStore.get("dsec_admin_role")?.value;
+    const companyIdFromCookie = String(
+      cookieStore.get("dsec_company_id")?.value || ""
+    ).trim();
 
     const isAllowedRole =
-      adminRole === "admin" || adminRole === "super_admin";
+      adminRole === "super_admin" || adminRole === "company_admin";
 
     if (adminAuth !== "ok" || !isAllowedRole) {
       return NextResponse.json(
         { error: "Yetkisiz erişim." },
         { status: 401 }
+      );
+    }
+
+    if (adminRole === "company_admin" && !companyIdFromCookie) {
+      return NextResponse.json(
+        { error: "Firma yöneticisi için firma bilgisi bulunamadı." },
+        { status: 403 }
       );
     }
 
@@ -66,14 +76,14 @@ export async function GET() {
       );
     }
 
-    const assignmentRows = assignments || [];
+    const allAssignmentRows = assignments || [];
 
     const trainingIds = Array.from(
-      new Set(assignmentRows.map((a) => a.training_id).filter(Boolean))
+      new Set(allAssignmentRows.map((a) => a.training_id).filter(Boolean))
     );
 
     const userIds = Array.from(
-      new Set(assignmentRows.map((a) => a.user_id).filter(Boolean))
+      new Set(allAssignmentRows.map((a) => a.user_id).filter(Boolean))
     );
 
     let trainingsMap: Record<string, TrainingRow> = {};
@@ -101,11 +111,16 @@ export async function GET() {
     }
 
     if (userIds.length > 0) {
-      const { data: users, error: usersError } = await supabase
+      let userQuery = supabase
         .from("users")
         .select("id, full_name, email, company_id")
-        .in("id", userIds)
-        .returns<UserRow[]>();
+        .in("id", userIds);
+
+      if (adminRole === "company_admin") {
+        userQuery = userQuery.eq("company_id", companyIdFromCookie);
+      }
+
+      const { data: users, error: usersError } = await userQuery.returns<UserRow[]>();
 
       if (usersError) {
         return NextResponse.json(
@@ -145,10 +160,18 @@ export async function GET() {
         }
 
         companyMap = Object.fromEntries(
-          (companies || []).map((c) => [c.id, String(c.name || "Firma Yok").trim() || "Firma Yok"])
+          (companies || []).map((c) => [
+            c.id,
+            String(c.name || "Firma Yok").trim() || "Firma Yok",
+          ])
         );
       }
     }
+
+    const allowedUserIds = new Set(Object.keys(usersMap));
+    const assignmentRows = allAssignmentRows.filter((row) =>
+      allowedUserIds.has(row.user_id)
+    );
 
     const trainingStatsMap = new Map<
       string,
@@ -208,6 +231,7 @@ export async function GET() {
       })
       .map((row) => {
         const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
+
         return {
           assignment_id: row.id,
           user_id: row.user_id,
@@ -226,6 +250,7 @@ export async function GET() {
       )
       .map((row) => {
         const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
+
         return {
           assignment_id: row.id,
           user_id: row.user_id,
@@ -244,6 +269,7 @@ export async function GET() {
       )
       .map((row) => {
         const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
+
         return {
           assignment_id: row.id,
           user_id: row.user_id,
@@ -291,18 +317,9 @@ export async function GET() {
       .slice(0, 8);
 
     const monthlyTrend = [
-      {
-        label: "Tamamlandı",
-        value: totalCompleted,
-      },
-      {
-        label: "Devam",
-        value: totalInProgress,
-      },
-      {
-        label: "Başlamadı",
-        value: totalNotStarted,
-      },
+      { label: "Tamamlandı", value: totalCompleted },
+      { label: "Devam", value: totalInProgress },
+      { label: "Başlamadı", value: totalNotStarted },
     ];
 
     return NextResponse.json({

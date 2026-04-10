@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 function getSupabase() {
   return createClient(
@@ -13,6 +14,7 @@ type UserRow = {
   full_name: string | null;
   email: string | null;
   phone: string | null;
+  company_id: string | null;
 };
 
 type TrainingRow = {
@@ -47,10 +49,8 @@ function isValidEmail(email?: string | null) {
 
 function getTrainingTypeLabel(type?: string | null) {
   const value = String(type || "").trim().toLowerCase();
-
   if (value === "senkron") return "Senkron Eğitim";
   if (value === "asenkron") return "Asenkron Eğitim";
-
   return type || "Eğitim";
 }
 
@@ -119,7 +119,6 @@ async function sendTrainingInviteEmail(params: {
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;padding:30px;color:#111827;">
       <div style="max-width:700px;margin:0 auto;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5e7eb;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
-
         <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:26px;text-align:center;">
           <div style="font-size:24px;font-weight:900;color:#ffffff;letter-spacing:0.3px;">D-SEC</div>
           <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Dijital Sağlık • Emniyet • Çevre</div>
@@ -171,14 +170,6 @@ async function sendTrainingInviteEmail(params: {
             </div>
           </div>
 
-          <p style="margin:0 0 14px;font-size:14px;line-height:1.8;color:#374151;">
-            Giriş ekranında <strong>email / TC / sicil no</strong> bilgilerinizden uygun olan bilgi ile giriş yapabilirsiniz.
-          </p>
-
-          <p style="margin:0 0 18px;font-size:14px;line-height:1.8;color:#374151;">
-            Bilgi güvenliği kapsamında ilk girişiniz sonrasında şifrenizi değiştirmeniz önerilir.
-          </p>
-
           <div style="margin-top:20px;">
             <a
               href="${safeLoginUrl}"
@@ -186,10 +177,6 @@ async function sendTrainingInviteEmail(params: {
             >
               Eğitime Başla
             </a>
-          </div>
-
-          <div style="margin-top:24px;padding:14px 16px;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:13px;line-height:1.7;">
-            Bu bildirim sistem tarafından otomatik oluşturulmuştur. Atanan eğitiminizi zamanında tamamlamanız önerilir.
           </div>
         </div>
 
@@ -227,14 +214,10 @@ async function sendTrainingInviteEmail(params: {
           data?.error ||
           data?.name ||
           `Mail gönderilemedi. HTTP ${response.status}`,
-        data,
       };
     }
 
-    return {
-      ok: true,
-      data,
-    };
+    return { ok: true };
   } catch (err: any) {
     return {
       ok: false,
@@ -245,6 +228,27 @@ async function sendTrainingInviteEmail(params: {
 
 export async function POST(req: Request) {
   try {
+    const cookieStore = await cookies();
+    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+    const adminRole = cookieStore.get("dsec_admin_role")?.value;
+    const companyIdFromCookie = String(
+      cookieStore.get("dsec_company_id")?.value || ""
+    ).trim();
+
+    const isAllowedRole =
+      adminRole === "super_admin" || adminRole === "company_admin";
+
+    if (adminAuth !== "ok" || !isAllowedRole) {
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
+    }
+
+    if (adminRole === "company_admin" && !companyIdFromCookie) {
+      return NextResponse.json(
+        { error: "Firma yöneticisi için firma bilgisi bulunamadı." },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
 
     const userIds = Array.isArray(body?.userIds)
@@ -275,7 +279,7 @@ export async function POST(req: Request) {
 
     const { data: users, error: usersError } = await supabase
       .from("users")
-      .select("id, full_name, email, phone")
+      .select("id, full_name, email, phone, company_id")
       .in("id", uniqueUserIds);
 
     if (usersError) {
@@ -286,6 +290,26 @@ export async function POST(req: Request) {
     }
 
     const typedUsers = (users || []) as UserRow[];
+
+    if (typedUsers.length !== uniqueUserIds.length) {
+      return NextResponse.json(
+        { error: "Seçilen kullanıcıların bir kısmı bulunamadı." },
+        { status: 400 }
+      );
+    }
+
+    if (adminRole === "company_admin") {
+      const unauthorizedUser = typedUsers.find(
+        (user) => String(user.company_id || "").trim() !== companyIdFromCookie
+      );
+
+      if (unauthorizedUser) {
+        return NextResponse.json(
+          { error: "Sadece kendi firmanızdaki çalışanlara eğitim atayabilirsiniz." },
+          { status: 403 }
+        );
+      }
+    }
 
     const { data: existingRows, error: existingError } = await supabase
       .from("training_assignments")
@@ -360,7 +384,6 @@ export async function POST(req: Request) {
       );
     }
 
-    let insertedCount = assignableUsers.length;
     let emailedCount = 0;
     let mailFailedCount = 0;
     let noEmailCount = 0;
@@ -423,11 +446,6 @@ export async function POST(req: Request) {
         emailedCount += 1;
       } else {
         mailFailedCount += 1;
-        console.error("MAIL SEND ERROR:", {
-          userId: user.id,
-          email: user.email,
-          reason: mailResult.reason,
-        });
       }
 
       mailResults.push({
@@ -445,29 +463,17 @@ export async function POST(req: Request) {
         status: mailResult.ok ? "sent" : "failed",
         errorText: mailResult.ok ? null : mailResult.reason,
       });
-
-      console.log("📩 DAVET İŞLENDİ:", {
-        name: user.full_name,
-        email: user.email,
-        phone: user.phone,
-        training: training.title,
-       link: `${process.env.NEXT_PUBLIC_APP_URL || "https://dsec360.com"}/login`,
-        mailOk: mailResult.ok,
-      });
     }
 
     return NextResponse.json({
       success: true,
-      insertedCount,
+      insertedCount: assignableUsers.length,
       skippedCount,
       emailedCount,
       mailFailedCount,
       noEmailCount,
       trainingTitle: training.title,
-      message:
-        insertedCount > 0
-          ? "Eğitim atandı. Mail gönderimleri işlendi."
-          : "Yeni atama yapılmadı.",
+      message: "Eğitim atandı. Mail gönderimleri işlendi.",
       mailResults,
     });
   } catch (err) {

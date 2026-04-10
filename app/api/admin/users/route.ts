@@ -28,17 +28,28 @@ export async function GET() {
   try {
     const cookieStore = await cookies();
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+    const adminRole = cookieStore.get("dsec_admin_role")?.value;
+    const companyIdFromCookie = String(
+      cookieStore.get("dsec_company_id")?.value || ""
+    ).trim();
 
-    if (adminAuth !== "ok") {
+    const isAllowedRole =
+      adminRole === "super_admin" || adminRole === "company_admin";
+
+    if (adminAuth !== "ok" || !isAllowedRole) {
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
+    }
+
+    if (adminRole === "company_admin" && !companyIdFromCookie) {
       return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
+        { error: "Firma yöneticisi için firma bilgisi bulunamadı." },
+        { status: 403 }
       );
     }
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("users")
       .select(`
         id,
@@ -50,6 +61,12 @@ export async function GET() {
         created_at
       `)
       .order("created_at", { ascending: false });
+
+    if (adminRole === "company_admin") {
+      query = query.eq("company_id", companyIdFromCookie);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Admin users fetch hatası:", error);

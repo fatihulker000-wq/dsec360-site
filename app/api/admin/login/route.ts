@@ -4,13 +4,29 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+type LoginUserRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  password: string | null;
+  role: string | null;
+  company_id: string | null;
+};
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+
+    const email = String(body?.email ?? "")
+      .trim()
+      .toLowerCase();
     const password = String(body?.password ?? "").trim();
 
-    if (!password) {
-      return NextResponse.json({ error: "Şifre gerekli." }, { status: 400 });
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: "Email ve şifre gerekli." },
+        { status: 400 }
+      );
     }
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
@@ -24,23 +40,23 @@ export async function POST(request: Request) {
 
     const { data: adminUser, error } = await supabase
       .from("users")
-      .select("id, full_name, email, password, role")
-      .eq("email", "admin@dsec360.com")
-      .eq("role", "super_admin")
-      .maybeSingle();
+      .select("id, full_name, email, password, role, company_id")
+      .ilike("email", email)
+      .in("role", ["super_admin", "company_admin"])
+      .maybeSingle<LoginUserRow>();
 
     if (error) {
       console.error("Admin kullanıcı sorgu hatası:", error);
       return NextResponse.json(
-        { error: "Admin kullanıcı okunamadı." },
+        { error: "Kullanıcı bilgisi okunamadı." },
         { status: 500 }
       );
     }
 
     if (!adminUser) {
       return NextResponse.json(
-        { error: "Admin kullanıcı bulunamadı." },
-        { status: 404 }
+        { error: "Yetkili kullanıcı bulunamadı." },
+        { status: 401 }
       );
     }
 
@@ -48,7 +64,7 @@ export async function POST(request: Request) {
 
     if (!dbPassword) {
       return NextResponse.json(
-        { error: "Admin kullanıcısında şifre tanımlı değil." },
+        { error: "Kullanıcı şifresi sistemde tanımlı değil." },
         { status: 500 }
       );
     }
@@ -57,18 +73,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Hatalı şifre." }, { status: 401 });
     }
 
+    const secure = process.env.NODE_ENV === "production";
+    const roleValue = String(adminUser.role ?? "").trim();
+    const userId = String(adminUser.id);
+    const userEmail = String(adminUser.email ?? email).trim().toLowerCase();
+    const companyId = String(adminUser.company_id ?? "").trim();
+
     const response = NextResponse.json({
       success: true,
-      role: adminUser.role,
+      role: roleValue,
       user: {
-        id: String(adminUser.id),
-        full_name: String(adminUser.full_name ?? "Admin Kullanıcı"),
-        email: String(adminUser.email ?? "admin@dsec360.com"),
+        id: userId,
+        full_name: String(adminUser.full_name ?? "Kullanıcı"),
+        email: userEmail,
+        company_id: companyId || null,
       },
     });
-
-    const secure = process.env.NODE_ENV === "production";
-    const roleValue = String(adminUser.role ?? "super_admin");
 
     response.cookies.set("dsec_admin_auth", "ok", {
       httpOnly: true,
@@ -102,7 +122,23 @@ export async function POST(request: Request) {
       maxAge: 60 * 60 * 12,
     });
 
-    response.cookies.set("dsec_user_id", String(adminUser.id), {
+    response.cookies.set("dsec_user_id", userId, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
+
+    response.cookies.set("dsec_user_email", userEmail, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
+
+    response.cookies.set("dsec_company_id", companyId, {
       httpOnly: true,
       sameSite: "lax",
       secure,

@@ -22,7 +22,6 @@ const BRAND = {
   borderStrong: "#e7c0c7",
 
   inputBorder: "#dec7cc",
-  inputFocus: "#c62828",
 
   softChip: "#fff0f1",
 
@@ -35,6 +34,7 @@ const BRAND = {
 };
 
 export default function AdminLoginPage() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,7 +51,10 @@ export default function AdminLoginPage() {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
       });
 
       const data = await res.json();
@@ -150,7 +153,7 @@ export default function AdminLoginPage() {
                 letterSpacing: "0.2px",
               }}
             >
-              D-SEC • Admin Paneli
+              D-SEC • Yönetim Girişi
             </div>
 
             <h1
@@ -178,9 +181,8 @@ export default function AdminLoginPage() {
                 maxWidth: "760px",
               }}
             >
-              Eğitim atamaları, kullanıcı risk analizi, tamamlama oranları,
-              yönetim kontrolleri ve karar destek görünümü için güvenli admin
-              erişimi.
+              Firma admini ve süper admin; eğitim atama, takip, risk analizi ve
+              yönetim görünümüne bu giriş üzerinden erişir.
             </p>
 
             <div
@@ -191,7 +193,7 @@ export default function AdminLoginPage() {
               }}
             >
               <FeatureCard title="Yönetim" value="Eğitim Kontrolü" />
-              <FeatureCard title="Analiz" value="Risk Takibi" />
+              <FeatureCard title="Firma" value="Kendi Verin" />
               <FeatureCard title="Dashboard" value="Canlı Durum" />
             </div>
           </div>
@@ -220,7 +222,7 @@ export default function AdminLoginPage() {
               marginBottom: "16px",
             }}
           >
-            Güvenli Admin Girişi
+            Güvenli Yönetim Girişi
           </div>
 
           <h2
@@ -244,8 +246,42 @@ export default function AdminLoginPage() {
               fontSize: "16px",
             }}
           >
-            Yönetim paneline erişmek için admin şifrenizi girin.
+            Yönetim paneline erişmek için kurumsal email ve şifrenizi girin.
           </p>
+
+          <div style={{ marginBottom: "16px" }}>
+            <label
+              style={{
+                display: "block",
+                fontSize: "14px",
+                fontWeight: 800,
+                color: BRAND.textStrong,
+                marginBottom: "10px",
+              }}
+            >
+              Email
+            </label>
+
+            <input
+              type="email"
+              placeholder="firma@dsec360.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={{
+                width: "100%",
+                height: "56px",
+                borderRadius: "15px",
+                border: `1px solid ${BRAND.inputBorder}`,
+                padding: "0 16px",
+                fontSize: "16px",
+                outline: "none",
+                boxSizing: "border-box",
+                background: BRAND.white,
+                color: BRAND.textStrong,
+                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)",
+              }}
+            />
+          </div>
 
           <div style={{ marginBottom: "18px" }}>
             <label
@@ -257,7 +293,7 @@ export default function AdminLoginPage() {
                 marginBottom: "10px",
               }}
             >
-              Admin Şifresi
+              Şifre
             </label>
 
             <input
@@ -304,7 +340,7 @@ export default function AdminLoginPage() {
               boxShadow: "0 18px 36px rgba(198, 40, 40, 0.22)",
             }}
           >
-            {loading ? "Kontrol ediliyor..." : "Admin Paneline Giriş Yap"}
+            {loading ? "Kontrol ediliyor..." : "Yönetim Paneline Giriş Yap"}
           </button>
 
           {error ? (
@@ -333,8 +369,8 @@ export default function AdminLoginPage() {
               lineHeight: 1.7,
             }}
           >
-            Yetkisiz erişimler engellenir. Giriş başarılı olduğunda eğitim
-            dashboard ekranına yönlendirilirsiniz.
+            Firma admini yalnız kendi firmasının eğitim atama ve takip verilerini
+            görür. Süper admin tüm firmaları görür.
           </p>
         </div>
       </div>

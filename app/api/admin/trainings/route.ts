@@ -9,27 +9,33 @@ function getSupabase() {
   );
 }
 
-type UserRow = {
+type TrainingRow = {
   id: string;
-  full_name: string | null;
-  email: string | null;
-  role: string | null;
-  company_id: string | null;
-  is_active: boolean | null;
-  created_at: string | null;
+  title: string | null;
+  description: string | null;
+  type: string | null;
+  duration_minutes: number | null;
+  content_url: string | null;
+  topics_text: string | null;
+  created_at?: string | null;
 };
 
-type CompanyRow = {
-  id: string;
-  name: string | null;
+type AssignmentAggRow = {
+  training_id: string;
+  status: "not_started" | "in_progress" | "completed" | null;
+  final_exam_passed?: boolean | null;
 };
 
 export async function GET() {
   try {
     const cookieStore = await cookies();
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+    const adminRole = cookieStore.get("dsec_admin_role")?.value;
 
-    if (adminAuth !== "ok") {
+    const isAllowedRole =
+      adminRole === "super_admin" || adminRole === "company_admin";
+
+    if (adminAuth !== "ok" || !isAllowedRole) {
       return NextResponse.json(
         { error: "Yetkisiz erişim." },
         { status: 401 }
@@ -38,74 +44,109 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
-      .from("users")
+    const { data: trainings, error: trainingsError } = await supabase
+      .from("trainings")
       .select(`
         id,
-        full_name,
-        email,
-        role,
-        company_id,
-        is_active,
+        title,
+        description,
+        type,
+        duration_minutes,
+        content_url,
+        topics_text,
         created_at
       `)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Admin users fetch hatası:", error);
+    if (trainingsError) {
+      console.error("Admin trainings fetch hatası:", trainingsError);
       return NextResponse.json(
-        { error: "Kullanıcılar alınamadı." },
+        { error: "Eğitimler alınamadı." },
         { status: 500 }
       );
     }
 
-    const userRows = (data || []) as UserRow[];
+    const trainingRows = (trainings || []) as TrainingRow[];
 
-    const companyIds = Array.from(
-      new Set(
-        userRows
-          .map((user) => (user.company_id ? String(user.company_id).trim() : ""))
-          .filter(Boolean)
-      )
-    );
+    const trainingIds = trainingRows.map((t) => String(t.id)).filter(Boolean);
 
-    let companyMap = new Map<string, string>();
+    let assignmentMap = new Map<
+      string,
+      {
+        assigned_count: number;
+        not_started_count: number;
+        in_progress_count: number;
+        completed_count: number;
+      }
+    >();
 
-    if (companyIds.length > 0) {
-      const { data: companiesData, error: companiesError } = await supabase
-        .from("companies")
-        .select("id, name")
-        .in("id", companyIds);
+    if (trainingIds.length > 0) {
+      const { data: assignments, error: assignmentsError } = await supabase
+        .from("training_assignments")
+        .select("training_id, status, final_exam_passed")
+        .in("training_id", trainingIds)
+        .returns<AssignmentAggRow[]>();
 
-      if (companiesError) {
-        console.error("Companies fetch hatası:", companiesError);
-      } else {
-        const companies = (companiesData || []) as CompanyRow[];
-        companyMap = new Map(
-          companies.map((company) => [
-            String(company.id).trim(),
-            String(company.name || "").trim(),
-          ])
+      if (assignmentsError) {
+        console.error("Training assignment stats fetch hatası:", assignmentsError);
+        return NextResponse.json(
+          { error: "Eğitim istatistikleri alınamadı." },
+          { status: 500 }
         );
+      }
+
+      for (const row of assignments || []) {
+        const trainingId = String(row.training_id || "").trim();
+        if (!trainingId) continue;
+
+        const current = assignmentMap.get(trainingId) || {
+          assigned_count: 0,
+          not_started_count: 0,
+          in_progress_count: 0,
+          completed_count: 0,
+        };
+
+        current.assigned_count += 1;
+
+        const isCompleted =
+          row.final_exam_passed === true || row.status === "completed";
+
+        if (isCompleted) {
+          current.completed_count += 1;
+        } else if (row.status === "in_progress") {
+          current.in_progress_count += 1;
+        } else {
+          current.not_started_count += 1;
+        }
+
+        assignmentMap.set(trainingId, current);
       }
     }
 
-    const normalized = userRows.map((user) => {
-      const companyId = user.company_id ? String(user.company_id).trim() : null;
-      const companyName =
-        companyId && companyMap.get(companyId)
-          ? String(companyMap.get(companyId)).trim()
-          : null;
+    const normalized = trainingRows.map((training) => {
+      const stats = assignmentMap.get(String(training.id)) || {
+        assigned_count: 0,
+        not_started_count: 0,
+        in_progress_count: 0,
+        completed_count: 0,
+      };
 
       return {
-        id: String(user.id),
-        full_name: (user.full_name || "Adsız Kullanıcı").trim(),
-        email: (user.email || "").trim(),
-        role: (user.role || "").trim(),
-        company_id: companyId,
-        company: companyName || null,
-        is_active: Boolean(user.is_active),
-        created_at: user.created_at || null,
+        id: String(training.id),
+        title: (training.title || "Adsız Eğitim").trim(),
+        description: (training.description || "Açıklama bulunmuyor.").trim(),
+        type: (training.type || "asenkron").trim(),
+        duration_minutes:
+          typeof training.duration_minutes === "number"
+            ? training.duration_minutes
+            : null,
+        content_url: (training.content_url || "").trim(),
+        topics_text: (training.topics_text || "").trim(),
+        assigned_count: stats.assigned_count,
+        not_started_count: stats.not_started_count,
+        in_progress_count: stats.in_progress_count,
+        completed_count: stats.completed_count,
+        created_at: training.created_at || null,
       };
     });
 
@@ -113,12 +154,26 @@ export async function GET() {
       data: normalized,
       stats: {
         total_count: normalized.length,
-        active_count: normalized.filter((u) => u.is_active).length,
-        passive_count: normalized.filter((u) => !u.is_active).length,
+        total_assigned_count: normalized.reduce(
+          (sum, item) => sum + item.assigned_count,
+          0
+        ),
+        total_completed_count: normalized.reduce(
+          (sum, item) => sum + item.completed_count,
+          0
+        ),
+        total_in_progress_count: normalized.reduce(
+          (sum, item) => sum + item.in_progress_count,
+          0
+        ),
+        total_not_started_count: normalized.reduce(
+          (sum, item) => sum + item.not_started_count,
+          0
+        ),
       },
     });
   } catch (error) {
-    console.error("Admin users genel hata:", error);
+    console.error("Admin trainings genel hata:", error);
     return NextResponse.json(
       { error: "Sunucu hatası oluştu." },
       { status: 500 }
