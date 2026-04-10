@@ -87,12 +87,12 @@ function getRoleLabel(role?: string | null) {
 }
 
 function buildCompanyLabel(user: UserApiRow) {
-  if (user.company && user.company.trim()) return user.company.trim();
-  if (user.company_id && user.company_id.trim()) {
-    return `Firma ID: ${user.company_id.trim()}`;
+  if (user.company && user.company.trim()) {
+    return user.company.trim();
   }
   return "Firma bilgisi yok";
 }
+
 
 function parseTopicsCount(topicsText?: string | null) {
   const raw = String(topicsText || "").trim();
