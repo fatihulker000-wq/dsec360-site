@@ -36,6 +36,34 @@ function normalizeType(type?: string | null) {
   return "asenkron";
 }
 
+function normalizeFinalScore(score?: number | null) {
+  if (score === null || score === undefined) return null;
+
+  const numeric = Number(score);
+  if (!Number.isFinite(numeric)) return null;
+
+  const clamped = Math.max(0, Math.min(100, numeric));
+
+  return Math.round(clamped / 10) * 10;
+}
+
+function shouldShowFinalScore(params: {
+  final_exam_score?: number | null;
+  final_exam_attempts?: number | null;
+  final_exam_passed?: boolean | null;
+  status?: TrainingStatus;
+}) {
+  const attempts = Number(params.final_exam_attempts || 0);
+  const passed = params.final_exam_passed === true;
+  const completed = params.status === "completed";
+  const hasRawScore =
+    params.final_exam_score !== null && params.final_exam_score !== undefined;
+
+  if (!hasRawScore) return false;
+
+  return attempts > 0 || passed || completed;
+}
+
 function isNativeVideoUrl(url: string) {
   if (!url) return false;
 
@@ -213,11 +241,11 @@ export default function TrainingDetailPage() {
     } catch {}
   };
 
- const videoRef = useRef<HTMLVideoElement | null>(null);
-const maxReachedRef = useRef(0);
-const lastAllowedTimeRef = useRef(0);
-const isProgrammaticSeekRef = useRef(false);
-const blockSeekRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const maxReachedRef = useRef(0);
+  const lastAllowedTimeRef = useRef(0);
+  const isProgrammaticSeekRef = useRef(false);
+  const blockSeekRef = useRef(false);
 
   const [training, setTraining] = useState<TrainingDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -380,11 +408,13 @@ const blockSeekRef = useRef(false);
     ? 3
     : Math.max(0, 3 - serverFinalAttempts);
 
-  const finalScore =
-    training?.final_exam_score !== null &&
-    training?.final_exam_score !== undefined
-      ? Number(training.final_exam_score)
-      : null;
+  const finalScore = normalizeFinalScore(training?.final_exam_score);
+  const showFinalScore = shouldShowFinalScore({
+    final_exam_score: training?.final_exam_score,
+    final_exam_attempts: training?.final_exam_attempts,
+    final_exam_passed: training?.final_exam_passed,
+    status: training?.status,
+  });
 
   const preExamCompleted = training?.pre_exam_completed === true;
   const finalPassed = training?.final_exam_passed === true;
@@ -403,126 +433,124 @@ const blockSeekRef = useRef(false);
     }
   }, [videoDuration]);
 
- const handleLoadedMetadata = () => {
-  const player = videoRef.current;
-  if (!player) return;
+  const handleLoadedMetadata = () => {
+    const player = videoRef.current;
+    if (!player) return;
 
-  const duration = Math.floor(player.duration || 0);
-  setVideoDuration(duration);
+    const duration = Math.floor(player.duration || 0);
+    setVideoDuration(duration);
 
-  const shouldResume =
-    preExamCompleted &&
-    !resetRequired &&
-    maxReachedRef.current > 0 &&
-    maxReachedRef.current < duration;
+    const shouldResume =
+      preExamCompleted &&
+      !resetRequired &&
+      maxReachedRef.current > 0 &&
+      maxReachedRef.current < duration;
 
-  if (shouldResume) {
-    const safeResume = Math.floor(maxReachedRef.current);
-    isProgrammaticSeekRef.current = true;
-    player.currentTime = safeResume;
-    maxReachedRef.current = safeResume;
-    lastAllowedTimeRef.current = safeResume;
-    setMaxReachedTime(safeResume);
-  } else {
-    isProgrammaticSeekRef.current = true;
-    player.currentTime = 0;
-    maxReachedRef.current = 0;
-    lastAllowedTimeRef.current = 0;
-    setMaxReachedTime(0);
-  }
-
-  player.playbackRate = 1;
-
-  setPlaybackReady(true);
-  setVideoLoadError("");
-};
-
- const handleTimeUpdate = () => {
-  const player = videoRef.current;
-  if (!player) return;
-
-  if (player.playbackRate !== 1) {
-    player.playbackRate = 1;
-  }
-
-  const current = Number(player.currentTime || 0);
-  const flooredCurrent = Math.floor(current);
-  const prevMax = Number(maxReachedRef.current || 0);
-  const allowedForwardGap = 1.2;
-
-  // İleri sarma / ani sıçrama engeli
-  if (!isProgrammaticSeekRef.current && current > prevMax + allowedForwardGap) {
-    blockSeekRef.current = true;
-    player.pause();
-    isProgrammaticSeekRef.current = true;
-    player.currentTime = prevMax;
-    return;
-  }
-
-  // Doğal ilerleme kabul edilir
-  if (current >= prevMax && current <= prevMax + allowedForwardGap) {
-    maxReachedRef.current = current;
-    lastAllowedTimeRef.current = current;
-    setMaxReachedTime(flooredCurrent);
-
-    try {
-      localStorage.setItem(
-        `training_watch_${assignmentId}`,
-        String(flooredCurrent)
-      );
-    } catch {}
-
-    if (flooredCurrent > 0 && flooredCurrent % 15 === 0) {
-      fetch("/api/training/update", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          assignmentId,
-          action: "heartbeat",
-          currentSecond: flooredCurrent,
-          duration: Math.floor(videoDuration || 0),
-        }),
-      }).catch((err) => {
-        console.error("training heartbeat error:", err);
-      });
+    if (shouldResume) {
+      const safeResume = Math.floor(maxReachedRef.current);
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = safeResume;
+      maxReachedRef.current = safeResume;
+      lastAllowedTimeRef.current = safeResume;
+      setMaxReachedTime(safeResume);
+    } else {
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = 0;
+      maxReachedRef.current = 0;
+      lastAllowedTimeRef.current = 0;
+      setMaxReachedTime(0);
     }
-  }
 
-  const checkpoints = checkpointsRef.current;
-  if (
-    checkpointIndex < checkpoints.length &&
-    flooredCurrent >= checkpoints[checkpointIndex] &&
-    !showPresencePopup
-  ) {
-    player.pause();
-    setShowPresencePopup(true);
-  }
-};
+    player.playbackRate = 1;
 
-const handleSeeking = () => {
-  const player = videoRef.current;
-  if (!player) return;
+    setPlaybackReady(true);
+    setVideoLoadError("");
+  };
 
-  if (isProgrammaticSeekRef.current) {
-    isProgrammaticSeekRef.current = false;
-    return;
-  }
+  const handleTimeUpdate = () => {
+    const player = videoRef.current;
+    if (!player) return;
 
-  const current = Number(player.currentTime || 0);
-  const allowedMax = Number(maxReachedRef.current || 0);
+    if (player.playbackRate !== 1) {
+      player.playbackRate = 1;
+    }
 
-  if (current > allowedMax + 0.5) {
-    blockSeekRef.current = true;
-    player.pause();
-    isProgrammaticSeekRef.current = true;
-    player.currentTime = allowedMax;
-    return;
-  }
+    const current = Number(player.currentTime || 0);
+    const flooredCurrent = Math.floor(current);
+    const prevMax = Number(maxReachedRef.current || 0);
+    const allowedForwardGap = 1.2;
 
-  lastAllowedTimeRef.current = current;
-};
+    if (!isProgrammaticSeekRef.current && current > prevMax + allowedForwardGap) {
+      blockSeekRef.current = true;
+      player.pause();
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = prevMax;
+      return;
+    }
+
+    if (current >= prevMax && current <= prevMax + allowedForwardGap) {
+      maxReachedRef.current = current;
+      lastAllowedTimeRef.current = current;
+      setMaxReachedTime(flooredCurrent);
+
+      try {
+        localStorage.setItem(
+          `training_watch_${assignmentId}`,
+          String(flooredCurrent)
+        );
+      } catch {}
+
+      if (flooredCurrent > 0 && flooredCurrent % 15 === 0) {
+        fetch("/api/training/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            assignmentId,
+            action: "heartbeat",
+            currentSecond: flooredCurrent,
+            duration: Math.floor(videoDuration || 0),
+          }),
+        }).catch((err) => {
+          console.error("training heartbeat error:", err);
+        });
+      }
+    }
+
+    const checkpoints = checkpointsRef.current;
+    if (
+      checkpointIndex < checkpoints.length &&
+      flooredCurrent >= checkpoints[checkpointIndex] &&
+      !showPresencePopup
+    ) {
+      player.pause();
+      setShowPresencePopup(true);
+    }
+  };
+
+  const handleSeeking = () => {
+    const player = videoRef.current;
+    if (!player) return;
+
+    if (isProgrammaticSeekRef.current) {
+      isProgrammaticSeekRef.current = false;
+      return;
+    }
+
+    const current = Number(player.currentTime || 0);
+    const allowedMax = Number(maxReachedRef.current || 0);
+
+    if (current > allowedMax + 0.5) {
+      blockSeekRef.current = true;
+      player.pause();
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = allowedMax;
+      return;
+    }
+
+    lastAllowedTimeRef.current = current;
+  };
 
   const effectiveWatchSeconds = Math.min(
     Math.max(Number(training?.watch_seconds || 0), Math.floor(maxReachedTime)),
@@ -840,7 +868,7 @@ const handleSeeking = () => {
               Tekrar Sayısı: {repeatCount}
             </div>
 
-            {finalScore !== null ? (
+            {showFinalScore && finalScore !== null ? (
               <div
                 style={{
                   display: "inline-flex",
@@ -1046,26 +1074,26 @@ const handleSeeking = () => {
                     }}
                     onTimeUpdate={handleTimeUpdate}
                     onSeeking={handleSeeking}
-
                     onSeeked={() => {
-  if (blockSeekRef.current) {
-    blockSeekRef.current = false;
-  }
-}}
-onRateChange={() => {
-  const player = videoRef.current;
-  if (!player) return;
-  if (player.playbackRate !== 1) {
-    player.playbackRate = 1;
-  }
-}}
-
+                      if (blockSeekRef.current) {
+                        blockSeekRef.current = false;
+                      }
+                    }}
+                    onRateChange={() => {
+                      const player = videoRef.current;
+                      if (!player) return;
+                      if (player.playbackRate !== 1) {
+                        player.playbackRate = 1;
+                      }
+                    }}
                     onEnded={async () => {
                       maxReachedRef.current = Math.max(
                         maxReachedRef.current,
                         Math.floor(videoDuration)
                       );
-                      setMaxReachedTime(Math.max(maxReachedRef.current, Math.floor(videoDuration)));
+                      setMaxReachedTime(
+                        Math.max(maxReachedRef.current, Math.floor(videoDuration))
+                      );
 
                       try {
                         if (effectiveClickCount < requiredClicks) {
@@ -1287,7 +1315,7 @@ onRateChange={() => {
                   Katılım Formu
                 </button>
               </>
-            ) : resetRequired || (finalScore !== null && !finalPassed) ? (
+            ) : resetRequired || (showFinalScore && finalScore !== null && !finalPassed) ? (
               <button
                 onClick={openAttendance}
                 style={{

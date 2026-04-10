@@ -25,6 +25,35 @@ function normalizeType(type?: string | null) {
   return "asenkron";
 }
 
+function normalizeFinalScore(score?: number | null) {
+  if (score === null || score === undefined) return null;
+
+  const numeric = Number(score);
+  if (!Number.isFinite(numeric)) return null;
+
+  const clamped = Math.max(0, Math.min(100, numeric));
+
+  // 10 soruluk sınav mantığına göre 10'luk sisteme yuvarla
+  return Math.round(clamped / 10) * 10;
+}
+
+function shouldShowFinalScore(params: {
+  final_exam_score?: number | null;
+  final_exam_attempts?: number | null;
+  final_exam_passed?: boolean | null;
+  status?: "not_started" | "in_progress" | "completed";
+}) {
+  const attempts = Number(params.final_exam_attempts || 0);
+  const passed = params.final_exam_passed === true;
+  const completed = params.status === "completed";
+  const hasRawScore =
+    params.final_exam_score !== null && params.final_exam_score !== undefined;
+
+  if (!hasRawScore) return false;
+
+  return attempts > 0 || passed || completed;
+}
+
 export default function TrainingListPage() {
   const router = useRouter();
   const [items, setItems] = useState<TrainingItem[]>([]);
@@ -293,11 +322,13 @@ export default function TrainingListPage() {
             const finalAttempts = Number(item.final_exam_attempts || 0);
             const finalAttemptsLeft = Math.max(0, 3 - finalAttempts);
 
-            const finalScore =
-              item.final_exam_score !== null &&
-              item.final_exam_score !== undefined
-                ? Number(item.final_exam_score)
-                : null;
+            const finalScore = normalizeFinalScore(item.final_exam_score);
+            const showFinalScore = shouldShowFinalScore({
+              final_exam_score: item.final_exam_score,
+              final_exam_attempts: item.final_exam_attempts,
+              final_exam_passed: item.final_exam_passed,
+              status: item.status,
+            });
 
             return (
               <div
@@ -408,7 +439,7 @@ export default function TrainingListPage() {
                     Final Hak: {finalAttemptsLeft}
                   </span>
 
-                  {finalScore !== null ? (
+                  {showFinalScore && finalScore !== null ? (
                     <span
                       style={{
                         padding: "6px 10px",
