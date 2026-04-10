@@ -56,6 +56,18 @@ type DashboardResponse = {
   detail?: string;
 };
 
+type MeResponse = {
+  success?: boolean;
+  user?: {
+    id?: string;
+    full_name?: string;
+    email?: string;
+    role?: string;
+    company_id?: string;
+  };
+  error?: string;
+};
+
 const BRAND = {
   bg: "#f7f8fb",
   white: "#ffffff",
@@ -90,6 +102,7 @@ function cardStyle(): React.CSSProperties {
     borderRadius: 20,
     padding: 20,
     boxShadow: BRAND.shadow,
+    minWidth: 0,
   };
 }
 
@@ -292,15 +305,30 @@ function EmptyState({ text }: { text: string }) {
 }
 
 export default function AdminDashboardPage() {
+  const [adminRole, setAdminRole] = useState<string>("");
+  const [adminCompanyId, setAdminCompanyId] = useState<string>("");
+
   useEffect(() => {
     const check = async () => {
       const res = await fetch("/api/admin/me", {
         credentials: "include",
+        cache: "no-store",
       });
 
       if (res.status === 401) {
         window.location.href = "/admin/login";
+        return;
       }
+
+      const json: MeResponse = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      setAdminRole(String(json?.user?.role || "").trim());
+      setAdminCompanyId(String(json?.user?.company_id || "").trim());
     };
 
     void check();
@@ -374,6 +402,17 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     void loadDashboard();
   }, []);
+
+  useEffect(() => {
+    if (adminRole === "company_admin" && adminCompanyId) {
+      const matched =
+        riskyUsers
+          .map((u) => (u.company_id || "").trim())
+          .find((x) => x && x === adminCompanyId) || adminCompanyId;
+
+      setSelectedCompany(matched);
+    }
+  }, [adminRole, adminCompanyId, riskyUsers]);
 
   const exportPDF = async () => {
     const { default: jsPDF } = await import("jspdf");
@@ -470,35 +509,38 @@ export default function AdminDashboardPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "tr"));
   }, [riskyUsers, inProgressUsers, completedUsers]);
 
+  const effectiveSelectedCompany =
+    adminRole === "company_admin" && adminCompanyId ? adminCompanyId : selectedCompany;
+
   const filteredRiskUsers = useMemo(() => {
-    if (selectedCompany === "all") return riskyUsers;
+    if (effectiveSelectedCompany === "all") return riskyUsers;
 
     return riskyUsers.filter(
       (u) =>
         ((u.company_id || "Firma Yok").trim() || "Firma Yok") ===
-        selectedCompany
+        effectiveSelectedCompany
     );
-  }, [selectedCompany, riskyUsers]);
+  }, [effectiveSelectedCompany, riskyUsers]);
 
   const filteredInProgressUsers = useMemo(() => {
-    if (selectedCompany === "all") return inProgressUsers;
+    if (effectiveSelectedCompany === "all") return inProgressUsers;
 
     return inProgressUsers.filter(
       (u) =>
         ((u.company_id || "Firma Yok").trim() || "Firma Yok") ===
-        selectedCompany
+        effectiveSelectedCompany
     );
-  }, [selectedCompany, inProgressUsers]);
+  }, [effectiveSelectedCompany, inProgressUsers]);
 
   const filteredCompletedUsers = useMemo(() => {
-    if (selectedCompany === "all") return completedUsers;
+    if (effectiveSelectedCompany === "all") return completedUsers;
 
     return completedUsers.filter(
       (u) =>
         ((u.company_id || "Firma Yok").trim() || "Firma Yok") ===
-        selectedCompany
+        effectiveSelectedCompany
     );
-  }, [selectedCompany, completedUsers]);
+  }, [effectiveSelectedCompany, completedUsers]);
 
   const topRiskTrainings = useMemo(() => {
     return [...trainings]
@@ -636,7 +678,9 @@ export default function AdminDashboardPage() {
                   marginBottom: 12,
                 }}
               >
-                D-SEC • Admin Dashboard
+                {adminRole === "company_admin"
+                  ? "D-SEC • Firma Admin Dashboard"
+                  : "D-SEC • Admin Dashboard"}
               </div>
 
               <h1 style={{ margin: 0, fontSize: 38, fontWeight: 900 }}>
@@ -754,10 +798,49 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
+        {adminRole === "super_admin" ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: 16,
+              marginBottom: 20,
+            }}
+          >
+            <div style={cardStyle()}>
+              <div style={{ fontSize: 12, color: BRAND.muted }}>Yönetim</div>
+              <div style={{ marginTop: 8, fontSize: 24, fontWeight: 900, color: BRAND.text }}>
+                Firma Yönetimi
+              </div>
+              <div style={{ marginTop: 8, fontSize: 13, color: BRAND.muted, lineHeight: 1.7 }}>
+                Firma ekleme, düzenleme ve firma atama işlemleri sadece süper admin tarafından yönetilir.
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = "/admin/companies";
+                }}
+                style={{
+                  marginTop: 16,
+                  border: "none",
+                  borderRadius: 12,
+                  padding: "12px 16px",
+                  background: BRAND.red,
+                  color: "#fff",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Firma Yönetimine Git
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
             gap: 16,
             marginBottom: 20,
           }}
@@ -773,7 +856,6 @@ export default function AdminDashboardPage() {
                 background: BRAND.slate,
               }}
             />
-
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Atama</div>
             <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
               {summary?.total_assignments ?? totals.assigned}
@@ -794,7 +876,6 @@ export default function AdminDashboardPage() {
                 background: BRAND.green,
               }}
             />
-
             <div style={{ fontSize: 13, color: BRAND.green }}>Tamamlanma</div>
             <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
               %{formatPercent(completionRate)}
@@ -815,7 +896,6 @@ export default function AdminDashboardPage() {
                 background: BRAND.blue,
               }}
             />
-
             <div style={{ fontSize: 13, color: BRAND.blue }}>Devam Eden</div>
             <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
               %{formatPercent(inProgressRate)}
@@ -836,7 +916,6 @@ export default function AdminDashboardPage() {
                 background: BRAND.amber,
               }}
             />
-
             <div style={{ fontSize: 13, color: BRAND.amber }}>Riskli Oran</div>
             <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
               %{formatPercent(riskRate)}
@@ -852,7 +931,7 @@ export default function AdminDashboardPage() {
             ...cardStyle(),
             marginBottom: 20,
             display: "grid",
-            gridTemplateColumns: "1.3fr 0.7fr",
+            gridTemplateColumns: "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
             gap: 16,
             alignItems: "stretch",
           }}
@@ -870,7 +949,7 @@ export default function AdminDashboardPage() {
               style={{
                 marginTop: 16,
                 display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
                 gap: 12,
               }}
             >
@@ -906,31 +985,46 @@ export default function AdminDashboardPage() {
               display: "grid",
               gap: 12,
               alignContent: "start",
+              minWidth: 0,
             }}
           >
             <div style={{ fontSize: 14, fontWeight: 900, color: BRAND.text }}>
               Firma Filtresi
             </div>
 
-            <select
-              value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              style={{
-                padding: "12px 14px",
-                borderRadius: 12,
-                border: `1px solid ${BRAND.border}`,
-                background: "#fff",
-                fontWeight: 700,
-                minWidth: 220,
-              }}
-            >
-              <option value="all">Tüm Firmalar</option>
-              {companies.map((company) => (
-                <option key={company} value={company}>
-                  {company}
-                </option>
-              ))}
-            </select>
+            {adminRole === "company_admin" ? (
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  background: "#fff",
+                  fontWeight: 700,
+                }}
+              >
+                {adminCompanyId || "Bağlı firma"}
+              </div>
+            ) : (
+              <select
+                value={selectedCompany}
+                onChange={(e) => setSelectedCompany(e.target.value)}
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  background: "#fff",
+                  fontWeight: 700,
+                  minWidth: 220,
+                }}
+              >
+                <option value="all">Tüm Firmalar</option>
+                {companies.map((company) => (
+                  <option key={company} value={company}>
+                    {company}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <div
               style={{
@@ -993,7 +1087,7 @@ export default function AdminDashboardPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.1fr 0.9fr",
+            gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 0.9fr)",
             gap: 20,
             marginBottom: 20,
           }}
@@ -1009,13 +1103,7 @@ export default function AdminDashboardPage() {
                 flexWrap: "wrap",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 24,
-                  fontWeight: 900,
-                }}
-              >
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
                 Eğitim Durum Özeti
               </h2>
 
@@ -1024,7 +1112,11 @@ export default function AdminDashboardPage() {
               </span>
             </div>
 
-            <MiniBarChart items={trend} color={BRAND.red} emptyText="Trend verisi bulunamadı." />
+            <MiniBarChart
+              items={trend}
+              color={BRAND.red}
+              emptyText="Trend verisi bulunamadı."
+            />
           </section>
 
           <section style={cardStyle()}>
@@ -1038,13 +1130,7 @@ export default function AdminDashboardPage() {
                 flexWrap: "wrap",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 24,
-                  fontWeight: 900,
-                }}
-              >
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
                 Firma Risk Yoğunluğu
               </h2>
 
@@ -1067,7 +1153,7 @@ export default function AdminDashboardPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.1fr 0.9fr",
+            gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 0.9fr)",
             gap: 20,
             marginBottom: 20,
           }}
@@ -1083,13 +1169,7 @@ export default function AdminDashboardPage() {
                 flexWrap: "wrap",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 24,
-                  fontWeight: 900,
-                }}
-              >
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
                 En Riskli Eğitimler
               </h2>
 
@@ -1184,13 +1264,7 @@ export default function AdminDashboardPage() {
                 flexWrap: "wrap",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 24,
-                  fontWeight: 900,
-                }}
-              >
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
                 En Güçlü Eğitimler
               </h2>
 
@@ -1217,20 +1291,13 @@ export default function AdminDashboardPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
             gap: 20,
             marginBottom: 20,
           }}
         >
           <section style={cardStyle()}>
-            <h2
-              style={{
-                marginTop: 0,
-                marginBottom: 16,
-                fontSize: 22,
-                fontWeight: 900,
-              }}
-            >
+            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
               Riskli Kullanıcılar
             </h2>
 
@@ -1244,14 +1311,7 @@ export default function AdminDashboardPage() {
           </section>
 
           <section style={cardStyle()}>
-            <h2
-              style={{
-                marginTop: 0,
-                marginBottom: 16,
-                fontSize: 22,
-                fontWeight: 900,
-              }}
-            >
+            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
               Devam Eden
             </h2>
 
@@ -1265,14 +1325,7 @@ export default function AdminDashboardPage() {
           </section>
 
           <section style={cardStyle()}>
-            <h2
-              style={{
-                marginTop: 0,
-                marginBottom: 16,
-                fontSize: 22,
-                fontWeight: 900,
-              }}
-            >
+            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
               Tamamlayanlar
             </h2>
 
@@ -1289,7 +1342,7 @@ export default function AdminDashboardPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
             gap: 20,
             marginBottom: 20,
           }}
@@ -1305,13 +1358,7 @@ export default function AdminDashboardPage() {
                 flexWrap: "wrap",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 24,
-                  fontWeight: 900,
-                }}
-              >
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
                 En Riskli Çalışanlar
               </h2>
 
@@ -1370,13 +1417,7 @@ export default function AdminDashboardPage() {
                 flexWrap: "wrap",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 24,
-                  fontWeight: 900,
-                }}
-              >
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
                 Riskli Eğitim Dağılımı
               </h2>
 
@@ -1417,7 +1458,7 @@ export default function AdminDashboardPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.05fr 0.95fr",
+            gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 0.95fr)",
             gap: 20,
           }}
         >
@@ -1432,13 +1473,7 @@ export default function AdminDashboardPage() {
                 flexWrap: "wrap",
               }}
             >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 24,
-                  fontWeight: 900,
-                }}
-              >
+              <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
                 Firma Bazlı Risk
               </h2>
 
@@ -1522,14 +1557,7 @@ export default function AdminDashboardPage() {
           </section>
 
           <section style={cardStyle()}>
-            <h2
-              style={{
-                marginTop: 0,
-                marginBottom: 16,
-                fontSize: 24,
-                fontWeight: 900,
-              }}
-            >
+            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
               Dashboard Notu
             </h2>
 
