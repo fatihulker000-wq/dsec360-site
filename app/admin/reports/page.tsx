@@ -103,6 +103,7 @@ function cardStyle(): React.CSSProperties {
     background: BRAND.white,
     padding: 18,
     boxShadow: BRAND.shadow,
+    minWidth: 0,
   };
 }
 
@@ -203,6 +204,7 @@ function MiniBar({
         borderRadius: 16,
         padding: 14,
         background: soft,
+        minWidth: 0,
       }}
     >
       <div
