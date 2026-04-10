@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+function redirectTo(request: NextRequest, path: string) {
+  return NextResponse.redirect(new URL(path, request.url));
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -20,10 +24,22 @@ export function middleware(request: NextRequest) {
   const isAllowedAdminRole =
     adminRoleCookie === "super_admin" || adminRoleCookie === "company_admin";
 
+  const isAllowedPanelRole =
+    userRoleCookie === "company_admin" ||
+    userRoleCookie === "operator" ||
+    userRoleCookie === "super_admin";
+
+  const isAllowedPortalRole =
+    userRoleCookie === "training_user" ||
+    userRoleCookie === "company_admin" ||
+    userRoleCookie === "operator" ||
+    userRoleCookie === "super_admin";
+
+  // ADMIN
   if (isAdminPage) {
     if (isAdminLoginPage) {
       if (adminAuthCookie === "ok" && isAllowedAdminRole) {
-        return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+        return redirectTo(request, "/admin/dashboard");
       }
 
       return NextResponse.next();
@@ -33,44 +49,38 @@ export function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    return NextResponse.redirect(new URL("/admin/login", request.url));
+    return redirectTo(request, "/admin/login");
   }
 
+  // USER LOGIN
   if (isLoginPage) {
     return NextResponse.next();
   }
 
+  // PANEL
   if (isPanelPage) {
     if (userAuthCookie !== "ok") {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return redirectTo(request, "/login");
     }
 
-    if (
-      userRoleCookie === "company_admin" ||
-      userRoleCookie === "operator" ||
-      userRoleCookie === "super_admin"
-    ) {
+    if (isAllowedPanelRole) {
       return NextResponse.next();
     }
 
-    return NextResponse.redirect(new URL("/login", request.url));
+    return redirectTo(request, "/login");
   }
 
+  // TRAINING PORTAL
   if (isPortalTrainingPage) {
     if (userAuthCookie !== "ok") {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return redirectTo(request, "/login");
     }
 
-    if (
-      userRoleCookie === "training_user" ||
-      userRoleCookie === "company_admin" ||
-      userRoleCookie === "operator" ||
-      userRoleCookie === "super_admin"
-    ) {
+    if (isAllowedPortalRole) {
       return NextResponse.next();
     }
 
-    return NextResponse.redirect(new URL("/login", request.url));
+    return redirectTo(request, "/login");
   }
 
   return NextResponse.next();

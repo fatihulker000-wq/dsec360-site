@@ -23,6 +23,18 @@ type UserResponse = {
   error?: string;
 };
 
+type MeResponse = {
+  success?: boolean;
+  user?: {
+    id?: string;
+    full_name?: string;
+    email?: string;
+    role?: string;
+    company_id?: string;
+  };
+  error?: string;
+};
+
 type UserRow = {
   id: string;
   full_name: string;
@@ -96,47 +108,78 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [role, setRole] = useState<string | null>(null);
+  const [adminRole, setAdminRole] = useState<string | null>(null);
 
   const loadUsers = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const [usersRes, companiesRes] = await Promise.all([
-        fetch("/api/admin/users", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        }),
-        fetch("/api/admin/companies", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include",
-        }),
-      ]);
+      const meRes = await fetch("/api/admin/me", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      });
 
-      if (usersRes.status === 401 || companiesRes.status === 401) {
+      if (meRes.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      const meJson: MeResponse = await meRes.json();
+
+      if (!meRes.ok) {
+        setError(meJson?.error || "Oturum bilgisi alınamadı.");
+        setUsers([]);
+        return;
+      }
+
+      const currentRole = String(meJson?.user?.role || "").trim();
+      setAdminRole(currentRole);
+
+      const usersRes = await fetch("/api/admin/users", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      });
+
+      if (usersRes.status === 401) {
         window.location.href = "/admin/login";
         return;
       }
 
       const json: UserResponse = await usersRes.json();
-      const companiesJson = await companiesRes.json();
-
-      setCompanies(
-        Array.isArray(companiesJson?.data)
-          ? companiesJson.data.map((c: { id: string; name: string }) => ({
-              id: String(c.id || ""),
-              name: String(c.name || "").trim(),
-            }))
-          : []
-      );
 
       if (!usersRes.ok) {
         setError(json?.error || "Kullanıcılar alınamadı.");
         setUsers([]);
         return;
+      }
+
+      if (currentRole === "super_admin") {
+        const companiesRes = await fetch("/api/admin/companies", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        if (companiesRes.status === 401) {
+          window.location.href = "/admin/login";
+          return;
+        }
+
+        const companiesJson = await companiesRes.json();
+
+        setCompanies(
+          Array.isArray(companiesJson?.data)
+            ? companiesJson.data.map((c: { id: string; name: string }) => ({
+                id: String(c.id || ""),
+                name: String(c.name || "").trim(),
+              }))
+            : []
+        );
+      } else {
+        setCompanies([]);
       }
 
       const normalized: UserRow[] = Array.isArray(json.data)
@@ -164,16 +207,9 @@ export default function AdminUsersPage() {
     }
   };
 
-useEffect(() => {
-  void loadUsers();
-
-  const r = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith("dsec_admin_role="))
-    ?.split("=")[1];
-
-  setRole(r || null);
-}, []);
+  useEffect(() => {
+    void loadUsers();
+  }, []);
 
   const roles = useMemo(() => {
     return Array.from(new Set(users.map((u) => u.role))).sort((a, b) =>
@@ -183,7 +219,8 @@ useEffect(() => {
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      const text = `${u.full_name} ${u.email} ${u.role} ${u.company}`.toLowerCase();
+      const text =
+        `${u.full_name} ${u.email} ${u.role} ${u.company}`.toLowerCase();
 
       const matchesSearch = !search || text.includes(search.toLowerCase());
       const matchesRole = roleFilter === "all" ? true : u.role === roleFilter;
@@ -201,7 +238,8 @@ useEffect(() => {
   const totalCount = users.length;
   const activeCount = users.filter((u) => u.is_active).length;
   const passiveCount = users.filter((u) => !u.is_active).length;
-  const companyCount = new Set(users.map((u) => u.company_id).filter(Boolean)).size;
+  const companyCount = new Set(users.map((u) => u.company_id).filter(Boolean))
+    .size;
 
   const updateCompany = async (userId: string, companyId: string) => {
     try {
@@ -212,6 +250,7 @@ useEffect(() => {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
           userId,
           companyId,
@@ -258,7 +297,9 @@ useEffect(() => {
               fontWeight: 900,
             }}
           >
-            Sistem Kullanıcıları
+            {adminRole === "company_admin"
+              ? "Alt Sistem Kullanıcıları"
+              : "Sistem Kullanıcıları"}
           </h1>
 
           <p
@@ -268,8 +309,9 @@ useEffect(() => {
               lineHeight: 1.7,
             }}
           >
-            Admin, firma yöneticisi ve operatör kullanıcılarını yönet. Eğitim
-            katılımcıları bu ekranda gösterilmez.
+            {adminRole === "company_admin"
+              ? "Kendi firmanıza ait yetkili alt kullanıcıları yönetin. Eğitim katılımcıları bu ekranda gösterilmez."
+              : "Admin, firma yöneticisi ve operatör kullanıcılarını yönetin. Eğitim katılımcıları bu ekranda gösterilmez."}
           </p>
         </div>
 
@@ -490,42 +532,42 @@ useEffect(() => {
                     </div>
                   </div>
 
-<div style={{ marginTop: 10 }}>
-  {role !== "company_admin" && (
-    <select
-      defaultValue={u.company_id || ""}
-      onChange={(e) => void updateCompany(u.id, e.target.value)}
-      disabled={savingCompany}
-      style={{
-        padding: "10px 12px",
-        borderRadius: 10,
-        border: "1px solid #d1d5db",
-        fontSize: 13,
-        minWidth: 220,
-      }}
-    >
-      <option value="">Firma yok</option>
-      {companies.map((c) => (
-        <option key={c.id} value={c.id}>
-          {c.name}
-        </option>
-      ))}
-    </select>
-  )}
-</div>
+                  <div style={{ marginTop: 10 }}>
+                    {adminRole === "super_admin" && (
+                      <select
+                        defaultValue={u.company_id || ""}
+                        onChange={(e) => void updateCompany(u.id, e.target.value)}
+                        disabled={savingCompany}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: "1px solid #d1d5db",
+                          fontSize: 13,
+                          minWidth: 220,
+                        }}
+                      >
+                        <option value="">Firma yok</option>
+                        {companies.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
 
-<div
-  style={{
-    marginTop: 12,
-    fontSize: 12,
-    color: BRAND.muted,
-  }}
->
-  Kayıt tarihi:{" "}
-  {u.created_at
-    ? new Date(u.created_at).toLocaleString("tr-TR")
-    : "-"}
-</div>
+                  <div
+                    style={{
+                      marginTop: 12,
+                      fontSize: 12,
+                      color: BRAND.muted,
+                    }}
+                  >
+                    Kayıt tarihi:{" "}
+                    {u.created_at
+                      ? new Date(u.created_at).toLocaleString("tr-TR")
+                      : "-"}
+                  </div>
                 </div>
               ))}
             </div>
