@@ -1121,25 +1121,25 @@ function buildRegulationCertificateHtml(params: {
 
           .front-box {
             border: 1px solid #111827;
-            min-height: 1120px;
-            padding: 12px;
+            min-height: 980px;
+            padding: 10px;
           }
 
           .mini-head {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
           }
 
           .front-paragraph {
-            font-size: 12px;
-            line-height: 1.6;
-            margin-bottom: 18px;
+            font-size: 11px;
+            line-height: 1.4;
+            margin-bottom: 10px;
           }
 
           .front-lines {
-            font-size: 12px;
-            line-height: 1.65;
+            font-size: 11px;
+            line-height: 1.4;
             white-space: pre-line;
           }
 
@@ -1153,24 +1153,24 @@ function buildRegulationCertificateHtml(params: {
           }
 
           .verify-block {
-            margin-top: 14px;
+            margin-top: 8px;
             border: 1px solid #111827;
-            padding: 6px;
+            padding: 5px;
             display: grid;
-            grid-template-columns: 70px 1fr;
-            gap: 6px;
+            grid-template-columns: 58px 1fr;
+            gap: 5px;
             align-items: center;
-            font-size: 10px;
-            line-height: 1.3;
+            font-size: 9px;
+            line-height: 1.2;
           }
 
           .verify-block img {
-            width: 70px;
-            height: 70px;
+            width: 58px;
+            height: 58px;
             object-fit: contain;
             border: 1px solid #111827;
             background: #fff;
-            padding: 3px;
+            padding: 2px;
           }
 
           .verify-link {
@@ -1181,9 +1181,9 @@ function buildRegulationCertificateHtml(params: {
           }
 
           .footer-note {
-            margin-top: 10px;
-            font-size: 10px;
-            line-height: 1.4;
+            margin-top: 6px;
+            font-size: 9px;
+            line-height: 1.2;
           }
 
           .back-table {
@@ -1280,9 +1280,6 @@ Eğitimin şekli: Uzaktan<span class="box-line"></span>
 
 Eğiticilerin adı soyadı ve ünvanı: D-SEC Eğitim Yetkilisi
 Eğiticilerin imzası:
-
-
-
 
 Çalışanın işyerinin ünvanı: ${params.safeCompanyName}
 İşverenin/işveren vekilinin adı soyadı:
