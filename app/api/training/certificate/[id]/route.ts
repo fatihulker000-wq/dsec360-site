@@ -110,11 +110,13 @@ type GroupedTopicSections = {
   iseOzel: string[];
 };
 
+type RegulationSectionKey = keyof GroupedTopicSections;
+
 function detectIsgRegulationSection(
   trainingTitle?: string | null,
   trainingDescription?: string | null,
   topics: string[] = []
-): keyof GroupedTopicSections | null {
+): RegulationSectionKey | null {
   const allText = normalizeTopicText(
     [trainingTitle || "", trainingDescription || "", ...topics].join("\n")
   );
@@ -155,8 +157,12 @@ function detectIsgRegulationSection(
   return null;
 }
 
+function isOfficialBasicIsgTemplate(sectionKey: RegulationSectionKey | null) {
+  return sectionKey === "genel" || sectionKey === "saglik" || sectionKey === "teknik";
+}
+
 function buildRegulationSectionsFromSingleTraining(
-  sectionKey: keyof GroupedTopicSections | null,
+  sectionKey: RegulationSectionKey | null,
   topics: string[]
 ): GroupedTopicSections | null {
   if (!sectionKey) return null;
@@ -175,7 +181,7 @@ function buildStandardTopicsTableRows(topics: string[]) {
 
 function buildGroupedTopicList(items: string[]) {
   if (!items.length) {
-    return `<li>Bu bölüm için konu bilgisi girilmemiştir.</li>`;
+    return `<li style="opacity:.65;">-</li>`;
   }
 
   return items
@@ -239,7 +245,7 @@ function buildStandardCertificateHtml(params: {
 }) {
   const statusChip = params.isCertificate
     ? `<div class="eyebrow">BAŞARIYLA TAMAMLANDI</div>`
-    : `<div class="eyebrow">EĞİTİM KAYDI</div>`;
+    : `<div class="eyebrow secondary">EĞİTİM KAYDI</div>`;
 
   return `
     <!doctype html>
@@ -255,7 +261,10 @@ function buildStandardCertificateHtml(params: {
             margin: 0;
             padding: 18px;
             font-family: Arial, Helvetica, sans-serif;
-            background: #f4f6fb;
+            background:
+              radial-gradient(circle at top left, rgba(239,68,68,.06), transparent 28%),
+              radial-gradient(circle at top right, rgba(15,118,110,.06), transparent 22%),
+              #f4f6fb;
             color: #111827;
           }
 
@@ -285,14 +294,26 @@ function buildStandardCertificateHtml(params: {
 
           .sheet {
             background: #fff;
-            border-radius: 28px;
+            border-radius: 30px;
             overflow: hidden;
             box-shadow: 0 24px 60px rgba(15, 23, 42, 0.10);
             margin-bottom: 20px;
             border: 1px solid #e5e7eb;
+            position: relative;
+          }
+
+          .sheet::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+              linear-gradient(135deg, rgba(207,61,46,.05), transparent 18%),
+              linear-gradient(315deg, rgba(15,118,110,.05), transparent 18%);
           }
 
           .sheet-inner {
+            position: relative;
             padding: 34px 38px 30px;
           }
 
@@ -318,23 +339,24 @@ function buildStandardCertificateHtml(params: {
           }
 
           .brand-icon {
-            width: 74px;
-            height: 74px;
-            border-radius: 22px;
+            width: 78px;
+            height: 78px;
+            border-radius: 24px;
             background: linear-gradient(135deg, #ef4444, #f97316);
             color: #fff;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
+            font-size: 34px;
             font-weight: 900;
             box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
           }
 
           .brand-main {
-            font-size: 30px;
+            font-size: 31px;
             font-weight: 900;
             color: #cf3d2e;
+            letter-spacing: 0.4px;
           }
 
           .brand-sub {
@@ -393,6 +415,12 @@ function buildStandardCertificateHtml(params: {
             font-size: 12px;
             font-weight: 800;
             letter-spacing: 1px;
+          }
+
+          .eyebrow.secondary {
+            background: #eff6ff;
+            border-color: #bfdbfe;
+            color: #1d4ed8;
           }
 
           h1 {
@@ -468,11 +496,12 @@ function buildStandardCertificateHtml(params: {
           }
 
           .card {
-            background: #f9fafb;
+            background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
             border: 1px solid #e5e7eb;
             border-radius: 18px;
             padding: 16px;
             text-align: left;
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.04);
           }
 
           .card-label {
@@ -587,8 +616,8 @@ function buildStandardCertificateHtml(params: {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 122px;
-            height: 122px;
+            width: 124px;
+            height: 124px;
             border-radius: 999px;
             border: 4px solid #cf3d2e;
             color: #cf3d2e;
@@ -930,9 +959,7 @@ function buildRegulationCertificateHtml(params: {
     ? "TEMEL EĞİTİM BELGESİ"
     : "TEMEL EĞİTİM KATILIM BELGESİ";
 
-  const egitimTuruLabel = params.isCertificate
-    ? "Temel İSG Eğitimi"
-    : "Temel İSG Eğitim Katılımı";
+  const trainingShortTitle = escapeHtml(params.trainingTitle || "-");
 
   return `
     <!doctype html>
@@ -947,13 +974,13 @@ function buildRegulationCertificateHtml(params: {
           body {
             margin: 0;
             padding: 18px;
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: "Times New Roman", Arial, serif;
             background: #f3f4f6;
             color: #111827;
           }
 
           .page-wrap {
-            max-width: 1100px;
+            max-width: 1000px;
             margin: 0 auto;
           }
 
@@ -974,187 +1001,205 @@ function buildRegulationCertificateHtml(params: {
             text-decoration: none;
             font-size: 14px;
             font-weight: 700;
+            font-family: Arial, Helvetica, sans-serif;
           }
 
           .sheet {
             background: #fff;
-            border: 1px solid #d1d5db;
+            border: 2px solid #111827;
             box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-            margin-bottom: 20px;
-            padding: 28px;
-          }
-
-          .top-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 20px;
             margin-bottom: 18px;
+            padding: 24px 24px 18px;
           }
 
-          .title {
+          .official-head {
             text-align: center;
-            font-size: 28px;
-            font-weight: 900;
-            margin: 10px 0 18px;
+            font-size: 16px;
+            font-weight: 700;
             letter-spacing: 0.4px;
+            margin-bottom: 6px;
+          }
+
+          .official-sub {
+            text-align: center;
+            font-size: 12px;
+            margin-bottom: 14px;
+          }
+
+          .page-title {
+            text-align: center;
+            font-size: 22px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin: 8px 0 16px;
+          }
+
+          .front-table,
+          .back-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+
+          .front-table td,
+          .back-table td,
+          .back-table th {
+            border: 1px solid #111827;
+            padding: 8px 10px;
+            vertical-align: top;
+            font-size: 13px;
+            line-height: 1.55;
+          }
+
+          .label-cell {
+            width: 230px;
+            font-weight: 700;
+          }
+
+          .paragraph-box {
+            border: 1px solid #111827;
+            padding: 14px 16px;
+            min-height: 210px;
+            font-size: 13px;
+            line-height: 1.8;
+            margin-bottom: 14px;
+          }
+
+          .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 14px;
           }
 
           .meta-box {
-            border: 1px solid #1f2937;
-            padding: 12px 14px;
-            font-size: 13px;
-            line-height: 1.8;
-            min-width: 320px;
-          }
-
-          .brand {
-            font-size: 26px;
-            font-weight: 900;
-            color: #b91c1c;
-          }
-
-          .brand-sub {
-            margin-top: 6px;
-            font-size: 13px;
-            color: #4b5563;
-            line-height: 1.6;
-          }
-
-          .paragraph {
-            font-size: 15px;
-            line-height: 1.9;
-            color: #111827;
-            margin: 16px 0;
-          }
-
-          .field-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 16px;
-          }
-
-          .field-table td {
             border: 1px solid #111827;
             padding: 10px 12px;
-            font-size: 14px;
-            vertical-align: top;
+            font-size: 12px;
+            line-height: 1.7;
+            min-height: 78px;
           }
 
-          .field-label {
-            width: 220px;
-            font-weight: 800;
-            background: #f9fafb;
+          .meta-box strong {
+            display: inline-block;
+            min-width: 96px;
           }
 
-          .section-title {
-            margin-top: 20px;
-            margin-bottom: 10px;
-            font-size: 18px;
-            font-weight: 900;
-          }
-
-          .topics-grid {
+          .sign-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 14px;
-            margin-top: 12px;
-          }
-
-          .topic-card {
-            border: 1px solid #111827;
-            padding: 14px;
-            min-height: 180px;
-          }
-
-          .topic-card-title {
-            font-size: 15px;
-            font-weight: 900;
-            margin-bottom: 8px;
-          }
-
-          .topic-card ul {
-            margin: 0;
-            padding-left: 18px;
-            line-height: 1.8;
-            font-size: 13px;
-          }
-
-          .verify-box {
-            margin-top: 22px;
-            display: grid;
-            grid-template-columns: 160px 1fr;
-            gap: 18px;
-            align-items: center;
-            border: 1px dashed #9ca3af;
-            padding: 16px;
-          }
-
-          .verify-box img {
-            width: 160px;
-            height: 160px;
-            object-fit: contain;
-            border: 1px solid #d1d5db;
-          }
-
-          .verify-text {
-            font-size: 13px;
-            line-height: 1.8;
-          }
-
-          .verify-link {
-            color: #b91c1c;
-            font-weight: 700;
-            word-break: break-all;
-            text-decoration: none;
-          }
-
-          .signatures {
-            margin-top: 36px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 26px;
+            gap: 24px;
+            margin-top: 26px;
           }
 
           .sign-box {
-            min-height: 100px;
+            min-height: 88px;
             display: flex;
             flex-direction: column;
             justify-content: flex-end;
           }
 
           .sign-line {
-            width: 220px;
+            width: 230px;
+            max-width: 100%;
             height: 1px;
             background: #111827;
             margin-bottom: 8px;
           }
 
           .sign-title {
-            font-size: 14px;
-            font-weight: 800;
+            font-size: 13px;
+            font-weight: 700;
           }
 
           .sign-sub {
             font-size: 12px;
-            color: #4b5563;
             margin-top: 4px;
           }
 
-          .note {
-            margin-top: 18px;
-            border: 1px solid #d1d5db;
-            background: #f9fafb;
-            padding: 14px;
-            font-size: 13px;
-            line-height: 1.8;
+          .page-mark {
+            margin-top: 12px;
+            text-align: right;
+            font-size: 11px;
           }
 
-          .official-head {
+          .section-head {
             text-align: center;
-            font-size: 18px;
-            font-weight: 900;
-            margin-bottom: 12px;
+            font-size: 19px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin: 8px 0 10px;
+          }
+
+          .section-sub {
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.7;
+            margin-bottom: 14px;
+          }
+
+          .back-table th {
+            text-align: left;
+            background: #f3f4f6;
+          }
+
+          .group-title {
+            width: 220px;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+
+          .topic-list {
+            margin: 0;
+            padding-left: 18px;
+            line-height: 1.75;
+          }
+
+          .topic-list li {
+            margin: 0 0 4px;
+          }
+
+          .verify-row {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: 135px 1fr;
+            gap: 12px;
+            align-items: center;
+          }
+
+          .qr-box {
+            width: 135px;
+            height: 135px;
+            border: 1px solid #111827;
+            padding: 6px;
+            background: #fff;
+          }
+
+          .qr-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          }
+
+          .verify-text {
+            border: 1px solid #111827;
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.7;
+            word-break: break-word;
+          }
+
+          .verify-link {
+            color: #b91c1c;
+            font-weight: 700;
+            text-decoration: none;
+          }
+
+          .footer-note {
+            margin-top: 12px;
+            border: 1px solid #111827;
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.7;
           }
 
           @page {
@@ -1163,16 +1208,15 @@ function buildRegulationCertificateHtml(params: {
           }
 
           @media (max-width: 900px) {
-            .top-row,
-            .verify-box,
-            .signatures,
-            .topics-grid {
+            .meta-grid,
+            .sign-grid,
+            .verify-row {
               grid-template-columns: 1fr;
-              display: grid;
             }
 
-            .meta-box {
-              min-width: unset;
+            .label-cell,
+            .group-title {
+              width: auto;
             }
           }
 
@@ -1189,6 +1233,10 @@ function buildRegulationCertificateHtml(params: {
             .sheet {
               box-shadow: none;
             }
+
+            .page-break {
+              page-break-before: always;
+            }
           }
         </style>
       </head>
@@ -1199,86 +1247,66 @@ function buildRegulationCertificateHtml(params: {
           </div>
 
           <div class="sheet">
-            <div class="official-head">D-SEC DİJİTAL SAĞLIK • EMNİYET • ÇEVRE</div>
+            <div class="official-head">TEMEL EĞİTİM BELGESİ</div>
+            <div class="official-sub">ÖN YÜZ</div>
 
-            <div class="top-row">
-              <div>
-                <div class="brand">D-SEC</div>
-                <div class="brand-sub">
-                  Yeni yönetmelik kapsamına uyumlu temel eğitim belgesi<br/>
-                  Firma / Kurum: ${params.safeCompanyName}
-                </div>
+            <div class="page-title">${belgeBaslik}</div>
+
+            <div class="meta-grid">
+              <div class="meta-box">
+                <strong>Belge No:</strong> ${params.certificateNo}<br/>
+                <strong>Belge Türü:</strong> ${params.badgeText}<br/>
+                <strong>Düzenleme:</strong> ${params.issueDate}
               </div>
 
               <div class="meta-box">
-                <strong>Belge Türü:</strong> ${params.badgeText}<br/>
-                <strong>Belge No:</strong> ${params.certificateNo}<br/>
-                <strong>Doğrulama Kodu:</strong> ${params.verificationCode}<br/>
-                <strong>Düzenleme Tarihi:</strong> ${params.issueDate}<br/>
-                <strong>Tamamlanma Tarihi:</strong> ${params.completedDate}
+                <strong>Firma:</strong> ${params.safeCompanyName}<br/>
+                <strong>Tamamlanma:</strong> ${params.completedDate}<br/>
+                <strong>Süre:</strong> ${params.durationText}
               </div>
             </div>
 
-            <div class="title">${belgeBaslik}</div>
-
-            <div class="paragraph">
-              İşbu belge, <strong>${params.safeUserFullName}</strong> adına düzenlenmiş olup,
-              katılımcının iş sağlığı ve güvenliği mevzuatında belirtilen eğitim konu başlıklarını
-              içeren <strong>${params.trainingTitle}</strong> eğitimini başarıyla tamamladığını göstermektedir.
+            <div class="paragraph-box">
+              İşbu belge,<br/><br/>
+              <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına,
+              çalışanların iş sağlığı ve güvenliği eğitimlerinin usul ve esaslarına ilişkin
+              konu başlıkları kapsamında düzenlenen
+              <strong>${trainingShortTitle}</strong> eğitimini
+              başarıyla tamamladığını göstermek üzere hazırlanmıştır.
+              <br/><br/>
+              Belge doğrulaması; belge numarası, doğrulama kodu ve sistem kaydı birlikte esas alınarak yapılır.
             </div>
 
-            <table class="field-table">
+            <table class="front-table">
               <tr>
-                <td class="field-label">Katılımcı Adı Soyadı</td>
-                <td>${params.safeUserFullName}</td>
+                <td class="label-cell">Katılımcının Adı Soyadı ve Ünvanı</td>
+                <td>${params.safeUserFullName} / ${params.safeUserRole}</td>
               </tr>
               <tr>
-                <td class="field-label">Görevi / Ünvanı</td>
-                <td>${params.safeUserRole}</td>
+                <td class="label-cell">Eğitimin Adı</td>
+                <td>${trainingShortTitle}</td>
               </tr>
               <tr>
-                <td class="field-label">Eğitim Türü</td>
-                <td>${egitimTuruLabel}</td>
-              </tr>
-              <tr>
-                <td class="field-label">Eğitim Süresi</td>
+                <td class="label-cell">Eğitim Süresi</td>
                 <td>${params.durationText}</td>
               </tr>
               <tr>
-                <td class="field-label">Belge Düzenleme Tarihi</td>
+                <td class="label-cell">Belge Düzenlenme Tarihi</td>
                 <td>${params.issueDate}</td>
+              </tr>
+              <tr>
+                <td class="label-cell">Doğrulama Kodu</td>
+                <td>${params.verificationCode}</td>
               </tr>
             </table>
 
-            <div class="section-title">Yönetmelik Kapsamındaki Eğitim Konuları</div>
-
-            <div class="topics-grid">
-              <div class="topic-card">
-                <div class="topic-card-title">1. Genel konular</div>
-                <ul>${buildGroupedTopicList(params.groupedSections.genel)}</ul>
+            <div class="verify-row">
+              <div class="qr-box">
+                <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
               </div>
-
-              <div class="topic-card">
-                <div class="topic-card-title">2. Sağlık konuları</div>
-                <ul>${buildGroupedTopicList(params.groupedSections.saglik)}</ul>
-              </div>
-
-              <div class="topic-card">
-                <div class="topic-card-title">3. Teknik konular</div>
-                <ul>${buildGroupedTopicList(params.groupedSections.teknik)}</ul>
-              </div>
-
-              <div class="topic-card">
-                <div class="topic-card-title">4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular</div>
-                <ul>${buildGroupedTopicList(params.groupedSections.iseOzel)}</ul>
-              </div>
-            </div>
-
-            <div class="verify-box">
-              <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
               <div class="verify-text">
-                Bu belge D-SEC sistemi üzerinden doğrulanabilir.
-                <br/><br/>
+                Bu belge D-SEC sistemi üzerinden oluşturulmuştur.
+                <br/>
                 Doğrulama bağlantısı:
                 <br/>
                 <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
@@ -1287,26 +1315,67 @@ function buildRegulationCertificateHtml(params: {
               </div>
             </div>
 
-            <div class="signatures">
+            <div class="sign-grid">
               <div class="sign-box">
                 <div class="sign-line"></div>
-                <div class="sign-title">Eğitimi Düzenleyen / Eğitim Yetkilisi</div>
-                <div class="sign-sub">D-SEC Eğitim Kayıt Birimi</div>
+                <div class="sign-title">Eğitimi Veren / Düzenleyen</div>
+                <div class="sign-sub">D-SEC Eğitim Yetkilisi</div>
               </div>
 
               <div class="sign-box" style="align-items:flex-end; text-align:right;">
                 <div class="sign-line"></div>
-                <div class="sign-title">İşveren / Yetkili Onayı</div>
+                <div class="sign-title">İşveren / Yetkili</div>
                 <div class="sign-sub">${params.safeCompanyName}</div>
               </div>
             </div>
 
-            <div class="note">
-              Bu belge, iş sağlığı ve güvenliği eğitim konu başlıklarının
-              1) Genel konular, 2) Sağlık konuları, 3) Teknik konular ve
-              4) İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular
-              şeklinde planlandığı eğitimler için düzenlenen yeni şablondur.
+            <div class="page-mark">Ek-1 / Ön Yüz</div>
+          </div>
+
+          <div class="sheet page-break">
+            <div class="official-head">TEMEL EĞİTİM BELGESİ</div>
+            <div class="official-sub">ARKA YÜZ</div>
+
+            <div class="section-head">Eğitim Konuları</div>
+            <div class="section-sub">
+              Bu arka sayfa, temel eğitim konularını ve doğrulama referanslarını içerir.
             </div>
+
+            <table class="back-table">
+              <thead>
+                <tr>
+                  <th class="group-title">Bölüm</th>
+                  <th>Konu Başlıkları</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="group-title">1. Genel konular</td>
+                  <td><ul class="topic-list">${buildGroupedTopicList(params.groupedSections.genel)}</ul></td>
+                </tr>
+                <tr>
+                  <td class="group-title">2. Sağlık konuları</td>
+                  <td><ul class="topic-list">${buildGroupedTopicList(params.groupedSections.saglik)}</ul></td>
+                </tr>
+                <tr>
+                  <td class="group-title">3. Teknik konular</td>
+                  <td><ul class="topic-list">${buildGroupedTopicList(params.groupedSections.teknik)}</ul></td>
+                </tr>
+                <tr>
+                  <td class="group-title">4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular</td>
+                  <td><ul class="topic-list">${buildGroupedTopicList(params.groupedSections.iseOzel)}</ul></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="footer-note">
+              <strong>Katılımcı:</strong> ${params.safeUserFullName}<br/>
+              <strong>Görevi / Ünvanı:</strong> ${params.safeUserRole}<br/>
+              <strong>Belge No:</strong> ${params.certificateNo}<br/>
+              <strong>Doğrulama Kodu:</strong> ${params.verificationCode}
+            </div>
+
+            <div class="page-mark">Ek-1 / Arka Yüz</div>
           </div>
         </div>
       </body>
@@ -1392,7 +1461,7 @@ export async function GET(
       );
     }
 
-    if (isCertificate && (assignment.final_exam_score || 0) < 60) {
+    if (isCertificate && Number(assignment.final_exam_score || 0) < 60) {
       return new NextResponse(
         "Sertifika için final sınavından en az 60 puan alınmalıdır.",
         { status: 400 }
@@ -1486,10 +1555,13 @@ export async function GET(
       training?.description,
       topics
     );
+
     const groupedSections = buildRegulationSectionsFromSingleTraining(
       matchedSection,
       topics
     );
+
+    const useOfficialBasicTemplate = isOfficialBasicIsgTemplate(matchedSection);
 
     const topicsRows = buildStandardTopicsTableRows(topics);
 
@@ -1526,58 +1598,64 @@ export async function GET(
       ? "Bu sertifika, sistem kayıtları esas alınarak düzenlenmiştir. Belge doğrulaması için karekod veya doğrulama bağlantısı kullanılabilir."
       : "Bu katılım belgesi, eğitim kaydının sistemde bulunduğunu göstermek amacıyla düzenlenmiştir.";
 
+    const realFinalScore = Math.max(
+      0,
+      Math.min(100, Math.round(Number(assignment.final_exam_score || 0)))
+    );
+
     const scoreCard = isCertificate
       ? `
         <div class="card">
           <div class="card-label">Final Sınav Puanı</div>
-          <div class="card-value">${Number(assignment.final_exam_score || 0)}</div>
+          <div class="card-value">${realFinalScore}</div>
         </div>
       `
       : "";
 
-    const html = groupedSections
-      ? buildRegulationCertificateHtml({
-          documentTitle,
-          badgeText,
-          certificateNo: certificateNo || "-",
-          verificationCode: verificationCode || "-",
-          issueDate: issueDateOnly,
-          completedDate,
-          safeCompanyName,
-          safeUserFullName,
-          safeUserRole,
-          trainingTitle,
-          durationText,
-          verifyUrl,
-          qrImageUrl,
-          groupedSections,
-          isCertificate,
-        })
-      : buildStandardCertificateHtml({
-          documentTitle,
-          badgeText,
-          mainHeading,
-          introText,
-          noteText,
-          certificateNo: certificateNo || "-",
-          verificationCode: verificationCode || "-",
-          issueDate,
-          completedDate,
-          startedDate,
-          safeCompanyName,
-          safeUserFullName,
-          safeUserEmail,
-          safeUserRole,
-          trainingTitle,
-          trainingDescription,
-          trainingType,
-          durationText,
-          scoreCard,
-          topicsRows,
-          verifyUrl,
-          qrImageUrl,
-          isCertificate,
-        });
+    const html =
+      useOfficialBasicTemplate && groupedSections
+        ? buildRegulationCertificateHtml({
+            documentTitle,
+            badgeText,
+            certificateNo: certificateNo || "-",
+            verificationCode: verificationCode || "-",
+            issueDate: issueDateOnly,
+            completedDate,
+            safeCompanyName,
+            safeUserFullName,
+            safeUserRole,
+            trainingTitle,
+            durationText,
+            verifyUrl,
+            qrImageUrl,
+            groupedSections,
+            isCertificate,
+          })
+        : buildStandardCertificateHtml({
+            documentTitle,
+            badgeText,
+            mainHeading,
+            introText,
+            noteText,
+            certificateNo: certificateNo || "-",
+            verificationCode: verificationCode || "-",
+            issueDate,
+            completedDate,
+            startedDate,
+            safeCompanyName,
+            safeUserFullName,
+            safeUserEmail,
+            safeUserRole,
+            trainingTitle,
+            trainingDescription,
+            trainingType,
+            durationText,
+            scoreCard,
+            topicsRows,
+            verifyUrl,
+            qrImageUrl,
+            isCertificate,
+          });
 
     return new NextResponse(html, {
       headers: {

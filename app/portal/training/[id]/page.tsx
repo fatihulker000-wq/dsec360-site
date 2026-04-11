@@ -42,9 +42,7 @@ function normalizeFinalScore(score?: number | null) {
   const numeric = Number(score);
   if (!Number.isFinite(numeric)) return null;
 
-  const clamped = Math.max(0, Math.min(100, numeric));
-
-  return Math.round(clamped / 10) * 10;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
 function shouldShowFinalScore(params: {
