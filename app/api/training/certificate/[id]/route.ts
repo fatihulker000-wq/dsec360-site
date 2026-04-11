@@ -110,86 +110,63 @@ type GroupedTopicSections = {
   iseOzel: string[];
 };
 
-function extractGroupedIsgSections(
-  topics: string[],
+function detectIsgRegulationSection(
   trainingTitle?: string | null,
-  trainingDescription?: string | null
-): GroupedTopicSections | null {
+  trainingDescription?: string | null,
+  topics: string[] = []
+): keyof GroupedTopicSections | null {
   const allText = normalizeTopicText(
     [trainingTitle || "", trainingDescription || "", ...topics].join("\n")
   );
 
-  const hasGenelHeader =
-    allText.includes("genel konular") || allText.includes("1. genel konular");
-  const hasSaglikHeader =
-    allText.includes("saglik konulari") || allText.includes("2. saglik konulari");
-  const hasTeknikHeader =
-    allText.includes("teknik konular") || allText.includes("3. teknik konular");
-  const hasIseOzelHeader =
+  if (
+    allText.includes("genel konular") ||
+    allText.includes("1. genel konular") ||
+    allText === "genel konular"
+  ) {
+    return "genel";
+  }
+
+  if (
+    allText.includes("saglik konulari") ||
+    allText.includes("2. saglik konulari") ||
+    allText === "saglik konulari"
+  ) {
+    return "saglik";
+  }
+
+  if (
+    allText.includes("teknik konular") ||
+    allText.includes("3. teknik konular") ||
+    allText === "teknik konular"
+  ) {
+    return "teknik";
+  }
+
+  if (
     allText.includes("ise ve isyerine ozgu riskler") ||
     allText.includes("ise ve isyerine ozel riskler") ||
     allText.includes("risk degerlendirmesine dayali konular") ||
-    allText.includes("4. ise ve isyerine ozgu riskler");
-
-  if (!(hasGenelHeader && hasSaglikHeader && hasTeknikHeader && hasIseOzelHeader)) {
-    return null;
+    allText.includes("4. ise ve isyerine ozgu riskler")
+  ) {
+    return "iseOzel";
   }
 
-  const sections: GroupedTopicSections = {
-    genel: [],
-    saglik: [],
-    teknik: [],
-    iseOzel: [],
+  return null;
+}
+
+function buildRegulationSectionsFromSingleTraining(
+  sectionKey: keyof GroupedTopicSections | null,
+  topics: string[]
+): GroupedTopicSections | null {
+  if (!sectionKey) return null;
+
+  return {
+    genel: sectionKey === "genel" ? topics : [],
+    saglik: sectionKey === "saglik" ? topics : [],
+    teknik: sectionKey === "teknik" ? topics : [],
+    iseOzel: sectionKey === "iseOzel" ? topics : [],
   };
-
-  let currentSection: keyof GroupedTopicSections | null = null;
-
-  for (const rawTopic of topics) {
-    const topic = String(rawTopic || "").trim();
-    const normalized = normalizeTopicText(topic);
-
-    if (!topic) continue;
-
-    if (
-      normalized.includes("genel konular") ||
-      normalized.startsWith("1. genel konular")
-    ) {
-      currentSection = "genel";
-      continue;
-    }
-
-    if (
-      normalized.includes("saglik konulari") ||
-      normalized.startsWith("2. saglik konulari")
-    ) {
-      currentSection = "saglik";
-      continue;
-    }
-
-    if (
-      normalized.includes("teknik konular") ||
-      normalized.startsWith("3. teknik konular")
-    ) {
-      currentSection = "teknik";
-      continue;
-    }
-
-    if (
-      normalized.includes("ise ve isyerine ozgu riskler") ||
-      normalized.includes("ise ve isyerine ozel riskler") ||
-      normalized.includes("risk degerlendirmesine dayali konular") ||
-      normalized.startsWith("4.")
-    ) {
-      currentSection = "iseOzel";
-      continue;
-    }
-
-    if (currentSection) {
-      sections[currentSection].push(topic);
-    }
-  }
-
-  return sections;
 }
 
 function buildStandardTopicsTableRows(topics: string[]) {
@@ -1504,10 +1481,14 @@ export async function GET(
         : "Süre bilgisi tanımlanmadı";
 
     const topics = parseTrainingTopics(training?.topics_text);
-    const groupedSections = extractGroupedIsgSections(
-      topics,
+    const matchedSection = detectIsgRegulationSection(
       training?.title,
-      training?.description
+      training?.description,
+      topics
+    );
+    const groupedSections = buildRegulationSectionsFromSingleTraining(
+      matchedSection,
+      topics
     );
 
     const topicsRows = buildStandardTopicsTableRows(topics);
