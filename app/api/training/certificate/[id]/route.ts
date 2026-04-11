@@ -1029,23 +1029,19 @@ function buildRegulationCertificateHtml(params: {
             letter-spacing: 0.2px;
           }
 
-          .front-layout {
-            display: grid;
-            grid-template-columns: 1.55fr 1fr;
-            gap: 8px;
-            align-items: stretch;
-          }
+        .front-layout {
+  display: block;
+}
 
-          .front-left,
-          .front-right {
-            border: 1px solid #111827;
-            min-height: 640px;
-          }
+.front-left {
+  border: 1px solid #111827;
+  min-height: 640px;
+  width: 100%;
+}
 
-          .front-left-inner,
-          .front-right-inner {
-            padding: 10px 10px 8px;
-          }
+.front-left-inner {
+  padding: 10px 10px 8px;
+}
 
           .mini-head {
             font-size: 12px;
@@ -1121,26 +1117,26 @@ function buildRegulationCertificateHtml(params: {
             text-align: center;
           }
 
-          .verify-block {
-            margin-top: 8px;
-            border: 1px solid #111827;
-            padding: 8px;
-            display: grid;
-            grid-template-columns: 90px 1fr;
-            gap: 8px;
-            align-items: center;
-            font-size: 11px;
-            line-height: 1.45;
-          }
+         .verify-block {
+  margin-top: 6px;
+  border: 1px solid #111827;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1.3;
+}
 
-          .verify-block img {
-            width: 90px;
-            height: 90px;
-            object-fit: contain;
-            border: 1px solid #111827;
-            background: #fff;
-            padding: 4px;
-          }
+.verify-block img {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  border: 1px solid #111827;
+  background: #fff;
+  padding: 3px;
+}
 
           .verify-link {
             color: #111827;
@@ -1149,37 +1145,40 @@ function buildRegulationCertificateHtml(params: {
             font-weight: 700;
           }
 
-          .back-box {
-            border: 1px solid #111827;
-            padding: 8px;
-          }
+         .back-box {
+  border: 1px solid #111827;
+  padding: 6px;
+  max-height: 1000px;
+  overflow: hidden;
+  page-break-inside: avoid;
+}
 
           .back-header {
             display: grid;
             grid-template-columns: 1fr 60px;
           }
 
-          .back-header > div {
-            border: 1px solid #111827;
-            border-bottom: none;
-            padding: 4px 6px;
-            font-size: 12px;
-            font-weight: 700;
-          }
+        .back-header > div {
+  border: 1px solid #111827;
+  border-bottom: none;
+  padding: 3px 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
 
           .back-row {
             display: grid;
             grid-template-columns: 1fr 60px;
           }
 
-          .back-row > div {
-            border: 1px solid #111827;
-            border-top: none;
-            padding: 4px 6px;
-            font-size: 11px;
-            line-height: 1.35;
-            min-height: 22px;
-          }
+       .back-row > div {
+  border: 1px solid #111827;
+  border-top: none;
+  padding: 3px 4px;
+  font-size: 10px;
+  line-height: 1.2;
+  min-height: 18px;
+}
 
           .section-title {
             font-weight: 700;
@@ -1194,6 +1193,10 @@ function buildRegulationCertificateHtml(params: {
             font-size: 10px;
             line-height: 1.4;
           }
+
+          .sheet {
+            page-break-inside: avoid;
+            }
 
           @page {
             size: A4 portrait;
@@ -1233,138 +1236,6 @@ function buildRegulationCertificateHtml(params: {
               <div>${belgeBaslik}</div>
             </div>
 
-            <div class="front-layout">
-              <div class="front-left">
-                <div class="front-left-inner">
-                  <div class="mini-head">TEMEL EĞİTİM BELGESİ</div>
-
-                  <div class="front-paragraph">
-                    İşbu belge,<br/><br/>
-                    <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına
-                    Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında
-                    Yönetmelik kapsamında D-SEC tarafından düzenlenen
-                    <strong>${trainingShortTitle}</strong> eğitiminin tamamlanması sonucunda
-                    düzenlenmiştir.
-                  </div>
-
-                  <div class="front-lines">
-Belge düzenlenme tarihi: ${params.issueDate}
-Eğitimin süresi: ${params.durationText}
-Eğitimin türü: İlk defa verilen temel eğitim<span class="box-line"></span>
-                     Tekrar verilen temel eğitim<span class="box-line"></span>
-Eğitimin şekli: Uzaktan<span class="box-line"></span>
-                    Yüz yüze<span class="box-line"></span>
-
-Eğiticilerin adı soyadı ve ünvanı: D-SEC Eğitim Yetkilisi
-Eğiticilerin imzası:
-
-<div class="spacer"></div>
-
-Çalışanın işyerinin ünvanı: ${params.safeCompanyName}
-İşverenin/işveren vekilinin adı soyadı:
-İşveren/işveren vekilinin imzası:
-                  </div>
-                </div>
-              </div>
-
-              <div class="front-right">
-                <div class="front-right-inner">
-                  <table class="topic-table">
-                    <tr>
-                      <th class="topic-col-head">EĞİTİM KONULARI</th>
-                      <th class="duration-col">SÜRE</th>
-                    </tr>
-
-                    <tr>
-                      <td class="topic-row-title">1. Genel konular</td>
-                      <td></td>
-                    </tr>
-                    ${params.groupedSections.genel.length
-                      ? params.groupedSections.genel
-                          .map(
-                            (item) => `
-                              <tr>
-                                <td class="topic-sub">${escapeHtml(item)}</td>
-                                <td></td>
-                              </tr>
-                            `
-                          )
-                          .join("")
-                      : `
-                        <tr>
-                          <td class="topic-sub">-</td>
-                          <td></td>
-                        </tr>
-                      `}
-
-                    <tr>
-                      <td class="topic-row-title">2. Sağlık konuları</td>
-                      <td></td>
-                    </tr>
-                    ${params.groupedSections.saglik.length
-                      ? params.groupedSections.saglik
-                          .map(
-                            (item) => `
-                              <tr>
-                                <td class="topic-sub">${escapeHtml(item)}</td>
-                                <td></td>
-                              </tr>
-                            `
-                          )
-                          .join("")
-                      : `
-                        <tr>
-                          <td class="topic-sub">-</td>
-                          <td></td>
-                        </tr>
-                      `}
-
-                    <tr>
-                      <td class="topic-row-title">3. Teknik konular</td>
-                      <td></td>
-                    </tr>
-                    ${params.groupedSections.teknik.length
-                      ? params.groupedSections.teknik
-                          .map(
-                            (item) => `
-                              <tr>
-                                <td class="topic-sub">${escapeHtml(item)}</td>
-                                <td></td>
-                              </tr>
-                            `
-                          )
-                          .join("")
-                      : `
-                        <tr>
-                          <td class="topic-sub">-</td>
-                          <td></td>
-                        </tr>
-                      `}
-
-                    <tr>
-                      <td class="topic-row-title">4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular</td>
-                      <td></td>
-                    </tr>
-                    ${params.groupedSections.iseOzel.length
-                      ? params.groupedSections.iseOzel
-                          .map(
-                            (item) => `
-                              <tr>
-                                <td class="topic-sub">${escapeHtml(item)}</td>
-                                <td></td>
-                              </tr>
-                            `
-                          )
-                          .join("")
-                      : `
-                        <tr>
-                          <td class="topic-sub">-</td>
-                          <td></td>
-                        </tr>
-                      `}
-                  </table>
-                </div>
-              </div>
             </div>
 
             <div class="footer-note">
