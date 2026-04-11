@@ -1119,11 +1119,20 @@ function buildRegulationCertificateHtml(params: {
             margin-bottom: 6px;
           }
 
-          .front-box {
-            border: 1px solid #111827;
-            min-height: 980px;
-            padding: 10px;
-          }
+         .front-box {
+  border: 1px solid #111827;
+  height: 980px;
+  padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+  .front-content {
+  height: 66%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
 
           .mini-head {
             font-size: 11px;
@@ -1153,7 +1162,7 @@ function buildRegulationCertificateHtml(params: {
           }
 
           .verify-block {
-            margin-top: 8px;
+            margin-top: 10px;
             border: 1px solid #111827;
             padding: 5px;
             display: grid;
@@ -1259,18 +1268,19 @@ function buildRegulationCertificateHtml(params: {
               <div>${belgeBaslik}</div>
             </div>
 
-            <div class="front-box">
-              <div class="mini-head">TEMEL EĞİTİM BELGESİ</div>
+         <div class="front-box">
+  <div class="front-content">
+    <div class="mini-head">TEMEL EĞİTİM BELGESİ</div>
 
-              <div class="front-paragraph">
-                İşbu belge,<br/><br/>
-                <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına,
-                Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında
-                Yönetmelik kapsamında D-SEC tarafından düzenlenen
-                <strong>${trainingShortTitle}</strong> eğitiminin tamamlanması sonucunda düzenlenmiştir.
-              </div>
+    <div class="front-paragraph">
+      İşbu belge,<br/><br/>
+      <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına,
+      Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında
+      Yönetmelik kapsamında D-SEC tarafından düzenlenen
+      <strong>${trainingShortTitle}</strong> eğitiminin tamamlanması sonucunda düzenlenmiştir.
+    </div>
 
-              <div class="front-lines">
+    <div class="front-lines">
 Belge düzenlenme tarihi: ${params.issueDate}
 Eğitimin süresi: ${params.durationText}
 Eğitimin türü: İlk defa verilen temel eğitim<span class="box-line"></span>
@@ -1284,21 +1294,22 @@ Eğiticilerin imzası:
 Çalışanın işyerinin ünvanı: ${params.safeCompanyName}
 İşverenin/işveren vekilinin adı soyadı:
 İşveren/işveren vekilinin imzası:
-              </div>
+    </div>
 
-              <div class="verify-block">
-                <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
-                <div>
-                  Bu belge D-SEC sistemi üzerinden doğrulanabilir.<br/>
-                  Belge No: ${params.certificateNo}<br/>
-                  Doğrulama Kodu: ${params.verificationCode}<br/>
-                  Bağlantı:
-                  <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
-                    ${escapeHtml(params.verifyUrl)}
-                  </a>
-                </div>
-              </div>
-            </div>
+    <div class="verify-block">
+      <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
+      <div>
+        Bu belge D-SEC sistemi üzerinden doğrulanabilir.<br/>
+        Belge No: ${params.certificateNo}<br/>
+        Doğrulama Kodu: ${params.verificationCode}<br/>
+        Bağlantı:
+        <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
+          ${escapeHtml(params.verifyUrl)}
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
 
             <div class="footer-note">
               * Belge No: ${params.certificateNo} &nbsp;&nbsp;|&nbsp;&nbsp; Doğrulama Kodu: ${params.verificationCode}
