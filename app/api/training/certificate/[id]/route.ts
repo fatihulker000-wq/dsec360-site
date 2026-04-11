@@ -1476,3 +1476,287 @@ Eğiticilerin imzası:
     </html>
   `;
 }
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const cookieStore = await cookies();
+
+    const userId = cookieStore.get("dsec_user_id")?.value;
+    const cookieEmail = cookieStore.get("dsec_user_email")?.value || "Kullanıcı";
+    const cookieFullName =
+      cookieStore.get("dsec_user_full_name")?.value ||
+      cookieStore.get("dsec_user_name")?.value ||
+      cookieEmail;
+
+    const companyName =
+      cookieStore.get("dsec_company_name")?.value || "Firma Adı Tanımlanmadı";
+
+    if (!userId) {
+      return new NextResponse("Yetkisiz erişim", { status: 401 });
+    }
+
+    const { id } = await context.params;
+
+    if (!id || String(id).trim().length < 3) {
+      return new NextResponse("Geçersiz belge kaydı.", { status: 400 });
+    }
+
+    const supabase = getSupabase();
+    const url = new URL(request.url);
+    const docType =
+      url.searchParams.get("type") === "attendance"
+        ? "attendance"
+        : "certificate";
+
+    const isCertificate = docType === "certificate";
+
+    let assignmentQuery = supabase
+      .from("training_assignments")
+      .select(
+        "id, status, completed_at, started_at, training_id, certificate_no, certificate_issued_at, verification_code, final_exam_passed, final_exam_score"
+      )
+      .eq("id", id);
+
+    if (userId !== "admin-1") {
+      assignmentQuery = assignmentQuery.eq("user_id", userId);
+    }
+
+    const { data, error: assignmentError } =
+      await assignmentQuery.single<AssignmentRow>();
+
+    if (assignmentError || !data) {
+      console.error("ASSIGNMENT ERROR:", assignmentError);
+      return new NextResponse(
+        isCertificate
+          ? "Sertifika kaydı bulunamadı."
+          : "Katılım belgesi kaydı bulunamadı.",
+        { status: 404 }
+      );
+    }
+
+    const assignment = data;
+
+    if (assignment.status !== "completed") {
+      return new NextResponse(
+        isCertificate
+          ? "Belge yalnızca tamamlanan eğitimler için oluşturulur."
+          : "Katılım belgesi yalnızca tamamlanan eğitimler için oluşturulur.",
+        { status: 400 }
+      );
+    }
+
+    if (isCertificate && !assignment.final_exam_passed) {
+      return new NextResponse(
+        "Sertifika için final sınavı başarıyla tamamlanmalıdır.",
+        { status: 400 }
+      );
+    }
+
+    if (isCertificate && Number(assignment.final_exam_score || 0) < 60) {
+      return new NextResponse(
+        "Sertifika için final sınavından en az 60 puan alınmalıdır.",
+        { status: 400 }
+      );
+    }
+
+    let certificateNo = assignment.certificate_no;
+    let verificationCode = assignment.verification_code;
+    let certificateIssuedAt = assignment.certificate_issued_at;
+
+    if (!certificateNo || !verificationCode || !certificateIssuedAt) {
+      certificateNo = certificateNo || buildCertificateNo(String(assignment.id));
+      verificationCode = verificationCode || buildVerificationCode();
+      certificateIssuedAt = certificateIssuedAt || new Date().toISOString();
+
+      let updateQuery = supabase
+        .from("training_assignments")
+        .update({
+          certificate_no: certificateNo,
+          verification_code: verificationCode,
+          certificate_issued_at: certificateIssuedAt,
+        })
+        .eq("id", id);
+
+      if (userId !== "admin-1") {
+        updateQuery = updateQuery.eq("user_id", userId);
+      }
+
+      const { error: updateError } = await updateQuery;
+
+      if (updateError) {
+        console.error("CERTIFICATE META UPDATE ERROR:", updateError);
+      }
+    }
+
+    let training: TrainingRow | null = null;
+
+    if (assignment.training_id) {
+      const { data: trainingData, error: trainingError } = await supabase
+        .from("trainings")
+        .select("id, title, description, type, topics_text, duration_minutes")
+        .eq("id", assignment.training_id)
+        .maybeSingle<TrainingRow>();
+
+      if (trainingError) {
+        console.error("TRAINING ERROR:", trainingError);
+      } else {
+        training = trainingData;
+      }
+    }
+
+    let dbUser: UserRow | null = null;
+    if (userId !== "admin-1") {
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("id, full_name, email, role")
+        .eq("id", userId)
+        .maybeSingle<UserRow>();
+
+      if (userError) {
+        console.error("CERTIFICATE USER ERROR:", userError);
+      } else {
+        dbUser = userData;
+      }
+    }
+
+    const userFullName = dbUser?.full_name || cookieFullName;
+    const userEmail = dbUser?.email || cookieEmail;
+    const userRole =
+      dbUser?.role ||
+      cookieStore.get("dsec_user_role")?.value ||
+      cookieStore.get("dsec_user_job_title")?.value ||
+      "Katılımcı";
+
+    const safeUserEmail = escapeHtml(userEmail);
+    const safeUserFullName = escapeHtml(userFullName);
+    const safeUserRole = escapeHtml(formatRoleLabel(userRole));
+    const safeCompanyName = escapeHtml(companyName);
+
+    const trainingTitle = escapeHtml(training?.title || "Eğitim adı bulunamadı");
+    const trainingDescription = escapeHtml(training?.description || "-");
+    const trainingType = escapeHtml(training?.type || "online");
+    const durationText =
+      training?.duration_minutes && training.duration_minutes > 0
+        ? `${training.duration_minutes} dakika`
+        : "Süre bilgisi tanımlanmadı";
+
+    const topics = parseTrainingTopics(training?.topics_text);
+    const matchedSection = detectIsgRegulationSection(
+      training?.title,
+      training?.description,
+      topics
+    );
+
+    const groupedSections = buildRegulationSectionsFromSingleTraining(
+      matchedSection,
+      topics
+    );
+
+    const useOfficialBasicTemplate = isOfficialBasicIsgTemplate(matchedSection);
+
+    const topicsRows = buildStandardTopicsTableRows(topics);
+
+    const completedDate = formatDateTr(assignment.completed_at);
+    const startedDate = formatDateTr(assignment.started_at);
+    const issueDate = formatDateTr(certificateIssuedAt);
+    const issueDateOnly = formatDateOnlyTr(certificateIssuedAt);
+
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
+
+    const verifyUrl = `${origin}/verify/certificate/${verificationCode}`;
+    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+      verifyUrl
+    )}`;
+
+    const documentTitle = isCertificate
+      ? "D-SEC Eğitim Sertifikası"
+      : "D-SEC Eğitim Katılım Belgesi";
+
+    const badgeText = isCertificate
+      ? "Eğitim Sertifikası"
+      : "Eğitim Katılım Belgesi";
+
+    const mainHeading = isCertificate
+      ? "EĞİTİM SERTİFİKASI"
+      : "EĞİTİM KATILIM BELGESİ";
+
+    const introText = isCertificate
+      ? "İşbu belge, aşağıda bilgileri yer alan katılımcının belirtilen eğitimi başarıyla tamamladığını göstermek üzere düzenlenmiştir."
+      : "Bu belge, ilgili eğitim kaydı esas alınarak düzenlenmiş olup katılımcının aşağıda belirtilen eğitime katılım sağladığını göstermektedir.";
+
+    const noteText = isCertificate
+      ? "Bu sertifika, sistem kayıtları esas alınarak düzenlenmiştir. Belge doğrulaması için karekod veya doğrulama bağlantısı kullanılabilir."
+      : "Bu katılım belgesi, eğitim kaydının sistemde bulunduğunu göstermek amacıyla düzenlenmiştir.";
+
+    const realFinalScore = Math.max(
+      0,
+      Math.min(100, Math.round(Number(assignment.final_exam_score || 0)))
+    );
+
+    const scoreCard = isCertificate
+      ? `
+        <div class="card">
+          <div class="card-label">Final Sınav Puanı</div>
+          <div class="card-value">${realFinalScore}</div>
+        </div>
+      `
+      : "";
+
+    const html =
+      useOfficialBasicTemplate && groupedSections
+        ? buildRegulationCertificateHtml({
+            documentTitle,
+            badgeText,
+            certificateNo: certificateNo || "-",
+            verificationCode: verificationCode || "-",
+            issueDate: issueDateOnly,
+            completedDate,
+            safeCompanyName,
+            safeUserFullName,
+            safeUserRole,
+            trainingTitle,
+            durationText,
+            verifyUrl,
+            qrImageUrl,
+            groupedSections,
+            isCertificate,
+          })
+        : buildStandardCertificateHtml({
+            documentTitle,
+            badgeText,
+            mainHeading,
+            introText,
+            noteText,
+            certificateNo: certificateNo || "-",
+            verificationCode: verificationCode || "-",
+            issueDate,
+            completedDate,
+            startedDate,
+            safeCompanyName,
+            safeUserFullName,
+            safeUserEmail,
+            safeUserRole,
+            trainingTitle,
+            trainingDescription,
+            trainingType,
+            durationText,
+            scoreCard,
+            topicsRows,
+            verifyUrl,
+            qrImageUrl,
+            isCertificate,
+          });
+
+    return new NextResponse(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+      },
+    });
+  } catch (err) {
+    console.error("Certificate route hata:", err);
+    return new NextResponse("Sunucu hatası", { status: 500 });
+  }
+}
