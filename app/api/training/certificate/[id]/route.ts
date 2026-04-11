@@ -973,251 +973,231 @@ function buildRegulationCertificateHtml(params: {
 
           body {
             margin: 0;
-            padding: 18px;
+            padding: 10px;
             font-family: "Times New Roman", Arial, serif;
             background: #f3f4f6;
             color: #111827;
           }
 
           .page-wrap {
-            max-width: 1000px;
+            max-width: 960px;
             margin: 0 auto;
           }
 
           .toolbar {
             display: flex;
             justify-content: flex-end;
-            margin-bottom: 16px;
+            margin-bottom: 10px;
           }
 
           .print-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 12px 18px;
-            border-radius: 12px;
+            padding: 10px 16px;
+            border-radius: 10px;
             background: #111827;
             color: #fff;
             text-decoration: none;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             font-family: Arial, Helvetica, sans-serif;
           }
 
           .sheet {
             background: #fff;
-            border: 2px solid #111827;
-            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
-            margin-bottom: 18px;
-            padding: 24px 24px 18px;
+            border: 1.5px solid #111827;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+            margin-bottom: 12px;
+            padding: 12px 12px 10px;
           }
 
-          .official-head {
-            text-align: center;
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: 0.4px;
-            margin-bottom: 6px;
-          }
-
-          .official-sub {
-            text-align: center;
+          .top-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
             font-size: 12px;
-            margin-bottom: 14px;
+            margin-bottom: 4px;
           }
 
           .page-title {
             text-align: center;
-            font-size: 22px;
+            font-size: 17px;
             font-weight: 700;
             text-transform: uppercase;
-            margin: 8px 0 16px;
+            margin: 0 0 8px;
+            letter-spacing: 0.2px;
           }
 
-          .front-table,
-          .back-table {
-            width: 100%;
-            border-collapse: collapse;
-          }
-
-          .front-table td,
-          .back-table td,
-          .back-table th {
-            border: 1px solid #111827;
-            padding: 8px 10px;
-            vertical-align: top;
-            font-size: 13px;
-            line-height: 1.55;
-          }
-
-          .label-cell {
-            width: 230px;
-            font-weight: 700;
-          }
-
-          .paragraph-box {
-            border: 1px solid #111827;
-            padding: 14px 16px;
-            min-height: 210px;
-            font-size: 13px;
-            line-height: 1.8;
-            margin-bottom: 14px;
-          }
-
-          .meta-grid {
+          .front-layout {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 14px;
+            grid-template-columns: 1.55fr 1fr;
+            gap: 8px;
+            align-items: stretch;
           }
 
-          .meta-box {
+          .front-left,
+          .front-right {
             border: 1px solid #111827;
-            padding: 10px 12px;
+            min-height: 640px;
+          }
+
+          .front-left-inner,
+          .front-right-inner {
+            padding: 10px 10px 8px;
+          }
+
+          .mini-head {
             font-size: 12px;
-            line-height: 1.7;
-            min-height: 78px;
-          }
-
-          .meta-box strong {
-            display: inline-block;
-            min-width: 96px;
-          }
-
-          .sign-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
-            margin-top: 26px;
-          }
-
-          .sign-box {
-            min-height: 88px;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-          }
-
-          .sign-line {
-            width: 230px;
-            max-width: 100%;
-            height: 1px;
-            background: #111827;
+            font-weight: 700;
             margin-bottom: 8px;
           }
 
-          .sign-title {
-            font-size: 13px;
-            font-weight: 700;
-          }
-
-          .sign-sub {
+          .front-paragraph {
             font-size: 12px;
-            margin-top: 4px;
+            line-height: 1.55;
+            min-height: 150px;
+            margin-bottom: 10px;
           }
 
-          .page-mark {
-            margin-top: 12px;
-            text-align: right;
+          .front-lines {
+            font-size: 12px;
+            line-height: 1.55;
+            white-space: pre-line;
+          }
+
+          .front-lines .spacer {
+            height: 10px;
+          }
+
+          .box-line {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border: 1px solid #111827;
+            margin: 0 4px 0 6px;
+            vertical-align: middle;
+          }
+
+          .topic-table {
+            width: 100%;
+            border-collapse: collapse;
             font-size: 11px;
           }
 
-          .section-head {
-            text-align: center;
-            font-size: 19px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin: 8px 0 10px;
-          }
-
-          .section-sub {
-            text-align: center;
-            font-size: 12px;
-            line-height: 1.7;
-            margin-bottom: 14px;
-          }
-
-          .back-table th {
-            text-align: left;
-            background: #f3f4f6;
-          }
-
-          .group-title {
-            width: 220px;
-            font-weight: 700;
-            white-space: nowrap;
-          }
-
-          .topic-list {
-            margin: 0;
-            padding-left: 18px;
-            line-height: 1.75;
-          }
-
-          .topic-list li {
-            margin: 0 0 4px;
-          }
-
-          .verify-row {
-            margin-top: 14px;
-            display: grid;
-            grid-template-columns: 135px 1fr;
-            gap: 12px;
-            align-items: center;
-          }
-
-          .qr-box {
-            width: 135px;
-            height: 135px;
+          .topic-table td,
+          .topic-table th {
             border: 1px solid #111827;
-            padding: 6px;
+            padding: 3px 5px;
+            vertical-align: top;
+            line-height: 1.3;
+          }
+
+          .topic-table th {
+            text-align: left;
+            font-size: 12px;
+            font-weight: 700;
             background: #fff;
           }
 
-          .qr-box img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
+          .topic-col-head {
+            font-weight: 700;
           }
 
-          .verify-text {
+          .topic-row-title {
+            font-weight: 700;
+          }
+
+          .topic-sub {
+            padding-left: 14px;
+          }
+
+          .topic-sub div {
+            margin-bottom: 2px;
+          }
+
+          .duration-col {
+            width: 58px;
+            text-align: center;
+          }
+
+          .verify-block {
+            margin-top: 8px;
             border: 1px solid #111827;
-            padding: 10px 12px;
-            font-size: 12px;
-            line-height: 1.7;
-            word-break: break-word;
+            padding: 8px;
+            display: grid;
+            grid-template-columns: 90px 1fr;
+            gap: 8px;
+            align-items: center;
+            font-size: 11px;
+            line-height: 1.45;
+          }
+
+          .verify-block img {
+            width: 90px;
+            height: 90px;
+            object-fit: contain;
+            border: 1px solid #111827;
+            background: #fff;
+            padding: 4px;
           }
 
           .verify-link {
-            color: #b91c1c;
-            font-weight: 700;
+            color: #111827;
             text-decoration: none;
+            word-break: break-all;
+            font-weight: 700;
+          }
+
+          .back-box {
+            border: 1px solid #111827;
+            padding: 8px;
+          }
+
+          .back-header {
+            display: grid;
+            grid-template-columns: 1fr 60px;
+          }
+
+          .back-header > div {
+            border: 1px solid #111827;
+            border-bottom: none;
+            padding: 4px 6px;
+            font-size: 12px;
+            font-weight: 700;
+          }
+
+          .back-row {
+            display: grid;
+            grid-template-columns: 1fr 60px;
+          }
+
+          .back-row > div {
+            border: 1px solid #111827;
+            border-top: none;
+            padding: 4px 6px;
+            font-size: 11px;
+            line-height: 1.35;
+            min-height: 22px;
+          }
+
+          .section-title {
+            font-weight: 700;
+          }
+
+          .section-list div {
+            margin: 0 0 2px 0;
           }
 
           .footer-note {
-            margin-top: 12px;
-            border: 1px solid #111827;
-            padding: 10px 12px;
-            font-size: 12px;
-            line-height: 1.7;
+            margin-top: 8px;
+            font-size: 10px;
+            line-height: 1.4;
           }
 
           @page {
             size: A4 portrait;
-            margin: 10mm;
-          }
-
-          @media (max-width: 900px) {
-            .meta-grid,
-            .sign-grid,
-            .verify-row {
-              grid-template-columns: 1fr;
-            }
-
-            .label-cell,
-            .group-title {
-              width: auto;
-            }
+            margin: 6mm;
           }
 
           @media print {
@@ -1232,6 +1212,7 @@ function buildRegulationCertificateHtml(params: {
 
             .sheet {
               box-shadow: none;
+              margin-bottom: 0;
             }
 
             .page-break {
@@ -1247,423 +1228,251 @@ function buildRegulationCertificateHtml(params: {
           </div>
 
           <div class="sheet">
-            <div class="official-head">TEMEL EĞİTİM BELGESİ</div>
-            <div class="official-sub">ÖN YÜZ</div>
+            <div class="top-line">
+              <div>(ÖN YÜZ)</div>
+              <div>${belgeBaslik}</div>
+            </div>
 
-            <div class="page-title">${belgeBaslik}</div>
+            <div class="front-layout">
+              <div class="front-left">
+                <div class="front-left-inner">
+                  <div class="mini-head">TEMEL EĞİTİM BELGESİ</div>
 
-            <div class="meta-grid">
-              <div class="meta-box">
-                <strong>Belge No:</strong> ${params.certificateNo}<br/>
-                <strong>Belge Türü:</strong> ${params.badgeText}<br/>
-                <strong>Düzenleme:</strong> ${params.issueDate}
+                  <div class="front-paragraph">
+                    İşbu belge,<br/><br/>
+                    <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına
+                    Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında
+                    Yönetmelik kapsamında D-SEC tarafından düzenlenen
+                    <strong>${trainingShortTitle}</strong> eğitiminin tamamlanması sonucunda
+                    düzenlenmiştir.
+                  </div>
+
+                  <div class="front-lines">
+Belge düzenlenme tarihi: ${params.issueDate}
+Eğitimin süresi: ${params.durationText}
+Eğitimin türü: İlk defa verilen temel eğitim<span class="box-line"></span>
+                     Tekrar verilen temel eğitim<span class="box-line"></span>
+Eğitimin şekli: Uzaktan<span class="box-line"></span>
+                    Yüz yüze<span class="box-line"></span>
+
+Eğiticilerin adı soyadı ve ünvanı: D-SEC Eğitim Yetkilisi
+Eğiticilerin imzası:
+
+<div class="spacer"></div>
+
+Çalışanın işyerinin ünvanı: ${params.safeCompanyName}
+İşverenin/işveren vekilinin adı soyadı:
+İşveren/işveren vekilinin imzası:
+                  </div>
+                </div>
               </div>
 
-              <div class="meta-box">
-                <strong>Firma:</strong> ${params.safeCompanyName}<br/>
-                <strong>Tamamlanma:</strong> ${params.completedDate}<br/>
-                <strong>Süre:</strong> ${params.durationText}
+              <div class="front-right">
+                <div class="front-right-inner">
+                  <table class="topic-table">
+                    <tr>
+                      <th class="topic-col-head">EĞİTİM KONULARI</th>
+                      <th class="duration-col">SÜRE</th>
+                    </tr>
+
+                    <tr>
+                      <td class="topic-row-title">1. Genel konular</td>
+                      <td></td>
+                    </tr>
+                    ${params.groupedSections.genel.length
+                      ? params.groupedSections.genel
+                          .map(
+                            (item) => `
+                              <tr>
+                                <td class="topic-sub">${escapeHtml(item)}</td>
+                                <td></td>
+                              </tr>
+                            `
+                          )
+                          .join("")
+                      : `
+                        <tr>
+                          <td class="topic-sub">-</td>
+                          <td></td>
+                        </tr>
+                      `}
+
+                    <tr>
+                      <td class="topic-row-title">2. Sağlık konuları</td>
+                      <td></td>
+                    </tr>
+                    ${params.groupedSections.saglik.length
+                      ? params.groupedSections.saglik
+                          .map(
+                            (item) => `
+                              <tr>
+                                <td class="topic-sub">${escapeHtml(item)}</td>
+                                <td></td>
+                              </tr>
+                            `
+                          )
+                          .join("")
+                      : `
+                        <tr>
+                          <td class="topic-sub">-</td>
+                          <td></td>
+                        </tr>
+                      `}
+
+                    <tr>
+                      <td class="topic-row-title">3. Teknik konular</td>
+                      <td></td>
+                    </tr>
+                    ${params.groupedSections.teknik.length
+                      ? params.groupedSections.teknik
+                          .map(
+                            (item) => `
+                              <tr>
+                                <td class="topic-sub">${escapeHtml(item)}</td>
+                                <td></td>
+                              </tr>
+                            `
+                          )
+                          .join("")
+                      : `
+                        <tr>
+                          <td class="topic-sub">-</td>
+                          <td></td>
+                        </tr>
+                      `}
+
+                    <tr>
+                      <td class="topic-row-title">4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular</td>
+                      <td></td>
+                    </tr>
+                    ${params.groupedSections.iseOzel.length
+                      ? params.groupedSections.iseOzel
+                          .map(
+                            (item) => `
+                              <tr>
+                                <td class="topic-sub">${escapeHtml(item)}</td>
+                                <td></td>
+                              </tr>
+                            `
+                          )
+                          .join("")
+                      : `
+                        <tr>
+                          <td class="topic-sub">-</td>
+                          <td></td>
+                        </tr>
+                      `}
+                  </table>
+                </div>
               </div>
             </div>
 
-            <div class="paragraph-box">
-              İşbu belge,<br/><br/>
-              <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına,
-              çalışanların iş sağlığı ve güvenliği eğitimlerinin usul ve esaslarına ilişkin
-              konu başlıkları kapsamında düzenlenen
-              <strong>${trainingShortTitle}</strong> eğitimini
-              başarıyla tamamladığını göstermek üzere hazırlanmıştır.
-              <br/><br/>
-              Belge doğrulaması; belge numarası, doğrulama kodu ve sistem kaydı birlikte esas alınarak yapılır.
+            <div class="footer-note">
+              * Belge No: ${params.certificateNo} &nbsp;&nbsp; | &nbsp;&nbsp;
+              Doğrulama Kodu: ${params.verificationCode}
+            </div>
+          </div>
+
+          <div class="sheet page-break">
+            <div class="top-line">
+              <div>(ARKA YÜZ)</div>
+              <div>Ek-2</div>
             </div>
 
-            <table class="front-table">
-              <tr>
-                <td class="label-cell">Katılımcının Adı Soyadı ve Ünvanı</td>
-                <td>${params.safeUserFullName} / ${params.safeUserRole}</td>
-              </tr>
-              <tr>
-                <td class="label-cell">Eğitimin Adı</td>
-                <td>${trainingShortTitle}</td>
-              </tr>
-              <tr>
-                <td class="label-cell">Eğitim Süresi</td>
-                <td>${params.durationText}</td>
-              </tr>
-              <tr>
-                <td class="label-cell">Belge Düzenlenme Tarihi</td>
-                <td>${params.issueDate}</td>
-              </tr>
-              <tr>
-                <td class="label-cell">Doğrulama Kodu</td>
-                <td>${params.verificationCode}</td>
-              </tr>
-            </table>
-
-            <div class="verify-row">
-              <div class="qr-box">
-                <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
+            <div class="back-box">
+              <div class="back-header">
+                <div>EĞİTİM KONULARI</div>
+                <div>SÜRE</div>
               </div>
-              <div class="verify-text">
-                Bu belge D-SEC sistemi üzerinden oluşturulmuştur.
-                <br/>
-                Doğrulama bağlantısı:
-                <br/>
+
+              <div class="back-row">
+                <div class="section-title">1. Genel konular</div>
+                <div></div>
+              </div>
+              ${(params.groupedSections.genel.length
+                ? params.groupedSections.genel
+                : ["-"]
+              )
+                .map(
+                  (item) => `
+                    <div class="back-row">
+                      <div class="section-list">${escapeHtml(item)}</div>
+                      <div></div>
+                    </div>
+                  `
+                )
+                .join("")}
+
+              <div class="back-row">
+                <div class="section-title">2. Sağlık konuları</div>
+                <div></div>
+              </div>
+              ${(params.groupedSections.saglik.length
+                ? params.groupedSections.saglik
+                : ["-"]
+              )
+                .map(
+                  (item) => `
+                    <div class="back-row">
+                      <div class="section-list">${escapeHtml(item)}</div>
+                      <div></div>
+                    </div>
+                  `
+                )
+                .join("")}
+
+              <div class="back-row">
+                <div class="section-title">3. Teknik konular</div>
+                <div></div>
+              </div>
+              ${(params.groupedSections.teknik.length
+                ? params.groupedSections.teknik
+                : ["-"]
+              )
+                .map(
+                  (item) => `
+                    <div class="back-row">
+                      <div class="section-list">${escapeHtml(item)}</div>
+                      <div></div>
+                    </div>
+                  `
+                )
+                .join("")}
+
+              <div class="back-row">
+                <div class="section-title">4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular</div>
+                <div></div>
+              </div>
+              ${(params.groupedSections.iseOzel.length
+                ? params.groupedSections.iseOzel
+                : ["-"]
+              )
+                .map(
+                  (item) => `
+                    <div class="back-row">
+                      <div class="section-list">${escapeHtml(item)}</div>
+                      <div></div>
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>
+
+            <div class="verify-block">
+              <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
+              <div>
+                Bu belge D-SEC sistemi üzerinden doğrulanabilir.<br/>
+                Belge No: ${params.certificateNo}<br/>
+                Doğrulama Kodu: ${params.verificationCode}<br/>
+                Bağlantı:
                 <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
                   ${escapeHtml(params.verifyUrl)}
                 </a>
               </div>
             </div>
-
-            <div class="sign-grid">
-              <div class="sign-box">
-                <div class="sign-line"></div>
-                <div class="sign-title">Eğitimi Veren / Düzenleyen</div>
-                <div class="sign-sub">D-SEC Eğitim Yetkilisi</div>
-              </div>
-
-              <div class="sign-box" style="align-items:flex-end; text-align:right;">
-                <div class="sign-line"></div>
-                <div class="sign-title">İşveren / Yetkili</div>
-                <div class="sign-sub">${params.safeCompanyName}</div>
-              </div>
-            </div>
-
-            <div class="page-mark">Ek-1 / Ön Yüz</div>
-          </div>
-
-          <div class="sheet page-break">
-            <div class="official-head">TEMEL EĞİTİM BELGESİ</div>
-            <div class="official-sub">ARKA YÜZ</div>
-
-            <div class="section-head">Eğitim Konuları</div>
-            <div class="section-sub">
-              Bu arka sayfa, temel eğitim konularını ve doğrulama referanslarını içerir.
-            </div>
-
-            <table class="back-table">
-              <thead>
-                <tr>
-                  <th class="group-title">Bölüm</th>
-                  <th>Konu Başlıkları</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="group-title">1. Genel konular</td>
-                  <td><ul class="topic-list">${buildGroupedTopicList(params.groupedSections.genel)}</ul></td>
-                </tr>
-                <tr>
-                  <td class="group-title">2. Sağlık konuları</td>
-                  <td><ul class="topic-list">${buildGroupedTopicList(params.groupedSections.saglik)}</ul></td>
-                </tr>
-                <tr>
-                  <td class="group-title">3. Teknik konular</td>
-                  <td><ul class="topic-list">${buildGroupedTopicList(params.groupedSections.teknik)}</ul></td>
-                </tr>
-                <tr>
-                  <td class="group-title">4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular</td>
-                  <td><ul class="topic-list">${buildGroupedTopicList(params.groupedSections.iseOzel)}</ul></td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div class="footer-note">
-              <strong>Katılımcı:</strong> ${params.safeUserFullName}<br/>
-              <strong>Görevi / Ünvanı:</strong> ${params.safeUserRole}<br/>
-              <strong>Belge No:</strong> ${params.certificateNo}<br/>
-              <strong>Doğrulama Kodu:</strong> ${params.verificationCode}
-            </div>
-
-            <div class="page-mark">Ek-1 / Arka Yüz</div>
           </div>
         </div>
       </body>
     </html>
   `;
-}
-
-export async function GET(
-  request: Request,
-  context: { params: Promise<{ id: string }> }
-) {
-  try {
-    const cookieStore = await cookies();
-
-    const userId = cookieStore.get("dsec_user_id")?.value;
-    const cookieEmail = cookieStore.get("dsec_user_email")?.value || "Kullanıcı";
-    const cookieFullName =
-      cookieStore.get("dsec_user_full_name")?.value ||
-      cookieStore.get("dsec_user_name")?.value ||
-      cookieEmail;
-
-    const companyName =
-      cookieStore.get("dsec_company_name")?.value || "Firma Adı Tanımlanmadı";
-
-    if (!userId) {
-      return new NextResponse("Yetkisiz erişim", { status: 401 });
-    }
-
-    const { id } = await context.params;
-
-    if (!id || String(id).trim().length < 3) {
-      return new NextResponse("Geçersiz belge kaydı.", { status: 400 });
-    }
-
-    const supabase = getSupabase();
-    const url = new URL(request.url);
-    const docType =
-      url.searchParams.get("type") === "attendance"
-        ? "attendance"
-        : "certificate";
-
-    const isCertificate = docType === "certificate";
-
-    let assignmentQuery = supabase
-      .from("training_assignments")
-      .select(
-        "id, status, completed_at, started_at, training_id, certificate_no, certificate_issued_at, verification_code, final_exam_passed, final_exam_score"
-      )
-      .eq("id", id);
-
-    if (userId !== "admin-1") {
-      assignmentQuery = assignmentQuery.eq("user_id", userId);
-    }
-
-    const { data, error: assignmentError } =
-      await assignmentQuery.single<AssignmentRow>();
-
-    if (assignmentError || !data) {
-      console.error("ASSIGNMENT ERROR:", assignmentError);
-      return new NextResponse(
-        isCertificate
-          ? "Sertifika kaydı bulunamadı."
-          : "Katılım belgesi kaydı bulunamadı.",
-        { status: 404 }
-      );
-    }
-
-    const assignment = data;
-
-    if (assignment.status !== "completed") {
-      return new NextResponse(
-        isCertificate
-          ? "Belge yalnızca tamamlanan eğitimler için oluşturulur."
-          : "Katılım belgesi yalnızca tamamlanan eğitimler için oluşturulur.",
-        { status: 400 }
-      );
-    }
-
-    if (isCertificate && !assignment.final_exam_passed) {
-      return new NextResponse(
-        "Sertifika için final sınavı başarıyla tamamlanmalıdır.",
-        { status: 400 }
-      );
-    }
-
-    if (isCertificate && Number(assignment.final_exam_score || 0) < 60) {
-      return new NextResponse(
-        "Sertifika için final sınavından en az 60 puan alınmalıdır.",
-        { status: 400 }
-      );
-    }
-
-    let certificateNo = assignment.certificate_no;
-    let verificationCode = assignment.verification_code;
-    let certificateIssuedAt = assignment.certificate_issued_at;
-
-    if (!certificateNo || !verificationCode || !certificateIssuedAt) {
-      certificateNo = certificateNo || buildCertificateNo(String(assignment.id));
-      verificationCode = verificationCode || buildVerificationCode();
-      certificateIssuedAt = certificateIssuedAt || new Date().toISOString();
-
-      let updateQuery = supabase
-        .from("training_assignments")
-        .update({
-          certificate_no: certificateNo,
-          verification_code: verificationCode,
-          certificate_issued_at: certificateIssuedAt,
-        })
-        .eq("id", id);
-
-      if (userId !== "admin-1") {
-        updateQuery = updateQuery.eq("user_id", userId);
-      }
-
-      const { error: updateError } = await updateQuery;
-
-      if (updateError) {
-        console.error("CERTIFICATE META UPDATE ERROR:", updateError);
-      }
-    }
-
-    let training: TrainingRow | null = null;
-
-    if (assignment.training_id) {
-      const { data: trainingData, error: trainingError } = await supabase
-        .from("trainings")
-        .select("id, title, description, type, topics_text, duration_minutes")
-        .eq("id", assignment.training_id)
-        .maybeSingle<TrainingRow>();
-
-      if (trainingError) {
-        console.error("TRAINING ERROR:", trainingError);
-      } else {
-        training = trainingData;
-      }
-    }
-
-    let dbUser: UserRow | null = null;
-    if (userId !== "admin-1") {
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .select("id, full_name, email, role")
-        .eq("id", userId)
-        .maybeSingle<UserRow>();
-
-      if (userError) {
-        console.error("CERTIFICATE USER ERROR:", userError);
-      } else {
-        dbUser = userData;
-      }
-    }
-
-    const userFullName = dbUser?.full_name || cookieFullName;
-    const userEmail = dbUser?.email || cookieEmail;
-    const userRole =
-      dbUser?.role ||
-      cookieStore.get("dsec_user_role")?.value ||
-      cookieStore.get("dsec_user_job_title")?.value ||
-      "Katılımcı";
-
-    const safeUserEmail = escapeHtml(userEmail);
-    const safeUserFullName = escapeHtml(userFullName);
-    const safeUserRole = escapeHtml(formatRoleLabel(userRole));
-    const safeCompanyName = escapeHtml(companyName);
-
-    const trainingTitle = escapeHtml(training?.title || "Eğitim adı bulunamadı");
-    const trainingDescription = escapeHtml(training?.description || "-");
-    const trainingType = escapeHtml(training?.type || "online");
-    const durationText =
-      training?.duration_minutes && training.duration_minutes > 0
-        ? `${training.duration_minutes} dakika`
-        : "Süre bilgisi tanımlanmadı";
-
-    const topics = parseTrainingTopics(training?.topics_text);
-    const matchedSection = detectIsgRegulationSection(
-      training?.title,
-      training?.description,
-      topics
-    );
-
-    const groupedSections = buildRegulationSectionsFromSingleTraining(
-      matchedSection,
-      topics
-    );
-
-    const useOfficialBasicTemplate = isOfficialBasicIsgTemplate(matchedSection);
-
-    const topicsRows = buildStandardTopicsTableRows(topics);
-
-    const completedDate = formatDateTr(assignment.completed_at);
-    const startedDate = formatDateTr(assignment.started_at);
-    const issueDate = formatDateTr(certificateIssuedAt);
-    const issueDateOnly = formatDateOnlyTr(certificateIssuedAt);
-
-    const origin =
-      process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
-
-    const verifyUrl = `${origin}/verify/certificate/${verificationCode}`;
-    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-      verifyUrl
-    )}`;
-
-    const documentTitle = isCertificate
-      ? "D-SEC Eğitim Sertifikası"
-      : "D-SEC Eğitim Katılım Belgesi";
-
-    const badgeText = isCertificate
-      ? "Eğitim Sertifikası"
-      : "Eğitim Katılım Belgesi";
-
-    const mainHeading = isCertificate
-      ? "EĞİTİM SERTİFİKASI"
-      : "EĞİTİM KATILIM BELGESİ";
-
-    const introText = isCertificate
-      ? "İşbu belge, aşağıda bilgileri yer alan katılımcının belirtilen eğitimi başarıyla tamamladığını göstermek üzere düzenlenmiştir."
-      : "Bu belge, ilgili eğitim kaydı esas alınarak düzenlenmiş olup katılımcının aşağıda belirtilen eğitime katılım sağladığını göstermektedir.";
-
-    const noteText = isCertificate
-      ? "Bu sertifika, sistem kayıtları esas alınarak düzenlenmiştir. Belge doğrulaması için karekod veya doğrulama bağlantısı kullanılabilir."
-      : "Bu katılım belgesi, eğitim kaydının sistemde bulunduğunu göstermek amacıyla düzenlenmiştir.";
-
-    const realFinalScore = Math.max(
-      0,
-      Math.min(100, Math.round(Number(assignment.final_exam_score || 0)))
-    );
-
-    const scoreCard = isCertificate
-      ? `
-        <div class="card">
-          <div class="card-label">Final Sınav Puanı</div>
-          <div class="card-value">${realFinalScore}</div>
-        </div>
-      `
-      : "";
-
-    const html =
-      useOfficialBasicTemplate && groupedSections
-        ? buildRegulationCertificateHtml({
-            documentTitle,
-            badgeText,
-            certificateNo: certificateNo || "-",
-            verificationCode: verificationCode || "-",
-            issueDate: issueDateOnly,
-            completedDate,
-            safeCompanyName,
-            safeUserFullName,
-            safeUserRole,
-            trainingTitle,
-            durationText,
-            verifyUrl,
-            qrImageUrl,
-            groupedSections,
-            isCertificate,
-          })
-        : buildStandardCertificateHtml({
-            documentTitle,
-            badgeText,
-            mainHeading,
-            introText,
-            noteText,
-            certificateNo: certificateNo || "-",
-            verificationCode: verificationCode || "-",
-            issueDate,
-            completedDate,
-            startedDate,
-            safeCompanyName,
-            safeUserFullName,
-            safeUserEmail,
-            safeUserRole,
-            trainingTitle,
-            trainingDescription,
-            trainingType,
-            durationText,
-            scoreCard,
-            topicsRows,
-            verifyUrl,
-            qrImageUrl,
-            isCertificate,
-          });
-
-    return new NextResponse(html, {
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-      },
-    });
-  } catch (err) {
-    console.error("Certificate route hata:", err);
-    return new NextResponse("Sunucu hatası", { status: 500 });
-  }
 }
