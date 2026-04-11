@@ -51,17 +51,15 @@ function shouldShowFinalScore(params: {
   final_exam_score?: number | null;
   final_exam_attempts?: number | null;
   final_exam_passed?: boolean | null;
-  status?: TrainingStatus;
 }) {
   const attempts = Number(params.final_exam_attempts || 0);
   const passed = params.final_exam_passed === true;
-  const completed = params.status === "completed";
   const hasRawScore =
     params.final_exam_score !== null && params.final_exam_score !== undefined;
 
   if (!hasRawScore) return false;
 
-  return attempts > 0 || passed || completed;
+  return attempts > 0 || passed;
 }
 
 function isNativeVideoUrl(url: string) {
@@ -413,7 +411,6 @@ export default function TrainingDetailPage() {
     final_exam_score: training?.final_exam_score,
     final_exam_attempts: training?.final_exam_attempts,
     final_exam_passed: training?.final_exam_passed,
-    status: training?.status,
   });
 
   const preExamCompleted = training?.pre_exam_completed === true;
