@@ -961,6 +961,104 @@ function buildRegulationCertificateHtml(params: {
 
   const trainingShortTitle = escapeHtml(params.trainingTitle || "-");
 
+  const backRows = `
+    <tr>
+      <td class="section-title">1. Genel konular</td>
+      <td class="duration-col"></td>
+    </tr>
+    ${
+      params.groupedSections.genel.length
+        ? params.groupedSections.genel
+            .map(
+              (item) => `
+                <tr>
+                  <td class="topic-item">${escapeHtml(item)}</td>
+                  <td class="duration-col"></td>
+                </tr>
+              `
+            )
+            .join("")
+        : `
+          <tr>
+            <td class="topic-item">-</td>
+            <td class="duration-col"></td>
+          </tr>
+        `
+    }
+
+    <tr>
+      <td class="section-title">2. Sağlık konuları</td>
+      <td class="duration-col"></td>
+    </tr>
+    ${
+      params.groupedSections.saglik.length
+        ? params.groupedSections.saglik
+            .map(
+              (item) => `
+                <tr>
+                  <td class="topic-item">${escapeHtml(item)}</td>
+                  <td class="duration-col"></td>
+                </tr>
+              `
+            )
+            .join("")
+        : `
+          <tr>
+            <td class="topic-item">-</td>
+            <td class="duration-col"></td>
+          </tr>
+        `
+    }
+
+    <tr>
+      <td class="section-title">3. Teknik konular</td>
+      <td class="duration-col"></td>
+    </tr>
+    ${
+      params.groupedSections.teknik.length
+        ? params.groupedSections.teknik
+            .map(
+              (item) => `
+                <tr>
+                  <td class="topic-item">${escapeHtml(item)}</td>
+                  <td class="duration-col"></td>
+                </tr>
+              `
+            )
+            .join("")
+        : `
+          <tr>
+            <td class="topic-item">-</td>
+            <td class="duration-col"></td>
+          </tr>
+        `
+    }
+
+    <tr>
+      <td class="section-title">4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular</td>
+      <td class="duration-col"></td>
+    </tr>
+    ${
+      params.groupedSections.iseOzel.length
+        ? params.groupedSections.iseOzel
+            .map(
+              (item) => `
+                <tr>
+                  <td class="topic-item">${escapeHtml(item)}</td>
+                  <td class="duration-col"></td>
+                </tr>
+              `
+            )
+            .join("")
+        : `
+          <tr>
+            <td class="topic-item">-</td>
+            <td class="duration-col"></td>
+          </tr>
+        `
+    }
+  `;
+
   return `
     <!doctype html>
     <html lang="tr">
@@ -980,7 +1078,7 @@ function buildRegulationCertificateHtml(params: {
           }
 
           .page-wrap {
-            max-width: 960px;
+            max-width: 930px;
             margin: 0 auto;
           }
 
@@ -1006,10 +1104,11 @@ function buildRegulationCertificateHtml(params: {
 
           .sheet {
             background: #fff;
-            border: 1.5px solid #111827;
+            border: 1.2px solid #111827;
             box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
             margin-bottom: 12px;
-            padding: 12px 12px 10px;
+            padding: 10px;
+            page-break-inside: avoid;
           }
 
           .top-line {
@@ -1017,53 +1116,31 @@ function buildRegulationCertificateHtml(params: {
             justify-content: space-between;
             align-items: flex-start;
             font-size: 12px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
           }
 
-          .page-title {
-            text-align: center;
-            font-size: 17px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin: 0 0 8px;
-            letter-spacing: 0.2px;
+          .front-box {
+            border: 1px solid #111827;
+            min-height: 1120px;
+            padding: 12px;
           }
-
-        .front-layout {
-  display: block;
-}
-
-.front-left {
-  border: 1px solid #111827;
-  min-height: 640px;
-  width: 100%;
-}
-
-.front-left-inner {
-  padding: 10px 10px 8px;
-}
 
           .mini-head {
             font-size: 12px;
             font-weight: 700;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
           }
 
           .front-paragraph {
             font-size: 12px;
-            line-height: 1.55;
-            min-height: 150px;
-            margin-bottom: 10px;
+            line-height: 1.6;
+            margin-bottom: 18px;
           }
 
           .front-lines {
             font-size: 12px;
-            line-height: 1.55;
+            line-height: 1.65;
             white-space: pre-line;
-          }
-
-          .front-lines .spacer {
-            height: 10px;
           }
 
           .box-line {
@@ -1075,68 +1152,26 @@ function buildRegulationCertificateHtml(params: {
             vertical-align: middle;
           }
 
-          .topic-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 11px;
-          }
-
-          .topic-table td,
-          .topic-table th {
+          .verify-block {
+            margin-top: 14px;
             border: 1px solid #111827;
-            padding: 3px 5px;
-            vertical-align: top;
+            padding: 6px;
+            display: grid;
+            grid-template-columns: 70px 1fr;
+            gap: 6px;
+            align-items: center;
+            font-size: 10px;
             line-height: 1.3;
           }
 
-          .topic-table th {
-            text-align: left;
-            font-size: 12px;
-            font-weight: 700;
+          .verify-block img {
+            width: 70px;
+            height: 70px;
+            object-fit: contain;
+            border: 1px solid #111827;
             background: #fff;
+            padding: 3px;
           }
-
-          .topic-col-head {
-            font-weight: 700;
-          }
-
-          .topic-row-title {
-            font-weight: 700;
-          }
-
-          .topic-sub {
-            padding-left: 14px;
-          }
-
-          .topic-sub div {
-            margin-bottom: 2px;
-          }
-
-          .duration-col {
-            width: 58px;
-            text-align: center;
-          }
-
-         .verify-block {
-  margin-top: 6px;
-  border: 1px solid #111827;
-  padding: 6px;
-  display: grid;
-  grid-template-columns: 70px 1fr;
-  gap: 6px;
-  align-items: center;
-  font-size: 10px;
-  line-height: 1.3;
-}
-
-.verify-block img {
-  width: 70px;
-  height: 70px;
-  object-fit: contain;
-  border: 1px solid #111827;
-  background: #fff;
-  padding: 3px;
-}
 
           .verify-link {
             color: #111827;
@@ -1145,58 +1180,46 @@ function buildRegulationCertificateHtml(params: {
             font-weight: 700;
           }
 
-         .back-box {
-  border: 1px solid #111827;
-  padding: 6px;
-  max-height: 1000px;
-  overflow: hidden;
-  page-break-inside: avoid;
-}
-
-          .back-header {
-            display: grid;
-            grid-template-columns: 1fr 60px;
+          .footer-note {
+            margin-top: 10px;
+            font-size: 10px;
+            line-height: 1.4;
           }
 
-        .back-header > div {
-  border: 1px solid #111827;
-  border-bottom: none;
-  padding: 3px 5px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-          .back-row {
-            display: grid;
-            grid-template-columns: 1fr 60px;
+          .back-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 10px;
           }
 
-       .back-row > div {
-  border: 1px solid #111827;
-  border-top: none;
-  padding: 3px 4px;
-  font-size: 10px;
-  line-height: 1.2;
-  min-height: 18px;
-}
+          .back-table th,
+          .back-table td {
+            border: 1px solid #111827;
+            padding: 3px 4px;
+            vertical-align: top;
+            line-height: 1.2;
+          }
+
+          .back-table th {
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            background: #fff;
+          }
 
           .section-title {
             font-weight: 700;
           }
 
-          .section-list div {
-            margin: 0 0 2px 0;
+          .topic-item {
+            padding-left: 8px;
           }
 
-          .footer-note {
-            margin-top: 8px;
-            font-size: 10px;
-            line-height: 1.4;
+          .duration-col {
+            width: 58px;
+            text-align: center;
           }
-
-          .sheet {
-            page-break-inside: avoid;
-            }
 
           @page {
             size: A4 portrait;
@@ -1236,11 +1259,52 @@ function buildRegulationCertificateHtml(params: {
               <div>${belgeBaslik}</div>
             </div>
 
+            <div class="front-box">
+              <div class="mini-head">TEMEL EĞİTİM BELGESİ</div>
+
+              <div class="front-paragraph">
+                İşbu belge,<br/><br/>
+                <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına,
+                Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında
+                Yönetmelik kapsamında D-SEC tarafından düzenlenen
+                <strong>${trainingShortTitle}</strong> eğitiminin tamamlanması sonucunda düzenlenmiştir.
+              </div>
+
+              <div class="front-lines">
+Belge düzenlenme tarihi: ${params.issueDate}
+Eğitimin süresi: ${params.durationText}
+Eğitimin türü: İlk defa verilen temel eğitim<span class="box-line"></span>
+               Tekrar verilen temel eğitim<span class="box-line"></span>
+Eğitimin şekli: Uzaktan<span class="box-line"></span>
+               Yüz yüze<span class="box-line"></span>
+
+Eğiticilerin adı soyadı ve ünvanı: D-SEC Eğitim Yetkilisi
+Eğiticilerin imzası:
+
+
+
+
+Çalışanın işyerinin ünvanı: ${params.safeCompanyName}
+İşverenin/işveren vekilinin adı soyadı:
+İşveren/işveren vekilinin imzası:
+              </div>
+
+              <div class="verify-block">
+                <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
+                <div>
+                  Bu belge D-SEC sistemi üzerinden doğrulanabilir.<br/>
+                  Belge No: ${params.certificateNo}<br/>
+                  Doğrulama Kodu: ${params.verificationCode}<br/>
+                  Bağlantı:
+                  <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
+                    ${escapeHtml(params.verifyUrl)}
+                  </a>
+                </div>
+              </div>
             </div>
 
             <div class="footer-note">
-              * Belge No: ${params.certificateNo} &nbsp;&nbsp; | &nbsp;&nbsp;
-              Doğrulama Kodu: ${params.verificationCode}
+              * Belge No: ${params.certificateNo} &nbsp;&nbsp;|&nbsp;&nbsp; Doğrulama Kodu: ${params.verificationCode}
             </div>
           </div>
 
@@ -1250,97 +1314,17 @@ function buildRegulationCertificateHtml(params: {
               <div>Ek-2</div>
             </div>
 
-            <div class="back-box">
-              <div class="back-header">
-                <div>EĞİTİM KONULARI</div>
-                <div>SÜRE</div>
-              </div>
-
-              <div class="back-row">
-                <div class="section-title">1. Genel konular</div>
-                <div></div>
-              </div>
-              ${(params.groupedSections.genel.length
-                ? params.groupedSections.genel
-                : ["-"]
-              )
-                .map(
-                  (item) => `
-                    <div class="back-row">
-                      <div class="section-list">${escapeHtml(item)}</div>
-                      <div></div>
-                    </div>
-                  `
-                )
-                .join("")}
-
-              <div class="back-row">
-                <div class="section-title">2. Sağlık konuları</div>
-                <div></div>
-              </div>
-              ${(params.groupedSections.saglik.length
-                ? params.groupedSections.saglik
-                : ["-"]
-              )
-                .map(
-                  (item) => `
-                    <div class="back-row">
-                      <div class="section-list">${escapeHtml(item)}</div>
-                      <div></div>
-                    </div>
-                  `
-                )
-                .join("")}
-
-              <div class="back-row">
-                <div class="section-title">3. Teknik konular</div>
-                <div></div>
-              </div>
-              ${(params.groupedSections.teknik.length
-                ? params.groupedSections.teknik
-                : ["-"]
-              )
-                .map(
-                  (item) => `
-                    <div class="back-row">
-                      <div class="section-list">${escapeHtml(item)}</div>
-                      <div></div>
-                    </div>
-                  `
-                )
-                .join("")}
-
-              <div class="back-row">
-                <div class="section-title">4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular</div>
-                <div></div>
-              </div>
-              ${(params.groupedSections.iseOzel.length
-                ? params.groupedSections.iseOzel
-                : ["-"]
-              )
-                .map(
-                  (item) => `
-                    <div class="back-row">
-                      <div class="section-list">${escapeHtml(item)}</div>
-                      <div></div>
-                    </div>
-                  `
-                )
-                .join("")}
-            </div>
-
-            <div class="verify-block">
-              <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
-              <div>
-                Bu belge D-SEC sistemi üzerinden doğrulanabilir.<br/>
-                Belge No: ${params.certificateNo}<br/>
-                Doğrulama Kodu: ${params.verificationCode}<br/>
-                Bağlantı:
-                <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
-                  ${escapeHtml(params.verifyUrl)}
-                </a>
-              </div>
-            </div>
+            <table class="back-table">
+              <thead>
+                <tr>
+                  <th>EĞİTİM KONULARI</th>
+                  <th class="duration-col">SÜRE</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${backRows}
+              </tbody>
+            </table>
           </div>
         </div>
       </body>
