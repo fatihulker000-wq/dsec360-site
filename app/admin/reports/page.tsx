@@ -98,7 +98,7 @@ const BRAND = {
 
 function cardStyle(): React.CSSProperties {
   return {
-    border: `1px solid ${BRAND.border}`,
+    border: '1px solid ${BRAND.border}',
     borderRadius: 18,
     background: BRAND.white,
     padding: 18,
@@ -805,9 +805,15 @@ export default function AdminReportsPage() {
     );
   };
 
-  return (
-    <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
-      <div style={{ maxWidth: 1600, margin: "0 auto" }}>
+ return (
+  <main
+    style={{
+      minHeight: "100%",
+      background: BRAND.bg,
+      padding: "16px",
+    }}
+  >
+    <div style={{ maxWidth: 1600, margin: "0 auto", width: "100%" }}>
         <div
           style={{
             ...cardStyle(),
@@ -843,7 +849,15 @@ export default function AdminReportsPage() {
                   : "Admin Raporlama Merkezi"}
               </div>
 
-              <h1 style={{ marginTop: 0, marginBottom: 8, fontSize: 36, fontWeight: 900 }}>
+             <h1
+  style={{
+    marginTop: 0,
+    marginBottom: 8,
+    fontSize: "clamp(24px, 4vw, 36px)",
+    fontWeight: 900,
+    lineHeight: 1.2,
+  }}
+>
                 Firma Eğitim Raporları
               </h1>
               <p
@@ -858,13 +872,15 @@ export default function AdminReportsPage() {
             </div>
 
             {report?.company ? (
-              <div
-                style={{
-                  display: "grid",
-                  gap: 8,
-                  minWidth: 250,
-                }}
-              >
+             <div
+  style={{
+    display: "grid",
+    gap: 8,
+    minWidth: 0,
+    width: "100%",
+    maxWidth: 260,
+  }}
+>
                 <button
                   onClick={exportExcel}
                   style={{
@@ -956,14 +972,14 @@ export default function AdminReportsPage() {
 
         {!loadingReport && report?.company ? (
           <div id="report-export-area">
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1.2fr 0.8fr",
-                gap: 20,
-                marginBottom: 20,
-              }}
-            >
+           <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: 20,
+    marginBottom: 20,
+  }}
+>
               <div style={cardStyle()}>
                 <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
                   Firma Künyesi
@@ -1023,7 +1039,13 @@ export default function AdminReportsPage() {
                   {executiveTone.label}
                 </div>
 
-                <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1 }}>
+               <div
+  style={{
+    fontSize: "clamp(20px, 3.5vw, 28px)",
+    fontWeight: 900,
+    lineHeight: 1.2,
+  }}
+>
                   Yönetici Dashboard
                 </div>
 
@@ -1077,14 +1099,14 @@ export default function AdminReportsPage() {
               </div>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-                gap: 16,
-                marginBottom: 20,
-              }}
-            >
+           <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 16,
+    marginBottom: 20,
+  }}
+>
               <div style={cardStyle()}>
                 <div style={{ fontSize: 12, color: BRAND.muted }}>Filtrelenen Çalışan</div>
                 <div style={{ marginTop: 8, fontSize: 28, fontWeight: 900 }}>
@@ -1128,14 +1150,14 @@ export default function AdminReportsPage() {
               </div>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 20,
-                marginBottom: 20,
-              }}
-            >
+           <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: 20,
+    marginBottom: 20,
+  }}
+>
               <div style={cardStyle()}>
                 <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
                   Durum Dağılımı
@@ -1276,14 +1298,14 @@ export default function AdminReportsPage() {
             </div>
 
             <div style={{ ...cardStyle(), marginBottom: 20 }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.2fr 1.2fr 1fr 1fr auto auto",
-                  gap: 12,
-                  alignItems: "end",
-                }}
-              >
+             <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 12,
+    alignItems: "end",
+  }}
+>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
                     Çalışan Ara
@@ -1449,7 +1471,7 @@ export default function AdminReportsPage() {
                     style={{
                       width: "100%",
                       borderCollapse: "collapse",
-                      minWidth: 1000,
+                      minWidth: 620,
                     }}
                   >
                     <thead>
@@ -1507,7 +1529,7 @@ export default function AdminReportsPage() {
                               position: "sticky",
                               left: 0,
                               zIndex: 1,
-                              minWidth: 240,
+                              minWidth: 180,
                             }}
                           >
                             <div style={{ fontWeight: 800, color: BRAND.text }}>
@@ -1580,7 +1602,7 @@ export default function AdminReportsPage() {
                     style={{
                       width: "100%",
                       borderCollapse: "collapse",
-                      minWidth: 900,
+                      minWidth: 620,
                     }}
                   >
                     <thead>
@@ -1677,7 +1699,7 @@ export default function AdminReportsPage() {
                     style={{
                       width: "100%",
                       borderCollapse: "collapse",
-                      minWidth: 900,
+                      minWidth: 620,
                     }}
                   >
                     <thead>
@@ -1771,29 +1793,30 @@ export default function AdminReportsPage() {
             padding: 20,
           }}
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 980,
-              maxHeight: "86vh",
-              overflow: "auto",
-              background: "#fff",
-              borderRadius: 20,
-              boxShadow: "0 24px 64px rgba(15,23,42,0.20)",
-              border: `1px solid ${BRAND.border}`,
-            }}
-          >
-            <div
-              style={{
-                padding: 20,
-                borderBottom: `1px solid ${BRAND.border}`,
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                alignItems: "flex-start",
-              }}
-            >
+         <div
+  onClick={(e) => e.stopPropagation()}
+  style={{
+    width: "100%",
+    maxWidth: 980,
+    maxHeight: "90vh",
+    overflow: "auto",
+    background: "#fff",
+    borderRadius: 20,
+    boxShadow: "0 24px 64px rgba(15,23,42,0.20)",
+    border: '1px solid ${BRAND.border}',
+  }}
+>
+           <div
+  style={{
+    padding: 20,
+    borderBottom: '1px solid ${BRAND.border}',
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  }}
+>
               <div>
                 <div style={{ fontSize: 24, fontWeight: 900, color: BRAND.text }}>
                   {detailModal.title}
@@ -1825,7 +1848,7 @@ export default function AdminReportsPage() {
                   style={{
                     width: "100%",
                     borderCollapse: "collapse",
-                    minWidth: 700,
+                    minWidth: 620,
                   }}
                 >
                   <thead>
