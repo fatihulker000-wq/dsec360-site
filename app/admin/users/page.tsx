@@ -79,6 +79,7 @@ function cardStyle(): React.CSSProperties {
     background: BRAND.white,
     padding: 18,
     boxShadow: BRAND.shadow,
+    minWidth: 0,
   };
 }
 
@@ -96,6 +97,7 @@ function badgeStyle(
     fontSize: 12,
     fontWeight: 700,
     color,
+    whiteSpace: "nowrap",
   };
 }
 
@@ -279,22 +281,31 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
-      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+    <main
+      style={{
+        minHeight: "100%",
+        background: BRAND.bg,
+        padding: "clamp(12px, 2vw, 24px)",
+      }}
+    >
+      <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
         <div
           style={{
             ...cardStyle(),
             background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
             color: "#fff",
             marginBottom: 20,
+            padding: "clamp(16px, 2.4vw, 24px)",
+            borderRadius: 24,
           }}
         >
           <h1
             style={{
               marginTop: 0,
               marginBottom: 8,
-              fontSize: 36,
+              fontSize: "clamp(28px, 4vw, 36px)",
               fontWeight: 900,
+              lineHeight: 1.1,
             }}
           >
             {adminRole === "company_admin"
@@ -331,7 +342,7 @@ export default function AdminUsersPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 16,
             marginBottom: 20,
           }}
@@ -374,11 +385,11 @@ export default function AdminUsersPage() {
             ...cardStyle(),
             marginBottom: 20,
             display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 14,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
               Ara
             </div>
@@ -396,7 +407,7 @@ export default function AdminUsersPage() {
             />
           </div>
 
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
               Rol
             </div>
@@ -421,7 +432,7 @@ export default function AdminUsersPage() {
             </select>
           </div>
 
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
               Durum
             </div>
@@ -478,6 +489,8 @@ export default function AdminUsersPage() {
                     borderRadius: 16,
                     padding: 16,
                     background: "#fff",
+                    minWidth: 0,
+                    overflow: "hidden",
                   }}
                 >
                   <div
@@ -489,12 +502,13 @@ export default function AdminUsersPage() {
                       flexWrap: "wrap",
                     }}
                   >
-                    <div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
                       <div
                         style={{
                           fontSize: 17,
                           fontWeight: 900,
                           color: BRAND.text,
+                          wordBreak: "break-word",
                         }}
                       >
                         {u.full_name}
@@ -505,13 +519,21 @@ export default function AdminUsersPage() {
                           marginTop: 6,
                           fontSize: 13,
                           color: BRAND.muted,
+                          wordBreak: "break-word",
                         }}
                       >
                         {u.email || "-"}
                       </div>
                     </div>
 
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        minWidth: 0,
+                      }}
+                    >
                       <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
                         {getRoleLabel(u.role)}
                       </span>
@@ -532,10 +554,10 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
 
-                  <div style={{ marginTop: 10 }}>
+                  <div style={{ marginTop: 10, minWidth: 0 }}>
                     {adminRole === "super_admin" && (
                       <select
-                        defaultValue={u.company_id || ""}
+                        value={u.company_id || ""}
                         onChange={(e) => void updateCompany(u.id, e.target.value)}
                         disabled={savingCompany}
                         style={{
@@ -544,6 +566,9 @@ export default function AdminUsersPage() {
                           border: "1px solid #d1d5db",
                           fontSize: 13,
                           minWidth: 220,
+                          width: "100%",
+                          maxWidth: 320,
+                          background: "#fff",
                         }}
                       >
                         <option value="">Firma yok</option>
@@ -561,6 +586,7 @@ export default function AdminUsersPage() {
                       marginTop: 12,
                       fontSize: 12,
                       color: BRAND.muted,
+                      wordBreak: "break-word",
                     }}
                   >
                     Kayıt tarihi:{" "}
