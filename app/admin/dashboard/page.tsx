@@ -95,12 +95,12 @@ const BRAND = {
   shadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
 
-function cardStyle(): React.CSSProperties {
+function cardStyle(isMobile = false): React.CSSProperties {
   return {
     background: BRAND.white,
-    border: `1px solid ${BRAND.border}`,
-    borderRadius: 20,
-    padding: 20,
+    border: '1px solid ${BRAND.border}',
+    borderRadius: isMobile ? 16 : 20,
+    padding: isMobile ? 14 : 20,
     boxShadow: BRAND.shadow,
     minWidth: 0,
   };
@@ -126,24 +126,24 @@ function badgeStyle(
   };
 }
 
-function metricCardStyle(accent: string): React.CSSProperties {
+function metricCardStyle(accent: string, isMobile = false): React.CSSProperties {
   return {
-    ...cardStyle(),
+    ...cardStyle(isMobile),
     position: "relative",
     overflow: "hidden",
-    minHeight: 132,
-    border: `1px solid ${BRAND.border}`,
+    minHeight: isMobile ? 110 : 132,
+    border: '1px solid ${BRAND.border}',
     background: BRAND.white,
     boxShadow: BRAND.shadow,
   };
 }
 
-function softPanelStyle(bg: string): React.CSSProperties {
+function softPanelStyle(bg: string, isMobile = false): React.CSSProperties {
   return {
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: isMobile ? 14 : 18,
+    padding: isMobile ? 12 : 16,
     background: bg,
-    border: `1px solid ${BRAND.border}`,
+    border: '1px solid ${BRAND.border}',
   };
 }
 
@@ -349,6 +349,7 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("all");
+  const [isMobile, setIsMobile] = useState(false);
 
   const loadDashboard = async () => {
     try {
@@ -405,6 +406,19 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     void loadDashboard();
   }, []);
+
+  useEffect(() => {
+  const checkMobile = () => {
+    setIsMobile(window.innerWidth <= 900);
+  };
+
+  checkMobile();
+  window.addEventListener("resize", checkMobile);
+
+  return () => {
+    window.removeEventListener("resize", checkMobile);
+  };
+}, []);
 
   useEffect(() => {
     if (adminRole === "company_admin" && adminCompanyId) {
@@ -629,7 +643,7 @@ export default function AdminDashboardPage() {
       : "Sağlıklı Görünüm";
 
   if (loading) {
-    return <div style={{ padding: 24 }}>Yükleniyor...</div>;
+    return null;
   }
 
   if (error) {
@@ -645,12 +659,16 @@ export default function AdminDashboardPage() {
       style={{
         minHeight: "100%",
         background: BRAND.bg,
-        padding: 24,
+        padding: isMobile ? 12 : 24,
       }}
     >
       <div
         id="admin-dashboard-pdf"
-        style={{ maxWidth: 1440, margin: "0 auto" }}
+        style={{
+             maxWidth: 1440, 
+             margin: "0 auto" ,
+            width: "100%",
+            }}
       >
         <div
           style={{
@@ -662,15 +680,16 @@ export default function AdminDashboardPage() {
           }}
         >
           <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 16,
-              alignItems: "flex-start",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ maxWidth: 860 }}>
+  style={{
+    display: "flex",
+    flexDirection: isMobile ? "column" : "row",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: isMobile ? "stretch" : "flex-start",
+    flexWrap: "wrap",
+  }}
+>
+            <div style={{ maxWidth: isMobile ? "100%" : 860 }}>
               <div
                 style={{
                   ...badgeStyle(
@@ -686,31 +705,40 @@ export default function AdminDashboardPage() {
                   : "D-SEC • Admin Dashboard"}
               </div>
 
-              <h1 style={{ margin: 0, fontSize: 38, fontWeight: 900 }}>
-                Eğitim Yönetim Paneli
-              </h1>
+              <h1
+  style={{
+    margin: 0,
+    fontSize: isMobile ? 28 : 38,
+    fontWeight: 900,
+    lineHeight: 1.15,
+  }}
+>
+  Eğitim Yönetim Paneli
+</h1>
 
-              <p
-                style={{
-                  marginTop: 10,
-                  marginBottom: 0,
-                  color: "rgba(255,255,255,0.92)",
-                  maxWidth: 820,
-                  lineHeight: 1.7,
-                }}
-              >
+             <p
+  style={{
+    marginTop: 10,
+    marginBottom: 0,
+    color: "rgba(255,255,255,0.92)",
+    maxWidth: 820,
+    lineHeight: 1.7,
+    fontSize: isMobile ? 14 : 16,
+  }}
+>
                 Eğitim atamaları, riskli kullanıcılar, firma yoğunluğu, KPI alanı,
                 ilerleme görünümü ve yönetici değerlendirmesi tek panelde izlenir.
               </p>
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexWrap: "wrap",
-                  marginTop: 16,
-                }}
-              >
+             <div
+  style={{
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 16,
+    alignItems: "center",
+  }}
+>
                 <span
                   style={badgeStyle(
                     "rgba(255,255,255,0.14)",
@@ -744,12 +772,13 @@ export default function AdminDashboardPage() {
             </div>
 
             <div
-              style={{
-                display: "grid",
-                gap: 10,
-                minWidth: 240,
-              }}
-            >
+  style={{
+    display: "grid",
+    gap: 10,
+    minWidth: isMobile ? "100%" : 240,
+    width: isMobile ? "100%" : "auto",
+  }}
+>
               <div
                 style={{
                   ...badgeStyle(
@@ -768,33 +797,35 @@ export default function AdminDashboardPage() {
                 Risk Durumu: {riskStatus}
               </div>
 
-              <button
-                onClick={exportPDF}
-                style={{
-                  border: "none",
-                  borderRadius: 14,
-                  padding: "12px 18px",
-                  background: "#fff",
-                  color: BRAND.red,
-                  fontWeight: 900,
-                  cursor: "pointer",
-                }}
-              >
+            <button
+  onClick={exportPDF}
+  style={{
+    border: "none",
+    borderRadius: 14,
+    padding: "12px 18px",
+    background: "#fff",
+    color: BRAND.red,
+    fontWeight: 900,
+    cursor: "pointer",
+    width: isMobile ? "100%" : "auto",
+  }}
+>
                 PDF İndir
               </button>
 
-              <button
-                onClick={() => void loadDashboard()}
-                style={{
-                  border: "1px solid rgba(255,255,255,0.18)",
-                  borderRadius: 14,
-                  padding: "12px 18px",
-                  background: "rgba(255,255,255,0.10)",
-                  color: "#fff",
-                  fontWeight: 900,
-                  cursor: "pointer",
-                }}
-              >
+            <button
+  onClick={() => void loadDashboard()}
+  style={{
+    border: "1px solid rgba(255,255,255,0.18)",
+    borderRadius: 14,
+    padding: "12px 18px",
+    background: "rgba(255,255,255,0.10)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+    width: isMobile ? "100%" : "auto",
+  }}
+>
                 Veriyi Yenile
               </button>
             </div>
@@ -810,7 +841,7 @@ export default function AdminDashboardPage() {
               marginBottom: 20,
             }}
           >
-            <div style={cardStyle()}>
+            <div style={cardStyle(isMobile)}>
               <div style={{ fontSize: 12, color: BRAND.muted }}>Yönetim</div>
               <div style={{ marginTop: 8, fontSize: 24, fontWeight: 900, color: BRAND.text }}>
                 Firma Yönetimi
@@ -841,14 +872,14 @@ export default function AdminDashboardPage() {
         ) : null}
 
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: 16,
-            marginBottom: 20,
-          }}
-        >
-          <div style={metricCardStyle(BRAND.slate)}>
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: isMobile ? 12 : 16,
+    marginBottom: 20,
+  }}
+>
+          <div style={metricCardStyle(BRAND.slate, isMobile)}>
             <div
               style={{
                 position: "absolute",
@@ -860,7 +891,7 @@ export default function AdminDashboardPage() {
               }}
             />
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Atama</div>
-            <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
+           <div style={{ fontSize: isMobile ? 28 : 34, fontWeight: 900, marginTop: 8 }}>
               {summary?.total_assignments ?? totals.assigned}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
@@ -868,7 +899,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div style={metricCardStyle(BRAND.green)}>
+          <div style={metricCardStyle(BRAND.green, isMobile)}>
             <div
               style={{
                 position: "absolute",
@@ -880,7 +911,7 @@ export default function AdminDashboardPage() {
               }}
             />
             <div style={{ fontSize: 13, color: BRAND.green }}>Tamamlanma</div>
-            <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
+           <div style={{ fontSize: isMobile ? 28 : 34, fontWeight: 900, marginTop: 8 }}>
               %{formatPercent(completionRate)}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
@@ -888,7 +919,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div style={metricCardStyle(BRAND.blue)}>
+          <div style={metricCardStyle(BRAND.blue, isMobile)}>
             <div
               style={{
                 position: "absolute",
@@ -900,7 +931,7 @@ export default function AdminDashboardPage() {
               }}
             />
             <div style={{ fontSize: 13, color: BRAND.blue }}>Devam Eden</div>
-            <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
+           <div style={{ fontSize: isMobile ? 28 : 34, fontWeight: 900, marginTop: 8 }}>
               %{formatPercent(inProgressRate)}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
@@ -908,7 +939,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div style={metricCardStyle(BRAND.amber)}>
+          <div style={metricCardStyle(BRAND.amber, isMobile)}>
             <div
               style={{
                 position: "absolute",
@@ -920,7 +951,7 @@ export default function AdminDashboardPage() {
               }}
             />
             <div style={{ fontSize: 13, color: BRAND.amber }}>Riskli Oran</div>
-            <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
+           <div style={{ fontSize: isMobile ? 28 : 34, fontWeight: 900, marginTop: 8 }}>
               %{formatPercent(riskRate)}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
@@ -929,16 +960,18 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <div
-          style={{
-            ...cardStyle(),
-            marginBottom: 20,
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
-            gap: 16,
-            alignItems: "stretch",
-          }}
-        >
+       <div
+  style={{
+    ...cardStyle(),
+    marginBottom: 20,
+    display: "grid",
+    gridTemplateColumns: isMobile
+      ? "1fr"
+      : "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
+    gap: 16,
+    alignItems: "stretch",
+  }}
+>
           <div>
             <div style={{ fontSize: 16, fontWeight: 900, color: BRAND.text }}>
               Yönetici Yorumu
@@ -948,14 +981,16 @@ export default function AdminDashboardPage() {
               {aiComment}
             </div>
 
-            <div
-              style={{
-                marginTop: 16,
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: 12,
-              }}
-            >
+           <div
+  style={{
+    marginTop: 16,
+    display: "grid",
+    gridTemplateColumns: isMobile
+      ? "1fr"
+      : "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
+  }}
+>
               <StatusDonut
                 label="Tamamlanan"
                 value={summary?.completed_count ?? totals.completed}
@@ -1008,18 +1043,19 @@ export default function AdminDashboardPage() {
                 {adminCompanyId || "Bağlı firma"}
               </div>
             ) : (
-              <select
-                value={selectedCompany}
-                onChange={(e) => setSelectedCompany(e.target.value)}
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  border: `1px solid ${BRAND.border}`,
-                  background: "#fff",
-                  fontWeight: 700,
-                  minWidth: 220,
-                }}
-              >
+             <select
+  value={selectedCompany}
+  onChange={(e) => setSelectedCompany(e.target.value)}
+  style={{
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: '1px solid ${BRAND.border}',
+    background: "#fff",
+    fontWeight: 700,
+    minWidth: isMobile ? "100%" : 220,
+    width: isMobile ? "100%" : "auto",
+  }}
+>
                 <option value="all">Tüm Firmalar</option>
                 {companies.map((company) => (
                   <option key={company} value={company}>
@@ -1036,7 +1072,7 @@ export default function AdminDashboardPage() {
                 marginTop: 4,
               }}
             >
-              <div style={softPanelStyle(BRAND.redSoft)}>
+              <div style={softPanelStyle(BRAND.redSoft, isMobile)}>
                 <div style={{ fontSize: 12, color: BRAND.muted }}>
                   Seçili Firmada Riskli
                 </div>
@@ -1052,7 +1088,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div style={softPanelStyle(BRAND.blueSoft)}>
+              <div style={softPanelStyle(BRAND.blueSoft, isMobile)}>
                 <div style={{ fontSize: 12, color: BRAND.muted }}>
                   Seçili Firmada Devam Eden
                 </div>
@@ -1068,7 +1104,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div style={softPanelStyle(BRAND.greenSoft)}>
+              <div style={softPanelStyle(BRAND.greenSoft, isMobile)}>
                 <div style={{ fontSize: 12, color: BRAND.muted }}>
                   Seçili Firmada Tamamlayan
                 </div>
@@ -1087,15 +1123,15 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 0.9fr)",
-            gap: 20,
-            marginBottom: 20,
-          }}
-        >
-          <section style={cardStyle()}>
+       <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.1fr) minmax(0, 0.9fr)",
+    gap: isMobile ? 14 : 20,
+    marginBottom: 20,
+  }}
+>
+          <section style={cardStyle(isMobile)}>
             <div
               style={{
                 display: "flex",
@@ -1122,7 +1158,7 @@ export default function AdminDashboardPage() {
             />
           </section>
 
-          <section style={cardStyle()}>
+          <section style={cardStyle(isMobile)}>
             <div
               style={{
                 display: "flex",
@@ -1153,15 +1189,15 @@ export default function AdminDashboardPage() {
           </section>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 0.9fr)",
-            gap: 20,
-            marginBottom: 20,
-          }}
-        >
-          <section style={cardStyle()}>
+       <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.1fr) minmax(0, 0.9fr)",
+    gap: isMobile ? 14 : 20,
+    marginBottom: 20,
+  }}
+>
+          <section style={cardStyle(isMobile)}>
             <div
               style={{
                 display: "flex",
@@ -1256,7 +1292,7 @@ export default function AdminDashboardPage() {
             )}
           </section>
 
-          <section style={cardStyle()}>
+          <section style={cardStyle(isMobile)}>
             <div
               style={{
                 display: "flex",
@@ -1295,16 +1331,16 @@ export default function AdminDashboardPage() {
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: 20,
+            gap: isMobile ? 14 : 20,
             marginBottom: 20,
           }}
         >
-          <section style={cardStyle()}>
+          <section style={cardStyle(isMobile)}>
             <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
               Riskli Kullanıcılar
             </h2>
 
-            <div style={{ fontSize: 32, fontWeight: 900, color: BRAND.red }}>
+           <div style={{ fontSize: isMobile ? 26 : 32, fontWeight: 900, color: BRAND.red }}>
               {filteredRiskUsers.length}
             </div>
 
@@ -1313,12 +1349,12 @@ export default function AdminDashboardPage() {
             </div>
           </section>
 
-          <section style={cardStyle()}>
+          <section style={cardStyle(isMobile)}>
             <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
               Devam Eden
             </h2>
 
-            <div style={{ fontSize: 32, fontWeight: 900, color: BRAND.blue }}>
+          <div style={{ fontSize: isMobile ? 26 : 32, fontWeight: 900, color: BRAND.blue }}>
               {summary?.in_progress_count ?? inProgressUsers.length}
             </div>
 
@@ -1327,12 +1363,12 @@ export default function AdminDashboardPage() {
             </div>
           </section>
 
-          <section style={cardStyle()}>
+          <section style={cardStyle(isMobile)}>
             <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
               Tamamlayanlar
             </h2>
 
-            <div style={{ fontSize: 32, fontWeight: 900, color: BRAND.green }}>
+           <div style={{ fontSize: isMobile ? 26 : 32, fontWeight: 900, color: BRAND.green }}>
               {summary?.completed_count ?? completedUsers.length}
             </div>
 
@@ -1343,14 +1379,14 @@ export default function AdminDashboardPage() {
         </div>
 
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-            gap: 20,
-            marginBottom: 20,
-          }}
-        >
-          <section style={cardStyle()}>
+  style={{
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(0, 1fr)",
+    gap: isMobile ? 14 : 20,
+    marginBottom: 20,
+  }}
+>
+          <section style={cardStyle(isMobile)}>
             <div
               style={{
                 display: "flex",
@@ -1375,27 +1411,30 @@ export default function AdminDashboardPage() {
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
                 {topEmployees.map((item, index) => (
-                  <div
-                    key={`${item.email}-${index}`}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 14,
-                      borderBottom: `1px solid ${BRAND.border}`,
-                      paddingBottom: 10,
-                    }}
-                  >
+                 <div
+  key={`${item.email}-${index}`}
+  style={{
+    display: "flex",
+    flexDirection: isMobile ? "column" : "row",
+    justifyContent: "space-between",
+    alignItems: isMobile ? "flex-start" : "center",
+    gap: 14,
+    borderBottom: `1px solid ${BRAND.border}`,
+    paddingBottom: 10,
+  }}
+>
                     <div>
                       <div style={{ fontWeight: 800, color: BRAND.text }}>
                         {item.full_name}
                       </div>
-                      <div
-                        style={{
-                          marginTop: 4,
-                          color: BRAND.muted,
-                          fontSize: 13,
-                        }}
-                      >
+                     <div
+  style={{
+    marginTop: 4,
+    color: BRAND.muted,
+    fontSize: 13,
+    wordBreak: "break-word",
+  }}
+>
                         {item.email || "-"}
                       </div>
                     </div>
@@ -1409,7 +1448,7 @@ export default function AdminDashboardPage() {
             )}
           </section>
 
-          <section style={cardStyle()}>
+          <section style={cardStyle(isMobile)}>
             <div
               style={{
                 display: "flex",
@@ -1435,18 +1474,26 @@ export default function AdminDashboardPage() {
               <div style={{ display: "grid", gap: 10 }}>
                 {groupedRiskTrainings.map((item) => (
                   <div
-                    key={item.name}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 14,
-                      borderBottom: `1px solid ${BRAND.border}`,
-                      paddingBottom: 10,
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, color: BRAND.text }}>
-                      {item.name}
-                    </div>
+  key={item.name}
+  style={{
+    display: "flex",
+    flexDirection: isMobile ? "column" : "row",
+    justifyContent: "space-between",
+    alignItems: isMobile ? "flex-start" : "center",
+    gap: 14,
+    borderBottom: `1px solid ${BRAND.border}`,
+    paddingBottom: 10,
+  }}
+>
+                   <div
+  style={{
+    fontWeight: 700,
+    color: BRAND.text,
+    wordBreak: "break-word",
+  }}
+>
+  {item.name}
+</div>
 
                     <div style={badgeStyle(BRAND.redSoft, BRAND.red, "#f3c8c8")}>
                       {item.count} kişi
@@ -1458,14 +1505,14 @@ export default function AdminDashboardPage() {
           </section>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 0.95fr)",
-            gap: 20,
-          }}
-        >
-          <section style={cardStyle()}>
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.05fr) minmax(0, 0.95fr)",
+    gap: isMobile ? 14 : 20,
+  }}
+>
+          <section style={cardStyle(isMobile)}>
             <div
               style={{
                 display: "flex",
@@ -1496,23 +1543,26 @@ export default function AdminDashboardPage() {
 
                   return (
                     <div key={item.name}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: 6,
-                          gap: 10,
-                        }}
-                      >
+                    <div
+  style={{
+    display: "flex",
+    flexDirection: isMobile ? "column" : "row",
+    justifyContent: "space-between",
+    alignItems: isMobile ? "flex-start" : "center",
+    marginBottom: 6,
+    gap: 10,
+  }}
+>
                         <div
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 800,
-                            color: BRAND.text,
-                          }}
-                        >
-                          {item.name}
-                        </div>
+  style={{
+    fontSize: 14,
+    fontWeight: 800,
+    color: BRAND.text,
+    wordBreak: "break-word",
+  }}
+>
+  {item.name}
+</div>
 
                         <div
                           style={{
@@ -1559,13 +1609,13 @@ export default function AdminDashboardPage() {
             )}
           </section>
 
-          <section style={cardStyle()}>
+          <section style={cardStyle(isMobile)}>
             <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
               Dashboard Notu
             </h2>
 
             <div style={{ display: "grid", gap: 12 }}>
-              <div style={softPanelStyle(BRAND.redSoft)}>
+              <div style={softPanelStyle(BRAND.redSoft, isMobile)}>
                 <div style={{ fontWeight: 800, color: BRAND.red }}>
                   Risk Seviyesi
                 </div>
@@ -1582,7 +1632,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div style={softPanelStyle(BRAND.blueSoft)}>
+              <div style={softPanelStyle(BRAND.blueSoft, isMobile)}>
                 <div style={{ fontWeight: 800, color: BRAND.blue }}>
                   Operasyonel Takip
                 </div>
@@ -1599,7 +1649,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div style={softPanelStyle(BRAND.greenSoft)}>
+              <div style={softPanelStyle(BRAND.greenSoft, isMobile)}>
                 <div style={{ fontWeight: 800, color: BRAND.green }}>
                   Performans Yorumu
                 </div>
@@ -1609,7 +1659,8 @@ export default function AdminDashboardPage() {
                     color: BRAND.muted,
                     lineHeight: 1.7,
                     fontSize: 14,
-                  }}
+                  }}  
+
                 >
                   Tamamlanma oranı yüksek olan eğitim başlıkları örnek akış olarak
                   alınabilir ve diğer başlıklara uyarlanabilir.

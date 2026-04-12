@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const BRAND = {
   pageTop: "#fff4f5",
@@ -19,9 +19,7 @@ const BRAND = {
 
   border: "#efd8dc",
   borderStrong: "#e7c0c7",
-
   inputBorder: "#dec7cc",
-
   softChip: "#fff0f1",
 
   dangerBg: "#fef2f2",
@@ -32,7 +30,25 @@ const BRAND = {
   shadowStrong: "0 30px 80px rgba(87, 14, 26, 0.24)",
 };
 
+function useIsMobile(breakpoint = 900) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= breakpoint);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
 export default function AdminLoginPage() {
+  const isMobile = useIsMobile();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -76,7 +92,7 @@ export default function AdminLoginPage() {
       style={{
         minHeight: "100vh",
         background: `linear-gradient(180deg, ${BRAND.pageTop} 0%, ${BRAND.pageMid} 45%, ${BRAND.pageBottom} 100%)`,
-        padding: "48px 20px",
+        padding: isMobile ? "16px" : "48px 20px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -88,16 +104,16 @@ export default function AdminLoginPage() {
           width: "100%",
           maxWidth: "1180px",
           display: "grid",
-          gridTemplateColumns: "1.15fr 0.85fr",
-          gap: "24px",
+          gridTemplateColumns: isMobile ? "1fr" : "1.15fr 0.85fr",
+          gap: isMobile ? "16px" : "24px",
         }}
       >
         <div
           style={{
             background: `linear-gradient(135deg, ${BRAND.heroDark} 0%, ${BRAND.heroMid} 44%, ${BRAND.heroMain} 78%, ${BRAND.heroSoft} 100%)`,
             border: "1px solid rgba(255,255,255,0.12)",
-            borderRadius: "30px",
-            padding: "36px",
+            borderRadius: isMobile ? "22px" : "30px",
+            padding: isMobile ? "22px 18px" : "36px",
             color: "#ffffff",
             boxShadow: BRAND.shadowStrong,
             position: "relative",
@@ -116,10 +132,10 @@ export default function AdminLoginPage() {
           <div
             style={{
               position: "absolute",
-              right: "-90px",
-              top: "-90px",
-              width: "280px",
-              height: "280px",
+              right: isMobile ? "-110px" : "-90px",
+              top: isMobile ? "-110px" : "-90px",
+              width: isMobile ? "220px" : "280px",
+              height: isMobile ? "220px" : "280px",
               borderRadius: "999px",
               background: "rgba(255,255,255,0.10)",
             }}
@@ -127,10 +143,10 @@ export default function AdminLoginPage() {
           <div
             style={{
               position: "absolute",
-              left: "58%",
-              bottom: "-120px",
-              width: "240px",
-              height: "240px",
+              left: isMobile ? "58%" : "58%",
+              bottom: isMobile ? "-120px" : "-120px",
+              width: isMobile ? "180px" : "240px",
+              height: isMobile ? "180px" : "240px",
               borderRadius: "999px",
               background: "rgba(255,255,255,0.07)",
             }}
@@ -140,13 +156,13 @@ export default function AdminLoginPage() {
             <div
               style={{
                 display: "inline-flex",
-                padding: "8px 14px",
+                padding: isMobile ? "7px 12px" : "8px 14px",
                 borderRadius: "999px",
                 background: "rgba(255,255,255,0.14)",
                 border: "1px solid rgba(255,255,255,0.18)",
-                fontSize: "12px",
+                fontSize: isMobile ? "11px" : "12px",
                 fontWeight: 800,
-                marginBottom: "18px",
+                marginBottom: isMobile ? "14px" : "18px",
                 letterSpacing: "0.2px",
               }}
             >
@@ -155,12 +171,13 @@ export default function AdminLoginPage() {
 
             <h1
               style={{
-                fontSize: "56px",
-                lineHeight: 1.02,
+                fontSize: isMobile ? "34px" : "56px",
+                lineHeight: isMobile ? 1.08 : 1.02,
                 fontWeight: 900,
                 margin: 0,
-                letterSpacing: "-1.2px",
+                letterSpacing: isMobile ? "-0.6px" : "-1.2px",
                 textShadow: "0 6px 24px rgba(0,0,0,0.12)",
+                wordBreak: "break-word",
               }}
             >
               Eğitim Yönetim
@@ -170,9 +187,9 @@ export default function AdminLoginPage() {
 
             <p
               style={{
-                marginTop: "18px",
-                marginBottom: "28px",
-                fontSize: "20px",
+                marginTop: isMobile ? "14px" : "18px",
+                marginBottom: isMobile ? "18px" : "28px",
+                fontSize: isMobile ? "15px" : "20px",
                 lineHeight: 1.7,
                 color: "rgba(255,255,255,0.92)",
                 maxWidth: "760px",
@@ -185,13 +202,13 @@ export default function AdminLoginPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gap: "14px",
+                gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                gap: "12px",
               }}
             >
-              <FeatureCard title="Yönetim" value="Eğitim Kontrolü" />
-              <FeatureCard title="Firma" value="Kendi Verin" />
-              <FeatureCard title="Dashboard" value="Canlı Durum" />
+              <FeatureCard title="Yönetim" value="Eğitim Kontrolü" isMobile={isMobile} />
+              <FeatureCard title="Firma" value="Kendi Verin" isMobile={isMobile} />
+              <FeatureCard title="Dashboard" value="Canlı Durum" isMobile={isMobile} />
             </div>
           </div>
         </div>
@@ -199,8 +216,8 @@ export default function AdminLoginPage() {
         <div
           style={{
             background: BRAND.white,
-            borderRadius: "30px",
-            padding: "34px",
+            borderRadius: isMobile ? "22px" : "30px",
+            padding: isMobile ? "22px 18px" : "34px",
             border: `1px solid ${BRAND.border}`,
             boxShadow: BRAND.shadowSoft,
             alignSelf: "center",
@@ -225,10 +242,11 @@ export default function AdminLoginPage() {
           <h2
             style={{
               margin: 0,
-              fontSize: "42px",
+              fontSize: isMobile ? "32px" : "42px",
               fontWeight: 900,
               color: BRAND.textStrong,
-              letterSpacing: "-0.8px",
+              letterSpacing: isMobile ? "-0.4px" : "-0.8px",
+              lineHeight: 1.08,
             }}
           >
             Hoş geldiniz
@@ -240,7 +258,7 @@ export default function AdminLoginPage() {
               marginBottom: "26px",
               color: BRAND.textBody,
               lineHeight: 1.8,
-              fontSize: "16px",
+              fontSize: isMobile ? "15px" : "16px",
             }}
           >
             Yönetim paneline erişmek için kurumsal email ve şifrenizi girin.
@@ -324,17 +342,18 @@ export default function AdminLoginPage() {
             disabled={loading}
             style={{
               width: "100%",
-              height: "58px",
+              minHeight: "58px",
               borderRadius: "15px",
               border: "none",
               background: loading
                 ? "#d98b8b"
                 : `linear-gradient(135deg, ${BRAND.heroSoft} 0%, ${BRAND.heroMain} 55%, ${BRAND.heroMid} 100%)`,
               color: "#ffffff",
-              fontSize: "17px",
+              fontSize: isMobile ? "16px" : "17px",
               fontWeight: 800,
               cursor: loading ? "not-allowed" : "pointer",
               boxShadow: "0 18px 36px rgba(198, 40, 40, 0.22)",
+              padding: isMobile ? "12px 14px" : undefined,
             }}
           >
             {loading ? "Kontrol ediliyor..." : "Yönetim Paneline Giriş Yap"}
@@ -378,15 +397,17 @@ export default function AdminLoginPage() {
 function FeatureCard({
   title,
   value,
+  isMobile,
 }: {
   title: string;
   value: string;
+  isMobile: boolean;
 }) {
   return (
     <div
       style={{
         borderRadius: "20px",
-        padding: "18px",
+        padding: isMobile ? "14px" : "18px",
         background: "rgba(255,255,255,0.11)",
         border: "1px solid rgba(255,255,255,0.16)",
         backdropFilter: "blur(8px)",
@@ -402,7 +423,16 @@ function FeatureCard({
       >
         {title}
       </div>
-      <div style={{ fontSize: "18px", fontWeight: 900 }}>{value}</div>
+
+      <div
+        style={{
+          fontSize: isMobile ? "16px" : "18px",
+          fontWeight: 900,
+          lineHeight: 1.25,
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
