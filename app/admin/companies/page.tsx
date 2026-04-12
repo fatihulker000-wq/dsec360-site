@@ -38,6 +38,7 @@ function cardStyle(): React.CSSProperties {
     background: BRAND.white,
     padding: 18,
     boxShadow: BRAND.shadow,
+    minWidth: 0,
   };
 }
 
@@ -55,6 +56,7 @@ function badgeStyle(
     fontSize: 12,
     fontWeight: 700,
     color,
+    whiteSpace: "nowrap",
   };
 }
 
@@ -280,22 +282,31 @@ export default function AdminCompaniesPage() {
   };
 
   return (
-    <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
-      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+    <main
+      style={{
+        minHeight: "100%",
+        background: BRAND.bg,
+        padding: "clamp(12px, 2vw, 24px)",
+      }}
+    >
+      <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
         <div
           style={{
             ...cardStyle(),
             background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
             color: "#fff",
             marginBottom: 20,
+            padding: "clamp(16px, 2.4vw, 24px)",
+            borderRadius: 24,
           }}
         >
           <h1
             style={{
               marginTop: 0,
               marginBottom: 8,
-              fontSize: 36,
+              fontSize: "clamp(28px, 4vw, 36px)",
               fontWeight: 900,
+              lineHeight: 1.1,
             }}
           >
             Firma Yönetimi
@@ -328,9 +339,10 @@ export default function AdminCompaniesPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.3fr 0.7fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
             gap: 20,
             marginBottom: 20,
+            alignItems: "start",
           }}
         >
           <div style={cardStyle()}>
@@ -358,6 +370,7 @@ export default function AdminCompaniesPage() {
                   borderRadius: 12,
                   border: `1px solid ${BRAND.border}`,
                   fontSize: 14,
+                  minWidth: 0,
                 }}
               />
 
@@ -373,6 +386,7 @@ export default function AdminCompaniesPage() {
                   borderRadius: 12,
                   border: `1px solid ${BRAND.border}`,
                   fontSize: 14,
+                  minWidth: 0,
                 }}
               />
 
@@ -388,6 +402,7 @@ export default function AdminCompaniesPage() {
                   borderRadius: 12,
                   border: `1px solid ${BRAND.border}`,
                   fontSize: 14,
+                  minWidth: 0,
                 }}
               />
 
@@ -403,6 +418,7 @@ export default function AdminCompaniesPage() {
                   borderRadius: 12,
                   border: `1px solid ${BRAND.border}`,
                   fontSize: 14,
+                  minWidth: 0,
                 }}
               />
 
@@ -412,7 +428,7 @@ export default function AdminCompaniesPage() {
                   setNewCompany({ ...newCompany, address: e.target.value })
                 }
                 placeholder="Adres"
-                rows={3}
+                rows={4}
                 style={{
                   width: "100%",
                   padding: "12px 14px",
@@ -421,10 +437,18 @@ export default function AdminCompaniesPage() {
                   fontSize: 14,
                   resize: "vertical",
                   fontFamily: "inherit",
+                  minWidth: 0,
                 }}
               />
 
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  flexWrap: "wrap",
+                  gap: 10,
+                }}
+              >
                 <button
                   onClick={addCompany}
                   disabled={saving}
@@ -436,6 +460,8 @@ export default function AdminCompaniesPage() {
                     color: "#fff",
                     fontWeight: 800,
                     cursor: saving ? "not-allowed" : "pointer",
+                    width: "100%",
+                    maxWidth: 180,
                   }}
                 >
                   Firma Ekle
@@ -466,6 +492,7 @@ export default function AdminCompaniesPage() {
                 borderRadius: 12,
                 border: `1px solid ${BRAND.border}`,
                 fontSize: 14,
+                minWidth: 0,
               }}
             />
           </div>
@@ -505,16 +532,26 @@ export default function AdminCompaniesPage() {
                     borderRadius: 16,
                     padding: 16,
                     background: "#fff",
+                    minWidth: 0,
+                    overflow: "hidden",
                   }}
                 >
                   {editingId === company.id ? (
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        flexWrap: "wrap",
+                        alignItems: "stretch",
+                      }}
+                    >
                       <input
                         value={editingName}
                         onChange={(e) => setEditingName(e.target.value)}
                         style={{
                           flex: 1,
-                          minWidth: 240,
+                          minWidth: 220,
+                          width: "100%",
                           padding: "12px 14px",
                           borderRadius: 12,
                           border: `1px solid ${BRAND.border}`,
@@ -559,16 +596,17 @@ export default function AdminCompaniesPage() {
                         display: "flex",
                         justifyContent: "space-between",
                         gap: 12,
-                        alignItems: "center",
+                        alignItems: "flex-start",
                         flexWrap: "wrap",
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 260 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
                             fontSize: 20,
                             fontWeight: 900,
                             color: BRAND.text,
+                            wordBreak: "break-word",
                           }}
                         >
                           {company.name}
@@ -582,38 +620,80 @@ export default function AdminCompaniesPage() {
                             borderRadius: 999,
                             fontSize: 11,
                             fontWeight: 800,
-                            background: (company.user_count || 0) > 0 ? "#dcfce7" : "#fee2e2",
-                            color: (company.user_count || 0) > 0 ? "#166534" : "#991b1b",
+                            background:
+                              (company.user_count || 0) > 0
+                                ? "#dcfce7"
+                                : "#fee2e2",
+                            color:
+                              (company.user_count || 0) > 0
+                                ? "#166534"
+                                : "#991b1b",
                           }}
                         >
                           {(company.user_count || 0) > 0 ? "AKTİF" : "PASİF"}
                         </div>
 
                         {company.yetkili && (
-                          <div style={{ marginTop: 8, fontSize: 13, color: BRAND.text }}>
+                          <div
+                            style={{
+                              marginTop: 8,
+                              fontSize: 13,
+                              color: BRAND.text,
+                              wordBreak: "break-word",
+                            }}
+                          >
                             👤 {company.yetkili}
                           </div>
                         )}
 
                         {company.phone && (
-                          <div style={{ marginTop: 4, fontSize: 13, color: BRAND.text }}>
+                          <div
+                            style={{
+                              marginTop: 4,
+                              fontSize: 13,
+                              color: BRAND.text,
+                              wordBreak: "break-word",
+                            }}
+                          >
                             📞 {company.phone}
                           </div>
                         )}
 
                         {company.email && (
-                          <div style={{ marginTop: 4, fontSize: 13, color: BRAND.text }}>
+                          <div
+                            style={{
+                              marginTop: 4,
+                              fontSize: 13,
+                              color: BRAND.text,
+                              wordBreak: "break-word",
+                            }}
+                          >
                             📧 {company.email}
                           </div>
                         )}
 
                         {company.address && (
-                          <div style={{ marginTop: 4, fontSize: 13, color: BRAND.muted }}>
+                          <div
+                            style={{
+                              marginTop: 4,
+                              fontSize: 13,
+                              color: BRAND.muted,
+                              wordBreak: "break-word",
+                              lineHeight: 1.6,
+                            }}
+                          >
                             📍 {company.address}
                           </div>
                         )}
 
-                        <div style={{ marginTop: 10, fontSize: 13, color: BRAND.muted }}>
+                        <div
+                          style={{
+                            marginTop: 10,
+                            fontSize: 13,
+                            color: BRAND.muted,
+                            wordBreak: "break-word",
+                          }}
+                        >
                           👥 Çalışanlar: {company.user_count || 0}
                         </div>
 
@@ -630,7 +710,10 @@ export default function AdminCompaniesPage() {
                         >
                           <div
                             style={{
-                              width: `${Math.min((company.user_count || 0) * 10, 100)}%`,
+                              width: `${Math.min(
+                                (company.user_count || 0) * 10,
+                                100
+                              )}%`,
                               background: BRAND.red,
                               height: "100%",
                             }}
@@ -642,16 +725,28 @@ export default function AdminCompaniesPage() {
                             marginTop: 6,
                             fontSize: 12,
                             color: BRAND.muted,
+                            wordBreak: "break-word",
                           }}
                         >
                           Oluşturulma:{" "}
                           {company.created_at
-                            ? new Date(company.created_at).toLocaleString("tr-TR")
+                            ? new Date(company.created_at).toLocaleString(
+                                "tr-TR"
+                              )
                             : "-"}
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          flexWrap: "wrap",
+                          width: "100%",
+                          maxWidth: 220,
+                          justifyContent: "flex-start",
+                        }}
+                      >
                         <button
                           onClick={() => startEdit(company)}
                           style={{
@@ -662,6 +757,8 @@ export default function AdminCompaniesPage() {
                             color: "#fff",
                             fontWeight: 800,
                             cursor: "pointer",
+                            flex: 1,
+                            minWidth: 96,
                           }}
                         >
                           Düzenle
@@ -677,6 +774,8 @@ export default function AdminCompaniesPage() {
                             color: "#fff",
                             fontWeight: 800,
                             cursor: "pointer",
+                            flex: 1,
+                            minWidth: 96,
                           }}
                         >
                           Sil
