@@ -8,6 +8,34 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+type AssignmentRow = {
+  id: string;
+  user_id: string;
+  training_id: string | null;
+  status: "not_started" | "in_progress" | "completed" | null;
+  watch_completed: boolean | null;
+  pre_exam_completed: boolean | null;
+  final_exam_passed: boolean | null;
+  final_exam_score: number | null;
+  final_exam_attempts: number | null;
+  training_reset_required: boolean | null;
+  training_repeat_count: number | null;
+  watch_seconds: number | null;
+  click_count: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+};
+
+type TrainingRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  type: string | null;
+  content_url: string | null;
+  duration_minutes: number | null;
+};
+
 export async function GET() {
   try {
     const cookieStore = await cookies();
@@ -24,15 +52,17 @@ export async function GET() {
 
     let assignmentsQuery = supabase
       .from("training_assignments")
-      .select("*")
+      .select(
+        "id, user_id, training_id, status, watch_completed, pre_exam_completed, final_exam_passed, final_exam_score, final_exam_attempts, training_reset_required, training_repeat_count, watch_seconds, click_count, started_at, completed_at, created_at"
+      )
       .order("created_at", { ascending: false });
 
-    // admin-1 uuid değil, o yüzden user_id filtre uygulanmaz
     if (userId !== "admin-1") {
       assignmentsQuery = assignmentsQuery.eq("user_id", userId);
     }
 
-    const { data: assignments, error: assignmentsError } = await assignmentsQuery;
+    const { data: assignments, error: assignmentsError } =
+      await assignmentsQuery.returns<AssignmentRow[]>();
 
     if (assignmentsError) {
       return NextResponse.json(
@@ -41,17 +71,20 @@ export async function GET() {
       );
     }
 
-    const trainingIds = Array.from(
-      new Set((assignments || []).map((a) => a.training_id).filter(Boolean))
-    );
+    const safeAssignments = assignments || [];
 
-    let trainingsMap: Record<string, any> = {};
+    const trainingIds = Array.from(
+      new Set(safeAssignments.map((a) => a.training_id).filter(Boolean))
+    ) as string[];
+
+    let trainingsMap: Record<string, TrainingRow> = {};
 
     if (trainingIds.length > 0) {
       const { data: trainings, error: trainingsError } = await supabase
         .from("trainings")
-        .select("*")
-        .in("id", trainingIds);
+        .select("id, title, description, type, content_url, duration_minutes")
+        .in("id", trainingIds)
+        .returns<TrainingRow[]>();
 
       if (trainingsError) {
         return NextResponse.json(
@@ -65,7 +98,7 @@ export async function GET() {
       );
     }
 
-    const result = (assignments || []).map((item) => ({
+    const result = safeAssignments.map((item) => ({
       ...item,
       training: item.training_id ? trainingsMap[item.training_id] || null : null,
     }));
