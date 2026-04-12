@@ -1119,69 +1119,50 @@ function buildRegulationCertificateHtml(params: {
             margin-bottom: 6px;
           }
 
-         .front-box {
+ .front-box {
   border: 1px solid #111827;
-  height: 980px;
-  padding: 10px 12px 8px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-}
-  .front-content {
-  height: 66%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
+  min-height: 980px;
+  padding: 16px 18px 14px;
 }
 
-          .mini-head {
-            font-size: 11px;
-            font-weight: 700;
-            margin-bottom: 8px;
-          }
+.mini-head {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
 
-          .front-paragraph {
-            font-size: 11px;
-            line-height: 1.4;
-            margin-bottom: 10px;
-          }
+.front-paragraph {
+  font-size: 14px;
+  line-height: 1.8;
+  margin-bottom: 28px;
+}
 
-          .front-lines {
-            font-size: 11px;
-            line-height: 1.4;
-            white-space: pre-line;
-          }
+.front-lines {
+  font-size: 13px;
+  line-height: 1.75;
+  white-space: pre-line;
+}
 
-          .box-line {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border: 1px solid #111827;
-            margin: 0 4px 0 6px;
-            vertical-align: middle;
-          }
+.verify-block {
+  margin-top: 28px;
+  border: 1px solid #111827;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.45;
+}
 
-          .verify-block {
-            margin-top: 10px;
-            border: 1px solid #111827;
-            padding: 5px;
-            display: grid;
-            grid-template-columns: 58px 1fr;
-            gap: 5px;
-            align-items: center;
-            font-size: 9px;
-            line-height: 1.2;
-          }
-
-          .verify-block img {
-            width: 58px;
-            height: 58px;
-            object-fit: contain;
-            border: 1px solid #111827;
-            background: #fff;
-            padding: 2px;
-          }
-
+.verify-block img {
+  width: 78px;
+  height: 78px;
+  object-fit: contain;
+  border: 1px solid #111827;
+  background: #fff;
+  padding: 3px;
+}
           .verify-link {
             color: #111827;
             text-decoration: none;
@@ -1269,18 +1250,17 @@ function buildRegulationCertificateHtml(params: {
             </div>
 
          <div class="front-box">
-  <div class="front-content">
-    <div class="mini-head">TEMEL EĞİTİM BELGESİ</div>
+  <div class="mini-head">TEMEL EĞİTİM BELGESİ</div>
 
-    <div class="front-paragraph">
-      İşbu belge,<br/><br/>
-      <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına,
-      Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında
-      Yönetmelik kapsamında D-SEC tarafından düzenlenen
-      <strong>${trainingShortTitle}</strong> eğitiminin tamamlanması sonucunda düzenlenmiştir.
-    </div>
+  <div class="front-paragraph">
+    İşbu belge,<br/><br/>
+    <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına,
+    Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında
+    Yönetmelik kapsamında D-SEC tarafından düzenlenen
+    <strong>${trainingShortTitle}</strong> eğitiminin tamamlanması sonucunda düzenlenmiştir.
+  </div>
 
-    <div class="front-lines">
+  <div class="front-lines">
 Belge düzenlenme tarihi: ${params.issueDate}
 Eğitimin süresi: ${params.durationText}
 Eğitimin türü: İlk defa verilen temel eğitim<span class="box-line"></span>
@@ -1294,19 +1274,18 @@ Eğiticilerin imzası:
 Çalışanın işyerinin ünvanı: ${params.safeCompanyName}
 İşverenin/işveren vekilinin adı soyadı:
 İşveren/işveren vekilinin imzası:
-    </div>
+  </div>
 
-    <div class="verify-block">
-      <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
-      <div>
-        Bu belge D-SEC sistemi üzerinden doğrulanabilir.<br/>
-        Belge No: ${params.certificateNo}<br/>
-        Doğrulama Kodu: ${params.verificationCode}<br/>
-        Bağlantı:
-        <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
-          ${escapeHtml(params.verifyUrl)}
-        </a>
-      </div>
+  <div class="verify-block">
+    <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
+    <div>
+      Bu belge D-SEC sistemi üzerinden doğrulanabilir.<br/>
+      Belge No: ${params.certificateNo}<br/>
+      Doğrulama Kodu: ${params.verificationCode}<br/>
+      Bağlantı:
+      <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
+        ${escapeHtml(params.verifyUrl)}
+      </a>
     </div>
   </div>
 </div>
