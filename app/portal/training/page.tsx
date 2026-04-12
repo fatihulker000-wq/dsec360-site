@@ -33,7 +33,6 @@ function normalizeFinalScore(score?: number | null) {
 
   const clamped = Math.max(0, Math.min(100, numeric));
 
-  // 10 soruluk sınav mantığına göre 10'luk sisteme yuvarla
   return Math.round(clamped / 10) * 10;
 }
 
@@ -52,6 +51,156 @@ function shouldShowFinalScore(params: {
   if (!hasRawScore) return false;
 
   return attempts > 0 || passed || completed;
+}
+
+function TrainingListSkeleton({
+  loggingOut,
+  onLogout,
+}: {
+  loggingOut: boolean;
+  onLogout: () => void;
+}) {
+  const cardSkeletons = Array.from({ length: 6 });
+
+  return (
+    <main
+      style={{
+        padding: "40px",
+        fontFamily: "Arial",
+        background: "#f8fafc",
+        minHeight: "100vh",
+      }}
+    >
+      <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "12px",
+            alignItems: "center",
+            marginBottom: "20px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              width: "220px",
+              height: "34px",
+              borderRadius: "10px",
+              background: "#e5e7eb",
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={onLogout}
+            disabled={loggingOut}
+            style={{
+              padding: "12px 18px",
+              borderRadius: "10px",
+              border: "none",
+              background: loggingOut ? "#9ca3af" : "#111827",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: loggingOut ? "not-allowed" : "pointer",
+            }}
+          >
+            {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gap: "16px",
+          }}
+        >
+          {cardSkeletons.map((_, index) => (
+            <div
+              key={index}
+              style={{
+                background: "#ffffff",
+                border: "1px solid #e5e7eb",
+                borderRadius: "16px",
+                padding: "18px",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.06)",
+              }}
+            >
+              <div
+                style={{
+                  width: "68%",
+                  height: "24px",
+                  borderRadius: "8px",
+                  background: "#e5e7eb",
+                  marginBottom: "14px",
+                }}
+              />
+
+              <div
+                style={{
+                  width: "100%",
+                  height: "14px",
+                  borderRadius: "8px",
+                  background: "#f1f5f9",
+                  marginBottom: "10px",
+                }}
+              />
+              <div
+                style={{
+                  width: "88%",
+                  height: "14px",
+                  borderRadius: "8px",
+                  background: "#f1f5f9",
+                  marginBottom: "10px",
+                }}
+              />
+              <div
+                style={{
+                  width: "72%",
+                  height: "14px",
+                  borderRadius: "8px",
+                  background: "#f1f5f9",
+                  marginBottom: "18px",
+                }}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                  marginBottom: "18px",
+                }}
+              >
+                {Array.from({ length: 4 }).map((__, chipIndex) => (
+                  <div
+                    key={chipIndex}
+                    style={{
+                      width: chipIndex === 0 ? "78px" : chipIndex === 1 ? "120px" : chipIndex === 2 ? "115px" : "90px",
+                      height: "28px",
+                      borderRadius: "999px",
+                      background: "#f3f4f6",
+                      border: "1px solid #e5e7eb",
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div
+                style={{
+                  width: "100%",
+                  height: "46px",
+                  borderRadius: "10px",
+                  background: "#dbeafe",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
 }
 
 export default function TrainingListPage() {
@@ -125,47 +274,10 @@ export default function TrainingListPage() {
 
   if (loading) {
     return (
-      <main
-        style={{
-          padding: "40px",
-          fontFamily: "Arial",
-          background: "#f8fafc",
-          minHeight: "100vh",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "1100px",
-            margin: "0 auto",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
-            marginBottom: "24px",
-          }}
-        >
-          <h1 style={{ margin: 0 }}>Eğitim Portalı</h1>
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            disabled={loggingOut}
-            style={{
-              padding: "12px 18px",
-              borderRadius: "10px",
-              border: "none",
-              background: loggingOut ? "#9ca3af" : "#111827",
-              color: "#fff",
-              fontWeight: 700,
-              cursor: loggingOut ? "not-allowed" : "pointer",
-            }}
-          >
-            {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
-          </button>
-        </div>
-
-        <h2>Yükleniyor...</h2>
-      </main>
+      <TrainingListSkeleton
+        loggingOut={loggingOut}
+        onLogout={handleLogout}
+      />
     );
   }
 
