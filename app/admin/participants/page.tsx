@@ -114,6 +114,7 @@ function cardStyle(): React.CSSProperties {
     background: BRAND.white,
     padding: 18,
     boxShadow: BRAND.shadow,
+    minWidth: 0,
   };
 }
 
@@ -131,6 +132,7 @@ function badgeStyle(
     fontSize: 12,
     fontWeight: 700,
     color,
+    whiteSpace: "nowrap",
   };
 }
 
@@ -379,14 +381,22 @@ export default function AdminParticipantsPage() {
   };
 
   return (
-    <main style={{ minHeight: "100%", background: BRAND.bg, padding: 24 }}>
-      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+    <main
+      style={{
+        minHeight: "100%",
+        background: BRAND.bg,
+        padding: "clamp(12px, 2vw, 24px)",
+      }}
+    >
+      <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
         <div
           style={{
             ...cardStyle(),
             background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
             color: "#fff",
             marginBottom: 20,
+            padding: "clamp(16px, 2.4vw, 24px)",
+            borderRadius: 24,
           }}
         >
           <div
@@ -399,7 +409,13 @@ export default function AdminParticipantsPage() {
             D-SEC Eğitim Yönetimi
           </div>
           <h1
-            style={{ marginTop: 14, marginBottom: 8, fontSize: 36, fontWeight: 900 }}
+            style={{
+              marginTop: 14,
+              marginBottom: 8,
+              fontSize: "clamp(28px, 4vw, 36px)",
+              fontWeight: 900,
+              lineHeight: 1.1,
+            }}
           >
             Eğitim Katılımcıları
           </h1>
@@ -430,7 +446,7 @@ export default function AdminParticipantsPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 16,
             marginBottom: 20,
           }}
@@ -466,11 +482,11 @@ export default function AdminParticipantsPage() {
             ...cardStyle(),
             marginBottom: 20,
             display: "grid",
-            gridTemplateColumns: "1.3fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
             gap: 16,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
               Eğitim
             </div>
@@ -501,6 +517,7 @@ export default function AdminParticipantsPage() {
               borderRadius: 16,
               padding: 14,
               background: "#fafafa",
+              minWidth: 0,
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
@@ -509,7 +526,13 @@ export default function AdminParticipantsPage() {
 
             {selectedTrainingInfo ? (
               <>
-                <div style={{ fontSize: 17, fontWeight: 900 }}>
+                <div
+                  style={{
+                    fontSize: 17,
+                    fontWeight: 900,
+                    wordBreak: "break-word",
+                  }}
+                >
                   {selectedTrainingInfo.title}
                 </div>
                 <div
@@ -518,6 +541,7 @@ export default function AdminParticipantsPage() {
                     fontSize: 13,
                     color: BRAND.muted,
                     lineHeight: 1.6,
+                    wordBreak: "break-word",
                   }}
                 >
                   {selectedTrainingInfo.description}
@@ -557,11 +581,11 @@ export default function AdminParticipantsPage() {
             ...cardStyle(),
             marginBottom: 20,
             display: "grid",
-            gridTemplateColumns: "2fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
             gap: 14,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
               Ara
             </div>
@@ -579,7 +603,7 @@ export default function AdminParticipantsPage() {
             />
           </div>
 
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
               Firma
             </div>
@@ -664,7 +688,7 @@ export default function AdminParticipantsPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
                 gap: 14,
               }}
             >
@@ -685,6 +709,8 @@ export default function AdminParticipantsPage() {
                         : `1px solid ${BRAND.border}`,
                       background: checked ? "#eff6ff" : "#f9fafb",
                       cursor: "pointer",
+                      minWidth: 0,
+                      overflow: "hidden",
                     }}
                   >
                     <input
@@ -694,8 +720,14 @@ export default function AdminParticipantsPage() {
                       style={{ marginTop: 4 }}
                     />
 
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 16, fontWeight: 900 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 16,
+                          fontWeight: 900,
+                          wordBreak: "break-word",
+                        }}
+                      >
                         {u.full_name}
                       </div>
                       <div
@@ -747,13 +779,20 @@ export default function AdminParticipantsPage() {
             ...cardStyle(),
             marginBottom: assignSummary ? 20 : 0,
             display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 12,
           }}
         >
           <div style={{ ...cardStyle(), padding: 14 }}>
             <div style={{ fontSize: 12, color: BRAND.muted }}>Seçilen Eğitim</div>
-            <div style={{ fontSize: 15, fontWeight: 900, marginTop: 8 }}>
+            <div
+              style={{
+                fontSize: 15,
+                fontWeight: 900,
+                marginTop: 8,
+                wordBreak: "break-word",
+              }}
+            >
               {selectedTrainingInfo?.title || "-"}
             </div>
           </div>
@@ -790,7 +829,7 @@ export default function AdminParticipantsPage() {
               flexWrap: "wrap",
             }}
           >
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 900, color: BRAND.text }}>
                 Atama Özeti
               </div>
@@ -800,6 +839,7 @@ export default function AdminParticipantsPage() {
                   fontSize: 13,
                   color: BRAND.muted,
                   lineHeight: 1.6,
+                  wordBreak: "break-word",
                 }}
               >
                 Seçilen eğitim: {selectedTrainingInfo?.title || "-"}
@@ -826,6 +866,8 @@ export default function AdminParticipantsPage() {
                     ? "not-allowed"
                     : "pointer",
                 minWidth: 180,
+                width: "100%",
+                maxWidth: 260,
               }}
             >
               {assigning ? "Atanıyor..." : "Eğitimi Ata"}
@@ -845,11 +887,18 @@ export default function AdminParticipantsPage() {
                 marginBottom: 16,
               }}
             >
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <h3 style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>
                   Son Atama Sonucu
                 </h3>
-                <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 13,
+                    color: BRAND.muted,
+                    wordBreak: "break-word",
+                  }}
+                >
                   {assignSummary.message || "İşlem sonucu hazır."}
                 </div>
               </div>
@@ -868,7 +917,7 @@ export default function AdminParticipantsPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
                 gap: 12,
                 marginBottom: 18,
               }}
@@ -921,16 +970,16 @@ export default function AdminParticipantsPage() {
                       key={`${item.userId}-${index}`}
                       style={{
                         padding: "14px 16px",
-                        borderTop:
-                          index === 0 ? "none" : "1px solid #f1f5f9",
+                        borderTop: index === 0 ? "none" : "1px solid #f1f5f9",
                         display: "flex",
                         justifyContent: "space-between",
                         gap: 12,
                         alignItems: "center",
                         flexWrap: "wrap",
+                        minWidth: 0,
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 240 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
                             fontSize: 14,
@@ -949,6 +998,7 @@ export default function AdminParticipantsPage() {
                               fontSize: 12,
                               color: BRAND.muted,
                               lineHeight: 1.5,
+                              wordBreak: "break-word",
                             }}
                           >
                             {item.reason}
