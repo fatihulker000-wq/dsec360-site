@@ -1077,3 +1077,183 @@ main {
 .chart-fill.risk {
   background: #a61b2b;
 }
+
+/* ===== MOBILE ADMIN FIX / SAFE OVERRIDE ===== */
+
+@media (max-width: 900px) {
+  .admin-layout {
+    display: block !important;
+    grid-template-columns: 1fr !important;
+    min-height: 100vh;
+  }
+
+  .admin-layout-main {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 12px !important;
+  }
+
+  .admin-layout-content {
+    min-height: auto !important;
+  }
+
+  .admin-sidebar-shell {
+    position: relative !important;
+    top: auto !important;
+    height: auto !important;
+    padding: 12px 12px 0 12px !important;
+    border-right: none !important;
+    background: transparent !important;
+  }
+
+  .admin-sidebar {
+    height: auto !important;
+    min-height: auto !important;
+    border-radius: 24px !important;
+    overflow: hidden !important;
+  }
+
+  .admin-sidebar-top {
+    padding: 16px !important;
+  }
+
+  .admin-sidebar-brand {
+    gap: 10px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .admin-sidebar-logo {
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 14px !important;
+    font-size: 20px !important;
+  }
+
+  .admin-sidebar-title {
+    font-size: 18px !important;
+  }
+
+  .admin-sidebar-subtitle {
+    font-size: 11px !important;
+  }
+
+  .admin-sidebar-hero-card {
+    padding: 14px !important;
+    border-radius: 18px !important;
+  }
+
+  .admin-sidebar-hero-title {
+    font-size: 18px !important;
+    line-height: 1.2 !important;
+  }
+
+  .admin-sidebar-hero-text {
+    font-size: 12px !important;
+    line-height: 1.5 !important;
+  }
+
+  .admin-sidebar-section {
+    padding: 0 14px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .admin-sidebar-section-title {
+    font-size: 10px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .admin-sidebar-nav {
+    gap: 8px !important;
+  }
+
+  .admin-sidebar-link,
+  .admin-sidebar-link-soft {
+    min-height: 48px !important;
+    padding: 0 12px !important;
+    border-radius: 14px !important;
+  }
+
+  .admin-sidebar-link-icon {
+    width: 28px !important;
+    min-width: 28px !important;
+    height: 28px !important;
+    font-size: 13px !important;
+  }
+
+  .admin-sidebar-link-label {
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+  }
+
+  .admin-sidebar-footer {
+    padding: 14px !important;
+  }
+
+  .admin-sidebar-logout {
+    min-height: 50px !important;
+    border-radius: 14px !important;
+    font-size: 14px !important;
+  }
+
+  .admin-content,
+  .admin-layout-main,
+  main {
+    overflow-x: hidden !important;
+  }
+
+  /* Dashboard / panel içi kutular taşmasın */
+  div[style*="gridTemplateColumns: repeat(4"],
+  div[style*="gridTemplateColumns: repeat(5"],
+  div[style*="gridTemplateColumns: repeat(auto-fit"],
+  div[style*="gridTemplateColumns: minmax(0, 1.3fr) 1fr"],
+  div[style*="gridTemplateColumns: 1.3fr 1fr"],
+  div[style*="gridTemplateColumns: 2fr 1fr"],
+  div[style*="gridTemplateColumns: minmax(0, 1.1fr) minmax(0, 0.9fr)"],
+  div[style*="gridTemplateColumns: minmax(0, 1fr) minmax(0, 1fr)"],
+  div[style*="gridTemplateColumns: minmax(0, 1.05fr) minmax(0, 0.95fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Kartlar mobilde daha rahat görünsün */
+  div[style*="maxWidth: 1400"],
+  div[style*="maxWidth: 1440"],
+  div[style*="maxWidth: 1100"] {
+    max-width: 100% !important;
+  }
+
+  /* Büyük başlıklar mobilde taşmasın */
+  h1 {
+    word-break: break-word;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-layout-main {
+    padding: 10px !important;
+  }
+
+  .admin-sidebar-shell {
+    padding: 10px 10px 0 10px !important;
+  }
+
+  .admin-sidebar-top {
+    padding: 14px !important;
+  }
+
+  .admin-sidebar-hero-card {
+    padding: 12px !important;
+  }
+
+  .admin-sidebar-hero-title {
+    font-size: 16px !important;
+  }
+
+  .admin-sidebar-link,
+  .admin-sidebar-link-soft {
+    min-height: 46px !important;
+  }
+
+  .admin-sidebar-logout {
+    min-height: 48px !important;
+  }
+}
