@@ -200,6 +200,7 @@ type AssignmentRow = {
   verification_code: string | null;
   final_exam_passed: boolean | null;
   final_exam_score: number | null;
+  training_repeat_count: number | null;
 };
 
 type TrainingRow = {
@@ -954,17 +955,35 @@ function buildRegulationCertificateHtml(params: {
   qrImageUrl: string;
   groupedSections: GroupedTopicSections;
   isCertificate: boolean;
+  selectedSection: RegulationSectionKey | null;
+  isRepeatTraining: boolean;
 }) {
+
+ {
   const belgeBaslik = params.isCertificate
     ? "TEMEL EĞİTİM BELGESİ"
     : "TEMEL EĞİTİM KATILIM BELGESİ";
 
   const trainingShortTitle = escapeHtml(params.trainingTitle || "-");
 
+  const firstTrainingMark = params.isRepeatTraining ? "☐" : "☑";
+  const repeatTrainingMark = params.isRepeatTraining ? "☑" : "☐";
+  const remoteTrainingMark = "☑";
+  const faceToFaceMark = "☐";
+
+  const genelDuration =
+    params.selectedSection === "genel" ? params.durationText : "";
+  const saglikDuration =
+    params.selectedSection === "saglik" ? params.durationText : "";
+  const teknikDuration =
+    params.selectedSection === "teknik" ? params.durationText : "";
+  const iseOzelDuration =
+    params.selectedSection === "iseOzel" ? params.durationText : "";
+
   const backRows = `
     <tr>
       <td class="section-title">1. Genel konular</td>
-      <td class="duration-col"></td>
+      <td class="duration-col">${escapeHtml(genelDuration)}</td>
     </tr>
     ${
       params.groupedSections.genel.length
@@ -988,7 +1007,7 @@ function buildRegulationCertificateHtml(params: {
 
     <tr>
       <td class="section-title">2. Sağlık konuları</td>
-      <td class="duration-col"></td>
+      <td class="duration-col">${escapeHtml(saglikDuration)}</td>
     </tr>
     ${
       params.groupedSections.saglik.length
@@ -1012,7 +1031,7 @@ function buildRegulationCertificateHtml(params: {
 
     <tr>
       <td class="section-title">3. Teknik konular</td>
-      <td class="duration-col"></td>
+      <td class="duration-col">${escapeHtml(teknikDuration)}</td>
     </tr>
     ${
       params.groupedSections.teknik.length
@@ -1036,7 +1055,7 @@ function buildRegulationCertificateHtml(params: {
 
     <tr>
       <td class="section-title">4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular</td>
-      <td class="duration-col"></td>
+      <td class="duration-col">${escapeHtml(iseOzelDuration)}</td>
     </tr>
     ${
       params.groupedSections.iseOzel.length
@@ -1119,50 +1138,60 @@ function buildRegulationCertificateHtml(params: {
             margin-bottom: 6px;
           }
 
- .front-box {
-  border: 1px solid #111827;
-  min-height: 980px;
-  padding: 16px 18px 14px;
-}
+          .front-box {
+            border: 1px solid #111827;
+            min-height: 980px;
+            padding: 16px 18px 14px;
+          }
 
-.mini-head {
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 18px;
-}
+          .mini-head {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 18px;
+          }
 
-.front-paragraph {
-  font-size: 14px;
-  line-height: 1.8;
-  margin-bottom: 28px;
-}
+          .front-paragraph {
+            font-size: 14px;
+            line-height: 1.8;
+            margin-bottom: 28px;
+          }
 
-.front-lines {
-  font-size: 13px;
-  line-height: 1.75;
-  white-space: pre-line;
-}
+          .front-lines {
+            font-size: 13px;
+            line-height: 1.75;
+            white-space: pre-line;
+          }
 
-.verify-block {
-  margin-top: 28px;
-  border: 1px solid #111827;
-  padding: 8px;
-  display: grid;
-  grid-template-columns: 78px 1fr;
-  gap: 8px;
-  align-items: center;
-  font-size: 11px;
-  line-height: 1.45;
-}
+          .box-line {
+            display: inline-block;
+            min-width: 18px;
+            font-size: 16px;
+            font-weight: 700;
+            text-align: center;
+            margin: 0 6px 0 6px;
+          }
 
-.verify-block img {
-  width: 78px;
-  height: 78px;
-  object-fit: contain;
-  border: 1px solid #111827;
-  background: #fff;
-  padding: 3px;
-}
+          .verify-block {
+            margin-top: 28px;
+            border: 1px solid #111827;
+            padding: 8px;
+            display: grid;
+            grid-template-columns: 78px 1fr;
+            gap: 8px;
+            align-items: center;
+            font-size: 11px;
+            line-height: 1.45;
+          }
+
+          .verify-block img {
+            width: 78px;
+            height: 78px;
+            object-fit: contain;
+            border: 1px solid #111827;
+            background: #fff;
+            padding: 3px;
+          }
+
           .verify-link {
             color: #111827;
             text-decoration: none;
@@ -1171,9 +1200,9 @@ function buildRegulationCertificateHtml(params: {
           }
 
           .footer-note {
-            margin-top: 6px;
-            font-size: 9px;
-            line-height: 1.2;
+            margin-top: 10px;
+            font-size: 10px;
+            line-height: 1.4;
           }
 
           .back-table {
@@ -1209,6 +1238,7 @@ function buildRegulationCertificateHtml(params: {
           .duration-col {
             width: 58px;
             text-align: center;
+            font-weight: 700;
           }
 
           @page {
@@ -1249,24 +1279,24 @@ function buildRegulationCertificateHtml(params: {
               <div>${belgeBaslik}</div>
             </div>
 
-         <div class="front-box">
-  <div class="mini-head">TEMEL EĞİTİM BELGESİ</div>
+            <div class="front-box">
+              <div class="mini-head">TEMEL EĞİTİM BELGESİ</div>
 
-  <div class="front-paragraph">
-    İşbu belge,<br/><br/>
-    <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına,
-    Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında
-    Yönetmelik kapsamında D-SEC tarafından düzenlenen
-    <strong>${trainingShortTitle}</strong> eğitiminin tamamlanması sonucunda düzenlenmiştir.
-  </div>
+              <div class="front-paragraph">
+                İşbu belge,<br/><br/>
+                <strong>${params.safeUserFullName}</strong> (${params.safeUserRole}) adına,
+                Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında
+                Yönetmelik kapsamında D-SEC tarafından düzenlenen
+                <strong>${trainingShortTitle}</strong> eğitiminin tamamlanması sonucunda düzenlenmiştir.
+              </div>
 
-  <div class="front-lines">
+              <div class="front-lines">
 Belge düzenlenme tarihi: ${params.issueDate}
 Eğitimin süresi: ${params.durationText}
-Eğitimin türü: İlk defa verilen temel eğitim<span class="box-line"></span>
-               Tekrar verilen temel eğitim<span class="box-line"></span>
-Eğitimin şekli: Uzaktan<span class="box-line"></span>
-               Yüz yüze<span class="box-line"></span>
+Eğitimin türü: İlk defa verilen temel eğitim<span class="box-line">${firstTrainingMark}</span>
+               Tekrar verilen temel eğitim<span class="box-line">${repeatTrainingMark}</span>
+Eğitimin şekli: Uzaktan<span class="box-line">${remoteTrainingMark}</span>
+               Yüz yüze<span class="box-line">${faceToFaceMark}</span>
 
 Eğiticilerin adı soyadı ve ünvanı: D-SEC Eğitim Yetkilisi
 Eğiticilerin imzası:
@@ -1274,21 +1304,21 @@ Eğiticilerin imzası:
 Çalışanın işyerinin ünvanı: ${params.safeCompanyName}
 İşverenin/işveren vekilinin adı soyadı:
 İşveren/işveren vekilinin imzası:
-  </div>
+              </div>
 
-  <div class="verify-block">
-    <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
-    <div>
-      Bu belge D-SEC sistemi üzerinden doğrulanabilir.<br/>
-      Belge No: ${params.certificateNo}<br/>
-      Doğrulama Kodu: ${params.verificationCode}<br/>
-      Bağlantı:
-      <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
-        ${escapeHtml(params.verifyUrl)}
-      </a>
-    </div>
-  </div>
-</div>
+              <div class="verify-block">
+                <img src="${params.qrImageUrl}" alt="QR Doğrulama" />
+                <div>
+                  Bu belge D-SEC sistemi üzerinden doğrulanabilir.<br/>
+                  Belge No: ${params.certificateNo}<br/>
+                  Doğrulama Kodu: ${params.verificationCode}<br/>
+                  Bağlantı:
+                  <a class="verify-link" href="${params.verifyUrl}" target="_blank" rel="noreferrer">
+                    ${escapeHtml(params.verifyUrl)}
+                  </a>
+                </div>
+              </div>
+            </div>
 
             <div class="footer-note">
               * Belge No: ${params.certificateNo} &nbsp;&nbsp;|&nbsp;&nbsp; Doğrulama Kodu: ${params.verificationCode}
@@ -1317,6 +1347,7 @@ Eğiticilerin imzası:
       </body>
     </html>
   `;
+}
 }
 export async function GET(
   request: Request,
@@ -1356,9 +1387,9 @@ export async function GET(
 
     let assignmentQuery = supabase
       .from("training_assignments")
-      .select(
-        "id, status, completed_at, started_at, training_id, certificate_no, certificate_issued_at, verification_code, final_exam_passed, final_exam_score"
-      )
+     .select(
+  "id, status, completed_at, started_at, training_id, certificate_no, certificate_issued_at, verification_code, final_exam_passed, final_exam_score, training_repeat_count"
+)
       .eq("id", id);
 
     if (userId !== "admin-1") {
@@ -1549,23 +1580,26 @@ export async function GET(
 
     const html =
       useOfficialBasicTemplate && groupedSections
-        ? buildRegulationCertificateHtml({
-            documentTitle,
-            badgeText,
-            certificateNo: certificateNo || "-",
-            verificationCode: verificationCode || "-",
-            issueDate: issueDateOnly,
-            completedDate,
-            safeCompanyName,
-            safeUserFullName,
-            safeUserRole,
-            trainingTitle,
-            durationText,
-            verifyUrl,
-            qrImageUrl,
-            groupedSections,
-            isCertificate,
-          })
+       ? buildRegulationCertificateHtml({
+    documentTitle,
+    badgeText,
+    certificateNo: certificateNo || "-",
+    verificationCode: verificationCode || "-",
+    issueDate: issueDateOnly,
+    completedDate,
+    safeCompanyName,
+    safeUserFullName,
+    safeUserRole,
+    trainingTitle,
+    durationText,
+    verifyUrl,
+    qrImageUrl,
+    groupedSections,
+    isCertificate,
+    selectedSection: matchedSection,
+    isRepeatTraining: Number(assignment.training_repeat_count || 0) > 0,
+  })
+
         : buildStandardCertificateHtml({
             documentTitle,
             badgeText,
