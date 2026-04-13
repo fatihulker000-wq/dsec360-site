@@ -1,118 +1,208 @@
+"use client";
+
+import Link from "next/link";
+
+const plans = [
+  {
+    name: "Başlangıç",
+    price: "₺4.999",
+    period: "/yıl",
+    desc: "Küçük işletmeler için temel İSG yönetimi altyapısı.",
+    features: [
+      "Eğitim yönetimi",
+      "Denetim kayıtları",
+      "ÇBS kayıt sistemi",
+      "Temel raporlama",
+      "1 firma kullanımı",
+    ],
+    highlight: false,
+    cta: "Başlangıç Paketi İçin Teklif Al",
+  },
+  {
+    name: "Profesyonel",
+    price: "₺9.999",
+    period: "/yıl",
+    desc: "Büyüyen firmalar için daha güçlü kontrol ve görünürlük.",
+    features: [
+      "Tüm ana modüller",
+      "Sınırsız çalışan takibi",
+      "Gelişmiş raporlama",
+      "Eğitim + denetim entegrasyonu",
+      "Öncelikli destek",
+    ],
+    highlight: true,
+    cta: "Profesyonel Paket İçin Teklif Al",
+  },
+  {
+    name: "Kurumsal",
+    price: "Teklif Al",
+    period: "",
+    desc: "Büyük ölçekli işletmeler ve özel ihtiyaçlar için kurumsal çözüm.",
+    features: [
+      "Sınırsız firma yapısı",
+      "Özel entegrasyonlar",
+      "Yönetici dashboard kurgusu",
+      "Kurumsal danışmanlık",
+      "Özel destek süreci",
+    ],
+    highlight: false,
+    cta: "Kurumsal Teklif Al",
+  },
+];
+
 export default function PricingPage() {
   return (
-    <main style={{ padding: "80px 20px" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", textAlign: "center"}}>
-        
-        {/* HERO */}
-        <h1 style={{ fontSize: 46, fontWeight: 900 }}>
-          Kurumsal Ölçeklenebilir Fiyatlandırma
-        </h1>
+    <main>
+      <section className="hero hero-compact">
+        <div className="hero-inner">
+          <div className="hero-badge">D-SEC Fiyatlandırma</div>
 
-        <p style={{ marginTop: 20, fontSize: 18, opacity: 0.75 }}>
-          D-SEC platformu, işletmenizin büyüklüğüne ve ihtiyaçlarına göre
-          esnek, sürdürülebilir ve ölçeklenebilir bir fiyatlandırma modeli sunar.
-        </p>
+          <h1 className="hero-title">
+            İşletmenize Uygun D-SEC Paketini Seçin
+          </h1>
 
-        {/* VALUE */}
-        <div style={{ marginTop: 50, display: "grid", gap: 20 }}>
-          <div style={card}>
-            ✔ Tüm modüller tek platformda (Denetim, Eğitim, ÇBS, Sağlık)
+          <p className="hero-desc">
+            Küçük işletmelerden kurumsal yapılara kadar farklı ihtiyaçlara uygun
+            D-SEC paketleri ile eğitim, denetim, sağlık ve raporlama
+            süreçlerinizi daha kontrollü ve daha görünür yönetin.
+          </p>
+        </div>
+      </section>
+
+      <section className="section section-light">
+        <div className="page-container">
+          <div className="section-title-wrap">
+            <h2 className="section-title">Fiyatlandırma Paketleri</h2>
+            <p className="section-subtitle">
+              Küçük işletmelerden kurumsal yapılara kadar farklı ihtiyaçlara
+              uygun esnek seçenekler
+            </p>
           </div>
-          <div style={card}>
-            ✔ Kullanıcı ve firma bazlı ölçeklenebilir yapı
-          </div>
-          <div style={card}>
-            ✔ Kurumsal raporlama ve yönetim paneli
+
+          <div className="grid-3">
+            {plans.map((plan) => (
+              <div
+                key={plan.name}
+                className="card"
+                style={
+                  plan.highlight
+                    ? {
+                        border: "2px solid #c62828",
+                        boxShadow: "0 24px 52px rgba(198, 40, 40, 0.16)",
+                        position: "relative",
+                        transform: "translateY(-8px)",
+                        display: "flex",
+                        flexDirection: "column",
+                        height: "100%",
+                      }
+                    : {
+                        position: "relative",
+                        display: "flex",
+                        flexDirection: "column",
+                        height: "100%",
+                      }
+                }
+              >
+                {plan.highlight && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: -14,
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      background: "#c62828",
+                      color: "#ffffff",
+                      padding: "6px 14px",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    EN ÇOK TERCİH EDİLEN
+                  </div>
+                )}
+
+                <h3 className="card-title">{plan.name}</h3>
+                <p className="card-text">{plan.desc}</p>
+
+                <div style={{ marginTop: 20 }}>
+                  <span
+                    style={{
+                      fontSize: 34,
+                      fontWeight: 900,
+                      color: plan.highlight ? "#c62828" : "#111827",
+                    }}
+                  >
+                    {plan.price}
+                  </span>
+                  {plan.period && (
+                    <span style={{ color: "#6b7280", fontSize: 15 }}>
+                      {" "}
+                      {plan.period}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ marginTop: 20, display: "grid", gap: 10 }}>
+                  {plan.features.map((item) => (
+                    <div
+                      key={item}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        color: "#374151",
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      <span style={{ color: "#c62828", fontWeight: 900 }}>
+                        ✓
+                      </span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: "auto", paddingTop: 24 }}>
+                  <Link
+                    href="/contact"
+                    className="nav-cta"
+                    style={{ width: "100%" }}
+                  >
+                    {plan.cta}
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+      </section>
 
-        {/* PLAN */}
-        <div
-          style={{
-            marginTop: 60,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))",
-            gap: 20,
-          }}
-        >
-          {/* BASIC */}
-          <div style={planCard}>
-            <h3>KOBİ Paket</h3>
-            <p>Temel yönetim ihtiyaçları için</p>
-            <h2 style={{ marginTop: 10 }}>₺</h2>
+      <section className="hero hero-cta-band">
+        <div className="hero-inner hero-compact">
+          <div className="hero-badge">Demo ve Teklif Süreci</div>
 
-            <ul style={list}>
-              <li>✔ Eğitim modülü</li>
-              <li>✔ ÇBS kayıt sistemi</li>
-              <li>✔ Temel raporlama</li>
-            </ul>
-          </div>
+          <h2 className="hero-title" style={{ fontSize: 42 }}>
+            D-SEC ile Dijital İSG Yönetimine Geçin
+          </h2>
 
-          {/* PRO */}
-          <div style={{ ...planCard, border: "2px solid #b91c1c" }}>
-            <h3>Kurumsal Paket</h3>
-            <p>Profesyonel yönetim için</p>
-            <h2 style={{ marginTop: 10 }}>₺₺</h2>
+          <p className="hero-desc">
+            Size uygun paketi seçin, işletmenize özel kurumsal yapıyı birlikte
+            planlayalım.
+          </p>
 
-            <ul style={list}>
-              <li>✔ Tüm modüller aktif</li>
-              <li>✔ Gelişmiş raporlama</li>
-              <li>✔ Firma & kullanıcı yönetimi</li>
-            </ul>
-          </div>
+          <div className="hero-actions">
+            <Link href="/demo" className="btn-primary">
+              Ücretsiz Demo
+            </Link>
 
-          {/* ENTERPRISE */}
-          <div style={planCard}>
-            <h3>Enterprise</h3>
-            <p>Büyük ölçekli firmalar için</p>
-            <h2 style={{ marginTop: 10 }}>Özel Teklif</h2>
-
-            <ul style={list}>
-              <li>✔ Özel geliştirme</li>
-              <li>✔ API entegrasyonları</li>
-              <li>✔ Danışmanlık desteği</li>
-            </ul>
+            <Link href="/contact" className="btn-outline-light">
+              Teklif Al
+            </Link>
           </div>
         </div>
-
-        {/* CTA */}
-        <div style={{ marginTop: 60 }}>
-          <a href="/contact" style={cta}>
-            Size Özel Teklif Al
-          </a>
-        </div>
-      </div>
+      </section>
     </main>
   );
 }
-
-/* STYLES */
-const card = {
-  padding: "14px 20px",
-  borderRadius: 12,
-  background: "#fff",
-  border: "1px solid #eee",
-};
-
-const planCard = {
-  padding: 24,
-  borderRadius: 16,
-  background: "#fff",
-  border: "1px solid #eee",
-  textAlign: "center" as const,
-};
-
-const list = {
-  marginTop: 15,
-  paddingLeft: 18,
-  lineHeight: 1.8,
-};
-
-const cta = {
-  padding: "16px 28px",
-  background: "#b91c1c",
-  color: "#fff",
-  borderRadius: 14,
-  fontWeight: 800,
-  textDecoration: "none",
-};
