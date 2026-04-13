@@ -185,9 +185,9 @@ export default function Navbar() {
             </button>
           )}
 
-          <Link href="/contact" className="nav-cta">
-            Demo Talep Et
-          </Link>
+          <Link href="/demo" className="nav-cta">
+  Ücretsiz Demo
+</Link>
 
           <button
             type="button"
@@ -284,6 +284,14 @@ export default function Navbar() {
             <Link href="/cbs" className="nav-link-item" onClick={() => setMobileOpen(false)}>
               ÇBS
             </Link>
+
+<Link
+  href="/pricing"
+  className="nav-link-item"
+  onClick={() => setMobileOpen(false)}
+>
+  Fiyatlar
+</Link>
 
             <Link
               href="/contact"
