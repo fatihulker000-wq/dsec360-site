@@ -9,6 +9,7 @@ const navItems = [
   { href: "/", label: "Ana Sayfa" },
   { href: "/services", label: "Hizmetler" },
   { href: "/cbs", label: "ÇBS" },
+  { href: "/pricing", label: "Fiyatlar" },
   { href: "/contact", label: "İletişim" },
 ];
 
