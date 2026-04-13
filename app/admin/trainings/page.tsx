@@ -380,10 +380,10 @@ return (
   >
     <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
      
-    <div
+   <div
   style={{
     ...cardStyle(),
-    background: 'linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)',
+    background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
     color: "#fff",
     marginBottom: 20,
     padding: "clamp(16px, 2.8vw, 28px)",
@@ -757,9 +757,9 @@ return (
     gap: 12,
     padding: 16,
     borderRadius: 16,
-  border: checked
-  ? "2px solid #2563eb"
-  : '1px solid ${BRAND.border}',
+border: checked
+    ? "2px solid #2563eb"
+    : `1px solid ${BRAND.border}`,
     background: checked ? "#eff6ff" : "#f9fafb",
     cursor: "pointer",
     minWidth: 0,
