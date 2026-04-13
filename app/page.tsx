@@ -111,30 +111,59 @@ export default function HomePage() {
         <div className="hero-inner">
           <div className="hero-badge">D-SEC Kurumsal Yönetim Platformu</div>
 
-          <h1 className="hero-title">
-            Dijital Sağlık • Emniyet • Çevre Yönetim Sistemi
-          </h1>
+      <h1 className="hero-title">
+  İş Güvenliği Süreçlerinizi Tek Platformdan Yönetin
+</h1>
+
+<p className="hero-desc">
+  D-SEC; denetim, eğitim, sağlık ve ÇBS süreçlerini tek merkezde toplayarak
+  işletmenize hız, kontrol ve tam görünürlük sağlar.
+</p>
+
+<p className="hero-desc">
+Denetim, eğitim, sağlık ve ÇBS süreçlerini tek merkezde toplayarak
+iş yükünü azaltın, hataları sıfırlayın.
+</p>
 
           <p className="hero-desc">
             İş güvenliği, saha denetimi, eğitim yönetimi, ÇBS kayıtları ve
             raporlama süreçlerini tek platformda birleştiren kurumsal çözüm.
           </p>
 
-          <div className="hero-actions">
-            <Link href="/login" className="btn-primary">
-              Kullanıcı Girişi
-            </Link>
-            <Link href="/admin/login" className="btn-outline-light">
-              Admin Girişi
-            </Link>
-          </div>
+<div className="hero-actions">
+  <Link href="/demo" className="btn-primary">
+    Ücretsiz Demo Talep Et
+  </Link>
+
+  <div style={{
+  marginTop: 20,
+  display: "flex",
+  gap: 20,
+  justifyContent: "center",
+  flexWrap: "wrap",
+  fontSize: 14,
+  opacity: 0.8
+}}>
+  <span>✔ 13+ yıl İSG tecrübesi</span>
+  <span>✔ Kurumsal yapı</span>
+  <span>✔ Tüm modüller entegre</span>
+</div>
+
+  <Link href="/contact" className="btn-outline-light">
+    Teklif Al
+  </Link>
+</div>
         </div>
       </section>
 
       <section className="section section-light">
         <div className="page-container">
           <div className="section-title-wrap">
-            <h2 className="section-title">Giriş Noktaları</h2>
+          <h2 className="section-title">Platforma Nasıl Başlarsınız?</h2>
+
+<p className="section-subtitle">
+  D-SEC’i kullanmaya başlamak için 3 basit adım
+</p>
             <p className="section-subtitle">
               Platform içinde kimin hangi ekrandan giriş yapacağı net ve sade
               şekilde ayrıştırılmıştır
@@ -217,6 +246,43 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <section className="section section-light">
+  <div className="page-container" style={{ textAlign: "center" }}>
+    
+    <h2 className="section-title">
+      Neden D-SEC?
+    </h2>
+
+    <p className="section-subtitle">
+      Sadece bir yazılım değil, işletmeniz için yönetim altyapısı
+    </p>
+
+    <div style={{
+      marginTop: 40,
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+      gap: 20
+    }}>
+      
+      <div className="card">
+        <h3>Tek Platform</h3>
+        <p>Dağınık sistemleri ortadan kaldırır, tüm süreçleri tek yerde toplar.</p>
+      </div>
+
+      <div className="card">
+        <h3>Gerçek Zamanlı Takip</h3>
+        <p>Denetim, eğitim ve risk süreçlerini anlık olarak izleyin.</p>
+      </div>
+
+      <div className="card">
+        <h3>Kurumsal Raporlama</h3>
+        <p>Yönetim için anlamlı, aksiyon alınabilir raporlar üretir.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
 
       <section className="section section-soft">
         <div className="page-container">
@@ -310,6 +376,19 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="section section-light">
+  <div className="page-container">
+    <h2 className="section-title">Neden D-SEC?</h2>
+
+    <ul>
+      <li>✔ İSG mevzuatına %100 uyum</li>
+      <li>✔ Denetim ve eğitim tek platform</li>
+      <li>✔ Kurumsal raporlama</li>
+      <li>✔ Mobil + Web erişim</li>
+    </ul>
+  </div>
+</section>
+
       <section className="hero">
         <div
           className="hero-inner"
@@ -323,14 +402,15 @@ export default function HomePage() {
             daha yönetilebilir hale getirin.
           </p>
 
-          <div className="hero-actions">
-            <Link href="/contact" className="btn-primary">
-              İletişime Geç
-            </Link>
-            <Link href="/cbs" className="btn-outline-light">
-              ÇBS Modülünü Gör
-            </Link>
-          </div>
+<div className="hero-actions">
+  <Link href="/demo" className="btn-primary">
+    Ücretsiz Demo Talep Et
+  </Link>
+
+  <Link href="/contact" className="btn-outline-light">
+    Teklif Al
+  </Link>
+</div>
         </div>
       </section>
     </main>
