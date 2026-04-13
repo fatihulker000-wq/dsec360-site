@@ -379,47 +379,110 @@ return (
     }}
   >
     <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
-       <div
+     
+    <div
   style={{
     ...cardStyle(),
-   background: 'linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)',
+    background: 'linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)',
     color: "#fff",
     marginBottom: 20,
-    padding: "clamp(16px, 2.4vw, 24px)",
+    padding: "clamp(16px, 2.8vw, 28px)",
     borderRadius: 24,
   }}
 >
-          <div
-            style={badgeStyle(
-              "rgba(255,255,255,0.16)",
-              "rgba(255,255,255,0.22)",
-              "#fff"
-            )}
-          >
-            D-SEC Eğitim Yönetimi
-          </div>
-          <h1
-  style={{
-    marginTop: 14,
-    marginBottom: 8,
-    fontSize: "clamp(24px, 4.8vw, 36px)",
-    fontWeight: 900,
-    lineHeight: 1.15,
-  }}
->
-  Eğitim Atama Paneli
-</h1>
-         <p
-  style={{
-    margin: 0,
-    color: "rgba(255,255,255,0.92)",
-    lineHeight: 1.7,
-    fontSize: "clamp(14px, 2.5vw, 16px)",
-  }}
->
-            Eğitim seç, çalışan filtrele, toplu atama yap ve sonuçları tek ekranda izle.
-          </p>
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      gap: 16,
+      alignItems: "flex-start",
+      flexWrap: "wrap",
+    }}
+  >
+    {/* SOL METİN */}
+    <div style={{ maxWidth: 620 }}>
+      <div
+        style={{
+          display: "inline-flex",
+          padding: "8px 12px",
+          borderRadius: 999,
+          background: "rgba(255,255,255,0.14)",
+          border: "1px solid rgba(255,255,255,0.22)",
+          fontSize: 12,
+          fontWeight: 900,
+          marginBottom: 12,
+        }}
+      >
+        D-SEC Eğitim Yönetimi
+      </div>
+
+      <h1
+        style={{
+          marginTop: 0,
+          marginBottom: 10,
+          fontSize: "clamp(24px, 5vw, 38px)",
+          fontWeight: 900,
+          lineHeight: 1.15,
+        }}
+      >
+        Eğitim Atama Paneli
+      </h1>
+
+      <p
+        style={{
+          margin: 0,
+          color: "rgba(255,255,255,0.92)",
+          lineHeight: 1.7,
+          fontSize: "clamp(14px, 2.5vw, 16px)",
+        }}
+      >
+        Eğitimleri merkezi olarak yönet, çalışanları filtrele, toplu atama yap ve
+        tüm süreci tek ekrandan kontrol et.
+      </p>
+    </div>
+
+    {/* SAĞ KPI */}
+    <div
+      style={{
+        display: "grid",
+        gap: 10,
+        minWidth: 160,
+      }}
+    >
+      <div
+        style={{
+          background: "rgba(255,255,255,0.12)",
+          padding: 14,
+          borderRadius: 14,
+          border: "1px solid rgba(255,255,255,0.18)",
+        }}
+      >
+        <div style={{ fontSize: 12, opacity: 0.9 }}>
+          Seçili Çalışan
         </div>
+        <div style={{ fontSize: 24, fontWeight: 900 }}>
+          {selectedCount}
+        </div>
+      </div>
+
+      <div
+        style={{
+          background: "rgba(255,255,255,0.12)",
+          padding: 14,
+          borderRadius: 14,
+          border: "1px solid rgba(255,255,255,0.18)",
+        }}
+      >
+        <div style={{ fontSize: 12, opacity: 0.9 }}>
+          Toplam Eğitim
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 900 }}>
+          {trainings.length}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
         {error ? (
           <div
