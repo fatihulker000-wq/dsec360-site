@@ -110,6 +110,7 @@ export default function AdminLayout({
       { name: "Eğitim Katılımcıları", href: "/admin/participants" },
       { name: "Sistem Kullanıcıları", href: "/admin/users" },
       { name: "Raporlar", href: "/admin/reports" },
+      { name: "ÇBS Yönetimi", href: "/admin/cbs" },
     ];
 
     if (role === "super_admin") {

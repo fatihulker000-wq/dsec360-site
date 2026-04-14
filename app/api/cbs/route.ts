@@ -98,31 +98,55 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
+function normalizeFirmId(value: unknown): string | null {
+  const v = String(value || "").trim();
+  return v || null;
+}
+
+function detectSourceType(value: unknown) {
+  const raw = String(value || "").trim().toUpperCase();
+
+  if (raw === "APP") return "APP";
+  return "WEB";
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { full_name, email, message } = body ?? {};
 
-    if (!full_name?.trim() || !email?.trim() || !message?.trim()) {
+    const full_name = String(body?.full_name || "").trim();
+    const email = String(body?.email || "").trim();
+    const message = String(body?.message || "").trim();
+
+    if (!full_name || !email || !message) {
       return Response.json(
         { error: "Tüm alanlar zorunludur." },
         { status: 400 }
       );
     }
 
-    const cleanFullName = full_name.trim();
-    const cleanEmail = email.trim();
-    const cleanMessage = message.trim();
+    const cleanFullName = full_name;
+    const cleanEmail = email;
+    const cleanMessage = message;
+
+    const url = new URL(request.url);
+
+    const firm_id =
+      normalizeFirmId(body?.firm_id) ??
+      normalizeFirmId(url.searchParams.get("firm"));
+
+    const source_type =
+      body?.source_type != null
+        ? detectSourceType(body.source_type)
+        : firm_id
+        ? "APP"
+        : "WEB";
 
     const supabase = getSupabase();
 
-    // 1) Kategori otomatik
     const category = detectCategory(cleanMessage);
-
-    // 2) Öncelik otomatik
     const priority = detectPriority(cleanMessage);
 
-    // 3) SLA otomatik
     const now = new Date();
     const slaHours = resolveSlaHours(category, priority);
     const slaDue = new Date(now.getTime() + slaHours * 60 * 60 * 1000);
@@ -131,12 +155,15 @@ export async function POST(request: Request) {
       full_name: cleanFullName,
       email: cleanEmail,
       message: cleanMessage,
+      firm_id,
       status: "new",
       category,
       priority,
       sla_due_at: slaDue.toISOString(),
-      source_type: "WEB",
+      source_type,
       mail_sent_count: 0,
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
     };
 
     const { data, error } = await supabase
@@ -145,7 +172,7 @@ export async function POST(request: Request) {
       .select("*")
       .single();
 
-    if (error) {
+    if (error || !data) {
       console.error("CBS kayıt hatası:", error);
       return Response.json(
         { error: "Kayıt oluşturulamadı." },
@@ -158,9 +185,9 @@ export async function POST(request: Request) {
     const fromEmail =
       process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
 
-    // ================================
-    // ADMIN BİLDİRİM MAİLİ
-    // ================================
+    let sentCount =
+      typeof data.mail_sent_count === "number" ? data.mail_sent_count : 0;
+
     if (resend && notifyEmail) {
       try {
         await resend.emails.send({
@@ -172,6 +199,8 @@ export async function POST(request: Request) {
             <p><strong>ID:</strong> #${data.id}</p>
             <p><strong>Kategori:</strong> ${escapeHtml(data.category || "-")}</p>
             <p><strong>Öncelik:</strong> ${escapeHtml(data.priority || "-")}</p>
+            <p><strong>Kaynak:</strong> ${escapeHtml(data.source_type || "-")}</p>
+            <p><strong>Firma ID:</strong> ${escapeHtml(String(data.firm_id || "-"))}</p>
             <p><strong>Ad Soyad:</strong> ${escapeHtml(data.full_name || "-")}</p>
             <p><strong>Email:</strong> ${escapeHtml(data.email || "-")}</p>
             <p><strong>Durum:</strong> ${escapeHtml(data.status || "-")}</p>
@@ -192,11 +221,14 @@ export async function POST(request: Request) {
           status: "sent",
         });
 
+        sentCount += 1;
+
         await supabase
           .from("cbs_forms")
           .update({
-            mail_sent_count: 1,
+            mail_sent_count: sentCount,
             last_mail_sent_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq("id", data.id);
       } catch (mailError) {
@@ -215,9 +247,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // ================================
-    // KULLANICIYA OTOMATİK CEVAP
-    // ================================
     if (resend) {
       try {
         await resend.emails.send({
@@ -236,9 +265,6 @@ export async function POST(request: Request) {
           `,
         });
 
-        const currentMailCount =
-          typeof data.mail_sent_count === "number" ? data.mail_sent_count : 1;
-
         await supabase.from("cbs_mail_logs").insert({
           cbs_form_id: data.id,
           direction: "outbound",
@@ -249,11 +275,14 @@ export async function POST(request: Request) {
           status: "sent",
         });
 
+        sentCount += 1;
+
         await supabase
           .from("cbs_forms")
           .update({
-            mail_sent_count: currentMailCount + 1,
+            mail_sent_count: sentCount,
             last_mail_sent_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq("id", data.id);
       } catch (mailError) {

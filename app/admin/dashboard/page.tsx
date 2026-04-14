@@ -346,10 +346,20 @@ export default function AdminDashboardPage() {
   >([]);
   const [trend, setTrend] = useState<TrendItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("all");
   const [isMobile, setIsMobile] = useState(false);
+  const [cbsSummary, setCbsSummary] = useState<{
+  total: number;
+  new: number;
+  processing: number;
+  read: number;
+  closed: number;
+  slaExceeded: number;
+} | null>(null);
 
   const loadDashboard = async () => {
     try {
@@ -361,6 +371,29 @@ export default function AdminDashboardPage() {
         cache: "no-store",
         credentials: "include",
       });
+
+const loadCbs = async () => {
+  try {
+    const res = await fetch("/api/admin/cbs-dashboard", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setCbsSummary(null);
+      return;
+    }
+
+    setCbsSummary(json?.summary || null);
+  } catch (error) {
+    console.error("cbs dashboard load error:", error);
+    setCbsSummary(null);
+  }
+};
+      
 
       if (res.status === 401) {
         window.location.href = "/admin/login";
@@ -403,9 +436,28 @@ export default function AdminDashboardPage() {
     }
   };
 
-  useEffect(() => {
-    void loadDashboard();
-  }, []);
+const loadCbs = async () => {
+  try {
+    const res = await fetch("/api/admin/cbs-dashboard", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) return;
+
+    setCbsSummary(json.summary);
+  } catch (err) {
+    console.error("CBS load error:", err);
+  }
+};
+
+useEffect(() => {
+  void loadDashboard();
+  void loadCbs();
+}, []);
 
   useEffect(() => {
   const checkMobile = () => {
@@ -870,6 +922,151 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         ) : null}
+
+    <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+    gap: 16,
+    marginBottom: 20,
+  }}
+>
+  <div
+    style={{
+      ...cardStyle(isMobile),
+      border: '1px solid ${BRAND.border}',
+      background: BRAND.white,
+    }}
+  >
+    <div
+      style={{
+        display: "inline-block",
+        padding: "6px 12px",
+        borderRadius: 999,
+        background: "#eef2ff",
+        color: "#3730a3",
+        fontSize: 12,
+        fontWeight: 800,
+        marginBottom: 12,
+      }}
+    >
+      ÇBS MODÜLÜ
+    </div>
+
+  <h3 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>
+  Şikayet / Öneri Yönetimi
+</h3>
+
+<p style={{ marginTop: 10, color: BRAND.muted, lineHeight: 1.7 }}>
+  Dış kullanıcılar tarafından gönderilen talepleri görüntüleyin,
+  yönlendirin ve sonuçlandırın.
+</p>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  }}
+>
+  <div
+    style={{
+      background: "#f8fafc",
+      border: "1px solid #e5e7eb",
+      borderRadius: 12,
+      padding: 10,
+    }}
+  >
+    <div style={{ fontSize: 12, color: BRAND.muted }}>Toplam</div>
+    <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>
+      {cbsSummary?.total || 0}
+    </div>
+  </div>
+
+  <div
+    style={{
+      background: "#fff1f2",
+      border: "1px solid #fecdd3",
+      borderRadius: 12,
+      padding: 10,
+    }}
+  >
+    <div style={{ fontSize: 12, color: "#9f1239" }}>Yeni</div>
+    <div
+      style={{
+        fontSize: 22,
+        fontWeight: 900,
+        marginTop: 4,
+        color: "#be123c",
+      }}
+    >
+      {cbsSummary?.new || 0}
+    </div>
+  </div>
+
+  <div
+    style={{
+      background: "#fffbeb",
+      border: "1px solid #fde68a",
+      borderRadius: 12,
+      padding: 10,
+    }}
+  >
+    <div style={{ fontSize: 12, color: "#92400e" }}>İşlemde</div>
+    <div
+      style={{
+        fontSize: 22,
+        fontWeight: 900,
+        marginTop: 4,
+        color: "#a16207",
+      }}
+    >
+      {cbsSummary?.processing || 0}
+    </div>
+  </div>
+
+  <div
+    style={{
+      background: "#fef2f2",
+      border: "1px solid #fca5a5",
+      borderRadius: 12,
+      padding: 10,
+    }}
+  >
+    <div style={{ fontSize: 12, color: "#b91c1c" }}>SLA</div>
+    <div
+      style={{
+        fontSize: 22,
+        fontWeight: 900,
+        marginTop: 4,
+        color: "#b91c1c",
+      }}
+    >
+      {cbsSummary?.slaExceeded || 0}
+    </div>
+  </div>
+</div>
+
+<button
+  onClick={() => {
+    window.location.href = "/admin/cbs";
+  }}
+  style={{
+    marginTop: 18,
+    border: "none",
+    borderRadius: 12,
+    padding: "12px 16px",
+    background: "#1e3a8a",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  }}
+>
+  ÇBS Paneline Git
+</button>
+  </div>
+</div>
 
         <div
   style={{

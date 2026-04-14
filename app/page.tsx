@@ -2,43 +2,28 @@ import Link from "next/link";
 
 const modules = [
   {
-    title: "Ajanda Yönetimi",
-    desc: "Görev, hatırlatma, denetim ve saha planlarını tek merkezden yönetin.",
+    title: "Ajanda ve Görev Yönetimi",
+    desc: "Görev, ziyaret, saha planı ve kritik hatırlatmaları tek merkezden yöneterek operasyon akışınızı düzenli hale getirin.",
   },
   {
-    title: "Denetim Sistemi",
-    desc: "Saha denetimlerini dijital formlar ve kayıt altyapısıyla yönetin.",
+    title: "Dijital Denetim Sistemi",
+    desc: "Form bazlı saha denetimleri, uygunsuzluk takibi ve düzeltici faaliyet süreçlerini dijitalleştirerek kontrol gücü kazanın.",
   },
   {
-    title: "Eğitim Yönetimi",
-    desc: "Senkron, asenkron ve online eğitim süreçlerini çalışan bazlı takip edin.",
+    title: "Eğitim Yönetim Platformu",
+    desc: "Senkron ve asenkron eğitimleri çalışan bazlı planlayın, katılım ve tamamlama durumlarını merkezi olarak takip edin.",
   },
   {
-    title: "Sağlık Modülü",
-    desc: "Muayene, sağlık kayıtları ve takip süreçlerini merkezi yönetin.",
+    title: "Sağlık Takip Modülü",
+    desc: "Muayene, sağlık evrakları ve periyodik takip süreçlerini tek panel üzerinden daha görünür yönetin.",
   },
   {
-    title: "ÇBS Yönetimi",
-    desc: "Şikayet, öneri ve talepleri web ve panel üzerinden toplayın.",
+    title: "ÇBS Kayıt Yönetimi",
+    desc: "Şikayet, öneri ve talepleri sistematik şekilde toplayın, kayıt altına alın ve sonuçlandırma sürecini izleyin.",
   },
   {
-    title: "Raporlama Sistemi",
-    desc: "Kurumsal karar destek için güçlü raporlar ve analiz ekranları alın.",
-  },
-];
-
-const advantages = [
-  {
-    title: "Saha Yönetimi",
-    desc: "Mobil ve web destekli yapı ile sahadaki verileri hızlı şekilde yönetin.",
-  },
-  {
-    title: "Kurumsal Raporlama",
-    desc: "PDF, özet rapor ve gelişmiş analiz ekranları ile karar sürecini hızlandırın.",
-  },
-  {
-    title: "Merkezi Kontrol",
-    desc: "Eğitim, sağlık, denetim ve bildirim süreçlerini tek sistemde toplayın.",
+    title: "Raporlama ve Analitik",
+    desc: "Yönetim kararlarını hızlandıran özet ekranlar, performans göstergeleri ve aksiyon odaklı kurumsal raporlar alın.",
   },
 ];
 
@@ -63,23 +48,23 @@ const trainingTypes = [
 const processSteps = [
   {
     step: "01",
-    title: "Süreci Tanımla",
-    desc: "Denetim, eğitim, sağlık, ÇBS ve raporlama süreçleri modül bazında planlanır.",
+    title: "Firmanızı ve Sürecinizi Tanımlayın",
+    desc: "İSG, eğitim, sağlık, ÇBS ve denetim yapınızı işletmenize uygun modüllerle sisteme alın.",
   },
   {
     step: "02",
-    title: "Veriyi Topla",
-    desc: "Saha, çalışan ve yönetim tarafındaki bilgiler merkezi akış içinde sisteme alınır.",
+    title: "Verileri Tek Merkezde Toplayın",
+    desc: "Çalışan kayıtları, saha işlemleri, eğitim durumları ve operasyonel veriler tek yapıda birleşsin.",
   },
   {
     step: "03",
-    title: "Takip Et",
-    desc: "Açık işler, eksikler, durum değişimleri ve süreç ilerlemeleri görünür hale gelir.",
+    title: "Eksikleri ve Riskleri Anlık İzleyin",
+    desc: "Açık aksiyonlar, eksik eğitimler, geciken süreçler ve kritik durumlar görünür hale gelsin.",
   },
   {
     step: "04",
-    title: "Raporla ve Yönet",
-    desc: "Toplanan veriler özet ekranlar, raporlar ve kurumsal karar destek çıktıları üretir.",
+    title: "Raporlayın ve Karar Alın",
+    desc: "Yönetim ekranları, rapor çıktıları ve analiz panelleri ile daha güçlü ve hızlı aksiyon alın.",
   },
 ];
 
@@ -107,67 +92,69 @@ const entryPoints = [
 export default function HomePage() {
   return (
     <main>
-      <section className="hero">
-        <div className="hero-inner">
-          <div className="hero-badge">D-SEC Kurumsal Yönetim Platformu</div>
+     <section className="hero hero-premium">
+  <div className="hero-orb hero-orb-1" />
+  <div className="hero-orb hero-orb-2" />
 
-      <h1 className="hero-title">
-  İş Güvenliği Süreçlerinizi Tek Platformdan Yönetin
-</h1>
+  <div className="hero-inner">
+    <div className="hero-badge">D-SEC Kurumsal İSG Yönetim Platformu</div>
 
-<p className="hero-desc">
-  D-SEC; denetim, eğitim, sağlık ve ÇBS süreçlerini tek merkezde toplayarak
-  işletmenize hız, kontrol ve tam görünürlük sağlar.
-</p>
+    <h1 className="hero-title">
+      İSG Süreçlerinizi Dijitalleştirin,
+      <br />
+      Denetim ve Eğitim Yönetimini Tek Platformda Toplayın
+    </h1>
 
-<p className="hero-desc">
-Denetim, eğitim, sağlık ve ÇBS süreçlerini tek merkezde toplayarak
-iş yükünü azaltın, hataları sıfırlayın.
-</p>
+    <p className="hero-desc">
+      D-SEC; eğitim, denetim, sağlık, ÇBS ve raporlama süreçlerini tek merkezde
+      toplayarak işletmelere hız, kontrol, görünürlük ve kurumsal yönetim gücü sağlar.
+    </p>
 
-          <p className="hero-desc">
-            İş güvenliği, saha denetimi, eğitim yönetimi, ÇBS kayıtları ve
-            raporlama süreçlerini tek platformda birleştiren kurumsal çözüm.
-          </p>
+    <div className="hero-actions">
+      <Link href="/demo" className="btn-primary">
+        Ücretsiz Demo Talep Et
+      </Link>
 
-<div className="hero-actions">
-  <Link href="/demo" className="btn-primary">
-    Ücretsiz Demo Talep Et
-  </Link>
+      <Link href="/contact" className="btn-outline-light">
+        Teklif Al
+      </Link>
+    </div>
 
-  <div style={{
-  marginTop: 20,
-  display: "flex",
-  gap: 20,
-  justifyContent: "center",
-  flexWrap: "wrap",
-  fontSize: 14,
-  opacity: 0.8
-}}>
-  <span>✔ 13+ yıl İSG tecrübesi</span>
-  <span>✔ Kurumsal yapı</span>
-  <span>✔ Tüm modüller entegre</span>
-</div>
+    <div className="hero-trust-row">
+      <span>13+ yıl İSG tecrübesi</span>
+      <span>Kurumsal modül mimarisi</span>
+      <span>Web + mobil uyumlu yapı</span>
+      <span>Eğitim + denetim + raporlama entegrasyonu</span>
+    </div>
 
-  <Link href="/contact" className="btn-outline-light">
-    Teklif Al
-  </Link>
-</div>
-        </div>
-      </section>
+    <div className="hero-stats">
+      <div className="hero-stat-card">
+        <strong>Tek Platform</strong>
+        <p>Dağınık süreçleri tek merkezde toplayın.</p>
+      </div>
+
+      <div className="hero-stat-card">
+        <strong>Anlık Görünürlük</strong>
+        <p>Eksik, açık ve kritik kayıtları hızlıca görün.</p>
+      </div>
+
+      <div className="hero-stat-card">
+        <strong>Kurumsal Yönetim</strong>
+        <p>Yönetim için aksiyon alınabilir raporlar üretin.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
       <section className="section section-light">
         <div className="page-container">
           <div className="section-title-wrap">
-          <h2 className="section-title">Platforma Nasıl Başlarsınız?</h2>
+         <h2 className="section-title">Platforma Nasıl Başlarsınız?</h2>
 
 <p className="section-subtitle">
-  D-SEC’i kullanmaya başlamak için 3 basit adım
+  Kullanıcı, firma yöneticisi ve admin tarafı için ayrıştırılmış giriş yapısıyla
+  D-SEC’e hızlı ve kontrollü şekilde başlayın.
 </p>
-            <p className="section-subtitle">
-              Platform içinde kimin hangi ekrandan giriş yapacağı net ve sade
-              şekilde ayrıştırılmıştır
-            </p>
           </div>
 
           <div className="grid-3">
@@ -192,35 +179,33 @@ iş yükünü azaltın, hataları sıfırlayın.
         <div className="page-container">
           <div className="grid-3">
             <div className="card">
-              <p className="card-text" style={{ marginTop: 0 }}>
-                Kurumsal Odak
-              </p>
-              <h3 className="card-title">Tek Platform</h3>
-              <p className="card-text">
-                Dağınık süreçleri tek merkezde toplayarak operasyonel verim
-                sağlar.
-              </p>
+            <p className="card-text" style={{ marginTop: 0 }}>
+  Kurumsal Yapı
+</p>
+<h3 className="card-title">Tek Merkezden Yönetim</h3>
+<p className="card-text">
+  Eğitim, denetim, sağlık ve kayıt süreçlerini ayrı araçlar yerine tek platformdan yönetin.
+</p>
+            </div>
+
+            <div className="card">
+             <p className="card-text" style={{ marginTop: 0 }}>
+  Operasyonel Kontrol
+</p>
+<h3 className="card-title">Saha ve Ofis Entegrasyonu</h3>
+<p className="card-text">
+  Saha verilerini ofis takibi ve yönetim görünürlüğü ile aynı akışta birleştirir.
+</p>
             </div>
 
             <div className="card">
               <p className="card-text" style={{ marginTop: 0 }}>
-                Saha + Ofis
-              </p>
-              <h3 className="card-title">Anlık Yönetim</h3>
-              <p className="card-text">
-                Ofis, saha ve yönetim tarafını aynı veri akışında buluşturur.
-              </p>
-            </div>
-
-            <div className="card">
-              <p className="card-text" style={{ marginTop: 0 }}>
-                Karar Destek
-              </p>
-              <h3 className="card-title">Raporlama</h3>
-              <p className="card-text">
-                Analiz, rapor ve takip ekranları ile yönetime net görünürlük
-                sağlar.
-              </p>
+  Yönetim Gücü
+</p>
+<h3 className="card-title">Raporlama ve Analitik</h3>
+<p className="card-text">
+  Yönetim için sadece veri değil, yorumlanabilir ve aksiyon alınabilir çıktılar üretir.
+</p>
             </div>
           </div>
         </div>
@@ -247,39 +232,110 @@ iş yükünü azaltın, hataları sıfırlayın.
         </div>
       </section>
 
-      <section className="section section-light">
+     <section className="section section-light">
+  <div className="page-container">
+    <div className="section-title-wrap">
+      <h2 className="section-title">Neden D-SEC?</h2>
+      <p className="section-subtitle">
+        Sadece kayıt tutan bir yazılım değil; süreçlerinizi görünür, takip edilebilir ve yönetilebilir hale getiren kurumsal altyapı
+      </p>
+    </div>
+
+    <div className="grid-3">
+      <div className="card">
+        <div className="card-icon" />
+        <h3 className="card-title">Tek Platform Mantığı</h3>
+        <p className="card-text">
+          Ayrı Excel dosyaları, dağınık takip yöntemleri ve kopuk süreçler yerine tüm operasyonu tek yapıda toplayın.
+        </p>
+      </div>
+
+      <div className="card">
+        <div className="card-icon" />
+        <h3 className="card-title">Gerçek Zamanlı Takip</h3>
+        <p className="card-text">
+          Eğitim, denetim, sağlık ve kayıt akışlarındaki durum değişimlerini daha hızlı görün ve gecikmeleri azaltın.
+        </p>
+      </div>
+
+      <div className="card">
+        <div className="card-icon" />
+        <h3 className="card-title">Yönetim İçin Net Sonuç</h3>
+        <p className="card-text">
+          Üst yönetim ve operasyon ekipleri için anlamlı raporlar, özet ekranlar ve takip göstergeleri üretin.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section className="section section-soft">
   <div className="page-container" style={{ textAlign: "center" }}>
-    
-    <h2 className="section-title">
-      Neden D-SEC?
-    </h2>
+    <div className="section-title-wrap">
+      <h2 className="section-title">Size Uygun Paketi Seçin</h2>
+      <p className="section-subtitle">
+        İşletmenizin ölçeğine uygun paketi seçin, D-SEC ile süreçlerinizi kontrollü ve kurumsal şekilde yönetin.
+      </p>
+    </div>
 
-    <p className="section-subtitle">
-      Sadece bir yazılım değil, işletmeniz için yönetim altyapısı
-    </p>
-
-    <div style={{
-      marginTop: 40,
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-      gap: 20
-    }}>
-      
+    <div
+      style={{
+        marginTop: 20,
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+        gap: 20,
+      }}
+    >
       <div className="card">
-        <h3>Tek Platform</h3>
-        <p>Dağınık sistemleri ortadan kaldırır, tüm süreçleri tek yerde toplar.</p>
+        <h3 className="card-title">Başlangıç</h3>
+        <p className="card-text">Küçük işletmeler için temel yapı</p>
+        <div style={{ marginTop: 16, fontSize: 30, fontWeight: 900, color: "#111827" }}>
+          ₺4.999<span style={{ fontSize: 15, color: "#6b7280" }}> / yıl</span>
+        </div>
+      </div>
+
+      <div
+        className="card"
+        style={{
+          border: "2px solid #c62828",
+          boxShadow: "0 22px 46px rgba(198, 40, 40, 0.16)",
+        }}
+      >
+        <div
+          style={{
+            display: "inline-block",
+            marginBottom: 12,
+            padding: "6px 12px",
+            borderRadius: 999,
+            background: "#c62828",
+            color: "#fff",
+            fontSize: 12,
+            fontWeight: 800,
+          }}
+        >
+          EN ÇOK TERCİH EDİLEN
+        </div>
+
+        <h3 className="card-title">Profesyonel</h3>
+        <p className="card-text">Büyüyen firmalar için tam kontrol</p>
+        <div style={{ marginTop: 16, fontSize: 30, fontWeight: 900, color: "#111827" }}>
+          ₺9.999<span style={{ fontSize: 15, color: "#6b7280" }}> / yıl</span>
+        </div>
       </div>
 
       <div className="card">
-        <h3>Gerçek Zamanlı Takip</h3>
-        <p>Denetim, eğitim ve risk süreçlerini anlık olarak izleyin.</p>
+        <h3 className="card-title">Kurumsal</h3>
+        <p className="card-text">Özel ihtiyaçlar için teklif bazlı çözüm</p>
+        <div style={{ marginTop: 16, fontSize: 30, fontWeight: 900, color: "#111827" }}>
+          Teklif Al
+        </div>
       </div>
+    </div>
 
-      <div className="card">
-        <h3>Kurumsal Raporlama</h3>
-        <p>Yönetim için anlamlı, aksiyon alınabilir raporlar üretir.</p>
-      </div>
-
+    <div style={{ marginTop: 26 }}>
+      <Link href="/pricing" className="nav-cta">
+        Tüm Paketleri Gör
+      </Link>
     </div>
   </div>
 </section>
@@ -356,63 +412,32 @@ iş yükünü azaltın, hataları sıfırlayın.
         </div>
       </section>
 
-      <section className="section section-soft">
-        <div className="page-container">
-          <div className="section-title-wrap">
-            <h2 className="section-title">Neden D-SEC?</h2>
-            <p className="section-subtitle">
-              Kurumsal yapı, saha kabiliyeti ve merkezi takip gücü
-            </p>
-          </div>
+     <section className="hero hero-cta-band">
+  <div className="hero-inner hero-compact">
+    <div className="hero-badge">Kurumsal Demo ve Teklif Süreci</div>
 
-          <div className="grid-3">
-            {advantages.map((item) => (
-              <div key={item.title} className="card">
-                <h3 className="card-title">{item.title}</h3>
-                <p className="card-text">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+    <h2 className="hero-title" style={{ fontSize: 42 }}>
+      İSG Süreçlerinizi Daha Güçlü,
+      <br />
+      Daha Görünür ve Daha Yönetilebilir Hale Getirin
+    </h2>
 
-      <section className="section section-light">
-  <div className="page-container">
-    <h2 className="section-title">Neden D-SEC?</h2>
+    <p className="hero-desc">
+      D-SEC ile eğitim, denetim, sağlık ve kayıt süreçlerinizi tek yapıda toplayın;
+      yönetime güven veren, sahaya hız kazandıran kurumsal bir sistem kurun.
+    </p>
 
-    <ul>
-      <li>✔ İSG mevzuatına %100 uyum</li>
-      <li>✔ Denetim ve eğitim tek platform</li>
-      <li>✔ Kurumsal raporlama</li>
-      <li>✔ Mobil + Web erişim</li>
-    </ul>
+    <div className="hero-actions">
+      <Link href="/demo" className="btn-primary">
+        Ücretsiz Demo Talep Et
+      </Link>
+
+      <Link href="/contact" className="btn-outline-light">
+        Kurumsal Teklif Al
+      </Link>
+    </div>
   </div>
 </section>
-
-      <section className="hero">
-        <div
-          className="hero-inner"
-          style={{ paddingTop: 70, paddingBottom: 70 }}
-        >
-          <h2 className="hero-title" style={{ fontSize: 42 }}>
-            D-SEC ile Dijital Dönüşüme Başlayın
-          </h2>
-          <p className="hero-desc">
-            İş güvenliği ve kurumsal süreçlerinizi daha güçlü, daha görünür ve
-            daha yönetilebilir hale getirin.
-          </p>
-
-<div className="hero-actions">
-  <Link href="/demo" className="btn-primary">
-    Ücretsiz Demo Talep Et
-  </Link>
-
-  <Link href="/contact" className="btn-outline-light">
-    Teklif Al
-  </Link>
-</div>
-        </div>
-      </section>
     </main>
   );
 }

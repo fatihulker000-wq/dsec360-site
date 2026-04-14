@@ -2,8 +2,26 @@
 
 import { useState } from "react";
 
+type CbsForm = {
+  full_name: string;
+  email: string;
+  message: string;
+};
+
+async function readSafeJson(response: Response) {
+  const text = await response.text();
+
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
+
 export default function CbsPage() {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<CbsForm>({
     full_name: "",
     email: "",
     message: "",
@@ -11,33 +29,61 @@ export default function CbsPage() {
 
   const [loading, setLoading] = useState(false);
   const [resultMessage, setResultMessage] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleSubmit = async () => {
-    if (!form.full_name.trim() || !form.email.trim() || !form.message.trim()) {
+    if (loading) return;
+
+    const fullName = form.full_name.trim();
+    const email = form.email.trim();
+    const message = form.message.trim();
+
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    if (!fullName || !email || !message) {
+      setIsSuccess(false);
       setResultMessage("Lütfen tüm alanları doldurun.");
+      return;
+    }
+
+    if (!emailValid) {
+      setIsSuccess(false);
+      setResultMessage("Geçerli bir email girin.");
       return;
     }
 
     try {
       setLoading(true);
       setResultMessage("");
+      setIsSuccess(false);
 
       const response = await fetch("/api/cbs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          full_name: fullName,
+          email,
+          message,
+        }),
       });
 
-      const result = await response.json();
+      const result = await readSafeJson(response);
 
       if (!response.ok) {
-        setResultMessage(result?.error || "Gönderim sırasında hata oluştu.");
+        setIsSuccess(false);
+        setResultMessage(
+          result?.error || "Gönderim sırasında hata oluştu."
+        );
         return;
       }
 
-      setResultMessage("Başvurunuz başarıyla gönderildi.");
+      setIsSuccess(true);
+      setResultMessage(
+        "✔ Başvurunuz başarıyla alındı. En kısa sürede sizinle iletişime geçeceğiz."
+      );
+
       setForm({
         full_name: "",
         email: "",
@@ -45,6 +91,7 @@ export default function CbsPage() {
       });
     } catch (error) {
       console.error("ÇBS gönderim hatası:", error);
+      setIsSuccess(false);
       setResultMessage("Bağlantı hatası oluştu.");
     } finally {
       setLoading(false);
@@ -87,6 +134,7 @@ export default function CbsPage() {
                   onChange={(e) =>
                     setForm({ ...form, full_name: e.target.value })
                   }
+                  disabled={loading}
                 />
               </div>
 
@@ -100,6 +148,7 @@ export default function CbsPage() {
                   onChange={(e) =>
                     setForm({ ...form, email: e.target.value })
                   }
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -108,16 +157,18 @@ export default function CbsPage() {
               <label className="cbs-label">Mesajınız</label>
               <textarea
                 value={form.message}
-                placeholder="Mesajınız"
+                placeholder="Mesajınızı yazın"
                 className="cbs-textarea"
                 onChange={(e) =>
                   setForm({ ...form, message: e.target.value })
                 }
+                disabled={loading}
               />
             </div>
 
             <div className="cbs-actions">
               <button
+                type="button"
                 onClick={handleSubmit}
                 disabled={loading}
                 className="cbs-button cbs-button-strong"
@@ -126,7 +177,17 @@ export default function CbsPage() {
               </button>
             </div>
 
-            {resultMessage && <p className="cbs-result">{resultMessage}</p>}
+            {resultMessage && (
+              <p
+                className="cbs-result"
+                style={{
+                  color: isSuccess ? "#166534" : "#b91c1c",
+                  fontWeight: 600,
+                }}
+              >
+                {resultMessage}
+              </p>
+            )}
 
             <div className="cbs-security">
               🔒 Verileriniz güvenli şekilde saklanır ve üçüncü kişilerle
