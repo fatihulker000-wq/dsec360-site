@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL!,
@@ -28,13 +30,13 @@ export async function POST(req: Request) {
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("cbs_forms")
       .select("*")
       .eq("id", id)
       .single();
 
-    if (error || !data) {
+    if (!data) {
       return NextResponse.json(
         { error: "Kayıt bulunamadı" },
         { status: 404 }
@@ -66,14 +68,6 @@ export async function POST(req: Request) {
         closed_at: new Date().toISOString(),
       })
       .eq("id", id);
-
-    await supabase.from("cbs_mail_logs").insert({
-      cbs_form_id: id,
-      direction: "outbound",
-      subject: "Admin cevap",
-      recipient_email: data.email,
-      status: "sent",
-    });
 
     return NextResponse.json({ success: true });
 
