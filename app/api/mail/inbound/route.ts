@@ -356,10 +356,15 @@ export async function POST(req: Request) {
         error_message: error?.message || "Kayıt oluşturulamadı",
       });
 
-      return NextResponse.json(
-        { error: "Mail işlenemedi." },
-        { status: 500 }
-      );
+     return NextResponse.json(
+  {
+    error: "Mail işlenemedi.",
+    detail: error?.message,
+    hint: error?.hint,
+    code: error?.code
+  },
+  { status: 500 }
+);
     }
 
     await logMail(supabase, {
