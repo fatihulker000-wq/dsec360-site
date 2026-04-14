@@ -98,7 +98,7 @@ const BRAND = {
 function cardStyle(isMobile = false): React.CSSProperties {
   return {
     background: BRAND.white,
-    border: '1px solid ${BRAND.border}',
+    border: `1px solid ${BRAND.border}`,
     borderRadius: isMobile ? 16 : 20,
     padding: isMobile ? 14 : 20,
     boxShadow: BRAND.shadow,
@@ -126,13 +126,16 @@ function badgeStyle(
   };
 }
 
-function metricCardStyle(accent: string, isMobile = false): React.CSSProperties {
+function metricCardStyle(
+  _accent: string,
+  isMobile = false
+): React.CSSProperties {
   return {
     ...cardStyle(isMobile),
     position: "relative",
     overflow: "hidden",
     minHeight: isMobile ? 110 : 132,
-    border: '1px solid ${BRAND.border}',
+    border: `1px solid ${BRAND.border}`,
     background: BRAND.white,
     boxShadow: BRAND.shadow,
   };
@@ -143,7 +146,7 @@ function softPanelStyle(bg: string, isMobile = false): React.CSSProperties {
     borderRadius: isMobile ? 14 : 18,
     padding: isMobile ? 12 : 16,
     background: bg,
-    border: '1px solid ${BRAND.border}',
+    border: `1px solid ${BRAND.border}`,
   };
 }
 
@@ -308,35 +311,6 @@ export default function AdminDashboardPage() {
   const [adminRole, setAdminRole] = useState<string>("");
   const [adminCompanyId, setAdminCompanyId] = useState<string>("");
 
- useEffect(() => {
-  const loadAdminContext = async () => {
-    try {
-      const res = await fetch("/api/admin/me", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      if (!res.ok) {
-        setAdminRole("");
-        setAdminCompanyId("");
-        return;
-      }
-
-      const json: MeResponse = await res.json().catch(() => ({}));
-
-      setAdminRole(String(json?.user?.role || "").trim());
-      setAdminCompanyId(String(json?.user?.company_id || "").trim());
-    } catch (error) {
-      console.error("admin me load error:", error);
-      setAdminRole("");
-      setAdminCompanyId("");
-    }
-  };
-
-  void loadAdminContext();
-}, []);
-
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [riskyUsers, setRiskyUsers] = useState<RiskUser[]>([]);
   const [inProgressUsers, setInProgressUsers] = useState<RiskUser[]>([]);
@@ -347,19 +321,47 @@ export default function AdminDashboardPage() {
   const [trend, setTrend] = useState<TrendItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
 
-  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("all");
   const [isMobile, setIsMobile] = useState(false);
   const [cbsSummary, setCbsSummary] = useState<{
-  total: number;
-  new: number;
-  processing: number;
-  read: number;
-  closed: number;
-  slaExceeded: number;
-} | null>(null);
+    total: number;
+    new: number;
+    processing: number;
+    read: number;
+    closed: number;
+    slaExceeded: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const loadAdminContext = async () => {
+      try {
+        const res = await fetch("/api/admin/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          setAdminRole("");
+          setAdminCompanyId("");
+          return;
+        }
+
+        const json: MeResponse = await res.json().catch(() => ({}));
+
+        setAdminRole(String(json?.user?.role || "").trim());
+        setAdminCompanyId(String(json?.user?.company_id || "").trim());
+      } catch (loadError) {
+        console.error("admin me load error:", loadError);
+        setAdminRole("");
+        setAdminCompanyId("");
+      }
+    };
+
+    void loadAdminContext();
+  }, []);
 
   const loadDashboard = async () => {
     try {
@@ -371,29 +373,6 @@ export default function AdminDashboardPage() {
         cache: "no-store",
         credentials: "include",
       });
-
-const loadCbs = async () => {
-  try {
-    const res = await fetch("/api/admin/cbs-dashboard", {
-      method: "GET",
-      cache: "no-store",
-      credentials: "include",
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      setCbsSummary(null);
-      return;
-    }
-
-    setCbsSummary(json?.summary || null);
-  } catch (error) {
-    console.error("cbs dashboard load error:", error);
-    setCbsSummary(null);
-  }
-};
-      
 
       if (res.status === 401) {
         window.location.href = "/admin/login";
@@ -421,8 +400,8 @@ const loadCbs = async () => {
       setCompanyDistribution(json.company_distribution || []);
       setTrend(json.trend || []);
       setSummary(json.summary || null);
-    } catch (err) {
-      console.error(err);
+    } catch (loadError) {
+      console.error(loadError);
       setError("Veri alınamadı.");
       setTrainings([]);
       setRiskyUsers([]);
@@ -436,41 +415,45 @@ const loadCbs = async () => {
     }
   };
 
-const loadCbs = async () => {
-  try {
-    const res = await fetch("/api/admin/cbs-dashboard", {
-      method: "GET",
-      cache: "no-store",
-      credentials: "include",
-    });
+  const loadCbs = async () => {
+    try {
+      const res = await fetch("/api/admin/cbs-dashboard", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      });
 
-    const json = await res.json().catch(() => ({}));
+      const json = await res.json().catch(() => ({}));
 
-    if (!res.ok) return;
+      if (!res.ok) {
+        setCbsSummary(null);
+        return;
+      }
 
-    setCbsSummary(json.summary);
-  } catch (err) {
-    console.error("CBS load error:", err);
-  }
-};
-
-useEffect(() => {
-  void loadDashboard();
-  void loadCbs();
-}, []);
+      setCbsSummary(json.summary || null);
+    } catch (loadError) {
+      console.error("CBS load error:", loadError);
+      setCbsSummary(null);
+    }
+  };
 
   useEffect(() => {
-  const checkMobile = () => {
-    setIsMobile(window.innerWidth <= 900);
-  };
+    void loadDashboard();
+    void loadCbs();
+  }, []);
 
-  checkMobile();
-  window.addEventListener("resize", checkMobile);
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 900);
+    };
 
-  return () => {
-    window.removeEventListener("resize", checkMobile);
-  };
-}, []);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    return () => {
+      window.removeEventListener("resize", checkMobile);
+    };
+  }, []);
 
   useEffect(() => {
     if (adminRole === "company_admin" && adminCompanyId) {
@@ -556,11 +539,7 @@ useEffect(() => {
 
   const riskStatus =
     summary?.risk_status ??
-    (totals.notStarted > 20
-      ? "KRITIK"
-      : totals.notStarted > 10
-      ? "ORTA"
-      : "IYI");
+    (totals.notStarted > 20 ? "KRITIK" : totals.notStarted > 10 ? "ORTA" : "IYI");
 
   const companies = useMemo(() => {
     const set = new Set<string>();
@@ -579,7 +558,9 @@ useEffect(() => {
   }, [riskyUsers, inProgressUsers, completedUsers]);
 
   const effectiveSelectedCompany =
-    adminRole === "company_admin" && adminCompanyId ? adminCompanyId : selectedCompany;
+    adminRole === "company_admin" && adminCompanyId
+      ? adminCompanyId
+      : selectedCompany;
 
   const filteredRiskUsers = useMemo(() => {
     if (effectiveSelectedCompany === "all") return riskyUsers;
@@ -694,6 +675,54 @@ useEffect(() => {
       ? "Kontrollü Risk Alanı"
       : "Sağlıklı Görünüm";
 
+  const ceoSummary = useMemo(() => {
+    const totalTrainings = trainings.length;
+    const totalAssignments = summary?.total_assignments ?? totals.assigned;
+    const totalCompleted = summary?.completed_count ?? totals.completed;
+    const totalInProgress = summary?.in_progress_count ?? totals.inProgress;
+    const totalNotStarted = summary?.not_started_count ?? totals.notStarted;
+
+    const cbsTotal = cbsSummary?.total || 0;
+    const cbsOpen =
+      (cbsSummary?.new || 0) +
+      (cbsSummary?.processing || 0) +
+      (cbsSummary?.read || 0);
+
+    const cbsClosed = cbsSummary?.closed || 0;
+    const cbsSla = cbsSummary?.slaExceeded || 0;
+
+    const executiveRiskScore = Math.min(
+      100,
+      Math.round(
+        riskRate * 0.45 +
+          (cbsSla > 0 ? 25 : 0) +
+          (cbsOpen > cbsClosed ? 15 : 0) +
+          (totalNotStarted > totalCompleted ? 15 : 0)
+      )
+    );
+
+    const healthLabel =
+      executiveRiskScore >= 70
+        ? "Kritik"
+        : executiveRiskScore >= 40
+        ? "Dikkat"
+        : "Sağlıklı";
+
+    return {
+      totalTrainings,
+      totalAssignments,
+      totalCompleted,
+      totalInProgress,
+      totalNotStarted,
+      cbsTotal,
+      cbsOpen,
+      cbsClosed,
+      cbsSla,
+      executiveRiskScore,
+      healthLabel,
+    };
+  }, [trainings, summary, totals, cbsSummary, riskRate]);
+
   if (loading) {
     return null;
   }
@@ -717,10 +746,10 @@ useEffect(() => {
       <div
         id="admin-dashboard-pdf"
         style={{
-             maxWidth: 1440, 
-             margin: "0 auto" ,
-            width: "100%",
-            }}
+          maxWidth: 1440,
+          margin: "0 auto",
+          width: "100%",
+        }}
       >
         <div
           style={{
@@ -732,15 +761,15 @@ useEffect(() => {
           }}
         >
           <div
-  style={{
-    display: "flex",
-    flexDirection: isMobile ? "column" : "row",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: isMobile ? "stretch" : "flex-start",
-    flexWrap: "wrap",
-  }}
->
+            style={{
+              display: "flex",
+              flexDirection: isMobile ? "column" : "row",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: isMobile ? "stretch" : "flex-start",
+              flexWrap: "wrap",
+            }}
+          >
             <div style={{ maxWidth: isMobile ? "100%" : 860 }}>
               <div
                 style={{
@@ -758,39 +787,39 @@ useEffect(() => {
               </div>
 
               <h1
-  style={{
-    margin: 0,
-    fontSize: isMobile ? 28 : 38,
-    fontWeight: 900,
-    lineHeight: 1.15,
-  }}
->
-  Eğitim Yönetim Paneli
-</h1>
+                style={{
+                  margin: 0,
+                  fontSize: isMobile ? 28 : 38,
+                  fontWeight: 900,
+                  lineHeight: 1.15,
+                }}
+              >
+                Yönetici & CEO Dashboard
+              </h1>
 
-             <p
-  style={{
-    marginTop: 10,
-    marginBottom: 0,
-    color: "rgba(255,255,255,0.92)",
-    maxWidth: 820,
-    lineHeight: 1.7,
-    fontSize: isMobile ? 14 : 16,
-  }}
->
-                Eğitim atamaları, riskli kullanıcılar, firma yoğunluğu, KPI alanı,
-                ilerleme görünümü ve yönetici değerlendirmesi tek panelde izlenir.
+              <p
+                style={{
+                  marginTop: 10,
+                  marginBottom: 0,
+                  color: "rgba(255,255,255,0.92)",
+                  maxWidth: 820,
+                  lineHeight: 1.7,
+                  fontSize: isMobile ? 14 : 16,
+                }}
+              >
+                Eğitim operasyonu, ÇBS yoğunluğu, firma bazlı risk, açık kayıtlar,
+                SLA alarmı ve üst yönetim karar desteği tek ekranda izlenir.
               </p>
 
-             <div
-  style={{
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    marginTop: 16,
-    alignItems: "center",
-  }}
->
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  marginTop: 16,
+                  alignItems: "center",
+                }}
+              >
                 <span
                   style={badgeStyle(
                     "rgba(255,255,255,0.14)",
@@ -824,13 +853,13 @@ useEffect(() => {
             </div>
 
             <div
-  style={{
-    display: "grid",
-    gap: 10,
-    minWidth: isMobile ? "100%" : 240,
-    width: isMobile ? "100%" : "auto",
-  }}
->
+              style={{
+                display: "grid",
+                gap: 10,
+                minWidth: isMobile ? "100%" : 240,
+                width: isMobile ? "100%" : "auto",
+              }}
+            >
               <div
                 style={{
                   ...badgeStyle(
@@ -849,37 +878,96 @@ useEffect(() => {
                 Risk Durumu: {riskStatus}
               </div>
 
-            <button
-  onClick={exportPDF}
-  style={{
-    border: "none",
-    borderRadius: 14,
-    padding: "12px 18px",
-    background: "#fff",
-    color: BRAND.red,
-    fontWeight: 900,
-    cursor: "pointer",
-    width: isMobile ? "100%" : "auto",
-  }}
->
+              <button
+                onClick={exportPDF}
+                style={{
+                  border: "none",
+                  borderRadius: 14,
+                  padding: "12px 18px",
+                  background: "#fff",
+                  color: BRAND.red,
+                  fontWeight: 900,
+                  cursor: "pointer",
+                  width: isMobile ? "100%" : "auto",
+                }}
+              >
                 PDF İndir
               </button>
 
-            <button
-  onClick={() => void loadDashboard()}
-  style={{
-    border: "1px solid rgba(255,255,255,0.18)",
-    borderRadius: 14,
-    padding: "12px 18px",
-    background: "rgba(255,255,255,0.10)",
-    color: "#fff",
-    fontWeight: 900,
-    cursor: "pointer",
-    width: isMobile ? "100%" : "auto",
-  }}
->
+              <button
+                onClick={() => {
+                  void loadDashboard();
+                  void loadCbs();
+                }}
+                style={{
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  borderRadius: 14,
+                  padding: "12px 18px",
+                  background: "rgba(255,255,255,0.10)",
+                  color: "#fff",
+                  fontWeight: 900,
+                  cursor: "pointer",
+                  width: isMobile ? "100%" : "auto",
+                }}
+              >
                 Veriyi Yenile
               </button>
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 12,
+            marginBottom: 20,
+          }}
+        >
+          <div style={cardStyle(isMobile)}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Genel Sağlık</div>
+            <div
+              style={{
+                fontSize: 28,
+                fontWeight: 900,
+                color:
+                  ceoSummary.healthLabel === "Kritik"
+                    ? BRAND.red
+                    : ceoSummary.healthLabel === "Dikkat"
+                    ? BRAND.amber
+                    : BRAND.green,
+              }}
+            >
+              {ceoSummary.healthLabel}
+            </div>
+          </div>
+
+          <div style={cardStyle(isMobile)}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>
+              Executive Risk Score
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900 }}>
+              {ceoSummary.executiveRiskScore}
+            </div>
+          </div>
+
+          <div style={cardStyle(isMobile)}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>
+              Açık Şikayet (ÇBS)
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900 }}>
+              {ceoSummary.cbsOpen}
+            </div>
+          </div>
+
+          <div style={cardStyle(isMobile)}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>
+              Tamamlanan Eğitim
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900 }}>
+              {ceoSummary.totalCompleted}
             </div>
           </div>
         </div>
@@ -895,11 +983,26 @@ useEffect(() => {
           >
             <div style={cardStyle(isMobile)}>
               <div style={{ fontSize: 12, color: BRAND.muted }}>Yönetim</div>
-              <div style={{ marginTop: 8, fontSize: 24, fontWeight: 900, color: BRAND.text }}>
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 24,
+                  fontWeight: 900,
+                  color: BRAND.text,
+                }}
+              >
                 Firma Yönetimi
               </div>
-              <div style={{ marginTop: 8, fontSize: 13, color: BRAND.muted, lineHeight: 1.7 }}>
-                Firma ekleme, düzenleme ve firma atama işlemleri sadece süper admin tarafından yönetilir.
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 13,
+                  color: BRAND.muted,
+                  lineHeight: 1.7,
+                }}
+              >
+                Firma ekleme, düzenleme ve firma atama işlemleri sadece süper admin
+                tarafından yönetilir.
               </div>
               <button
                 type="button"
@@ -923,159 +1026,159 @@ useEffect(() => {
           </div>
         ) : null}
 
-    <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: 16,
-    marginBottom: 20,
-  }}
->
-  <div
-    style={{
-      ...cardStyle(isMobile),
-      border: '1px solid ${BRAND.border}',
-      background: BRAND.white,
-    }}
-  >
-    <div
-      style={{
-        display: "inline-block",
-        padding: "6px 12px",
-        borderRadius: 999,
-        background: "#eef2ff",
-        color: "#3730a3",
-        fontSize: 12,
-        fontWeight: 800,
-        marginBottom: 12,
-      }}
-    >
-      ÇBS MODÜLÜ
-    </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          <div
+            style={{
+              ...cardStyle(isMobile),
+              border: `1px solid ${BRAND.border}`,
+              background: BRAND.white,
+            }}
+          >
+            <div
+              style={{
+                display: "inline-block",
+                padding: "6px 12px",
+                borderRadius: 999,
+                background: "#eef2ff",
+                color: "#3730a3",
+                fontSize: 12,
+                fontWeight: 800,
+                marginBottom: 12,
+              }}
+            >
+              ÇBS MODÜLÜ
+            </div>
 
-  <h3 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>
-  Şikayet / Öneri Yönetimi
-</h3>
+            <h3 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>
+              Şikayet / Öneri Yönetimi
+            </h3>
 
-<p style={{ marginTop: 10, color: BRAND.muted, lineHeight: 1.7 }}>
-  Dış kullanıcılar tarafından gönderilen talepleri görüntüleyin,
-  yönlendirin ve sonuçlandırın.
-</p>
+            <p style={{ marginTop: 10, color: BRAND.muted, lineHeight: 1.7 }}>
+              Dış kullanıcılar tarafından gönderilen talepleri görüntüleyin,
+              yönlendirin ve sonuçlandırın.
+            </p>
 
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
-    gap: 10,
-    marginTop: 14,
-  }}
->
-  <div
-    style={{
-      background: "#f8fafc",
-      border: "1px solid #e5e7eb",
-      borderRadius: 12,
-      padding: 10,
-    }}
-  >
-    <div style={{ fontSize: 12, color: BRAND.muted }}>Toplam</div>
-    <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>
-      {cbsSummary?.total || 0}
-    </div>
-  </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+                gap: 10,
+                marginTop: 14,
+              }}
+            >
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 10,
+                }}
+              >
+                <div style={{ fontSize: 12, color: BRAND.muted }}>Toplam</div>
+                <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>
+                  {cbsSummary?.total || 0}
+                </div>
+              </div>
 
-  <div
-    style={{
-      background: "#fff1f2",
-      border: "1px solid #fecdd3",
-      borderRadius: 12,
-      padding: 10,
-    }}
-  >
-    <div style={{ fontSize: 12, color: "#9f1239" }}>Yeni</div>
-    <div
-      style={{
-        fontSize: 22,
-        fontWeight: 900,
-        marginTop: 4,
-        color: "#be123c",
-      }}
-    >
-      {cbsSummary?.new || 0}
-    </div>
-  </div>
+              <div
+                style={{
+                  background: "#fff1f2",
+                  border: "1px solid #fecdd3",
+                  borderRadius: 12,
+                  padding: 10,
+                }}
+              >
+                <div style={{ fontSize: 12, color: "#9f1239" }}>Yeni</div>
+                <div
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 900,
+                    marginTop: 4,
+                    color: "#be123c",
+                  }}
+                >
+                  {cbsSummary?.new || 0}
+                </div>
+              </div>
 
-  <div
-    style={{
-      background: "#fffbeb",
-      border: "1px solid #fde68a",
-      borderRadius: 12,
-      padding: 10,
-    }}
-  >
-    <div style={{ fontSize: 12, color: "#92400e" }}>İşlemde</div>
-    <div
-      style={{
-        fontSize: 22,
-        fontWeight: 900,
-        marginTop: 4,
-        color: "#a16207",
-      }}
-    >
-      {cbsSummary?.processing || 0}
-    </div>
-  </div>
+              <div
+                style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  borderRadius: 12,
+                  padding: 10,
+                }}
+              >
+                <div style={{ fontSize: 12, color: "#92400e" }}>İşlemde</div>
+                <div
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 900,
+                    marginTop: 4,
+                    color: "#a16207",
+                  }}
+                >
+                  {cbsSummary?.processing || 0}
+                </div>
+              </div>
 
-  <div
-    style={{
-      background: "#fef2f2",
-      border: "1px solid #fca5a5",
-      borderRadius: 12,
-      padding: 10,
-    }}
-  >
-    <div style={{ fontSize: 12, color: "#b91c1c" }}>SLA</div>
-    <div
-      style={{
-        fontSize: 22,
-        fontWeight: 900,
-        marginTop: 4,
-        color: "#b91c1c",
-      }}
-    >
-      {cbsSummary?.slaExceeded || 0}
-    </div>
-  </div>
-</div>
+              <div
+                style={{
+                  background: "#fef2f2",
+                  border: "1px solid #fca5a5",
+                  borderRadius: 12,
+                  padding: 10,
+                }}
+              >
+                <div style={{ fontSize: 12, color: "#b91c1c" }}>SLA</div>
+                <div
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 900,
+                    marginTop: 4,
+                    color: "#b91c1c",
+                  }}
+                >
+                  {cbsSummary?.slaExceeded || 0}
+                </div>
+              </div>
+            </div>
 
-<button
-  onClick={() => {
-    window.location.href = "/admin/cbs";
-  }}
-  style={{
-    marginTop: 18,
-    border: "none",
-    borderRadius: 12,
-    padding: "12px 16px",
-    background: "#1e3a8a",
-    color: "#fff",
-    fontWeight: 800,
-    cursor: "pointer",
-  }}
->
-  ÇBS Paneline Git
-</button>
-  </div>
-</div>
+            <button
+              onClick={() => {
+                window.location.href = "/admin/cbs";
+              }}
+              style={{
+                marginTop: 18,
+                border: "none",
+                borderRadius: 12,
+                padding: "12px 16px",
+                background: "#1e3a8a",
+                color: "#fff",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              ÇBS Paneline Git
+            </button>
+          </div>
+        </div>
 
         <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: isMobile ? 12 : 16,
-    marginBottom: 20,
-  }}
->
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: isMobile ? 12 : 16,
+            marginBottom: 20,
+          }}
+        >
           <div style={metricCardStyle(BRAND.slate, isMobile)}>
             <div
               style={{
@@ -1088,7 +1191,13 @@ useEffect(() => {
               }}
             />
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Atama</div>
-           <div style={{ fontSize: isMobile ? 28 : 34, fontWeight: 900, marginTop: 8 }}>
+            <div
+              style={{
+                fontSize: isMobile ? 28 : 34,
+                fontWeight: 900,
+                marginTop: 8,
+              }}
+            >
               {summary?.total_assignments ?? totals.assigned}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
@@ -1108,7 +1217,13 @@ useEffect(() => {
               }}
             />
             <div style={{ fontSize: 13, color: BRAND.green }}>Tamamlanma</div>
-           <div style={{ fontSize: isMobile ? 28 : 34, fontWeight: 900, marginTop: 8 }}>
+            <div
+              style={{
+                fontSize: isMobile ? 28 : 34,
+                fontWeight: 900,
+                marginTop: 8,
+              }}
+            >
               %{formatPercent(completionRate)}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
@@ -1128,7 +1243,13 @@ useEffect(() => {
               }}
             />
             <div style={{ fontSize: 13, color: BRAND.blue }}>Devam Eden</div>
-           <div style={{ fontSize: isMobile ? 28 : 34, fontWeight: 900, marginTop: 8 }}>
+            <div
+              style={{
+                fontSize: isMobile ? 28 : 34,
+                fontWeight: 900,
+                marginTop: 8,
+              }}
+            >
               %{formatPercent(inProgressRate)}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
@@ -1148,7 +1269,13 @@ useEffect(() => {
               }}
             />
             <div style={{ fontSize: 13, color: BRAND.amber }}>Riskli Oran</div>
-           <div style={{ fontSize: isMobile ? 28 : 34, fontWeight: 900, marginTop: 8 }}>
+            <div
+              style={{
+                fontSize: isMobile ? 28 : 34,
+                fontWeight: 900,
+                marginTop: 8,
+              }}
+            >
               %{formatPercent(riskRate)}
             </div>
             <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
@@ -1157,37 +1284,41 @@ useEffect(() => {
           </div>
         </div>
 
-       <div
-  style={{
-    ...cardStyle(),
-    marginBottom: 20,
-    display: "grid",
-    gridTemplateColumns: isMobile
-      ? "1fr"
-      : "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
-    gap: 16,
-    alignItems: "stretch",
-  }}
->
+        <div
+          style={{
+            ...cardStyle(),
+            marginBottom: 20,
+            display: "grid",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
+            gap: 16,
+            alignItems: "stretch",
+          }}
+        >
           <div>
             <div style={{ fontSize: 16, fontWeight: 900, color: BRAND.text }}>
-              Yönetici Yorumu
+              CEO Executive Özeti
             </div>
 
             <div style={{ marginTop: 8, color: BRAND.muted, lineHeight: 1.8 }}>
-              {aiComment}
+              {ceoSummary.executiveRiskScore >= 70
+                ? "Operasyonel risk yükselmiş görünüyor. Başlamayan eğitimler, açık ÇBS kayıtları ve SLA gecikmeleri üst yönetim takibine alınmalıdır."
+                : ceoSummary.executiveRiskScore >= 40
+                ? "Sistem kontrol altında ancak dikkat gerektiren alanlar var. Eğitim tamamlama performansı ile ÇBS kapanış hızının birlikte izlenmesi önerilir."
+                : "Kurumsal görünüm sağlıklı. Eğitim kapanış oranı ve ÇBS akışı dengeli ilerliyor. Yönetim seviyesinde sürdürülebilir operasyon görünümü mevcut."}
             </div>
 
-           <div
-  style={{
-    marginTop: 16,
-    display: "grid",
-    gridTemplateColumns: isMobile
-      ? "1fr"
-      : "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 12,
-  }}
->
+            <div
+              style={{
+                marginTop: 16,
+                display: "grid",
+                gridTemplateColumns: isMobile
+                  ? "1fr"
+                  : "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: 12,
+              }}
+            >
               <StatusDonut
                 label="Tamamlanan"
                 value={summary?.completed_count ?? totals.completed}
@@ -1240,19 +1371,19 @@ useEffect(() => {
                 {adminCompanyId || "Bağlı firma"}
               </div>
             ) : (
-             <select
-  value={selectedCompany}
-  onChange={(e) => setSelectedCompany(e.target.value)}
-  style={{
-    padding: "12px 14px",
-    borderRadius: 12,
-    border: '1px solid ${BRAND.border}',
-    background: "#fff",
-    fontWeight: 700,
-    minWidth: isMobile ? "100%" : 220,
-    width: isMobile ? "100%" : "auto",
-  }}
->
+              <select
+                value={selectedCompany}
+                onChange={(e) => setSelectedCompany(e.target.value)}
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  background: "#fff",
+                  fontWeight: 700,
+                  minWidth: isMobile ? "100%" : 220,
+                  width: isMobile ? "100%" : "auto",
+                }}
+              >
                 <option value="all">Tüm Firmalar</option>
                 {companies.map((company) => (
                   <option key={company} value={company}>
@@ -1320,14 +1451,16 @@ useEffect(() => {
           </div>
         </div>
 
-       <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.1fr) minmax(0, 0.9fr)",
-    gap: isMobile ? 14 : 20,
-    marginBottom: 20,
-  }}
->
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : "minmax(0, 1.1fr) minmax(0, 0.9fr)",
+            gap: isMobile ? 14 : 20,
+            marginBottom: 20,
+          }}
+        >
           <section style={cardStyle(isMobile)}>
             <div
               style={{
@@ -1343,7 +1476,9 @@ useEffect(() => {
                 Eğitim Durum Özeti
               </h2>
 
-              <span style={badgeStyle(BRAND.purpleSoft, BRAND.purple, "#ddd6fe")}>
+              <span
+                style={badgeStyle(BRAND.purpleSoft, BRAND.purple, "#ddd6fe")}
+              >
                 Trend
               </span>
             </div>
@@ -1370,7 +1505,9 @@ useEffect(() => {
                 Firma Risk Yoğunluğu
               </h2>
 
-              <span style={badgeStyle(BRAND.amberSoft, BRAND.amber, "#fed7aa")}>
+              <span
+                style={badgeStyle(BRAND.amberSoft, BRAND.amber, "#fed7aa")}
+              >
                 Firma Analizi
               </span>
             </div>
@@ -1386,14 +1523,16 @@ useEffect(() => {
           </section>
         </div>
 
-       <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.1fr) minmax(0, 0.9fr)",
-    gap: isMobile ? 14 : 20,
-    marginBottom: 20,
-  }}
->
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : "minmax(0, 1.1fr) minmax(0, 0.9fr)",
+            gap: isMobile ? 14 : 20,
+            marginBottom: 20,
+          }}
+        >
           <section style={cardStyle(isMobile)}>
             <div
               style={{
@@ -1450,7 +1589,9 @@ useEffect(() => {
                           {item.title}
                         </div>
 
-                        <div style={badgeStyle(BRAND.redSoft, BRAND.red, "#f3c8c8")}>
+                        <div
+                          style={badgeStyle(BRAND.redSoft, BRAND.red, "#f3c8c8")}
+                        >
                           {item.not_started_count}
                         </div>
                       </div>
@@ -1504,7 +1645,9 @@ useEffect(() => {
                 En Güçlü Eğitimler
               </h2>
 
-              <span style={badgeStyle(BRAND.greenSoft, BRAND.green, "#bbf7d0")}>
+              <span
+                style={badgeStyle(BRAND.greenSoft, BRAND.green, "#bbf7d0")}
+              >
                 Pozitif Görünüm
               </span>
             </div>
@@ -1533,11 +1676,24 @@ useEffect(() => {
           }}
         >
           <section style={cardStyle(isMobile)}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 22,
+                fontWeight: 900,
+              }}
+            >
               Riskli Kullanıcılar
             </h2>
 
-           <div style={{ fontSize: isMobile ? 26 : 32, fontWeight: 900, color: BRAND.red }}>
+            <div
+              style={{
+                fontSize: isMobile ? 26 : 32,
+                fontWeight: 900,
+                color: BRAND.red,
+              }}
+            >
               {filteredRiskUsers.length}
             </div>
 
@@ -1547,11 +1703,24 @@ useEffect(() => {
           </section>
 
           <section style={cardStyle(isMobile)}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 22,
+                fontWeight: 900,
+              }}
+            >
               Devam Eden
             </h2>
 
-          <div style={{ fontSize: isMobile ? 26 : 32, fontWeight: 900, color: BRAND.blue }}>
+            <div
+              style={{
+                fontSize: isMobile ? 26 : 32,
+                fontWeight: 900,
+                color: BRAND.blue,
+              }}
+            >
               {summary?.in_progress_count ?? inProgressUsers.length}
             </div>
 
@@ -1561,11 +1730,24 @@ useEffect(() => {
           </section>
 
           <section style={cardStyle(isMobile)}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 22,
+                fontWeight: 900,
+              }}
+            >
               Tamamlayanlar
             </h2>
 
-           <div style={{ fontSize: isMobile ? 26 : 32, fontWeight: 900, color: BRAND.green }}>
+            <div
+              style={{
+                fontSize: isMobile ? 26 : 32,
+                fontWeight: 900,
+                color: BRAND.green,
+              }}
+            >
               {summary?.completed_count ?? completedUsers.length}
             </div>
 
@@ -1576,13 +1758,13 @@ useEffect(() => {
         </div>
 
         <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(0, 1fr)",
-    gap: isMobile ? 14 : 20,
-    marginBottom: 20,
-  }}
->
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(0, 1fr)",
+            gap: isMobile ? 14 : 20,
+            marginBottom: 20,
+          }}
+        >
           <section style={cardStyle(isMobile)}>
             <div
               style={{
@@ -1608,30 +1790,30 @@ useEffect(() => {
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
                 {topEmployees.map((item, index) => (
-                 <div
-  key={`${item.email}-${index}`}
-  style={{
-    display: "flex",
-    flexDirection: isMobile ? "column" : "row",
-    justifyContent: "space-between",
-    alignItems: isMobile ? "flex-start" : "center",
-    gap: 14,
-    borderBottom: `1px solid ${BRAND.border}`,
-    paddingBottom: 10,
-  }}
->
+                  <div
+                    key={`${item.email}-${index}`}
+                    style={{
+                      display: "flex",
+                      flexDirection: isMobile ? "column" : "row",
+                      justifyContent: "space-between",
+                      alignItems: isMobile ? "flex-start" : "center",
+                      gap: 14,
+                      borderBottom: `1px solid ${BRAND.border}`,
+                      paddingBottom: 10,
+                    }}
+                  >
                     <div>
                       <div style={{ fontWeight: 800, color: BRAND.text }}>
                         {item.full_name}
                       </div>
-                     <div
-  style={{
-    marginTop: 4,
-    color: BRAND.muted,
-    fontSize: 13,
-    wordBreak: "break-word",
-  }}
->
+                      <div
+                        style={{
+                          marginTop: 4,
+                          color: BRAND.muted,
+                          fontSize: 13,
+                          wordBreak: "break-word",
+                        }}
+                      >
                         {item.email || "-"}
                       </div>
                     </div>
@@ -1660,7 +1842,9 @@ useEffect(() => {
                 Riskli Eğitim Dağılımı
               </h2>
 
-              <span style={badgeStyle(BRAND.amberSoft, BRAND.amber, "#fed7aa")}>
+              <span
+                style={badgeStyle(BRAND.amberSoft, BRAND.amber, "#fed7aa")}
+              >
                 Dağılım
               </span>
             </div>
@@ -1671,26 +1855,26 @@ useEffect(() => {
               <div style={{ display: "grid", gap: 10 }}>
                 {groupedRiskTrainings.map((item) => (
                   <div
-  key={item.name}
-  style={{
-    display: "flex",
-    flexDirection: isMobile ? "column" : "row",
-    justifyContent: "space-between",
-    alignItems: isMobile ? "flex-start" : "center",
-    gap: 14,
-    borderBottom: `1px solid ${BRAND.border}`,
-    paddingBottom: 10,
-  }}
->
-                   <div
-  style={{
-    fontWeight: 700,
-    color: BRAND.text,
-    wordBreak: "break-word",
-  }}
->
-  {item.name}
-</div>
+                    key={item.name}
+                    style={{
+                      display: "flex",
+                      flexDirection: isMobile ? "column" : "row",
+                      justifyContent: "space-between",
+                      alignItems: isMobile ? "flex-start" : "center",
+                      gap: 14,
+                      borderBottom: `1px solid ${BRAND.border}`,
+                      paddingBottom: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        color: BRAND.text,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {item.name}
+                    </div>
 
                     <div style={badgeStyle(BRAND.redSoft, BRAND.red, "#f3c8c8")}>
                       {item.count} kişi
@@ -1702,13 +1886,16 @@ useEffect(() => {
           </section>
         </div>
 
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.05fr) minmax(0, 0.95fr)",
-    gap: isMobile ? 14 : 20,
-  }}
->
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : "minmax(0, 1.05fr) minmax(0, 0.95fr)",
+            gap: isMobile ? 14 : 20,
+            marginBottom: 20,
+          }}
+        >
           <section style={cardStyle(isMobile)}>
             <div
               style={{
@@ -1740,26 +1927,26 @@ useEffect(() => {
 
                   return (
                     <div key={item.name}>
-                    <div
-  style={{
-    display: "flex",
-    flexDirection: isMobile ? "column" : "row",
-    justifyContent: "space-between",
-    alignItems: isMobile ? "flex-start" : "center",
-    marginBottom: 6,
-    gap: 10,
-  }}
->
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: isMobile ? "column" : "row",
+                          justifyContent: "space-between",
+                          alignItems: isMobile ? "flex-start" : "center",
+                          marginBottom: 6,
+                          gap: 10,
+                        }}
+                      >
                         <div
-  style={{
-    fontSize: 14,
-    fontWeight: 800,
-    color: BRAND.text,
-    wordBreak: "break-word",
-  }}
->
-  {item.name}
-</div>
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 800,
+                            color: BRAND.text,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {item.name}
+                        </div>
 
                         <div
                           style={{
@@ -1807,7 +1994,14 @@ useEffect(() => {
           </section>
 
           <section style={cardStyle(isMobile)}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 16,
+                fontSize: 24,
+                fontWeight: 900,
+              }}
+            >
               Dashboard Notu
             </h2>
 
@@ -1856,8 +2050,7 @@ useEffect(() => {
                     color: BRAND.muted,
                     lineHeight: 1.7,
                     fontSize: 14,
-                  }}  
-
+                  }}
                 >
                   Tamamlanma oranı yüksek olan eğitim başlıkları örnek akış olarak
                   alınabilir ve diğer başlıklara uyarlanabilir.
@@ -1865,6 +2058,75 @@ useEffect(() => {
               </div>
             </div>
           </section>
+        </div>
+
+        <div
+          style={{
+            ...cardStyle(isMobile),
+            marginTop: 20,
+            background:
+              ceoSummary.executiveRiskScore >= 70
+                ? "linear-gradient(135deg, #7f1d1d 0%, #b91c1c 100%)"
+                : ceoSummary.executiveRiskScore >= 40
+                ? "linear-gradient(135deg, #92400e 0%, #d97706 100%)"
+                : "linear-gradient(135deg, #166534 0%, #16a34a 100%)",
+            color: "#fff",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  opacity: 0.9,
+                  marginBottom: 8,
+                }}
+              >
+                CEO ALARM PANELİ
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.2 }}>
+                {ceoSummary.healthLabel === "Kritik"
+                  ? "Üst yönetim müdahalesi önerilir"
+                  : ceoSummary.healthLabel === "Dikkat"
+                  ? "Yakın takip önerilir"
+                  : "Operasyon dengeli görünüyor"}
+              </div>
+              <div
+                style={{
+                  marginTop: 10,
+                  lineHeight: 1.7,
+                  color: "rgba(255,255,255,0.92)",
+                }}
+              >
+                Açık ÇBS kayıtları: {ceoSummary.cbsOpen} • SLA alarmı:{" "}
+                {ceoSummary.cbsSla} • Başlamayan eğitim:{" "}
+                {ceoSummary.totalNotStarted} • Tamamlanan eğitim:{" "}
+                {ceoSummary.totalCompleted}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "12px 16px",
+                borderRadius: 16,
+                background: "rgba(255,255,255,0.12)",
+                border: "1px solid rgba(255,255,255,0.18)",
+                fontSize: 24,
+                fontWeight: 900,
+              }}
+            >
+              Skor: {ceoSummary.executiveRiskScore}
+            </div>
+          </div>
         </div>
       </div>
     </main>
