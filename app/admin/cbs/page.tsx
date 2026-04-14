@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -35,8 +34,10 @@ function formatDate(dateString?: string | null) {
 function isSlaExceeded(sla?: string | null, status?: string) {
   if (!sla) return false;
   if (status === "closed") return false;
+
   const due = new Date(sla).getTime();
   if (Number.isNaN(due)) return false;
+
   return due < Date.now();
 }
 
@@ -113,6 +114,104 @@ async function readSafeJson(response: Response) {
   } catch {
     return { error: "Sunucudan geçersiz yanıt geldi." };
   }
+}
+
+function StatusPill({
+  label,
+  value,
+  bg,
+  color,
+  border,
+}: {
+  label: string;
+  value: number | string;
+  bg: string;
+  color: string;
+  border: string;
+}) {
+  return (
+    <div
+      style={{
+        background: bg,
+        color,
+        border: `1px solid ${border}`,
+        borderRadius: 18,
+        padding: 16,
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 700 }}>{label}</div>
+      <div
+        style={{
+          fontSize: 28,
+          fontWeight: 900,
+          marginTop: 8,
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function TinyBar({
+  label,
+  value,
+  max,
+  color,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  color: string;
+}) {
+  const height = Math.max(16, Math.round((value / Math.max(max, 1)) * 110));
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 48,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 800,
+          color: "#111827",
+        }}
+      >
+        {value}
+      </div>
+
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 54,
+          height,
+          background: color,
+          borderRadius: "14px 14px 6px 6px",
+          boxShadow: "0 12px 24px rgba(0,0,0,0.08)",
+        }}
+      />
+
+      <div
+        style={{
+          fontSize: 12,
+          color: "#6b7280",
+          textAlign: "center",
+          lineHeight: 1.3,
+        }}
+      >
+        {label}
+      </div>
+    </div>
+  );
 }
 
 export default function AdminCbsPage() {
@@ -323,6 +422,12 @@ export default function AdminCbsPage() {
       setReplyId(null);
       setReplyText("");
       await loadRecords();
+
+      if (result?.warning) {
+        alert(result.warning);
+        return;
+      }
+
       alert("Cevap gönderildi ve kayıt kapatıldı.");
     } catch (error) {
       console.error("CBS cevap gönderim hatası:", error);
@@ -344,49 +449,48 @@ export default function AdminCbsPage() {
     }
   };
 
-const exportPdfReport = async () => {
-  const element = document.getElementById("cbs-report-area");
-  if (!element) {
-    alert("Rapor alanı bulunamadı.");
-    return;
-  }
-
-  try {
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-    });
-
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
-
-    const pdfWidth = 210;
-    const pdfHeight = 297;
-    const margin = 10;
-    const usableWidth = pdfWidth - margin * 2;
-    const imgHeight = (canvas.height * usableWidth) / canvas.width;
-
-    let heightLeft = imgHeight;
-    let position = margin;
-
-    pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
-    heightLeft -= (pdfHeight - margin * 2);
-
-    while (heightLeft > 0) {
-      pdf.addPage();
-      position = margin - (imgHeight - heightLeft);
-      pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
-      heightLeft -= (pdfHeight - margin * 2);
+  const exportPdfReport = async () => {
+    const element = document.getElementById("cbs-report-area");
+    if (!element) {
+      alert("Rapor alanı bulunamadı.");
+      return;
     }
 
-    pdf.save("dsec-cbs-raporu.pdf");
-  } catch (error) {
-    console.error("PDF oluşturma hatası:", error);
-    alert("PDF oluşturulurken hata oluştu.");
-  }
-};
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+      });
 
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+      const margin = 10;
+      const usableWidth = pdfWidth - margin * 2;
+      const imgHeight = (canvas.height * usableWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
+      heightLeft -= pdfHeight - margin * 2;
+
+      while (heightLeft > 0) {
+        pdf.addPage();
+        position = margin - (imgHeight - heightLeft);
+        pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
+        heightLeft -= pdfHeight - margin * 2;
+      }
+
+      pdf.save("dsec-cbs-raporu.pdf");
+    } catch (error) {
+      console.error("PDF oluşturma hatası:", error);
+      alert("PDF oluşturulurken hata oluştu.");
+    }
+  };
 
   const getStatusLabel = (status?: string) => {
     if (status === "read") return "Okundu";
@@ -460,24 +564,42 @@ const exportPdfReport = async () => {
   ).length;
 
   const closedRate = countAll > 0 ? Math.round((countClosed / countAll) * 100) : 0;
-const slaSafeCount = countAll - countSlaExceeded;
+  const slaSafeCount = countAll - countSlaExceeded;
 
-const criticalCount = records.filter(
-  (item) => String(item.priority || "").toLowerCase() === "critical"
-).length;
+  const criticalCount = records.filter(
+    (item) => String(item.priority || "").toLowerCase() === "critical"
+  ).length;
 
-const highCount = records.filter(
-  (item) => String(item.priority || "").toLowerCase() === "high"
-).length;
+  const highCount = records.filter(
+    (item) => String(item.priority || "").toLowerCase() === "high"
+  ).length;
 
-const aiSummary =
-  countSlaExceeded > 0
-    ? `SLA aşımı bulunan ${countSlaExceeded} kayıt var. Süreçte gecikme riski oluşmuş görünüyor. Öncelikli aksiyon önerilir.`
-    : criticalCount > 0
-    ? `Kritik öncelikte ${criticalCount} kayıt var. Operasyonel müdahale ve hızlı dönüş önerilir.`
-    : countNew > countClosed
-    ? `Yeni kayıt yoğunluğu kapanan kayıtlardan fazla. Operasyon yükü artıyor olabilir.`
-    : `Kapanış oranı %${closedRate}. Genel akış kontrollü ve sistem sağlıklı görünüyor.`;
+  const aiSummary =
+    countSlaExceeded > 0
+      ? `SLA aşımı bulunan ${countSlaExceeded} kayıt var. Süreçte gecikme riski oluşmuş görünüyor. Öncelikli aksiyon önerilir.`
+      : criticalCount > 0
+      ? `Kritik öncelikte ${criticalCount} kayıt var. Operasyonel müdahale ve hızlı dönüş önerilir.`
+      : countNew > countClosed
+      ? `Yeni kayıt yoğunluğu kapanan kayıtlardan fazla. Operasyon yükü artıyor olabilir.`
+      : `Kapanış oranı %${closedRate}. Genel akış kontrollü ve sistem sağlıklı görünüyor.`;
+
+  const maxChartValue = Math.max(countNew, countProcessing, countRead, countClosed, 1);
+
+  const categoryStats = useMemo(() => {
+    const map = new Map<string, number>();
+
+    records.forEach((item) => {
+      const key = item.category?.trim() || "Genel";
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+
+    return Array.from(map.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [records]);
+
+  const maxCategoryValue = Math.max(...categoryStats.map((x) => x.value), 1);
 
   const filterButtonStyle = (active: boolean): React.CSSProperties => ({
     border: "1px solid #e5e7eb",
@@ -497,14 +619,14 @@ const aiSummary =
           <div className="hero-badge">D-SEC Yönetim</div>
           <h1 className="hero-title">ÇBS Başvuru Paneli</h1>
           <p className="hero-desc">
-            Web sitesinden gelen şikayet, öneri ve talepleri tek ekranda takip
-            edin, yönetin ve kapatın.
+            Web sitesinden gelen şikayet, öneri ve talepleri tek ekranda takip edin,
+            yönetin ve kapatın.
           </p>
         </div>
       </section>
 
       <section className="section section-light">
-       <div className="page-container" id="cbs-report-area">
+        <div className="page-container" id="cbs-report-area">
           <div
             style={{
               display: "flex",
@@ -534,9 +656,7 @@ const aiSummary =
                   fontSize: "16px",
                 }}
               >
-                {loading
-                  ? "Kayıtlar yükleniyor..."
-                  : "Toplam kayıt: " + records.length}
+                {loading ? "Kayıtlar yükleniyor..." : "Toplam kayıt: " + records.length}
               </p>
             </div>
 
@@ -551,13 +671,13 @@ const aiSummary =
                 Yenile
               </button>
 
-<button
-  onClick={exportPdfReport}
-  className="cbs-button"
-  style={{ background: "#2563eb" }}
->
-  PDF Rapor
-</button>
+              <button
+                onClick={exportPdfReport}
+                className="cbs-button"
+                style={{ background: "#2563eb" }}
+              >
+                PDF Rapor
+              </button>
 
               <button
                 onClick={handleLogout}
@@ -577,120 +697,206 @@ const aiSummary =
               gap: "18px",
             }}
           >
-
-{/* ================================
-   📊 GRAFİK DASHBOARD
-================================ */}
-<div
-  style={{
-    background: "#ffffff",
-    borderRadius: 20,
-    padding: 20,
-    border: "1px solid #e5e7eb",
-  }}
->
-  <div style={{ fontWeight: 800, marginBottom: 16 }}>
-    📊 Başvuru Analizi
-  </div>
-
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-      gap: 20,
-    }}
-  >
-
-    {/* STATUS DAĞILIM */}
-    <div>
-      <div style={{ fontSize: 13, marginBottom: 8 }}>
-        Durum Dağılımı
-      </div>
-
-      <div style={{ display: "grid", gap: 6 }}>
-        <div>Yeni: {countNew}</div>
-        <div>İşlemde: {countProcessing}</div>
-        <div>Okundu: {countRead}</div>
-        <div>Kapalı: {countClosed}</div>
-      </div>
-    </div>
-
-    {/* SLA */}
-    <div>
-      <div style={{ fontSize: 13, marginBottom: 8 }}>
-        SLA Durumu
-      </div>
-
-      <div style={{ display: "grid", gap: 6 }}>
-        <div>Toplam: {countAll}</div>
-        <div style={{ color: "#b91c1c" }}>
-          Aşım: {countSlaExceeded}
-        </div>
-        <div style={{ color: "#16a34a" }}>
-          Sağlıklı: {countAll - countSlaExceeded}
-        </div>
-      </div>
-    </div>
-
-    {/* BASİT BAR GRAFİK */}
-    <div>
-      <div style={{ fontSize: 13, marginBottom: 8 }}>
-        Görsel Dağılım
-      </div>
-
-      <div style={{ display: "flex", gap: 6, alignItems: "end", height: 80 }}>
-        <div style={{ width: 20, height: countNew * 5, background: "#ef4444" }} />
-        <div style={{ width: 20, height: countProcessing * 5, background: "#f59e0b" }} />
-        <div style={{ width: 20, height: countRead * 5, background: "#3b82f6" }} />
-        <div style={{ width: 20, height: countClosed * 5, background: "#22c55e" }} />
-      </div>
-    </div>
-
-  </div>
-</div>
-
-
             <div
               style={{
-                borderRadius: 18,
-                padding: 18,
-                background: "#fff7ed",
-                border: "1px solid #fed7aa",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: 18,
               }}
             >
               <div
                 style={{
-                  fontWeight: 900,
-                  color: "#92400e",
-                  marginBottom: 8,
+                  borderRadius: 22,
+                  padding: 22,
+                  background:
+                    "linear-gradient(135deg, #4a0d1a 0%, #7f1734 38%, #c62828 100%)",
+                  color: "#ffffff",
+                  boxShadow: "0 24px 54px rgba(127, 23, 52, 0.22)",
                 }}
               >
-                Yönetici Yorumu
+                <div
+                  style={{
+                    display: "inline-flex",
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    background: "rgba(255,255,255,0.12)",
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    marginBottom: 12,
+                  }}
+                >
+                  D-SEC • Premium Dashboard
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 28,
+                    fontWeight: 900,
+                    lineHeight: 1.15,
+                  }}
+                >
+                  ÇBS Operasyon Merkezi
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 10,
+                    lineHeight: 1.75,
+                    color: "rgba(255,255,255,0.92)",
+                  }}
+                >
+                  Başvuru akışı, SLA kontrolü, öncelik takibi ve yönetim görünürlüğü
+                  tek panelde izlenir.
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 16,
+                    display: "flex",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,0.12)",
+                      border: "1px solid rgba(255,255,255,0.16)",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Toplam: {countAll}
+                  </span>
+                  <span
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,0.12)",
+                      border: "1px solid rgba(255,255,255,0.16)",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Kapanış: %{closedRate}
+                  </span>
+                </div>
               </div>
 
               <div
-  style={{
-    background: "#111827",
-    color: "#fff",
-    padding: 16,
-    borderRadius: 16,
-  }}
->
-  <strong>Sistem Durumu:</strong><br />
-  {countSlaExceeded > 0
-    ? "⚠ Kritik uyarı: SLA aşımı var"
-    : "✔ Sistem sağlıklı"}
-</div>
+                style={{
+                  borderRadius: 22,
+                  padding: 22,
+                  background: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  boxShadow: "0 16px 38px rgba(15, 23, 42, 0.05)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 900,
+                    color: "#111827",
+                    marginBottom: 12,
+                  }}
+                >
+                  AI Yönetici Özeti
+                </div>
 
+                <div
+                  style={{
+                    background: "#111827",
+                    color: "#ffffff",
+                    padding: 16,
+                    borderRadius: 16,
+                    lineHeight: 1.75,
+                    fontSize: 14,
+                  }}
+                >
+                  <strong>Sistem Durumu</strong>
+                  <br />
+                  {countSlaExceeded > 0
+                    ? `⚠ Kritik uyarı: ${countSlaExceeded} adet SLA aşımı var`
+                    : "✔ Sistem sağlıklı görünüyor"}
+                </div>
 
-              <div style={{ color: "#6b7280", lineHeight: 1.7 }}>
-                {countSlaExceeded > 0
-                  ? `SLA aşımı bulunan ${countSlaExceeded} kayıt var. Öncelikli müdahale önerilir.`
-                  : countNew > countRead
-                  ? "Yeni başvuru yoğunluğu artıyor. Operasyonel aksiyon önerilir."
-                  : countProcessing > 5
-                  ? "İşlemde bekleyen kayıtlar yüksek. Süreç takibi güçlendirilmeli."
-                  : "Genel akış kontrol altında. Sistem sağlıklı ilerliyor."}
+                <div
+                  style={{
+                    marginTop: 12,
+                    color: "#6b7280",
+                    lineHeight: 1.8,
+                    fontSize: 14,
+                  }}
+                >
+                  {aiSummary}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 14,
+                    display: "flex",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{
+                      background: "#eff6ff",
+                      color: "#1d4ed8",
+                      border: "1px solid #bfdbfe",
+                      borderRadius: 999,
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Kapanış Oranı: %{closedRate}
+                  </span>
+
+                  <span
+                    style={{
+                      background: "#ecfdf5",
+                      color: "#166534",
+                      border: "1px solid #86efac",
+                      borderRadius: 999,
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    SLA Sağlıklı: {slaSafeCount}
+                  </span>
+
+                  <span
+                    style={{
+                      background: "#fff7ed",
+                      color: "#c2410c",
+                      border: "1px solid #fdba74",
+                      borderRadius: 999,
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Yüksek Öncelik: {highCount}
+                  </span>
+
+                  <span
+                    style={{
+                      background: "#fef2f2",
+                      color: "#b91c1c",
+                      border: "1px solid #fca5a5",
+                      borderRadius: 999,
+                      padding: "8px 12px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Kritik Öncelik: {criticalCount}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -701,248 +907,162 @@ const aiSummary =
                 gap: "14px",
               }}
             >
+              <StatusPill
+                label="Toplam"
+                value={countAll}
+                bg="#f8fafc"
+                color="#334155"
+                border="#e5e7eb"
+              />
+              <StatusPill
+                label="Yeni"
+                value={countNew}
+                bg="#fff1f2"
+                color="#9f1239"
+                border="#fecdd3"
+              />
+              <StatusPill
+                label="İşlemde"
+                value={countProcessing}
+                bg="#fffbeb"
+                color="#92400e"
+                border="#fde68a"
+              />
+              <StatusPill
+                label="Okundu"
+                value={countRead}
+                bg="#eff6ff"
+                color="#1d4ed8"
+                border="#bfdbfe"
+              />
+              <StatusPill
+                label="Kapalı"
+                value={countClosed}
+                bg="#ecfdf5"
+                color="#166534"
+                border="#86efac"
+              />
+              <StatusPill
+                label="SLA Aşımı"
+                value={countSlaExceeded}
+                bg="#fef2f2"
+                color="#b91c1c"
+                border="#fca5a5"
+              />
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: 18,
+              }}
+            >
               <div
                 style={{
-                  background: "#f8fafc",
+                  background: "#ffffff",
+                  borderRadius: 20,
+                  padding: 20,
                   border: "1px solid #e5e7eb",
-                  borderRadius: "18px",
-                  padding: "16px",
                 }}
               >
-                <div style={{ fontSize: "13px", color: "#6b7280" }}>
-                  Toplam
+                <div style={{ fontWeight: 900, marginBottom: 14, color: "#111827" }}>
+                  Durum Dağılımı
                 </div>
-
-              <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: "14px",
-  }}
->
-  <div
-    style={{
-      borderRadius: 18,
-      padding: 18,
-      background: "#111827",
-      color: "#ffffff",
-    }}
-  >
-    <div style={{ fontWeight: 900, marginBottom: 8 }}>
-      Sistem Durumu
-    </div>
-    <div style={{ lineHeight: 1.7 }}>
-      {countSlaExceeded > 0
-        ? `⚠ Kritik uyarı: ${countSlaExceeded} adet SLA aşımı var`
-        : "✔ Sistem sağlıklı görünüyor"}
-    </div>
-  </div>
-
-  <div
-    style={{
-      borderRadius: 18,
-      padding: 18,
-      background: "#f8fafc",
-      border: "1px solid #e5e7eb",
-    }}
-  >
-    <div
-      style={{
-        fontWeight: 900,
-        color: "#111827",
-        marginBottom: 8,
-      }}
-    >
-      AI Analiz
-    </div>
-
-    <div style={{ color: "#6b7280", lineHeight: 1.8 }}>
-      {aiSummary}
-    </div>
-
-    <div
-      style={{
-        marginTop: 12,
-        display: "flex",
-        gap: "10px",
-        flexWrap: "wrap",
-      }}
-    >
-      <span
-        style={{
-          background: "#eff6ff",
-          color: "#1d4ed8",
-          border: "1px solid #bfdbfe",
-          borderRadius: 999,
-          padding: "8px 12px",
-          fontSize: 12,
-          fontWeight: 700,
-        }}
-      >
-        Kapanış Oranı: %{closedRate}
-      </span>
-
-      <span
-        style={{
-          background: "#ecfdf5",
-          color: "#166534",
-          border: "1px solid #86efac",
-          borderRadius: 999,
-          padding: "8px 12px",
-          fontSize: 12,
-          fontWeight: 700,
-        }}
-      >
-        SLA Sağlıklı: {slaSafeCount}
-      </span>
-
-      <span
-        style={{
-          background: "#fff7ed",
-          color: "#c2410c",
-          border: "1px solid #fdba74",
-          borderRadius: 999,
-          padding: "8px 12px",
-          fontSize: 12,
-          fontWeight: 700,
-        }}
-      >
-        Yüksek Öncelik: {highCount}
-      </span>
-
-      <span
-        style={{
-          background: "#fef2f2",
-          color: "#b91c1c",
-          border: "1px solid #fca5a5",
-          borderRadius: 999,
-          padding: "8px 12px",
-          fontSize: 12,
-          fontWeight: 700,
-        }}
-      >
-        Kritik Öncelik: {criticalCount}
-      </span>
-    </div>
-  </div>
-</div>
 
                 <div
                   style={{
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    marginTop: "8px",
+                    display: "flex",
+                    gap: 12,
+                    alignItems: "end",
+                    height: 170,
+                    paddingTop: 8,
                   }}
                 >
-                  {countAll}
+                  <TinyBar
+                    label="Yeni"
+                    value={countNew}
+                    max={maxChartValue}
+                    color="#ef4444"
+                  />
+                  <TinyBar
+                    label="İşlemde"
+                    value={countProcessing}
+                    max={maxChartValue}
+                    color="#f59e0b"
+                  />
+                  <TinyBar
+                    label="Okundu"
+                    value={countRead}
+                    max={maxChartValue}
+                    color="#3b82f6"
+                  />
+                  <TinyBar
+                    label="Kapalı"
+                    value={countClosed}
+                    max={maxChartValue}
+                    color="#22c55e"
+                  />
                 </div>
               </div>
 
               <div
                 style={{
-                  background: "#fff1f2",
-                  border: "1px solid #fecdd3",
-                  borderRadius: "18px",
-                  padding: "16px",
+                  background: "#ffffff",
+                  borderRadius: 20,
+                  padding: 20,
+                  border: "1px solid #e5e7eb",
                 }}
               >
-                <div style={{ fontSize: "13px", color: "#9f1239" }}>Yeni</div>
-                <div
-                  style={{
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    marginTop: "8px",
-                  }}
-                >
-                  {countNew}
+                <div style={{ fontWeight: 900, marginBottom: 14, color: "#111827" }}>
+                  Kategori Yoğunluğu
                 </div>
-              </div>
 
-              <div
-                style={{
-                  background: "#fffbeb",
-                  border: "1px solid #fde68a",
-                  borderRadius: "18px",
-                  padding: "16px",
-                }}
-              >
-                <div style={{ fontSize: "13px", color: "#92400e" }}>
-                  İşlemde
-                </div>
-                <div
-                  style={{
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    marginTop: "8px",
-                  }}
-                >
-                  {countProcessing}
-                </div>
-              </div>
+                <div style={{ display: "grid", gap: 12 }}>
+                  {categoryStats.length === 0 ? (
+                    <div style={{ color: "#6b7280" }}>Kategori verisi yok.</div>
+                  ) : (
+                    categoryStats.map((item) => (
+                      <div key={item.label}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            marginBottom: 6,
+                            fontSize: 13,
+                          }}
+                        >
+                          <span style={{ fontWeight: 700, color: "#111827" }}>
+                            {item.label}
+                          </span>
+                          <span style={{ color: "#6b7280" }}>{item.value}</span>
+                        </div>
 
-              <div
-                style={{
-                  background: "#eff6ff",
-                  border: "1px solid #bfdbfe",
-                  borderRadius: "18px",
-                  padding: "16px",
-                }}
-              >
-                <div style={{ fontSize: "13px", color: "#1d4ed8" }}>
-                  Okundu
-                </div>
-                <div
-                  style={{
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    marginTop: "8px",
-                  }}
-                >
-                  {countRead}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: "#ecfdf5",
-                  border: "1px solid #86efac",
-                  borderRadius: "18px",
-                  padding: "16px",
-                }}
-              >
-                <div style={{ fontSize: "13px", color: "#166534" }}>
-                  Kapalı
-                </div>
-                <div
-                  style={{
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    marginTop: "8px",
-                  }}
-                >
-                  {countClosed}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: "#fef2f2",
-                  border: "1px solid #fca5a5",
-                  borderRadius: "18px",
-                  padding: "16px",
-                }}
-              >
-                <div style={{ fontSize: "13px", color: "#b91c1c" }}>
-                  SLA Aşımı
-                </div>
-                <div
-                  style={{
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    marginTop: "8px",
-                  }}
-                >
-                  {countSlaExceeded}
+                        <div
+                          style={{
+                            height: 10,
+                            borderRadius: 999,
+                            background: "#f1f5f9",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: "100%",
+                              width: `${Math.max(
+                                8,
+                                Math.round((item.value / maxCategoryValue) * 100)
+                              )}%`,
+                              background:
+                                "linear-gradient(90deg, #7f1734 0%, #c62828 100%)",
+                              borderRadius: 999,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -1013,9 +1133,7 @@ const aiSummary =
           ) : filteredRecords.length === 0 ? (
             <div className="card">
               <h3 className="card-title">Kayıt bulunamadı</h3>
-              <p className="card-text">
-                Seçili filtreye uygun kayıt görünmüyor.
-              </p>
+              <p className="card-text">Seçili filtreye uygun kayıt görünmüyor.</p>
             </div>
           ) : (
             <div
