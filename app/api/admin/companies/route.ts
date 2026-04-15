@@ -27,6 +27,17 @@ type CompanyRow = {
   phone: string | null;
   email: string | null;
   address: string | null;
+
+  // 🔥 YENİ ALANLAR
+  calisan_sayisi: number | null;
+  nace_kodu: string | null;
+  tehlike_sinifi: string | null;
+  sgk_sicil_no: string | null;
+  sektor: string | null;
+  isg_uzmani: string | null;
+  isyeri_hekimi: string | null;
+  dsp: string | null;
+
   created_at: string | null;
   is_active: boolean | null;
 };
@@ -36,25 +47,36 @@ export async function GET() {
     const allowed = await checkAdmin();
 
     if (!allowed) {
-      return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
     const supabase = getSupabase();
 
     const { data, error } = await supabase
       .from("companies")
-      .select("id, name, yetkili, phone, email, address, created_at, is_active")
+      .select(`
+        id,
+        name,
+        yetkili,
+        phone,
+        email,
+        address,
+        calisan_sayisi,
+        nace_kodu,
+        tehlike_sinifi,
+        sgk_sicil_no,
+        sektor,
+        isg_uzmani,
+        isyeri_hekimi,
+        dsp,
+        created_at,
+        is_active
+      `)
       .order("created_at", { ascending: false });
 
     if (error) {
       console.error("companies GET error:", error);
-      return NextResponse.json(
-        { error: "Firmalar alınamadı." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Firmalar alınamadı." }, { status: 500 });
     }
 
     const { data: users } = await supabase
@@ -68,168 +90,141 @@ export async function GET() {
       counts[u.company_id] = (counts[u.company_id] || 0) + 1;
     });
 
-const normalized = ((data || []) as CompanyRow[]).map((item) => ({
-  id: String(item.id),
-  name: String(item.name || "").trim(),
-  yetkili: item.yetkili ? String(item.yetkili).trim() : null,
-  phone: item.phone ? String(item.phone).trim() : null,
-  email: item.email ? String(item.email).trim() : null,
-  address: item.address ? String(item.address).trim() : null,
-  created_at: item.created_at || null,
-  is_active: item.is_active ?? true,
-  user_count: counts[String(item.id)] || 0,
-}));
+    const normalized = ((data || []) as CompanyRow[]).map((item) => ({
+      id: String(item.id),
+      name: String(item.name || "").trim(),
+      yetkili: item.yetkili?.trim() || null,
+      phone: item.phone?.trim() || null,
+      email: item.email?.trim() || null,
+      address: item.address?.trim() || null,
+
+      // 🔥 YENİ ALANLAR
+      calisan_sayisi: item.calisan_sayisi ?? 0,
+      nace_kodu: item.nace_kodu ?? "",
+      tehlike_sinifi: item.tehlike_sinifi ?? "",
+      sgk_sicil_no: item.sgk_sicil_no ?? "",
+      sektor: item.sektor ?? "",
+      isg_uzmani: item.isg_uzmani ?? "",
+      isyeri_hekimi: item.isyeri_hekimi ?? "",
+      dsp: item.dsp ?? "",
+
+      created_at: item.created_at || null,
+      is_active: item.is_active ?? true,
+      user_count: counts[String(item.id)] || 0,
+    }));
 
     return NextResponse.json({ data: normalized });
+
   } catch (error) {
     console.error("companies GET genel hata:", error);
-    return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Sunucu hatası oluştu." }, { status: 500 });
   }
 }
 
+// ======================
+// POST
+// ======================
 export async function POST(req: NextRequest) {
   try {
     const allowed = await checkAdmin();
-
     if (!allowed) {
-      return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
     const body = await req.json();
-
-    const name = String(body?.name || "").trim();
-    const yetkili = String(body?.yetkili || "").trim();
-    const phone = String(body?.phone || "").trim();
-    const email = String(body?.email || "").trim();
-    const address = String(body?.address || "").trim();
-
-    if (!name) {
-      return NextResponse.json(
-        { error: "Firma adı gerekli." },
-        { status: 400 }
-      );
-    }
 
     const supabase = getSupabase();
 
     const { error } = await supabase.from("companies").insert({
-  name,
-  yetkili: yetkili || null,
-  phone: phone || null,
-  email: email || null,
-  address: address || null,
-  is_active: true,
-});
+      name: body.name,
+      yetkili: body.yetkili || null,
+      phone: body.phone || null,
+      email: body.email || null,
+      address: body.address || null,
+
+      // 🔥 YENİ ALANLAR
+      calisan_sayisi: body.calisan_sayisi ?? 0,
+      nace_kodu: body.nace_kodu || null,
+      tehlike_sinifi: body.tehlike_sinifi || null,
+      sgk_sicil_no: body.sgk_sicil_no || null,
+      sektor: body.sektor || null,
+      isg_uzmani: body.isg_uzmani || null,
+      isyeri_hekimi: body.isyeri_hekimi || null,
+      dsp: body.dsp || null,
+
+      is_active: true,
+    });
 
     if (error) {
-      console.error("companies POST error:", error);
-      return NextResponse.json(
-        { error: error.message || "Firma eklenemedi." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("companies POST genel hata:", error);
-    return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
-      { status: 500 }
-    );
+
+  } catch {
+    return NextResponse.json({ error: "Sunucu hatası" }, { status: 500 });
   }
 }
 
+// ======================
+// PUT
+// ======================
 export async function PUT(req: NextRequest) {
   try {
     const allowed = await checkAdmin();
-
     if (!allowed) {
-      return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
     const body = await req.json();
 
-    const id = String(body?.id || "").trim();
-const name = String(body?.name || "").trim();
-const yetkili = String(body?.yetkili || "").trim();
-const phone = String(body?.phone || "").trim();
-const email = String(body?.email || "").trim();
-const address = String(body?.address || "").trim();
-const is_active =
-  typeof body?.is_active === "boolean" ? body.is_active : undefined;
-
-    if (!id || !name) {
-      return NextResponse.json(
-        { error: "ID ve firma adı gerekli." },
-        { status: 400 }
-      );
-    }
-
     const supabase = getSupabase();
 
-    const updatePayload: Record<string, unknown> = {
-  name,
-  yetkili: yetkili || null,
-  phone: phone || null,
-  email: email || null,
-  address: address || null,
-};
+    const { error } = await supabase
+      .from("companies")
+      .update({
+        name: body.name,
+        yetkili: body.yetkili || null,
+        phone: body.phone || null,
+        email: body.email || null,
+        address: body.address || null,
 
-if (typeof is_active === "boolean") {
-  updatePayload.is_active = is_active;
-}
+        // 🔥 YENİ ALANLAR
+        calisan_sayisi: body.calisan_sayisi ?? 0,
+        nace_kodu: body.nace_kodu || null,
+        tehlike_sinifi: body.tehlike_sinifi || null,
+        sgk_sicil_no: body.sgk_sicil_no || null,
+        sektor: body.sektor || null,
+        isg_uzmani: body.isg_uzmani || null,
+        isyeri_hekimi: body.isyeri_hekimi || null,
+        dsp: body.dsp || null,
 
-const { error } = await supabase
-  .from("companies")
-  .update(updatePayload)
-  .eq("id", id);
+        is_active: body.is_active,
+      })
+      .eq("id", body.id);
 
     if (error) {
-      console.error("companies PUT error:", error);
-      return NextResponse.json(
-        { error: error.message || "Firma güncellenemedi." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("companies PUT genel hata:", error);
-    return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
-      { status: 500 }
-    );
+
+  } catch {
+    return NextResponse.json({ error: "Sunucu hatası" }, { status: 500 });
   }
 }
 
+// ======================
+// DELETE
+// ======================
 export async function DELETE(req: NextRequest) {
   try {
     const allowed = await checkAdmin();
-
     if (!allowed) {
-      return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
     const id = req.nextUrl.searchParams.get("id");
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "Firma ID gerekli." },
-        { status: 400 }
-      );
-    }
 
     const supabase = getSupabase();
 
@@ -239,19 +234,12 @@ export async function DELETE(req: NextRequest) {
       .eq("id", id);
 
     if (error) {
-      console.error("companies DELETE error:", error);
-      return NextResponse.json(
-        { error: error.message || "Firma silinemedi." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("companies DELETE genel hata:", error);
-    return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
-      { status: 500 }
-    );
+
+  } catch {
+    return NextResponse.json({ error: "Sunucu hatası" }, { status: 500 });
   }
 }

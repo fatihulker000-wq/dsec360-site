@@ -8,7 +8,6 @@ function getSupabase() {
   );
 }
 
-// 🔐 Basit APP AUTH (sonra güçlendiririz)
 function checkAppAuth(req: NextRequest) {
   const key = req.headers.get("x-app-key");
   return key === "DSEC_APP_2026";
@@ -19,6 +18,27 @@ function normalizeCompanyName(value: unknown) {
     .trim()
     .replace(/\s+/g, " ")
     .toLocaleLowerCase("tr-TR");
+}
+
+function buildCompanyPayload(body: any, rawName: string) {
+  return {
+    name: rawName,
+    yetkili: body?.yetkili ?? null,
+    phone: body?.phone ?? null,
+    email: body?.email ?? null,
+    address: body?.address ?? null,
+    is_active: typeof body?.is_active === "boolean" ? body.is_active : true,
+
+    sgk_sicil_no: body?.sgk_sicil_no ?? null,
+    nace_kodu: body?.nace_kodu ?? null,
+    tehlike_sinifi: body?.tehlike_sinifi ?? null,
+    calisan_sayisi:
+      typeof body?.calisan_sayisi === "number" ? body.calisan_sayisi : 0,
+    sektor: body?.sektor ?? null,
+    isg_uzmani: body?.isg_uzmani ?? null,
+    isyeri_hekimi: body?.isyeri_hekimi ?? null,
+    dsp: body?.dsp ?? null,
+  };
 }
 
 // ======================
@@ -76,18 +96,12 @@ export async function POST(req: NextRequest) {
     (item) => normalizeCompanyName(item.name) === normalizedName
   );
 
+  const payload = buildCompanyPayload(body, rawName);
+
   if (existing?.id) {
     const { error: updateError } = await supabase
       .from("companies")
-      .update({
-        name: rawName,
-        yetkili: body?.yetkili ?? null,
-        phone: body?.phone ?? null,
-        email: body?.email ?? null,
-        address: body?.address ?? null,
-        is_active:
-          typeof body?.is_active === "boolean" ? body.is_active : true,
-      })
+      .update(payload)
       .eq("id", existing.id);
 
     if (updateError) {
@@ -103,15 +117,7 @@ export async function POST(req: NextRequest) {
 
   const { data: inserted, error: insertError } = await supabase
     .from("companies")
-    .insert({
-      name: rawName,
-      yetkili: body?.yetkili ?? null,
-      phone: body?.phone ?? null,
-      email: body?.email ?? null,
-      address: body?.address ?? null,
-      is_active:
-        typeof body?.is_active === "boolean" ? body.is_active : true,
-    })
+    .insert(payload)
     .select("id")
     .single();
 
@@ -148,17 +154,11 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Firma adı zorunlu." }, { status: 400 });
   }
 
+  const payload = buildCompanyPayload(body, rawName);
+
   const { error } = await supabase
     .from("companies")
-    .update({
-      name: rawName,
-      yetkili: body?.yetkili ?? null,
-      phone: body?.phone ?? null,
-      email: body?.email ?? null,
-      address: body?.address ?? null,
-      is_active:
-        typeof body?.is_active === "boolean" ? body.is_active : true,
-    })
+    .update(payload)
     .eq("id", id);
 
   if (error) {
