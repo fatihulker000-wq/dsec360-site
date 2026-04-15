@@ -28,6 +28,7 @@ type CompanyRow = {
   email: string | null;
   address: string | null;
   created_at: string | null;
+  is_active: boolean | null;
 };
 
 export async function GET() {
@@ -45,7 +46,7 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("companies")
-      .select("id, name, yetkili, phone, email, address, created_at")
+      .select("id, name, yetkili, phone, email, address, created_at, is_active")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -67,16 +68,17 @@ export async function GET() {
       counts[u.company_id] = (counts[u.company_id] || 0) + 1;
     });
 
-    const normalized = ((data || []) as CompanyRow[]).map((item) => ({
-      id: String(item.id),
-      name: String(item.name || "").trim(),
-      yetkili: item.yetkili ? String(item.yetkili).trim() : null,
-      phone: item.phone ? String(item.phone).trim() : null,
-      email: item.email ? String(item.email).trim() : null,
-      address: item.address ? String(item.address).trim() : null,
-      created_at: item.created_at || null,
-      user_count: counts[String(item.id)] || 0,
-    }));
+const normalized = ((data || []) as CompanyRow[]).map((item) => ({
+  id: String(item.id),
+  name: String(item.name || "").trim(),
+  yetkili: item.yetkili ? String(item.yetkili).trim() : null,
+  phone: item.phone ? String(item.phone).trim() : null,
+  email: item.email ? String(item.email).trim() : null,
+  address: item.address ? String(item.address).trim() : null,
+  created_at: item.created_at || null,
+  is_active: item.is_active ?? true,
+  user_count: counts[String(item.id)] || 0,
+}));
 
     return NextResponse.json({ data: normalized });
   } catch (error) {
@@ -117,12 +119,13 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabase();
 
     const { error } = await supabase.from("companies").insert({
-      name,
-      yetkili: yetkili || null,
-      phone: phone || null,
-      email: email || null,
-      address: address || null,
-    });
+  name,
+  yetkili: yetkili || null,
+  phone: phone || null,
+  email: email || null,
+  address: address || null,
+  is_active: true,
+});
 
     if (error) {
       console.error("companies POST error:", error);
@@ -156,11 +159,13 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
 
     const id = String(body?.id || "").trim();
-    const name = String(body?.name || "").trim();
-    const yetkili = String(body?.yetkili || "").trim();
-    const phone = String(body?.phone || "").trim();
-    const email = String(body?.email || "").trim();
-    const address = String(body?.address || "").trim();
+const name = String(body?.name || "").trim();
+const yetkili = String(body?.yetkili || "").trim();
+const phone = String(body?.phone || "").trim();
+const email = String(body?.email || "").trim();
+const address = String(body?.address || "").trim();
+const is_active =
+  typeof body?.is_active === "boolean" ? body.is_active : undefined;
 
     if (!id || !name) {
       return NextResponse.json(
@@ -171,16 +176,22 @@ export async function PUT(req: NextRequest) {
 
     const supabase = getSupabase();
 
-    const { error } = await supabase
-      .from("companies")
-      .update({
-        name,
-        yetkili: yetkili || null,
-        phone: phone || null,
-        email: email || null,
-        address: address || null,
-      })
-      .eq("id", id);
+    const updatePayload: Record<string, unknown> = {
+  name,
+  yetkili: yetkili || null,
+  phone: phone || null,
+  email: email || null,
+  address: address || null,
+};
+
+if (typeof is_active === "boolean") {
+  updatePayload.is_active = is_active;
+}
+
+const { error } = await supabase
+  .from("companies")
+  .update(updatePayload)
+  .eq("id", id);
 
     if (error) {
       console.error("companies PUT error:", error);
