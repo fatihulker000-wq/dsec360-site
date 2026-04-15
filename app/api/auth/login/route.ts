@@ -4,6 +4,21 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+type LoginUserRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  password: string | null;
+  role: string | null;
+  company_id: string | null;
+};
+
+type CompanyRow = {
+  id: string;
+  name: string | null;
+  is_active: boolean | null;
+};
+
 export async function POST(request: Request) {
   console.log("🔥 AUTH LOGIN API CALISTI");
 
@@ -31,14 +46,15 @@ export async function POST(request: Request) {
 
     const { data: user, error } = await supabase
       .from("users")
-      .select("id, full_name, email, password, role")
+      .select("id, full_name, email, password, role, company_id")
       .eq("email", rawEmail)
-      .maybeSingle();
+      .maybeSingle<LoginUserRow>();
 
     console.log("OKUNAN EMAIL:", user?.email);
     console.log("DB SIFRE:", user?.password);
     console.log("GELEN SIFRE:", rawPassword);
     console.log("ROL:", user?.role);
+    console.log("COMPANY ID:", user?.company_id);
 
     if (error) {
       console.error("Kullanıcı sorgu hatası:", error);
@@ -55,9 +71,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const userId = String(user.id ?? "").trim();
     const userEmail = String(user.email ?? "").trim().toLowerCase();
     const userRole = String(user.role ?? "").trim();
     const dbPassword = String(user.password ?? "").trim();
+    const companyId = String(user.company_id ?? "").trim();
 
     if (!dbPassword) {
       return NextResponse.json(
@@ -80,13 +98,54 @@ export async function POST(request: Request) {
       );
     }
 
+    const companyBoundRoles = ["company_admin", "operator", "training_user"];
+    const mustCheckCompany = companyBoundRoles.includes(userRole);
+
+    if (mustCheckCompany) {
+      if (!companyId) {
+        return NextResponse.json(
+          { error: "Bu kullanıcıya bağlı firma bulunamadı." },
+          { status: 403 }
+        );
+      }
+
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .select("id, name, is_active")
+        .eq("id", companyId)
+        .maybeSingle<CompanyRow>();
+
+      if (companyError) {
+        console.error("Firma sorgu hatası:", companyError);
+        return NextResponse.json(
+          { error: "Firma bilgisi okunamadı." },
+          { status: 500 }
+        );
+      }
+
+      if (!company) {
+        return NextResponse.json(
+          { error: "Bağlı firma kaydı bulunamadı." },
+          { status: 403 }
+        );
+      }
+
+      if (company.is_active === false) {
+        return NextResponse.json(
+          { error: "Bağlı firma pasif durumda. Giriş yetkisi kapalı." },
+          { status: 403 }
+        );
+      }
+    }
+
     const response = NextResponse.json({
       success: true,
       role: userRole,
       user: {
-        id: String(user.id),
+        id: userId,
         full_name: String(user.full_name ?? ""),
         email: userEmail,
+        company_id: companyId || null,
       },
     });
 
@@ -110,9 +169,11 @@ export async function POST(request: Request) {
 
     response.cookies.set("dsec_user_auth", "ok", activeCookieBase);
     response.cookies.set("dsec_user_role", userRole, activeCookieBase);
-    response.cookies.set("dsec_user_id", String(user.id ?? ""), activeCookieBase);
+    response.cookies.set("dsec_user_id", userId, activeCookieBase);
+    response.cookies.set("dsec_user_email", userEmail, activeCookieBase);
+    response.cookies.set("dsec_company_id", companyId, activeCookieBase);
 
-    if (userRole === "super_admin") {
+    if (userRole === "super_admin" || userRole === "company_admin") {
       response.cookies.set("dsec_admin_auth", "ok", activeCookieBase);
       response.cookies.set("dsec_admin_role", userRole, activeCookieBase);
     } else {
