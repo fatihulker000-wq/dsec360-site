@@ -11,7 +11,14 @@ function getSupabase() {
 // 🔐 Basit APP AUTH (sonra güçlendiririz)
 function checkAppAuth(req: NextRequest) {
   const key = req.headers.get("x-app-key");
-  return key === "DSEC_APP_2026"; // 👉 sonra env yaparız
+  return key === "DSEC_APP_2026";
+}
+
+function normalizeCompanyName(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("tr-TR");
 }
 
 // ======================
@@ -38,6 +45,7 @@ export async function GET(req: NextRequest) {
 
 // ======================
 // POST → App yeni firma ekler
+// Aynı isim varsa duplicate açmaz, mevcut kaydı günceller
 // ======================
 export async function POST(req: NextRequest) {
   if (!checkAppAuth(req)) {
@@ -47,20 +55,75 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const supabase = getSupabase();
 
-  const { error } = await supabase.from("companies").insert({
-    name: body.name,
-    yetkili: body.yetkili,
-    phone: body.phone,
-    email: body.email,
-    address: body.address,
-    is_active: true,
-  });
+  const rawName = String(body?.name ?? "").trim();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!rawName) {
+    return NextResponse.json({ error: "Firma adı zorunlu." }, { status: 400 });
   }
 
-  return NextResponse.json({ success: true });
+  const normalizedName = normalizeCompanyName(rawName);
+
+  const { data: existingRows, error: findError } = await supabase
+    .from("companies")
+    .select("id, name")
+    .order("created_at", { ascending: true });
+
+  if (findError) {
+    return NextResponse.json({ error: findError.message }, { status: 500 });
+  }
+
+  const existing = (existingRows || []).find(
+    (item) => normalizeCompanyName(item.name) === normalizedName
+  );
+
+  if (existing?.id) {
+    const { error: updateError } = await supabase
+      .from("companies")
+      .update({
+        name: rawName,
+        yetkili: body?.yetkili ?? null,
+        phone: body?.phone ?? null,
+        email: body?.email ?? null,
+        address: body?.address ?? null,
+        is_active:
+          typeof body?.is_active === "boolean" ? body.is_active : true,
+      })
+      .eq("id", existing.id);
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      mode: "updated_existing",
+      id: existing.id,
+    });
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("companies")
+    .insert({
+      name: rawName,
+      yetkili: body?.yetkili ?? null,
+      phone: body?.phone ?? null,
+      email: body?.email ?? null,
+      address: body?.address ?? null,
+      is_active:
+        typeof body?.is_active === "boolean" ? body.is_active : true,
+    })
+    .select("id")
+    .single();
+
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    success: true,
+    mode: "inserted",
+    id: inserted?.id ?? null,
+  });
 }
 
 // ======================
@@ -74,21 +137,33 @@ export async function PUT(req: NextRequest) {
   const body = await req.json();
   const supabase = getSupabase();
 
+  const id = String(body?.id ?? "").trim();
+  const rawName = String(body?.name ?? "").trim();
+
+  if (!id) {
+    return NextResponse.json({ error: "Firma id zorunlu." }, { status: 400 });
+  }
+
+  if (!rawName) {
+    return NextResponse.json({ error: "Firma adı zorunlu." }, { status: 400 });
+  }
+
   const { error } = await supabase
     .from("companies")
     .update({
-      name: body.name,
-      yetkili: body.yetkili,
-      phone: body.phone,
-      email: body.email,
-      address: body.address,
-      is_active: body.is_active,
+      name: rawName,
+      yetkili: body?.yetkili ?? null,
+      phone: body?.phone ?? null,
+      email: body?.email ?? null,
+      address: body?.address ?? null,
+      is_active:
+        typeof body?.is_active === "boolean" ? body.is_active : true,
     })
-    .eq("id", body.id);
+    .eq("id", id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, mode: "updated", id });
 }
