@@ -20,6 +20,7 @@ export function middleware(request: NextRequest) {
 
   const userAuthCookie = request.cookies.get("dsec_user_auth")?.value;
   const userRoleCookie = request.cookies.get("dsec_user_role")?.value;
+  const companyIdCookie = request.cookies.get("dsec_company_id")?.value;
 
   const isAllowedAdminRole =
     adminRoleCookie === "super_admin" || adminRoleCookie === "company_admin";
@@ -63,6 +64,10 @@ export function middleware(request: NextRequest) {
       return redirectTo(request, "/login");
     }
 
+    if (!companyIdCookie) {
+      return redirectTo(request, "/login");
+    }
+
     if (isAllowedPanelRole) {
       return NextResponse.next();
     }
@@ -73,6 +78,10 @@ export function middleware(request: NextRequest) {
   // TRAINING PORTAL
   if (isPortalTrainingPage) {
     if (userAuthCookie !== "ok") {
+      return redirectTo(request, "/login");
+    }
+
+    if (!companyIdCookie) {
       return redirectTo(request, "/login");
     }
 
