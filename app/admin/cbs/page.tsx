@@ -11,7 +11,10 @@ type CbsRecord = {
   message: string;
   created_at: string;
   category?: string;
-  firmId?: number;
+  firma_adi?: string;
+  firmId?: number | string | null;
+  suggestedFirmId?: string | null;
+  suggestedFirmName?: string | null;
   assignedTo?: string;
   resolutionNote?: string;
   status?: string;
@@ -360,43 +363,86 @@ export default function AdminCbsPage() {
     setEditResolutionNote("");
   };
 
-  const deleteRecord = async (id: number) => {
-    const ok = window.confirm("Bu kaydı silmek istediğine emin misin?");
-    if (!ok) return;
+ const deleteRecord = async (id: number) => {
+  const ok = window.confirm("Bu kaydı silmek istediğine emin misin?");
+  if (!ok) return;
 
-    try {
-      setBusyId(id);
+  try {
+    setBusyId(id);
 
-      const response = await fetch("/api/admin/cbs", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id }),
-      });
+    const response = await fetch("/api/admin/cbs", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id }),
+    });
 
-      const result = await readSafeJson(response);
+    const result = await readSafeJson(response);
 
-      if (!response.ok) {
-        alert(result?.error || "Kayıt silinemedi.");
-        return;
-      }
-
-      await loadRecords();
-    } catch (error) {
-      console.error("Kayıt silme hatası:", error);
-      alert("Kayıt silinirken hata oluştu.");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const sendReply = async () => {
-    if (!replyId) return;
-    if (!replyText.trim()) {
-      alert("Lütfen cevap metni yaz.");
+    if (!response.ok) {
+      alert(result?.error || "Kayıt silinemedi.");
       return;
     }
+
+    await loadRecords();
+  } catch (error) {
+    console.error("Kayıt silme hatası:", error);
+    alert("Kayıt silinirken hata oluştu.");
+  } finally {
+    setBusyId(null);
+  }
+};
+
+const bindSuggestedFirm = async (
+  id: number,
+  suggestedFirmId?: string | null,
+  suggestedFirmName?: string | null
+) => {
+  if (!suggestedFirmId) return;
+
+  const ok = window.confirm(
+    `"${suggestedFirmName || "Önerilen firma"}" kayda bağlansın mı?`
+  );
+  if (!ok) return;
+
+  try {
+    setBusyId(id);
+
+    const response = await fetch("/api/admin/cbs", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id,
+        firmId: suggestedFirmId,
+      }),
+    });
+
+    const result = await readSafeJson(response);
+
+    if (!response.ok) {
+      alert(result?.error || "Firma bağlanamadı.");
+      return;
+    }
+
+    await loadRecords();
+    alert("Firma başarıyla bağlandı.");
+  } catch (error) {
+    console.error("Firma bağlama hatası:", error);
+    alert("Firma bağlanırken hata oluştu.");
+  } finally {
+    setBusyId(null);
+  }
+};
+
+const sendReply = async () => {
+  if (!replyId) return;
+  if (!replyText.trim()) {
+    alert("Lütfen cevap metni yaz.");
+    return;
+  }
 
     try {
       setSendingReply(true);
@@ -543,6 +589,7 @@ export default function AdminCbsPage() {
         item.email?.toLowerCase().includes(query) ||
         item.message?.toLowerCase().includes(query) ||
         item.category?.toLowerCase().includes(query) ||
+        item.firma_adi?.toLowerCase().includes(query) ||
         item.assignedTo?.toLowerCase().includes(query) ||
         item.resolutionNote?.toLowerCase().includes(query) ||
         item.priority?.toLowerCase().includes(query)
@@ -626,6 +673,48 @@ export default function AdminCbsPage() {
       </section>
 
       <section className="section section-light">
+<div
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 20,
+    flexWrap: "wrap",
+  }}
+>
+  <div style={{ fontWeight: 800, fontSize: 18 }}>
+    Operasyon Kontrol Paneli
+  </div>
+
+  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+    <button
+      onClick={loadRecords}
+      className="cbs-button"
+      style={{ background: "#111827" }}
+    >
+      🔄 Yenile
+    </button>
+
+    <button
+      onClick={exportPdfReport}
+      className="cbs-button"
+      style={{ background: "#1d4ed8" }}
+    >
+      📊 PDF Al
+    </button>
+
+    <button
+      onClick={handleLogout}
+      className="cbs-button"
+      style={{ background: "#7f1d1d" }}
+    >
+      🚪 Çıkış
+    </button>
+  </div>
+</div>
+
+
         <div className="page-container" id="cbs-report-area">
           <div
             style={{
@@ -1143,7 +1232,22 @@ export default function AdminCbsPage() {
               }}
             >
               {filteredRecords.map((item) => (
-                <div key={item.id} className="card">
+                <div
+  key={item.id}
+  className="card"
+  style={{
+    transition: "all 0.2s ease",
+    cursor: "pointer",
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.transform = "translateY(-4px)";
+    e.currentTarget.style.boxShadow = "0 20px 40px rgba(0,0,0,0.08)";
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.transform = "translateY(0px)";
+    e.currentTarget.style.boxShadow = "";
+  }}
+>
                   <div
                     style={{
                       display: "flex",
@@ -1179,11 +1283,17 @@ export default function AdminCbsPage() {
                           <strong>ID:</strong> #{item.id}
                         </div>
 
-                        {item.category && (
-                          <div>
-                            <strong>Kategori:</strong> {item.category}
-                          </div>
-                        )}
+                        {item.firma_adi && (
+  <div>
+    <strong>Firma / Kurum:</strong> {item.firma_adi}
+  </div>
+)}
+
+{!item.firmId && item.suggestedFirmName && (
+  <div>
+    <strong>Önerilen Firma:</strong> {item.suggestedFirmName}
+  </div>
+)}
 
                         {item.assignedTo && (
                           <div>
@@ -1379,6 +1489,23 @@ export default function AdminCbsPage() {
                       Düzenle
                     </button>
 
+{!item.firmId && item.suggestedFirmId && (
+  <button
+    onClick={() =>
+      bindSuggestedFirm(
+        item.id,
+        item.suggestedFirmId,
+        item.suggestedFirmName
+      )
+    }
+    disabled={busyId === item.id}
+    className="cbs-button"
+    style={{ background: "#0f766e" }}
+  >
+    Firmaya Bağla
+  </button>
+)}
+
                     <button
                       onClick={() => {
                         setEditId(null);
@@ -1423,34 +1550,66 @@ export default function AdminCbsPage() {
                         Kayıt Detaylarını Düzenle
                       </div>
 
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fit, minmax(220px, 1fr))",
-                          gap: "12px",
-                        }}
-                      >
-                        <div>
-                          <label
-                            style={{
-                              display: "block",
-                              fontSize: "13px",
-                              fontWeight: 700,
-                              color: "#374151",
-                              marginBottom: "6px",
-                            }}
-                          >
-                            Kategori
-                          </label>
-                          <input
-                            value={editCategory}
-                            onChange={(e) => setEditCategory(e.target.value)}
-                            className="cbs-input"
-                            placeholder="Kategori gir"
-                          />
-                        </div>
+                    <div
+  style={{
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "12px",
+  }}
+>
+  <div>
+    <label
+      style={{
+        display: "block",
+        fontSize: "13px",
+        fontWeight: 700,
+        color: "#374151",
+        marginBottom: "6px",
+      }}
+    >
+      Firma / Kurum
+    </label>
+    <input
+      value={item.firma_adi || ""}
+      className="cbs-input"
+      placeholder="Firma / kurum adı"
+      disabled
+    />
+{!item.firmId && item.suggestedFirmName && (
+  <div
+    style={{
+      marginTop: "8px",
+      fontSize: "12px",
+      fontWeight: 700,
+      color: "#0f766e",
+    }}
+  >
+    Önerilen eşleşme: {item.suggestedFirmName}
+  </div>
+)}
 
+  </div>
+
+  <div>
+    <label
+      style={{
+        display: "block",
+        fontSize: "13px",
+        fontWeight: 700,
+        color: "#374151",
+        marginBottom: "6px",
+      }}
+    >
+      Kategori
+    </label>
+    <input
+      value={editCategory}
+      onChange={(e) => setEditCategory(e.target.value)}
+      className="cbs-input"
+      placeholder="Kategori gir"
+    />
+  </div>
                         <div>
                           <label
                             style={{
