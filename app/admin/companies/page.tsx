@@ -11,6 +11,7 @@ type CompanyRow = {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  is_active?: boolean | null;
 };
 
 type CompanyResponse = {
@@ -69,6 +70,7 @@ export default function AdminCompaniesPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingIsActive, setEditingIsActive] = useState(true);
 
   const [newCompany, setNewCompany] = useState({
     name: "",
@@ -190,14 +192,16 @@ export default function AdminCompaniesPage() {
     }
   };
 
-  const startEdit = (company: CompanyRow) => {
-    setEditingId(company.id);
-    setEditingName(company.name);
-  };
+ const startEdit = (company: CompanyRow) => {
+  setEditingId(company.id);
+  setEditingName(company.name);
+  setEditingIsActive(company.is_active ?? true);
+};
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditingName("");
+    setEditingIsActive(true);
   };
 
   const saveEdit = async () => {
@@ -220,6 +224,7 @@ export default function AdminCompaniesPage() {
         body: JSON.stringify({
           id: editingId,
           name,
+          is_active: editingIsActive,
         }),
       });
 
@@ -546,6 +551,8 @@ export default function AdminCompaniesPage() {
                       }}
                     >
                       <input
+
+                      
                         value={editingName}
                         onChange={(e) => setEditingName(e.target.value)}
                         style={{
@@ -558,6 +565,22 @@ export default function AdminCompaniesPage() {
                           fontSize: 14,
                         }}
                       />
+
+                     <select
+    value={editingIsActive ? "active" : "passive"}
+    onChange={(e) => setEditingIsActive(e.target.value === "active")}
+    style={{
+      minWidth: 180,
+      padding: "12px 14px",
+      borderRadius: 12,
+      border: `1px solid ${BRAND.border}`,
+      fontSize: 14,
+      background: "#fff",
+    }}
+  >
+    <option value="active">Aktif</option>
+    <option value="passive">Pasif</option>
+  </select>
 
                       <button
                         onClick={saveEdit}
@@ -613,25 +636,19 @@ export default function AdminCompaniesPage() {
                         </div>
 
                         <div
-                          style={{
-                            marginTop: 6,
-                            display: "inline-block",
-                            padding: "4px 10px",
-                            borderRadius: 999,
-                            fontSize: 11,
-                            fontWeight: 800,
-                            background:
-                              (company.user_count || 0) > 0
-                                ? "#dcfce7"
-                                : "#fee2e2",
-                            color:
-                              (company.user_count || 0) > 0
-                                ? "#166534"
-                                : "#991b1b",
-                          }}
-                        >
-                          {(company.user_count || 0) > 0 ? "AKTİF" : "PASİF"}
-                        </div>
+  style={{
+    marginTop: 6,
+    display: "inline-block",
+    padding: "4px 10px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 800,
+    background: company.is_active ? "#dcfce7" : "#fee2e2",
+    color: company.is_active ? "#166534" : "#991b1b",
+  }}
+>
+  {company.is_active ? "AKTİF" : "PASİF"}
+</div>
 
                         {company.yetkili && (
                           <div

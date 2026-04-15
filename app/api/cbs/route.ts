@@ -103,6 +103,35 @@ function normalizeFirmId(value: unknown): string | null {
   return v || null;
 }
 
+function normalizeText(value: unknown): string {
+  return String(value || "").trim();
+}
+
+function normalizeKey(value: string) {
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .trim();
+}
+
+function normalizeFirmName(value: string) {
+  return normalizeKey(value)
+    .replace(/\s+/g, " ")
+    .replace(/a\.s\./g, "as")
+    .replace(/a\.ş\./g, "as")
+    .replace(/anonim sirketi/g, "")
+    .replace(/limited sirketi/g, "")
+    .replace(/ltd\.sti\./g, "")
+    .replace(/ltd/g, "")
+    .replace(/sti/g, "")
+    .trim();
+}
+
 function detectSourceType(value: unknown) {
   const raw = String(value || "").trim().toUpperCase();
 
@@ -110,15 +139,52 @@ function detectSourceType(value: unknown) {
   return "WEB";
 }
 
+async function resolveCompanyIdByName(
+  supabase: ReturnType<typeof getSupabase>,
+  firmaAdi: string
+): Promise<string | null> {
+  const normalizedTarget = normalizeFirmName(firmaAdi);
+  if (!normalizedTarget) return null;
+
+  const { data, error } = await supabase
+    .from("companies")
+    .select("id, name")
+    .limit(500);
+
+  if (error || !data?.length) {
+    return null;
+  }
+
+  const exact = data.find((item) => {
+    return normalizeFirmName(String(item.name || "")) === normalizedTarget;
+  });
+
+  if (exact?.id) {
+    return String(exact.id);
+  }
+
+  const includes = data.find((item) => {
+    const dbName = normalizeFirmName(String(item.name || ""));
+    return dbName.includes(normalizedTarget) || normalizedTarget.includes(dbName);
+  });
+
+  if (includes?.id) {
+    return String(includes.id);
+  }
+
+  return null;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const full_name = String(body?.full_name || "").trim();
-    const email = String(body?.email || "").trim();
-    const message = String(body?.message || "").trim();
+    const full_name = normalizeText(body?.full_name);
+    const email = normalizeText(body?.email);
+    const firma_adi = normalizeText(body?.firma_adi);
+    const message = normalizeText(body?.message);
 
-    if (!full_name || !email || !message) {
+    if (!full_name || !email || !firma_adi || !message) {
       return Response.json(
         { error: "Tüm alanlar zorunludur." },
         { status: 400 }
@@ -127,22 +193,26 @@ export async function POST(request: Request) {
 
     const cleanFullName = full_name;
     const cleanEmail = email;
+    const cleanFirmaAdi = firma_adi;
     const cleanMessage = message;
 
     const url = new URL(request.url);
 
-    const firm_id =
+    const rawFirmId =
       normalizeFirmId(body?.firm_id) ??
       normalizeFirmId(url.searchParams.get("firm"));
 
     const source_type =
       body?.source_type != null
         ? detectSourceType(body.source_type)
-        : firm_id
+        : rawFirmId
         ? "APP"
         : "WEB";
 
     const supabase = getSupabase();
+
+    const resolvedFirmId =
+      rawFirmId || (await resolveCompanyIdByName(supabase, cleanFirmaAdi));
 
     const category = detectCategory(cleanMessage);
     const priority = detectPriority(cleanMessage);
@@ -154,10 +224,11 @@ export async function POST(request: Request) {
     const insertPayload = {
       full_name: cleanFullName,
       email: cleanEmail,
+      firma_adi: cleanFirmaAdi,
       message: cleanMessage,
-      firm_id,
+      firm_id: resolvedFirmId,
       status: "new",
-      category,
+      category: resolvedFirmId ? category : "Firma Eşleşmesi Bekliyor",
       priority,
       sla_due_at: slaDue.toISOString(),
       source_type,
@@ -200,6 +271,7 @@ export async function POST(request: Request) {
             <p><strong>Kategori:</strong> ${escapeHtml(data.category || "-")}</p>
             <p><strong>Öncelik:</strong> ${escapeHtml(data.priority || "-")}</p>
             <p><strong>Kaynak:</strong> ${escapeHtml(data.source_type || "-")}</p>
+            <p><strong>Firma / Kurum:</strong> ${escapeHtml(String(data.firma_adi || "-"))}</p>
             <p><strong>Firma ID:</strong> ${escapeHtml(String(data.firm_id || "-"))}</p>
             <p><strong>Ad Soyad:</strong> ${escapeHtml(data.full_name || "-")}</p>
             <p><strong>Email:</strong> ${escapeHtml(data.email || "-")}</p>
@@ -260,7 +332,8 @@ export async function POST(request: Request) {
             <p>Talebiniz kayıt altına alınmış olup en kısa sürede değerlendirilecektir.</p>
             <hr />
             <p><strong>Başvuru No:</strong> #${data.id}</p>
-            <p><strong>Kategori:</strong> ${escapeHtml(category)}</p>
+            <p><strong>Firma / Kurum:</strong> ${escapeHtml(cleanFirmaAdi)}</p>
+            <p><strong>Kategori:</strong> ${escapeHtml(String(data.category || category))}</p>
             <p><strong>Öncelik:</strong> ${escapeHtml(priority)}</p>
           `,
         });

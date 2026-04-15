@@ -654,14 +654,17 @@ main {
   background: #dc2626;
   color: #ffffff;
   border: none;
-  border-radius: 14px;
-  padding: 14px 22px;
-  font-weight: 700;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .cbs-button:hover {
   background: #b91c1c;
+  transform: translateY(-2px);
+  filter: brightness(1.05);
 }
 
 .cbs-button:disabled {
@@ -1380,4 +1383,18 @@ main {
   .hero-title {
   letter-spacing: -0.5px;
 
+}
+
+.cbs-button {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cbs-button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
 }

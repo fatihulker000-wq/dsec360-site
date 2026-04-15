@@ -13,6 +13,31 @@ function getSupabase() {
   return createClient(supabaseUrl, supabaseServiceRoleKey);
 }
 
+function normalizeKey(value: string) {
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .trim();
+}
+
+function normalizeFirmName(value: string) {
+  return normalizeKey(value)
+    .replace(/\s+/g, " ")
+    .replace(/a\.s\./g, "as")
+    .replace(/a\.ş\./g, "as")
+    .replace(/anonim sirketi/g, "")
+    .replace(/limited sirketi/g, "")
+    .replace(/ltd\.sti\./g, "")
+    .replace(/ltd/g, "")
+    .replace(/sti/g, "")
+    .trim();
+}
+
 type AdminSession = {
   userId: string;
   role: "super_admin" | "company_admin";
@@ -100,6 +125,11 @@ export async function GET() {
 
     const supabase = getSupabase();
 
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("id, name")
+      .limit(1000);
+
     let query = supabase
       .from("cbs_forms")
       .select(`
@@ -113,6 +143,7 @@ export async function GET() {
         firm_id,
         assigned_to,
         resolution_note,
+        firma_adi,
         priority,
         sla_due_at,
         closed_at
@@ -133,21 +164,51 @@ export async function GET() {
       );
     }
 
-    const formatted = (data || []).map((item) => ({
-      id: item.id,
-      full_name: item.full_name,
-      email: item.email,
-      message: item.message,
-      created_at: item.created_at,
-      status: item.status,
-      category: item.category,
-      firmId: item.firm_id,
-      assignedTo: item.assigned_to,
-      resolutionNote: item.resolution_note,
-      priority: item.priority,
-      sla_due_at: item.sla_due_at,
-      closed_at: item.closed_at,
-    }));
+    const formatted = (data || []).map((item) => {
+      const normalizedInput = normalizeFirmName(String(item.firma_adi || ""));
+      let suggestedFirmId: string | null = null;
+      let suggestedFirmName: string | null = null;
+
+      if (!item.firm_id && normalizedInput && companies?.length) {
+        const exact = companies.find((company) => {
+          return normalizeFirmName(String(company.name || "")) === normalizedInput;
+        });
+
+        const includes =
+          exact ||
+          companies.find((company) => {
+            const dbName = normalizeFirmName(String(company.name || ""));
+            return (
+              dbName.includes(normalizedInput) ||
+              normalizedInput.includes(dbName)
+            );
+          });
+
+        if (includes?.id) {
+          suggestedFirmId = String(includes.id);
+          suggestedFirmName = String(includes.name || "");
+        }
+      }
+
+      return {
+        id: item.id,
+        full_name: item.full_name,
+        email: item.email,
+        message: item.message,
+        created_at: item.created_at,
+        status: item.status,
+        category: item.category,
+        firmId: item.firm_id,
+        assignedTo: item.assigned_to,
+        resolutionNote: item.resolution_note,
+        firma_adi: item.firma_adi,
+        priority: item.priority,
+        sla_due_at: item.sla_due_at,
+        closed_at: item.closed_at,
+        suggestedFirmId,
+        suggestedFirmName,
+      };
+    });
 
     return NextResponse.json({ data: formatted });
   } catch (error) {
@@ -240,7 +301,7 @@ export async function PUT(req: Request) {
 
     const body = await req.json();
     const id = Number(body?.id);
-    const { category, assignedTo, resolutionNote, priority } = body ?? {};
+    const { category, assignedTo, resolutionNote, priority, firmId } = body ?? {};
 
     if (!id) {
       return NextResponse.json(
@@ -276,6 +337,10 @@ export async function PUT(req: Request) {
 
     if (priority) {
       updatePayload.priority = priority;
+    }
+
+    if (firmId !== undefined) {
+      updatePayload.firm_id = String(firmId || "").trim() || null;
     }
 
     const { error } = await supabase
