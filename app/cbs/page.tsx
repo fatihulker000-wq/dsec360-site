@@ -5,14 +5,13 @@ import { useState } from "react";
 type CbsForm = {
   full_name: string;
   email: string;
+  firma_adi: string;
   message: string;
 };
 
 async function readSafeJson(response: Response) {
   const text = await response.text();
-
   if (!text) return {};
-
   try {
     return JSON.parse(text);
   } catch {
@@ -24,6 +23,7 @@ export default function CbsPage() {
   const [form, setForm] = useState<CbsForm>({
     full_name: "",
     email: "",
+    firma_adi: "",
     message: "",
   });
 
@@ -36,11 +36,12 @@ export default function CbsPage() {
 
     const fullName = form.full_name.trim();
     const email = form.email.trim();
+    const firmaAdi = form.firma_adi.trim();
     const message = form.message.trim();
 
     const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-    if (!fullName || !email || !message) {
+    if (!fullName || !email || !firmaAdi || !message) {
       setIsSuccess(false);
       setResultMessage("Lütfen tüm alanları doldurun.");
       return;
@@ -65,6 +66,7 @@ export default function CbsPage() {
         body: JSON.stringify({
           full_name: fullName,
           email,
+          firma_adi: firmaAdi,
           message,
         }),
       });
@@ -87,6 +89,7 @@ export default function CbsPage() {
       setForm({
         full_name: "",
         email: "",
+        firma_adi: "",
         message: "",
       });
     } catch (error) {
@@ -147,6 +150,19 @@ export default function CbsPage() {
                   className="cbs-input"
                   onChange={(e) =>
                     setForm({ ...form, email: e.target.value })
+                  }
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="cbs-field">
+                <label className="cbs-label">Firma / Kurum Adı</label>
+                <input
+                  value={form.firma_adi}
+                  placeholder="İlişkili olduğunuz firma veya kurumu yazın"
+                  className="cbs-input"
+                  onChange={(e) =>
+                    setForm({ ...form, firma_adi: e.target.value })
                   }
                   disabled={loading}
                 />
