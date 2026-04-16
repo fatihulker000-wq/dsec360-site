@@ -77,22 +77,35 @@ export default function AdminCompaniesPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
-  const [editingIsActive, setEditingIsActive] = useState(true);
-  const [detailCompany, setDetailCompany] = useState<CompanyRow | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
+ const [editingId, setEditingId] = useState<string | null>(null);
+const [editingName, setEditingName] = useState("");
+const [editingYetkili, setEditingYetkili] = useState("");
+const [editingPhone, setEditingPhone] = useState("");
+const [editingEmail, setEditingEmail] = useState("");
+const [editingAddress, setEditingAddress] = useState("");
+const [editingCalisanSayisi, setEditingCalisanSayisi] = useState("0");
+const [editingNaceKodu, setEditingNaceKodu] = useState("");
+const [editingTehlikeSinifi, setEditingTehlikeSinifi] = useState("");
+const [editingSgkSicilNo, setEditingSgkSicilNo] = useState("");
+const [editingSektor, setEditingSektor] = useState("");
+const [editingIsgUzmani, setEditingIsgUzmani] = useState("");
+const [editingIsyeriHekimi, setEditingIsyeriHekimi] = useState("");
+const [editingDsp, setEditingDsp] = useState("");
+const [editingIsActive, setEditingIsActive] = useState(true);
 
-  const [newCompany, setNewCompany] = useState({
+const [detailCompany, setDetailCompany] = useState<CompanyRow | null>(null);
+const [showDetailModal, setShowDetailModal] = useState(false);
+
+const [newCompany, setNewCompany] = useState({
   name: "",
   yetkili: "",
   phone: "",
   email: "",
   address: "",
-  sgk_sicil_no: "",
+  calisan_sayisi: "",
   nace_kodu: "",
   tehlike_sinifi: "",
-  calisan_sayisi: 0,
+  sgk_sicil_no: "",
   sektor: "",
   isg_uzmani: "",
   isyeri_hekimi: "",
@@ -173,21 +186,20 @@ export default function AdminCompaniesPage() {
           "Content-Type": "application/json",
         },
         credentials: "include",
-       body: JSON.stringify({
+     body: JSON.stringify({
   name: newCompany.name.trim(),
   yetkili: newCompany.yetkili.trim(),
   phone: newCompany.phone.trim(),
   email: newCompany.email.trim(),
   address: newCompany.address.trim(),
-
-  calisan_sayisi: Number(newCompany.calisan_sayisi) || 0,
-  nace_kodu: newCompany.nace_kodu,
-  tehlike_sinifi: newCompany.tehlike_sinifi,
-  sgk_sicil_no: newCompany.sgk_sicil_no,
-  sektor: newCompany.sektor,
-  isg_uzmani: newCompany.isg_uzmani,
-  isyeri_hekimi: newCompany.isyeri_hekimi,
-  dsp: newCompany.dsp,
+  calisan_sayisi: Number(newCompany.calisan_sayisi || 0),
+  nace_kodu: newCompany.nace_kodu.trim(),
+  tehlike_sinifi: newCompany.tehlike_sinifi.trim(),
+  sgk_sicil_no: newCompany.sgk_sicil_no.trim(),
+  sektor: newCompany.sektor.trim(),
+  isg_uzmani: newCompany.isg_uzmani.trim(),
+  isyeri_hekimi: newCompany.isyeri_hekimi.trim(),
+  dsp: newCompany.dsp.trim(),
 }),
       });
 
@@ -203,23 +215,21 @@ export default function AdminCompaniesPage() {
         return;
       }
 
-     setNewCompany({
+   setNewCompany({
   name: "",
   yetkili: "",
   phone: "",
   email: "",
   address: "",
-
-  sgk_sicil_no: "",
+  calisan_sayisi: "",
   nace_kodu: "",
   tehlike_sinifi: "",
-  calisan_sayisi: 0,
+  sgk_sicil_no: "",
   sektor: "",
   isg_uzmani: "",
   isyeri_hekimi: "",
   dsp: "",
 });
-
       await loadCompanies();
     } catch (err) {
       console.error(err);
@@ -231,66 +241,102 @@ export default function AdminCompaniesPage() {
 
  const startEdit = (company: CompanyRow) => {
   setEditingId(company.id);
-  setEditingName(company.name);
+  setEditingName(company.name || "");
+  setEditingYetkili(company.yetkili || "");
+  setEditingPhone(company.phone || "");
+  setEditingEmail(company.email || "");
+  setEditingAddress(company.address || "");
+  setEditingCalisanSayisi(String(company.calisan_sayisi ?? 0));
+  setEditingNaceKodu(company.nace_kodu || "");
+  setEditingTehlikeSinifi(company.tehlike_sinifi || "");
+  setEditingSgkSicilNo(company.sgk_sicil_no || "");
+  setEditingSektor(company.sektor || "");
+  setEditingIsgUzmani(company.isg_uzmani || "");
+  setEditingIsyeriHekimi(company.isyeri_hekimi || "");
+  setEditingDsp(company.dsp || "");
   setEditingIsActive(company.is_active ?? true);
 };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditingName("");
-    setEditingIsActive(true);
-  };
+ const cancelEdit = () => {
+  setEditingId(null);
+  setEditingName("");
+  setEditingYetkili("");
+  setEditingPhone("");
+  setEditingEmail("");
+  setEditingAddress("");
+  setEditingCalisanSayisi("0");
+  setEditingNaceKodu("");
+  setEditingTehlikeSinifi("");
+  setEditingSgkSicilNo("");
+  setEditingSektor("");
+  setEditingIsgUzmani("");
+  setEditingIsyeriHekimi("");
+  setEditingDsp("");
+  setEditingIsActive(true);
+};
 
   const openDetail = (company: CompanyRow) => {
   setDetailCompany(company);
   setShowDetailModal(true);
   };
 
-  const saveEdit = async () => {
-    const name = editingName.trim();
+ const saveEdit = async () => {
+  const name = editingName.trim();
 
-    if (!editingId || !name) {
-      alert("Firma adı boş olamaz.");
+  if (!editingId || !name) {
+    alert("Firma adı boş olamaz.");
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    const res = await fetch("/api/admin/companies", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        id: editingId,
+        name,
+        yetkili: editingYetkili.trim(),
+        phone: editingPhone.trim(),
+        email: editingEmail.trim(),
+        address: editingAddress.trim(),
+        calisan_sayisi: Number(editingCalisanSayisi || 0),
+        nace_kodu: editingNaceKodu.trim(),
+        tehlike_sinifi: editingTehlikeSinifi.trim(),
+        sgk_sicil_no: editingSgkSicilNo.trim(),
+        sektor: editingSektor.trim(),
+        isg_uzmani: editingIsgUzmani.trim(),
+        isyeri_hekimi: editingIsyeriHekimi.trim(),
+        dsp: editingDsp.trim(),
+        is_active: editingIsActive,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (res.status === 401) {
+      window.location.href = "/admin/login";
       return;
     }
 
-    try {
-      setSaving(true);
-
-      const res = await fetch("/api/admin/companies", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          id: editingId,
-          name,
-          is_active: editingIsActive,
-        }),
-      });
-
-      const json = await res.json();
-
-      if (res.status === 401) {
-        window.location.href = "/admin/login";
-        return;
-      }
-
-      if (!res.ok) {
-        alert(json?.error || "Firma güncellenemedi.");
-        return;
-      }
-
-      cancelEdit();
-      await loadCompanies();
-    } catch (err) {
-      console.error(err);
-      alert("Firma güncellenemedi.");
-    } finally {
-      setSaving(false);
+    if (!res.ok) {
+      alert(json?.error || "Firma güncellenemedi.");
+      return;
     }
-  };
+
+    cancelEdit();
+    await loadCompanies();
+  } catch (err) {
+    console.error(err);
+    alert("Firma güncellenemedi.");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const deleteCompany = async (id: string, name: string) => {
     const ok = window.confirm(`"${name}" firması silinsin mi?`);
@@ -543,11 +589,11 @@ export default function AdminCompaniesPage() {
 
 <input
   type="number"
-  value={newCompany.calisan_sayisi ?? ""}
+  value={newCompany.calisan_sayisi}
   onChange={(e) =>
     setNewCompany({
       ...newCompany,
-      calisan_sayisi: Number(e.target.value || 0),
+      calisan_sayisi: e.target.value,
     })
   }
   placeholder="Firma Çalışan Sayısı"
@@ -720,79 +766,252 @@ export default function AdminCompaniesPage() {
                     overflow: "hidden",
                   }}
                 >
-                  {editingId === company.id ? (
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 10,
-                        flexWrap: "wrap",
-                        alignItems: "stretch",
-                      }}
-                    >
-                      <input
-
-                      
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        style={{
-                          flex: 1,
-                          minWidth: 220,
-                          width: "100%",
-                          padding: "12px 14px",
-                          borderRadius: 12,
-                          border: `1px solid ${BRAND.border}`,
-                          fontSize: 14,
-                        }}
-                      />
-
-                     <select
-    value={editingIsActive ? "active" : "passive"}
-    onChange={(e) => setEditingIsActive(e.target.value === "active")}
+                 {editingId === company.id ? (
+  <div
     style={{
-      minWidth: 180,
-      padding: "12px 14px",
-      borderRadius: 12,
-      border: `1px solid ${BRAND.border}`,
-      fontSize: 14,
-      background: "#fff",
+      display: "grid",
+      gap: 10,
+      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+      alignItems: "stretch",
     }}
   >
-    <option value="active">Aktif</option>
-    <option value="passive">Pasif</option>
-  </select>
+    <input
+      value={editingName}
+      onChange={(e) => setEditingName(e.target.value)}
+      placeholder="Firma Adı *"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
 
-                      <button
-                        onClick={saveEdit}
-                        disabled={saving}
-                        style={{
-                          border: "none",
-                          borderRadius: 12,
-                          padding: "12px 16px",
-                          background: BRAND.green,
-                          color: "#fff",
-                          fontWeight: 800,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Kaydet
-                      </button>
+    <input
+      value={editingYetkili}
+      onChange={(e) => setEditingYetkili(e.target.value)}
+      placeholder="Yetkili Kişi"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
 
-                      <button
-                        onClick={cancelEdit}
-                        style={{
-                          border: "none",
-                          borderRadius: 12,
-                          padding: "12px 16px",
-                          background: "#6b7280",
-                          color: "#fff",
-                          fontWeight: 800,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Vazgeç
-                      </button>
-                    </div>
-                  ) : (
+    <input
+      value={editingPhone}
+      onChange={(e) => setEditingPhone(e.target.value)}
+      placeholder="Telefon"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
+
+    <input
+      value={editingEmail}
+      onChange={(e) => setEditingEmail(e.target.value)}
+      placeholder="E-Posta"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
+
+    <input
+      value={editingSgkSicilNo}
+      onChange={(e) => setEditingSgkSicilNo(e.target.value)}
+      placeholder="SGK Sicil No"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
+
+    <input
+      value={editingNaceKodu}
+      onChange={(e) => setEditingNaceKodu(e.target.value)}
+      placeholder="NACE Kodu"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
+
+    <select
+      value={editingTehlikeSinifi}
+      onChange={(e) => setEditingTehlikeSinifi(e.target.value)}
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+        background: "#fff",
+      }}
+    >
+      <option value="">Tehlike Sınıfı Seç</option>
+      <option value="Az">Az Tehlikeli</option>
+      <option value="Tehlikeli">Tehlikeli</option>
+      <option value="Çok">Çok Tehlikeli</option>
+    </select>
+
+    <input
+      type="number"
+      value={editingCalisanSayisi}
+      onChange={(e) => setEditingCalisanSayisi(e.target.value)}
+      placeholder="Firma Çalışan Sayısı"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
+
+    <input
+      value={editingSektor}
+      onChange={(e) => setEditingSektor(e.target.value)}
+      placeholder="Sektör"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
+
+    <input
+      value={editingIsgUzmani}
+      onChange={(e) => setEditingIsgUzmani(e.target.value)}
+      placeholder="İSG Uzmanı"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
+
+    <input
+      value={editingIsyeriHekimi}
+      onChange={(e) => setEditingIsyeriHekimi(e.target.value)}
+      placeholder="İşyeri Hekimi"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
+
+    <input
+      value={editingDsp}
+      onChange={(e) => setEditingDsp(e.target.value)}
+      placeholder="DSP"
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
+
+    <textarea
+      value={editingAddress}
+      onChange={(e) => setEditingAddress(e.target.value)}
+      placeholder="Adres"
+      rows={3}
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+        resize: "vertical",
+        fontFamily: "inherit",
+        gridColumn: "1 / -1",
+      }}
+    />
+
+    <select
+      value={editingIsActive ? "active" : "passive"}
+      onChange={(e) => setEditingIsActive(e.target.value === "active")}
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+        background: "#fff",
+      }}
+    >
+      <option value="active">Aktif</option>
+      <option value="passive">Pasif</option>
+    </select>
+
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        flexWrap: "wrap",
+        gridColumn: "1 / -1",
+        justifyContent: "flex-end",
+      }}
+    >
+      <button
+        onClick={saveEdit}
+        disabled={saving}
+        style={{
+          border: "none",
+          borderRadius: 12,
+          padding: "12px 16px",
+          background: BRAND.green,
+          color: "#fff",
+          fontWeight: 800,
+          cursor: "pointer",
+        }}
+      >
+        Kaydet
+      </button>
+
+      <button
+        onClick={cancelEdit}
+        style={{
+          border: "none",
+          borderRadius: 12,
+          padding: "12px 16px",
+          background: "#6b7280",
+          color: "#fff",
+          fontWeight: 800,
+          cursor: "pointer",
+        }}
+      >
+        Vazgeç
+      </button>
+    </div>
+  </div>
+) : (
                     <div
                       style={{
                         display: "flex",
@@ -947,126 +1166,7 @@ export default function AdminCompaniesPage() {
                           </div>
                         )}
 
-                      {company.sgk_sicil_no && (
-  <div
-    style={{
-      marginTop: 6,
-      fontSize: 13,
-      color: BRAND.text,
-      wordBreak: "break-word",
-    }}
-  >
-    🧾 SGK Sicil No: {company.sgk_sicil_no}
-  </div>
-)}
-
-{company.nace_kodu && (
-  <div
-    style={{
-      marginTop: 4,
-      fontSize: 13,
-      color: BRAND.text,
-      wordBreak: "break-word",
-    }}
-  >
-    🏭 NACE Kodu: {company.nace_kodu}
-  </div>
-)}
-
-{company.tehlike_sinifi && (
-  <div style={{ marginTop: 6 }}>
-    <span
-      style={{
-        display: "inline-flex",
-        padding: "5px 10px",
-        borderRadius: 999,
-        fontSize: 11,
-        fontWeight: 800,
-        background:
-          company.tehlike_sinifi === "Çok"
-            ? "#fee2e2"
-            : company.tehlike_sinifi === "Tehlikeli"
-            ? "#fef3c7"
-            : "#dcfce7",
-        color:
-          company.tehlike_sinifi === "Çok"
-            ? "#991b1b"
-            : company.tehlike_sinifi === "Tehlikeli"
-            ? "#92400e"
-            : "#166534",
-      }}
-    >
-      ⚠️ Tehlike Sınıfı: {company.tehlike_sinifi}
-    </span>
-  </div>
-)}
-
-{company.sektor && (
-  <div
-    style={{
-      marginTop: 4,
-      fontSize: 13,
-      color: BRAND.text,
-      wordBreak: "break-word",
-    }}
-  >
-    🏢 Sektör: {company.sektor}
-  </div>
-)}
-
-{typeof company.calisan_sayisi === "number" && (
-  <div
-    style={{
-      marginTop: 4,
-      fontSize: 13,
-      color: BRAND.text,
-      wordBreak: "break-word",
-    }}
-  >
-    👥 Firma Çalışan Sayısı: {company.calisan_sayisi}
-  </div>
-)}
-
-{company.isg_uzmani && (
-  <div
-    style={{
-      marginTop: 4,
-      fontSize: 13,
-      color: BRAND.text,
-      wordBreak: "break-word",
-    }}
-  >
-    🦺 İSG Uzmanı: {company.isg_uzmani}
-  </div>
-)}
-
-{company.isyeri_hekimi && (
-  <div
-    style={{
-      marginTop: 4,
-      fontSize: 13,
-      color: BRAND.text,
-      wordBreak: "break-word",
-    }}
-  >
-    🩺 İşyeri Hekimi: {company.isyeri_hekimi}
-  </div>
-)}
-
-{company.dsp && (
-  <div
-    style={{
-      marginTop: 4,
-      fontSize: 13,
-      color: BRAND.text,
-      wordBreak: "break-word",
-    }}
-  >
-    👷 DSP: {company.dsp}
-  </div>
-)}
-
-                        <div
+                       <div
                           style={{
                             marginTop: 10,
                             fontSize: 13,
@@ -1184,8 +1284,8 @@ export default function AdminCompaniesPage() {
               ))}
             </div>
           )}
-        </div>
-      </div>
+       </div>
+</div>
 
 {showDetailModal && detailCompany && (
   <div
@@ -1406,6 +1506,6 @@ export default function AdminCompaniesPage() {
   </div>
 )}
 
-    </main>
+</main>
   );
 }
