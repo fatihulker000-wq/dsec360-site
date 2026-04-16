@@ -19,6 +19,9 @@ function normalizeCompanyName(value: unknown) {
     .replace(/\s+/g, " ")
     .toLocaleLowerCase("tr-TR");
 }
+function normalizeRemoteId(value: unknown) {
+  return String(value ?? "").trim();
+}
 
 function buildCompanyPayload(body: any, rawName: string) {
   return {
@@ -83,18 +86,24 @@ export async function POST(req: NextRequest) {
 
   const normalizedName = normalizeCompanyName(rawName);
 
+  const remoteId = normalizeRemoteId(body?.id || body?.remote_id);
+
   const { data: existingRows, error: findError } = await supabase
     .from("companies")
-    .select("id, name")
-    .order("created_at", { ascending: true });
+.select("id, name")
+.order("created_at", { ascending: true });
 
   if (findError) {
     return NextResponse.json({ error: findError.message }, { status: 500 });
   }
 
-  const existing = (existingRows || []).find(
-    (item) => normalizeCompanyName(item.name) === normalizedName
-  );
+  const existing = (existingRows || []).find((item: any) => {
+  const rowId = normalizeRemoteId(item?.id);
+  const rowName = normalizeCompanyName(item?.name);
+
+  if (remoteId && rowId === remoteId) return true;
+  return rowName === normalizedName;
+});
 
   const payload = buildCompanyPayload(body, rawName);
 
@@ -143,27 +152,68 @@ export async function PUT(req: NextRequest) {
   const body = await req.json();
   const supabase = getSupabase();
 
-  const id = String(body?.id ?? "").trim();
+  const id = normalizeRemoteId(body?.id);
+  const remoteId = normalizeRemoteId(body?.remote_id);
   const rawName = String(body?.name ?? "").trim();
-
-  if (!id) {
-    return NextResponse.json({ error: "Firma id zorunlu." }, { status: 400 });
-  }
 
   if (!rawName) {
     return NextResponse.json({ error: "Firma adı zorunlu." }, { status: 400 });
   }
 
+  const normalizedName = normalizeCompanyName(rawName);
   const payload = buildCompanyPayload(body, rawName);
+
+  let targetId = id || remoteId;
+
+  if (!targetId) {
+    const { data: existingRows, error: findError } = await supabase
+      .from("companies")
+      .select("id, name")
+      .order("created_at", { ascending: true });
+
+    if (findError) {
+      return NextResponse.json({ error: findError.message }, { status: 500 });
+    }
+
+    const existing = (existingRows || []).find((item: any) => {
+      const rowId = normalizeRemoteId(item?.id);
+      const rowName = normalizeCompanyName(item?.name);
+
+      if (remoteId && rowId === remoteId) return true;
+      return rowName === normalizedName;
+    });
+
+    if (existing?.id) {
+      targetId = String(existing.id).trim();
+    }
+  }
+
+  if (!targetId) {
+    const { data: inserted, error: insertError } = await supabase
+      .from("companies")
+      .insert(payload)
+      .select("id")
+      .single();
+
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      mode: "inserted_from_put",
+      id: inserted?.id ?? null,
+    });
+  }
 
   const { error } = await supabase
     .from("companies")
     .update(payload)
-    .eq("id", id);
+    .eq("id", targetId);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, mode: "updated", id });
+  return NextResponse.json({ success: true, mode: "updated", id: targetId });
 }
