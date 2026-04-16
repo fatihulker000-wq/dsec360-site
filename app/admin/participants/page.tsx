@@ -26,11 +26,18 @@ type TrainingApiRow = {
   completed_count?: number | null;
 };
 
+type CompanyApiRow = {
+  id?: string | null;
+  name?: string | null;
+  is_active?: boolean | null;
+};
+
 type UserRow = {
   id: string;
   full_name: string;
   email: string;
   company: string;
+  company_id: string | null; //;
   role: string;
   is_active: boolean;
 };
@@ -139,6 +146,7 @@ function badgeStyle(
 export default function AdminParticipantsPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [trainings, setTrainings] = useState<TrainingRow[]>([]);
+  const [companies, setCompanies] = useState<{id: string, name: string}[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [trainingId, setTrainingId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -155,20 +163,44 @@ export default function AdminParticipantsPage() {
       setError("");
       setLoading(true);
 
-      const trainingsRes = await fetch("/api/admin/trainings", {
-        cache: "no-store",
-        credentials: "include",
-      });
+      const [trainingsRes, usersRes, companiesRes] = await Promise.all([
+        fetch("/api/admin/trainings", {
+          cache: "no-store",
+          credentials: "include",
+        }),
+        fetch("/api/admin/users", {
+          cache: "no-store",
+          credentials: "include",
+        }),
+        fetch("/api/admin/companies", {
+          cache: "no-store",
+          credentials: "include",
+        }),
+      ]);
 
-      if (trainingsRes.status === 401) {
+      if (
+        trainingsRes.status === 401 ||
+        usersRes.status === 401 ||
+        companiesRes.status === 401
+      ) {
         window.location.href = "/admin/login";
         return;
       }
 
       const trainingsJson = await trainingsRes.json();
+      const usersJson = await usersRes.json();
+      const companiesJson = await companiesRes.json();
 
       if (!trainingsRes.ok) {
         throw new Error(trainingsJson?.error || "Eğitim listesi alınamadı.");
+      }
+
+      if (!usersRes.ok) {
+        throw new Error(usersJson?.error || "Katılımcı listesi alınamadı.");
+      }
+
+      if (!companiesRes.ok) {
+        throw new Error(companiesJson?.error || "Firma listesi alınamadı.");
       }
 
       const normalizedTrainings: TrainingRow[] = Array.isArray(trainingsJson?.data)
@@ -192,26 +224,6 @@ export default function AdminParticipantsPage() {
           }))
         : [];
 
-      setTrainings(normalizedTrainings);
-
-      const usersRes = await fetch("/api/admin/users", {
-        cache: "no-store",
-        credentials: "include",
-      });
-
-      if (usersRes.status === 401) {
-        window.location.href = "/admin/login";
-        return;
-      }
-
-      const usersJson = await usersRes.json();
-
-      if (!usersRes.ok) {
-        setError(usersJson?.error || "Katılımcı listesi alınamadı.");
-        setUsers([]);
-        return;
-      }
-
       const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
         ? usersJson.data
             .filter((u: UserApiRow) => String(u.role || "") === "training_user")
@@ -220,12 +232,25 @@ export default function AdminParticipantsPage() {
               full_name: (u.full_name || "Adsız Kullanıcı").trim(),
               email: (u.email || "-").trim(),
               company: buildCompanyLabel(u),
+              company_id: u.company_id || null, //
               role: getRoleLabel(u.role),
               is_active: Boolean(u.is_active),
             }))
         : [];
 
+      const normalizedCompanies = Array.isArray(companiesJson?.data)
+  ? companiesJson.data
+      .filter((c: CompanyApiRow) => (c?.is_active ?? true) === true)
+      .map((c: CompanyApiRow) => ({
+        id: String(c?.id || ""),
+        name: String(c?.name || "").trim(),
+      }))
+      .filter((c: { id: string; name: string }) => c.name)
+  : [];
+
+      setTrainings(normalizedTrainings);
       setUsers(normalizedUsers);
+      setCompanies(normalizedCompanies);
     } catch (err) {
       console.error(err);
       setError(
@@ -245,19 +270,14 @@ export default function AdminParticipantsPage() {
     setSelectedTrainingInfo(found);
   }, [trainingId, trainings]);
 
-  const companies = useMemo(() => {
-    const list = Array.from(
-      new Set(users.map((u) => u.company.trim()).filter(Boolean))
-    );
-    return list.sort((a, b) => a.localeCompare(b, "tr"));
-  }, [users]);
-
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       const text = `${u.full_name} ${u.email} ${u.company} ${u.role}`.toLowerCase();
       const matchesSearch = !search || text.includes(search.toLowerCase());
       const matchesCompany =
-        companyFilter === "all" ? true : u.company === companyFilter;
+  companyFilter === "all"
+    ? true
+    : u.company_id === companyFilter;
 
       return matchesSearch && matchesCompany;
     });
@@ -620,11 +640,12 @@ export default function AdminParticipantsPage() {
               }}
             >
               <option value="all">Tüm Firmalar</option>
-              {companies.map((company) => (
-                <option key={company} value={company}>
-                  {company}
-                </option>
-              ))}
+              {companies.map((c) => (
+  <option key={c.id} value={c.id}>
+    {c.name}
+  </option>
+))}
+
             </select>
           </div>
         </div>
