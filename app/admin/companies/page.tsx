@@ -84,12 +84,20 @@ export default function AdminCompaniesPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   const [newCompany, setNewCompany] = useState({
-    name: "",
-    yetkili: "",
-    phone: "",
-    email: "",
-    address: "",
-  });
+  name: "",
+  yetkili: "",
+  phone: "",
+  email: "",
+  address: "",
+  sgk_sicil_no: "",
+  nace_kodu: "",
+  tehlike_sinifi: "",
+  calisan_sayisi: 0,
+  sektor: "",
+  isg_uzmani: "",
+  isyeri_hekimi: "",
+  dsp: "",
+});
 
   const loadCompanies = async () => {
     try {
@@ -165,13 +173,22 @@ export default function AdminCompaniesPage() {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({
-          name: newCompany.name.trim(),
-          yetkili: newCompany.yetkili.trim(),
-          phone: newCompany.phone.trim(),
-          email: newCompany.email.trim(),
-          address: newCompany.address.trim(),
-        }),
+       body: JSON.stringify({
+  name: newCompany.name.trim(),
+  yetkili: newCompany.yetkili.trim(),
+  phone: newCompany.phone.trim(),
+  email: newCompany.email.trim(),
+  address: newCompany.address.trim(),
+
+  calisan_sayisi: Number(newCompany.calisan_sayisi) || 0,
+  nace_kodu: newCompany.nace_kodu,
+  tehlike_sinifi: newCompany.tehlike_sinifi,
+  sgk_sicil_no: newCompany.sgk_sicil_no,
+  sektor: newCompany.sektor,
+  isg_uzmani: newCompany.isg_uzmani,
+  isyeri_hekimi: newCompany.isyeri_hekimi,
+  dsp: newCompany.dsp,
+}),
       });
 
       const json = await res.json();
@@ -186,13 +203,22 @@ export default function AdminCompaniesPage() {
         return;
       }
 
-      setNewCompany({
-        name: "",
-        yetkili: "",
-        phone: "",
-        email: "",
-        address: "",
-      });
+     setNewCompany({
+  name: "",
+  yetkili: "",
+  phone: "",
+  email: "",
+  address: "",
+
+  sgk_sicil_no: "",
+  nace_kodu: "",
+  tehlike_sinifi: "",
+  calisan_sayisi: 0,
+  sektor: "",
+  isg_uzmani: "",
+  isyeri_hekimi: "",
+  dsp: "",
+});
 
       await loadCompanies();
     } catch (err) {
@@ -461,6 +487,143 @@ export default function AdminCompaniesPage() {
                   minWidth: 0,
                 }}
               />
+
+<input
+  value={newCompany.sgk_sicil_no || ""}
+  onChange={(e) =>
+    setNewCompany({ ...newCompany, sgk_sicil_no: e.target.value })
+  }
+  placeholder="SGK Sicil No"
+  style={{
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1px solid ${BRAND.border}`,
+    fontSize: 14,
+    minWidth: 0,
+  }}
+/>
+
+<input
+  value={newCompany.nace_kodu || ""}
+  onChange={(e) =>
+    setNewCompany({ ...newCompany, nace_kodu: e.target.value })
+  }
+  placeholder="NACE Kodu"
+  style={{
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1px solid ${BRAND.border}`,
+    fontSize: 14,
+    minWidth: 0,
+  }}
+/>
+
+<select
+  value={newCompany.tehlike_sinifi || ""}
+  onChange={(e) =>
+    setNewCompany({ ...newCompany, tehlike_sinifi: e.target.value })
+  }
+  style={{
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1px solid ${BRAND.border}`,
+    fontSize: 14,
+    background: "#fff",
+    minWidth: 0,
+  }}
+>
+  <option value="">Tehlike Sınıfı Seç</option>
+  <option value="Az">Az Tehlikeli</option>
+  <option value="Tehlikeli">Tehlikeli</option>
+  <option value="Çok">Çok Tehlikeli</option>
+</select>
+
+<input
+  type="number"
+  value={newCompany.calisan_sayisi ?? ""}
+  onChange={(e) =>
+    setNewCompany({
+      ...newCompany,
+      calisan_sayisi: Number(e.target.value || 0),
+    })
+  }
+  placeholder="Firma Çalışan Sayısı"
+  style={{
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1px solid ${BRAND.border}`,
+    fontSize: 14,
+    minWidth: 0,
+  }}
+/>
+
+<input
+  value={newCompany.sektor || ""}
+  onChange={(e) =>
+    setNewCompany({ ...newCompany, sektor: e.target.value })
+  }
+  placeholder="Sektör"
+  style={{
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1px solid ${BRAND.border}`,
+    fontSize: 14,
+    minWidth: 0,
+  }}
+/>
+
+<input
+  value={newCompany.isg_uzmani || ""}
+  onChange={(e) =>
+    setNewCompany({ ...newCompany, isg_uzmani: e.target.value })
+  }
+  placeholder="İSG Uzmanı"
+  style={{
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1px solid ${BRAND.border}`,
+    fontSize: 14,
+    minWidth: 0,
+  }}
+/>
+
+<input
+  value={newCompany.isyeri_hekimi || ""}
+  onChange={(e) =>
+    setNewCompany({ ...newCompany, isyeri_hekimi: e.target.value })
+  }
+  placeholder="İşyeri Hekimi"
+  style={{
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1px solid ${BRAND.border}`,
+    fontSize: 14,
+    minWidth: 0,
+  }}
+/>
+
+<input
+  value={newCompany.dsp || ""}
+  onChange={(e) =>
+    setNewCompany({ ...newCompany, dsp: e.target.value })
+  }
+  placeholder="DSP"
+  style={{
+    width: "100%",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1px solid ${BRAND.border}`,
+    fontSize: 14,
+    minWidth: 0,
+  }}
+/>
 
               <div
                 style={{
