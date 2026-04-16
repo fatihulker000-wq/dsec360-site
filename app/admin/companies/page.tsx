@@ -12,6 +12,15 @@ type CompanyRow = {
   email?: string | null;
   address?: string | null;
   is_active?: boolean | null;
+
+  calisan_sayisi?: number | null;
+  nace_kodu?: string | null;
+  tehlike_sinifi?: string | null;
+  sgk_sicil_no?: string | null;
+  sektor?: string | null;
+  isg_uzmani?: string | null;
+  isyeri_hekimi?: string | null;
+  dsp?: string | null;
 };
 
 type CompanyResponse = {
@@ -71,6 +80,8 @@ export default function AdminCompaniesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingIsActive, setEditingIsActive] = useState(true);
+  const [detailCompany, setDetailCompany] = useState<CompanyRow | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   const [newCompany, setNewCompany] = useState({
     name: "",
@@ -202,6 +213,11 @@ export default function AdminCompaniesPage() {
     setEditingId(null);
     setEditingName("");
     setEditingIsActive(true);
+  };
+
+  const openDetail = (company: CompanyRow) => {
+  setDetailCompany(company);
+  setShowDetailModal(true);
   };
 
   const saveEdit = async () => {
@@ -689,6 +705,71 @@ export default function AdminCompaniesPage() {
                           </div>
                         )}
 
+{/* 🔥 PREMIUM İSG BİLGİLERİ */}
+
+{company.sgk_sicil_no && (
+  <div style={{ marginTop: 6, fontSize: 13 }}>
+    🧾 SGK: {company.sgk_sicil_no}
+  </div>
+)}
+
+{company.nace_kodu && (
+  <div style={{ marginTop: 4, fontSize: 13 }}>
+    🏭 NACE: {company.nace_kodu}
+  </div>
+)}
+
+{company.tehlike_sinifi && (
+  <div style={{ marginTop: 4 }}>
+    <span
+      style={{
+        padding: "4px 10px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 800,
+        background:
+          company.tehlike_sinifi === "Çok"
+            ? "#fee2e2"
+            : company.tehlike_sinifi === "Tehlikeli"
+            ? "#fef3c7"
+            : "#dcfce7",
+        color:
+          company.tehlike_sinifi === "Çok"
+            ? "#991b1b"
+            : company.tehlike_sinifi === "Tehlikeli"
+            ? "#92400e"
+            : "#166534",
+      }}
+    >
+      ⚠️ {company.tehlike_sinifi}
+    </span>
+  </div>
+)}
+
+{company.sektor && (
+  <div style={{ marginTop: 4, fontSize: 13 }}>
+    🏢 Sektör: {company.sektor}
+  </div>
+)}
+
+{company.isg_uzmani && (
+  <div style={{ marginTop: 4, fontSize: 13 }}>
+    🦺 İSG Uzmanı: {company.isg_uzmani}
+  </div>
+)}
+
+{company.isyeri_hekimi && (
+  <div style={{ marginTop: 4, fontSize: 13 }}>
+    🩺 Hekim: {company.isyeri_hekimi}
+  </div>
+)}
+
+{company.dsp && (
+  <div style={{ marginTop: 4, fontSize: 13 }}>
+    👷 DSP: {company.dsp}
+  </div>
+)}
+
                         {company.address && (
                           <div
                             style={{
@@ -702,6 +783,125 @@ export default function AdminCompaniesPage() {
                             📍 {company.address}
                           </div>
                         )}
+
+                      {company.sgk_sicil_no && (
+  <div
+    style={{
+      marginTop: 6,
+      fontSize: 13,
+      color: BRAND.text,
+      wordBreak: "break-word",
+    }}
+  >
+    🧾 SGK Sicil No: {company.sgk_sicil_no}
+  </div>
+)}
+
+{company.nace_kodu && (
+  <div
+    style={{
+      marginTop: 4,
+      fontSize: 13,
+      color: BRAND.text,
+      wordBreak: "break-word",
+    }}
+  >
+    🏭 NACE Kodu: {company.nace_kodu}
+  </div>
+)}
+
+{company.tehlike_sinifi && (
+  <div style={{ marginTop: 6 }}>
+    <span
+      style={{
+        display: "inline-flex",
+        padding: "5px 10px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 800,
+        background:
+          company.tehlike_sinifi === "Çok"
+            ? "#fee2e2"
+            : company.tehlike_sinifi === "Tehlikeli"
+            ? "#fef3c7"
+            : "#dcfce7",
+        color:
+          company.tehlike_sinifi === "Çok"
+            ? "#991b1b"
+            : company.tehlike_sinifi === "Tehlikeli"
+            ? "#92400e"
+            : "#166534",
+      }}
+    >
+      ⚠️ Tehlike Sınıfı: {company.tehlike_sinifi}
+    </span>
+  </div>
+)}
+
+{company.sektor && (
+  <div
+    style={{
+      marginTop: 4,
+      fontSize: 13,
+      color: BRAND.text,
+      wordBreak: "break-word",
+    }}
+  >
+    🏢 Sektör: {company.sektor}
+  </div>
+)}
+
+{typeof company.calisan_sayisi === "number" && (
+  <div
+    style={{
+      marginTop: 4,
+      fontSize: 13,
+      color: BRAND.text,
+      wordBreak: "break-word",
+    }}
+  >
+    👥 Firma Çalışan Sayısı: {company.calisan_sayisi}
+  </div>
+)}
+
+{company.isg_uzmani && (
+  <div
+    style={{
+      marginTop: 4,
+      fontSize: 13,
+      color: BRAND.text,
+      wordBreak: "break-word",
+    }}
+  >
+    🦺 İSG Uzmanı: {company.isg_uzmani}
+  </div>
+)}
+
+{company.isyeri_hekimi && (
+  <div
+    style={{
+      marginTop: 4,
+      fontSize: 13,
+      color: BRAND.text,
+      wordBreak: "break-word",
+    }}
+  >
+    🩺 İşyeri Hekimi: {company.isyeri_hekimi}
+  </div>
+)}
+
+{company.dsp && (
+  <div
+    style={{
+      marginTop: 4,
+      fontSize: 13,
+      color: BRAND.text,
+      wordBreak: "break-word",
+    }}
+  >
+    👷 DSP: {company.dsp}
+  </div>
+)}
 
                         <div
                           style={{
@@ -755,49 +955,66 @@ export default function AdminCompaniesPage() {
                       </div>
 
                       <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          flexWrap: "wrap",
-                          width: "100%",
-                          maxWidth: 220,
-                          justifyContent: "flex-start",
-                        }}
-                      >
-                        <button
-                          onClick={() => startEdit(company)}
-                          style={{
-                            border: "none",
-                            borderRadius: 10,
-                            padding: "10px 14px",
-                            background: BRAND.blue,
-                            color: "#fff",
-                            fontWeight: 800,
-                            cursor: "pointer",
-                            flex: 1,
-                            minWidth: 96,
-                          }}
-                        >
-                          Düzenle
-                        </button>
+  style={{
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    width: "100%",
+    maxWidth: 320,
+    justifyContent: "flex-start",
+  }}
+>
+  <button
+    onClick={() => openDetail(company)}
+    style={{
+      border: "none",
+      borderRadius: 10,
+      padding: "10px 14px",
+      background: "#111827",
+      color: "#fff",
+      fontWeight: 800,
+      cursor: "pointer",
+      flex: 1,
+      minWidth: 96,
+    }}
+  >
+    Detay
+  </button>
 
-                        <button
-                          onClick={() => deleteCompany(company.id, company.name)}
-                          style={{
-                            border: "none",
-                            borderRadius: 10,
-                            padding: "10px 14px",
-                            background: BRAND.red,
-                            color: "#fff",
-                            fontWeight: 800,
-                            cursor: "pointer",
-                            flex: 1,
-                            minWidth: 96,
-                          }}
-                        >
-                          Sil
-                        </button>
-                      </div>
+  <button
+    onClick={() => startEdit(company)}
+    style={{
+      border: "none",
+      borderRadius: 10,
+      padding: "10px 14px",
+      background: BRAND.blue,
+      color: "#fff",
+      fontWeight: 800,
+      cursor: "pointer",
+      flex: 1,
+      minWidth: 96,
+    }}
+  >
+    Düzenle
+  </button>
+
+  <button
+    onClick={() => deleteCompany(company.id, company.name)}
+    style={{
+      border: "none",
+      borderRadius: 10,
+      padding: "10px 14px",
+      background: BRAND.red,
+      color: "#fff",
+      fontWeight: 800,
+      cursor: "pointer",
+      flex: 1,
+      minWidth: 96,
+    }}
+  >
+    Sil
+  </button>
+</div>
                     </div>
                   )}
                 </div>
@@ -806,6 +1023,226 @@ export default function AdminCompaniesPage() {
           )}
         </div>
       </div>
+
+{showDetailModal && detailCompany && (
+  <div
+    onClick={() => setShowDetailModal(false)}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(15,23,42,0.55)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20,
+      zIndex: 9999,
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: "100%",
+        maxWidth: 760,
+        maxHeight: "90vh",
+        overflowY: "auto",
+        background: "#fff",
+        borderRadius: 24,
+        boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
+        border: `1px solid ${BRAND.border}`,
+      }}
+    >
+      <div
+        style={{
+          padding: 24,
+          background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
+          color: "#fff",
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+        }}
+      >
+        <div
+          style={{
+            display: "inline-flex",
+            padding: "6px 10px",
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.14)",
+            border: "1px solid rgba(255,255,255,0.22)",
+            fontSize: 12,
+            fontWeight: 800,
+            marginBottom: 12,
+          }}
+        >
+          Firma Detay Kartı
+        </div>
+
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "clamp(24px, 4vw, 34px)",
+            fontWeight: 900,
+            lineHeight: 1.15,
+            wordBreak: "break-word",
+          }}
+        >
+          {detailCompany.name}
+        </h2>
+
+        <div style={{ marginTop: 10 }}>
+          <span
+            style={{
+              display: "inline-flex",
+              padding: "5px 10px",
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 800,
+              background: detailCompany.is_active
+                ? "rgba(34,197,94,0.18)"
+                : "rgba(239,68,68,0.18)",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.20)",
+            }}
+          >
+            {detailCompany.is_active ? "AKTİF" : "PASİF"}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ padding: 24 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 14,
+            marginBottom: 18,
+          }}
+        >
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Yetkili</div>
+            <div style={{ marginTop: 8, fontWeight: 900 }}>
+              {detailCompany.yetkili || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Telefon</div>
+            <div style={{ marginTop: 8, fontWeight: 900 }}>
+              {detailCompany.phone || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>E-Posta</div>
+            <div style={{ marginTop: 8, fontWeight: 900, wordBreak: "break-word" }}>
+              {detailCompany.email || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Çalışan</div>
+            <div style={{ marginTop: 8, fontWeight: 900 }}>
+              {detailCompany.calisan_sayisi ?? detailCompany.user_count ?? 0}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 14,
+          }}
+        >
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>SGK Sicil No</div>
+            <div style={{ marginTop: 8, fontWeight: 900, wordBreak: "break-word" }}>
+              {detailCompany.sgk_sicil_no || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>NACE Kodu</div>
+            <div style={{ marginTop: 8, fontWeight: 900 }}>
+              {detailCompany.nace_kodu || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Tehlike Sınıfı</div>
+            <div style={{ marginTop: 8, fontWeight: 900 }}>
+              {detailCompany.tehlike_sinifi || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Sektör</div>
+            <div style={{ marginTop: 8, fontWeight: 900 }}>
+              {detailCompany.sektor || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>İSG Uzmanı</div>
+            <div style={{ marginTop: 8, fontWeight: 900 }}>
+              {detailCompany.isg_uzmani || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>İşyeri Hekimi</div>
+            <div style={{ marginTop: 8, fontWeight: 900 }}>
+              {detailCompany.isyeri_hekimi || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>DSP</div>
+            <div style={{ marginTop: 8, fontWeight: 900 }}>
+              {detailCompany.dsp || "-"}
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 12, color: BRAND.muted }}>Adres</div>
+            <div
+              style={{
+                marginTop: 8,
+                fontWeight: 900,
+                wordBreak: "break-word",
+                lineHeight: 1.6,
+              }}
+            >
+              {detailCompany.address || "-"}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginTop: 20,
+          }}
+        >
+          <button
+            onClick={() => setShowDetailModal(false)}
+            style={{
+              border: "none",
+              borderRadius: 12,
+              padding: "12px 18px",
+              background: "#111827",
+              color: "#fff",
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            Kapat
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
     </main>
   );
 }
