@@ -26,6 +26,12 @@ type TrainingApiRow = {
   completed_count?: number | null;
 };
 
+type CompanyApiRow = {
+  id?: string | null;
+  name?: string | null;
+  is_active?: boolean | null;
+};
+
 type UserRow = {
   id: string;
   full_name: string;
@@ -137,6 +143,7 @@ function badgeStyle(
 export default function AdminTrainingPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [trainings, setTrainings] = useState<TrainingRow[]>([]);
+  const [companies, setCompanies] = useState<string[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [trainingId, setTrainingId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -153,7 +160,7 @@ export default function AdminTrainingPage() {
       setError("");
       setLoading(true);
 
-      const [usersRes, trainingsRes] = await Promise.all([
+      const [usersRes, trainingsRes, companiesRes] = await Promise.all([
         fetch("/api/admin/users", {
           cache: "no-store",
           credentials: "include",
@@ -162,15 +169,24 @@ export default function AdminTrainingPage() {
           cache: "no-store",
           credentials: "include",
         }),
+        fetch("/api/admin/companies", {
+          cache: "no-store",
+          credentials: "include",
+        }),
       ]);
 
-      if (usersRes.status === 401 || trainingsRes.status === 401) {
+      if (
+        usersRes.status === 401 ||
+        trainingsRes.status === 401 ||
+        companiesRes.status === 401
+      ) {
         window.location.href = "/admin/login";
         return;
       }
 
       const usersJson = await usersRes.json();
       const trainingsJson = await trainingsRes.json();
+      const companiesJson = await companiesRes.json();
 
       if (!usersRes.ok) {
         throw new Error(usersJson?.error || "Kullanıcı listesi alınamadı.");
@@ -178,6 +194,10 @@ export default function AdminTrainingPage() {
 
       if (!trainingsRes.ok) {
         throw new Error(trainingsJson?.error || "Eğitim listesi alınamadı.");
+      }
+
+      if (!companiesRes.ok) {
+        throw new Error(companiesJson?.error || "Firma listesi alınamadı.");
       }
 
       const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
@@ -212,12 +232,22 @@ export default function AdminTrainingPage() {
           }))
         : [];
 
+      const normalizedCompanies: string[] = Array.isArray(companiesJson?.data)
+        ? companiesJson.data
+            .filter((c: CompanyApiRow) => (c?.is_active ?? true) === true)
+            .map((c: CompanyApiRow) => String(c?.name || "").trim())
+            .filter(Boolean)
+            .sort((a: string, b: string) => a.localeCompare(b, "tr"))
+        : [];
+
       setUsers(normalizedUsers);
       setTrainings(normalizedTrainings);
+      setCompanies(normalizedCompanies);
     } catch (err) {
       console.error(err);
       setUsers([]);
       setTrainings([]);
+      setCompanies([]);
       setError(
         err instanceof Error ? err.message : "Veriler alınırken hata oluştu."
       );
@@ -234,13 +264,6 @@ export default function AdminTrainingPage() {
     const found = trainings.find((t) => t.id === trainingId) || null;
     setSelectedTrainingInfo(found);
   }, [trainingId, trainings]);
-
-  const companies = useMemo(() => {
-    const list = Array.from(
-      new Set(users.map((u) => u.company.trim()).filter(Boolean))
-    );
-    return list.sort((a, b) => a.localeCompare(b, "tr"));
-  }, [users]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
@@ -370,119 +393,108 @@ export default function AdminTrainingPage() {
     }
   };
 
-return (
-  <main
-    style={{
-      minHeight: "100%",
-      background: BRAND.bg,
-      padding: "clamp(12px, 2vw, 24px)",
-    }}
-  >
-    <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
-     
-   <div
-  style={{
-    ...cardStyle(),
-    background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
-    color: "#fff",
-    marginBottom: 20,
-    padding: "clamp(16px, 2.8vw, 28px)",
-    borderRadius: 24,
-  }}
->
-  <div
-    style={{
-      display: "flex",
-      justifyContent: "space-between",
-      gap: 16,
-      alignItems: "flex-start",
-      flexWrap: "wrap",
-    }}
-  >
-    {/* SOL METİN */}
-    <div style={{ maxWidth: 620 }}>
-      <div
-        style={{
-          display: "inline-flex",
-          padding: "8px 12px",
-          borderRadius: 999,
-          background: "rgba(255,255,255,0.14)",
-          border: "1px solid rgba(255,255,255,0.22)",
-          fontSize: 12,
-          fontWeight: 900,
-          marginBottom: 12,
-        }}
-      >
-        D-SEC Eğitim Yönetimi
-      </div>
-
-      <h1
-        style={{
-          marginTop: 0,
-          marginBottom: 10,
-          fontSize: "clamp(24px, 5vw, 38px)",
-          fontWeight: 900,
-          lineHeight: 1.15,
-        }}
-      >
-        Eğitim Atama Paneli
-      </h1>
-
-      <p
-        style={{
-          margin: 0,
-          color: "rgba(255,255,255,0.92)",
-          lineHeight: 1.7,
-          fontSize: "clamp(14px, 2.5vw, 16px)",
-        }}
-      >
-        Eğitimleri merkezi olarak yönet, çalışanları filtrele, toplu atama yap ve
-        tüm süreci tek ekrandan kontrol et.
-      </p>
-    </div>
-
-    {/* SAĞ KPI */}
-    <div
+  return (
+    <main
       style={{
-        display: "grid",
-        gap: 10,
-        minWidth: 160,
+        minHeight: "100%",
+        background: BRAND.bg,
+        padding: "clamp(12px, 2vw, 24px)",
       }}
     >
-      <div
-        style={{
-          background: "rgba(255,255,255,0.12)",
-          padding: 14,
-          borderRadius: 14,
-          border: "1px solid rgba(255,255,255,0.18)",
-        }}
-      >
-        <div style={{ fontSize: 12, opacity: 0.9 }}>
-          Seçili Çalışan
-        </div>
-        <div style={{ fontSize: 24, fontWeight: 900 }}>
-          {selectedCount}
-        </div>
-      </div>
+      <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+        <div
+          style={{
+            ...cardStyle(),
+            background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
+            color: "#fff",
+            marginBottom: 20,
+            padding: "clamp(16px, 2.8vw, 28px)",
+            borderRadius: 24,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: "flex-start",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ maxWidth: 620 }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.14)",
+                  border: "1px solid rgba(255,255,255,0.22)",
+                  fontSize: 12,
+                  fontWeight: 900,
+                  marginBottom: 12,
+                }}
+              >
+                D-SEC Eğitim Yönetimi
+              </div>
 
-      <div
-        style={{
-          background: "rgba(255,255,255,0.12)",
-          padding: 14,
-          borderRadius: 14,
-          border: "1px solid rgba(255,255,255,0.18)",
-        }}
-      >
-        <div style={{ fontSize: 12, opacity: 0.9 }}>
-          Toplam Eğitim
+              <h1
+                style={{
+                  marginTop: 0,
+                  marginBottom: 10,
+                  fontSize: "clamp(24px, 5vw, 38px)",
+                  fontWeight: 900,
+                  lineHeight: 1.15,
+                }}
+              >
+                Eğitim Atama Paneli
+              </h1>
+
+              <p
+                style={{
+                  margin: 0,
+                  color: "rgba(255,255,255,0.92)",
+                  lineHeight: 1.7,
+                  fontSize: "clamp(14px, 2.5vw, 16px)",
+                }}
+              >
+                Eğitimleri merkezi olarak yönet, çalışanları filtrele, toplu atama yap ve
+                tüm süreci tek ekrandan kontrol et.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gap: 10,
+                minWidth: 160,
+              }}
+            >
+              <div
+                style={{
+                  background: "rgba(255,255,255,0.12)",
+                  padding: 14,
+                  borderRadius: 14,
+                  border: "1px solid rgba(255,255,255,0.18)",
+                }}
+              >
+                <div style={{ fontSize: 12, opacity: 0.9 }}>Seçili Çalışan</div>
+                <div style={{ fontSize: 24, fontWeight: 900 }}>{selectedCount}</div>
+              </div>
+
+              <div
+                style={{
+                  background: "rgba(255,255,255,0.12)",
+                  padding: 14,
+                  borderRadius: 14,
+                  border: "1px solid rgba(255,255,255,0.18)",
+                }}
+              >
+                <div style={{ fontSize: 12, opacity: 0.9 }}>Toplam Eğitim</div>
+                <div style={{ fontSize: 24, fontWeight: 900 }}>{trainings.length}</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div style={{ fontSize: 24, fontWeight: 900 }}>
-          {trainings.length}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
         {error ? (
           <div
@@ -497,14 +509,14 @@ return (
           </div>
         ) : null}
 
-       <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 16,
-    marginBottom: 20,
-  }}
->
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Çalışan</div>
             <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
@@ -531,15 +543,15 @@ return (
           </div>
         </div>
 
-       <div
-  style={{
-    ...cardStyle(),
-    marginBottom: 20,
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 16,
-  }}
->
+        <div
+          style={{
+            ...cardStyle(),
+            marginBottom: 20,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: 16,
+          }}
+        >
           <div>
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
               Eğitim
@@ -579,16 +591,16 @@ return (
 
             {selectedTrainingInfo ? (
               <>
-               <div
-  style={{
-    fontSize: 17,
-    fontWeight: 900,
-    lineHeight: 1.35,
-    wordBreak: "break-word",
-  }}
->
-  {selectedTrainingInfo.title}
-</div>
+                <div
+                  style={{
+                    fontSize: 17,
+                    fontWeight: 900,
+                    lineHeight: 1.35,
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {selectedTrainingInfo.title}
+                </div>
                 <div
                   style={{
                     marginTop: 8,
@@ -629,15 +641,15 @@ return (
           </div>
         </div>
 
-      <div
-  style={{
-    ...cardStyle(),
-    marginBottom: 20,
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: 14,
-  }}
->
+        <div
+          style={{
+            ...cardStyle(),
+            marginBottom: 20,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 14,
+          }}
+        >
           <div>
             <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
               Ara
@@ -738,34 +750,34 @@ return (
           ) : filteredUsers.length === 0 ? (
             <div style={{ color: BRAND.muted }}>Uygun çalışan bulunamadı.</div>
           ) : (
-           <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 14,
-  }}
->
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: 14,
+              }}
+            >
               {filteredUsers.map((u) => {
                 const checked = selectedUsers.includes(u.id);
 
                 return (
-                 <label
-  key={u.id}
-  style={{
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 12,
-    padding: 16,
-    borderRadius: 16,
-border: checked
-    ? "2px solid #2563eb"
-    : `1px solid ${BRAND.border}`,
-    background: checked ? "#eff6ff" : "#f9fafb",
-    cursor: "pointer",
-    minWidth: 0,
-    overflow: "hidden",
-  }}
->
+                  <label
+                    key={u.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 12,
+                      padding: 16,
+                      borderRadius: 16,
+                      border: checked
+                        ? "2px solid #2563eb"
+                        : `1px solid ${BRAND.border}`,
+                      background: checked ? "#eff6ff" : "#f9fafb",
+                      cursor: "pointer",
+                      minWidth: 0,
+                      overflow: "hidden",
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={checked}
@@ -821,15 +833,15 @@ border: checked
           )}
         </div>
 
-       <div
-  style={{
-    ...cardStyle(),
-    marginBottom: assignSummary ? 20 : 0,
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 12,
-  }}
->
+        <div
+          style={{
+            ...cardStyle(),
+            marginBottom: assignSummary ? 20 : 0,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 12,
+          }}
+        >
           <div style={{ ...cardStyle(), padding: 14 }}>
             <div style={{ fontSize: 12, color: BRAND.muted }}>Seçilen Eğitim</div>
             <div style={{ fontSize: 15, fontWeight: 900, marginTop: 8 }}>
@@ -887,28 +899,28 @@ border: checked
               </div>
             </div>
 
-           <button
-  onClick={assign}
-  disabled={!trainingId || selectedCount === 0 || assigning}
-  style={{
-    border: "none",
-    borderRadius: 14,
-    padding: "14px 20px",
-    background:
-      !trainingId || selectedCount === 0 || assigning
-        ? "#9ca3af"
-        : "#16a34a",
-    color: "#fff",
-    fontWeight: 900,
-    cursor:
-      !trainingId || selectedCount === 0 || assigning
-        ? "not-allowed"
-        : "pointer",
-    minWidth: 180,
-    width: "100%",
-    maxWidth: 260,
-  }}
->
+            <button
+              onClick={assign}
+              disabled={!trainingId || selectedCount === 0 || assigning}
+              style={{
+                border: "none",
+                borderRadius: 14,
+                padding: "14px 20px",
+                background:
+                  !trainingId || selectedCount === 0 || assigning
+                    ? "#9ca3af"
+                    : "#16a34a",
+                color: "#fff",
+                fontWeight: 900,
+                cursor:
+                  !trainingId || selectedCount === 0 || assigning
+                    ? "not-allowed"
+                    : "pointer",
+                minWidth: 180,
+                width: "100%",
+                maxWidth: 260,
+              }}
+            >
               {assigning ? "Atanıyor..." : "Eğitimi Ata"}
             </button>
           </div>
@@ -946,14 +958,14 @@ border: checked
               </div>
             </div>
 
-           <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-    gap: 12,
-    marginBottom: 18,
-  }}
->
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: 12,
+                marginBottom: 18,
+              }}
+            >
               {[
                 ["Yeni Atama", assignSummary.insertedCount || 0],
                 ["Atlandı", assignSummary.skippedCount || 0],
@@ -1001,17 +1013,17 @@ border: checked
                     <div
                       key={`${item.userId}-${index}`}
                       style={{
-                      padding: "14px 16px",
-    borderTop:
-      index === 0 ? "none" : "1px solid #f1f5f9",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    flexWrap: "wrap",
-    minWidth: 0,
-  }}
->
+                        padding: "14px 16px",
+                        borderTop:
+                          index === 0 ? "none" : "1px solid #f1f5f9",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        minWidth: 0,
+                      }}
+                    >
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
