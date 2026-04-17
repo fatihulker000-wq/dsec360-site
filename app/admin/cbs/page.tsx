@@ -599,10 +599,13 @@ const firmList = useMemo(() => {
   </option>
 ))}
 
-    if (selectedFirm !== "all") {
-  data = data.filter((item) => item.firma_adi === selectedFirm);
+if (selectedFirmId !== "all") {
+  data = data.filter(
+    (item) => String(item.firmId || "").trim() === selectedFirmId
+  );
 }
-    if (filter !== "all") {
+
+if (filter !== "all") {
       data = data.filter((item) => (item.status || "new") === filter);
     }
 
@@ -621,7 +624,7 @@ const firmList = useMemo(() => {
         item.priority?.toLowerCase().includes(query)
       );
     });
-  }, [records, filter, search]);
+  }, [records, filter, search, selectedFirmId]);
 
   const countAll = records.length;
   const countNew = records.filter(
