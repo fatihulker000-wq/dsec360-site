@@ -223,6 +223,7 @@ export default function AdminCbsPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [search, setSearch] = useState("");
+  const [selectedFirm, setSelectedFirm] = useState<string>("all");
   const [pageError, setPageError] = useState("");
 
   const [replyId, setReplyId] = useState<number | null>(null);
@@ -573,9 +574,24 @@ const sendReply = async () => {
     };
   };
 
+const firmList = useMemo(() => {
+  const map = new Map<string, string>();
+
+  records.forEach((item) => {
+    if (item.firma_adi) {
+      map.set(item.firma_adi, item.firma_adi);
+    }
+  });
+
+  return Array.from(map.values());
+}, [records]);
+
   const filteredRecords = useMemo(() => {
     let data = records;
 
+    if (selectedFirm !== "all") {
+  data = data.filter((item) => item.firma_adi === selectedFirm);
+}
     if (filter !== "all") {
       data = data.filter((item) => (item.status || "new") === filter);
     }
@@ -1155,6 +1171,20 @@ const sendReply = async () => {
                 </div>
               </div>
             </div>
+
+<select
+  value={selectedFirm}
+  onChange={(e) => setSelectedFirm(e.target.value)}
+  className="cbs-input"
+  style={{ marginBottom: "10px" }}
+>
+  <option value="all">Tüm Firmalar</option>
+  {firmList.map((firm) => (
+    <option key={firm} value={firm}>
+      {firm}
+    </option>
+  ))}
+</select>
 
             <input
               value={search}
