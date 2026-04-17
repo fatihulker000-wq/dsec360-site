@@ -67,7 +67,10 @@ export async function GET(req: Request) {
 
     if (error) {
       console.error("mobile-sync GET supabase hata:", error);
-      return NextResponse.json({ error: "Kayıtlar alınamadı." }, { status: 500 });
+      return NextResponse.json(
+        { error: "Kayıtlar alınamadı." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true, data: data || [] });
@@ -87,11 +90,8 @@ export async function POST(req: Request) {
     const email = String(body?.email || "").trim();
     const message = String(body?.message || "").trim();
 
-    const firm_id_raw = body?.firm_id;
-    const firm_id =
-      typeof firm_id_raw === "number"
-        ? firm_id_raw
-        : Number(String(firm_id_raw || "").trim());
+    // ✅ APP artık web firması için UUID/string remoteId gönderiyor
+    const firm_id = String(body?.firm_id || "").trim();
 
     const category = String(body?.category || "").trim() || "Şikayet";
     const priority = String(body?.priority || "").trim() || "normal";
@@ -100,8 +100,11 @@ export async function POST(req: Request) {
     const status = String(body?.status || "").trim() || "new";
     const firma_adi = String(body?.firma_adi || "").trim() || null;
 
-    if (!full_name || !message || !firm_id || Number.isNaN(firm_id)) {
-      return NextResponse.json({ error: "Eksik alan var." }, { status: 400 });
+    if (!full_name || !message || !firm_id) {
+      return NextResponse.json(
+        { error: "Eksik alan var." },
+        { status: 400 }
+      );
     }
 
     const supabase = getSupabase();
@@ -111,7 +114,7 @@ export async function POST(req: Request) {
       full_name,
       email: email || null,
       message,
-      firm_id,
+      firm_id, // ✅ UUID/string olarak direkt yaz
       category,
       priority,
       assigned_to,
@@ -167,14 +170,38 @@ export async function PUT(req: Request) {
       updated_at: new Date().toISOString(),
     };
 
-    if (body?.status != null) updatePayload.status = String(body.status).trim();
-    if (body?.category != null) updatePayload.category = String(body.category).trim() || null;
-    if (body?.priority != null) updatePayload.priority = String(body.priority).trim() || null;
-    if (body?.assigned_to != null) updatePayload.assigned_to = String(body.assigned_to).trim() || null;
-    if (body?.resolution_note != null) updatePayload.resolution_note = String(body.resolution_note).trim() || null;
-    if (body?.message != null) updatePayload.message = String(body.message).trim() || null;
-    if (body?.full_name != null) updatePayload.full_name = String(body.full_name).trim() || null;
-    if (body?.email != null) updatePayload.email = String(body.email).trim() || null;
+    if (body?.status != null) {
+      updatePayload.status = String(body.status).trim();
+    }
+
+    if (body?.category != null) {
+      updatePayload.category = String(body.category).trim() || null;
+    }
+
+    if (body?.priority != null) {
+      updatePayload.priority = String(body.priority).trim() || null;
+    }
+
+    if (body?.assigned_to != null) {
+      updatePayload.assigned_to = String(body.assigned_to).trim() || null;
+    }
+
+    if (body?.resolution_note != null) {
+      updatePayload.resolution_note =
+        String(body.resolution_note).trim() || null;
+    }
+
+    if (body?.message != null) {
+      updatePayload.message = String(body.message).trim() || null;
+    }
+
+    if (body?.full_name != null) {
+      updatePayload.full_name = String(body.full_name).trim() || null;
+    }
+
+    if (body?.email != null) {
+      updatePayload.email = String(body.email).trim() || null;
+    }
 
     if (String(body?.status || "").trim() === "closed") {
       updatePayload.closed_at = new Date().toISOString();
@@ -187,7 +214,10 @@ export async function PUT(req: Request) {
 
     if (error) {
       console.error("mobile-sync PUT supabase hata:", error);
-      return NextResponse.json({ error: "Güncelleme yapılamadı." }, { status: 500 });
+      return NextResponse.json(
+        { error: "Güncelleme yapılamadı." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true });
