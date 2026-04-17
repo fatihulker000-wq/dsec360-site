@@ -418,22 +418,41 @@ export async function PUT(req: Request) {
       updatePayload.priority = priority;
     }
 
-    if (firmId !== undefined) {
-      const cleanFirmId = String(firmId || "").trim() || null;
+  if (firmId !== undefined) {
+  const cleanFirmId = String(firmId || "").trim() || null;
 
-      if (
-        session.role === "company_admin" &&
-        cleanFirmId &&
-        cleanFirmId !== session.companyId
-      ) {
-        return NextResponse.json(
-          { error: "Sadece kendi firmanı bağlayabilirsin." },
-          { status: 403 }
-        );
-      }
+  if (
+    session.role === "company_admin" &&
+    cleanFirmId &&
+    cleanFirmId !== session.companyId
+  ) {
+    return NextResponse.json(
+      { error: "Sadece kendi firmanı bağlayabilirsin." },
+      { status: 403 }
+    );
+  }
 
-      updatePayload.firm_id = cleanFirmId;
+  updatePayload.firm_id = cleanFirmId;
+
+  if (cleanFirmId) {
+    const { data: companyData, error: companyError } = await supabase
+      .from("companies")
+      .select("id, name")
+      .eq("id", cleanFirmId)
+      .maybeSingle();
+
+    if (companyError) {
+      return NextResponse.json(
+        { error: "Firma bilgisi alınamadı." },
+        { status: 500 }
+      );
     }
+
+    updatePayload.firma_adi = String(companyData?.name || "").trim() || null;
+  } else {
+    updatePayload.firma_adi = null;
+  }
+}
 
     const { error } = await supabase
       .from("cbs_forms")
