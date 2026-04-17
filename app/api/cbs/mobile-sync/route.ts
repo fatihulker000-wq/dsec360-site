@@ -15,9 +15,16 @@ function getSupabase() {
 }
 
 function isAuthorized(req: Request) {
-  const expectedKey = process.env.CBS_MOBILE_SYNC_KEY || "";
-  const incomingKey = req.headers.get("X-DSEC-SYNC-KEY") || "";
-  return expectedKey.isNotBlank?.() ? incomingKey === expectedKey : incomingKey === expectedKey;
+  const expectedKey = (process.env.CBS_MOBILE_SYNC_KEY || "").trim();
+  const incomingKey = (req.headers.get("X-DSEC-SYNC-KEY") || "").trim();
+
+  // Eğer key tanımlıysa kontrol et
+  if (expectedKey.length > 0) {
+    return incomingKey === expectedKey;
+  }
+
+  // Eğer key boşsa (dev ortamı) izin ver
+  return true;
 }
 
 // TS safety
