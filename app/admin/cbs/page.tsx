@@ -218,7 +218,7 @@ function TinyBar({
 }
 
 export default function AdminCbsPage() {
- const [records, setRecords] = useState<CbsRecord[]>([]);
+const [records, setRecords] = useState<CbsRecord[]>([]);
 const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
 const [selectedFirmId, setSelectedFirmId] = useState("all");
 const [loading, setLoading] = useState(true);
@@ -238,6 +238,7 @@ const [pageError, setPageError] = useState("");
     "low" | "normal" | "high" | "critical"
   >("normal");
   const [editResolutionNote, setEditResolutionNote] = useState("");
+  const [editFirmId, setEditFirmId] = useState("none");
   const [savingEdit, setSavingEdit] = useState(false);
 
   const loadRecords = async () => {
@@ -315,13 +316,14 @@ const [pageError, setPageError] = useState("");
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          id: editId,
-          category: editCategory.trim() || null,
-          assignedTo: editAssignedTo.trim() || null,
-          resolutionNote: editResolutionNote.trim() || null,
-          priority: editPriority,
-        }),
+       body: JSON.stringify({
+  id: editId,
+  category: editCategory.trim() || null,
+  assignedTo: editAssignedTo.trim() || null,
+  resolutionNote: editResolutionNote.trim() || null,
+  priority: editPriority,
+  firmId: editFirmId === "none" ? null : editFirmId,
+}),
       });
 
       const result = await readSafeJson(response);
@@ -336,6 +338,7 @@ const [pageError, setPageError] = useState("");
       setEditAssignedTo("");
       setEditPriority("normal");
       setEditResolutionNote("");
+      setEditFirmId("none")
       await loadRecords();
       alert("Kayıt detayları güncellendi.");
     } catch (error) {
@@ -347,24 +350,28 @@ const [pageError, setPageError] = useState("");
   };
 
   const openEdit = (item: CbsRecord) => {
-    setReplyId(null);
-    setReplyText("");
-    setEditId(item.id);
-    setEditCategory(item.category || "");
-    setEditAssignedTo(item.assignedTo || "");
-    setEditPriority(
-      (item.priority as "low" | "normal" | "high" | "critical") || "normal"
-    );
-    setEditResolutionNote(item.resolutionNote || "");
-  };
+  setReplyId(null);
+  setReplyText("");
+  setEditId(item.id);
+  setEditCategory(item.category || "");
+  setEditAssignedTo(item.assignedTo || "");
+  setEditPriority(
+    (item.priority as "low" | "normal" | "high" | "critical") || "normal"
+  );
+  setEditResolutionNote(item.resolutionNote || "");
+  setEditFirmId(
+    String(item.firmId || item.suggestedFirmId || "none").trim() || "none"
+  );
+};
 
-  const cancelEdit = () => {
-    setEditId(null);
-    setEditCategory("");
-    setEditAssignedTo("");
-    setEditPriority("normal");
-    setEditResolutionNote("");
-  };
+const cancelEdit = () => {
+  setEditId(null);
+  setEditCategory("");
+  setEditAssignedTo("");
+  setEditPriority("normal");
+  setEditResolutionNote("");
+  setEditFirmId("none");
+};
 
  const deleteRecord = async (id: number) => {
   const ok = window.confirm("Bu kaydı silmek istediğine emin misin?");
@@ -1632,6 +1639,46 @@ const categoryStats = useMemo(() => {
 )}
 
   </div>
+
+  <div>
+  <label
+    style={{
+      display: "block",
+      fontSize: "13px",
+      fontWeight: 700,
+      color: "#374151",
+      marginBottom: "6px",
+    }}
+  >
+    Sistem Firması Seç
+  </label>
+
+  <select
+    value={editFirmId}
+    onChange={(e) => setEditFirmId(e.target.value)}
+    className="cbs-input"
+  >
+    <option value="none">Firma seçilmedi</option>
+    {companies.map((company) => (
+      <option key={company.id} value={company.id}>
+        {company.name}
+      </option>
+    ))}
+  </select>
+
+  {editFirmId !== "none" && (
+    <div
+      style={{
+        marginTop: "8px",
+        fontSize: "12px",
+        fontWeight: 700,
+        color: "#166534",
+      }}
+    >
+      Kayıt seçilen firmaya bağlanacak.
+    </div>
+  )}
+</div>
 
   <div>
     <label
