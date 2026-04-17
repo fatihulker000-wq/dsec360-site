@@ -218,15 +218,14 @@ function TinyBar({
 }
 
 export default function AdminCbsPage() {
-  const [records, setRecords] = useState<CbsRecord[]>([]);
-  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
-  const [selectedFirmId, setSelectedFirmId] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const [filter, setFilter] = useState<FilterType>("all");
-  const [search, setSearch] = useState("");
-  const [selectedFirm, setSelectedFirm] = useState<string>("all");
-  const [pageError, setPageError] = useState("");
+ const [records, setRecords] = useState<CbsRecord[]>([]);
+const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+const [selectedFirmId, setSelectedFirmId] = useState("all");
+const [loading, setLoading] = useState(true);
+const [busyId, setBusyId] = useState<number | null>(null);
+const [filter, setFilter] = useState<FilterType>("all");
+const [search, setSearch] = useState("");
+const [pageError, setPageError] = useState("");
 
   const [replyId, setReplyId] = useState<number | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -577,27 +576,9 @@ const sendReply = async () => {
     };
   };
 
-const firmList = useMemo(() => {
-  const map = new Map<string, string>();
-
-  records.forEach((item) => {
-    if (item.firma_adi) {
-      map.set(item.firma_adi, item.firma_adi);
-    }
-  });
-
-  return Array.from(map.values());
-}, [records]);
-
+ 
   const filteredRecords = useMemo(() => {
     let data = records;
-
-    <option value="all">Tüm Firmalar</option>
-{companies.map((company) => (
-  <option key={company.id} value={company.id}>
-    {company.name}
-  </option>
-))}
 
 if (selectedFirmId !== "all") {
   data = data.filter(
@@ -626,27 +607,38 @@ if (filter !== "all") {
     });
   }, [records, filter, search, selectedFirmId]);
 
-  const countAll = records.length;
-  const countNew = records.filter(
+  const countAll = filteredRecords.length;
+
+  const countNew = filteredRecords.filter(
     (item) => (item.status || "new") === "new"
   ).length;
-  const countRead = records.filter((item) => item.status === "read").length;
-  const countProcessing = records.filter(
+
+  const countRead = filteredRecords.filter(
+    (item) => item.status === "read"
+  ).length;
+
+  const countProcessing = filteredRecords.filter(
     (item) => item.status === "processing"
   ).length;
-  const countClosed = records.filter((item) => item.status === "closed").length;
-  const countSlaExceeded = records.filter((item) =>
+
+  const countClosed = filteredRecords.filter(
+    (item) => item.status === "closed"
+  ).length;
+
+  const countSlaExceeded = filteredRecords.filter((item) =>
     isSlaExceeded(item.sla_due_at, item.status)
   ).length;
 
-  const closedRate = countAll > 0 ? Math.round((countClosed / countAll) * 100) : 0;
+  const closedRate =
+    countAll > 0 ? Math.round((countClosed / countAll) * 100) : 0;
+
   const slaSafeCount = countAll - countSlaExceeded;
 
-  const criticalCount = records.filter(
+  const criticalCount = filteredRecords.filter(
     (item) => String(item.priority || "").toLowerCase() === "critical"
   ).length;
 
-  const highCount = records.filter(
+  const highCount = filteredRecords.filter(
     (item) => String(item.priority || "").toLowerCase() === "high"
   ).length;
 
@@ -659,21 +651,27 @@ if (filter !== "all") {
       ? `Yeni kayıt yoğunluğu kapanan kayıtlardan fazla. Operasyon yükü artıyor olabilir.`
       : `Kapanış oranı %${closedRate}. Genel akış kontrollü ve sistem sağlıklı görünüyor.`;
 
-  const maxChartValue = Math.max(countNew, countProcessing, countRead, countClosed, 1);
+  const maxChartValue = Math.max(
+    countNew,
+    countProcessing,
+    countRead,
+    countClosed,
+    1
+  );
 
-  const categoryStats = useMemo(() => {
-    const map = new Map<string, number>();
+const categoryStats = useMemo(() => {
+  const map = new Map<string, number>();
 
-    records.forEach((item) => {
-      const key = item.category?.trim() || "Genel";
-      map.set(key, (map.get(key) || 0) + 1);
-    });
+  filteredRecords.forEach((item) => {
+    const key = item.category?.trim() || "Genel";
+    map.set(key, (map.get(key) || 0) + 1);
+  });
 
-    return Array.from(map.entries())
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
-  }, [records]);
+  return Array.from(map.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+}, [filteredRecords]);
 
   const maxCategoryValue = Math.max(...categoryStats.map((x) => x.value), 1);
 
@@ -774,7 +772,7 @@ if (filter !== "all") {
                   fontSize: "16px",
                 }}
               >
-                {loading ? "Kayıtlar yükleniyor..." : "Toplam kayıt: " + records.length}
+               {loading ? "Kayıtlar yükleniyor..." : "Toplam kayıt: " + countAll}
               </p>
             </div>
 
