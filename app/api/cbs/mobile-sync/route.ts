@@ -34,7 +34,7 @@ export async function GET(req: Request) {
     if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
-    const firmId = String(url.searchParams.get("firmId") || "").trim();
+    const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
 
     const supabase = getSupabase();
 
@@ -59,8 +59,8 @@ export async function GET(req: Request) {
       `)
       .order("created_at", { ascending: false });
 
-    if (firmId) {
-      query = query.eq("firm_id", firmId);
+    if (firmIdParam) {
+      query = query.eq("firm_id", firmIdParam);
     }
 
     const { data, error } = await query;
@@ -86,7 +86,13 @@ export async function POST(req: Request) {
     const full_name = String(body?.full_name || "").trim();
     const email = String(body?.email || "").trim();
     const message = String(body?.message || "").trim();
-    const firm_id = String(body?.firm_id || "").trim();
+
+    const firm_id_raw = body?.firm_id;
+    const firm_id =
+      typeof firm_id_raw === "number"
+        ? firm_id_raw
+        : Number(String(firm_id_raw || "").trim());
+
     const category = String(body?.category || "").trim() || "Şikayet";
     const priority = String(body?.priority || "").trim() || "normal";
     const assigned_to = String(body?.assigned_to || "").trim() || null;
@@ -94,7 +100,7 @@ export async function POST(req: Request) {
     const status = String(body?.status || "").trim() || "new";
     const firma_adi = String(body?.firma_adi || "").trim() || null;
 
-    if (!full_name || !message || !firm_id) {
+    if (!full_name || !message || !firm_id || Number.isNaN(firm_id)) {
       return NextResponse.json({ error: "Eksik alan var." }, { status: 400 });
     }
 
@@ -112,7 +118,6 @@ export async function POST(req: Request) {
       resolution_note,
       status,
       firma_adi,
-      source_type: "APP",
       created_at: now,
       updated_at: now,
     };
@@ -124,8 +129,18 @@ export async function POST(req: Request) {
       .single();
 
     if (error || !data) {
-      console.error("mobile-sync POST supabase hata:", error);
-      return NextResponse.json({ error: "Kayıt oluşturulamadı." }, { status: 500 });
+      console.error("mobile-sync POST supabase hata detayı:", {
+        error,
+        insertPayload,
+      });
+
+      return NextResponse.json(
+        {
+          error: "Kayıt oluşturulamadı.",
+          detail: error?.message || error || null,
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true, remoteId: data.id });
