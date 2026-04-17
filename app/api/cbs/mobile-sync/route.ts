@@ -18,19 +18,12 @@ function isAuthorized(req: Request) {
   const expectedKey = (process.env.CBS_MOBILE_SYNC_KEY || "").trim();
   const incomingKey = (req.headers.get("X-DSEC-SYNC-KEY") || "").trim();
 
-  // Eğer key tanımlıysa kontrol et
   if (expectedKey.length > 0) {
     return incomingKey === expectedKey;
   }
 
-  // Eğer key boşsa (dev ortamı) izin ver
   return true;
 }
-
-// TS safety
-(String.prototype as any).isNotBlank = function () {
-  return String(this).trim().length > 0;
-};
 
 function unauthorized() {
   return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
@@ -73,10 +66,11 @@ export async function GET(req: Request) {
     const { data, error } = await query;
 
     if (error) {
+      console.error("mobile-sync GET supabase hata:", error);
       return NextResponse.json({ error: "Kayıtlar alınamadı." }, { status: 500 });
     }
 
-    return NextResponse.json({ data: data || [] });
+    return NextResponse.json({ success: true, data: data || [] });
   } catch (e) {
     console.error("mobile-sync GET hata:", e);
     return NextResponse.json({ error: "Sunucu hatası." }, { status: 500 });
@@ -93,7 +87,7 @@ export async function POST(req: Request) {
     const email = String(body?.email || "").trim();
     const message = String(body?.message || "").trim();
     const firm_id = String(body?.firm_id || "").trim();
-    const category = String(body?.category || "").trim();
+    const category = String(body?.category || "").trim() || "Şikayet";
     const priority = String(body?.priority || "").trim() || "normal";
     const assigned_to = String(body?.assigned_to || "").trim() || null;
     const resolution_note = String(body?.resolution_note || "").trim() || null;
@@ -105,32 +99,32 @@ export async function POST(req: Request) {
     }
 
     const supabase = getSupabase();
-
     const now = new Date().toISOString();
+
+    const insertPayload = {
+      full_name,
+      email: email || null,
+      message,
+      firm_id,
+      category,
+      priority,
+      assigned_to,
+      resolution_note,
+      status,
+      firma_adi,
+      source_type: "APP",
+      created_at: now,
+      updated_at: now,
+    };
 
     const { data, error } = await supabase
       .from("cbs_forms")
-      .insert([
-        {
-          full_name,
-          email: email || null,
-          message,
-          firm_id,
-          category: category || null,
-          priority,
-          assigned_to,
-          resolution_note,
-          status,
-          firma_adi,
-          source_type: "APP",
-          created_at: now,
-          updated_at: now,
-        },
-      ])
+      .insert([insertPayload])
       .select("id")
       .single();
 
     if (error || !data) {
+      console.error("mobile-sync POST supabase hata:", error);
       return NextResponse.json({ error: "Kayıt oluşturulamadı." }, { status: 500 });
     }
 
@@ -146,8 +140,8 @@ export async function PUT(req: Request) {
     if (!isAuthorized(req)) return unauthorized();
 
     const body = await req.json();
-
     const id = Number(body?.id);
+
     if (!id) {
       return NextResponse.json({ error: "ID zorunlu." }, { status: 400 });
     }
@@ -177,6 +171,7 @@ export async function PUT(req: Request) {
       .eq("id", id);
 
     if (error) {
+      console.error("mobile-sync PUT supabase hata:", error);
       return NextResponse.json({ error: "Güncelleme yapılamadı." }, { status: 500 });
     }
 
