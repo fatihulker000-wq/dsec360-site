@@ -44,6 +44,28 @@ type AdminSession = {
   companyId: string;
 };
 
+type CompanyRow = {
+  id: string | number;
+  name: string | null;
+};
+
+type CbsRow = {
+  id: number;
+  full_name: string | null;
+  email: string | null;
+  message: string | null;
+  created_at: string | null;
+  status: string | null;
+  category: string | null;
+  firm_id: string | number | null;
+  assigned_to: string | null;
+  resolution_note: string | null;
+  firma_adi: string | null;
+  priority: string | null;
+  sla_due_at: string | null;
+  closed_at: string | null;
+};
+
 async function getAdminSession(): Promise<AdminSession | null> {
   const cookieStore = await cookies();
 
@@ -115,6 +137,60 @@ async function getAuthorizedRecord(
   return data;
 }
 
+function findSuggestedCompany(
+  item: Pick<CbsRow, "firma_adi" | "firm_id">,
+  companies: CompanyRow[]
+) {
+  const rawFirmId = String(item.firm_id ?? "").trim();
+  const rawFirmaAdi = String(item.firma_adi ?? "").trim();
+
+  if (rawFirmId) {
+    const exactIdMatch = companies.find(
+      (company) => String(company.id || "").trim() === rawFirmId
+    );
+
+    if (exactIdMatch) {
+      return {
+        suggestedFirmId: String(exactIdMatch.id || "").trim(),
+        suggestedFirmName: String(exactIdMatch.name || "").trim() || null,
+      };
+    }
+  }
+
+  const normalizedInput = normalizeFirmName(rawFirmaAdi);
+  if (!normalizedInput) {
+    return {
+      suggestedFirmId: null,
+      suggestedFirmName: null,
+    };
+  }
+
+  const exact = companies.find((company) => {
+    return normalizeFirmName(String(company.name || "")) === normalizedInput;
+  });
+
+  const includes =
+    exact ||
+    companies.find((company) => {
+      const dbName = normalizeFirmName(String(company.name || ""));
+      return (
+        dbName.includes(normalizedInput) || normalizedInput.includes(dbName)
+      );
+    });
+
+  if (includes?.id) {
+    return {
+      suggestedFirmId: String(includes.id || "").trim(),
+      suggestedFirmName: String(includes.name || "").trim() || null,
+    };
+  }
+
+  return {
+    suggestedFirmId: null,
+    suggestedFirmName: null,
+  };
+}
+
 /* =========================
    GET
 ========================= */
@@ -125,36 +201,38 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    const { data: companies } = await supabase
-      .from("companies")
-      .select("id, name")
-      .limit(1000);
+    const [{ data: companies, error: companiesError }, { data, error }] =
+      await Promise.all([
+        supabase.from("companies").select("id, name").limit(5000),
+        supabase
+          .from("cbs_forms")
+          .select(`
+            id,
+            full_name,
+            email,
+            message,
+            created_at,
+            status,
+            category,
+            firm_id,
+            assigned_to,
+            resolution_note,
+            firma_adi,
+            priority,
+            sla_due_at,
+            closed_at
+          `)
+          .order("created_at", { ascending: false })
+          .limit(5000),
+      ]);
 
-    let query = supabase
-      .from("cbs_forms")
-      .select(`
-        id,
-        full_name,
-        email,
-        message,
-        created_at,
-        status,
-        category,
-        firm_id,
-        assigned_to,
-        resolution_note,
-        firma_adi,
-        priority,
-        sla_due_at,
-        closed_at
-      `)
-      .order("created_at", { ascending: false });
-
-    if (session.role === "company_admin") {
-      query = query.eq("firm_id", session.companyId);
+    if (companiesError) {
+      console.error("CBS GET companies hatası:", companiesError);
+      return NextResponse.json(
+        { error: "Firma listesi alınamadı." },
+        { status: 500 }
+      );
     }
-
-    const { data, error } = await query;
 
     if (error) {
       console.error("CBS GET hatası:", error);
@@ -164,51 +242,45 @@ export async function GET() {
       );
     }
 
-    const formatted = (data || []).map((item) => {
-      const normalizedInput = normalizeFirmName(String(item.firma_adi || ""));
-      let suggestedFirmId: string | null = null;
-      let suggestedFirmName: string | null = null;
+    const companyList: CompanyRow[] = companies || [];
+    const sessionCompanyId = String(session.companyId || "").trim();
 
-      if (!item.firm_id && normalizedInput && companies?.length) {
-        const exact = companies.find((company) => {
-          return normalizeFirmName(String(company.name || "")) === normalizedInput;
-        });
+    const formatted = ((data || []) as CbsRow[])
+      .map((item) => {
+        const directFirmId = String(item.firm_id ?? "").trim() || null;
 
-        const includes =
-          exact ||
-          companies.find((company) => {
-            const dbName = normalizeFirmName(String(company.name || ""));
-            return (
-              dbName.includes(normalizedInput) ||
-              normalizedInput.includes(dbName)
-            );
-          });
+        const { suggestedFirmId, suggestedFirmName } = findSuggestedCompany(
+          item,
+          companyList
+        );
 
-        if (includes?.id) {
-          suggestedFirmId = String(includes.id);
-          suggestedFirmName = String(includes.name || "");
-        }
-      }
+        return {
+          id: item.id,
+          full_name: item.full_name,
+          email: item.email,
+          message: item.message,
+          created_at: item.created_at,
+          status: item.status,
+          category: item.category,
+          firmId: directFirmId,
+          assignedTo: item.assigned_to,
+          resolutionNote: item.resolution_note,
+          firma_adi: item.firma_adi,
+          priority: item.priority,
+          sla_due_at: item.sla_due_at,
+          closed_at: item.closed_at,
+          suggestedFirmId,
+          suggestedFirmName,
+        };
+      })
+      .filter((item) => {
+        if (session.role === "super_admin") return true;
 
-      return {
-        id: item.id,
-        full_name: item.full_name,
-        email: item.email,
-        message: item.message,
-        created_at: item.created_at,
-        status: item.status,
-        category: item.category,
-        firmId: item.firm_id,
-        assignedTo: item.assigned_to,
-        resolutionNote: item.resolution_note,
-        firma_adi: item.firma_adi,
-        priority: item.priority,
-        sla_due_at: item.sla_due_at,
-        closed_at: item.closed_at,
-        suggestedFirmId,
-        suggestedFirmName,
-      };
-    });
+        return (
+          String(item.firmId || "").trim() === sessionCompanyId ||
+          String(item.suggestedFirmId || "").trim() === sessionCompanyId
+        );
+      });
 
     return NextResponse.json({ data: formatted });
   } catch (error) {
@@ -340,7 +412,20 @@ export async function PUT(req: Request) {
     }
 
     if (firmId !== undefined) {
-      updatePayload.firm_id = String(firmId || "").trim() || null;
+      const cleanFirmId = String(firmId || "").trim() || null;
+
+      if (
+        session.role === "company_admin" &&
+        cleanFirmId &&
+        cleanFirmId !== session.companyId
+      ) {
+        return NextResponse.json(
+          { error: "Sadece kendi firmanı bağlayabilirsin." },
+          { status: 403 }
+        );
+      }
+
+      updatePayload.firm_id = cleanFirmId;
     }
 
     const { error } = await supabase
