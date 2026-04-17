@@ -219,6 +219,8 @@ function TinyBar({
 
 export default function AdminCbsPage() {
   const [records, setRecords] = useState<CbsRecord[]>([]);
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [selectedFirmId, setSelectedFirmId] = useState("all");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
@@ -258,6 +260,7 @@ export default function AdminCbsPage() {
       }
 
       setRecords(result?.data ?? []);
+      setCompanies(result?.companies ?? []);
     } catch (error) {
       console.error("CBS kayıt yükleme hatası:", error);
       setRecords([]);
@@ -588,6 +591,13 @@ const firmList = useMemo(() => {
 
   const filteredRecords = useMemo(() => {
     let data = records;
+
+    <option value="all">Tüm Firmalar</option>
+{companies.map((company) => (
+  <option key={company.id} value={company.id}>
+    {company.name}
+  </option>
+))}
 
     if (selectedFirm !== "all") {
   data = data.filter((item) => item.firma_adi === selectedFirm);
@@ -1173,15 +1183,16 @@ const firmList = useMemo(() => {
             </div>
 
 <select
-  value={selectedFirm}
-  onChange={(e) => setSelectedFirm(e.target.value)}
+  value={selectedFirmId}
+  onChange={(e) => setSelectedFirmId(e.target.value)}
   className="cbs-input"
   style={{ marginBottom: "10px" }}
 >
   <option value="all">Tüm Firmalar</option>
-  {firmList.map((firm) => (
-    <option key={firm} value={firm}>
-      {firm}
+
+  {companies.map((company) => (
+    <option key={company.id} value={company.id}>
+      {company.name}
     </option>
   ))}
 </select>
