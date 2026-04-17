@@ -233,6 +233,7 @@ export async function GET() {
         { status: 500 }
       );
     }
+console.log("COMPANIES:", companies);
 
     if (error) {
       console.error("CBS GET hatası:", error);
@@ -282,7 +283,13 @@ export async function GET() {
         );
       });
 
-    return NextResponse.json({ data: formatted });
+    return NextResponse.json({
+  data: formatted,
+  companies: (companies || []).map((company) => ({
+    id: String(company.id || "").trim(),
+    name: String(company.name || "").trim(),
+  })),
+});
   } catch (error) {
     console.error("CBS GET genel hata:", error);
     return NextResponse.json(
