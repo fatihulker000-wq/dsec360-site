@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -66,12 +69,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const resetUrl = '${req.nextUrl.origin}/admin/reset-password?token=${token}';
+   const resetUrl = '${req.nextUrl.origin}/admin/reset-password?token=${token}';
 
-    return NextResponse.json({
-      success: true,
-      resetUrl,
-    });
+  await resend.emails.send({
+  from: "DSEC <noreply@dsec360.com>",
+  to: email,
+  subject: "Şifre Yenileme",
+  html: `
+    <h2>Şifre Yenileme</h2>
+    <p>Şifrenizi yenilemek için aşağıdaki butona tıklayın:</p>
+
+    <a href="${resetUrl}" 
+       style="
+         display:inline-block;
+         padding:12px 18px;
+         background:#c62828;
+         color:#fff;
+         text-decoration:none;
+         border-radius:8px;
+         font-weight:bold;
+       ">
+       Şifreyi Yenile
+    </a>
+
+    <p>Bu bağlantı 30 dakika geçerlidir.</p>
+  `,
+});
+
+return NextResponse.json({
+  success: true,
+});
   } catch (error) {
     console.error("forgot-password general error:", error);
     return NextResponse.json(

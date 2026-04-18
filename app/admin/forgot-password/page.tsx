@@ -19,7 +19,6 @@ export default function AdminForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [resetUrl, setResetUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSend = async () => {
@@ -27,7 +26,6 @@ export default function AdminForgotPasswordPage() {
       setLoading(true);
       setError("");
       setSuccess("");
-      setResetUrl("");
 
       const res = await fetch("/api/admin/forgot-password", {
         method: "POST",
@@ -46,10 +44,8 @@ export default function AdminForgotPasswordPage() {
         return;
       }
 
-      setSuccess("Reset bağlantısı üretildi.");
-      if (data?.resetUrl) {
-        setResetUrl(data.resetUrl);
-      }
+      setSuccess("Şifre yenileme bağlantısı email adresinize gönderildi.");
+
     } catch (error) {
       console.error(error);
       setError("Bağlantı hatası oluştu.");
@@ -101,11 +97,18 @@ export default function AdminForgotPasswordPage() {
             lineHeight: 1.7,
           }}
         >
-          Yönetim hesabınızın email adresini girin. Sistem size yeni şifre bağlantısı oluşturur.
+          Email adresinizi girin. Şifre yenileme bağlantısı size gönderilecektir.
         </p>
 
         <div style={{ marginBottom: 18 }}>
-          <label style={{ display: "block", marginBottom: 8, fontWeight: 800, color: BRAND.text }}>
+          <label
+            style={{
+              display: "block",
+              marginBottom: 8,
+              fontWeight: 800,
+              color: BRAND.text,
+            }}
+          >
             Email
           </label>
           <input
@@ -138,10 +141,10 @@ export default function AdminForgotPasswordPage() {
             cursor: loading ? "not-allowed" : "pointer",
           }}
         >
-          {loading ? "Oluşturuluyor..." : "Reset Bağlantısı Oluştur"}
+          {loading ? "Gönderiliyor..." : "Şifre Yenileme Linki Gönder"}
         </button>
 
-        {error ? (
+        {error && (
           <div
             style={{
               marginTop: 14,
@@ -155,9 +158,9 @@ export default function AdminForgotPasswordPage() {
           >
             {error}
           </div>
-        ) : null}
+        )}
 
-        {success ? (
+        {success && (
           <div
             style={{
               marginTop: 14,
@@ -171,27 +174,7 @@ export default function AdminForgotPasswordPage() {
           >
             {success}
           </div>
-        ) : null}
-
-        {resetUrl ? (
-          <div
-            style={{
-              marginTop: 14,
-              padding: 14,
-              borderRadius: 14,
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              color: "#1d4ed8",
-              fontWeight: 700,
-              wordBreak: "break-all",
-            }}
-          >
-            <div style={{ marginBottom: 8 }}>Reset Linki:</div>
-            <a href={resetUrl} style={{ color: "#1d4ed8" }}>
-              {resetUrl}
-            </a>
-          </div>
-        ) : null}
+        )}
 
         <div style={{ marginTop: 16 }}>
           <a

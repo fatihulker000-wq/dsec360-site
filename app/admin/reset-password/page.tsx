@@ -71,7 +71,11 @@ useEffect(() => {
         return;
       }
 
-      setSuccess("Şifreniz güncellendi. Giriş sayfasına dönebilirsiniz.");
+      setSuccess("Şifreniz güncellendi. Birkaç saniye içinde giriş ekranına yönlendirileceksiniz.");
+      setTimeout(() => {
+  window.location.href = "/admin/login";
+}, 1800);
+
       setNewPassword("");
       setNewPassword2("");
     } catch (error) {

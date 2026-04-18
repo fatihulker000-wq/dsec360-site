@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+
+async function checkAdmin() {
+  const cookieStore = await cookies();
+  const auth = cookieStore.get("dsec_admin_auth")?.value;
+  const role = cookieStore.get("dsec_admin_role")?.value;
+
+  return auth === "ok" && role === "super_admin";
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const allowed = await checkAdmin();
+
+    if (!allowed) {
+      return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
+    }
+
     const { role } = await req.json();
 
     if (!role) {
@@ -13,7 +28,8 @@ export async function POST(req: NextRequest) {
     if (role === "operator") {
       permissions = [
         "DENETIM",
-        "EGITIM"
+        "EGITIM",
+        "CALISANLAR",
       ];
     }
 
@@ -24,7 +40,10 @@ export async function POST(req: NextRequest) {
         "SAGLIK",
         "RAPORLAMA",
         "CBS",
-        "CALISANLAR"
+        "CALISANLAR",
+        "DOKUMANTASYON",
+        "MEVZUAT",
+        "AJANDA",
       ];
     }
 
@@ -36,14 +55,23 @@ export async function POST(req: NextRequest) {
         "RAPORLAMA",
         "CBS",
         "CALISANLAR",
+        "DOKUMANTASYON",
+        "MEVZUAT",
+        "AJANDA",
+        "RISK_YONETIMI",
+        "KAZA_OLAY_YONETIMI",
         "ADMIN",
-        "FIRMA_YONETIM"
+        "FIRMA_YONETIM",
+        "KULLANICI_YONETIMI",
       ];
     }
 
-    return NextResponse.json({ permissions });
-
-  } catch {
+    return NextResponse.json({
+      success: true,
+      permissions: Array.from(new Set(permissions)),
+    });
+  } catch (error) {
+    console.error("roles template error:", error);
     return NextResponse.json({ error: "Sunucu hatası" }, { status: 500 });
   }
 }
