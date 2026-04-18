@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 
 const BRAND = {
@@ -17,8 +18,15 @@ const BRAND = {
 };
 
 export default function AdminResetPasswordPage() {
-  const searchParams = useSearchParams();
-  const token = useMemo(() => String(searchParams.get("token") || "").trim(), [searchParams]);
+ const [token, setToken] = useState("");
+
+useEffect(() => {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const t = String(params.get("token") || "").trim();
+    setToken(t);
+  }
+}, []);
 
   const [newPassword, setNewPassword] = useState("");
   const [newPassword2, setNewPassword2] = useState("");
