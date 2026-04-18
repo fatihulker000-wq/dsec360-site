@@ -24,6 +24,11 @@ type CompanyRow = {
   name: string | null;
 };
 
+type UserPermissionRow = {
+  user_id: string | null;
+  permission_key: string | null;
+};
+
 export async function GET() {
   try {
     const cookieStore = await cookies();
@@ -81,16 +86,45 @@ export async function GET() {
     }
 
     const userRows = (data || []) as UserRow[];
+    const userIds = userRows
+      .map((u) => String(u.id || "").trim())
+      .filter(Boolean);
+
+    const permissionMap = new Map<string, string[]>();
+
+    if (userIds.length > 0) {
+      const { data: permData, error: permError } = await supabase
+        .from("user_permissions")
+        .select("user_id, permission_key")
+        .in("user_id", userIds);
+
+      if (permError) {
+        console.error("User permissions fetch hatası:", permError);
+      } else {
+        ((permData || []) as UserPermissionRow[]).forEach((p) => {
+          const uid = String(p.user_id || "").trim();
+          const key = String(p.permission_key || "").trim();
+
+          if (!uid || !key) return;
+
+          if (!permissionMap.has(uid)) {
+            permissionMap.set(uid, []);
+          }
+
+          permissionMap.get(uid)!.push(key);
+        });
+      }
+    }
 
     const companyIds = Array.from(
       new Set(
         userRows
-          .map((user) => (user.company_id ? String(user.company_id).trim() : ""))
+          .map((user) => String(user.company_id || "").trim())
           .filter(Boolean)
       )
     );
 
-    let companyMap = new Map<string, string>();
+    const companyMap = new Map<string, string>();
 
     if (companyIds.length > 0) {
       const { data: companiesData, error: companiesError } = await supabase
@@ -102,31 +136,43 @@ export async function GET() {
         console.error("Companies fetch hatası:", companiesError);
       } else {
         const companies = (companiesData || []) as CompanyRow[];
-        companyMap = new Map(
-          companies.map((company) => [
-            String(company.id).trim(),
-            String(company.name || "").trim(),
-          ])
-        );
+
+        companies.forEach((company) => {
+          const id = String(company.id || "").trim();
+          const name = String(company.name || "").trim();
+
+          if (!id) return;
+          companyMap.set(id, name);
+        });
       }
     }
 
     const normalized = userRows.map((user) => {
-      const companyId = user.company_id ? String(user.company_id).trim() : null;
+      const userId = String(user.id || "").trim();
+      const companyId = String(user.company_id || "").trim() || null;
       const companyName =
-        companyId && companyMap.get(companyId)
-          ? String(companyMap.get(companyId)).trim()
+        companyId && companyMap.has(companyId)
+          ? String(companyMap.get(companyId) || "").trim()
           : null;
 
+      const permissions = Array.from(
+        new Set(
+          (permissionMap.get(userId) || [])
+            .map((p) => String(p || "").trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b, "tr"));
+
       return {
-        id: String(user.id),
-        full_name: (user.full_name || "Adsız Kullanıcı").trim(),
-        email: (user.email || "").trim(),
-        role: (user.role || "").trim(),
+        id: userId,
+        full_name: String(user.full_name || "Adsız Kullanıcı").trim(),
+        email: String(user.email || "").trim(),
+        role: String(user.role || "").trim(),
         company_id: companyId,
         company: companyName || null,
         is_active: Boolean(user.is_active),
         created_at: user.created_at || null,
+        permissions,
       };
     });
 

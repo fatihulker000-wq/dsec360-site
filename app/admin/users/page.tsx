@@ -11,6 +11,7 @@ type UserApiRow = {
   company?: string | null;
   is_active?: boolean | null;
   created_at?: string | null;
+  permissions?: string[] | null;
 };
 
 type UserResponse = {
@@ -44,12 +45,79 @@ type UserRow = {
   company: string;
   is_active: boolean;
   created_at: string;
+  permissions: string[];
 };
 
 type CompanyOption = {
   id: string;
   name: string;
 };
+
+type PermissionGroup = {
+  title: string;
+  items: string[];
+};
+
+function getPermissionLabel(key: string) {
+  const safe = String(key || "").trim();
+  if (!safe) return "-";
+
+  return safe
+    .replace(/_/g, " ")
+    .replace(/:/g, " / ")
+    .toUpperCase();
+}
+
+function groupPermissions(permissionList: string[]): PermissionGroup[] {
+  const unique = Array.from(
+    new Set(
+      (permissionList || [])
+        .map((p) => String(p || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "tr"));
+
+  const groups: Record<string, string[]> = {
+    Panel: [],
+    Sağlık: [],
+    Denetim: [],
+    Eğitim: [],
+    Raporlama: [],
+    ÇBS: [],
+    Risk: [],
+    Profil: [],
+    Dokümantasyon: [],
+    Mevzuat: [],
+    Ajanda: [],
+    Çalışanlar: [],
+    Diğer: [],
+  };
+
+  unique.forEach((perm) => {
+    const upper = perm.toUpperCase();
+
+    if (upper.includes("SAGLIK")) groups["Sağlık"].push(perm);
+    else if (upper.includes("DENETIM")) groups["Denetim"].push(perm);
+    else if (upper.includes("EGITIM")) groups["Eğitim"].push(perm);
+    else if (upper.includes("RAPOR")) groups["Raporlama"].push(perm);
+    else if (upper.includes("CBS")) groups["ÇBS"].push(perm);
+    else if (upper.includes("RISK")) groups["Risk"].push(perm);
+    else if (upper.includes("PROFIL")) groups["Profil"].push(perm);
+    else if (upper.includes("DOKUMAN")) groups["Dokümantasyon"].push(perm);
+    else if (upper.includes("MEVZUAT")) groups["Mevzuat"].push(perm);
+    else if (upper.includes("AJANDA")) groups["Ajanda"].push(perm);
+    else if (upper.includes("CALISAN")) groups["Çalışanlar"].push(perm);
+    else if (upper.includes("CARD:") || upper.includes("MODULE:")) groups["Panel"].push(perm);
+    else groups["Diğer"].push(perm);
+  });
+
+  return Object.entries(groups)
+    .filter(([, items]) => items.length > 0)
+    .map(([title, items]) => ({
+      title,
+      items,
+    }));
+}
 
 const BRAND = {
   bg: "#f7f8fb",
@@ -64,6 +132,15 @@ const BRAND = {
   shadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
 
+const ALL_PERMISSIONS = [
+  "DENETIM",
+  "EGITIM",
+  "SAGLIK",
+  "RAPORLAMA",
+  "CBS",
+  "CALISANLAR",
+];
+
 function getRoleLabel(role?: string | null) {
   if (role === "super_admin") return "Süper Admin";
   if (role === "company_admin") return "Firma Yöneticisi";
@@ -74,7 +151,7 @@ function getRoleLabel(role?: string | null) {
 
 function cardStyle(): React.CSSProperties {
   return {
-    border: `1px solid ${BRAND.border}`,
+    border: '1px solid ${BRAND.border}',
     borderRadius: 18,
     background: BRAND.white,
     padding: 18,
@@ -93,7 +170,7 @@ function badgeStyle(
     padding: "6px 10px",
     borderRadius: 999,
     background: bg,
-    border: `1px solid ${border}`,
+    border: '1px solid ${border}',
     fontSize: 12,
     fontWeight: 700,
     color,
@@ -106,11 +183,14 @@ export default function AdminUsersPage() {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingCompany, setSavingCompany] = useState(false);
+  const [savingPerm, setSavingPerm] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [adminRole, setAdminRole] = useState<string | null>(null);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [autoApplyRole, setAutoApplyRole] = useState(true);
 
   const loadUsers = async () => {
     try {
@@ -184,20 +264,25 @@ export default function AdminUsersPage() {
         setCompanies([]);
       }
 
-      const normalized: UserRow[] = Array.isArray(json.data)
-        ? json.data
-            .filter((u) => String(u.role || "") !== "training_user")
-            .map((u) => ({
-              id: String(u.id || ""),
-              full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
-              email: String(u.email || "-").trim(),
-              role: String(u.role || "").trim(),
-              company_id: String(u.company_id || "").trim(),
-              company: String(u.company || "").trim(),
-              is_active: Boolean(u.is_active),
-              created_at: String(u.created_at || ""),
-            }))
-        : [];
+     const normalized: UserRow[] = Array.isArray(json.data)
+  ? json.data
+      .filter((u) => String(u.role || "") !== "training_user")
+      .map((u) => ({
+        id: String(u.id || ""),
+        full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
+        email: String(u.email || "-").trim(),
+        role: String(u.role || "").trim(),
+        company_id: String(u.company_id || "").trim(),
+        company: String(u.company || "").trim(),
+        is_active: Boolean(u.is_active),
+        created_at: String(u.created_at || ""),
+        permissions: Array.isArray(u.permissions)
+          ? u.permissions
+              .map((p) => String(p || "").trim())
+              .filter(Boolean)
+          : [],
+      }))
+  : [];
 
       setUsers(normalized);
     } catch (err) {
@@ -279,6 +364,67 @@ export default function AdminUsersPage() {
       setSavingCompany(false);
     }
   };
+
+const updatePermissions = async (userId: string, perms: string[]) => {
+  try {
+    setSavingPerm(true);
+
+    const res = await fetch("/api/admin/users/update-permissions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        userId,
+        permissions: perms,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Yetki güncellenemedi");
+      return;
+    }
+
+    await loadUsers();
+
+  } catch {
+    alert("Hata");
+  } finally {
+    setSavingPerm(false);
+  }
+};
+
+const updateRole = async (userId: string, role: string) => {
+  try {
+    const res = await fetch("/api/admin/users/update-role", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        userId,
+        role,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Rol güncellenemedi");
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error(error);
+    alert("Rol güncellenemedi");
+    return false;
+  }
+};
 
   return (
     <main
@@ -401,7 +547,7 @@ export default function AdminUsersPage() {
                 width: "100%",
                 padding: "12px 14px",
                 borderRadius: 12,
-                border: `1px solid ${BRAND.border}`,
+                border: '1px solid ${BRAND.border}',
                 fontSize: 14,
               }}
             />
@@ -418,7 +564,7 @@ export default function AdminUsersPage() {
                 width: "100%",
                 padding: "12px 14px",
                 borderRadius: 12,
-                border: `1px solid ${BRAND.border}`,
+                border: '1px solid ${BRAND.border}',
                 background: "#fff",
                 fontSize: 14,
               }}
@@ -443,7 +589,7 @@ export default function AdminUsersPage() {
                 width: "100%",
                 padding: "12px 14px",
                 borderRadius: 12,
-                border: `1px solid ${BRAND.border}`,
+                border: '1px solid ${BRAND.border}',
                 background: "#fff",
                 fontSize: 14,
               }}
@@ -454,6 +600,17 @@ export default function AdminUsersPage() {
             </select>
           </div>
         </div>
+
+        <div style={{ marginTop: 10 }}>
+  <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
+    <input
+      type="checkbox"
+      checked={autoApplyRole}
+      onChange={(e) => setAutoApplyRole(e.target.checked)}
+    />
+    Rol değişince yetkileri otomatik uygula
+  </label>
+</div>
 
         <div style={cardStyle()}>
           <div
@@ -485,7 +642,7 @@ export default function AdminUsersPage() {
                 <div
                   key={u.id}
                   style={{
-                    border: `1px solid ${BRAND.border}`,
+                    border: '1px solid ${BRAND.border}',
                     borderRadius: 16,
                     padding: 16,
                     background: "#fff",
@@ -534,9 +691,75 @@ export default function AdminUsersPage() {
                         minWidth: 0,
                       }}
                     >
-                      <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
-                        {getRoleLabel(u.role)}
-                      </span>
+                    
+<select
+  value={u.role}
+onChange={async (e) => {
+  const newRole = e.target.value;
+
+  const roleSaved = await updateRole(u.id, newRole);
+  if (!roleSaved) return;
+
+  if (autoApplyRole) {
+    const res = await fetch("/api/admin/roles/template", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ role: newRole }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert("Rol kaydedildi ama varsayılan yetkiler alınamadı");
+      await loadUsers();
+      return;
+    }
+
+    await updatePermissions(u.id, json.permissions || []);
+    return;
+  }
+
+  const confirmChange = confirm(
+    "Rol güncellendi. Bu role ait varsayılan yetkiler de yüklensin mi?"
+  );
+
+  if (!confirmChange) {
+    await loadUsers();
+    return;
+  }
+
+  const res = await fetch("/api/admin/roles/template", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ role: newRole }),
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    alert("Rol kaydedildi ama varsayılan yetkiler alınamadı");
+    await loadUsers();
+    return;
+  }
+
+  await updatePermissions(u.id, json.permissions || []);
+}}
+  style={{
+    padding: "6px 10px",
+    borderRadius: 8,
+    border: '1px solid ${BRAND.border}',
+    fontSize: 12,
+    fontWeight: 700,
+  }}
+>
+  <option value="operator">Operatör</option>
+  <option value="company_admin">Firma Yöneticisi</option>
+  <option value="super_admin">Süper Admin</option>
+</select>
 
                       <span
                         style={
@@ -578,6 +801,123 @@ export default function AdminUsersPage() {
                           </option>
                         ))}
                       </select>
+                    )}
+                  </div>
+<div style={{ marginTop: 14 }}>
+
+  <div style={{ marginBottom: 10 }}>
+  <button
+    onClick={async () => {
+      const res = await fetch("/api/admin/roles/template", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: u.role }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        alert("Rol yetkileri alınamadı");
+        return;
+      }
+
+      updatePermissions(u.id, json.permissions || []);
+    }}
+    style={{
+      background: "#111827",
+      color: "#fff",
+      border: "none",
+      borderRadius: 10,
+      padding: "8px 12px",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    🔥 Role Göre Yetki Yükle
+  </button>
+</div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedUserId((prev) => (prev === u.id ? null : u.id))
+                      }
+                    style={{
+  border: '1px solid ${BRAND.border}',
+  background: expandedUserId === u.id ? "#111827" : "#fff",
+  borderRadius: 12,
+  padding: "10px 14px",
+  fontSize: 13,
+  fontWeight: 800,
+  cursor: "pointer",
+  color: expandedUserId === u.id ? "#fff" : BRAND.text,
+}}
+                    >
+                      {expandedUserId === u.id
+                        ? "Yetkileri Gizle"
+                        : 'Yetkileri Göster (${u.permissions?.length || 0})'}
+                    </button>
+
+                    {expandedUserId === u.id && (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          border: `1px solid ${BRAND.border}`,
+                          borderRadius: 14,
+                          padding: 14,
+                          background: "#fafafa",
+                        }}
+                      >
+                        {!u.permissions || u.permissions.length === 0 ? (
+                          <div style={{ fontSize: 13, color: BRAND.muted }}>
+                            Yetki yok
+                          </div>
+                        ) : (
+                          <div style={{ display: "grid", gap: 8 }}>
+                            {ALL_PERMISSIONS.map((perm) => {
+                              const isChecked = u.permissions?.includes(perm);
+
+                              return (
+                                <label
+                                  key={perm}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    fontSize: 13,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                 <input
+  type="checkbox"
+  checked={isChecked}
+  disabled={savingPerm}
+  onChange={(e) => {
+    const currentPerms = u.permissions || [];
+
+    let newPerms: string[];
+
+    if (e.target.checked) {
+      newPerms = [...currentPerms, perm];
+    } else {
+      newPerms = currentPerms.filter((p) => p !== perm);
+    }
+
+    newPerms = Array.from(new Set(newPerms));
+
+    updatePermissions(u.id, newPerms);
+  }}
+/>
+
+                                  {perm}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
 
