@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+const MOBILE_API_KEY = "dsec_mobile_123";
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL!,
@@ -15,12 +17,24 @@ type AdminSession = {
   companyId: string;
 };
 
-async function getAdminSession(): Promise<AdminSession> {
+async function getAdminSession(req: NextRequest): Promise<AdminSession> {
+  const apiKey = req.headers.get("x-api-key");
+
+  if (apiKey === MOBILE_API_KEY) {
+    return {
+      isOk: true,
+      role: "super_admin",
+      companyId: "",
+    };
+  }
+
   const cookieStore = await cookies();
 
   const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
   const adminRole = cookieStore.get("dsec_admin_role")?.value;
-  const companyId = String(cookieStore.get("dsec_company_id")?.value || "").trim();
+  const companyId = String(
+    cookieStore.get("dsec_company_id")?.value || ""
+  ).trim();
 
   if (
     adminAuth !== "ok" ||
@@ -48,7 +62,7 @@ type TargetUserRow = {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getAdminSession();
+    const session = await getAdminSession(req);
 
     if (!session.isOk || !session.role) {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });

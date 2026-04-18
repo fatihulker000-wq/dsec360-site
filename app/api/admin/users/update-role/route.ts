@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+const MOBILE_API_KEY = "dsec_mobile_123";
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL!,
@@ -9,7 +11,13 @@ function getSupabase() {
   );
 }
 
-async function checkAdmin() {
+async function checkAdmin(req: NextRequest) {
+  const apiKey = req.headers.get("x-api-key");
+
+  if (apiKey === MOBILE_API_KEY) {
+    return true;
+  }
+
   const cookieStore = await cookies();
   const auth = cookieStore.get("dsec_admin_auth")?.value;
   const role = cookieStore.get("dsec_admin_role")?.value;
@@ -19,7 +27,7 @@ async function checkAdmin() {
 
 export async function POST(req: NextRequest) {
   try {
-    const allowed = await checkAdmin();
+    const allowed = await checkAdmin(req);
 
     if (!allowed) {
       return NextResponse.json({ error: "Yetkisiz" }, { status: 401 });
