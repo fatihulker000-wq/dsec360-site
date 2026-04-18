@@ -337,6 +337,27 @@ export default function AdminLoginPage() {
             />
           </div>
 
+<div
+  style={{
+    display: "flex",
+    justifyContent: "flex-end",
+    marginTop: "-6px",
+    marginBottom: "18px",
+  }}
+>
+  <a
+    href="/admin/forgot-password"
+    style={{
+      color: BRAND.heroMid,
+      fontSize: "13px",
+      fontWeight: 800,
+      textDecoration: "none",
+    }}
+  >
+    Şifremi Unuttum
+  </a>
+</div>
+
           <button
             onClick={handleLogin}
             disabled={loading}

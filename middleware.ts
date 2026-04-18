@@ -9,7 +9,11 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isAdminPage = pathname.startsWith("/admin");
-  const isAdminLoginPage = pathname === "/admin/login";
+  const isAdminPublicPage =
+  pathname === "/admin/login" ||
+  pathname === "/admin/forgot-password" ||
+  pathname === "/admin/reset-password";
+
 
   const isPanelPage = pathname.startsWith("/panel");
   const isPortalTrainingPage = pathname.startsWith("/portal/training");
@@ -38,7 +42,7 @@ export function middleware(request: NextRequest) {
 
   // ADMIN
   if (isAdminPage) {
-    if (isAdminLoginPage) {
+    if (isAdminPublicPage) {
       if (adminAuthCookie === "ok" && isAllowedAdminRole) {
         return redirectTo(request, "/admin/dashboard");
       }
