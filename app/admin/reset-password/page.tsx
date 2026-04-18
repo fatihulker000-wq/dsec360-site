@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMemo } from "react";
-import { useSearchParams } from "next/navigation";
 
 const BRAND = {
   bg: "#fff8f8",
