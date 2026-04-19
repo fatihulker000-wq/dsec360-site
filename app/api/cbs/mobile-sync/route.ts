@@ -126,25 +126,25 @@ export async function GET(req: Request) {
       });
     }
 
-    if (normalizedFirmaAdi) {
-      const { data, error } = await supabase
-        .from("cbs_forms")
-        .select(selectFields)
-        .ilike("firma_adi", `%${normalizedFirmaAdi}%`)
-        .order("created_at", { ascending: false });
+   if (firmaAdiParam) {
+  const { data: byFirmaAdi, error: byFirmaAdiError } = await supabase
+    .from("cbs_forms")
+    .select(selectFields)
+    .ilike("firma_adi", '%${firmaAdiParam}%')
+    .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("mobile-sync GET by firma_adi hata:", error);
-        return NextResponse.json(
-          { error: "Kayıtlar alınamadı." },
-          { status: 500 }
-        );
-      }
+  if (byFirmaAdiError) {
+    console.error("mobile-sync GET by firma_adi hata:", byFirmaAdiError);
+    return NextResponse.json(
+      { error: "Kayıtlar alınamadı." },
+      { status: 500 }
+    );
+  }
 
-      (data || []).forEach((row) => {
-        mergedMap.set(Number(row.id), row);
-      });
-    }
+  (byFirmaAdi || []).forEach((row) => {
+    mergedMap.set(Number(row.id), row);
+  });
+}
 
     if (!firmIdParam && !normalizedFirmaAdi) {
       const { data, error } = await supabase
