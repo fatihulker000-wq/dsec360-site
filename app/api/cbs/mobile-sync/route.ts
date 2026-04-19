@@ -100,8 +100,6 @@ export async function POST(req: Request) {
     const full_name = String(body?.full_name || "").trim();
     const email = String(body?.email || "").trim();
     const message = String(body?.message || "").trim();
-
-    // ✅ APP artık web firması için UUID/string remoteId gönderiyor
     const firm_id = String(body?.firm_id || "").trim();
 
     const category = String(body?.category || "").trim() || "Şikayet";
@@ -112,27 +110,27 @@ export async function POST(req: Request) {
     const firma_adi = String(body?.firma_adi || "").trim() || null;
 
     const assigned_username =
-  String(body?.assigned_username || "").trim() || null;
-const assigned_role =
-  String(body?.assigned_role || "").trim() || null;
-const target_role =
-  String(body?.target_role || "").trim() || null;
-const opened_by_email =
-  String(body?.opened_by_email || "").trim() || null;
-const mail_subject =
-  String(body?.mail_subject || "").trim() || null;
-const mail_message_id =
-  String(body?.mail_message_id || "").trim() || null;
-const first_receiver_username =
-  String(body?.first_receiver_username || "").trim() || null;
-const forwarded_by =
-  String(body?.forwarded_by || "").trim() || null;
-const response_note =
-  String(body?.response_note || "").trim() || null;
-const rejected_reason =
-  String(body?.rejected_reason || "").trim() || null;
-const created_by =
-  String(body?.created_by || "").trim() || null;
+      String(body?.assigned_username || "").trim() || null;
+    const assigned_role =
+      String(body?.assigned_role || "").trim() || null;
+    const target_role =
+      String(body?.target_role || "").trim() || null;
+    const opened_by_email =
+      String(body?.opened_by_email || "").trim() || null;
+    const mail_subject =
+      String(body?.mail_subject || "").trim() || null;
+    const mail_message_id =
+      String(body?.mail_message_id || "").trim() || null;
+    const first_receiver_username =
+      String(body?.first_receiver_username || "").trim() || null;
+    const forwarded_by =
+      String(body?.forwarded_by || "").trim() || null;
+    const response_note =
+      String(body?.response_note || "").trim() || null;
+    const rejected_reason =
+      String(body?.rejected_reason || "").trim() || null;
+    const created_by =
+      String(body?.created_by || "").trim() || null;
 
     if (!full_name || !message || !firm_id) {
       return NextResponse.json(
@@ -144,7 +142,7 @@ const created_by =
     const supabase = getSupabase();
     const now = new Date().toISOString();
 
-   const insertPayload = {
+    const insertPayload = {
       full_name,
       email: email || null,
       message,
@@ -249,59 +247,59 @@ export async function PUT(req: Request) {
     }
 
     if (body?.assigned_username != null) {
-  updatePayload.assigned_username =
-    String(body.assigned_username).trim() || null;
-}
+      updatePayload.assigned_username =
+        String(body.assigned_username).trim() || null;
+    }
 
-if (body?.assigned_role != null) {
-  updatePayload.assigned_role =
-    String(body.assigned_role).trim() || null;
-}
+    if (body?.assigned_role != null) {
+      updatePayload.assigned_role =
+        String(body.assigned_role).trim() || null;
+    }
 
-if (body?.target_role != null) {
-  updatePayload.target_role =
-    String(body.target_role).trim() || null;
-}
+    if (body?.target_role != null) {
+      updatePayload.target_role =
+        String(body.target_role).trim() || null;
+    }
 
-if (body?.opened_by_email != null) {
-  updatePayload.opened_by_email =
-    String(body.opened_by_email).trim() || null;
-}
+    if (body?.opened_by_email != null) {
+      updatePayload.opened_by_email =
+        String(body.opened_by_email).trim() || null;
+    }
 
-if (body?.mail_subject != null) {
-  updatePayload.mail_subject =
-    String(body.mail_subject).trim() || null;
-}
+    if (body?.mail_subject != null) {
+      updatePayload.mail_subject =
+        String(body.mail_subject).trim() || null;
+    }
 
-if (body?.mail_message_id != null) {
-  updatePayload.mail_message_id =
-    String(body.mail_message_id).trim() || null;
-}
+    if (body?.mail_message_id != null) {
+      updatePayload.mail_message_id =
+        String(body.mail_message_id).trim() || null;
+    }
 
-if (body?.first_receiver_username != null) {
-  updatePayload.first_receiver_username =
-    String(body.first_receiver_username).trim() || null;
-}
+    if (body?.first_receiver_username != null) {
+      updatePayload.first_receiver_username =
+        String(body.first_receiver_username).trim() || null;
+    }
 
-if (body?.forwarded_by != null) {
-  updatePayload.forwarded_by =
-    String(body.forwarded_by).trim() || null;
-}
+    if (body?.forwarded_by != null) {
+      updatePayload.forwarded_by =
+        String(body.forwarded_by).trim() || null;
+    }
 
-if (body?.response_note != null) {
-  updatePayload.response_note =
-    String(body.response_note).trim() || null;
-}
+    if (body?.response_note != null) {
+      updatePayload.response_note =
+        String(body.response_note).trim() || null;
+    }
 
-if (body?.rejected_reason != null) {
-  updatePayload.rejected_reason =
-    String(body.rejected_reason).trim() || null;
-}
+    if (body?.rejected_reason != null) {
+      updatePayload.rejected_reason =
+        String(body.rejected_reason).trim() || null;
+    }
 
-if (body?.created_by != null) {
-  updatePayload.created_by =
-    String(body.created_by).trim() || null;
-}
+    if (body?.created_by != null) {
+      updatePayload.created_by =
+        String(body.created_by).trim() || null;
+    }
 
     if (String(body?.status || "").trim() === "closed") {
       updatePayload.closed_at = new Date().toISOString();
