@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+const FALLBACK_SYNC_KEY = "dsec_mobile_123456";
+
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -14,9 +16,9 @@ function getSupabase() {
   return createClient(supabaseUrl, supabaseServiceRoleKey);
 }
 
-function isAuthorized(req: Request) {
+function isAuthorized(req: Request): boolean {
   const serverKey = (
-    process.env.CBS_MOBILE_SYNC_KEY || "dsec_mobile_123456"
+    process.env.CBS_MOBILE_SYNC_KEY || FALLBACK_SYNC_KEY
   ).trim();
 
   const requestKey = (
@@ -29,12 +31,7 @@ function isAuthorized(req: Request) {
 }
 
 function unauthorized() {
-  return NextResponse.json(
-    {
-      error: "Yetkisiz.",
-    },
-    { status: 401 }
-  );
+  return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
 }
 
 const SELECT_FIELDS = `
@@ -77,33 +74,31 @@ export async function GET(req: Request) {
     const supabase = getSupabase();
     const mergedMap = new Map<number, any>();
 
-   if (firmaAdiParam) {
-  const { data, error } = await supabase
-    .from("cbs_forms")
-    .select(SELECT_FIELDS)
-    .ilike("firma_adi", '%${firmaAdiParam}%')
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("mobile-sync GET by firma_adi hata:", error);
-    return NextResponse.json(
-      { error: "Kayıtlar alınamadı." },
-      { status: 500 }
-    );
-  }
-
-  (data || []).forEach((row) => {
-    mergedMap.set(Number(row.id), row);
-  });
-}
-
-    if (firmaAdiParam) {
-      const normalizedFirmaAdi = firmaAdiParam.replace(/\s+/g, " ").trim();
-
+    if (firmIdParam) {
       const { data, error } = await supabase
         .from("cbs_forms")
         .select(SELECT_FIELDS)
-        .ilike("firma_adi", normalizedFirmaAdi)
+        .eq("firm_id", firmIdParam)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("mobile-sync GET by firm_id hata:", error);
+        return NextResponse.json(
+          { error: "Kayıtlar alınamadı." },
+          { status: 500 }
+        );
+      }
+
+      (data || []).forEach((row) => {
+        mergedMap.set(Number(row.id), row);
+      });
+    }
+
+    if (firmaAdiParam) {
+      const { data, error } = await supabase
+        .from("cbs_forms")
+        .select(SELECT_FIELDS)
+        .ilike("firma_adi", %${firmaAdiParam}%)
         .order("created_at", { ascending: false });
 
       if (error) {
