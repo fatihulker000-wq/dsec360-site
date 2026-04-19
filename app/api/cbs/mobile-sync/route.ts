@@ -98,7 +98,7 @@ export async function GET(req: Request) {
       const { data, error } = await supabase
         .from("cbs_forms")
         .select(SELECT_FIELDS)
-        .ilike("firma_adi", %${firmaAdiParam}%)
+        .ilike("firma_adi", `%${firmaAdiParam}%`)
         .order("created_at", { ascending: false });
 
       if (error) {
