@@ -70,6 +70,7 @@ function normalizeFirmName(value: string) {
 export async function GET(req: Request) {
   try {
     if (!isAuthorized(req)) return unauthorized();
+// if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
     const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
@@ -120,7 +121,7 @@ const byFirmaAdi =
 export async function POST(req: Request) {
   try {
     if (!isAuthorized(req)) return unauthorized();
-
+// if (!isAuthorized(req)) return unauthorized();
     const body = await req.json();
 
     const full_name = String(body?.full_name || "").trim();
@@ -225,6 +226,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     if (!isAuthorized(req)) return unauthorized();
+// if (!isAuthorized(req)) return unauthorized();
 
     const body = await req.json();
     const id = Number(body?.id);
