@@ -34,57 +34,108 @@ export async function GET(req: Request) {
     if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
-    const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
+const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
+const firmaAdiParam = String(url.searchParams.get("firmaAdi") || "").trim(); 
 
     const supabase = getSupabase();
 
-    let query = supabase
-      .from("cbs_forms")
-      .select(`
-        id,
-        full_name,
-        email,
-        message,
-        created_at,
-        updated_at,
-        status,
-        category,
-        firm_id,
-        assigned_to,
-        assigned_username,
-        assigned_role,
-        target_role,
-        resolution_note,
-        response_note,
-        rejected_reason,
-        opened_by_email,
-        mail_subject,
-        mail_message_id,
-        first_receiver_username,
-        forwarded_by,
-        created_by,
-        firma_adi,
-        priority,
-        sla_due_at,
-        closed_at
-      `)
-      .order("created_at", { ascending: false });
+  const selectFields = `
+  id,
+  full_name,
+  email,
+  message,
+  created_at,
+  updated_at,
+  status,
+  category,
+  firm_id,
+  assigned_to,
+  assigned_username,
+  assigned_role,
+  target_role,
+  resolution_note,
+  response_note,
+  rejected_reason,
+  opened_by_email,
+  mail_subject,
+  mail_message_id,
+  first_receiver_username,
+  forwarded_by,
+  created_by,
+  firma_adi,
+  priority,
+  sla_due_at,
+  closed_at
+`;
 
-    if (firmIdParam) {
-      query = query.eq("firm_id", firmIdParam);
-    }
+const mergedMap = new Map<number, any>();
 
-    const { data, error } = await query;
+if (firmIdParam) {
+  const { data: byFirmId, error: byFirmIdError } = await supabase
+    .from("cbs_forms")
+    .select(selectFields)
+    .eq("firm_id", firmIdParam)
+    .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("mobile-sync GET supabase hata:", error);
-      return NextResponse.json(
-        { error: "Kayıtlar alınamadı." },
-        { status: 500 }
-      );
-    }
+  if (byFirmIdError) {
+    console.error("mobile-sync GET by firm_id hata:", byFirmIdError);
+    return NextResponse.json(
+      { error: "Kayıtlar alınamadı." },
+      { status: 500 }
+    );
+  }
 
-    return NextResponse.json({ success: true, data: data || [] });
+  (byFirmId || []).forEach((row) => {
+    mergedMap.set(Number(row.id), row);
+  });
+}
+
+if (firmaAdiParam) {
+  const { data: byFirmaAdi, error: byFirmaAdiError } = await supabase
+    .from("cbs_forms")
+    .select(selectFields)
+    .eq("firma_adi", firmaAdiParam)
+    .order("created_at", { ascending: false });
+
+  if (byFirmaAdiError) {
+    console.error("mobile-sync GET by firma_adi hata:", byFirmaAdiError);
+    return NextResponse.json(
+      { error: "Kayıtlar alınamadı." },
+      { status: 500 }
+    );
+  }
+
+  (byFirmaAdi || []).forEach((row) => {
+    mergedMap.set(Number(row.id), row);
+  });
+}
+
+if (!firmIdParam && !firmaAdiParam) {
+  const { data: allData, error: allError } = await supabase
+    .from("cbs_forms")
+    .select(selectFields)
+    .order("created_at", { ascending: false });
+
+  if (allError) {
+    console.error("mobile-sync GET all hata:", allError);
+    return NextResponse.json(
+      { error: "Kayıtlar alınamadı." },
+      { status: 500 }
+    );
+  }
+
+  (allData || []).forEach((row) => {
+    mergedMap.set(Number(row.id), row);
+  });
+}
+
+const finalData = Array.from(mergedMap.values()).sort((a, b) => {
+  const aTime = new Date(a.created_at || 0).getTime();
+  const bTime = new Date(b.created_at || 0).getTime();
+  return bTime - aTime;
+});
+
+return NextResponse.json({ success: true, data: finalData });
   } catch (e) {
     console.error("mobile-sync GET hata:", e);
     return NextResponse.json({ error: "Sunucu hatası." }, { status: 500 });
