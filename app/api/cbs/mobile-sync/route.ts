@@ -83,13 +83,18 @@ export async function GET(req: Request) {
       .select(SELECT_FIELDS)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("mobile-sync GET hata:", error);
-      return NextResponse.json(
-        { error: "Kayıtlar alınamadı." },
-        { status: 500 }
-      );
-    }
+   if (error) {
+  console.error("mobile-sync GET hata:", error);
+  return NextResponse.json(
+    {
+      error: "Kayıtlar alınamadı.",
+      detail: error.message,
+      code: error.code,
+      hint: error.hint,
+    },
+    { status: 500 }
+  );
+}
 
     const filtered = data || [];
     
