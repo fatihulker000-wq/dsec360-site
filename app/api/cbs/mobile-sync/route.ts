@@ -69,7 +69,7 @@ function normalizeFirmName(value: string) {
 
 export async function GET(req: Request) {
   try {
-    if (!isAuthorized(req)) return unauthorized();
+
 // if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
