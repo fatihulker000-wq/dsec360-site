@@ -63,7 +63,6 @@ const SELECT_FIELDS = `
   closed_at
 `;
 
-
 export async function GET(req: Request) {
   try {
     if (!isAuthorized(req)) return unauthorized();
@@ -74,42 +73,12 @@ export async function GET(req: Request) {
     const normalizedFirmaAdi = firmaAdiParam.replace(/\s+/g, " ").trim();
 
     const supabase = getSupabase();
-
-    const selectFields = `
-      id,
-      full_name,
-      email,
-      message,
-      created_at,
-      updated_at,
-      status,
-      category,
-      firm_id,
-      assigned_to,
-      assigned_username,
-      assigned_role,
-      target_role,
-      resolution_note,
-      response_note,
-      rejected_reason,
-      opened_by_email,
-      mail_subject,
-      mail_message_id,
-      first_receiver_username,
-      forwarded_by,
-      created_by,
-      firma_adi,
-      priority,
-      sla_due_at,
-      closed_at
-    `;
-
     const mergedMap = new Map<number, any>();
 
     if (firmIdParam) {
       const { data, error } = await supabase
         .from("cbs_forms")
-        .select(selectFields)
+        .select(SELECT_FIELDS)
         .eq("firm_id", firmIdParam)
         .order("created_at", { ascending: false });
 
@@ -126,30 +95,30 @@ export async function GET(req: Request) {
       });
     }
 
-   if (firmaAdiParam) {
-  const { data: byFirmaAdi, error: byFirmaAdiError } = await supabase
-    .from("cbs_forms")
-    .select(selectFields)
-    .ilike("firma_adi", '%${firmaAdiParam}%')
-    .order("created_at", { ascending: false });
+    if (normalizedFirmaAdi) {
+      const { data, error } = await supabase
+        .from("cbs_forms")
+        .select(SELECT_FIELDS)
+        .ilike("firma_adi", %${normalizedFirmaAdi}%)
+        .order("created_at", { ascending: false });
 
-  if (byFirmaAdiError) {
-    console.error("mobile-sync GET by firma_adi hata:", byFirmaAdiError);
-    return NextResponse.json(
-      { error: "Kayıtlar alınamadı." },
-      { status: 500 }
-    );
-  }
+      if (error) {
+        console.error("mobile-sync GET by firma_adi hata:", error);
+        return NextResponse.json(
+          { error: "Kayıtlar alınamadı." },
+          { status: 500 }
+        );
+      }
 
-  (byFirmaAdi || []).forEach((row) => {
-    mergedMap.set(Number(row.id), row);
-  });
-}
+      (data || []).forEach((row) => {
+        mergedMap.set(Number(row.id), row);
+      });
+    }
 
     if (!firmIdParam && !normalizedFirmaAdi) {
       const { data, error } = await supabase
         .from("cbs_forms")
-        .select(selectFields)
+        .select(SELECT_FIELDS)
         .order("created_at", { ascending: false });
 
       if (error) {
