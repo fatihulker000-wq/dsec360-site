@@ -77,25 +77,25 @@ export async function GET(req: Request) {
     const supabase = getSupabase();
     const mergedMap = new Map<number, any>();
 
-    if (firmIdParam) {
-      const { data, error } = await supabase
-        .from("cbs_forms")
-        .select(SELECT_FIELDS)
-        .eq("firm_id", firmIdParam)
-        .order("created_at", { ascending: false });
+   if (firmaAdiParam) {
+  const { data, error } = await supabase
+    .from("cbs_forms")
+    .select(SELECT_FIELDS)
+    .ilike("firma_adi", '%${firmaAdiParam}%')
+    .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("mobile-sync GET by firm_id hata:", error);
-        return NextResponse.json(
-          { error: "Kayıtlar alınamadı." },
-          { status: 500 }
-        );
-      }
+  if (error) {
+    console.error("mobile-sync GET by firma_adi hata:", error);
+    return NextResponse.json(
+      { error: "Kayıtlar alınamadı." },
+      { status: 500 }
+    );
+  }
 
-      (data || []).forEach((row) => {
-        mergedMap.set(Number(row.id), row);
-      });
-    }
+  (data || []).forEach((row) => {
+    mergedMap.set(Number(row.id), row);
+  });
+}
 
     if (firmaAdiParam) {
       const normalizedFirmaAdi = firmaAdiParam.replace(/\s+/g, " ").trim();
