@@ -97,8 +97,11 @@ export async function GET(req: Request) {
 
       if (!firmIdParam && !normalizedFirmaAdi) return true;
 
-     const byFirmId = firmIdParam.length > 0 ? rowFirmId === firmIdParam : false;
-      const byFirmaAdi = normalizedFirmaAdi ? rowFirmaAdi === normalizedFirmaAdi : false;
+    const byFirmId = firmIdParam.length > 0 ? rowFirmId === firmIdParam : false;
+const byFirmaAdi =
+  normalizedFirmaAdi.length > 0
+    ? rowFirmaAdi.includes(normalizedFirmaAdi)
+    : false;
 
       return byFirmId || byFirmaAdi;
     });
