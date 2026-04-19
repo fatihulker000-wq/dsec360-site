@@ -91,21 +91,8 @@ export async function GET(req: Request) {
       );
     }
 
-    const filtered = (data || []).filter((row: any) => {
-      const rowFirmId = String(row?.firm_id || "").trim();
-      const rowFirmaAdi = normalizeFirmName(String(row?.firma_adi || ""));
-
-      if (!firmIdParam && !normalizedFirmaAdi) return true;
-
-    const byFirmId = firmIdParam.length > 0 ? rowFirmId === firmIdParam : false;
-const byFirmaAdi =
-  normalizedFirmaAdi.length > 0
-    ? rowFirmaAdi.includes(normalizedFirmaAdi)
-    : false;
-
-      return byFirmId || byFirmaAdi;
-    });
-
+    const filtered = data || [];
+    
     return NextResponse.json({
       success: true,
       count: filtered.length,
