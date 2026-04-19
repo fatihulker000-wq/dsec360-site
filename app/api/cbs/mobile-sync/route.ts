@@ -63,6 +63,10 @@ const SELECT_FIELDS = `
   closed_at
 `;
 
+function normalizeFirmName(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
+}
+
 export async function GET(req: Request) {
   try {
     if (!isAuthorized(req)) return unauthorized();
@@ -70,80 +74,39 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
     const firmaAdiParam = String(url.searchParams.get("firmaAdi") || "").trim();
-    const normalizedFirmaAdi = firmaAdiParam.replace(/\s+/g, " ").trim();
+    const normalizedFirmaAdi = normalizeFirmName(firmaAdiParam);
 
     const supabase = getSupabase();
-    const mergedMap = new Map<number, any>();
 
-    if (firmIdParam) {
-      const { data, error } = await supabase
-        .from("cbs_forms")
-        .select(SELECT_FIELDS)
-        .eq("firm_id", firmIdParam)
-        .order("created_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("cbs_forms")
+      .select(SELECT_FIELDS)
+      .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("mobile-sync GET by firm_id hata:", error);
-        return NextResponse.json(
-          { error: "Kayıtlar alınamadı." },
-          { status: 500 }
-        );
-      }
-
-      (data || []).forEach((row) => {
-        mergedMap.set(Number(row.id), row);
-      });
+    if (error) {
+      console.error("mobile-sync GET hata:", error);
+      return NextResponse.json(
+        { error: "Kayıtlar alınamadı." },
+        { status: 500 }
+      );
     }
 
-    if (normalizedFirmaAdi) {
-      const { data, error } = await supabase
-        .from("cbs_forms")
-        .select(SELECT_FIELDS)
-        .ilike("firma_adi", '%${normalizedFirmaAdi}%')
-        .order("created_at", { ascending: false });
+    const filtered = (data || []).filter((row: any) => {
+      const rowFirmId = String(row?.firm_id || "").trim();
+      const rowFirmaAdi = normalizeFirmName(String(row?.firma_adi || ""));
 
-      if (error) {
-        console.error("mobile-sync GET by firma_adi hata:", error);
-        return NextResponse.json(
-          { error: "Kayıtlar alınamadı." },
-          { status: 500 }
-        );
-      }
+      if (!firmIdParam && !normalizedFirmaAdi) return true;
 
-      (data || []).forEach((row) => {
-        mergedMap.set(Number(row.id), row);
-      });
-    }
+     const byFirmId = firmIdParam.length > 0 ? rowFirmId === firmIdParam : false;
+      const byFirmaAdi = normalizedFirmaAdi ? rowFirmaAdi === normalizedFirmaAdi : false;
 
-    if (!firmIdParam && !normalizedFirmaAdi) {
-      const { data, error } = await supabase
-        .from("cbs_forms")
-        .select(SELECT_FIELDS)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("mobile-sync GET all hata:", error);
-        return NextResponse.json(
-          { error: "Kayıtlar alınamadı." },
-          { status: 500 }
-        );
-      }
-
-      (data || []).forEach((row) => {
-        mergedMap.set(Number(row.id), row);
-      });
-    }
-
-    const finalData = Array.from(mergedMap.values()).sort((a, b) => {
-      const aTime = new Date(a.created_at || 0).getTime();
-      const bTime = new Date(b.created_at || 0).getTime();
-      return bTime - aTime;
+      return byFirmId || byFirmaAdi;
     });
 
     return NextResponse.json({
       success: true,
-      count: finalData.length,
-      data: finalData,
+      count: filtered.length,
+      data: filtered,
     });
   } catch (e) {
     console.error("mobile-sync GET hata:", e);
@@ -192,12 +155,12 @@ export async function POST(req: Request) {
     const created_by =
       String(body?.created_by || "").trim() || null;
 
-    if (!full_name || !message || !firm_id) {
-      return NextResponse.json(
-        { error: "Eksik alan var." },
-        { status: 400 }
-      );
-    }
+   if (!full_name || !message || (!firm_id && !firma_adi)) {
+  return NextResponse.json(
+    { error: "Eksik alan var." },
+    { status: 400 }
+  );
+}
 
     const supabase = getSupabase();
     const now = new Date().toISOString();
@@ -206,7 +169,7 @@ export async function POST(req: Request) {
       full_name,
       email: email || null,
       message,
-      firm_id,
+      firm_id: firm_id || null,
       category,
       priority,
       assigned_to,
