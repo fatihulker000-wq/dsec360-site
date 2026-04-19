@@ -72,18 +72,25 @@ export async function GET(req: Request) {
       );
     }
 
-    const filtered = (data || []).filter((row: any) => {
-      const rowFirmId = String(row?.firm_id || "").trim();
-      const rowFirmaAdi = normalizeFirmName(String(row?.firma_adi || ""));
+const filtered = (data || []).filter((row: any) => {
+  const rowFirmId = String(row?.firm_id || "").trim();
+  const rowFirmaAdi = normalizeFirmName(String(row?.firma_adi || ""));
 
-      if (!firmIdParam && !normalizedFirmaAdi) return true;
+  // Eğer hiçbir param yoksa hepsini getir
+  if (!firmIdParam && !normalizedFirmaAdi) return true;
 
-      const byFirmId = firmIdParam.length > 0 ? rowFirmId === firmIdParam : false;
-      const byFirmaAdi =
-        normalizedFirmaAdi.length > 0 ? rowFirmaAdi === normalizedFirmaAdi : false;
+  // FirmId eşleşmesi (daha esnek)
+  const byFirmId =
+    firmIdParam.length > 0 &&
+    (rowFirmId === firmIdParam || rowFirmId.includes(firmIdParam));
 
-      return byFirmId || byFirmaAdi;
-    });
+  // Firma adı eşleşmesi (en önemli)
+  const byFirmaAdi =
+    normalizedFirmaAdi.length > 0 &&
+    rowFirmaAdi.includes(normalizedFirmaAdi);
+
+  return byFirmId || byFirmaAdi;
+});
 
     return NextResponse.json({
       success: true,
