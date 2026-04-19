@@ -59,7 +59,6 @@ const SELECT_FIELDS = `
   created_by,
   firma_adi,
   priority,
-  sla_due_at,
   closed_at
 `;
 
