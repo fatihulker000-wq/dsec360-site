@@ -34,33 +34,8 @@ function unauthorized() {
   return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
 }
 
-const SELECT_FIELDS = `
-  id,
-  full_name,
-  email,
-  message,
-  created_at,
-  updated_at,
-  status,
-  category,
-  firm_id,
-  assigned_to,
-  assigned_username,
-  assigned_role,
-  target_role,
-  resolution_note,
-  response_note,
-  rejected_reason,
-  opened_by_email,
-  mail_subject,
-  mail_message_id,
-  first_receiver_username,
-  forwarded_by,
-  created_by,
-  firma_adi,
-  priority,
-  closed_at
-`;
+const SELECT_FIELDS = "*"
+
 
 function normalizeFirmName(value: string) {
   return value.replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
@@ -68,8 +43,7 @@ function normalizeFirmName(value: string) {
 
 export async function GET(req: Request) {
   try {
-
-// if (!isAuthorized(req)) return unauthorized();
+    // if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
     const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
@@ -80,32 +54,52 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabase
       .from("cbs_forms")
-      .select(SELECT_FIELDS)
+      .select("*")
       .order("created_at", { ascending: false });
 
-   if (error) {
-  console.error("mobile-sync GET hata:", error);
-  return NextResponse.json(
-    {
-      error: "Kayıtlar alınamadı.",
-      detail: error.message,
-      code: error.code,
-      hint: error.hint,
-    },
-    { status: 500 }
-  );
-}
+    if (error) {
+      console.error("mobile-sync GET hata detayı:", error);
 
-    const filtered = data || [];
-    
+      return NextResponse.json(
+        {
+          error: "Kayıtlar alınamadı.",
+          detail: error.message ?? null,
+          code: (error as any)?.code ?? null,
+          hint: (error as any)?.hint ?? null,
+          details: (error as any)?.details ?? null,
+        },
+        { status: 500 }
+      );
+    }
+
+    const filtered = (data || []).filter((row: any) => {
+      const rowFirmId = String(row?.firm_id || "").trim();
+      const rowFirmaAdi = normalizeFirmName(String(row?.firma_adi || ""));
+
+      if (!firmIdParam && !normalizedFirmaAdi) return true;
+
+      const byFirmId = firmIdParam.length > 0 ? rowFirmId === firmIdParam : false;
+      const byFirmaAdi =
+        normalizedFirmaAdi.length > 0 ? rowFirmaAdi === normalizedFirmaAdi : false;
+
+      return byFirmId || byFirmaAdi;
+    });
+
     return NextResponse.json({
       success: true,
       count: filtered.length,
       data: filtered,
     });
-  } catch (e) {
-    console.error("mobile-sync GET hata:", e);
-    return NextResponse.json({ error: "Sunucu hatası." }, { status: 500 });
+  } catch (e: any) {
+    console.error("mobile-sync GET catch hata:", e);
+
+    return NextResponse.json(
+      {
+        error: "Sunucu hatası.",
+        detail: e?.message ?? null,
+      },
+      { status: 500 }
+    );
   }
 }
 
