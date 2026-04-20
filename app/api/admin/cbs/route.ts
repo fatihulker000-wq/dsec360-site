@@ -269,10 +269,24 @@ const filtered = allRows.filter((row) => {
   return byDirectFirmId || byRequestedCompanyId || byRawFirmaAdi;
 });
 
+// 🔥 şirketleri güvenli normalize et
+const safeCompanies = (companies || []).map((c: any) => ({
+  id: String(c.id),
+  name: String(c.name || ""),
+}));
+
+// 🔥 CBS kayıtlarını güvenli formatla
+const safeData = (filtered || []).map((row: any) => ({
+  ...row,
+  firm_id: row.firm_id ? String(row.firm_id) : null,
+  firma_adi: row.firma_adi || null,
+}));
+
 return NextResponse.json({
   success: true,
-  count: filtered.length,
-  data: filtered,
+  count: safeData.length,
+  data: safeData,
+  companies: safeCompanies, // 🔥 EN KRİTİK SATIR BU
 });
   } catch (e: any) {
     console.error("mobile-sync GET catch hata:", e);
