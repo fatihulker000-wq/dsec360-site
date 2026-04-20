@@ -41,6 +41,8 @@ function normalizeFirmName(value: string) {
 export async function GET(req: Request) {
   try {
     if (!isAuthorized(req)) return unauthorized();
+    // TEMP: test için kapatıldı
+// if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
     const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
