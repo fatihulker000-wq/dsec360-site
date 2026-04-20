@@ -216,105 +216,82 @@ function findSuggestedCompany(
 /* =========================
    GET
 ========================= */
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const session = await getAdminSession();
-    if (!session) return unauthorized();
-
     const supabase = getSupabase();
 
-    const [{ data: companies, error: companiesError }, { data, error }] =
-      await Promise.all([
-        supabase.from("companies").select("id, name").limit(5000),
-        supabase
-          .from("cbs_forms")
-          .select(`
-            id,
-            full_name,
-            email,
-            message,
-            created_at,
-            status,
-            category,
-            firm_id,
-            assigned_to,
-            resolution_note,
-            firma_adi,
-            priority,
-            sla_due_at,
-            closed_at
-          `)
-          .order("created_at", { ascending: false })
-          .limit(5000),
-      ]);
+    // 🔥 header'dan rol ve firma al
+    const userRole =
+      req.headers.get("x-role") || "super_admin";
 
-    if (companiesError) {
-      console.error("CBS GET companies hatası:", companiesError);
-      return NextResponse.json(
-        { error: "Firma listesi alınamadı." },
-        { status: 500 }
-      );
+    const userFirmId =
+      req.headers.get("x-firm-id") || null;
+
+    // 🔥 TEMEL SORGU (FİLTRESİZ)
+    let query = supabase
+      .from("cbs_forms")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    // 🔥 SADECE FİRMA ADMİN FİLTRE
+    if (userRole !== "super_admin" && userFirmId) {
+      query = query.eq("firm_id", userFirmId);
     }
 
-    if (error) {
-      console.error("CBS GET hatası:", error);
-      return NextResponse.json(
-        { error: "Kayıtlar alınamadı." },
-        { status: 500 }
-      );
-    }
+   const { data, error } = await query;
 
-    const companyList: CompanyRow[] = companies || [];
-    const sessionCompanyId = String(session.companyId || "").trim();
+if (error) {
+  return NextResponse.json(
+    { error: "Kayıtlar alınamadı." },
+    { status: 500 }
+  );
+}
 
-    const formatted = ((data || []) as CbsRow[])
-      .map((item) => {
-        const directFirmId = String(item.firm_id ?? "").trim() || null;
+const { data: companies } = await supabase
+  .from("companies")
+  .select("id, name");
 
-        const { suggestedFirmId, suggestedFirmName } = findSuggestedCompany(
-          item,
-          companyList
-        );
+const companyList: CompanyRow[] = companies || [];
 
-        return {
-          id: item.id,
-          full_name: item.full_name,
-          email: item.email,
-          message: item.message,
-          created_at: item.created_at,
-          status: item.status,
-          category: item.category,
-          firmId: directFirmId,
-          assignedTo: item.assigned_to,
-          resolutionNote: item.resolution_note,
-          firma_adi: item.firma_adi,
-          priority: item.priority,
-          sla_due_at: item.sla_due_at,
-          closed_at: item.closed_at,
-          suggestedFirmId,
-          suggestedFirmName,
-        };
-      })
-      .filter((item) => {
-        if (session.role === "super_admin") return true;
+const formatted = ((data || []) as CbsRow[]).map((item) => {
+  const directFirmId = String(item.firm_id ?? "").trim() || null;
 
-        return (
-          String(item.firmId || "").trim() === sessionCompanyId ||
-          String(item.suggestedFirmId || "").trim() === sessionCompanyId
-        );
-      });
+  const { suggestedFirmId, suggestedFirmName } = findSuggestedCompany(
+    item,
+    companyList
+  );
 
-    return NextResponse.json({
-      data: formatted,
-      companies: (companyList || []).map((company) => ({
-        id: String(company.id || "").trim(),
-        name: String(company.name || "").trim(),
-      })),
-    });
-  } catch (error) {
-    console.error("CBS GET genel hata:", error);
+  return {
+    id: item.id,
+    full_name: item.full_name,
+    email: item.email,
+    message: item.message,
+    created_at: item.created_at,
+    status: item.status,
+    category: item.category,
+    firmId: directFirmId,
+    assignedTo: item.assigned_to,
+    resolutionNote: item.resolution_note,
+    firma_adi: item.firma_adi,
+    priority: item.priority,
+    sla_due_at: item.sla_due_at,
+    closed_at: item.closed_at,
+    suggestedFirmId,
+    suggestedFirmName,
+  };
+});
+
+return NextResponse.json({
+  success: true,
+  data: formatted,
+  companies: companyList.map((c) => ({
+    id: String(c.id || "").trim(),
+    name: String(c.name || "").trim(),
+  })),
+});
+  } catch (e: any) {
     return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
+      { error: "Sunucu hatası." },
       { status: 500 }
     );
   }
