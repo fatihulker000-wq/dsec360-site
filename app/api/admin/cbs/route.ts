@@ -226,38 +226,52 @@ export async function GET(req: Request) {
       }
     }
 
-    const filtered = ((data || []) as CbsRow[]).filter((row) => {
-      const rowFirmId = String(row?.firm_id || "").trim();
-      const rowFirmaAdiRaw = String(row?.firma_adi || "").trim();
-      const rowFirmaAdi = normalizeFirmName(rowFirmaAdiRaw);
+    const allRows = (data || []) as CbsRow[];
 
-      const { suggestedFirmId } = findSuggestedCompany(row, companyList);
+// 🔥 PARAMETRE YOKSA HER ŞEYİ DÖN
+if (!firmIdParam && !normalizedFirmaAdi) {
+  return NextResponse.json({
+    success: true,
+    count: allRows.length,
+    data: allRows,
+  });
+}
 
-      if (!firmIdParam && !normalizedFirmaAdi) return true;
+// 🔥 PARAMETRE VARSA FİLTRELE
+const filtered = allRows.filter((row) => {
+  const rowFirmId = String(row?.firm_id || "").trim();
+  const rowFirmaAdiRaw = String(row?.firma_adi || "").trim();
+  const rowFirmaAdi = normalizeFirmName(rowFirmaAdiRaw);
 
-      const byDirectFirmId =
-        firmIdParam.length > 0 &&
-        rowFirmId.length > 0 &&
-        rowFirmId === firmIdParam;
+  const { suggestedFirmId } = findSuggestedCompany(row, companyList);
 
-      const byRequestedCompanyId =
-        !!requestedCompanyId &&
-        (
-          rowFirmId === requestedCompanyId ||
-          String(suggestedFirmId || "").trim() === requestedCompanyId
-        );
+  const byDirectFirmId =
+    firmIdParam &&
+    rowFirmId &&
+    rowFirmId === firmIdParam;
 
-      const byRawFirmaAdi =
-        normalizedFirmaAdi.length > 0 &&
-        rowFirmaAdi.length > 0 &&
-        (
-          rowFirmaAdi === normalizedFirmaAdi ||
-          rowFirmaAdi.includes(normalizedFirmaAdi) ||
-          normalizedFirmaAdi.includes(rowFirmaAdi)
-        );
+  const bySuggested =
+    requestedCompanyId &&
+    (rowFirmId === requestedCompanyId ||
+      String(suggestedFirmId || "").trim() === requestedCompanyId);
 
-      return byDirectFirmId || byRequestedCompanyId || byRawFirmaAdi;
-    });
+  const byName =
+    normalizedFirmaAdi &&
+    rowFirmaAdi &&
+    (
+      rowFirmaAdi === normalizedFirmaAdi ||
+      rowFirmaAdi.includes(normalizedFirmaAdi) ||
+      normalizedFirmaAdi.includes(rowFirmaAdi)
+    );
+
+  return byDirectFirmId || bySuggested || byName;
+});
+
+return NextResponse.json({
+  success: true,
+  count: filtered.length,
+  data: filtered,
+});
 
     return NextResponse.json({
       success: true,
