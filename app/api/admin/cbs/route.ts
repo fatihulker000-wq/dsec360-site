@@ -277,10 +277,7 @@ console.log("COMPANIES:", companies);
       .filter((item) => {
         if (session.role === "super_admin") return true;
 
-        return (
-          String(item.firmId || "").trim() === sessionCompanyId ||
-          String(item.suggestedFirmId || "").trim() === sessionCompanyId
-        );
+        return String(item.firmId || "").trim() === sessionCompanyId;
       });
 
     return NextResponse.json({
