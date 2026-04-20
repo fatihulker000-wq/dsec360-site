@@ -34,16 +34,13 @@ function unauthorized() {
   return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
 }
 
-const SELECT_FIELDS = "*"
-
-
 function normalizeFirmName(value: string) {
   return value.replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
 }
 
 export async function GET(req: Request) {
   try {
-    // if (!isAuthorized(req)) return unauthorized();
+    if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
     const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
@@ -72,25 +69,28 @@ export async function GET(req: Request) {
       );
     }
 
-const filtered = (data || []).filter((row: any) => {
-  const rowFirmId = String(row?.firm_id || "").trim();
-  const rowFirmaAdi = normalizeFirmName(String(row?.firma_adi || ""));
+    const filtered = (data || []).filter((row: any) => {
+      const rowFirmId = String(row?.firm_id || "").trim();
+      const rowFirmaAdi = normalizeFirmName(String(row?.firma_adi || ""));
 
-  // Eğer hiçbir param yoksa hepsini getir
-  if (!firmIdParam && !normalizedFirmaAdi) return true;
+      if (!firmIdParam && !normalizedFirmaAdi) return true;
 
-  // FirmId eşleşmesi (daha esnek)
-  const byFirmId =
-    firmIdParam.length > 0 &&
-    (rowFirmId === firmIdParam || rowFirmId.includes(firmIdParam));
+      const byFirmId =
+        firmIdParam.length > 0 &&
+        rowFirmId.length > 0 &&
+        rowFirmId === firmIdParam;
 
-  // Firma adı eşleşmesi (en önemli)
-  const byFirmaAdi =
-    normalizedFirmaAdi.length > 0 &&
-    rowFirmaAdi.includes(normalizedFirmaAdi);
+      const byFirmaAdi =
+        normalizedFirmaAdi.length > 0 &&
+        rowFirmaAdi.length > 0 &&
+        (
+          rowFirmaAdi === normalizedFirmaAdi ||
+          rowFirmaAdi.includes(normalizedFirmaAdi) ||
+          normalizedFirmaAdi.includes(rowFirmaAdi)
+        );
 
-  return byFirmId || byFirmaAdi;
-});
+      return byFirmId || byFirmaAdi;
+    });
 
     return NextResponse.json({
       success: true,
@@ -113,7 +113,7 @@ const filtered = (data || []).filter((row: any) => {
 export async function POST(req: Request) {
   try {
     if (!isAuthorized(req)) return unauthorized();
-// if (!isAuthorized(req)) return unauthorized();
+
     const body = await req.json();
 
     const full_name = String(body?.full_name || "").trim();
@@ -151,12 +151,12 @@ export async function POST(req: Request) {
     const created_by =
       String(body?.created_by || "").trim() || null;
 
-   if (!full_name || !message || (!firm_id && !firma_adi)) {
-  return NextResponse.json(
-    { error: "Eksik alan var." },
-    { status: 400 }
-  );
-}
+    if (!full_name || !message || (!firm_id && !firma_adi)) {
+      return NextResponse.json(
+        { error: "Eksik alan var." },
+        { status: 400 }
+      );
+    }
 
     const supabase = getSupabase();
     const now = new Date().toISOString();
@@ -218,7 +218,6 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     if (!isAuthorized(req)) return unauthorized();
-// if (!isAuthorized(req)) return unauthorized();
 
     const body = await req.json();
     const id = Number(body?.id);
