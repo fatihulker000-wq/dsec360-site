@@ -90,6 +90,9 @@ export async function POST(request: Request) {
     }
 
     const secure = process.env.NODE_ENV === "production";
+    const cookieDomain =
+      process.env.NODE_ENV === "production" ? ".dsec360.com" : undefined;
+
     const roleValue = String(adminUser.role ?? "").trim();
     const userId = String(adminUser.id);
     const userEmail = String(adminUser.email ?? email).trim().toLowerCase();
@@ -110,6 +113,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       sameSite: "lax",
       secure,
+      domain: cookieDomain,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
@@ -118,6 +122,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       sameSite: "lax",
       secure,
+      domain: cookieDomain,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
@@ -126,6 +131,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       sameSite: "lax",
       secure,
+      domain: cookieDomain,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
@@ -134,6 +140,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       sameSite: "lax",
       secure,
+      domain: cookieDomain,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
@@ -142,6 +149,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       sameSite: "lax",
       secure,
+      domain: cookieDomain,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
@@ -150,6 +158,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       sameSite: "lax",
       secure,
+      domain: cookieDomain,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
@@ -158,6 +167,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       sameSite: "lax",
       secure,
+      domain: cookieDomain,
       path: "/",
       maxAge: 60 * 60 * 12,
     });
