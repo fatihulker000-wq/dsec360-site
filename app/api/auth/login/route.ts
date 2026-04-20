@@ -11,6 +11,7 @@ type LoginUserRow = {
   password: string | null;
   role: string | null;
   company_id: string | null;
+  is_active?: boolean | null;
 };
 
 type CompanyRow = {
@@ -19,9 +20,12 @@ type CompanyRow = {
   is_active: boolean | null;
 };
 
-export async function POST(request: Request) {
-  console.log("🔥 AUTH LOGIN API CALISTI");
+function isPasswordMatched(rawPassword: string, user: LoginUserRow) {
+  const plainPassword = String(user.password || "").trim();
+  return !!plainPassword && rawPassword === plainPassword;
+}
 
+export async function POST(request: Request) {
   try {
     const body = await request.json();
 
@@ -46,18 +50,12 @@ export async function POST(request: Request) {
 
     const { data: user, error } = await supabase
       .from("users")
-      .select("id, full_name, email, password, role, company_id")
-      .eq("email", rawEmail)
+      .select("id, full_name, email, password, role, company_id, is_active")
+      .ilike("email", rawEmail)
       .maybeSingle<LoginUserRow>();
 
-    console.log("OKUNAN EMAIL:", user?.email);
-    console.log("DB SIFRE:", user?.password);
-    console.log("GELEN SIFRE:", rawPassword);
-    console.log("ROL:", user?.role);
-    console.log("COMPANY ID:", user?.company_id);
-
     if (error) {
-      console.error("Kullanıcı sorgu hatası:", error);
+      console.error("Auth login kullanıcı sorgu hatası:", error);
       return NextResponse.json(
         { error: "Kullanıcı bilgileri okunamadı." },
         { status: 500 }
@@ -71,27 +69,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const userId = String(user.id ?? "").trim();
-    const userEmail = String(user.email ?? "").trim().toLowerCase();
-    const userRole = String(user.role ?? "").trim();
-    const dbPassword = String(user.password ?? "").trim();
-    const companyId = String(user.company_id ?? "").trim();
-
-    if (!dbPassword) {
+    if (user.is_active === false) {
       return NextResponse.json(
-        { error: "Kullanıcı şifresi tanımlı değil." },
-        { status: 500 }
-      );
-    }
-
-    if (userRole === "super_admin" && userEmail !== "admin@dsec360.com") {
-      return NextResponse.json(
-        { error: "Bu yönetici hesabı ile giriş izni yok." },
+        { error: "Kullanıcı pasif durumda." },
         { status: 403 }
       );
     }
 
-    if (rawPassword !== dbPassword) {
+    const userId = String(user.id ?? "").trim();
+    const userEmail = String(user.email ?? "").trim().toLowerCase();
+    const userRole = String(user.role ?? "").trim();
+    const companyId = String(user.company_id ?? "").trim();
+
+    if (!isPasswordMatched(rawPassword, user)) {
       return NextResponse.json(
         { error: "Hatalı şifre." },
         { status: 401 }
@@ -116,23 +106,23 @@ export async function POST(request: Request) {
         .maybeSingle<CompanyRow>();
 
       if (companyError) {
-        console.error("Firma sorgu hatası:", companyError);
+        console.error("Auth login firma sorgu hatası:", companyError);
         return NextResponse.json(
-          { error: "Firma bilgisi okunamadı." },
+          { error: "Firma bilgileri okunamadı." },
           { status: 500 }
         );
       }
 
       if (!company) {
         return NextResponse.json(
-          { error: "Bağlı firma kaydı bulunamadı." },
+          { error: "Bağlı firma bulunamadı." },
           { status: 403 }
         );
       }
 
       if (company.is_active === false) {
         return NextResponse.json(
-          { error: "Bağlı firma pasif durumda. Giriş yetkisi kapalı." },
+          { error: "Bağlı firma pasif durumda." },
           { status: 403 }
         );
       }
@@ -171,7 +161,7 @@ export async function POST(request: Request) {
     response.cookies.set("dsec_user_role", userRole, activeCookieBase);
     response.cookies.set("dsec_user_id", userId, activeCookieBase);
     response.cookies.set("dsec_user_email", userEmail, activeCookieBase);
-    response.cookies.set("dsec_company_id", companyId, activeCookieBase);
+    response.cookies.set("dsec_company_id", companyId || "", activeCookieBase);
 
     if (userRole === "super_admin" || userRole === "company_admin") {
       response.cookies.set("dsec_admin_auth", "ok", activeCookieBase);
@@ -183,7 +173,7 @@ export async function POST(request: Request) {
 
     return response;
   } catch (error) {
-    console.error("Auth login hatası:", error);
+    console.error("Auth login genel hata:", error);
     return NextResponse.json(
       { error: "Sunucu hatası oluştu." },
       { status: 500 }
