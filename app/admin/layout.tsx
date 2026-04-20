@@ -95,6 +95,25 @@ export default function AdminLayout({
     }
   }, [roleLoaded, role, pathname, router]);
 
+  const menu = useMemo(() => {
+    const items = [
+      { name: "Dashboard", href: "/admin/dashboard" },
+      { name: "Eğitimler", href: "/admin/trainings" },
+      { name: "Eğitim Katılımcıları", href: "/admin/participants" },
+      { name: "Sistem Kullanıcıları", href: "/admin/users" },
+      { name: "Raporlar", href: "/admin/reports" },
+      { name: "ÇBS Yönetimi", href: "/admin/cbs" },
+    ];
+
+    if (role === "super_admin") {
+      items.splice(4, 0, { name: "Firmalar", href: "/admin/companies" });
+    }
+
+    return items;
+  }, [role]);
+
+  const activeLabel = menu.find((x) => x.href === pathname)?.name || "Yönetim";
+
   const handleLogout = async () => {
     try {
       setLoggingOut(true);
@@ -126,25 +145,6 @@ export default function AdminLayout({
   if (!roleLoaded) {
     return null;
   }
-
-  const menu = useMemo(() => {
-    const items = [
-      { name: "Dashboard", href: "/admin/dashboard" },
-      { name: "Eğitimler", href: "/admin/trainings" },
-      { name: "Eğitim Katılımcıları", href: "/admin/participants" },
-      { name: "Sistem Kullanıcıları", href: "/admin/users" },
-      { name: "Raporlar", href: "/admin/reports" },
-      { name: "ÇBS Yönetimi", href: "/admin/cbs" },
-    ];
-
-    if (role === "super_admin") {
-      items.splice(4, 0, { name: "Firmalar", href: "/admin/companies" });
-    }
-
-    return items;
-  }, [role]);
-
-  const activeLabel = menu.find((x) => x.href === pathname)?.name || "Yönetim";
 
   return (
     <div
