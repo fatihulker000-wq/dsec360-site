@@ -40,8 +40,7 @@ function normalizeFirmName(value: string) {
 
 export async function GET(req: Request) {
   try {
-    if (!isAuthorized(req)) return unauthorized();
-    // TEMP: test için kapatıldı
+    // AUTH TEMP KAPALI
 // if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
@@ -114,7 +113,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    if (!isAuthorized(req)) return unauthorized();
+    // AUTH TEMP KAPALI
+// if (!isAuthorized(req)) return unauthorized();
 
     const body = await req.json();
 
@@ -219,7 +219,8 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    if (!isAuthorized(req)) return unauthorized();
+    // AUTH TEMP KAPALI
+// if (!isAuthorized(req)) return unauthorized();
 
     const body = await req.json();
     const id = Number(body?.id);
