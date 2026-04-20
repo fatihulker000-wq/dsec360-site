@@ -50,7 +50,7 @@ export async function POST(request: Request) {
 
     const { data: user, error } = await supabase
       .from("users")
-      .select("id, full_name, email, password, role, company_id, is_active")
+      .select("*")
       .ilike("email", rawEmail)
       .maybeSingle<LoginUserRow>();
 
