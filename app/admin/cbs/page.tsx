@@ -246,10 +246,14 @@ const [pageError, setPageError] = useState("");
       setLoading(true);
       setPageError("");
 
-      const response = await fetch("/api/admin/cbs", {
-        method: "GET",
-        cache: "no-store",
-      });
+     const response = await fetch("/api/admin/cbs", {
+  method: "GET",
+  cache: "no-store",
+  headers: {
+    "x-role": "super_admin", // 🔥 şimdilik sabit
+    "x-firm-id": selectedFirmId !== "all" ? selectedFirmId : "",
+  },
+});
 
       const result = await readSafeJson(response);
 
