@@ -592,9 +592,15 @@ const sendReply = async () => {
     let data = records;
 
 if (selectedFirmId !== "all") {
-  data = data.filter(
-    (item) => String(item.firmId || "").trim() === selectedFirmId
-  );
+  data = data.filter((item) => {
+    const directFirmId = String(item.firmId || "").trim();
+    const suggestedFirmId = String(item.suggestedFirmId || "").trim();
+
+    return (
+      directFirmId === selectedFirmId ||
+      suggestedFirmId === selectedFirmId
+    );
+  });
 }
 
 if (filter !== "all") {
