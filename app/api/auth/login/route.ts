@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     const { data: user, error } = await supabase
       .from("users")
       .select("*")
-      .or('email.ilike.${rawEmail},tc.eq.${rawEmail},sicil_no.eq.${rawEmail}')
+      .or(`email.ilike.${rawEmail},tc.eq.${rawEmail},sicil_no.eq.${rawEmail}`)
       .maybeSingle<LoginUserRow>();
 
     if (error) {
