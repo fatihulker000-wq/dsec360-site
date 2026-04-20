@@ -226,9 +226,9 @@ export async function GET(req: Request) {
       }
     }
 
-    const allRows = (data || []) as CbsRow[];
+   const allRows = (data || []) as CbsRow[];
 
-// 🔥 PARAMETRE YOKSA HER ŞEYİ DÖN
+// Parametre yoksa tüm kayıtları döndür
 if (!firmIdParam && !normalizedFirmaAdi) {
   return NextResponse.json({
     success: true,
@@ -237,7 +237,7 @@ if (!firmIdParam && !normalizedFirmaAdi) {
   });
 }
 
-// 🔥 PARAMETRE VARSA FİLTRELE
+// Parametre varsa firma bazlı filtrele
 const filtered = allRows.filter((row) => {
   const rowFirmId = String(row?.firm_id || "").trim();
   const rowFirmaAdiRaw = String(row?.firma_adi || "").trim();
@@ -246,25 +246,27 @@ const filtered = allRows.filter((row) => {
   const { suggestedFirmId } = findSuggestedCompany(row, companyList);
 
   const byDirectFirmId =
-    firmIdParam &&
-    rowFirmId &&
+    firmIdParam.length > 0 &&
+    rowFirmId.length > 0 &&
     rowFirmId === firmIdParam;
 
-  const bySuggested =
-    requestedCompanyId &&
-    (rowFirmId === requestedCompanyId ||
-      String(suggestedFirmId || "").trim() === requestedCompanyId);
+  const byRequestedCompanyId =
+    !!requestedCompanyId &&
+    (
+      rowFirmId === requestedCompanyId ||
+      String(suggestedFirmId || "").trim() === requestedCompanyId
+    );
 
-  const byName =
-    normalizedFirmaAdi &&
-    rowFirmaAdi &&
+  const byRawFirmaAdi =
+    normalizedFirmaAdi.length > 0 &&
+    rowFirmaAdi.length > 0 &&
     (
       rowFirmaAdi === normalizedFirmaAdi ||
       rowFirmaAdi.includes(normalizedFirmaAdi) ||
       normalizedFirmaAdi.includes(rowFirmaAdi)
     );
 
-  return byDirectFirmId || bySuggested || byName;
+  return byDirectFirmId || byRequestedCompanyId || byRawFirmaAdi;
 });
 
 return NextResponse.json({
@@ -272,12 +274,6 @@ return NextResponse.json({
   count: filtered.length,
   data: filtered,
 });
-
-    return NextResponse.json({
-      success: true,
-      count: filtered.length,
-      data: filtered,
-    });
   } catch (e: any) {
     console.error("mobile-sync GET catch hata:", e);
 
