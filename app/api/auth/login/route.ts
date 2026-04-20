@@ -48,11 +48,40 @@ export async function POST(request: Request) {
 
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("*")
-      .or(`email.ilike.${rawEmail},tc.eq.${rawEmail},sicil_no.eq.${rawEmail}`)
-      .maybeSingle<LoginUserRow>();
+    let user: LoginUserRow | null = null;
+
+// 1️⃣ email ile ara
+let res = await supabase
+  .from("users")
+  .select("*")
+  .ilike("email", rawEmail)
+  .maybeSingle<LoginUserRow>();
+
+if (res.data) user = res.data;
+
+// 2️⃣ tc ile ara
+if (!user) {
+  res = await supabase
+    .from("users")
+    .select("*")
+    .eq("tc", rawEmail)
+    .maybeSingle<LoginUserRow>();
+
+  if (res.data) user = res.data;
+}
+
+// 3️⃣ sicil ile ara
+if (!user) {
+  res = await supabase
+    .from("users")
+    .select("*")
+    .eq("sicil_no", rawEmail)
+    .maybeSingle<LoginUserRow>();
+
+  if (res.data) user = res.data;
+}
+
+const error = res.error;
 
     if (error) {
       console.error("Auth login kullanıcı sorgu hatası:", error);
