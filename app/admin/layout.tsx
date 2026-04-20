@@ -70,6 +70,10 @@ export default function AdminLayout({
         }
       } catch (error) {
         console.error("admin role load error:", error);
+        setRole("");
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("dsec_admin_role_cached");
+        }
       } finally {
         setRoleLoaded(true);
       }
@@ -78,6 +82,19 @@ export default function AdminLayout({
     void loadRole();
   }, [pathname]);
 
+  useEffect(() => {
+    if (!roleLoaded) return;
+    if (pathname === "/admin/login") return;
+
+    if (!role) {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("dsec_admin_role_cached");
+      }
+      router.replace("/admin/login");
+      router.refresh();
+    }
+  }, [roleLoaded, role, pathname, router]);
+
   const handleLogout = async () => {
     try {
       setLoggingOut(true);
@@ -85,22 +102,29 @@ export default function AdminLayout({
       await fetch("/api/admin/logout", {
         method: "POST",
         credentials: "include",
+        cache: "no-store",
       }).catch(() => null);
 
       await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
+        cache: "no-store",
       }).catch(() => null);
     } finally {
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("dsec_admin_role_cached");
       }
-      window.location.href = "/admin/login";
+      router.replace("/admin/login");
+      router.refresh();
     }
   };
 
   if (pathname === "/admin/login") {
     return <>{children}</>;
+  }
+
+  if (!roleLoaded) {
+    return null;
   }
 
   const menu = useMemo(() => {
@@ -187,7 +211,7 @@ export default function AdminLayout({
               opacity: 0.8,
             }}
           >
-            {!roleLoaded ? "Yetki okunuyor..." : role === "super_admin" ? "Süper Admin" : "Firma Admin"}
+            {role === "super_admin" ? "Süper Admin" : "Firma Admin"}
           </div>
         </div>
 
@@ -217,7 +241,7 @@ export default function AdminLayout({
                 }}
                 onClick={(e) => {
                   e.preventDefault();
-                  window.location.href = item.href;
+                  router.push(item.href);
                 }}
               >
                 {item.name}
