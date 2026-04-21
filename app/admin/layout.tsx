@@ -27,21 +27,31 @@ export default function AdminLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 900);
+    if (typeof window === "undefined") return;
+
+    const media = window.matchMedia("(max-width: 900px)");
+
+    const applyMobileState = (matches: boolean) => {
+      setIsMobile(matches);
+      if (!matches) {
+        setMobileMenuOpen(false);
+      }
     };
 
-    handleResize();
-    window.addEventListener("resize", handleResize);
+    applyMobileState(media.matches);
 
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    const handleChange = (event: MediaQueryListEvent) => {
+      applyMobileState(event.matches);
+    };
 
-  useEffect(() => {
-    if (!isMobile) {
-      setMobileMenuOpen(false);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
     }
-  }, [isMobile]);
+
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -148,14 +158,18 @@ export default function AdminLayout({
         credentials: "include",
         cache: "no-store",
       });
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error("admin logout error:", error);
+    } finally {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("dsec_admin_role_cached");
+      }
+
+      setMobileMenuOpen(false);
+      setRole("");
+
+      window.location.replace("/admin/login");
     }
-
-    sessionStorage.clear();
-    localStorage.clear();
-
-    window.location.href = "/admin/login";
   };
 
   if (pathname === "/admin/login") {
@@ -166,15 +180,53 @@ export default function AdminLayout({
     return null;
   }
 
+  const renderMenuItems = () =>
+    menu.map((item) => {
+      const isActive = pathname === item.href;
+
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          prefetch={false}
+          style={{
+            display: "block",
+            textDecoration: "none",
+            color: "inherit",
+            padding: "12px 14px",
+            borderRadius: 12,
+            marginBottom: 8,
+            cursor: "pointer",
+            background: isActive ? "#c62828" : "transparent",
+            border: isActive
+              ? "1px solid rgba(255,255,255,0.16)"
+              : "1px solid transparent",
+            fontWeight: isActive ? 800 : 600,
+            transition: "all 0.2s ease",
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            if (isMobile) {
+              setMobileMenuOpen(false);
+            }
+            router.push(item.href);
+          }}
+        >
+          {item.name}
+        </Link>
+      );
+    });
+
   return (
     <div
       className="admin-layout"
       style={{
         display: "flex",
-        flexDirection: isMobile ? "column" : "row",
+        flexDirection: "row",
         minHeight: "100vh",
         background: "#fafafa",
         overflowX: "hidden",
+        position: "relative",
       }}
     >
       {isMobile && (
@@ -182,7 +234,7 @@ export default function AdminLayout({
           style={{
             position: "sticky",
             top: 0,
-            zIndex: 60,
+            zIndex: 80,
             background: "#ffffff",
             borderBottom: "1px solid #ead7db",
             padding: "10px 14px",
@@ -234,125 +286,191 @@ export default function AdminLayout({
         </div>
       )}
 
-      <aside
-        className="admin-sidebar-shell"
-        style={{
-          width: isMobile ? "100%" : 260,
-          minWidth: isMobile ? "100%" : 260,
-          background: "linear-gradient(180deg, #4a0d1a 0%, #5a0f1f 100%)",
-          color: "#fff",
-          padding: isMobile ? 12 : 20,
-          overflowY: "auto",
-          position: isMobile ? "relative" : "fixed",
-          top: isMobile ? "auto" : 0,
-          left: isMobile ? "auto" : 0,
-          bottom: isMobile ? "auto" : 0,
-          display: isMobile ? (mobileMenuOpen ? "flex" : "none") : "flex",
-          flexDirection: "column",
-          boxShadow: isMobile ? "none" : "0 16px 40px rgba(0,0,0,0.16)",
-          zIndex: 20,
-        }}
-      >
-        <div style={{ marginBottom: 22 }}>
-          <div
-            style={{
-              display: "inline-flex",
-              padding: "8px 12px",
-              borderRadius: 999,
-              background: "rgba(255,255,255,0.10)",
-              border: "1px solid rgba(255,255,255,0.14)",
-              fontSize: 12,
-              fontWeight: 800,
-              marginBottom: 12,
-            }}
-          >
-            D-SEC Yönetim Merkezi
-          </div>
-
-          <div style={{ fontWeight: 900, fontSize: 24 }}>Admin Panel</div>
-        </div>
-
-        <div
+      {!isMobile && (
+        <aside
+          className="admin-sidebar-shell"
           style={{
-            borderRadius: 16,
-            padding: 14,
-            marginBottom: 20,
-            background: "rgba(255,255,255,0.08)",
-            border: "1px solid rgba(255,255,255,0.12)",
+            width: 260,
+            minWidth: 260,
+            background: "linear-gradient(180deg, #4a0d1a 0%, #5a0f1f 100%)",
+            color: "#fff",
+            padding: 20,
+            overflowY: "auto",
+            position: "fixed",
+            top: 0,
+            left: 0,
+            bottom: 0,
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "0 16px 40px rgba(0,0,0,0.16)",
+            zIndex: 20,
           }}
         >
-          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
-            AKTİF BÖLÜM
+          <div style={{ marginBottom: 22 }}>
+            <div
+              style={{
+                display: "inline-flex",
+                padding: "8px 12px",
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.10)",
+                border: "1px solid rgba(255,255,255,0.14)",
+                fontSize: 12,
+                fontWeight: 800,
+                marginBottom: 12,
+              }}
+            >
+              D-SEC Yönetim Merkezi
+            </div>
+
+            <div style={{ fontWeight: 900, fontSize: 24 }}>Admin Panel</div>
           </div>
-          <div style={{ fontWeight: 800 }}>{activeLabel}</div>
+
           <div
             style={{
-              marginTop: 8,
-              fontSize: 12,
-              opacity: 0.8,
+              borderRadius: 16,
+              padding: 14,
+              marginBottom: 20,
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.12)",
             }}
           >
-            {role === "super_admin" ? "Süper Admin" : "Firma Admin"}
+            <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+              AKTİF BÖLÜM
+            </div>
+            <div style={{ fontWeight: 800 }}>{activeLabel}</div>
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 12,
+                opacity: 0.8,
+              }}
+            >
+              {role === "super_admin" ? "Süper Admin" : "Firma Admin"}
+            </div>
           </div>
-        </div>
 
-        <nav style={{ flex: 1 }}>
-          {menu.map((item) => {
-            const isActive = pathname === item.href;
+          <nav style={{ flex: 1 }}>{renderMenuItems()}</nav>
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                prefetch={false}
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={{
+              width: "100%",
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: loggingOut ? "#7f1d1d" : "#111827",
+              color: "#fff",
+              borderRadius: 12,
+              padding: "12px 14px",
+              fontWeight: 800,
+              cursor: loggingOut ? "not-allowed" : "pointer",
+              marginTop: 16,
+            }}
+          >
+            {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+          </button>
+        </aside>
+      )}
+
+      {isMobile && mobileMenuOpen && (
+        <>
+          <div
+            onClick={() => setMobileMenuOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              top: 57,
+              background: "rgba(17, 24, 39, 0.28)",
+              zIndex: 69,
+            }}
+          />
+
+          <aside
+            className="admin-sidebar-shell"
+            style={{
+              position: "fixed",
+              top: 57,
+              left: 0,
+              right: 0,
+              maxHeight: "calc(100vh - 57px)",
+              overflowY: "auto",
+              background: "linear-gradient(180deg, #4a0d1a 0%, #5a0f1f 100%)",
+              color: "#fff",
+              padding: 12,
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 18px 40px rgba(0,0,0,0.22)",
+              zIndex: 70,
+              borderBottomLeftRadius: 18,
+              borderBottomRightRadius: 18,
+            }}
+          >
+            <div style={{ marginBottom: 18 }}>
+              <div
                 style={{
-                  display: "block",
-                  textDecoration: "none",
-                  color: "inherit",
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  marginBottom: 8,
-                  cursor: "pointer",
-                  background: isActive ? "#c62828" : "transparent",
-                  border: isActive
-                    ? "1px solid rgba(255,255,255,0.16)"
-                    : "1px solid transparent",
-                  fontWeight: isActive ? 800 : 600,
-                  transition: "all 0.2s ease",
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (isMobile) {
-                    setMobileMenuOpen(false);
-                  }
-                  router.push(item.href);
+                  display: "inline-flex",
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,0.10)",
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  marginBottom: 10,
                 }}
               >
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
+                D-SEC Yönetim Merkezi
+              </div>
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          disabled={loggingOut}
-          style={{
-            width: "100%",
-            border: "1px solid rgba(255,255,255,0.18)",
-            background: loggingOut ? "#7f1d1d" : "#111827",
-            color: "#fff",
-            borderRadius: 12,
-            padding: "12px 14px",
-            fontWeight: 800,
-            cursor: loggingOut ? "not-allowed" : "pointer",
-            marginTop: 16,
-          }}
-        >
-          {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
-        </button>
-      </aside>
+              <div style={{ fontWeight: 900, fontSize: 22 }}>Admin Panel</div>
+            </div>
+
+            <div
+              style={{
+                borderRadius: 16,
+                padding: 14,
+                marginBottom: 16,
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.12)",
+              }}
+            >
+              <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+                AKTİF BÖLÜM
+              </div>
+              <div style={{ fontWeight: 800 }}>{activeLabel}</div>
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  opacity: 0.8,
+                }}
+              >
+                {role === "super_admin" ? "Süper Admin" : "Firma Admin"}
+              </div>
+            </div>
+
+            <nav style={{ flex: 1 }}>{renderMenuItems()}</nav>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              style={{
+                width: "100%",
+                border: "1px solid rgba(255,255,255,0.18)",
+                background: loggingOut ? "#7f1d1d" : "#111827",
+                color: "#fff",
+                borderRadius: 12,
+                padding: "12px 14px",
+                fontWeight: 800,
+                cursor: loggingOut ? "not-allowed" : "pointer",
+                marginTop: 12,
+              }}
+            >
+              {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+            </button>
+          </aside>
+        </>
+      )}
 
       <main
         className="admin-layout-main"
