@@ -1482,3 +1482,94 @@ div {
     padding-right: 12px !important;
   }
 }
+
+/* ===== ULTRA RESPONSIVE FIX (GLOBAL) ===== */
+
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+* {
+  max-width: 100%;
+}
+
+img, video, canvas, iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+/* GRID FIX */
+div[style*="grid"] {
+  max-width: 100% !important;
+}
+
+/* FLEX FIX */
+div[style*="flex"] {
+  min-width: 0 !important;
+}
+
+/* TEXT TAŞMA ENGEL */
+h1, h2, h3, p {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* TABLE SCROLL */
+table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+}
+
+/* MOBILE MASTER FIX */
+@media (max-width: 900px) {
+
+  body {
+    overflow-x: hidden !important;
+  }
+
+  /* TÜM GRID'LERİ TEK SÜTUN YAP */
+  div[style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* SIDEBAR FULL WIDTH */
+  aside {
+    width: 100% !important;
+    position: relative !important;
+  }
+
+  main {
+    width: 100% !important;
+    margin-left: 0 !important;
+  }
+
+  /* NAV FIX */
+  .nav-links {
+    display: none !important;
+  }
+
+  /* CONTAINER FIX */
+  .page-container,
+  .site-navbar-inner,
+  .hero-inner {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+}
+
+/* EXTRA SMALL */
+@media (max-width: 600px) {
+
+  .hero-title {
+    font-size: 30px !important;
+  }
+
+  .section-title {
+    font-size: 26px !important;
+  }
+
+}
