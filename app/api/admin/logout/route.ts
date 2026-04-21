@@ -3,21 +3,40 @@ import { NextResponse } from "next/server";
 export async function POST() {
   const response = NextResponse.json({ success: true });
 
-  const cookieBase = {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: false, // 🔥 ÖNEMLİ (prod olsa bile false yap)
-    path: "/",
-    maxAge: 0,
+  const secure = process.env.NODE_ENV === "production";
+  const cookieDomain =
+    process.env.NODE_ENV === "production" ? ".dsec360.com" : undefined;
+
+  const expiredDate = new Date(0);
+
+  const clearCookie = (name: string) => {
+    response.cookies.set(name, "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      path: "/",
+      expires: expiredDate,
+    });
+
+    if (cookieDomain) {
+      response.cookies.set(name, "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure,
+        domain: cookieDomain,
+        path: "/",
+        expires: expiredDate,
+      });
+    }
   };
 
-  response.cookies.set("dsec_admin_auth", "", cookieBase);
-  response.cookies.set("dsec_admin_role", "", cookieBase);
-  response.cookies.set("dsec_user_auth", "", cookieBase);
-  response.cookies.set("dsec_user_role", "", cookieBase);
-  response.cookies.set("dsec_user_id", "", cookieBase);
-  response.cookies.set("dsec_user_email", "", cookieBase);
-  response.cookies.set("dsec_company_id", "", cookieBase);
+  clearCookie("dsec_admin_auth");
+  clearCookie("dsec_admin_role");
+  clearCookie("dsec_user_auth");
+  clearCookie("dsec_user_role");
+  clearCookie("dsec_user_id");
+  clearCookie("dsec_user_email");
+  clearCookie("dsec_company_id");
 
   return response;
 }
