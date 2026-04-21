@@ -2,62 +2,23 @@ import { NextResponse } from "next/server";
 
 export async function POST() {
   const response = NextResponse.json({ success: true });
+  const secure = process.env.NODE_ENV === "production";
 
-  response.cookies.set("dsec_user_auth", "", {
+  const cookieBase = {
     httpOnly: true,
-    sameSite: "lax",
-    secure: false,
+    sameSite: "lax" as const,
+    secure,
     path: "/",
-    maxAge: 0,
-  });
+    expires: new Date(0),
+  };
 
-  response.cookies.set("dsec_user_role", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    path: "/",
-    maxAge: 0,
-  });
-
-  response.cookies.set("dsec_user_id", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    path: "/",
-    maxAge: 0,
-  });
-
-  response.cookies.set("dsec_user_email", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    path: "/",
-    maxAge: 0,
-  });
-
-  response.cookies.set("dsec_user_full_name", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    path: "/",
-    maxAge: 0,
-  });
-
-  response.cookies.set("dsec_user_name", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    path: "/",
-    maxAge: 0,
-  });
-
-  response.cookies.set("dsec_company_name", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    path: "/",
-    maxAge: 0,
-  });
+  response.cookies.set("dsec_admin_auth", "", cookieBase);
+  response.cookies.set("dsec_admin_role", "", cookieBase);
+  response.cookies.set("dsec_user_auth", "", cookieBase);
+  response.cookies.set("dsec_user_role", "", cookieBase);
+  response.cookies.set("dsec_user_id", "", cookieBase);
+  response.cookies.set("dsec_user_email", "", cookieBase);
+  response.cookies.set("dsec_company_id", "", cookieBase);
 
   return response;
 }

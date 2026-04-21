@@ -35,16 +35,17 @@ export default function LoginPage() {
     try {
       setLoading(true);
 
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password.trim(),
-        }),
-      });
+     const response = await fetch("/api/auth/login", {
+  method: "POST",
+  credentials: "include",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    email: email.trim(),
+    password: password.trim(),
+  }),
+});
 
       const data = await readSafeJson(response);
 

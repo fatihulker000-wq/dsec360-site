@@ -117,30 +117,23 @@ export default function AdminLayout({
 const handleLogout = async () => {
   if (loggingOut) return;
 
+  setLoggingOut(true);
+
   try {
-    setLoggingOut(true);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-
-    try {
-      await fetch("/api/admin/logout", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        signal: controller.signal,
-      });
-    } catch (error) {
-      console.error("admin logout error:", error);
-    } finally {
-      clearTimeout(timeout);
-    }
-  } finally {
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("dsec_admin_role_cached");
-      window.location.replace("/admin/login");
-    }
+    await fetch("/api/admin/logout", {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch (e) {
+    console.error(e);
   }
+
+  // 🔥 HARD RESET
+  sessionStorage.clear();
+  localStorage.clear();
+
+  window.location.href = "/admin/login";
 };
 
   if (pathname === "/admin/login") {

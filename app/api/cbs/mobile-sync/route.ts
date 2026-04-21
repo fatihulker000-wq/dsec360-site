@@ -34,14 +34,121 @@ function unauthorized() {
   return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
 }
 
+function normalizeKey(value: string) {
+  return value
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .trim();
+}
+
 function normalizeFirmName(value: string) {
-  return value.replace(/\s+/g, " ").trim().toLocaleLowerCase("tr-TR");
+  return normalizeKey(value)
+    .replace(/\s+/g, " ")
+    .replace(/a\.s\./g, "as")
+    .replace(/a\.ş\./g, "as")
+    .replace(/anonim sirketi/g, "")
+    .replace(/limited sirketi/g, "")
+    .replace(/ltd\.sti\./g, "")
+    .replace(/ltd/g, "")
+    .replace(/sti/g, "")
+    .trim();
+}
+
+type CompanyRow = {
+  id: string | number;
+  name: string | null;
+};
+
+type CbsRow = {
+  id: number;
+  full_name: string | null;
+  email: string | null;
+  message: string | null;
+  created_at: string | null;
+  updated_at?: string | null;
+  status: string | null;
+  category: string | null;
+  firm_id: string | number | null;
+  assigned_to?: string | null;
+  assigned_username?: string | null;
+  assigned_role?: string | null;
+  target_role?: string | null;
+  resolution_note?: string | null;
+  response_note?: string | null;
+  rejected_reason?: string | null;
+  opened_by_email?: string | null;
+  mail_subject?: string | null;
+  mail_message_id?: string | null;
+  first_receiver_username?: string | null;
+  forwarded_by?: string | null;
+  created_by?: string | null;
+  firma_adi: string | null;
+  priority?: string | null;
+  closed_at?: string | null;
+};
+
+function findSuggestedCompany(
+  item: Pick<CbsRow, "firma_adi" | "firm_id">,
+  companies: CompanyRow[]
+) {
+  const rawFirmId = String(item.firm_id ?? "").trim();
+  const rawFirmaAdi = String(item.firma_adi ?? "").trim();
+
+  if (rawFirmId) {
+    const exactIdMatch = companies.find(
+      (company) => String(company.id || "").trim() === rawFirmId
+    );
+
+    if (exactIdMatch) {
+      return {
+        suggestedFirmId: String(exactIdMatch.id || "").trim(),
+        suggestedFirmName: String(exactIdMatch.name || "").trim() || null,
+      };
+    }
+  }
+
+  const normalizedInput = normalizeFirmName(rawFirmaAdi);
+  if (!normalizedInput) {
+    return {
+      suggestedFirmId: null,
+      suggestedFirmName: null,
+    };
+  }
+
+  const exact = companies.find((company) => {
+    return normalizeFirmName(String(company.name || "")) === normalizedInput;
+  });
+
+  const includes =
+    exact ||
+    companies.find((company) => {
+      const dbName = normalizeFirmName(String(company.name || ""));
+      return (
+        dbName.includes(normalizedInput) || normalizedInput.includes(dbName)
+      );
+    });
+
+  if (includes?.id) {
+    return {
+      suggestedFirmId: String(includes.id || "").trim(),
+      suggestedFirmName: String(includes.name || "").trim() || null,
+    };
+  }
+
+  return {
+    suggestedFirmId: null,
+    suggestedFirmName: null,
+  };
 }
 
 export async function GET(req: Request) {
   try {
-    // AUTH TEMP KAPALI
-// if (!isAuthorized(req)) return unauthorized();
+    if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
     const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
@@ -50,14 +157,26 @@ export async function GET(req: Request) {
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
-      .from("cbs_forms")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const [{ data: companies, error: companiesError }, { data, error }] =
+      await Promise.all([
+        supabase.from("companies").select("id, name").limit(5000),
+        supabase
+          .from("cbs_forms")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(5000),
+      ]);
+
+    if (companiesError) {
+      console.error("mobile-sync GET companies hatası:", companiesError);
+      return NextResponse.json(
+        { error: "Firma listesi alınamadı." },
+        { status: 500 }
+      );
+    }
 
     if (error) {
       console.error("mobile-sync GET hata detayı:", error);
-
       return NextResponse.json(
         {
           error: "Kayıtlar alınamadı.",
@@ -70,27 +189,67 @@ export async function GET(req: Request) {
       );
     }
 
-    const filtered = (data || []).filter((row: any) => {
+    const companyList: CompanyRow[] = companies || [];
+    let requestedCompanyId: string | null = null;
+
+    if (firmIdParam) {
+      const exactCompanyById = companyList.find(
+        (company) => String(company.id || "").trim() === firmIdParam
+      );
+
+      requestedCompanyId = exactCompanyById
+        ? String(exactCompanyById.id || "").trim()
+        : firmIdParam;
+    }
+
+    if (!requestedCompanyId && normalizedFirmaAdi) {
+      const exactByName = companyList.find(
+        (company) =>
+          normalizeFirmName(String(company.name || "")) === normalizedFirmaAdi
+      );
+
+      const includesByName =
+        exactByName ||
+        companyList.find((company) => {
+          const dbName = normalizeFirmName(String(company.name || ""));
+          return (
+            dbName.includes(normalizedFirmaAdi) ||
+            normalizedFirmaAdi.includes(dbName)
+          );
+        });
+
+      if (includesByName?.id) {
+        requestedCompanyId = String(includesByName.id || "").trim();
+      }
+    }
+
+    const filtered = ((data || []) as CbsRow[]).filter((row) => {
       const rowFirmId = String(row?.firm_id || "").trim();
-      const rowFirmaAdi = normalizeFirmName(String(row?.firma_adi || ""));
+      const rowFirmaAdiRaw = String(row?.firma_adi || "").trim();
+      const rowFirmaAdi = normalizeFirmName(rowFirmaAdiRaw);
+
+      const { suggestedFirmId } = findSuggestedCompany(row, companyList);
 
       if (!firmIdParam && !normalizedFirmaAdi) return true;
 
-      const byFirmId =
+      const byDirectFirmId =
         firmIdParam.length > 0 &&
         rowFirmId.length > 0 &&
         rowFirmId === firmIdParam;
 
-      const byFirmaAdi =
+      const byRequestedCompanyId =
+        !!requestedCompanyId &&
+        (rowFirmId === requestedCompanyId ||
+          String(suggestedFirmId || "").trim() === requestedCompanyId);
+
+      const byRawFirmaAdi =
         normalizedFirmaAdi.length > 0 &&
         rowFirmaAdi.length > 0 &&
-        (
-          rowFirmaAdi === normalizedFirmaAdi ||
+        (rowFirmaAdi === normalizedFirmaAdi ||
           rowFirmaAdi.includes(normalizedFirmaAdi) ||
-          normalizedFirmaAdi.includes(rowFirmaAdi)
-        );
+          normalizedFirmaAdi.includes(rowFirmaAdi));
 
-      return byFirmId || byFirmaAdi;
+      return byDirectFirmId || byRequestedCompanyId || byRawFirmaAdi;
     });
 
     return NextResponse.json({
@@ -113,8 +272,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    // AUTH TEMP KAPALI
-// if (!isAuthorized(req)) return unauthorized();
+    if (!isAuthorized(req)) return unauthorized();
 
     const body = await req.json();
 
@@ -132,26 +290,20 @@ export async function POST(req: Request) {
 
     const assigned_username =
       String(body?.assigned_username || "").trim() || null;
-    const assigned_role =
-      String(body?.assigned_role || "").trim() || null;
-    const target_role =
-      String(body?.target_role || "").trim() || null;
+    const assigned_role = String(body?.assigned_role || "").trim() || null;
+    const target_role = String(body?.target_role || "").trim() || null;
     const opened_by_email =
       String(body?.opened_by_email || "").trim() || null;
-    const mail_subject =
-      String(body?.mail_subject || "").trim() || null;
+    const mail_subject = String(body?.mail_subject || "").trim() || null;
     const mail_message_id =
       String(body?.mail_message_id || "").trim() || null;
     const first_receiver_username =
       String(body?.first_receiver_username || "").trim() || null;
-    const forwarded_by =
-      String(body?.forwarded_by || "").trim() || null;
-    const response_note =
-      String(body?.response_note || "").trim() || null;
+    const forwarded_by = String(body?.forwarded_by || "").trim() || null;
+    const response_note = String(body?.response_note || "").trim() || null;
     const rejected_reason =
       String(body?.rejected_reason || "").trim() || null;
-    const created_by =
-      String(body?.created_by || "").trim() || null;
+    const created_by = String(body?.created_by || "").trim() || null;
 
     if (!full_name || !message || (!firm_id && !firma_adi)) {
       return NextResponse.json(
@@ -219,8 +371,7 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    // AUTH TEMP KAPALI
-// if (!isAuthorized(req)) return unauthorized();
+    if (!isAuthorized(req)) return unauthorized();
 
     const body = await req.json();
     const id = Number(body?.id);
@@ -235,96 +386,105 @@ export async function PUT(req: Request) {
       updated_at: new Date().toISOString(),
     };
 
-    if (body?.status != null) {
-      updatePayload.status = String(body.status).trim();
+    if (body?.status !== undefined) {
+      updatePayload.status = String(body.status).trim() || null;
     }
 
-    if (body?.category != null) {
+    if (body?.category !== undefined) {
       updatePayload.category = String(body.category).trim() || null;
     }
 
-    if (body?.priority != null) {
+    if (body?.priority !== undefined) {
       updatePayload.priority = String(body.priority).trim() || null;
     }
 
-    if (body?.assigned_to != null) {
+    if (body?.assigned_to !== undefined) {
       updatePayload.assigned_to = String(body.assigned_to).trim() || null;
     }
 
-    if (body?.resolution_note != null) {
+    if (body?.resolution_note !== undefined) {
       updatePayload.resolution_note =
         String(body.resolution_note).trim() || null;
     }
 
-    if (body?.message != null) {
+    if (body?.message !== undefined) {
       updatePayload.message = String(body.message).trim() || null;
     }
 
-    if (body?.full_name != null) {
+    if (body?.full_name !== undefined) {
       updatePayload.full_name = String(body.full_name).trim() || null;
     }
 
-    if (body?.email != null) {
+    if (body?.email !== undefined) {
       updatePayload.email = String(body.email).trim() || null;
     }
 
-    if (body?.assigned_username != null) {
+    if (body?.assigned_username !== undefined) {
       updatePayload.assigned_username =
         String(body.assigned_username).trim() || null;
     }
 
-    if (body?.assigned_role != null) {
+    if (body?.assigned_role !== undefined) {
       updatePayload.assigned_role =
         String(body.assigned_role).trim() || null;
     }
 
-    if (body?.target_role != null) {
-      updatePayload.target_role =
-        String(body.target_role).trim() || null;
+    if (body?.target_role !== undefined) {
+      updatePayload.target_role = String(body.target_role).trim() || null;
     }
 
-    if (body?.opened_by_email != null) {
+    if (body?.opened_by_email !== undefined) {
       updatePayload.opened_by_email =
         String(body.opened_by_email).trim() || null;
     }
 
-    if (body?.mail_subject != null) {
+    if (body?.mail_subject !== undefined) {
       updatePayload.mail_subject =
         String(body.mail_subject).trim() || null;
     }
 
-    if (body?.mail_message_id != null) {
+    if (body?.mail_message_id !== undefined) {
       updatePayload.mail_message_id =
         String(body.mail_message_id).trim() || null;
     }
 
-    if (body?.first_receiver_username != null) {
+    if (body?.first_receiver_username !== undefined) {
       updatePayload.first_receiver_username =
         String(body.first_receiver_username).trim() || null;
     }
 
-    if (body?.forwarded_by != null) {
-      updatePayload.forwarded_by =
-        String(body.forwarded_by).trim() || null;
+    if (body?.forwarded_by !== undefined) {
+      updatePayload.forwarded_by = String(body.forwarded_by).trim() || null;
     }
 
-    if (body?.response_note != null) {
+    if (body?.response_note !== undefined) {
       updatePayload.response_note =
         String(body.response_note).trim() || null;
     }
 
-    if (body?.rejected_reason != null) {
+    if (body?.rejected_reason !== undefined) {
       updatePayload.rejected_reason =
         String(body.rejected_reason).trim() || null;
     }
 
-    if (body?.created_by != null) {
-      updatePayload.created_by =
-        String(body.created_by).trim() || null;
+    if (body?.created_by !== undefined) {
+      updatePayload.created_by = String(body.created_by).trim() || null;
     }
 
-    if (String(body?.status || "").trim() === "closed") {
+    if (body?.firma_adi !== undefined) {
+      updatePayload.firma_adi = String(body.firma_adi).trim() || null;
+    }
+
+    if (body?.firm_id !== undefined) {
+      updatePayload.firm_id = String(body.firm_id).trim() || null;
+    }
+
+    const nextStatus = String(body?.status || "").trim().toLowerCase();
+
+    if (nextStatus === "closed") {
       updatePayload.closed_at = new Date().toISOString();
+    } else if (body?.status !== undefined) {
+      updatePayload.closed_at = null;
     }
 
     const { error } = await supabase
