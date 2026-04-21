@@ -675,6 +675,13 @@ export default function AdminDashboardPage() {
       ? "Kontrollü Risk Alanı"
       : "Sağlıklı Görünüm";
 
+const heroTotalTrainings = trainings.length;
+const heroRiskStatus = riskStatus || "IYI";
+const heroCompletionHeadline =
+  completionHeadline || "Operasyon Yükleniyor";
+const heroRiskHeadline =
+  riskHeadline || "Durum Hesaplanıyor";
+
   const ceoSummary = useMemo(() => {
     const totalTrainings = trainings.length;
     const totalAssignments = summary?.total_assignments ?? totals.assigned;
@@ -723,9 +730,6 @@ export default function AdminDashboardPage() {
     };
   }, [trainings, summary, totals, cbsSummary, riskRate]);
 
-  if (loading) {
-    return null;
-  }
 
   if (error) {
     return (
@@ -743,14 +747,16 @@ export default function AdminDashboardPage() {
         padding: isMobile ? 12 : 24,
       }}
     >
-      <div
-        id="admin-dashboard-pdf"
-        style={{
-          maxWidth: 1440,
-          margin: "0 auto",
-          width: "100%",
-        }}
-      >
+    <div
+  id="admin-dashboard-pdf"
+  style={{
+    maxWidth: 1440,
+    margin: "0 auto",
+    width: "100%",
+    opacity: loading ? 0.96 : 1,
+    transition: "opacity 0.2s ease",
+  }}
+>
         <div
           style={{
             ...cardStyle(),
@@ -781,9 +787,9 @@ export default function AdminDashboardPage() {
                   marginBottom: 12,
                 }}
               >
-                {adminRole === "company_admin"
-                  ? "D-SEC • Firma Admin Dashboard"
-                  : "D-SEC • Admin Dashboard"}
+               {adminRole === "company_admin"
+  ? "D-SEC • Firma Admin Dashboard"
+  : "D-SEC • Admin Dashboard"}
               </div>
 
               <h1
@@ -827,7 +833,7 @@ export default function AdminDashboardPage() {
                     "rgba(255,255,255,0.20)"
                   )}
                 >
-                  {completionHeadline}
+                  {loading ? "Veriler Hazırlanıyor" : heroCompletionHeadline}
                 </span>
 
                 <span
@@ -837,7 +843,7 @@ export default function AdminDashboardPage() {
                     "rgba(255,255,255,0.20)"
                   )}
                 >
-                  {riskHeadline}
+                  {loading ? "Risk Analizi Yükleniyor" : heroRiskHeadline}
                 </span>
 
                 <span
@@ -847,7 +853,7 @@ export default function AdminDashboardPage() {
                     "rgba(255,255,255,0.20)"
                   )}
                 >
-                  Toplam Eğitim: {trainings.length}
+                  Toplam Eğitim: {loading ? "..." : heroTotalTrainings}
                 </span>
               </div>
             </div>
@@ -875,7 +881,7 @@ export default function AdminDashboardPage() {
                   justifyContent: "center",
                 }}
               >
-                Risk Durumu: {riskStatus}
+                Risk Durumu: {loading ? "Hesaplanıyor" : heroRiskStatus}
               </div>
 
               <button
