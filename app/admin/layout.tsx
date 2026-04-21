@@ -38,6 +38,16 @@ export default function AdminLayout({
   }, []);
 
   useEffect(() => {
+    if (!isMobile) {
+      setMobileMenuOpen(false);
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
     if (pathname === "/admin/login") {
       setRoleLoaded(true);
       return;
@@ -108,12 +118,6 @@ export default function AdminLayout({
     }
   }, [roleLoaded, role, pathname, router]);
 
-  useEffect(() => {
-    if (isMobile) {
-      setMobileMenuOpen(false);
-    }
-  }, [pathname, isMobile]);
-
   const menu = useMemo(() => {
     const items = [
       { name: "Dashboard", href: "/admin/dashboard" },
@@ -176,16 +180,15 @@ export default function AdminLayout({
       {isMobile && (
         <div
           style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 60,
+            background: "#ffffff",
+            borderBottom: "1px solid #ead7db",
+            padding: "10px 14px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 12,
-            padding: "12px 16px",
-            background: "#ffffff",
-            borderBottom: "1px solid #f0d6da",
-            position: "sticky",
-            top: 0,
-            zIndex: 30,
           }}
         >
           <div>
@@ -193,16 +196,19 @@ export default function AdminLayout({
               style={{
                 fontSize: 12,
                 fontWeight: 700,
-                color: "#8b6770",
+                color: "#7a5962",
+                lineHeight: 1.2,
               }}
             >
               D-SEC Yönetim Merkezi
             </div>
             <div
               style={{
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: 900,
-                color: "#111827",
+                color: "#22070d",
+                lineHeight: 1.2,
+                marginTop: 2,
               }}
             >
               {activeLabel}
@@ -213,13 +219,13 @@ export default function AdminLayout({
             type="button"
             onClick={() => setMobileMenuOpen((prev) => !prev)}
             style={{
-              border: "1px solid #ecd5da",
-              background: "#ffffff",
-              color: "#3b0a15",
+              border: "1px solid #dec7cc",
+              background: "#fff",
+              color: "#2b0f16",
               borderRadius: 14,
-              padding: "10px 16px",
-              fontSize: 14,
+              padding: "10px 14px",
               fontWeight: 800,
+              fontSize: 14,
               cursor: "pointer",
             }}
           >
@@ -238,9 +244,9 @@ export default function AdminLayout({
           padding: isMobile ? 12 : 20,
           overflowY: "auto",
           position: isMobile ? "relative" : "fixed",
-          top: isMobile ? undefined : 0,
-          left: isMobile ? undefined : 0,
-          bottom: isMobile ? undefined : 0,
+          top: isMobile ? "auto" : 0,
+          left: isMobile ? "auto" : 0,
+          bottom: isMobile ? "auto" : 0,
           display: isMobile ? (mobileMenuOpen ? "flex" : "none") : "flex",
           flexDirection: "column",
           boxShadow: isMobile ? "none" : "0 16px 40px rgba(0,0,0,0.16)",
@@ -316,6 +322,9 @@ export default function AdminLayout({
                 }}
                 onClick={(e) => {
                   e.preventDefault();
+                  if (isMobile) {
+                    setMobileMenuOpen(false);
+                  }
                   router.push(item.href);
                 }}
               >
