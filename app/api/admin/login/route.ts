@@ -1,19 +1,14 @@
-import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-function sha256(input: string) {
-  return crypto.createHash("sha256").update(input).digest("hex");
-}
-
 type LoginUserRow = {
   id: string;
   full_name: string | null;
   email: string | null;
-  password_hash: string | null;
+  password: string | null;
   role: string | null;
   company_id: string | null;
   is_active: boolean | null;
@@ -46,7 +41,7 @@ export async function POST(request: Request) {
 
     const { data: adminUser, error } = await supabase
       .from("users")
-      .select("id, full_name, email, password_hash, role, company_id, is_active")
+      .select("id, full_name, email, password, role, company_id, is_active")
       .ilike("email", email)
       .in("role", ["super_admin", "company_admin"])
       .maybeSingle<LoginUserRow>();
@@ -73,7 +68,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const dbPassword = String(adminUser.password_hash ?? "").trim();
+    const dbPassword = String(adminUser.password ?? "").trim();
 
     if (!dbPassword) {
       return NextResponse.json(
@@ -82,7 +77,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (sha256(password) !== dbPassword) {
+    if (password !== dbPassword) {
       return NextResponse.json(
         { error: "Hatalı şifre." },
         { status: 401 }
