@@ -24,17 +24,23 @@ export default function AdminLayout({
   const [role, setRole] = useState<string>("");
   const [roleLoaded, setRoleLoaded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 900);
-    };
+ useEffect(() => {
+  const handleResize = () => {
+    const mobile = window.innerWidth <= 900;
+    setIsMobile(mobile);
 
-    handleResize();
-    window.addEventListener("resize", handleResize);
+    if (!mobile) {
+      setMobileMenuOpen(false);
+    }
+  };
 
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  handleResize();
+  window.addEventListener("resize", handleResize);
+
+  return () => window.removeEventListener("resize", handleResize);
+}, []);
 
   useEffect(() => {
     if (pathname === "/admin/login") {
@@ -141,6 +147,7 @@ export default function AdminLayout({
       console.error(e);
     }
 
+    setMobileMenuOpen(false);  
     sessionStorage.clear();
     localStorage.clear();
 
@@ -166,25 +173,90 @@ export default function AdminLayout({
         overflowX: "hidden",
       }}
     >
-      <aside
-        className="admin-sidebar-shell"
+
+{isMobile && (
+  <div
+    style={{
+      position: "sticky",
+      top: 0,
+      zIndex: 30,
+      background: "#ffffff",
+      borderBottom: "1px solid #f0d6da",
+      padding: "10px 12px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    }}
+  >
+    <div
+      style={{
+        minWidth: 0,
+      }}
+    >
+      <div
         style={{
-          width: isMobile ? "100%" : 260,
-          minWidth: isMobile ? "100%" : 260,
-          background: "linear-gradient(180deg, #4a0d1a 0%, #5a0f1f 100%)",
-          color: "#fff",
-          padding: isMobile ? 12 : 20,
-          overflowY: "auto",
-          position: isMobile ? "relative" : "fixed",
-          top: isMobile ? "auto" : 0,
-          left: isMobile ? "auto" : 0,
-          bottom: isMobile ? "auto" : 0,
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: isMobile ? "none" : "0 16px 40px rgba(0,0,0,0.16)",
-          zIndex: 20,
+          fontSize: 12,
+          color: "#8b6770",
+          fontWeight: 700,
+          marginBottom: 2,
         }}
       >
+        D-SEC Yönetim Merkezi
+      </div>
+      <div
+        style={{
+          fontSize: 18,
+          fontWeight: 900,
+          color: "#3b0a15",
+          lineHeight: 1.1,
+        }}
+      >
+        {activeLabel}
+      </div>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => setMobileMenuOpen((prev) => !prev)}
+      style={{
+        border: "1px solid #ecd5da",
+        background: "#ffffff",
+        color: "#3b0a15",
+        borderRadius: 12,
+        padding: "10px 14px",
+        fontWeight: 800,
+        cursor: "pointer",
+        flexShrink: 0,
+      }}
+    >
+      {mobileMenuOpen ? "Kapat" : "Menü"}
+    </button>
+  </div>
+)}
+
+    <aside
+  className="admin-sidebar-shell"
+  style={{
+    width: isMobile ? "100%" : 260,
+    minWidth: isMobile ? "100%" : 260,
+    background: "linear-gradient(180deg, #4a0d1a 0%, #5a0f1f 100%)",
+    color: "#fff",
+    padding: isMobile ? 12 : 20,
+    overflowY: "auto",
+    position: isMobile ? "relative" : "fixed",
+    top: isMobile ? "auto" : 0,
+    left: isMobile ? "auto" : 0,
+    bottom: isMobile ? "auto" : 0,
+
+    // ✅ KRİTİK SATIR
+    display: isMobile ? (mobileMenuOpen ? "flex" : "none") : "flex",
+
+    flexDirection: "column",
+    boxShadow: isMobile ? "none" : "0 16px 40px rgba(0,0,0,0.16)",
+    zIndex: 20,
+  }}
+>
         <div style={{ marginBottom: 22 }}>
           <div
             style={{
@@ -252,10 +324,13 @@ export default function AdminLayout({
                   fontWeight: isActive ? 800 : 600,
                   transition: "all 0.2s ease",
                 }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  router.push(item.href);
-                }}
+               onClick={(e) => {
+  e.preventDefault();
+  if (isMobile) {
+    setMobileMenuOpen(false);
+  }
+  router.push(item.href);
+}}
               >
                 {item.name}
               </Link>
