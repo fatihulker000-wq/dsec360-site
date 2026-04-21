@@ -9,6 +9,10 @@ export async function POST() {
 
   const expiredDate = new Date(0);
 
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+
   const clearCookie = (name: string) => {
     response.cookies.set(name, "", {
       httpOnly: true,

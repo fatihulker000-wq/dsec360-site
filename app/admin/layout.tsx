@@ -12,6 +12,16 @@ type MeResponse = {
   error?: string;
 };
 
+const ACTIVE_LABELS: Record<string, string> = {
+  "/admin/dashboard": "Dashboard",
+  "/admin/trainings": "Eğitimler",
+  "/admin/participants": "Eğitim Katılımcıları",
+  "/admin/users": "Sistem Kullanıcıları",
+  "/admin/reports": "Raporlar",
+  "/admin/cbs": "ÇBS Yönetimi",
+  "/admin/companies": "Firmalar",
+};
+
 export default function AdminLayout({
   children,
 }: {
@@ -25,6 +35,7 @@ export default function AdminLayout({
   const [roleLoaded, setRoleLoaded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isLoggingOutFlow, setIsLoggingOutFlow] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -70,6 +81,7 @@ export default function AdminLayout({
 
     if (cachedRole) {
       setRole(cachedRole);
+      setRoleLoaded(true);
     }
 
     const loadRole = async () => {
@@ -118,6 +130,7 @@ export default function AdminLayout({
   useEffect(() => {
     if (!roleLoaded) return;
     if (pathname === "/admin/login") return;
+    if (isLoggingOutFlow) return;
 
     if (!role) {
       if (typeof window !== "undefined") {
@@ -126,7 +139,7 @@ export default function AdminLayout({
       router.replace("/admin/login");
       router.refresh();
     }
-  }, [roleLoaded, role, pathname, router]);
+  }, [roleLoaded, role, pathname, router, isLoggingOutFlow]);
 
   const menu = useMemo(() => {
     const items = [
@@ -145,39 +158,45 @@ export default function AdminLayout({
     return items;
   }, [role]);
 
-  const activeLabel = menu.find((x) => x.href === pathname)?.name || "Yönetim";
+  const activeLabel = ACTIVE_LABELS[pathname] || "Yönetim";
 
   const handleLogout = async () => {
-    if (loggingOut) return;
+    if (loggingOut || isLoggingOutFlow) return;
 
     setLoggingOut(true);
+    setIsLoggingOutFlow(true);
 
     try {
-      await fetch("/api/admin/logout", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-      });
+      await Promise.allSettled([
+        fetch("/api/admin/logout", {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+        }),
+        fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+        }),
+      ]);
     } catch (error) {
       console.error("admin logout error:", error);
     } finally {
       if (typeof window !== "undefined") {
         sessionStorage.removeItem("dsec_admin_role_cached");
+        localStorage.removeItem("dsec_admin_role_cached");
       }
 
       setMobileMenuOpen(false);
       setRole("");
+      setRoleLoaded(true);
 
-      window.location.replace("/admin/login");
+      window.location.href = "/admin/login";
     }
   };
 
   if (pathname === "/admin/login") {
     return <>{children}</>;
-  }
-
-  if (!roleLoaded) {
-    return null;
   }
 
   const renderMenuItems = () =>
@@ -235,6 +254,7 @@ export default function AdminLayout({
             position: "sticky",
             top: 0,
             zIndex: 80,
+            width: "100%",
             background: "#ffffff",
             borderBottom: "1px solid #ead7db",
             padding: "10px 14px",
@@ -379,49 +399,76 @@ export default function AdminLayout({
             style={{
               position: "fixed",
               inset: 0,
-              top: 57,
-              background: "rgba(17, 24, 39, 0.28)",
-              zIndex: 69,
+              background: "rgba(15, 23, 42, 0.34)",
+              zIndex: 89,
             }}
           />
 
-          <aside
-            className="admin-sidebar-shell"
+          <div
             style={{
               position: "fixed",
-              top: 57,
-              left: 0,
+              top: 0,
               right: 0,
-              maxHeight: "calc(100vh - 57px)",
-              overflowY: "auto",
+              width: "min(86vw, 340px)",
+              height: "100vh",
               background: "linear-gradient(180deg, #4a0d1a 0%, #5a0f1f 100%)",
               color: "#fff",
-              padding: 12,
+              padding: "16px 14px 18px 14px",
               display: "flex",
               flexDirection: "column",
-              boxShadow: "0 18px 40px rgba(0,0,0,0.22)",
-              zIndex: 70,
-              borderBottomLeftRadius: 18,
-              borderBottomRightRadius: 18,
+              boxShadow: "-14px 0 40px rgba(0,0,0,0.28)",
+              zIndex: 90,
+              overflowY: "auto",
             }}
           >
-            <div style={{ marginBottom: 18 }}>
-              <div
-                style={{
-                  display: "inline-flex",
-                  padding: "8px 12px",
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.10)",
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  fontSize: 12,
-                  fontWeight: 800,
-                  marginBottom: 10,
-                }}
-              >
-                D-SEC Yönetim Merkezi
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                marginBottom: 16,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    opacity: 0.82,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  D-SEC Yönetim Merkezi
+                </div>
+                <div
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 900,
+                    lineHeight: 1.2,
+                    marginTop: 4,
+                  }}
+                >
+                  Admin Panel
+                </div>
               </div>
 
-              <div style={{ fontWeight: 900, fontSize: 22 }}>Admin Panel</div>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  border: "1px solid rgba(255,255,255,0.22)",
+                  background: "rgba(255,255,255,0.10)",
+                  color: "#fff",
+                  borderRadius: 14,
+                  padding: "10px 14px",
+                  fontWeight: 800,
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Kapat
+              </button>
             </div>
 
             <div
@@ -463,12 +510,12 @@ export default function AdminLayout({
                 padding: "12px 14px",
                 fontWeight: 800,
                 cursor: loggingOut ? "not-allowed" : "pointer",
-                marginTop: 12,
+                marginTop: 14,
               }}
             >
               {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
             </button>
-          </aside>
+          </div>
         </>
       )}
 
