@@ -23,6 +23,18 @@ export default function AdminLayout({
   const [loggingOut, setLoggingOut] = useState(false);
   const [role, setRole] = useState<string>("");
   const [roleLoaded, setRoleLoaded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 900);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     if (pathname === "/admin/login") {
@@ -114,27 +126,26 @@ export default function AdminLayout({
 
   const activeLabel = menu.find((x) => x.href === pathname)?.name || "Yönetim";
 
-const handleLogout = async () => {
-  if (loggingOut) return;
+  const handleLogout = async () => {
+    if (loggingOut) return;
 
-  setLoggingOut(true);
+    setLoggingOut(true);
 
-  try {
-    await fetch("/api/admin/logout", {
-      method: "POST",
-      credentials: "include",
-      cache: "no-store",
-    });
-  } catch (e) {
-    console.error(e);
-  }
+    try {
+      await fetch("/api/admin/logout", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+    } catch (e) {
+      console.error(e);
+    }
 
-  // 🔥 HARD RESET
-  sessionStorage.clear();
-  localStorage.clear();
+    sessionStorage.clear();
+    localStorage.clear();
 
-  window.location.href = "/admin/login";
-};
+    window.location.href = "/admin/login";
+  };
 
   if (pathname === "/admin/login") {
     return <>{children}</>;
@@ -146,27 +157,31 @@ const handleLogout = async () => {
 
   return (
     <div
+      className="admin-layout"
       style={{
         display: "flex",
+        flexDirection: isMobile ? "column" : "row",
         minHeight: "100vh",
         background: "#fafafa",
         overflowX: "hidden",
       }}
     >
       <aside
+        className="admin-sidebar-shell"
         style={{
-          width: 260,
+          width: isMobile ? "100%" : 260,
+          minWidth: isMobile ? "100%" : 260,
           background: "linear-gradient(180deg, #4a0d1a 0%, #5a0f1f 100%)",
           color: "#fff",
-          padding: 20,
+          padding: isMobile ? 12 : 20,
           overflowY: "auto",
-          position: "fixed",
-          top: 0,
-          left: 0,
-          bottom: 0,
+          position: isMobile ? "relative" : "fixed",
+          top: isMobile ? "auto" : 0,
+          left: isMobile ? "auto" : 0,
+          bottom: isMobile ? "auto" : 0,
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 16px 40px rgba(0,0,0,0.16)",
+          boxShadow: isMobile ? "none" : "0 16px 40px rgba(0,0,0,0.16)",
           zIndex: 20,
         }}
       >
@@ -269,9 +284,11 @@ const handleLogout = async () => {
       </aside>
 
       <main
+        className="admin-layout-main"
         style={{
-          marginLeft: 260,
-          width: "calc(100% - 260px)",
+          marginLeft: isMobile ? 0 : 260,
+          width: isMobile ? "100%" : "calc(100% - 260px)",
+          maxWidth: "100%",
           minHeight: "100vh",
           overflowX: "hidden",
           background: "#fafafa",

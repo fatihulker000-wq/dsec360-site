@@ -1398,3 +1398,87 @@ main {
   transform: translateY(-2px);
   filter: brightness(1.05);
 }
+
+/* ===== GLOBAL SAFE RESPONSIVE FIX ===== */
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  width: 100%;
+}
+
+img,
+video,
+canvas,
+svg,
+iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+input,
+textarea,
+select,
+button {
+  max-width: 100%;
+}
+
+.page-container,
+.cbs-wrap,
+.site-navbar-inner,
+.site-footer-inner,
+.hero-inner {
+  width: 100%;
+  max-width: 100%;
+}
+
+main,
+section,
+div {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  html,
+  body {
+    overflow-x: hidden !important;
+  }
+
+  .page-container,
+  .cbs-wrap,
+  .site-navbar-inner,
+  .site-footer-inner,
+  .hero-inner {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .hero-title,
+  .section-title,
+  .cbs-title,
+  .card-title {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-container,
+  .cbs-wrap,
+  .site-navbar-inner,
+  .site-footer-inner,
+  .hero-inner {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
