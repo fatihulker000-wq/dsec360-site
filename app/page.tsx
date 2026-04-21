@@ -157,21 +157,21 @@ export default function HomePage() {
 </p>
           </div>
 
-          <div className="grid-3">
-            {entryPoints.map((item) => (
-              <div key={item.title} className="card">
-                <div className="card-icon" />
-                <h3 className="card-title">{item.title}</h3>
-                <p className="card-text">{item.desc}</p>
+          <div className="grid-3 entry-grid">
+  {entryPoints.map((item) => (
+    <div key={item.title} className="card entry-card">
+      <div className="card-icon" />
+      <h3 className="card-title">{item.title}</h3>
+      <p className="card-text">{item.desc}</p>
 
-                <div style={{ marginTop: 18 }}>
-                  <Link href={item.href} className="nav-cta">
-                    {item.cta}
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
+      <div style={{ marginTop: 18 }}>
+        <Link href={item.href} className="nav-cta entry-cta">
+          {item.cta}
+        </Link>
+      </div>
+    </div>
+  ))}
+</div>
         </div>
       </section>
 
@@ -335,7 +335,7 @@ export default function HomePage() {
     <div style={{ marginTop: 26 }}>
       <Link href="/pricing" className="nav-cta">
         Tüm Paketleri Gör
-      </Link>
+      </Link> 
     </div>
   </div>
 </section>

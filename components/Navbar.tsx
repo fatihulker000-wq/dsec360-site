@@ -185,7 +185,7 @@ export default function Navbar() {
             </button>
           )}
 
-          <Link href="/demo" className="nav-cta">
+          <Link href="/demo" className="nav-cta nav-cta-navbar">
   Ücretsiz Demo
 </Link>
 
@@ -325,13 +325,13 @@ export default function Navbar() {
             )}
 
             <Link
-              href="/contact"
-              className="nav-cta"
-              onClick={() => setMobileOpen(false)}
-              style={{ width: "fit-content", marginTop: "6px" }}
-            >
-              Demo Talep Et
-            </Link>
+             href="/contact"
+             className="nav-cta nav-cta-mobile"
+             onClick={() => setMobileOpen(false)}
+            style={{ width: "fit-content", marginTop: "6px" }}
+>
+  Demo Talep Et
+</Link>
           </div>
         </div>
       )}
