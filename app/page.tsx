@@ -92,7 +92,7 @@ const entryPoints = [
 export default function HomePage() {
   return (
     <main>
-     <section className="hero hero-premium">
+    <section className="hero hero-premium home-hero">
   <div className="hero-orb hero-orb-1" />
   <div className="hero-orb hero-orb-2" />
 

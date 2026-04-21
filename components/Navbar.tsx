@@ -27,10 +27,9 @@ export default function Navbar() {
   const [mobileTrainingOpen, setMobileTrainingOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const showLogoutButton =
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/panel") ||
-    pathname.startsWith("/portal/training");
+const showLogoutButton =
+  pathname.startsWith("/panel") ||
+  pathname.startsWith("/portal/training");
 
   const handleLogout = async () => {
     try {
