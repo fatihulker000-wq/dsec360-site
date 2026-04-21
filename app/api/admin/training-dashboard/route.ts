@@ -134,38 +134,32 @@ export async function GET() {
 
       usersMap = Object.fromEntries((users || []).map((u) => [u.id, u]));
 
-      const companyIds = Array.from(
-        new Set(
-          (users || [])
-            .map((u) => String(u.company_id || "").trim())
-            .filter(Boolean)
-        )
-      );
+     let companiesQuery = supabase
+  .from("companies")
+  .select("id, name");
 
-      if (companyIds.length > 0) {
-        const { data: companies, error: companiesError } = await supabase
-          .from("companies")
-          .select("id, name")
-          .in("id", companyIds)
-          .returns<CompanyRow[]>();
+if (adminRole === "company_admin") {
+  companiesQuery = companiesQuery.eq("id", companyIdFromCookie);
+}
 
-        if (companiesError) {
-          return NextResponse.json(
-            {
-              error: "Firma detayları alınamadı.",
-              detail: companiesError.message,
-            },
-            { status: 500 }
-          );
-        }
+const { data: companies, error: companiesError } = await companiesQuery.returns<CompanyRow[]>();
 
-        companyMap = Object.fromEntries(
-          (companies || []).map((c) => [
-            c.id,
-            String(c.name || "Firma Yok").trim() || "Firma Yok",
-          ])
-        );
-      }
+if (companiesError) {
+  return NextResponse.json(
+    {
+      error: "Firma detayları alınamadı.",
+      detail: companiesError.message,
+    },
+    { status: 500 }
+  );
+}
+
+companyMap = Object.fromEntries(
+  (companies || []).map((c) => [
+    String(c.id || "").trim(),
+    String(c.name || "Firma Yok").trim() || "Firma Yok",
+  ])
+);
     }
 
     const allowedUserIds = new Set(Object.keys(usersMap));
@@ -322,15 +316,18 @@ export async function GET() {
       { label: "Başlamadı", value: totalNotStarted },
     ];
 
-    return NextResponse.json({
-      success: true,
-      trainings,
-      risky_users: riskyUsers,
-      in_progress_users: inProgressUsers,
-      completed_users: completedUsers,
-      company_distribution: companyDistribution,
-      trend: monthlyTrend,
-      summary: {
+  return NextResponse.json({
+  success: true,
+  trainings,
+  risky_users: riskyUsers,
+  in_progress_users: inProgressUsers,
+  completed_users: completedUsers,
+  company_distribution: companyDistribution,
+  company_list: Object.values(companyMap).sort((a, b) =>
+    a.localeCompare(b, "tr")
+  ),
+  trend: monthlyTrend,
+  summary: {
         total_assignments: totalAssigned,
         completed_count: totalCompleted,
         in_progress_count: totalInProgress,

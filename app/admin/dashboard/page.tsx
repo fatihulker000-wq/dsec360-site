@@ -50,6 +50,7 @@ type DashboardResponse = {
   in_progress_users?: RiskUser[];
   completed_users?: RiskUser[];
   company_distribution?: CompanyDistributionItem[];
+  company_list?: string[];
   trend?: TrendItem[];
   summary?: DashboardSummary;
   error?: string;
@@ -316,9 +317,10 @@ export default function AdminDashboardPage() {
   const [inProgressUsers, setInProgressUsers] = useState<RiskUser[]>([]);
   const [completedUsers, setCompletedUsers] = useState<RiskUser[]>([]);
   const [companyDistribution, setCompanyDistribution] = useState<
-    CompanyDistributionItem[]
-  >([]);
-  const [trend, setTrend] = useState<TrendItem[]>([]);
+  CompanyDistributionItem[]
+>([]);
+const [companyList, setCompanyList] = useState<string[]>([]);
+const [trend, setTrend] = useState<TrendItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -383,33 +385,36 @@ export default function AdminDashboardPage() {
 
       if (!res.ok) {
         setError(json?.error || "Veri alınamadı.");
-        setTrainings([]);
-        setRiskyUsers([]);
-        setInProgressUsers([]);
-        setCompletedUsers([]);
-        setCompanyDistribution([]);
-        setTrend([]);
-        setSummary(null);
+       setTrainings([]);
+setRiskyUsers([]);
+setInProgressUsers([]);
+setCompletedUsers([]);
+setCompanyDistribution([]);
+setCompanyList([]);
+setTrend([]);
+setSummary(null);
         return;
       }
 
-      setTrainings(json.trainings || []);
-      setRiskyUsers(json.risky_users || []);
-      setInProgressUsers(json.in_progress_users || []);
-      setCompletedUsers(json.completed_users || []);
-      setCompanyDistribution(json.company_distribution || []);
-      setTrend(json.trend || []);
-      setSummary(json.summary || null);
+     setTrainings(json.trainings || []);
+setRiskyUsers(json.risky_users || []);
+setInProgressUsers(json.in_progress_users || []);
+setCompletedUsers(json.completed_users || []);
+setCompanyDistribution(json.company_distribution || []);
+setCompanyList(json.company_list || []);
+setTrend(json.trend || []);
+setSummary(json.summary || null);
     } catch (loadError) {
       console.error(loadError);
       setError("Veri alınamadı.");
-      setTrainings([]);
-      setRiskyUsers([]);
-      setInProgressUsers([]);
-      setCompletedUsers([]);
-      setCompanyDistribution([]);
-      setTrend([]);
-      setSummary(null);
+setTrainings([]);
+setRiskyUsers([]);
+setInProgressUsers([]);
+setCompletedUsers([]);
+setCompanyDistribution([]);
+setCompanyList([]);
+setTrend([]);
+setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -541,21 +546,9 @@ export default function AdminDashboardPage() {
     summary?.risk_status ??
     (totals.notStarted > 20 ? "KRITIK" : totals.notStarted > 10 ? "ORTA" : "IYI");
 
-  const companies = useMemo(() => {
-    const set = new Set<string>();
-
-    riskyUsers.forEach((u) =>
-      set.add((u.company_id || "Firma Yok").trim() || "Firma Yok")
-    );
-    inProgressUsers.forEach((u) =>
-      set.add((u.company_id || "Firma Yok").trim() || "Firma Yok")
-    );
-    completedUsers.forEach((u) =>
-      set.add((u.company_id || "Firma Yok").trim() || "Firma Yok")
-    );
-
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "tr"));
-  }, [riskyUsers, inProgressUsers, completedUsers]);
+ const companies = useMemo(() => {
+  return [...companyList].sort((a, b) => a.localeCompare(b, "tr"));
+}, [companyList]);
 
   const effectiveSelectedCompany =
     adminRole === "company_admin" && adminCompanyId
