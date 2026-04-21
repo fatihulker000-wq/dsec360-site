@@ -114,29 +114,34 @@ export default function AdminLayout({
 
   const activeLabel = menu.find((x) => x.href === pathname)?.name || "Yönetim";
 
-  const handleLogout = async () => {
-    try {
-      setLoggingOut(true);
+const handleLogout = async () => {
+  if (loggingOut) return;
 
+  try {
+    setLoggingOut(true);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+
+    try {
       await fetch("/api/admin/logout", {
         method: "POST",
         credentials: "include",
         cache: "no-store",
-      }).catch(() => null);
-
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-      }).catch(() => null);
+        signal: controller.signal,
+      });
+    } catch (error) {
+      console.error("admin logout error:", error);
     } finally {
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("dsec_admin_role_cached");
-      }
-      router.replace("/admin/login");
-      router.refresh();
+      clearTimeout(timeout);
     }
-  };
+  } finally {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("dsec_admin_role_cached");
+      window.location.replace("/admin/login");
+    }
+  }
+};
 
   if (pathname === "/admin/login") {
     return <>{children}</>;
