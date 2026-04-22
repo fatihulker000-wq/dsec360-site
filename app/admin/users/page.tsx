@@ -265,33 +265,31 @@ export default function AdminUsersPage() {
         setCompanies([]);
       }
 
-      const normalized: UserRow[] = Array.isArray(json.data)
-        ? json.data
-            .filter((u) => String(u.role || "") !== "training_user")
-            .map((u) => ({
-              id: String(u.id || ""),
-              full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
-              email: String(u.email || "-").trim(),
-              role: String(u.role || "").trim(),
-              company_id: String(u.company_id || "").trim(),
-              company: String(u.company || "").trim(),
-              is_active: Boolean(u.is_active),
-              created_at: String(u.created_at || ""),
-              permissions: Array.isArray(u.permissions)
-                ? u.permissions.map((p) => String(p || "").trim()).filter(Boolean)
-                : [],
-              firms: Array.isArray(u.firms)
-                ? u.firms
-                    .map((f) => ({
-                      firm_id: String(f?.firm_id || "").trim(),
-                      firm_name: String(f?.firm_name || "").trim() || "Firma",
-                      role: String(f?.role || "").trim() || "operator",
-                      is_primary: Boolean(f?.is_primary),
-                    }))
-                    .filter((f) => f.firm_id)
-                : [],
+     const normalized: UserRow[] = Array.isArray(json.data)
+  ? json.data.map((u) => ({
+      id: String(u.id || ""),
+      full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
+      email: String(u.email || "-").trim(),
+      role: String(u.role || "").trim(),
+      company_id: String(u.company_id || "").trim(),
+      company: String(u.company || "").trim(),
+      is_active: Boolean(u.is_active),
+      created_at: String(u.created_at || ""),
+      permissions: Array.isArray(u.permissions)
+        ? u.permissions.map((p) => String(p || "").trim()).filter(Boolean)
+        : [],
+      firms: Array.isArray(u.firms)
+        ? u.firms
+            .map((f) => ({
+              firm_id: String(f?.firm_id || "").trim(),
+              firm_name: String(f?.firm_name || "").trim() || "Firma",
+              role: String(f?.role || "").trim() || "operator",
+              is_primary: Boolean(f?.is_primary),
             }))
-        : [];
+            .filter((f) => f.firm_id)
+        : [],
+    }))
+  : [];
 
       setUsers(normalized);
     } catch (err) {
