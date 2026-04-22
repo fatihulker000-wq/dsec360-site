@@ -2,6 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+type UserFirmRow = {
+  firm_id?: string | null;
+  firm_name?: string | null;
+  role?: string | null;
+  is_primary?: boolean | null;
+};
+
 type UserApiRow = {
   id: string;
   full_name?: string | null;
@@ -12,6 +19,7 @@ type UserApiRow = {
   is_active?: boolean | null;
   created_at?: string | null;
   permissions?: string[] | null;
+  firms?: UserFirmRow[] | null;
 };
 
 type UserResponse = {
@@ -46,6 +54,12 @@ type UserRow = {
   is_active: boolean;
   created_at: string;
   permissions: string[];
+  firms: {
+    firm_id: string;
+    firm_name: string;
+    role: string;
+    is_primary: boolean;
+  }[];
 };
 
 type CompanyOption = {
@@ -264,9 +278,17 @@ export default function AdminUsersPage() {
               is_active: Boolean(u.is_active),
               created_at: String(u.created_at || ""),
               permissions: Array.isArray(u.permissions)
-                ? u.permissions
-                    .map((p) => String(p || "").trim())
-                    .filter(Boolean)
+                ? u.permissions.map((p) => String(p || "").trim()).filter(Boolean)
+                : [],
+              firms: Array.isArray(u.firms)
+                ? u.firms
+                    .map((f) => ({
+                      firm_id: String(f?.firm_id || "").trim(),
+                      firm_name: String(f?.firm_name || "").trim() || "Firma",
+                      role: String(f?.role || "").trim() || "operator",
+                      is_primary: Boolean(f?.is_primary),
+                    }))
+                    .filter((f) => f.firm_id)
                 : [],
             }))
         : [];
@@ -293,8 +315,9 @@ export default function AdminUsersPage() {
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
+      const firmsText = (u.firms || []).map((f) => f.firm_name).join(" ");
       const text =
-        `${u.full_name} ${u.email} ${u.role} ${u.company}`.toLowerCase();
+        `${u.full_name} ${u.email} ${u.role} ${u.company} ${firmsText}`.toLowerCase();
 
       const matchesSearch = !search || text.includes(search.toLowerCase());
       const matchesRole = roleFilter === "all" ? true : u.role === roleFilter;
@@ -312,8 +335,9 @@ export default function AdminUsersPage() {
   const totalCount = users.length;
   const activeCount = users.filter((u) => u.is_active).length;
   const passiveCount = users.filter((u) => !u.is_active).length;
-  const companyCount = new Set(users.map((u) => u.company_id).filter(Boolean))
-    .size;
+  const companyCount = new Set(
+    users.flatMap((u) => u.firms.map((f) => f.firm_id)).filter(Boolean)
+  ).size;
 
   const updateCompany = async (userId: string, companyId: string) => {
     try {
@@ -347,6 +371,120 @@ export default function AdminUsersPage() {
     } catch (err) {
       console.error(err);
       alert("Firma ataması güncellenemedi.");
+    } finally {
+      setSavingCompany(false);
+    }
+  };
+
+  const addCompany = async (userId: string, companyId: string) => {
+    try {
+      setSavingCompany(true);
+
+      const res = await fetch("/api/admin/users/add-company", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          userId,
+          companyId,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      if (!res.ok) {
+        alert(json?.error || "Firma eklenemedi.");
+        return;
+      }
+
+      await loadUsers();
+    } catch (err) {
+      console.error(err);
+      alert("Firma eklenemedi.");
+    } finally {
+      setSavingCompany(false);
+    }
+  };
+
+  const removeCompany = async (userId: string, companyId: string) => {
+    const ok = window.confirm("Bu firma kullanıcıdan kaldırılsın mı?");
+    if (!ok) return;
+
+    try {
+      setSavingCompany(true);
+
+      const res = await fetch("/api/admin/users/remove-company", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          userId,
+          companyId,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      if (!res.ok) {
+        alert(json?.error || "Firma kaldırılamadı.");
+        return;
+      }
+
+      await loadUsers();
+    } catch (err) {
+      console.error(err);
+      alert("Firma kaldırılamadı.");
+    } finally {
+      setSavingCompany(false);
+    }
+  };
+
+  const setPrimaryCompany = async (userId: string, companyId: string) => {
+    try {
+      setSavingCompany(true);
+
+      const res = await fetch("/api/admin/users/set-primary-company", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          userId,
+          companyId,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
+      }
+
+      if (!res.ok) {
+        alert(json?.error || "Primary firma güncellenemedi.");
+        return;
+      }
+
+      await loadUsers();
+    } catch (err) {
+      console.error(err);
+      alert("Primary firma güncellenemedi.");
     } finally {
       setSavingCompany(false);
     }
@@ -852,18 +990,18 @@ export default function AdminUsersPage() {
                         {(u.permissions || []).slice(0, 3).map((perm) => (
                           <span
                             key={`${u.id}-${perm}`}
-                           style={{
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "5px 9px",
-  borderRadius: 999,
-  background: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  fontSize: 11,
-  fontWeight: 700,
-  color: "#334155",
-  lineHeight: 1,
-}}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "5px 9px",
+                              borderRadius: 999,
+                              background: "#f8fafc",
+                              border: "1px solid #e2e8f0",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: "#334155",
+                              lineHeight: 1,
+                            }}
                           >
                             {prettyPermissionLabel(perm)}
                           </span>
@@ -872,17 +1010,17 @@ export default function AdminUsersPage() {
                         {(u.permissions || []).length > 3 ? (
                           <span
                             style={{
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "5px 9px",
-  borderRadius: 999,
-  background: "#eef2ff",
-  border: "1px solid #c7d2fe",
-  fontSize: 11,
-  fontWeight: 800,
-  color: "#3730a3",
-  lineHeight: 1,
-}}
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "5px 9px",
+                              borderRadius: 999,
+                              background: "#eef2ff",
+                              border: "1px solid #c7d2fe",
+                              fontSize: 11,
+                              fontWeight: 800,
+                              color: "#3730a3",
+                              lineHeight: 1,
+                            }}
                           >
                             +{u.permissions.length - 3}
                           </span>
@@ -973,23 +1111,23 @@ export default function AdminUsersPage() {
                         <option value="super_admin">Süper Admin</option>
                       </select>
 
-                    <div
-  style={{
-    width: "100%",
-    fontSize: 11,
-    color: BRAND.muted,
-    marginTop: 4,
-    fontWeight: 600,
-  }}
->
-  {u.role === "super_admin"
-    ? "Tam sistem yetkisi"
-    : u.role === "company_admin"
-    ? "Firma bazlı yönetim yetkisi"
-    : u.role === "operator"
-    ? "Operasyon / sınırlı erişim"
-    : "Rol tanımı yok"}
-</div>
+                      <div
+                        style={{
+                          width: "100%",
+                          fontSize: 11,
+                          color: BRAND.muted,
+                          marginTop: 4,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {u.role === "super_admin"
+                          ? "Tam sistem yetkisi"
+                          : u.role === "company_admin"
+                          ? "Firma bazlı yönetim yetkisi"
+                          : u.role === "operator"
+                          ? "Operasyon / sınırlı erişim"
+                          : "Rol tanımı yok"}
+                      </div>
 
                       <span
                         style={
@@ -1001,51 +1139,218 @@ export default function AdminUsersPage() {
                         {u.is_active ? "Aktif" : "Pasif"}
                       </span>
 
-                      <span
-                        style={badgeStyle("#fff7ed", "#fed7aa", "#9a3412")}
-                      >
-                        {u.company || "Firma yok"}
-                      </span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {u.firms.length === 0 ? (
+                          <span style={badgeStyle("#fff7ed", "#fed7aa", "#9a3412")}>
+                            Firma yok
+                          </span>
+                        ) : (
+                          u.firms.map((f) => (
+                            <span
+                              key={`${u.id}-${f.firm_id}`}
+                              style={badgeStyle(
+                                f.is_primary ? "#dcfce7" : "#f1f5f9",
+                                f.is_primary ? "#86efac" : "#cbd5e1",
+                                f.is_primary ? "#166534" : "#334155"
+                              )}
+                            >
+                              {f.firm_name} {f.is_primary ? "⭐" : ""}
+                            </span>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   <div style={{ marginTop: 10, minWidth: 0 }}>
                     {adminRole === "super_admin" && (
-                      <select
-                        value={u.company_id || ""}
-                        onChange={(e) => void updateCompany(u.id, e.target.value)}
-                        disabled={savingCompany}
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: 10,
-                          border: "1px solid #d1d5db",
-                          fontSize: 13,
-                          minWidth: 220,
-                          width: "100%",
-                          maxWidth: 320,
-                          background: "#fff",
-                        }}
-                      >
-                        <option value="">Firma yok</option>
-                        {companies.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
+                      <>
+                        <select
+                          value={u.company_id || ""}
+                          onChange={(e) => void updateCompany(u.id, e.target.value)}
+                          disabled={savingCompany}
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: 10,
+                            border: "1px solid #d1d5db",
+                            fontSize: 13,
+                            minWidth: 220,
+                            width: "100%",
+                            maxWidth: 320,
+                            background: "#fff",
+                            marginBottom: 10,
+                          }}
+                        >
+                          <option value="">Eski tekil firma alanı</option>
+                          {companies.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <div
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 12,
+                            padding: 12,
+                            background: "#fafafa",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 800,
+                              color: BRAND.text,
+                              marginBottom: 8,
+                            }}
+                          >
+                            Çoklu Firma Yönetimi
+                          </div>
+
+                          <select
+                            defaultValue=""
+                            onChange={async (e) => {
+                              const selectedFirmId = e.target.value;
+                              if (!selectedFirmId) return;
+                              await addCompany(u.id, selectedFirmId);
+                              e.currentTarget.value = "";
+                            }}
+                            disabled={savingCompany}
+                            style={{
+                              padding: "10px 12px",
+                              borderRadius: 10,
+                              border: "1px solid #d1d5db",
+                              fontSize: 13,
+                              width: "100%",
+                              maxWidth: 360,
+                              background: "#fff",
+                              marginBottom: 10,
+                            }}
+                          >
+                            <option value="">+ Çoklu firmaya firma ekle</option>
+                            {companies
+                              .filter(
+                                (c) => !u.firms.some((f) => f.firm_id === c.id)
+                              )
+                              .map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
+                              ))}
+                          </select>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 8,
+                            }}
+                          >
+                            {u.firms.length === 0 ? (
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: BRAND.muted,
+                                }}
+                              >
+                                Çoklu firma kaydı yok.
+                              </div>
+                            ) : (
+                              u.firms.map((f) => (
+                                <div
+                                  key={`${u.id}-manage-${f.firm_id}`}
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    flexWrap: "wrap",
+                                    padding: "8px 10px",
+                                    borderRadius: 10,
+                                    background: "#fff",
+                                    border: "1px solid #e5e7eb",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 13,
+                                      fontWeight: 700,
+                                      color: BRAND.text,
+                                    }}
+                                  >
+                                    {f.firm_name} {f.is_primary ? "⭐ Primary" : ""}
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      gap: 8,
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    {!f.is_primary && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void setPrimaryCompany(u.id, f.firm_id)
+                                        }
+                                        disabled={savingCompany}
+                                        style={{
+                                          border: "1px solid #bbf7d0",
+                                          background: "#f0fdf4",
+                                          color: "#166534",
+                                          borderRadius: 8,
+                                          padding: "6px 10px",
+                                          fontSize: 12,
+                                          fontWeight: 700,
+                                          cursor: "pointer",
+                                        }}
+                                      >
+                                        Primary Yap
+                                      </button>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        void removeCompany(u.id, f.firm_id)
+                                      }
+                                      disabled={savingCompany}
+                                      style={{
+                                        border: "1px solid #fecaca",
+                                        background: "#fff5f5",
+                                        color: "#b91c1c",
+                                        borderRadius: 8,
+                                        padding: "6px 10px",
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      Firmayı Kaldır
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
 
-                <div
-  style={{
-    fontSize: 11,
-    fontWeight: 800,
-    color: BRAND.muted,
-    marginRight: 2,
-  }}
->
-  İşlemler:
-</div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      color: BRAND.muted,
+                      marginRight: 2,
+                      marginTop: 10,
+                    }}
+                  >
+                    İşlemler:
+                  </div>
 
                   <div
                     style={{
@@ -1096,8 +1401,7 @@ export default function AdminUsersPage() {
                       }
                       style={{
                         border: `1px solid ${BRAND.border}`,
-                        background:
-                          expandedUserId === u.id ? "#111827" : "#fff",
+                        background: expandedUserId === u.id ? "#111827" : "#fff",
                         borderRadius: 12,
                         padding: "10px 14px",
                         fontSize: 13,
@@ -1330,7 +1634,9 @@ export default function AdminUsersPage() {
                     color: BRAND.text,
                   }}
                 >
-                  {showCreateModal ? "Şifre" : "Yeni Şifre (boş bırakırsan değişmez)"}
+                  {showCreateModal
+                    ? "Şifre"
+                    : "Yeni Şifre (boş bırakırsan değişmez)"}
                 </div>
                 <input
                   value={formPassword}
