@@ -147,7 +147,44 @@ export async function POST(req: NextRequest) {
 
     const rows = (allAccessRows || []) as UserFirmAccessRow[];
 
+    // 🔥 SON FİRMA BLOĞU
+    // super_admin için son firma da silinebilir → kullanıcı firma-yok moduna döner
+    // company_admin için son firma silinemez
     if (rows.length <= 1) {
+      if (session.role === "super_admin") {
+        const { error: deleteLastError } = await supabase
+          .from("user_firm_access")
+          .delete()
+          .eq("user_id", userId)
+          .eq("firm_id", companyId);
+
+        if (deleteLastError) {
+          console.error("remove-company delete last error:", deleteLastError);
+          return NextResponse.json(
+            { error: "Son firma erişimi kaldırılamadı." },
+            { status: 500 }
+          );
+        }
+
+        const { error: clearUserCompanyError } = await supabase
+          .from("users")
+          .update({ company_id: null })
+          .eq("id", userId);
+
+        if (clearUserCompanyError) {
+          console.error(
+            "remove-company clear users.company_id error:",
+            clearUserCompanyError
+          );
+          return NextResponse.json(
+            { error: "Kullanıcının firma alanı temizlenemedi." },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({ success: true });
+      }
+
       return NextResponse.json(
         { error: "Kullanıcının son firması kaldırılamaz." },
         { status: 400 }
@@ -173,6 +210,19 @@ export async function POST(req: NextRequest) {
       const nextPrimary = remainingRows[0];
 
       if (nextPrimary) {
+        const { error: clearPrimaryError } = await supabase
+          .from("user_firm_access")
+          .update({ is_primary: false })
+          .eq("user_id", userId);
+
+        if (clearPrimaryError) {
+          console.error("remove-company clear primary error:", clearPrimaryError);
+          return NextResponse.json(
+            { error: "Eski primary durumu temizlenemedi." },
+            { status: 500 }
+          );
+        }
+
         const { error: makePrimaryError } = await supabase
           .from("user_firm_access")
           .update({ is_primary: true })
@@ -192,7 +242,10 @@ export async function POST(req: NextRequest) {
           .eq("id", userId);
 
         if (updateUserError) {
-          console.error("remove-company update users.company_id error:", updateUserError);
+          console.error(
+            "remove-company update users.company_id error:",
+            updateUserError
+          );
           return NextResponse.json(
             { error: "Kullanıcının primary firması güncellenemedi." },
             { status: 500 }
