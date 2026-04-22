@@ -30,9 +30,9 @@ type UserPermissionRow = {
   permission_key: string | null;
 };
 
-type UserCompanyRow = {
-  user_id: string;
-  company_id: string;
+type UserFirmAccessRow = {
+  user_id: string | null;
+  firm_id: string | null;
   role: string | null;
   is_primary: boolean | null;
 };
@@ -77,7 +77,6 @@ export async function GET() {
 
     const supabase = getSupabase();
 
-    // 🔹 USERS
     const { data: usersData, error: userError } = await supabase
       .from("users")
       .select("id, full_name, email, role, is_active, created_at")
@@ -92,99 +91,164 @@ export async function GET() {
     }
 
     const userRows = (usersData || []) as UserRow[];
-    const userIds = userRows.map((u) => u.id);
+    const userIds = userRows
+      .map((u) => String(u.id || "").trim())
+      .filter(Boolean);
 
-    // 🔹 USER PERMISSIONS
     const permissionMap = new Map<string, string[]>();
 
     if (userIds.length > 0) {
-      const { data: permData } = await supabase
+      const { data: permData, error: permError } = await supabase
         .from("user_permissions")
         .select("user_id, permission_key")
         .in("user_id", userIds);
 
-      (permData || []).forEach((p: UserPermissionRow) => {
-        if (!p.user_id || !p.permission_key) return;
+      if (permError) {
+        console.error("user_permissions error:", permError);
+      } else {
+        ((permData || []) as UserPermissionRow[]).forEach((p) => {
+          const uid = String(p.user_id || "").trim();
+          const key = String(p.permission_key || "").trim();
 
-        if (!permissionMap.has(p.user_id)) {
-          permissionMap.set(p.user_id, []);
-        }
+          if (!uid || !key) return;
 
-        permissionMap.get(p.user_id)!.push(p.permission_key);
-      });
+          if (!permissionMap.has(uid)) {
+            permissionMap.set(uid, []);
+          }
+
+          permissionMap.get(uid)!.push(key);
+        });
+      }
     }
 
-    // 🔥 YENİ: USER_COMPANIES
-    const { data: userCompaniesData } = await supabase
-      .from("user_companies")
-      .select("user_id, company_id, role, is_primary")
+    const { data: userFirmAccessData, error: userFirmAccessError } = await supabase
+      .from("user_firm_access")
+      .select("user_id, firm_id, role, is_primary")
       .in("user_id", userIds);
 
-    const userCompanyMap = new Map<string, UserCompanyRow[]>();
+    if (userFirmAccessError) {
+      console.error("user_firm_access error:", userFirmAccessError);
+      return NextResponse.json(
+        { error: "Kullanıcı firma erişimleri alınamadı." },
+        { status: 500 }
+      );
+    }
 
-    (userCompaniesData || []).forEach((uc: UserCompanyRow) => {
-      if (!userCompanyMap.has(uc.user_id)) {
-        userCompanyMap.set(uc.user_id, []);
+    const accessRows = (userFirmAccessData || []) as UserFirmAccessRow[];
+
+    const userFirmMap = new Map<string, UserFirmAccessRow[]>();
+
+    accessRows.forEach((row) => {
+      const uid = String(row.user_id || "").trim();
+      if (!uid) return;
+
+      if (!userFirmMap.has(uid)) {
+        userFirmMap.set(uid, []);
       }
-      userCompanyMap.get(uc.user_id)!.push(uc);
+
+      userFirmMap.get(uid)!.push(row);
     });
 
-    // 🔹 COMPANY IDS
-    const allCompanyIds = Array.from(
+    const allFirmIds = Array.from(
       new Set(
-        (userCompaniesData || []).map((x: UserCompanyRow) => x.company_id)
+        accessRows
+          .map((row) => String(row.firm_id || "").trim())
+          .filter(Boolean)
       )
     );
 
     const companyMap = new Map<string, string>();
 
-    if (allCompanyIds.length > 0) {
-      const { data: companiesData } = await supabase
+    if (allFirmIds.length > 0) {
+      const { data: companiesData, error: companiesError } = await supabase
         .from("companies")
         .select("id, name")
-        .in("id", allCompanyIds);
+        .in("id", allFirmIds);
 
-      (companiesData || []).forEach((c: CompanyRow) => {
-        if (c.id) {
-          companyMap.set(c.id, c.name || "");
-        }
+      if (companiesError) {
+        console.error("companies error:", companiesError);
+        return NextResponse.json(
+          { error: "Firmalar alınamadı." },
+          { status: 500 }
+        );
+      }
+
+      ((companiesData || []) as CompanyRow[]).forEach((c) => {
+        const id = String(c.id || "").trim();
+        const name = String(c.name || "").trim();
+
+        if (!id) return;
+        companyMap.set(id, name || "Firma");
       });
     }
 
-    // 🔥 FINAL NORMALIZE
-    const normalized = userRows.map((user) => {
-      const userId = user.id;
+    const normalized = userRows
+      .map((user) => {
+        const userId = String(user.id || "").trim();
+        const userFirmRows = userFirmMap.get(userId) || [];
 
-      const firms =
-        userCompanyMap.get(userId)?.map((uc) => ({
-          firm_id: uc.company_id,
-          firm_name: companyMap.get(uc.company_id) || "Firma",
-          role: uc.role || "user",
-          is_primary: Boolean(uc.is_primary),
-        })) || [];
+        const firms = userFirmRows
+          .map((row) => {
+            const firmId = String(row.firm_id || "").trim();
+            if (!firmId) return null;
 
-      // 🔐 company_admin filtre
-      if (adminRole === "company_admin") {
-        const hasAccess = firms.some(
-          (f) => f.firm_id === companyIdFromCookie
-        );
+            return {
+              firm_id: firmId,
+              firm_name: companyMap.get(firmId) || "Firma",
+              role: String(row.role || "").trim() || "operator",
+              is_primary: Boolean(row.is_primary),
+            };
+          })
+          .filter(
+            (
+              item
+            ): item is {
+              firm_id: string;
+              firm_name: string;
+              role: string;
+              is_primary: boolean;
+            } => Boolean(item)
+          )
+          .sort((a, b) => {
+            if (a.is_primary === b.is_primary) {
+              return a.firm_name.localeCompare(b.firm_name, "tr");
+            }
+            return a.is_primary ? -1 : 1;
+          });
 
-        if (!hasAccess) return null;
-      }
+        if (adminRole === "company_admin") {
+          const hasAccess = firms.some(
+            (firm) => firm.firm_id === companyIdFromCookie
+          );
 
-      return {
-        id: userId,
-        full_name: user.full_name || "Adsız Kullanıcı",
-        email: user.email || "",
-        role: user.role || "",
-        is_active: Boolean(user.is_active),
-        created_at: user.created_at || null,
-        permissions: Array.from(
-          new Set(permissionMap.get(userId) || [])
-        ).sort((a, b) => a.localeCompare(b, "tr")),
-        firms,
-      };
-    }).filter(Boolean);
+          if (!hasAccess) {
+            return null;
+          }
+        }
+
+        const primaryFirm =
+          firms.find((firm) => firm.is_primary) || firms[0] || null;
+
+        return {
+          id: userId,
+          full_name: String(user.full_name || "Adsız Kullanıcı").trim(),
+          email: String(user.email || "").trim(),
+          role: String(user.role || "").trim(),
+          company_id: primaryFirm?.firm_id || "",
+          company: primaryFirm?.firm_name || "",
+          is_active: Boolean(user.is_active),
+          created_at: user.created_at || null,
+          permissions: Array.from(
+            new Set(
+              (permissionMap.get(userId) || [])
+                .map((p) => String(p || "").trim())
+                .filter(Boolean)
+            )
+          ).sort((a, b) => a.localeCompare(b, "tr")),
+          firms,
+        };
+      })
+      .filter(Boolean);
 
     return NextResponse.json({
       data: normalized,
