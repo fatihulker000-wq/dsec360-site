@@ -97,7 +97,17 @@ const ALL_PERMISSIONS = [
   "ADMIN",
 ];
 
+const APP_USER_ROLES = [
+  "super_admin",
+  "company_admin",
+  "operator",
+  "isg_uzmani",
+  "hekim",
+  "dsp",
+];
+
 function getRoleLabel(role?: string | null) {
+  if (role === "app_users") return "App Kullanıcıları";
   if (role === "super_admin") return "Süper Admin";
   if (role === "company_admin") return "Firma Yöneticisi";
   if (role === "operator") return "Operatör";
@@ -305,11 +315,15 @@ export default function AdminUsersPage() {
     void loadUsers();
   }, []);
 
-  const roles = useMemo(() => {
-    return Array.from(new Set(users.map((u) => u.role))).sort((a, b) =>
-      a.localeCompare(b, "tr")
-    );
-  }, [users]);
+const roles = useMemo(() => {
+  const baseRoles = Array.from(
+    new Set(users.map((u) => String(u.role || "").trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, "tr"));
+
+  const hasAppUsers = users.some((u) => APP_USER_ROLES.includes(u.role));
+
+  return hasAppUsers ? ["app_users", ...baseRoles] : baseRoles;
+}, [users]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
@@ -317,16 +331,23 @@ export default function AdminUsersPage() {
       const text =
         `${u.full_name} ${u.email} ${u.role} ${u.company} ${firmsText}`.toLowerCase();
 
-      const matchesSearch = !search || text.includes(search.toLowerCase());
-      const matchesRole = roleFilter === "all" ? true : u.role === roleFilter;
-      const matchesStatus =
-        statusFilter === "all"
-          ? true
-          : statusFilter === "active"
-          ? u.is_active
-          : !u.is_active;
+     const matchesSearch = !search || text.includes(search.toLowerCase());
 
-      return matchesSearch && matchesRole && matchesStatus;
+const matchesRole =
+  roleFilter === "all"
+    ? true
+    : roleFilter === "app_users"
+    ? APP_USER_ROLES.includes(u.role)
+    : u.role === roleFilter;
+
+const matchesStatus =
+  statusFilter === "all"
+    ? true
+    : statusFilter === "active"
+    ? u.is_active
+    : !u.is_active;
+
+return matchesSearch && matchesRole && matchesStatus;
     });
   }, [users, search, roleFilter, statusFilter]);
 
@@ -726,9 +747,9 @@ export default function AdminUsersPage() {
               lineHeight: 1.7,
             }}
           >
-            {adminRole === "company_admin"
-              ? "Kendi firmanıza ait yetkili alt kullanıcıları yönetin. Eğitim katılımcıları bu ekranda gösterilmez."
-              : "Admin, firma yöneticisi ve operatör kullanıcılarını yönetin. Eğitim katılımcıları bu ekranda gösterilmez."}
+          {adminRole === "company_admin"
+  ? "Kendi firmanıza ait yetkili alt kullanıcıları yönetin. App kullanıcıları bu ekranda filtrelenebilir. Eğitim katılımcıları operasyon tarafında ayrı değerlendirilir."
+  : "Web ve app kullanıcılarını yönetin. Rol filtresindeki 'App Kullanıcıları' seçeneği ile saha/operasyon kullanıcılarını toplu görebilirsiniz."}
           </p>
         </div>
 
@@ -1126,6 +1147,12 @@ export default function AdminUsersPage() {
                           ? "Operasyon / sınırlı erişim"
                           : "Rol tanımı yok"}
                       </div>
+
+{APP_USER_ROLES.includes(u.role) && (
+  <span style={badgeStyle("#dbeafe", "#93c5fd", "#1d4ed8")}>
+    App Kullanıcısı
+  </span>
+)}
 
                       <span
                         style={
