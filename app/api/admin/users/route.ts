@@ -188,33 +188,34 @@ export async function GET() {
         const userFirmRows = userFirmMap.get(userId) || [];
 
         const firms = userFirmRows
-          .map((row) => {
-            const firmId = String(row.firm_id || "").trim();
-            if (!firmId) return null;
+  .map((row) => {
+    const firmId = String(row.firm_id || "").trim();
 
-            return {
-              firm_id: firmId,
-              firm_name: companyMap.get(firmId) || "Firma",
-              role: String(row.role || "").trim() || "operator",
-              is_primary: Boolean(row.is_primary),
-            };
-          })
-          .filter(
-            (
-              item
-            ): item is {
-              firm_id: string;
-              firm_name: string;
-              role: string;
-              is_primary: boolean;
-            } => Boolean(item)
-          )
-          .sort((a, b) => {
-            if (a.is_primary === b.is_primary) {
-              return a.firm_name.localeCompare(b.firm_name, "tr");
-            }
-            return a.is_primary ? -1 : 1;
-          });
+    // 🌍 GLOBAL
+    if (firmId === "ALL") {
+      return {
+        firm_id: "ALL",
+        firm_name: "Tüm Firmalar",
+        role: "super_admin",
+        is_primary: true,
+      };
+    }
+
+    // 🏢 NORMAL FİRMA
+    return {
+      firm_id: firmId,
+      firm_name: companyMap.get(firmId) || "Firma",
+      role: String(row.role || "").trim() || "operator",
+      is_primary: Boolean(row.is_primary),
+    };
+  })
+  .filter(Boolean)
+  .sort((a, b) => {
+    if (a.is_primary === b.is_primary) {
+      return a.firm_name.localeCompare(b.firm_name, "tr");
+    }
+    return a.is_primary ? -1 : 1;
+  });
 
         if (adminRole === "company_admin") {
           const hasAccess = firms.some(

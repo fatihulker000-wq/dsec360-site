@@ -109,6 +109,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
+if (companyId === "ALL") {
+  await supabase
+    .from("user_firm_access")
+    .delete()
+    .eq("user_id", userId)
+    .eq("firm_id", "ALL");
+
+  return NextResponse.json({ success: true });
+}
+
     const { data: existingAccess, error: existingAccessError } = await supabase
       .from("user_firm_access")
       .select("id, user_id, firm_id, role, is_primary, created_at")

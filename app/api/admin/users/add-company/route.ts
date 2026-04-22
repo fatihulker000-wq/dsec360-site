@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
 
     const userId = String(body?.userId || "").trim();
     const companyId = String(body?.companyId || "").trim();
+    const isGlobal = companyId === "ALL";
 
     if (!userId) {
       return NextResponse.json(
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!companyId) {
+    if (!companyId && !isGlobal) {
       return NextResponse.json(
         { error: "companyId zorunlu." },
         { status: 400 }
@@ -122,6 +123,25 @@ export async function POST(req: NextRequest) {
         { status: 404 }
       );
     }
+
+
+if (isGlobal) {
+  await supabase
+    .from("user_firm_access")
+    .insert({
+      user_id: userId,
+      firm_id: "ALL",
+      role: "super_admin",
+      is_primary: true,
+    });
+
+  await supabase
+    .from("users")
+    .update({ company_id: null })
+    .eq("id", userId);
+
+  return NextResponse.json({ success: true });
+}
 
     const { data: company, error: companyError } = await supabase
       .from("companies")

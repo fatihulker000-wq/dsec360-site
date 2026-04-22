@@ -1154,7 +1154,7 @@ export default function AdminUsersPage() {
                                 f.is_primary ? "#166534" : "#334155"
                               )}
                             >
-                              {f.firm_name} {f.is_primary ? "⭐" : ""}
+                              {f.firm_id === "ALL" ? "🌍 TÜM FİRMALAR" : f.firm_name}
                             </span>
                           ))
                         )}
@@ -1229,6 +1229,7 @@ export default function AdminUsersPage() {
                             }}
                           >
                             <option value="">+ Çoklu firmaya firma ekle</option>
+                            <option value="ALL">🌍 Tüm Firmalar (Global)</option>
                             {companies
                               .filter(
                                 (c) => !u.firms.some((f) => f.firm_id === c.id)
