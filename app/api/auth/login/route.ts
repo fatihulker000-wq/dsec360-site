@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -9,6 +10,7 @@ type LoginUserRow = {
   full_name: string | null;
   email: string | null;
   password: string | null;
+  password_hash: string | null;
   role: string | null;
   company_id: string | null;
   is_active?: boolean | null;
@@ -20,9 +22,25 @@ type CompanyRow = {
   is_active: boolean | null;
 };
 
+function sha256(input: string) {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+
 function isPasswordMatched(rawPassword: string, user: LoginUserRow) {
   const plainPassword = String(user.password || "").trim();
-  return !!plainPassword && rawPassword === plainPassword;
+  const hashedPassword = String(user.password_hash || "").trim();
+
+  // 🔥 YENİ SİSTEM (HASH)
+  if (hashedPassword) {
+    return sha256(rawPassword) === hashedPassword;
+  }
+
+  // 🧩 ESKİ SİSTEM (PLAIN)
+  if (plainPassword) {
+    return rawPassword === plainPassword;
+  }
+
+  return false;
 }
 
 export async function POST(request: Request) {
@@ -49,39 +67,45 @@ export async function POST(request: Request) {
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     let user: LoginUserRow | null = null;
+    let error = null;
 
-// 1️⃣ email ile ara
-let res = await supabase
-  .from("users")
-  .select("*")
-  .ilike("email", rawEmail)
-  .maybeSingle<LoginUserRow>();
+    // 🔥 ORTAK SELECT (ÇOK ÖNEMLİ)
+    const selectFields =
+      "id, full_name, email, password, password_hash, role, company_id, is_active";
 
-if (res.data) user = res.data;
+    // 1️⃣ EMAIL
+    let res = await supabase
+      .from("users")
+      .select(selectFields)
+      .ilike("email", rawEmail)
+      .maybeSingle<LoginUserRow>();
 
-// 2️⃣ tc ile ara
-if (!user) {
-  res = await supabase
-    .from("users")
-    .select("*")
-    .eq("tc", rawEmail)
-    .maybeSingle<LoginUserRow>();
+    if (res.data) user = res.data;
+    error = res.error;
 
-  if (res.data) user = res.data;
-}
+    // 2️⃣ TC
+    if (!user) {
+      res = await supabase
+        .from("users")
+        .select(selectFields)
+        .eq("tc", rawEmail)
+        .maybeSingle<LoginUserRow>();
 
-// 3️⃣ sicil ile ara
-if (!user) {
-  res = await supabase
-    .from("users")
-    .select("*")
-    .eq("sicil_no", rawEmail)
-    .maybeSingle<LoginUserRow>();
+      if (res.data) user = res.data;
+      error = res.error;
+    }
 
-  if (res.data) user = res.data;
-}
+    // 3️⃣ SİCİL
+    if (!user) {
+      res = await supabase
+        .from("users")
+        .select(selectFields)
+        .eq("sicil_no", rawEmail)
+        .maybeSingle<LoginUserRow>();
 
-const error = res.error;
+      if (res.data) user = res.data;
+      error = res.error;
+    }
 
     if (error) {
       console.error("Auth login kullanıcı sorgu hatası:", error);
@@ -110,6 +134,7 @@ const error = res.error;
     const userRole = String(user.role ?? "").trim();
     const companyId = String(user.company_id ?? "").trim();
 
+    // 🔥 ŞİFRE KONTROL
     if (!isPasswordMatched(rawPassword, user)) {
       return NextResponse.json(
         { error: "Hatalı şifre." },
@@ -117,6 +142,7 @@ const error = res.error;
       );
     }
 
+    // 🏢 FİRMA KONTROL
     const companyBoundRoles = ["company_admin", "operator", "training_user"];
     const mustCheckCompany = companyBoundRoles.includes(userRole);
 
@@ -157,6 +183,7 @@ const error = res.error;
       }
     }
 
+    // 🎯 BAŞARILI LOGIN
     const response = NextResponse.json({
       success: true,
       role: userRole,
