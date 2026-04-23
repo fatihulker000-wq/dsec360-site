@@ -1,6 +1,11 @@
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+
+function sha256(input: string) {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
 
 function getSupabase() {
   return createClient(
@@ -164,7 +169,7 @@ async function sendTrainingInviteEmail(params: {
               ${safeLoginUrl}
             </div>
 
-            <div style="font-size:13px;color:#6b7280;">Geçici Şifre</div>
+           <div style="font-size:13px;color:#6b7280;">Giriş Şifreniz</div>
             <div style="font-size:24px;font-weight:900;color:#16a34a;margin-top:6px;letter-spacing:0.4px;">
               ${safePassword}
             </div>
@@ -400,12 +405,11 @@ export async function POST(req: Request) {
       const tempPassword = item.tempPassword;
 
       const { error: updateUserError } = await supabase
-        .from("users")
-        .update({
-          temp_password: tempPassword,
-          temp_password_created_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
+  .from("users")
+  .update({
+    password_hash: sha256(tempPassword),
+  })
+  .eq("id", user.id);
 
       if (updateUserError) {
         console.error("TEMP PASSWORD UPDATE ERROR:", updateUserError);
