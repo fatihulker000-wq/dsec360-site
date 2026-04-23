@@ -185,26 +185,24 @@ const type = url.searchParams.get("type");
       });
     }
 
-  const normalized = userRows
+ const normalized = userRows
   .filter((u) => {
     const role = String(u.role || "").trim();
 
-    if (type === "training") {
-      return role !== "training_user";
-    }
-
-    // 🔴 SYSTEM USERS
-    if (type === "system") {
-      return role !== "training_user";
-    }
-
     // 🔵 TRAINING USERS
+    // /api/admin/users?type=training → sadece eğitim katılımcıları
     if (type === "training") {
       return role === "training_user";
     }
 
-    // default (geri uyum)
-    return true;
+    // 🔴 SYSTEM USERS
+    // /api/admin/users?type=system → eğitim katılımcıları hariç sistem/app/web kullanıcıları
+    if (type === "system") {
+      return role !== "training_user";
+    }
+
+    // default: sistem kullanıcıları gibi davran
+    return role !== "training_user";
   })
       .map((user) => {
         const userId = String(user.id || "").trim();

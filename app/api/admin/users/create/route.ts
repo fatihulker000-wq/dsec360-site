@@ -106,6 +106,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
+    // ✅ Eğitim katılımcısı veya firma bağlı sistem kullanıcısı oluşturulunca
+// user_firm_access kaydı da açılır.
+// Böylece web/app tarafında firma ilişkisi kopmaz.
+if (insertedUser?.id && company_id) {
+  const { error: firmAccessError } = await supabase
+    .from("user_firm_access")
+    .insert({
+      user_id: insertedUser.id,
+      firm_id: company_id,
+      role: role || "training_user",
+      is_primary: true,
+    });
+
+  if (firmAccessError) {
+    console.error("create user firm access error:", firmAccessError);
+    return NextResponse.json(
+      { error: "Kullanıcı oluşturuldu ancak firma erişimi eklenemedi." },
+      { status: 500 }
+    );
+  }
+}
+
     return NextResponse.json({
       success: true,
       userId: insertedUser?.id || null,

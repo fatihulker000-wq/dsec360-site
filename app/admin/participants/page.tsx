@@ -875,20 +875,39 @@ const toggleTrainingUserActive = async (user: UserRow) => {
               flexWrap: "wrap",
             }}
           >
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
-              Katılımcı Seçimi
-            </h2>
+           <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
+  Katılımcı Seçimi
+</h2>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <label
-                style={{
-                  display: "inline-flex",
-                  gap: 8,
-                  alignItems: "center",
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
+<div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+
+  {/* 🔥 BURAYA EKLİYORSUN */}
+  <button
+    type="button"
+    onClick={openCreateModal}
+    style={{
+      border: "none",
+      borderRadius: 10,
+      padding: "10px 14px",
+      background: `linear-gradient(135deg, ${BRAND.redDark}, ${BRAND.red})`,
+      color: "#fff",
+      fontWeight: 800,
+      cursor: "pointer",
+    }}
+  >
+    + Yeni Katılımcı
+  </button>
+
+  {/* ZATEN VAR OLANLAR */}
+  <label
+    style={{
+      display: "inline-flex",
+      gap: 8,
+      alignItems: "center",
+      fontSize: 13,
+      fontWeight: 700,
+    }}
+  >
                 <input
                   type="checkbox"
                   checked={allFilteredSelected}
@@ -937,9 +956,9 @@ const toggleTrainingUserActive = async (user: UserRow) => {
       style={{
         padding: 16,
         borderRadius: 16,
-        border: checked
-          ? "2px solid #2563eb"
-          : '1px solid ${BRAND.border}',
+       border: checked
+  ? "2px solid #2563eb"
+  : `1px solid ${BRAND.border}`,
         background: checked ? "#eff6ff" : "#f9fafb",
       }}
     >
@@ -1370,6 +1389,146 @@ const toggleTrainingUserActive = async (user: UserRow) => {
           border: "none",
           borderRadius: 10,
           fontWeight: 600,
+        }}
+      >
+        Kapat
+      </button>
+    </div>
+  </div>
+)}
+
+{showCreateModal && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      background: "rgba(0,0,0,0.45)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 9999,
+    }}
+  >
+    <div
+      style={{
+        background: "#fff",
+        padding: 24,
+        borderRadius: 16,
+        width: 420,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+      }}
+    >
+      <h3 style={{ marginBottom: 16, fontWeight: 900 }}>
+        Yeni Katılımcı Oluştur
+      </h3>
+
+      <input
+        value={formFullName}
+        onChange={(e) => setFormFullName(e.target.value)}
+        placeholder="Ad Soyad"
+        style={{
+          width: "100%",
+          padding: 10,
+          marginBottom: 10,
+          border: "1px solid #ddd",
+          borderRadius: 8,
+        }}
+      />
+
+      <input
+        value={formEmail}
+        onChange={(e) => setFormEmail(e.target.value)}
+        placeholder="Email"
+        style={{
+          width: "100%",
+          padding: 10,
+          marginBottom: 10,
+          border: "1px solid #ddd",
+          borderRadius: 8,
+        }}
+      />
+
+      <input
+        value={formPassword}
+        onChange={(e) => setFormPassword(e.target.value)}
+        placeholder="Şifre"
+        type="password"
+        style={{
+          width: "100%",
+          padding: 10,
+          marginBottom: 10,
+          border: "1px solid #ddd",
+          borderRadius: 8,
+        }}
+      />
+
+      <select
+        value={formCompanyId}
+        onChange={(e) => setFormCompanyId(e.target.value)}
+        style={{
+          width: "100%",
+          padding: 10,
+          marginBottom: 12,
+          border: "1px solid #ddd",
+          borderRadius: 8,
+        }}
+      >
+        <option value="">Firma seç</option>
+        {companies.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 16,
+          fontSize: 14,
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={formIsActive}
+          onChange={(e) => setFormIsActive(e.target.checked)}
+        />
+        Aktif
+      </label>
+
+      <button
+        onClick={createTrainingUser}
+        disabled={savingUser}
+        style={{
+          width: "100%",
+          padding: 12,
+          background: "#16a34a",
+          color: "#fff",
+          border: "none",
+          borderRadius: 10,
+          fontWeight: 800,
+          marginBottom: 8,
+          cursor: savingUser ? "not-allowed" : "pointer",
+        }}
+      >
+        {savingUser ? "Kaydediliyor..." : "Kaydet"}
+      </button>
+
+      <button
+        onClick={() => setShowCreateModal(false)}
+        style={{
+          width: "100%",
+          padding: 10,
+          background: "#e5e7eb",
+          border: "none",
+          borderRadius: 10,
+          fontWeight: 600,
+          cursor: "pointer",
         }}
       >
         Kapat
