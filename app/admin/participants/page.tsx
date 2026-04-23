@@ -1293,6 +1293,91 @@ const toggleTrainingUserActive = async (user: UserRow) => {
             </div>
           </div>
         ) : null}
+
+      {showEditModal && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      background: "rgba(0,0,0,0.4)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 9999,
+    }}
+  >
+    <div
+      style={{
+        background: "#fff",
+        padding: 24,
+        borderRadius: 16,
+        width: 420,
+      }}
+    >
+      <h3 style={{ marginBottom: 16 }}>Kullanıcı Düzenle</h3>
+
+      <input
+        value={formFullName}
+        onChange={(e) => setFormFullName(e.target.value)}
+        placeholder="Ad Soyad"
+        style={{
+          width: "100%",
+          padding: 10,
+          marginBottom: 10,
+          border: "1px solid #ddd",
+          borderRadius: 8,
+        }}
+      />
+
+      <input
+        value={formEmail}
+        onChange={(e) => setFormEmail(e.target.value)}
+        placeholder="Email"
+        style={{
+          width: "100%",
+          padding: 10,
+          marginBottom: 10,
+          border: "1px solid #ddd",
+          borderRadius: 8,
+        }}
+      />
+
+      <button
+        onClick={updateTrainingUser}
+        style={{
+          width: "100%",
+          padding: 12,
+          background: "#16a34a",
+          color: "#fff",
+          border: "none",
+          borderRadius: 10,
+          fontWeight: 700,
+          marginBottom: 8,
+        }}
+      >
+        Kaydet
+      </button>
+
+      <button
+        onClick={() => setShowEditModal(false)}
+        style={{
+          width: "100%",
+          padding: 10,
+          background: "#e5e7eb",
+          border: "none",
+          borderRadius: 10,
+          fontWeight: 600,
+        }}
+      >
+        Kapat
+      </button>
+    </div>
+  </div>
+)}
+
       </div>
     </main>
   );
