@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type SidebarItem = {
   href: string;
@@ -25,7 +25,7 @@ const mainItems: SidebarItem[] = [
   {
     href: "/training/async",
     label: "Asenkron",
-    icon: "▶",
+    icon: "▶️",
   },
   {
     href: "/training/sync",
@@ -52,9 +52,56 @@ const secondaryItems: SidebarItem[] = [
   },
 ];
 
+type MeResponse = {
+  success?: boolean;
+  user?: {
+    id?: string;
+    full_name?: string;
+    email?: string;
+    role?: string;
+    company_id?: string;
+  };
+  error?: string;
+};
+
 export default function AdminSidebar() {
   const pathname = usePathname();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [userRole, setUserRole] = useState<string>("");
+  const [loadingRole, setLoadingRole] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const res = await fetch("/api/admin/me", {
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        const json: MeResponse = await res.json().catch(() => ({}));
+
+        if (!cancelled) {
+          setUserRole(String(json?.user?.role || "").trim());
+        }
+      } catch {
+        if (!cancelled) {
+          setUserRole("");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingRole(false);
+        }
+      }
+    }
+
+    void loadMe();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const pageTitle = useMemo(() => {
     if (pathname.startsWith("/admin/dashboard")) return "Admin Dashboard";
@@ -63,6 +110,16 @@ export default function AdminSidebar() {
     if (pathname.startsWith("/training")) return "Eğitim Yönetimi";
     return "Admin Panel";
   }, [pathname]);
+
+  const filteredMainItems = useMemo(() => {
+    if (userRole === "training_user") return [];
+    return mainItems;
+  }, [userRole]);
+
+  const filteredSecondaryItems = useMemo(() => {
+    if (userRole === "training_user") return [];
+    return secondaryItems;
+  }, [userRole]);
 
   const handleLogout = async () => {
     try {
@@ -88,6 +145,10 @@ export default function AdminSidebar() {
     }
     return pathname.startsWith(href);
   };
+
+  if (!loadingRole && userRole === "training_user") {
+    return null;
+  }
 
   return (
     <aside className="admin-sidebar-shell">
@@ -117,7 +178,7 @@ export default function AdminSidebar() {
           <div className="admin-sidebar-section-title">Yönetim</div>
 
           <nav className="admin-sidebar-nav">
-            {mainItems.map((item) => (
+            {filteredMainItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -139,7 +200,7 @@ export default function AdminSidebar() {
           <div className="admin-sidebar-section-title">Kısayollar</div>
 
           <nav className="admin-sidebar-nav">
-            {secondaryItems.map((item) => (
+            {filteredSecondaryItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

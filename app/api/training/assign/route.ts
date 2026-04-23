@@ -111,7 +111,7 @@ async function sendTrainingInviteEmail(params: {
     };
   }
 
-  const loginUrl = `${appUrl.replace(/\/$/, "")}/login`;
+  const loginUrl = `${appUrl.replace(/\/$/, "")}/portal/training`;
   const safeName = escapeHtml(params.fullName);
   const safeTraining = escapeHtml(params.trainingTitle);
   const safePassword = escapeHtml(params.tempPassword);
@@ -404,10 +404,11 @@ export async function POST(req: Request) {
       const user = item.user;
       const tempPassword = item.tempPassword;
 
-      const { error: updateUserError } = await supabase
+     const { error: updateUserError } = await supabase
   .from("users")
   .update({
     password_hash: sha256(tempPassword),
+    role: "training_user",
   })
   .eq("id", user.id);
 

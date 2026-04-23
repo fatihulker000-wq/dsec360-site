@@ -132,12 +132,13 @@ export default function AdminLayout({
     if (pathname === "/admin/login") return;
     if (isLoggingOutFlow) return;
 
-    if (!role) {
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("dsec_admin_role_cached");
-      }
-      router.replace("/admin/login");
-      router.refresh();
+    // 🚫 TRAINING USER ADMIN GİREMEZ
+
+  if (role === "training_user") {
+
+    window.location.href = "/portal/training";
+
+    return;
     }
   }, [roleLoaded, role, pathname, router, isLoggingOutFlow]);
 
@@ -198,6 +199,11 @@ export default function AdminLayout({
   if (pathname === "/admin/login") {
     return <>{children}</>;
   }
+
+  // 🚫 ekstra güvenlik (render koruması)
+if (roleLoaded && role === "training_user") {
+  return null;
+}
 
   const renderMenuItems = () =>
     menu.map((item) => {

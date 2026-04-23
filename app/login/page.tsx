@@ -54,15 +54,17 @@ export default function LoginPage() {
         return;
       }
 
-      if (data.role === "super_admin") {
-        router.push("/admin/dashboard");
-      } else if (data.role === "company_admin" || data.role === "operator") {
-        router.push("/panel");
-      } else if (data.role === "training_user") {
-        router.push("/portal/training");
-      } else {
-        router.push("/");
-      }
+    const nextRole = String(data?.role || "").trim();
+
+if (nextRole === "training_user") {
+  router.push("/portal/training");
+} else if (nextRole === "super_admin") {
+  router.push("/admin/dashboard");
+} else if (nextRole === "company_admin" || nextRole === "operator") {
+  router.push("/panel");
+} else {
+  router.push("/");
+}
 
       router.refresh();
     } catch (err) {

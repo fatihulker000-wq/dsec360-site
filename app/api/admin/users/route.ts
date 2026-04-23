@@ -80,7 +80,7 @@ export async function GET() {
     const { data: usersData, error: userError } = await supabase
       .from("users")
       .select("id, full_name, email, role, is_active, created_at, app_user_type")
-      .order("full_name", { ascending: false, nullsFirst: false });
+      .order("full_name", { ascending: true, nullsFirst: false });
 
     if (userError) {
       console.error("users error:", userError);
@@ -183,6 +183,7 @@ export async function GET() {
     }
 
     const normalized = userRows
+  .filter((u) => u.role !== "training_user") 
       .map((user) => {
         const userId = String(user.id || "").trim();
         const userFirmRows = userFirmMap.get(userId) || [];
