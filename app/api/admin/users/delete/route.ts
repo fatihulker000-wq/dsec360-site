@@ -56,6 +56,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (String(targetUser.role || "").trim() === "super_admin") {
+        if (String(targetUser.role || "").trim() === "training_user") {
+  // eğitim kullanıcı silinebilir (problem yok)
+} else {
+  // sistem kullanıcılarını korumak istersen buraya kural eklenebilir
+}
       return NextResponse.json(
         { error: "Süper admin kullanıcı silinemez." },
         { status: 400 }
@@ -63,6 +68,15 @@ export async function POST(req: NextRequest) {
     }
 
     await supabase.from("user_permissions").delete().eq("user_id", userId);
+
+    const { error: deleteAssignmentsError } = await supabase
+  .from("training_assignments")
+  .delete()
+  .eq("user_id", userId);
+
+if (deleteAssignmentsError) {
+  console.error("delete training assignments error:", deleteAssignmentsError);
+}
 
     const { error: deleteRoleError } = await supabase
       .from("user_roles")

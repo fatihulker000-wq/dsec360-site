@@ -157,6 +157,17 @@ export default function AdminParticipantsPage() {
   const [selectedTrainingInfo, setSelectedTrainingInfo] =
     useState<TrainingRow | null>(null);
   const [assignSummary, setAssignSummary] = useState<AssignResponse | null>(null);
+  
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+
+  const [formFullName, setFormFullName] = useState("");
+  const [formEmail, setFormEmail] = useState("");
+  const [formPassword, setFormPassword] = useState("");
+  const [formCompanyId, setFormCompanyId] = useState("");
+  const [formIsActive, setFormIsActive] = useState(true);
+  const [savingUser, setSavingUser] = useState(false);
 
   const loadAll = async () => {
     try {
@@ -168,7 +179,7 @@ export default function AdminParticipantsPage() {
           cache: "no-store",
           credentials: "include",
         }),
-        fetch("/api/admin/users", {
+        fetch("/api/admin/users?type=training", {
           cache: "no-store",
           credentials: "include",
         }),
@@ -226,7 +237,6 @@ export default function AdminParticipantsPage() {
 
       const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
         ? usersJson.data
-            .filter((u: UserApiRow) => String(u.role || "") === "training_user")
             .map((u: UserApiRow) => ({
               id: String(u.id || ""),
               full_name: (u.full_name || "Adsız Kullanıcı").trim(),
@@ -269,6 +279,210 @@ export default function AdminParticipantsPage() {
     const found = trainings.find((t) => t.id === trainingId) || null;
     setSelectedTrainingInfo(found);
   }, [trainingId, trainings]);
+
+  const resetForm = () => {
+  setFormFullName("");
+  setFormEmail("");
+  setFormPassword("");
+  setFormCompanyId("");
+  setFormIsActive(true);
+  setSelectedUser(null);
+};
+
+const openCreateModal = () => {
+  resetForm();
+  setShowCreateModal(true);
+};
+
+const openEditModal = (user: UserRow) => {
+  setSelectedUser(user);
+  setFormFullName(user.full_name);
+  setFormEmail(user.email === "-" ? "" : user.email);
+  setFormPassword("");
+  setFormCompanyId(user.company_id || "");
+  setFormIsActive(user.is_active);
+  setShowEditModal(true);
+};
+
+const createTrainingUser = async () => {
+  try {
+    if (!formFullName.trim()) {
+      alert("Ad soyad zorunlu.");
+      return;
+    }
+
+    if (!formEmail.trim()) {
+      alert("Email zorunlu.");
+      return;
+    }
+
+    if (!formPassword.trim()) {
+      alert("Şifre zorunlu.");
+      return;
+    }
+
+    if (!formCompanyId.trim()) {
+      alert("Firma zorunlu.");
+      return;
+    }
+
+    setSavingUser(true);
+
+    const res = await fetch("/api/admin/users/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        full_name: formFullName.trim(),
+        email: formEmail.trim().toLowerCase(),
+        password: formPassword,
+        role: "training_user",
+        company_id: formCompanyId,
+        is_active: formIsActive,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Katılımcı oluşturulamadı.");
+      return;
+    }
+
+    setShowCreateModal(false);
+    resetForm();
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    alert("Katılımcı oluşturulamadı.");
+  } finally {
+    setSavingUser(false);
+  }
+};
+
+const updateTrainingUser = async () => {
+  try {
+    if (!selectedUser?.id) {
+      alert("Düzenlenecek kullanıcı bulunamadı.");
+      return;
+    }
+
+    if (!formFullName.trim()) {
+      alert("Ad soyad zorunlu.");
+      return;
+    }
+
+    if (!formEmail.trim()) {
+      alert("Email zorunlu.");
+      return;
+    }
+
+    if (!formCompanyId.trim()) {
+      alert("Firma zorunlu.");
+      return;
+    }
+
+    setSavingUser(true);
+
+    const res = await fetch("/api/admin/users/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        userId: selectedUser.id,
+        full_name: formFullName.trim(),
+        email: formEmail.trim().toLowerCase(),
+        password: formPassword.trim() || null,
+        role: "training_user",
+        company_id: formCompanyId,
+        is_active: formIsActive,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Katılımcı güncellenemedi.");
+      return;
+    }
+
+    setShowEditModal(false);
+    resetForm();
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    alert("Katılımcı güncellenemedi.");
+  } finally {
+    setSavingUser(false);
+  }
+};
+
+const deleteTrainingUser = async (userId: string, fullName: string) => {
+  const ok = window.confirm(
+    '${fullName} isimli eğitim katılımcısını silmek istediğinize emin misiniz?'
+  );
+  if (!ok) return;
+
+  try {
+    const res = await fetch("/api/admin/users/delete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({ userId }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Katılımcı silinemedi.");
+      return;
+    }
+
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    alert("Katılımcı silinemedi.");
+  }
+};
+
+const toggleTrainingUserActive = async (user: UserRow) => {
+  try {
+    const res = await fetch("/api/admin/users/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        userId: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        password: null,
+        role: "training_user",
+        company_id: user.company_id,
+        is_active: !user.is_active,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Durum güncellenemedi.");
+      return;
+    }
+
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    alert("Durum güncellenemedi.");
+  }
+};
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
@@ -713,88 +927,124 @@ export default function AdminParticipantsPage() {
                 gap: 14,
               }}
             >
+              
               {filteredUsers.map((u) => {
-                const checked = selectedUsers.includes(u.id);
+  const checked = selectedUsers.includes(u.id);
 
-                return (
-                  <label
-                    key={u.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 12,
-                      padding: 16,
-                      borderRadius: 16,
-                      border: checked
-                        ? "2px solid #2563eb"
-                        : `1px solid ${BRAND.border}`,
-                      background: checked ? "#eff6ff" : "#f9fafb",
-                      cursor: "pointer",
-                      minWidth: 0,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => toggleUser(u.id, e.target.checked)}
-                      style={{ marginTop: 4 }}
-                    />
+  return (
+    <div
+      key={u.id}
+      style={{
+        padding: 16,
+        borderRadius: 16,
+        border: checked
+          ? "2px solid #2563eb"
+          : '1px solid ${BRAND.border}',
+        background: checked ? "#eff6ff" : "#f9fafb",
+      }}
+    >
+      {/* SEÇİM ALANI */}
+      <div style={{ display: "flex", gap: 12 }}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => toggleUser(u.id, e.target.checked)}
+        />
 
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 16,
-                          fontWeight: 900,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {u.full_name}
-                      </div>
-                      <div
-                        style={{
-                          marginTop: 6,
-                          fontSize: 13,
-                          color: BRAND.muted,
-                          lineHeight: 1.6,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {u.email}
-                      </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 900 }}>{u.full_name}</div>
+          <div style={{ fontSize: 13, color: BRAND.muted }}>{u.email}</div>
 
-                      <div
-                        style={{
-                          marginTop: 8,
-                          display: "flex",
-                          gap: 8,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <span style={badgeStyle("#fff", "#e5e7eb", "#374151")}>
-                          {u.company}
-                        </span>
-                        <span
-                          style={
-                            u.is_active
-                              ? badgeStyle("#dcfce7", "#86efac", "#166534")
-                              : badgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
-                          }
-                        >
-                          {u.is_active ? "Aktif" : "Pasif"}
-                        </span>
-                        <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
-                          {u.role}
-                        </span>
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
+          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={badgeStyle("#fff", "#e5e7eb", "#374151")}>
+              {u.company}
+            </span>
+
+            <span
+              style={
+                u.is_active
+                  ? badgeStyle("#dcfce7", "#86efac", "#166534")
+                  : badgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
+              }
+            >
+              {u.is_active ? "Aktif" : "Pasif"}
+            </span>
+
+            <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
+              {u.role}
+            </span>
+
+            {!u.company_id && (
+              <span style={badgeStyle("#fee2e2", "#fca5a5", "#b91c1c")}>
+                Firma zorunlu
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 🔥 İŞLEM BUTONLARI (DOĞRU YER) */}
+      <div
+        style={{
+          marginTop: 12,
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          onClick={() => openEditModal(u)}
+          style={{
+            border: "1px solid #d1d5db",
+            background: "#fff",
+            borderRadius: 10,
+            padding: "8px 12px",
+            fontWeight: 700,
+          }}
+        >
+          Düzenle
+        </button>
+
+        <button
+          onClick={() => toggleTrainingUserActive(u)}
+          style={{
+            border: "1px solid #fde68a",
+            background: "#fffbeb",
+            color: "#92400e",
+            borderRadius: 10,
+            padding: "8px 12px",
+            fontWeight: 700,
+          }}
+        >
+          {u.is_active ? "Pasife Al" : "Aktif Yap"}
+        </button>
+
+        <button
+          onClick={() => deleteTrainingUser(u.id, u.full_name)}
+          style={{
+            border: "1px solid #fecaca",
+            background: "#fff5f5",
+            color: "#b91c1c",
+            borderRadius: 10,
+            padding: "8px 12px",
+            fontWeight: 700,
+          }}
+        >
+          Sil
+        </button>
+      </div>
+    </div>
+  );
+})}
+
+
+
+            
             </div>
           )}
         </div>
 
+      
         <div
           style={{
             ...cardStyle(),

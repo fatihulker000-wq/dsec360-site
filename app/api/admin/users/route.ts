@@ -37,7 +37,7 @@ type UserFirmAccessRow = {
   is_primary: boolean | null;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const headerStore = await headers();
     const apiKey = headerStore.get("x-api-key");
@@ -91,6 +91,9 @@ export async function GET() {
     }
 
     const userRows = (usersData || []) as UserRow[];
+    const url = new URL(req.url);
+const type = url.searchParams.get("type"); 
+// type = system | training
     const userIds = userRows
       .map((u) => String(u.id || "").trim())
       .filter(Boolean);
@@ -182,8 +185,27 @@ export async function GET() {
       });
     }
 
-    const normalized = userRows
-  .filter((u) => u.role !== "training_user") 
+  const normalized = userRows
+  .filter((u) => {
+    const role = String(u.role || "").trim();
+
+    if (type === "training") {
+      return role !== "training_user";
+    }
+
+    // 🔴 SYSTEM USERS
+    if (type === "system") {
+      return role !== "training_user";
+    }
+
+    // 🔵 TRAINING USERS
+    if (type === "training") {
+      return role === "training_user";
+    }
+
+    // default (geri uyum)
+    return true;
+  })
       .map((user) => {
         const userId = String(user.id || "").trim();
         const userFirmRows = userFirmMap.get(userId) || [];

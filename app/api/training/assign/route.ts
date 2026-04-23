@@ -296,6 +296,17 @@ export async function POST(req: Request) {
 
     const typedUsers = (users || []) as UserRow[];
 
+    const usersWithoutCompany = typedUsers.filter(
+  (user) => !String(user.company_id || "").trim()
+);
+
+if (usersWithoutCompany.length > 0) {
+  return NextResponse.json(
+    { error: "Firma ilişkisi olmayan kullanıcıya eğitim atanamaz." },
+    { status: 400 }
+  );
+}
+
     if (typedUsers.length !== uniqueUserIds.length) {
       return NextResponse.json(
         { error: "Seçilen kullanıcıların bir kısmı bulunamadı." },

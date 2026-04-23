@@ -51,11 +51,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Şifre zorunlu." }, { status: 400 });
     }
 
-    const allowedRoles = ["operator", "company_admin", "super_admin"];
+    const allowedRoles = ["operator", "company_admin", "super_admin", "training_user"];
 
     if (!allowedRoles.includes(role)) {
       return NextResponse.json({ error: "Geçersiz rol." }, { status: 400 });
     }
+    if (role === "training_user" && !company_id) {
+  return NextResponse.json(
+    { error: "Eğitim katılımcısı için firma zorunludur." },
+    { status: 400 }
+  );
+}
 
     const supabase = getSupabase();
 
