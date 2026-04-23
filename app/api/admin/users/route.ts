@@ -79,7 +79,7 @@ export async function GET() {
 
     const { data: usersData, error: userError } = await supabase
       .from("users")
-      .select("id, full_name, email, role, is_active, created_at")
+      .select("id, full_name, email, role, is_active, created_at, app_user_type")
       .order("created_at", { ascending: false });
 
     if (userError) {
@@ -235,6 +235,7 @@ export async function GET() {
           full_name: String(user.full_name || "Adsız Kullanıcı").trim(),
           email: String(user.email || "").trim(),
           role: String(user.role || "").trim(),
+          app_user_type: String((user as any).app_user_type || "").trim(),
           company_id: primaryFirm?.firm_id || "",
           company: primaryFirm?.firm_name || "",
           is_active: Boolean(user.is_active),

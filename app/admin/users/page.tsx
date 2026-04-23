@@ -14,6 +14,7 @@ type UserApiRow = {
   full_name?: string | null;
   email?: string | null;
   role?: string | null;
+  app_user_type?: string | null;
   company_id?: string | null;
   company?: string | null;
   is_active?: boolean | null;
@@ -49,6 +50,7 @@ type UserRow = {
   full_name: string;
   email: string;
   role: string;
+  app_user_type: string;
   company_id: string;
   company: string;
   is_active: boolean;
@@ -97,15 +99,6 @@ const ALL_PERMISSIONS = [
   "ADMIN",
 ];
 
-const APP_USER_ROLES = [
-  "super_admin",
-  "company_admin",
-  "operator",
-  "isg_uzmani",
-  "hekim",
-  "dsp",
-];
-
 function getRoleLabel(role?: string | null) {
   if (role === "app_users") return "App Kullanıcıları";
   if (role === "super_admin") return "Süper Admin";
@@ -113,6 +106,27 @@ function getRoleLabel(role?: string | null) {
   if (role === "operator") return "Operatör";
   if (role === "training_user") return "Eğitim Kullanıcısı";
   return role || "-";
+}
+
+function getAppUserTypeLabel(type?: string | null) {
+  if (type === "isg_uzmani") return "İSG Uzmanı";
+  if (type === "hekim") return "İşyeri Hekimi";
+  if (type === "dsp") return "DSP";
+  if (type === "diger") return "Diğer Kullanıcı";
+  return "";
+}
+
+function getRoleDescription(role?: string | null, appUserType?: string | null) {
+  if (appUserType === "isg_uzmani") return "İş güvenliği uzmanı";
+  if (appUserType === "hekim") return "İşyeri hekimi";
+  if (appUserType === "dsp") return "DSP";
+  if (appUserType === "diger") return "Diğer saha kullanıcısı";
+
+  if (role === "super_admin") return "Tam sistem yetkisi";
+  if (role === "company_admin") return "Firma bazlı yönetim yetkisi";
+  if (role === "operator") return "Operasyon / sınırlı erişim";
+  if (role === "training_user") return "Eğitim portal kullanıcısı";
+  return "Rol tanımı yok";
 }
 
 function cardStyle(): React.CSSProperties {
@@ -275,31 +289,32 @@ export default function AdminUsersPage() {
         setCompanies([]);
       }
 
-     const normalized: UserRow[] = Array.isArray(json.data)
-  ? json.data.map((u) => ({
-      id: String(u.id || ""),
-      full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
-      email: String(u.email || "-").trim(),
-      role: String(u.role || "").trim(),
-      company_id: String(u.company_id || "").trim(),
-      company: String(u.company || "").trim(),
-      is_active: Boolean(u.is_active),
-      created_at: String(u.created_at || ""),
-      permissions: Array.isArray(u.permissions)
-        ? u.permissions.map((p) => String(p || "").trim()).filter(Boolean)
-        : [],
-      firms: Array.isArray(u.firms)
-        ? u.firms
-            .map((f) => ({
-              firm_id: String(f?.firm_id || "").trim(),
-              firm_name: String(f?.firm_name || "").trim() || "Firma",
-              role: String(f?.role || "").trim() || "operator",
-              is_primary: Boolean(f?.is_primary),
-            }))
-            .filter((f) => f.firm_id)
-        : [],
-    }))
-  : [];
+      const normalized: UserRow[] = Array.isArray(json.data)
+        ? json.data.map((u) => ({
+            id: String(u.id || ""),
+            full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
+            email: String(u.email || "-").trim(),
+            role: String(u.role || "").trim(),
+            app_user_type: String(u.app_user_type || "").trim(),
+            company_id: String(u.company_id || "").trim(),
+            company: String(u.company || "").trim(),
+            is_active: Boolean(u.is_active),
+            created_at: String(u.created_at || ""),
+            permissions: Array.isArray(u.permissions)
+              ? u.permissions.map((p) => String(p || "").trim()).filter(Boolean)
+              : [],
+            firms: Array.isArray(u.firms)
+              ? u.firms
+                  .map((f) => ({
+                    firm_id: String(f?.firm_id || "").trim(),
+                    firm_name: String(f?.firm_name || "").trim() || "Firma",
+                    role: String(f?.role || "").trim() || "operator",
+                    is_primary: Boolean(f?.is_primary),
+                  }))
+                  .filter((f) => f.firm_id)
+              : [],
+          }))
+        : [];
 
       setUsers(normalized);
     } catch (err) {
@@ -315,39 +330,40 @@ export default function AdminUsersPage() {
     void loadUsers();
   }, []);
 
-const roles = useMemo(() => {
-  const baseRoles = Array.from(
-    new Set(users.map((u) => String(u.role || "").trim()).filter(Boolean))
-  ).sort((a, b) => a.localeCompare(b, "tr"));
+  const roles = useMemo(() => {
+    const baseRoles = Array.from(
+      new Set(users.map((u) => String(u.role || "").trim()).filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b, "tr"));
 
-  const hasAppUsers = users.some((u) => APP_USER_ROLES.includes(u.role));
+    const hasAppUsers = users.some((u) => Boolean(u.app_user_type));
 
-  return hasAppUsers ? ["app_users", ...baseRoles] : baseRoles;
-}, [users]);
+    return hasAppUsers ? ["app_users", ...baseRoles] : baseRoles;
+  }, [users]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       const firmsText = (u.firms || []).map((f) => f.firm_name).join(" ");
+      const appTypeText = getAppUserTypeLabel(u.app_user_type).toLowerCase();
       const text =
-        `${u.full_name} ${u.email} ${u.role} ${u.company} ${firmsText}`.toLowerCase();
+        `${u.full_name} ${u.email} ${u.role} ${u.company} ${firmsText} ${appTypeText}`.toLowerCase();
 
-     const matchesSearch = !search || text.includes(search.toLowerCase());
+      const matchesSearch = !search || text.includes(search.toLowerCase());
 
-const matchesRole =
-  roleFilter === "all"
-    ? true
-    : roleFilter === "app_users"
-    ? APP_USER_ROLES.includes(u.role)
-    : u.role === roleFilter;
+      const matchesRole =
+        roleFilter === "all"
+          ? true
+          : roleFilter === "app_users"
+          ? Boolean(u.app_user_type)
+          : u.role === roleFilter;
 
-const matchesStatus =
-  statusFilter === "all"
-    ? true
-    : statusFilter === "active"
-    ? u.is_active
-    : !u.is_active;
+      const matchesStatus =
+        statusFilter === "all"
+          ? true
+          : statusFilter === "active"
+          ? u.is_active
+          : !u.is_active;
 
-return matchesSearch && matchesRole && matchesStatus;
+      return matchesSearch && matchesRole && matchesStatus;
     });
   }, [users, search, roleFilter, statusFilter]);
 
@@ -570,6 +586,35 @@ return matchesSearch && matchesRole && matchesStatus;
     }
   };
 
+  const updateAppUserType = async (userId: string, appUserType: string) => {
+    try {
+      const res = await fetch("/api/admin/users/update-app-type", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          userId,
+          app_user_type: appUserType,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json?.error || "App kullanıcı tipi güncellenemedi.");
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error(error);
+      alert("App kullanıcı tipi güncellenemedi.");
+      return false;
+    }
+  };
+
   const createUser = async () => {
     try {
       if (!formFullName.trim()) {
@@ -747,9 +792,9 @@ return matchesSearch && matchesRole && matchesStatus;
               lineHeight: 1.7,
             }}
           >
-          {adminRole === "company_admin"
-  ? "Kendi firmanıza ait yetkili alt kullanıcıları yönetin. App kullanıcıları bu ekranda filtrelenebilir. Eğitim katılımcıları operasyon tarafında ayrı değerlendirilir."
-  : "Web ve app kullanıcılarını yönetin. Rol filtresindeki 'App Kullanıcıları' seçeneği ile saha/operasyon kullanıcılarını toplu görebilirsiniz."}
+            {adminRole === "company_admin"
+              ? "Kendi firmanıza ait yetkili alt kullanıcıları yönetin. App kullanıcıları bu ekranda filtrelenebilir. Eğitim katılımcıları operasyon tarafında ayrı değerlendirilir."
+              : "Web ve app kullanıcılarını yönetin. Rol filtresindeki 'App Kullanıcıları' seçeneği ile saha/operasyon kullanıcılarını toplu görebilirsiniz."}
           </p>
         </div>
 
@@ -1130,6 +1175,31 @@ return matchesSearch && matchesRole && matchesStatus;
                         <option value="super_admin">Süper Admin</option>
                       </select>
 
+                      <select
+                        value={u.app_user_type || ""}
+                        onChange={async (e) => {
+                          const newType = e.target.value;
+                          const saved = await updateAppUserType(u.id, newType);
+                          if (!saved) return;
+                          await loadUsers();
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 8,
+                          border: `1px solid ${BRAND.border}`,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          background: "#fff",
+                          marginTop: 6,
+                        }}
+                      >
+                        <option value="">App Kullanıcısı Değil</option>
+                        <option value="isg_uzmani">İSG Uzmanı</option>
+                        <option value="hekim">İşyeri Hekimi</option>
+                        <option value="dsp">DSP</option>
+                        <option value="diger">Diğer Kullanıcı</option>
+                      </select>
+
                       <div
                         style={{
                           width: "100%",
@@ -1139,20 +1209,20 @@ return matchesSearch && matchesRole && matchesStatus;
                           fontWeight: 600,
                         }}
                       >
-                        {u.role === "super_admin"
-                          ? "Tam sistem yetkisi"
-                          : u.role === "company_admin"
-                          ? "Firma bazlı yönetim yetkisi"
-                          : u.role === "operator"
-                          ? "Operasyon / sınırlı erişim"
-                          : "Rol tanımı yok"}
+                        {getRoleDescription(u.role, u.app_user_type)}
                       </div>
 
-{APP_USER_ROLES.includes(u.role) && (
-  <span style={badgeStyle("#dbeafe", "#93c5fd", "#1d4ed8")}>
-    App Kullanıcısı
-  </span>
-)}
+                      {u.app_user_type ? (
+                        <span style={badgeStyle("#dbeafe", "#93c5fd", "#1d4ed8")}>
+                          App Kullanıcısı
+                        </span>
+                      ) : null}
+
+                      {u.app_user_type ? (
+                        <span style={badgeStyle("#f3e8ff", "#d8b4fe", "#7e22ce")}>
+                          {getAppUserTypeLabel(u.app_user_type)}
+                        </span>
+                      ) : null}
 
                       <span
                         style={
