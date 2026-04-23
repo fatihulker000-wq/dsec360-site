@@ -80,7 +80,7 @@ export async function GET() {
     const { data: usersData, error: userError } = await supabase
       .from("users")
       .select("id, full_name, email, role, is_active, created_at, app_user_type")
-      .order("created_at", { ascending: false });
+      .order("full_name", { ascending: false, nullsFirst: false });
 
     if (userError) {
       console.error("users error:", userError);
