@@ -37,8 +37,14 @@ type UserRow = {
   full_name: string;
   email: string;
   company: string;
+  company_id: string;
   role: string;
   is_active: boolean;
+};
+
+type CompanyRow = {
+  id: string;
+  name: string;
 };
 
 type TrainingRow = {
@@ -143,7 +149,7 @@ function badgeStyle(
 export default function AdminTrainingPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [trainings, setTrainings] = useState<TrainingRow[]>([]);
-  const [companies, setCompanies] = useState<string[]>([]);
+  const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [trainingId, setTrainingId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -163,6 +169,14 @@ const [previewLoading, setPreviewLoading] = useState(false);
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [bulkResult, setBulkResult] = useState<string>("");
+  const [showUserModal, setShowUserModal] = useState(false);
+const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+const [formFullName, setFormFullName] = useState("");
+const [formEmail, setFormEmail] = useState("");
+const [formPassword, setFormPassword] = useState("");
+const [formCompanyId, setFormCompanyId] = useState("");
+const [formIsActive, setFormIsActive] = useState(true);
+const [savingUser, setSavingUser] = useState(false);
 
   const loadAll = async () => {
     try {
@@ -215,8 +229,9 @@ const [previewLoading, setPreviewLoading] = useState(false);
             full_name: (u.full_name || "Adsız Kullanıcı").trim(),
             email: (u.email || "-").trim(),
             company: buildCompanyLabel(u),
-            role: getRoleLabel(u.role),
-            is_active: Boolean(u.is_active),
+company_id: String(u.company_id || ""),
+role: getRoleLabel(u.role),
+is_active: Boolean(u.is_active),
           }))
         : [];
 
@@ -241,13 +256,16 @@ const [previewLoading, setPreviewLoading] = useState(false);
           }))
         : [];
 
-      const normalizedCompanies: string[] = Array.isArray(companiesJson?.data)
-        ? companiesJson.data
-            .filter((c: CompanyApiRow) => (c?.is_active ?? true) === true)
-            .map((c: CompanyApiRow) => String(c?.name || "").trim())
-            .filter(Boolean)
-            .sort((a: string, b: string) => a.localeCompare(b, "tr"))
-        : [];
+      const normalizedCompanies: CompanyRow[] = Array.isArray(companiesJson?.data)
+  ? companiesJson.data
+      .filter((c: CompanyApiRow) => (c?.is_active ?? true) === true)
+      .map((c: CompanyApiRow) => ({
+        id: String(c?.id || "").trim(),
+        name: String(c?.name || "").trim(),
+      }))
+      .filter((c: CompanyRow) => c.id && c.name)
+      .sort((a: CompanyRow, b: CompanyRow) => a.name.localeCompare(b.name, "tr"))
+  : [];
 
       setUsers(normalizedUsers);
       setTrainings(normalizedTrainings);
@@ -543,6 +561,170 @@ return;
     alert("Toplu yükleme sırasında hata oluştu.");
   } finally {
     setBulkUploading(false);
+  }
+};
+
+const resetUserForm = () => {
+  setEditingUser(null);
+  setFormFullName("");
+  setFormEmail("");
+  setFormPassword("");
+  setFormCompanyId("");
+  setFormIsActive(true);
+};
+
+const openCreateUserModal = () => {
+  resetUserForm();
+  setShowUserModal(true);
+};
+
+const openEditUserModal = (user: UserRow) => {
+  setEditingUser(user);
+  setFormFullName(user.full_name);
+  setFormEmail(user.email === "-" ? "" : user.email);
+  setFormPassword("");
+  setFormCompanyId(user.company_id || "");
+  setFormIsActive(user.is_active);
+  setShowUserModal(true);
+};
+
+const saveTrainingUser = async () => {
+  if (!formFullName.trim()) {
+    alert("Ad soyad zorunlu.");
+    return;
+  }
+
+  if (!formEmail.trim()) {
+    alert("Email zorunlu.");
+    return;
+  }
+
+  if (!editingUser && !formPassword.trim()) {
+    alert("Yeni kullanıcı için şifre zorunlu.");
+    return;
+  }
+
+  if (!formCompanyId.trim()) {
+    alert("Firma seçimi zorunlu.");
+    return;
+  }
+
+  try {
+    setSavingUser(true);
+
+    const endpoint = editingUser
+      ? "/api/admin/users/update"
+      : "/api/admin/users/create";
+
+    const body = editingUser
+      ? {
+          userId: editingUser.id,
+          full_name: formFullName.trim(),
+          email: formEmail.trim().toLowerCase(),
+          password: formPassword.trim() || null,
+          role: "training_user",
+          company_id: formCompanyId,
+          is_active: formIsActive,
+        }
+      : {
+          full_name: formFullName.trim(),
+          email: formEmail.trim().toLowerCase(),
+          password: formPassword.trim(),
+          role: "training_user",
+          company_id: formCompanyId,
+          is_active: formIsActive,
+        };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Kullanıcı kaydedilemedi.");
+      return;
+    }
+
+    setShowUserModal(false);
+    resetUserForm();
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    alert("Kullanıcı kaydedilirken hata oluştu.");
+  } finally {
+    setSavingUser(false);
+  }
+};
+
+const toggleUserActive = async (user: UserRow) => {
+  try {
+    const res = await fetch("/api/admin/users/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        userId: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        password: null,
+        role: "training_user",
+        company_id: user.company_id,
+        is_active: !user.is_active,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Durum güncellenemedi.");
+      return;
+    }
+
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    alert("Durum güncellenirken hata oluştu.");
+  }
+};
+
+const deleteTrainingUser = async (user: UserRow) => {
+  const ok = window.confirm(
+    `${user.full_name} isimli katılımcıyı silmek istediğine emin misin?`
+  );
+
+  if (!ok) return;
+
+  try {
+    const res = await fetch("/api/admin/users/delete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        userId: user.id,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Kullanıcı silinemedi.");
+      return;
+    }
+
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    alert("Kullanıcı silinirken hata oluştu.");
   }
 };
 
@@ -883,11 +1065,11 @@ return;
               }}
             >
               <option value="all">Tüm Firmalar</option>
-              {companies.map((company) => (
-                <option key={company} value={company}>
-                  {company}
-                </option>
-              ))}
+             {companies.map((company) => (
+  <option key={company.name} value={company.name}>
+    {company.name}
+  </option>
+))}
             </select>
           </div>
         </div>
@@ -1173,6 +1355,22 @@ return;
               Çalışan Seçimi
             </h2>
          
+          <button
+  type="button"
+  onClick={openCreateUserModal}
+  style={{
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 14px",
+    background: 'linear-gradient(135deg, ${BRAND.redDark}, ${BRAND.red})',
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  }}
+>
+  + Yeni Katılımcı
+</button>
+
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <label
                 style={{
@@ -1288,6 +1486,73 @@ return;
                         <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
                           {u.role}
                         </span>
+
+<div
+  style={{
+    width: "100%",
+    marginTop: 10,
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  }}
+>
+  <button
+    type="button"
+    onClick={(e) => {
+      e.preventDefault();
+      openEditUserModal(u);
+    }}
+    style={{
+      border: "1px solid #d1d5db",
+      background: "#fff",
+      borderRadius: 10,
+      padding: "8px 12px",
+      fontWeight: 800,
+      cursor: "pointer",
+    }}
+  >
+    Düzenle
+  </button>
+
+  <button
+    type="button"
+    onClick={(e) => {
+      e.preventDefault();
+      void toggleUserActive(u);
+    }}
+    style={{
+      border: "1px solid #fde68a",
+      background: "#fffbeb",
+      color: "#92400e",
+      borderRadius: 10,
+      padding: "8px 12px",
+      fontWeight: 800,
+      cursor: "pointer",
+    }}
+  >
+    {u.is_active ? "Pasife Al" : "Aktif Yap"}
+  </button>
+
+  <button
+    type="button"
+    onClick={(e) => {
+      e.preventDefault();
+      void deleteTrainingUser(u);
+    }}
+    style={{
+      border: "1px solid #fecaca",
+      background: "#fff5f5",
+      color: "#b91c1c",
+      borderRadius: 10,
+      padding: "8px 12px",
+      fontWeight: 800,
+      cursor: "pointer",
+    }}
+  >
+    Sil
+  </button>
+</div>
+
                       </div>
 
 <div style={{
@@ -1613,6 +1878,181 @@ return;
             </div>
           </div>
         ) : null}
+        {showUserModal && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15,23,42,0.55)",
+              zIndex: 9999,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: 520,
+                background: "#fff",
+                borderRadius: 22,
+                padding: 22,
+                boxShadow: "0 30px 90px rgba(0,0,0,0.28)",
+                border: `1px solid ${BRAND.border}`,
+              }}
+            >
+              <div style={{ marginBottom: 16 }}>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: "#fee2e2",
+                    color: BRAND.redDark,
+                    fontSize: 12,
+                    fontWeight: 900,
+                    marginBottom: 10,
+                  }}
+                >
+                  Eğitim Katılımcısı
+                </div>
+
+                <h3 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
+                  {editingUser ? "Katılımcıyı Düzenle" : "Yeni Katılımcı Ekle"}
+                </h3>
+
+                <p style={{ marginTop: 6, marginBottom: 0, color: BRAND.muted, fontSize: 13 }}>
+                  Katılımcı mutlaka bir firmaya bağlanmalıdır.
+                </p>
+              </div>
+
+              <div style={{ display: "grid", gap: 12 }}>
+                <input
+                  value={formFullName}
+                  onChange={(e) => setFormFullName(e.target.value)}
+                  placeholder="Ad Soyad"
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: `1px solid ${BRAND.border}`,
+                  }}
+                />
+
+                <input
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  placeholder="Email"
+                  type="email"
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: `1px solid ${BRAND.border}`,
+                  }}
+                />
+
+                <input
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                  placeholder={editingUser ? "Yeni şifre / boş bırakılırsa değişmez" : "Şifre"}
+                  type="password"
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: `1px solid ${BRAND.border}`,
+                  }}
+                />
+
+                <select
+                  value={formCompanyId}
+                  onChange={(e) => setFormCompanyId(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: `1px solid ${BRAND.border}`,
+                    background: "#fff",
+                  }}
+                >
+                  <option value="">Firma seç</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 14,
+                    fontWeight: 800,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={formIsActive}
+                    onChange={(e) => setFormIsActive(e.target.checked)}
+                  />
+                  Aktif kullanıcı
+                </label>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 18,
+                  display: "flex",
+                  gap: 10,
+                  justifyContent: "flex-end",
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserModal(false);
+                    resetUserForm();
+                  }}
+                  style={{
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "11px 16px",
+                    background: "#e5e7eb",
+                    color: "#111827",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Vazgeç
+                </button>
+
+                <button
+                  type="button"
+                  onClick={saveTrainingUser}
+                  disabled={savingUser}
+                  style={{
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "11px 16px",
+                    background: savingUser
+                      ? "#9ca3af"
+                      : `linear-gradient(135deg, ${BRAND.redDark}, ${BRAND.red})`,
+                    color: "#fff",
+                    fontWeight: 900,
+                    cursor: savingUser ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {savingUser ? "Kaydediliyor..." : "Kaydet"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
