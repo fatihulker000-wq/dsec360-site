@@ -155,6 +155,10 @@ export default function AdminTrainingPage() {
     useState<TrainingRow | null>(null);
   const [assignSummary, setAssignSummary] = useState<AssignResponse | null>(null);
 
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string>("");
+
   const loadAll = async () => {
     try {
       setError("");
@@ -392,6 +396,65 @@ export default function AdminTrainingPage() {
       setAssigning(false);
     }
   };
+  
+  const downloadTemplate = () => {
+  const csv =
+    "full_name,email,password,company_id,is_active\n" +
+    "Ali Veli,ali.veli@mail.com,123456,FIRMA_ID,true\n";
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "dsec-egitim-katilimci-sablon.csv";
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+
+const uploadBulkParticipants = async () => {
+  if (!bulkFile) {
+    alert("Önce CSV dosyası seç.");
+    return;
+  }
+
+  try {
+    setBulkUploading(true);
+    setBulkResult("");
+
+    const formData = new FormData();
+    formData.append("file", bulkFile);
+
+    const res = await fetch("/api/admin/training-users/bulk-upload", {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json?.error || "Toplu yükleme başarısız.");
+      setBulkResult(json?.error || "Toplu yükleme başarısız.");
+      return;
+    }
+
+    setBulkResult(
+      `Yükleme tamamlandı. Eklenen: ${json.insertedCount || 0}, Atlanan: ${
+        json.skippedCount || 0
+      }`
+    );
+
+    setBulkFile(null);
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    alert("Toplu yükleme sırasında hata oluştu.");
+  } finally {
+    setBulkUploading(false);
+  }
+};
 
   return (
     <main
@@ -517,6 +580,51 @@ export default function AdminTrainingPage() {
             marginBottom: 20,
           }}
         >
+
+        <div style={{ ...cardStyle(), marginBottom: 20 }}>
+
+  <div style={{ fontWeight: 900, marginBottom: 12 }}>
+    Eğitim Performans Analizi
+  </div>
+
+  <div style={{ fontSize: 28, fontWeight: 900 }}>
+    %{Math.round(
+      (trainingTotals.totalCompleted /
+        (trainingTotals.totalAssigned || 1)) *
+        100
+    )}
+  </div>
+
+  <div
+    style={{
+      height: 10,
+      background: "#eee",
+      borderRadius: 10,
+      marginTop: 10,
+    }}
+  >
+    <div
+      style={{
+        width: `${
+          (trainingTotals.totalCompleted /
+            (trainingTotals.totalAssigned || 1)) *
+          100
+        }%`,
+        background: "#16a34a",
+        height: "100%",
+        borderRadius: 10,
+      }}
+    />
+  </div>
+
+  <div style={{ marginTop: 10, fontSize: 13 }}>
+    Tamamlanan: {trainingTotals.totalCompleted}  
+    Devam: {trainingTotals.totalInProgress}  
+    Başlamayan: {trainingTotals.totalNotStarted}
+  </div>
+
+</div>
+
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Çalışan</div>
             <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
@@ -695,6 +803,88 @@ export default function AdminTrainingPage() {
         </div>
 
         <div style={{ ...cardStyle(), marginBottom: 20 }}>
+  <div style={{ fontWeight: 900, marginBottom: 10 }}>
+    Toplu Katılımcı Yükleme
+  </div>
+
+  <div style={{ ...cardStyle(), marginBottom: 20 }}>
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      gap: 12,
+      alignItems: "center",
+      flexWrap: "wrap",
+      marginBottom: 14,
+    }}
+  >
+    <div>
+      <div style={{ fontWeight: 900, fontSize: 18 }}>
+        Toplu Katılımcı Yükleme
+      </div>
+      <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
+        CSV şablonu indir, çalışanları doldur ve toplu olarak eğitim katılımcısı oluştur.
+      </div>
+    </div>
+
+    <button
+      type="button"
+      onClick={downloadTemplate}
+      style={{
+        border: "none",
+        borderRadius: 10,
+        padding: "10px 14px",
+        background: "#111827",
+        color: "#fff",
+        fontWeight: 800,
+        cursor: "pointer",
+      }}
+    >
+      Şablon İndir
+    </button>
+  </div>
+
+  <input
+    type="file"
+    accept=".csv"
+    onChange={(e) => setBulkFile(e.target.files?.[0] || null)}
+  />
+
+  <button
+    type="button"
+    onClick={uploadBulkParticipants}
+    disabled={!bulkFile || bulkUploading}
+    style={{
+      marginTop: 12,
+      border: "none",
+      borderRadius: 10,
+      padding: "10px 14px",
+      background: !bulkFile || bulkUploading ? "#9ca3af" : "#16a34a",
+      color: "#fff",
+      fontWeight: 800,
+      cursor: !bulkFile || bulkUploading ? "not-allowed" : "pointer",
+    }}
+  >
+    {bulkUploading ? "Yükleniyor..." : "Toplu Yükle"}
+  </button>
+
+  <div style={{ marginTop: 10, fontSize: 12, color: BRAND.muted }}>
+    Format: full_name, email, password, company_id, is_active
+  </div>
+
+  {bulkResult ? (
+    <div style={{ marginTop: 10, fontSize: 13, fontWeight: 800, color: "#166534" }}>
+      {bulkResult}
+    </div>
+  ) : null}
+</div>
+
+  <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
+    Format: ad soyad | email | firma
+  </div>
+</div>
+
+        <div style={{ ...cardStyle(), marginBottom: 20 }}>
           <div
             style={{
               display: "flex",
@@ -705,9 +895,42 @@ export default function AdminTrainingPage() {
               flexWrap: "wrap",
             }}
           >
+          
             <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
               Çalışan Seçimi
             </h2>
+
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+  
+  <button
+    style={{
+      border: "none",
+      borderRadius: 10,
+      padding: "10px 14px",
+      background: "#16a34a",
+      color: "#fff",
+      fontWeight: 800,
+      cursor: "pointer",
+    }}
+  >
+    + Yeni Katılımcı
+  </button>
+
+  <button
+    style={{
+      border: "none",
+      borderRadius: 10,
+      padding: "10px 14px",
+      background: "#2563eb",
+      color: "#fff",
+      fontWeight: 800,
+      cursor: "pointer",
+    }}
+  >
+    Excel Yükle
+  </button>
+
+</div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <label

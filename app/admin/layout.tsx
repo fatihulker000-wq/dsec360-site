@@ -146,7 +146,7 @@ export default function AdminLayout({
     const items = [
       { name: "Dashboard", href: "/admin/dashboard" },
       { name: "Eğitimler", href: "/admin/trainings" },
-      { name: "Eğitim Katılımcıları", href: "/admin/participants" },
+  // { name: "Eğitim Katılımcıları", href: "/admin/participants" },
       { name: "Sistem Kullanıcıları", href: "/admin/users" },
       { name: "Raporlar", href: "/admin/reports" },
       { name: "ÇBS Yönetimi", href: "/admin/cbs" },
