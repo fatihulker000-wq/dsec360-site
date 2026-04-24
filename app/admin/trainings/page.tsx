@@ -154,6 +154,11 @@ export default function AdminTrainingPage() {
   const [selectedTrainingInfo, setSelectedTrainingInfo] =
     useState<TrainingRow | null>(null);
   const [assignSummary, setAssignSummary] = useState<AssignResponse | null>(null);
+  const [bulkErrors, setBulkErrors] = useState<string[]>([]);
+  const [previewRows, setPreviewRows] = useState<any[]>([]);
+const [previewErrors, setPreviewErrors] = useState<Record<number, string[]>>({});
+const [previewReady, setPreviewReady] = useState(false);
+const [previewLoading, setPreviewLoading] = useState(false);
 
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
@@ -413,10 +418,94 @@ export default function AdminTrainingPage() {
   URL.revokeObjectURL(url);
 };
 
+const parseFileForPreview = async (file: File) => {
+  setPreviewLoading(true);
+  setPreviewRows([]);
+  setPreviewErrors({});
+  setPreviewReady(false);
+
+  try {
+    let rows: any[] = [];
+
+    if (file.name.endsWith(".csv")) {
+      const text = await file.text();
+      const lines = text.replace(/\r/g, "").split("\n").filter(Boolean);
+      const headers = lines[0].split(",");
+
+      rows = lines.slice(1).map((line) => {
+        const values = line.split(",");
+        const obj: any = {};
+        headers.forEach((h, i) => {
+          obj[h.trim()] = values[i]?.trim() || "";
+        });
+        return obj;
+      });
+    } else if (file.name.endsWith(".xlsx")) {
+      const XLSX = await import("xlsx");
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(sheet);
+    }
+
+    // 🔥 VALIDATION
+    const errors: Record<number, string[]> = {};
+
+    rows.forEach((row, index) => {
+      const rowErrors: string[] = [];
+
+      if (!row.full_name) rowErrors.push("Ad soyad eksik");
+      if (!row.email) rowErrors.push("Email eksik");
+      if (!row.password) rowErrors.push("Şifre eksik");
+      if (!row.company_id) rowErrors.push("Firma eksik");
+
+      if (rowErrors.length) {
+        errors[index] = rowErrors;
+      }
+    });
+
+    setPreviewRows(rows);
+    setPreviewErrors(errors);
+    setPreviewReady(true);
+
+  } catch (err) {
+    console.error(err);
+    alert("Dosya okunamadı");
+  } finally {
+    setPreviewLoading(false);
+  }
+};
+
 const uploadBulkParticipants = async () => {
   if (!bulkFile) {
-    alert("Önce CSV dosyası seç.");
+    alert("Önce CSV veya Excel dosyası seç.");
     return;
+  }
+
+  const allowedTypes = [
+    "text/csv",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ];
+
+  const isAllowedByName =
+    bulkFile.name.endsWith(".csv") || bulkFile.name.endsWith(".xlsx");
+
+  if (!allowedTypes.includes(bulkFile.type) && !isAllowedByName) {
+    alert("Sadece CSV veya Excel (.xlsx) dosyası yükleyebilirsin.");
+    return;
+  }
+
+  if (!previewReady) {
+    alert("Önce dosyayı seç ve önizlemenin oluşmasını bekle.");
+    return;
+  }
+
+  if (Object.keys(previewErrors).length > 0) {
+    const ok = window.confirm(
+      "Dosyada hatalı satırlar var. Yine de yüklemeye devam etmek istiyor musun?"
+    );
+
+    if (!ok) return;
   }
 
   try {
@@ -437,7 +526,8 @@ const uploadBulkParticipants = async () => {
     if (!res.ok) {
       alert(json?.error || "Toplu yükleme başarısız.");
       setBulkResult(json?.error || "Toplu yükleme başarısız.");
-      return;
+setBulkErrors(json.errors || []);
+return;
     }
 
     setBulkResult(
@@ -801,13 +891,8 @@ const uploadBulkParticipants = async () => {
             </select>
           </div>
         </div>
-
-        <div style={{ ...cardStyle(), marginBottom: 20 }}>
-  <div style={{ fontWeight: 900, marginBottom: 10 }}>
-    Toplu Katılımcı Yükleme
-  </div>
-
-  <div style={{ ...cardStyle(), marginBottom: 20 }}>
+      
+     <div style={{ ...cardStyle(), marginBottom: 20 }}>
   <div
     style={{
       display: "flex",
@@ -823,7 +908,7 @@ const uploadBulkParticipants = async () => {
         Toplu Katılımcı Yükleme
       </div>
       <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
-        CSV şablonu indir, çalışanları doldur ve toplu olarak eğitim katılımcısı oluştur.
+        CSV veya Excel dosyası yükleyerek eğitim katılımcılarını toplu oluştur.
       </div>
     </div>
 
@@ -844,45 +929,158 @@ const uploadBulkParticipants = async () => {
     </button>
   </div>
 
-  <input
-    type="file"
-    accept=".csv"
-    onChange={(e) => setBulkFile(e.target.files?.[0] || null)}
-  />
+  <div
+    onDragOver={(e) => e.preventDefault()}
+    onDrop={(e) => {
+      e.preventDefault();
+      const file = e.dataTransfer.files?.[0];
+
+      if (file) {
+        setBulkFile(file);
+        void parseFileForPreview(file);
+      }
+    }}
+    style={{
+      border: "2px dashed #cbd5e1",
+      padding: 20,
+      borderRadius: 12,
+      textAlign: "center",
+      background: "#f8fafc",
+      cursor: "pointer",
+    }}
+  >
+    <div style={{ fontWeight: 800 }}>
+      Dosyayı buraya sürükle bırak
+    </div>
+
+    <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
+      veya dosya seç — CSV / XLSX
+    </div>
+
+    <input
+      type="file"
+      accept=".csv,.xlsx"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+
+        if (file) {
+          setBulkFile(file);
+          void parseFileForPreview(file);
+        }
+      }}
+      style={{ marginTop: 10 }}
+    />
+  </div>
 
   <button
     type="button"
     onClick={uploadBulkParticipants}
-    disabled={!bulkFile || bulkUploading}
+    disabled={!bulkFile || bulkUploading || previewLoading}
     style={{
       marginTop: 12,
       border: "none",
       borderRadius: 10,
       padding: "10px 14px",
-      background: !bulkFile || bulkUploading ? "#9ca3af" : "#16a34a",
+      background:
+        !bulkFile || bulkUploading || previewLoading ? "#9ca3af" : "#16a34a",
       color: "#fff",
       fontWeight: 800,
-      cursor: !bulkFile || bulkUploading ? "not-allowed" : "pointer",
+      cursor:
+        !bulkFile || bulkUploading || previewLoading ? "not-allowed" : "pointer",
     }}
   >
-    {bulkUploading ? "Yükleniyor..." : "Toplu Yükle"}
+    {previewLoading
+      ? "Önizleme hazırlanıyor..."
+      : bulkUploading
+      ? "Yükleniyor..."
+      : "Toplu Yükle"}
   </button>
+
+  {bulkErrors.length > 0 && (
+    <button
+      type="button"
+      onClick={() => {
+        const blob = new Blob([bulkErrors.join("\n")], {
+          type: "text/plain;charset=utf-8",
+        });
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "hata-raporu.txt";
+        a.click();
+        URL.revokeObjectURL(url);
+      }}
+      style={{
+        marginTop: 10,
+        marginLeft: 8,
+        padding: "8px 12px",
+        background: "#b91c1c",
+        color: "#fff",
+        border: "none",
+        borderRadius: 8,
+        fontWeight: 700,
+        cursor: "pointer",
+      }}
+    >
+      Hata Raporu İndir
+    </button>
+  )}
 
   <div style={{ marginTop: 10, fontSize: 12, color: BRAND.muted }}>
     Format: full_name, email, password, company_id, is_active
   </div>
 
   {bulkResult ? (
-    <div style={{ marginTop: 10, fontSize: 13, fontWeight: 800, color: "#166534" }}>
+    <div
+      style={{
+        marginTop: 10,
+        fontSize: 13,
+        fontWeight: 800,
+        color: bulkErrors.length > 0 ? "#b91c1c" : "#166534",
+      }}
+    >
       {bulkResult}
     </div>
   ) : null}
 </div>
 
-  <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
-    Format: ad soyad | email | firma
+{previewReady && (
+  <div style={{ ...cardStyle(), marginBottom: 20 }}>
+    <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 10 }}>
+      Yükleme Önizleme
+    </div>
+
+    <div style={{ maxHeight: 300, overflow: "auto", fontSize: 13 }}>
+      {previewRows.map((row, i) => {
+        const hasError = previewErrors[i];
+
+        return (
+          <div
+            key={i}
+            style={{
+              padding: 10,
+              borderBottom: "1px solid #eee",
+              background: hasError ? "#fee2e2" : "#f0fdf4",
+            }}
+          >
+            <div><b>{row.full_name}</b> - {row.email}</div>
+
+            {hasError && (
+              <div style={{ color: "#b91c1c", marginTop: 4 }}>
+                {hasError.join(", ")}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+
+    <div style={{ marginTop: 10, fontSize: 12 }}>
+      Toplam: {previewRows.length} | Hatalı: {Object.keys(previewErrors).length}
+    </div>
   </div>
-</div>
+)}
 
         <div style={{ ...cardStyle(), marginBottom: 20 }}>
           <div
@@ -896,42 +1094,12 @@ const uploadBulkParticipants = async () => {
             }}
           >
           
+
+
             <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
               Çalışan Seçimi
             </h2>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-  
-  <button
-    style={{
-      border: "none",
-      borderRadius: 10,
-      padding: "10px 14px",
-      background: "#16a34a",
-      color: "#fff",
-      fontWeight: 800,
-      cursor: "pointer",
-    }}
-  >
-    + Yeni Katılımcı
-  </button>
-
-  <button
-    style={{
-      border: "none",
-      borderRadius: 10,
-      padding: "10px 14px",
-      background: "#2563eb",
-      color: "#fff",
-      fontWeight: 800,
-      cursor: "pointer",
-    }}
-  >
-    Excel Yükle
-  </button>
-
-</div>
-
+         
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <label
                 style={{
