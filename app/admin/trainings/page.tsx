@@ -938,7 +938,7 @@ const deleteTrainingUser = async (user: UserRow) => {
             ...cardStyle(),
             marginBottom: 20,
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
             gap: 16,
           }}
         >
@@ -1031,86 +1031,87 @@ const deleteTrainingUser = async (user: UserRow) => {
           </div>
         </div>
 
-        <div
-          style={{
-            ...cardStyle(),
-            marginBottom: 20,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 14,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-              Ara
-            </div>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Ad soyad, e-posta, rol veya firma ara..."
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                borderRadius: 12,
-                border: `1px solid ${BRAND.border}`,
-                fontSize: 14,
-              }}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-              Firma
-            </div>
-            <select
-              value={companyFilter}
-              onChange={(e) => setCompanyFilter(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                borderRadius: 12,
-                border: `1px solid ${BRAND.border}`,
-                background: "#fff",
-                fontSize: 14,
-              }}
-            >
-              <option value="all">Tüm Firmalar</option>
-             {companies.map((company) => (
-  <option key={company.name} value={company.name}>
-    {company.name}
-  </option>
-))}
-            </select>
-          </div>
-
-          <div>
-          
-
-  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-    Durum
+       
+{/* FİLTRELER */}
+<div
+  style={{
+    ...cardStyle(),
+    marginBottom: 20,
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+    gap: 14,
+  }}
+>
+  <div>
+    <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+      Ara
+    </div>
+    <input
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+      placeholder="Ad soyad, e-posta, rol veya firma ara..."
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        fontSize: 14,
+      }}
+    />
   </div>
 
-  <select
-    value={statusFilter}
-    onChange={(e) =>
-      setStatusFilter(e.target.value as "all" | "active" | "passive")
-    }
-    style={{
-      width: "100%",
-      padding: "12px 14px",
-      borderRadius: 12,
-      border: `1px solid ${BRAND.border}`,
-      background: "#fff",
-      fontSize: 14,
-    }}
-  >
-    <option value="all">Tüm Kullanıcılar</option>
-    <option value="active">Aktif Kullanıcılar</option>
-    <option value="passive">Pasif Kullanıcılar</option>
-  </select>
+  <div>
+    <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+      Firma
+    </div>
+    <select
+      value={companyFilter}
+      onChange={(e) => setCompanyFilter(e.target.value)}
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        background: "#fff",
+        fontSize: 14,
+      }}
+    >
+      <option value="all">Tüm Firmalar</option>
+      {companies.map((company) => (
+        <option key={company.name} value={company.name}>
+          {company.name}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  <div>
+    <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+      Durum
+    </div>
+    <select
+      value={statusFilter}
+      onChange={(e) =>
+        setStatusFilter(e.target.value as "all" | "active" | "passive")
+      }
+      style={{
+        width: "100%",
+        padding: "12px 14px",
+        borderRadius: 12,
+        border: `1px solid ${BRAND.border}`,
+        background: "#fff",
+        fontSize: 14,
+      }}
+    >
+      <option value="all">Tüm Kullanıcılar</option>
+      <option value="active">Aktif Kullanıcılar</option>
+      <option value="passive">Pasif Kullanıcılar</option>
+    </select>
+  </div>
 </div>
-      
-     <div style={{ ...cardStyle(), marginBottom: 20 }}>
+
+{/* TOPLU YÜKLEME */}
+<div style={{ ...cardStyle(), marginBottom: 20 }}>
   <div
     style={{
       display: "flex",
@@ -1214,37 +1215,6 @@ const deleteTrainingUser = async (user: UserRow) => {
       : "Toplu Yükle"}
   </button>
 
-  {bulkErrors.length > 0 && (
-    <button
-      type="button"
-      onClick={() => {
-        const blob = new Blob([bulkErrors.join("\n")], {
-          type: "text/plain;charset=utf-8",
-        });
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "hata-raporu.txt";
-        a.click();
-        URL.revokeObjectURL(url);
-      }}
-      style={{
-        marginTop: 10,
-        marginLeft: 8,
-        padding: "8px 12px",
-        background: "#b91c1c",
-        color: "#fff",
-        border: "none",
-        borderRadius: 8,
-        fontWeight: 700,
-        cursor: "pointer",
-      }}
-    >
-      Hata Raporu İndir
-    </button>
-  )}
-
   <div style={{ marginTop: 10, fontSize: 12, color: BRAND.muted }}>
     Format: full_name, email, password, company_id, is_active
   </div>
@@ -1282,7 +1252,9 @@ const deleteTrainingUser = async (user: UserRow) => {
               background: hasError ? "#fee2e2" : "#f0fdf4",
             }}
           >
-            <div><b>{row.full_name}</b> - {row.email}</div>
+            <div>
+              <b>{row.full_name}</b> - {row.email}
+            </div>
 
             {hasError && (
               <div style={{ color: "#b91c1c", marginTop: 4 }}>
@@ -1300,6 +1272,7 @@ const deleteTrainingUser = async (user: UserRow) => {
   </div>
 )}
 
+
         <div style={{ ...cardStyle(), marginBottom: 20 }}>
           <div
             style={{
@@ -1313,9 +1286,31 @@ const deleteTrainingUser = async (user: UserRow) => {
           >
           
      
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
-              Çalışan Seçimi
-            </h2>
+            <div>
+  <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
+    Çalışan Yönetimi ve Seçimi
+  </h2>
+
+  <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
+    Çalışan ekle, düzenle, aktif/pasif yönet, sil ve eğitim ataması yap.
+  </div>
+</div>
+
+<button
+  type="button"
+  onClick={openCreateUserModal}
+  style={{
+    border: "none",
+    borderRadius: 12,
+    padding: "11px 15px",
+    background: "#16a34a",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  }}
+>
+  + Yeni Çalışan
+</button>
          
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <label
@@ -1361,7 +1356,7 @@ const deleteTrainingUser = async (user: UserRow) => {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
                 gap: 14,
               }}
             >
@@ -1918,7 +1913,6 @@ const deleteTrainingUser = async (user: UserRow) => {
           </div>
         )}
       </div>
-      </div>
-    </main>
+      </main>
   );
 }
