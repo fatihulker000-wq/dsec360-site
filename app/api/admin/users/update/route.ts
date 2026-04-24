@@ -60,7 +60,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email zorunlu." }, { status: 400 });
     }
 
-    const allowedRoles = ["operator", "company_admin", "super_admin", "training_user"];
+   const allowedRoles = [
+  "operator",
+  "company_admin",
+  "super_admin",
+  "training_user",
+];
 
 // 🔴 TRAINING USER = FİRMA ZORUNLU
 if (role === "training_user" && !company_id) {
