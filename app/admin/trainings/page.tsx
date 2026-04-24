@@ -97,7 +97,7 @@ function buildCompanyLabel(user: UserApiRow) {
     return user.company.trim();
   }
 
-  return "Firma atanmamış";
+  return "❗ Firma yok";
 }
 
 function parseTopicsCount(topicsText?: string | null) {
@@ -1094,7 +1094,80 @@ return;
             }}
           >
           
+          {/* 🔥 YENİ: ÇALIŞAN YÖNETİM PANELİ */}
+<div style={{ ...cardStyle(), marginBottom: 20 }}>
 
+  <div style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 14
+  }}>
+    
+    <div style={{ fontSize: 18, fontWeight: 900 }}>
+      Çalışan Yönetimi
+    </div>
+
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+
+      {/* MANUEL EKLE */}
+      <button
+        onClick={() => {
+          const name = prompt("Ad Soyad");
+          const email = prompt("Email");
+          const company = prompt("Firma");
+
+          if (!name || !email || !company) return;
+
+          fetch("/api/admin/users/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              full_name: name,
+              email,
+              company_name: company
+            })
+          }).then(() => loadAll());
+        }}
+        style={{
+          background: "#16a34a",
+          color: "#fff",
+          border: "none",
+          padding: "10px 14px",
+          borderRadius: 10,
+          fontWeight: 800,
+          cursor: "pointer"
+        }}
+      >
+        + Yeni Çalışan
+      </button>
+
+      {/* EXCEL YÜKLE */}
+      <button
+        onClick={() => window.scrollTo({ top: 600, behavior: "smooth" })}
+        style={{
+          background: "#2563eb",
+          color: "#fff",
+          border: "none",
+          padding: "10px 14px",
+          borderRadius: 10,
+          fontWeight: 800,
+          cursor: "pointer"
+        }}
+      >
+        Excel Yükle
+      </button>
+
+    </div>
+  </div>
+
+  <div style={{ fontSize: 13, color: BRAND.muted }}>
+    Çalışan ekle, düzenle, sil ve firmaya bağla.
+  </div>
+
+</div>
 
             <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
               Çalışan Seçimi
@@ -1216,6 +1289,89 @@ return;
                           {u.role}
                         </span>
                       </div>
+
+<div style={{
+  marginTop: 10,
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap"
+}}>
+
+  {/* DÜZENLE */}
+  <button
+    onClick={() => {
+      const name = prompt("Ad Soyad", u.full_name);
+      if (!name) return;
+
+      fetch("/api/admin/users/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: u.id,
+          full_name: name
+        })
+      }).then(() => loadAll());
+    }}
+    style={{
+      background: "#f59e0b",
+      color: "#fff",
+      border: "none",
+      borderRadius: 8,
+      padding: "6px 10px",
+      cursor: "pointer"
+    }}
+  >
+    Düzenle
+  </button>
+
+  {/* AKTİF / PASİF */}
+  <button
+    onClick={() => {
+      fetch("/api/admin/users/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: u.id,
+          is_active: !u.is_active
+        })
+      }).then(() => loadAll());
+    }}
+    style={{
+      background: u.is_active ? "#b91c1c" : "#16a34a",
+      color: "#fff",
+      border: "none",
+      borderRadius: 8,
+      padding: "6px 10px",
+      cursor: "pointer"
+    }}
+  >
+    {u.is_active ? "Pasif Yap" : "Aktif Yap"}
+  </button>
+
+  {/* SİL */}
+  <button
+    onClick={() => {
+      if (!confirm("Silmek istediğine emin misin?")) return;
+
+      fetch("/api/admin/users/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: u.id })
+      }).then(() => loadAll());
+    }}
+    style={{
+      background: "#111827",
+      color: "#fff",
+      border: "none",
+      borderRadius: 8,
+      padding: "6px 10px",
+      cursor: "pointer"
+    }}
+  >
+    Sil
+  </button>
+
+</div>
                     </div>
                   </label>
                 );
