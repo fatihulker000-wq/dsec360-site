@@ -1332,23 +1332,8 @@ const deleteTrainingUser = async (user: UserRow) => {
 
       {/* MANUEL EKLE */}
       <button
-        onClick={() => {
-          const name = prompt("Ad Soyad");
-          const email = prompt("Email");
-          const company = prompt("Firma");
-
-          if (!name || !email || !company) return;
-
-          fetch("/api/admin/users/create", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              full_name: name,
-              email,
-              company_name: company
-            })
-          }).then(() => loadAll());
-        }}
+        
+        onClick={openCreateUserModal}
         style={{
           background: "#16a34a",
           color: "#fff",
