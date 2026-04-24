@@ -423,8 +423,8 @@ const updateTrainingUser = async () => {
 
 const deleteTrainingUser = async (userId: string, fullName: string) => {
   const ok = window.confirm(
-    '${fullName} isimli eğitim katılımcısını silmek istediğinize emin misiniz?'
-  );
+  '${fullName} isimli eğitim katılımcısını silmek istediğinize emin misiniz?'
+);
   if (!ok) return;
 
   try {
@@ -538,6 +538,39 @@ const toggleTrainingUserActive = async (user: UserRow) => {
       totalCompleted,
     };
   }, [trainings]);
+
+  const participantAnalytics = useMemo(() => {
+  const activeCount = users.filter((u) => u.is_active).length;
+  const passiveCount = users.filter((u) => !u.is_active).length;
+  const missingCompanyCount = users.filter((u) => !u.company_id).length;
+  const missingMailCount = users.filter((u) => !u.email || u.email === "-").length;
+
+  const completionRate =
+    trainingTotals.totalAssigned > 0
+      ? Math.round((trainingTotals.totalCompleted / trainingTotals.totalAssigned) * 100)
+      : 0;
+
+  const companyMap = new Map<string, number>();
+
+  users.forEach((u) => {
+    const key = u.company || "Firma atanmamış";
+    companyMap.set(key, (companyMap.get(key) || 0) + 1);
+  });
+
+  const companyDistribution = Array.from(companyMap.entries())
+    .map(([company, count]) => ({ company, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+
+  return {
+    activeCount,
+    passiveCount,
+    missingCompanyCount,
+    missingMailCount,
+    completionRate,
+    companyDistribution,
+  };
+}, [users, trainingTotals]);
 
   const toggleUser = (userId: string, checked: boolean) => {
     if (checked) {
@@ -708,6 +741,144 @@ const toggleTrainingUserActive = async (user: UserRow) => {
             <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
               {selectedCount}
             </div>
+          </div>
+        </div>
+
+          <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.2fr 1fr",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          <div style={cardStyle()}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 13, color: BRAND.muted }}>
+                  Eğitim Tamamlama Oranı
+                </div>
+                <div style={{ fontSize: 34, fontWeight: 900, marginTop: 8 }}>
+                  %{participantAnalytics.completionRate}
+                </div>
+              </div>
+
+              <div style={{ textAlign: "right", fontSize: 12, color: BRAND.muted }}>
+                Tamamlanan: {trainingTotals.totalCompleted}
+                <br />
+                Devam Eden: {trainingTotals.totalInProgress}
+                <br />
+                Başlamayan: {trainingTotals.totalNotStarted}
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 18,
+                height: 12,
+                borderRadius: 999,
+                background: "#f1f5f9",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${participantAnalytics.completionRate}%`,
+                  height: "100%",
+                  borderRadius: 999,
+                  background: `linear-gradient(135deg, ${BRAND.redDark}, ${BRAND.red})`,
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={cardStyle()}>
+            <div style={{ fontSize: 13, color: BRAND.muted, marginBottom: 12 }}>
+              Katılımcı Risk Özeti
+            </div>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Aktif Katılımcı</span>
+                <strong>{participantAnalytics.activeCount}</strong>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Pasif Katılımcı</span>
+                <strong>{participantAnalytics.passiveCount}</strong>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Firma Eksik</span>
+                <strong style={{ color: BRAND.red }}>
+                  {participantAnalytics.missingCompanyCount}
+                </strong>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>Mail Eksik</span>
+                <strong style={{ color: BRAND.red }}>
+                  {participantAnalytics.missingMailCount}
+                </strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ ...cardStyle(), marginBottom: 20 }}>
+          <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 14 }}>
+            Firma Bazlı Katılımcı Dağılımı
+          </div>
+
+          <div style={{ display: "grid", gap: 12 }}>
+            {participantAnalytics.companyDistribution.length === 0 ? (
+              <div style={{ color: BRAND.muted, fontSize: 13 }}>
+                Firma bazlı veri bulunamadı.
+              </div>
+            ) : (
+              participantAnalytics.companyDistribution.map((item) => {
+                const max = Math.max(
+                  ...participantAnalytics.companyDistribution.map((x) => x.count),
+                  1
+                );
+                const width = Math.round((item.count / max) * 100);
+
+                return (
+                  <div key={item.company}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 13,
+                        fontWeight: 800,
+                        marginBottom: 6,
+                      }}
+                    >
+                      <span>{item.company}</span>
+                      <span>{item.count}</span>
+                    </div>
+
+                    <div
+                      style={{
+                        height: 10,
+                        borderRadius: 999,
+                        background: "#f1f5f9",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${width}%`,
+                          height: "100%",
+                          borderRadius: 999,
+                          background: `linear-gradient(135deg, ${BRAND.redDark}, ${BRAND.red})`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
