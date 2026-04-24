@@ -157,6 +157,7 @@ export default function AdminTrainingPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [companyFilter, setCompanyFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "passive">("all");
   const [selectedTrainingInfo, setSelectedTrainingInfo] =
     useState<TrainingRow | null>(null);
   const [assignSummary, setAssignSummary] = useState<AssignResponse | null>(null);
@@ -184,10 +185,10 @@ const [savingUser, setSavingUser] = useState(false);
       setLoading(true);
 
       const [usersRes, trainingsRes, companiesRes] = await Promise.all([
-        fetch("/api/admin/users", {
-          cache: "no-store",
-          credentials: "include",
-        }),
+      fetch("/api/admin/users?type=training", {
+  cache: "no-store",
+  credentials: "include",
+}),
         fetch("/api/admin/trainings", {
           cache: "no-store",
           credentials: "include",
@@ -292,16 +293,25 @@ is_active: Boolean(u.is_active),
     setSelectedTrainingInfo(found);
   }, [trainingId, trainings]);
 
-  const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
-      const text = `${u.full_name} ${u.email} ${u.company} ${u.role}`.toLowerCase();
-      const matchesSearch = !search || text.includes(search.toLowerCase());
-      const matchesCompany =
-        companyFilter === "all" ? true : u.company === companyFilter;
+ const filteredUsers = useMemo(() => {
+  return users.filter((u) => {
+    const text = `${u.full_name} ${u.email} ${u.company} ${u.role}`.toLowerCase();
 
-      return matchesSearch && matchesCompany;
-    });
-  }, [users, search, companyFilter]);
+    const matchesSearch = !search || text.includes(search.toLowerCase());
+
+    const matchesCompany =
+      companyFilter === "all" ? true : u.company === companyFilter;
+
+    const matchesStatus =
+      statusFilter === "all"
+        ? true
+        : statusFilter === "active"
+        ? u.is_active
+        : !u.is_active;
+
+    return matchesSearch && matchesCompany && matchesStatus;
+  });
+}, [users, search, companyFilter, statusFilter]);
 
   const selectedCount = selectedUsers.length;
 
@@ -830,7 +840,7 @@ const deleteTrainingUser = async (user: UserRow) => {
             </div>
           </div>
         </div>
-
+      
         {error ? (
           <div
             style={{
@@ -1072,7 +1082,33 @@ const deleteTrainingUser = async (user: UserRow) => {
 ))}
             </select>
           </div>
-        </div>
+
+          <div>
+          
+
+  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
+    Durum
+  </div>
+
+  <select
+    value={statusFilter}
+    onChange={(e) =>
+      setStatusFilter(e.target.value as "all" | "active" | "passive")
+    }
+    style={{
+      width: "100%",
+      padding: "12px 14px",
+      borderRadius: 12,
+      border: '1px solid ${BRAND.border}',
+      background: "#fff",
+      fontSize: 14,
+    }}
+  >
+    <option value="all">Tüm Kullanıcılar</option>
+    <option value="active">Aktif Kullanıcılar</option>
+    <option value="passive">Pasif Kullanıcılar</option>
+  </select>
+</div>
       
      <div style={{ ...cardStyle(), marginBottom: 20 }}>
   <div
@@ -2053,6 +2089,7 @@ const deleteTrainingUser = async (user: UserRow) => {
             </div>
           </div>
         )}
+      </div>
       </div>
     </main>
   );
