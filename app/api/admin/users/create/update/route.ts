@@ -52,7 +52,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email zorunlu." }, { status: 400 });
     }
 
-    const allowedRoles = ["operator", "company_admin", "super_admin"];
+  const allowedRoles = ["operator", "company_admin", "super_admin", "training_user"];
+
+  if (role === "training_user" && !company_id) {
+  return NextResponse.json(
+    { error: "Eğitim katılımcısı için firma zorunludur." },
+    { status: 400 }
+  );
+}
 
     if (!allowedRoles.includes(role)) {
       return NextResponse.json({ error: "Geçersiz rol." }, { status: 400 });
@@ -103,6 +110,27 @@ export async function POST(req: NextRequest) {
       console.error("update user error:", updateError);
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
+
+    if (company_id) {
+  await supabase.from("user_firm_access").delete().eq("user_id", userId);
+
+  const { error: firmAccessError } = await supabase
+    .from("user_firm_access")
+    .insert({
+      user_id: userId,
+      firm_id: company_id,
+      role,
+      is_primary: true,
+    });
+
+  if (firmAccessError) {
+    console.error("update user firm access error:", firmAccessError);
+    return NextResponse.json(
+      { error: "Kullanıcı güncellendi ancak firma erişimi güncellenemedi." },
+      { status: 500 }
+    );
+  }
+}
 
     return NextResponse.json({ success: true });
   } catch (error) {

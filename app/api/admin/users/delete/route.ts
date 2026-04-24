@@ -55,17 +55,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (String(targetUser.role || "").trim() === "super_admin") {
-        if (String(targetUser.role || "").trim() === "training_user") {
-  // eğitim kullanıcı silinebilir (problem yok)
-} else {
-  // sistem kullanıcılarını korumak istersen buraya kural eklenebilir
+   if (String(targetUser.role || "").trim() === "super_admin") {
+  return NextResponse.json(
+    { error: "Süper admin kullanıcı silinemez." },
+    { status: 400 }
+  );
 }
-      return NextResponse.json(
-        { error: "Süper admin kullanıcı silinemez." },
-        { status: 400 }
-      );
-    }
 
     await supabase.from("user_permissions").delete().eq("user_id", userId);
 
