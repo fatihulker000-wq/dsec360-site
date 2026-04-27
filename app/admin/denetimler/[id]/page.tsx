@@ -10,6 +10,7 @@ function getSupabase() {
 
 function modeLabel(mode?: string | null) {
   const m = String(mode || "").toUpperCase();
+
   if (m.includes("FOTO") || m.includes("PHOTO")) return "Fotoğraflı";
   if (m.includes("PUAN") || m.includes("SCOR")) return "Puanlamalı";
   if (m.includes("ELMERI")) return "ELMERI";
@@ -83,10 +84,16 @@ export default async function DenetimDetailPage({
     .order("id", { ascending: true });
 
   const answerList = answers || [];
+
   const uygunCount = answerList.filter((a: any) => a.result === "UYGUN").length;
   const kismenCount = answerList.filter((a: any) => a.result === "KISMEN").length;
   const uygunsuzCount = answerList.filter((a: any) => a.result === "UYGUNSUZ").length;
   const kapsamDisiCount = answerList.filter((a: any) => a.result === "KAPSAMDISI").length;
+
+  const uyumSkoru = Math.round(
+    (uygunCount * 100 + kismenCount * 50) /
+      (uygunCount + kismenCount + uygunsuzCount || 1)
+  );
 
   return (
     <main
@@ -138,46 +145,30 @@ export default async function DenetimDetailPage({
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Tag label={modeLabel(runData.eval_mode)} />
           <Tag label={runData.template_type || "-"} />
-          <Tag label={formatDate(runData.audit_date_millis || runData.created_at_millis)} />
+          <Tag
+            label={formatDate(
+              runData.audit_date_millis || runData.created_at_millis
+            )}
+          />
           <Tag label={`Rapor No: ${runData.report_no || "-"}`} />
 
-    <Link
-  href={`/admin/denetimler/${appRunId}/print`}
-  target="_blank"
-  style={{
-    marginTop: 16,
-    display: "inline-block",
-    background: "#111827",
-    padding: "10px 16px",
-    borderRadius: 10,
-    color: "#fff",
-    fontWeight: 800,
-    textDecoration: "none",
-  }}
->
-  📄 Kurumsal PDF Raporu
-</Link>
-
+          <Link
+            href={`/admin/denetimler/${appRunId}/print`}
+            target="_blank"
+            style={{
+              display: "inline-block",
+              background: "#111827",
+              padding: "10px 16px",
+              borderRadius: 10,
+              color: "#fff",
+              fontWeight: 800,
+              textDecoration: "none",
+            }}
+          >
+            📄 Kurumsal PDF Raporu
+          </Link>
         </div>
       </section>
-
-    {runData.pdf_url && (
-  <a
-    href={runData.pdf_url}
-    target="_blank"
-    style={{
-      marginTop: 18,
-      display: "inline-block",
-      background: "#111827",
-      padding: "10px 16px",
-      borderRadius: 10,
-      color: "#fff",
-      fontWeight: 800,
-    }}
-  >
-    📄 PDF İndir
-  </a>
-)}
 
       <section
         style={{
@@ -207,25 +198,24 @@ export default async function DenetimDetailPage({
         <StatusCard title="Kapsam Dışı" value={kapsamDisiCount} color="#64748b" bg="#e2e8f0" />
       </section>
 
-    <div style={{
-  background: "#fff",
-  padding: 20,
-  borderRadius: 20,
-  marginBottom: 20,
-  border: "1px solid #eee"
-}}>
-  <div style={{ fontWeight: 900, marginBottom: 8 }}>
-    Genel Uyum Skoru
-  </div>
+      <section
+        style={{
+          background: "#fff",
+          padding: 20,
+          borderRadius: 20,
+          marginBottom: 20,
+          border: "1px solid #eee",
+          boxShadow: "0 12px 34px rgba(15,23,42,0.05)",
+        }}
+      >
+        <div style={{ fontWeight: 900, marginBottom: 8 }}>
+          Genel Uyum Skoru
+        </div>
 
-  <div style={{ fontSize: 32, fontWeight: 1000 }}>
-    {Math.round(
-      (uygunCount * 100 + kismenCount * 50) /
-      (uygunCount + kismenCount + uygunsuzCount || 1)
-    )}%
-  </div>
-</div>
-
+        <div style={{ fontSize: 32, fontWeight: 1000, color: "#5a0f1f" }}>
+          %{uyumSkoru}
+        </div>
+      </section>
 
       <section
         style={{
@@ -254,7 +244,7 @@ export default async function DenetimDetailPage({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "0.35fr 2.2fr 1fr 2fr 2fr",
+            gridTemplateColumns: "0.35fr 2.2fr 1fr 2fr 2fr 0.8fr",
             padding: "14px 22px",
             background: "#f8fafc",
             fontWeight: 900,
@@ -267,6 +257,7 @@ export default async function DenetimDetailPage({
           <div>Sonuç</div>
           <div>Önerilen Önlem</div>
           <div>Açıklama</div>
+          <div>Foto</div>
         </div>
 
         {answerList.length === 0 ? (
@@ -279,7 +270,7 @@ export default async function DenetimDetailPage({
               key={a.id}
               style={{
                 display: "grid",
-                gridTemplateColumns: "0.35fr 2.2fr 1fr 2fr 2fr",
+                gridTemplateColumns: "0.35fr 2.2fr 1fr 2fr 2fr 0.8fr",
                 padding: "18px 22px",
                 borderTop: "1px solid #eef2f7",
                 background: index % 2 === 0 ? "#ffffff" : "#fbfbfb",
@@ -288,7 +279,9 @@ export default async function DenetimDetailPage({
                 gap: 14,
               }}
             >
-              <div style={{ fontWeight: 1000, color: "#475569" }}>{index + 1}</div>
+              <div style={{ fontWeight: 1000, color: "#475569" }}>
+                {index + 1}
+              </div>
 
               <div style={{ fontWeight: 900, color: "#111827", lineHeight: 1.45 }}>
                 {a.item_title || "-"}
@@ -318,22 +311,26 @@ export default async function DenetimDetailPage({
               <div style={{ color: "#475569", lineHeight: 1.45 }}>
                 {a.note || "-"}
               </div>
-    {a.photo_url && (
-  <a href={a.photo_url} target="_blank">
-    <img
-      src={a.photo_url}
-      style={{
-        width: 60,
-        height: 60,
-        objectFit: "cover",
-        borderRadius: 8,
-        marginTop: 6,
-        border: "1px solid #ddd",
-      }}
-    />
-  </a>
-)}
 
+              <div>
+                {a.photo_url ? (
+                  <a href={a.photo_url} target="_blank">
+                    <img
+                      src={a.photo_url}
+                      alt="Denetim fotoğrafı"
+                      style={{
+                        width: 60,
+                        height: 60,
+                        objectFit: "cover",
+                        borderRadius: 8,
+                        border: "1px solid #ddd",
+                      }}
+                    />
+                  </a>
+                ) : (
+                  "-"
+                )}
+              </div>
             </div>
           ))
         )}
@@ -356,7 +353,14 @@ function KPI({ title, value }: { title: string; value: string }) {
       <div style={{ color: "#64748b", fontSize: 13, fontWeight: 900 }}>
         {title}
       </div>
-      <div style={{ fontSize: 20, fontWeight: 1000, marginTop: 8, color: "#111827" }}>
+      <div
+        style={{
+          fontSize: 20,
+          fontWeight: 1000,
+          marginTop: 8,
+          color: "#111827",
+        }}
+      >
         {value || "-"}
       </div>
     </div>
