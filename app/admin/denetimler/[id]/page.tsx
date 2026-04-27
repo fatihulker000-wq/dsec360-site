@@ -23,22 +23,24 @@ function formatDate(value?: number | null) {
 
 export default async function DenetimDetailPage({
   params,
-}: {
-  params: { id: string };
-}) {
+}: any) {
+
   const supabase = getSupabase();
-  const id = Number(params.id);
+
+  const id = Number(params?.id);
+
+  console.log("DETAY ID:", id);
 
   const { data: run } = await supabase
     .from("denetim_runs")
     .select("*")
-    .eq("id", id)
+    .eq("id", Number(id))
     .single();
 
   const { data: answers } = await supabase
     .from("denetim_answers")
     .select("*")
-    .eq("run_remote_id", id)
+    .eq("run_remote_id", Number(id))
     .order("id", { ascending: true });
 
   if (!run) {
