@@ -13,9 +13,7 @@ type SidebarItem = {
 
 const mainItems: SidebarItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "⌘", desc: "Genel görünüm" },
-  { href: "/training", label: "Eğitimler", icon: "🎓", desc: "Atama ve takip" },
-  { href: "/training/async", label: "Asenkron", icon: "▶", desc: "Video eğitimler" },
-  { href: "/training/sync", label: "Senkron", icon: "◉", desc: "Canlı eğitimler" },
+  { href: "/admin/trainings", label: "Eğitimler", icon: "🎓", desc: "Atama ve takip" },
 ];
 
 const secondaryItems: SidebarItem[] = [
@@ -81,7 +79,7 @@ export default function AdminSidebar() {
     if (pathname.startsWith("/admin/dashboard")) return "Dashboard";
     if (pathname.startsWith("/training/async")) return "Asenkron Eğitim";
     if (pathname.startsWith("/training/sync")) return "Senkron Eğitim";
-    if (pathname.startsWith("/training")) return "Eğitim Yönetimi";
+    if (pathname.startsWith("/admin/trainings")) return "Eğitim Yönetimi";
     if (pathname.startsWith("/cbs")) return "ÇBS Yönetimi";
     return "Admin Panel";
   }, [pathname]);
