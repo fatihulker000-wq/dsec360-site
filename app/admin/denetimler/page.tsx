@@ -188,7 +188,7 @@ export default async function AdminDenetimlerPage() {
               </div>
 
               <Link
-                href={'/admin/denetimler/${r.id}'}
+                 href={`/admin/denetimler/${r.app_run_id}`}
                 style={{
                   padding: "8px 10px",
                   borderRadius: 10,

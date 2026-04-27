@@ -21,27 +21,27 @@ function formatDate(value?: number | null) {
   return new Date(value).toLocaleDateString("tr-TR");
 }
 
-export default async function DenetimDetailPage({
-  params,
-}: any) {
-
+export default async function DenetimDetailPage({ params }: any) {
   const supabase = getSupabase();
 
-  const id = Number(params?.id);
-
-  console.log("DETAY ID:", id);
+  // URL'den gelen değer: app_run_id
+  const appRunId = Number(params?.id);
 
   const { data: run } = await supabase
     .from("denetim_runs")
     .select("*")
-    .eq("id", Number(id))
-    .single();
+    .eq("app_run_id", appRunId)
+    .maybeSingle();
 
-  const { data: answers } = await supabase
-    .from("denetim_answers")
-    .select("*")
-    .eq("run_remote_id", Number(id))
-    .order("id", { ascending: true });
+  const remoteRunId = run?.id ? Number(run.id) : 0;
+
+  const { data: answers } = remoteRunId
+    ? await supabase
+        .from("denetim_answers")
+        .select("*")
+        .eq("run_remote_id", remoteRunId)
+        .order("id", { ascending: true })
+    : { data: [] as any[] };
 
   if (!run) {
     return (
