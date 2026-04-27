@@ -79,7 +79,7 @@ export async function GET(req: Request) {
 
     const { data: usersData, error: userError } = await supabase
       .from("users")
-      .select("id, full_name, email, role, is_active, created_at, app_user_type")
+     .select("id, full_name, email, role, is_active, created_at, app_user_type, password_hash")
       .order("full_name", { ascending: true, nullsFirst: false });
 
     if (userError) {
@@ -257,6 +257,7 @@ const type = url.searchParams.get("type");
           email: String(user.email || "").trim(),
           role: String(user.role || "").trim(),
           app_user_type: String((user as any).app_user_type || "").trim(),
+          password_hash: String((user as any).password_hash || "").trim(),
           company_id: primaryFirm?.firm_id || "",
           company: primaryFirm?.firm_name || "",
           is_active: Boolean(user.is_active),
