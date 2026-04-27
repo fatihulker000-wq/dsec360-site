@@ -10,40 +10,48 @@ function getSupabase() {
 
 function modeLabel(mode?: string | null) {
   const m = String(mode || "").toUpperCase();
+
   if (m.includes("FOTO") || m.includes("PHOTO")) return "Fotoğraflı";
   if (m.includes("PUAN") || m.includes("SCOR")) return "Puanlamalı";
   if (m.includes("ELMERI")) return "ELMERI";
   return "Klasik";
 }
 
-function formatDate(value?: number | null) {
+function formatDate(value?: number | string | null) {
   if (!value) return "-";
-  return new Date(value).toLocaleDateString("tr-TR");
+
+  const numeric = Number(value);
+  const date = Number.isFinite(numeric) ? new Date(numeric) : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("tr-TR");
 }
 
 export default async function DenetimDetailPage({ params }: any) {
   const supabase = getSupabase();
 
-  // URL'den gelen değer: app_run_id
-  const appRunId = Number(params?.id);
+  const routeId = Number(params?.id);
 
-  const { data: run } = await supabase
+  const { data: runsByAppRunId } = await supabase
     .from("denetim_runs")
     .select("*")
-    .eq("app_run_id", appRunId)
-    .maybeSingle();
+    .eq("app_run_id", routeId)
+    .limit(1);
 
-  const remoteRunId = run?.id ? Number(run.id) : 0;
+  let runData = runsByAppRunId?.[0] || null;
 
-  const { data: answers } = remoteRunId
-    ? await supabase
-        .from("denetim_answers")
-        .select("*")
-        .eq("run_remote_id", remoteRunId)
-        .order("id", { ascending: true })
-    : { data: [] as any[] };
+  if (!runData) {
+    const { data: runsById } = await supabase
+      .from("denetim_runs")
+      .select("*")
+      .eq("id", routeId)
+      .limit(1);
 
-  if (!run) {
+    runData = runsById?.[0] || null;
+  }
+
+  if (!runData) {
     return (
       <main style={{ padding: 32 }}>
         <h1>Denetim bulunamadı</h1>
@@ -51,6 +59,14 @@ export default async function DenetimDetailPage({ params }: any) {
       </main>
     );
   }
+
+  const remoteRunId = Number(runData.id);
+
+  const { data: answers } = await supabase
+    .from("denetim_answers")
+    .select("*")
+    .eq("run_remote_id", remoteRunId)
+    .order("id", { ascending: true });
 
   return (
     <main style={{ padding: 32 }}>
@@ -81,12 +97,12 @@ export default async function DenetimDetailPage({ params }: any) {
         </div>
 
         <h1 style={{ fontSize: 34, margin: "10px 0 8px", fontWeight: 1000 }}>
-          {run.firm_name || "Firma Ünvanı Yok"}
+          {runData.firm_name || "Firma Ünvanı Yok"}
         </h1>
 
         <p style={{ margin: 0, opacity: 0.9 }}>
-          {modeLabel(run.eval_mode)} • {run.template_type || "-"} •{" "}
-          {formatDate(run.audit_date_millis || run.created_at_millis)}
+          {modeLabel(runData.eval_mode)} • {runData.template_type || "-"} •{" "}
+          {formatDate(runData.audit_date_millis || runData.created_at_millis)}
         </p>
       </section>
 
@@ -98,9 +114,9 @@ export default async function DenetimDetailPage({ params }: any) {
           marginBottom: 22,
         }}
       >
-        <Info title="Denetçi" value={run.inspector_name || "-"} />
-        <Info title="Sorumlu" value={run.responsible || "-"} />
-        <Info title="Lokasyon" value={run.location || "-"} />
+        <Info title="Denetçi" value={runData.inspector_name || "-"} />
+        <Info title="Sorumlu" value={runData.responsible || "-"} />
+        <Info title="Lokasyon" value={runData.location || "-"} />
         <Info title="Madde Sayısı" value={String((answers || []).length)} />
       </section>
 
@@ -130,26 +146,32 @@ export default async function DenetimDetailPage({ params }: any) {
           <div>Açıklama</div>
         </div>
 
-        {(answers || []).map((a: any, index: number) => (
-          <div
-            key={a.id}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "0.4fr 2fr 1fr 2fr 2fr",
-              padding: "16px 18px",
-              borderTop: "1px solid #eef2f7",
-              fontSize: 14,
-              alignItems: "start",
-              gap: 10,
-            }}
-          >
-            <div style={{ fontWeight: 900 }}>{index + 1}</div>
-            <div style={{ fontWeight: 800 }}>{a.item_title || "-"}</div>
-            <div style={{ fontWeight: 900 }}>{a.result || "-"}</div>
-            <div>{a.recommended_action || "-"}</div>
-            <div>{a.note || "-"}</div>
+        {(answers || []).length === 0 ? (
+          <div style={{ padding: 24, color: "#64748b" }}>
+            Bu denetime ait bulgu/madde kaydı bulunamadı.
           </div>
-        ))}
+        ) : (
+          (answers || []).map((a: any, index: number) => (
+            <div
+              key={a.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "0.4fr 2fr 1fr 2fr 2fr",
+                padding: "16px 18px",
+                borderTop: "1px solid #eef2f7",
+                fontSize: 14,
+                alignItems: "start",
+                gap: 10,
+              }}
+            >
+              <div style={{ fontWeight: 900 }}>{index + 1}</div>
+              <div style={{ fontWeight: 800 }}>{a.item_title || "-"}</div>
+              <div style={{ fontWeight: 900 }}>{a.result || "-"}</div>
+              <div>{a.recommended_action || "-"}</div>
+              <div>{a.note || "-"}</div>
+            </div>
+          ))
+        )}
       </section>
     </main>
   );
