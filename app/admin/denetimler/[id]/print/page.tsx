@@ -96,6 +96,14 @@ export default async function InspectionPrintPage({
           box-shadow: 0 20px 60px rgba(15,23,42,.10);
         }
 
+   thead {
+  display: table-header-group;
+}
+
+tfoot {
+  display: table-footer-group;
+}
+
         .hero {
           padding: 30px;
           color: white;
@@ -247,12 +255,21 @@ export default async function InspectionPrintPage({
 
       <section className="sheet">
         <div className="hero">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+  <img 
+    src="/logo.png" 
+    style={{ height: 38 }} 
+  />
+  <div className="brand">D-SEC • Dijital Sağlık • Emniyet • Çevre</div>
+</div>
+
           <div className="brand">D-SEC • Dijital Sağlık • Emniyet • Çevre</div>
           <div className="title">İş Sağlığı ve Güvenliği Denetim Raporu</div>
-          <div className="subtitle">
-            {runData.firm_name || "Firma Ünvanı Yok"} • {modeLabel(runData.eval_mode)} •{" "}
-            {formatDate(runData.audit_date_millis || runData.created_at_millis)}
-          </div>
+        <div className="subtitle">
+  {runData.firm_name || "Firma Ünvanı Yok"} • {modeLabel(runData.eval_mode)} •{" "}
+  {formatDate(runData.audit_date_millis || runData.created_at_millis)} • 
+  Rapor No: {runData.report_no || "-"}
+</div>
         </div>
 
         <div className="content">
@@ -286,6 +303,8 @@ export default async function InspectionPrintPage({
                 <th style={{ width: 110 }}>Sonuç</th>
                 <th>Önerilen Önlem</th>
                 <th>Açıklama</th>
+                <th>Foto</th>
+
               </tr>
             </thead>
             <tbody>
@@ -303,6 +322,20 @@ export default async function InspectionPrintPage({
                     </td>
                     <td>{a.recommended_action || "-"}</td>
                     <td>{a.note || "-"}</td>
+                    <td>
+  {a.photo_url ? (
+    <img
+      src={a.photo_url}
+      style={{
+        width: 60,
+        height: 60,
+        objectFit: "cover",
+        borderRadius: 6,
+        border: "1px solid #ddd"
+      }}
+    />
+  ) : "-"}
+</td>
                   </tr>
                 ))
               )}
@@ -319,6 +352,13 @@ export default async function InspectionPrintPage({
           </p>
 
           <div className="footer">
+            <div style={{
+  marginTop: 20,
+  fontSize: 11,
+  color: "#64748b"
+}}>
+  Oluşturulma Tarihi: {new Date().toLocaleString("tr-TR")}
+</div>
             <div className="sign">
               <strong>Denetimi Gerçekleştiren</strong>
               <br />
