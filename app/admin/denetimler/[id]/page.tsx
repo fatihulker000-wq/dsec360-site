@@ -33,23 +33,13 @@ export default async function DenetimDetailPage({ params }: any) {
 
   const routeId = Number(params?.id);
 
-  const { data: runsByAppRunId } = await supabase
+  const { data: runList } = await supabase
     .from("denetim_runs")
     .select("*")
     .eq("app_run_id", routeId)
     .limit(1);
 
-  let runData = runsByAppRunId?.[0] || null;
-
-  if (!runData) {
-    const { data: runsById } = await supabase
-      .from("denetim_runs")
-      .select("*")
-      .eq("id", routeId)
-      .limit(1);
-
-    runData = runsById?.[0] || null;
-  }
+  const runData = runList?.[0];
 
   if (!runData) {
     return (
