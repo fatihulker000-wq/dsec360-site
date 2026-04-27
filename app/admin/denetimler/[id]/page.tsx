@@ -139,9 +139,45 @@ export default async function DenetimDetailPage({
           <Tag label={modeLabel(runData.eval_mode)} />
           <Tag label={runData.template_type || "-"} />
           <Tag label={formatDate(runData.audit_date_millis || runData.created_at_millis)} />
-          <Tag label={'Rapor No: ${runData.report_no || "-"}'} />
+          <Tag label={`Rapor No: ${runData.report_no || "-"}`} />
+
+    <Link
+  href={`/admin/denetimler/${appRunId}/print`}
+  target="_blank"
+  style={{
+    marginTop: 16,
+    display: "inline-block",
+    background: "#111827",
+    padding: "10px 16px",
+    borderRadius: 10,
+    color: "#fff",
+    fontWeight: 800,
+    textDecoration: "none",
+  }}
+>
+  📄 Kurumsal PDF Raporu
+</Link>
+
         </div>
       </section>
+
+    {runData.pdf_url && (
+  <a
+    href={runData.pdf_url}
+    target="_blank"
+    style={{
+      marginTop: 18,
+      display: "inline-block",
+      background: "#111827",
+      padding: "10px 16px",
+      borderRadius: 10,
+      color: "#fff",
+      fontWeight: 800,
+    }}
+  >
+    📄 PDF İndir
+  </a>
+)}
 
       <section
         style={{
@@ -170,6 +206,26 @@ export default async function DenetimDetailPage({
         <StatusCard title="Uygunsuz" value={uygunsuzCount} color="#dc2626" bg="#fee2e2" />
         <StatusCard title="Kapsam Dışı" value={kapsamDisiCount} color="#64748b" bg="#e2e8f0" />
       </section>
+
+    <div style={{
+  background: "#fff",
+  padding: 20,
+  borderRadius: 20,
+  marginBottom: 20,
+  border: "1px solid #eee"
+}}>
+  <div style={{ fontWeight: 900, marginBottom: 8 }}>
+    Genel Uyum Skoru
+  </div>
+
+  <div style={{ fontSize: 32, fontWeight: 1000 }}>
+    {Math.round(
+      (uygunCount * 100 + kismenCount * 50) /
+      (uygunCount + kismenCount + uygunsuzCount || 1)
+    )}%
+  </div>
+</div>
+
 
       <section
         style={{
@@ -262,6 +318,22 @@ export default async function DenetimDetailPage({
               <div style={{ color: "#475569", lineHeight: 1.45 }}>
                 {a.note || "-"}
               </div>
+    {a.photo_url && (
+  <a href={a.photo_url} target="_blank">
+    <img
+      src={a.photo_url}
+      style={{
+        width: 60,
+        height: 60,
+        objectFit: "cover",
+        borderRadius: 8,
+        marginTop: 6,
+        border: "1px solid #ddd",
+      }}
+    />
+  </a>
+)}
+
             </div>
           ))
         )}
