@@ -99,11 +99,19 @@ export default async function AdminDenetimlerPage() {
         <Kpi title="Toplam Denetim" value={(runs || []).length} />
         <Kpi
           title="Klasik"
-          value={(runs || []).filter((r: any) => modeLabel(r.eval_mode) === "Klasik").length}
+          value={
+            (runs || []).filter(
+              (r: any) => modeLabel(r.eval_mode) === "Klasik"
+            ).length
+          }
         />
         <Kpi
           title="Fotoğraflı"
-          value={(runs || []).filter((r: any) => modeLabel(r.eval_mode) === "Fotoğraflı").length}
+          value={
+            (runs || []).filter(
+              (r: any) => modeLabel(r.eval_mode) === "Fotoğraflı"
+            ).length
+          }
         />
         <Kpi
           title="Puan / ELMERI"
@@ -126,7 +134,7 @@ export default async function AdminDenetimlerPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.3fr 1fr 1fr 1fr 1fr 0.8fr",
+            gridTemplateColumns: "1.3fr 1fr 1fr 1fr 1fr 0.8fr 1fr",
             padding: "14px 18px",
             background: "#f8fafc",
             fontWeight: 900,
@@ -140,6 +148,7 @@ export default async function AdminDenetimlerPage() {
           <div>Denetçi</div>
           <div>Tarih</div>
           <div>Madde</div>
+          <div>Detay</div>
         </div>
 
         {(runs || []).length === 0 ? (
@@ -152,11 +161,12 @@ export default async function AdminDenetimlerPage() {
               key={r.id}
               style={{
                 display: "grid",
-                gridTemplateColumns: "1.3fr 1fr 1fr 1fr 1fr 0.8fr",
+                gridTemplateColumns: "1.3fr 1fr 1fr 1fr 1fr 0.8fr 1fr",
                 padding: "16px 18px",
                 borderTop: "1px solid #eef2f7",
                 alignItems: "center",
                 fontSize: 14,
+                gap: 10,
               }}
             >
               <div style={{ fontWeight: 900 }}>
@@ -169,11 +179,29 @@ export default async function AdminDenetimlerPage() {
 
               <div>{r.inspector_name || "-"}</div>
 
-              <div>{formatDate(r.audit_date_millis || r.created_at_millis)}</div>
+              <div>
+                {formatDate(r.audit_date_millis || r.created_at_millis)}
+              </div>
 
               <div style={{ fontWeight: 900 }}>
                 {countByRun.get(Number(r.id)) || 0}
               </div>
+
+              <Link
+                href={'/admin/denetimler/${r.id}'}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  background: "#5a0f1f",
+                  color: "#fff",
+                  textDecoration: "none",
+                  fontWeight: 900,
+                  textAlign: "center",
+                  fontSize: 13,
+                }}
+              >
+                Aç
+              </Link>
             </div>
           ))
         )}
