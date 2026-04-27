@@ -8,7 +8,6 @@ type SidebarItem = {
   href: string;
   label: string;
   icon: string;
-  badge?: string;
 };
 
 const mainItems: SidebarItem[] = [
@@ -55,19 +54,14 @@ const secondaryItems: SidebarItem[] = [
 type MeResponse = {
   success?: boolean;
   user?: {
-    id?: string;
-    full_name?: string;
-    email?: string;
     role?: string;
-    company_id?: string;
   };
-  error?: string;
 };
 
 export default function AdminSidebar() {
   const pathname = usePathname();
   const [loggingOut, setLoggingOut] = useState(false);
-  const [userRole, setUserRole] = useState<string>("");
+  const [userRole, setUserRole] = useState("");
   const [loadingRole, setLoadingRole] = useState(true);
 
   useEffect(() => {
@@ -83,7 +77,7 @@ export default function AdminSidebar() {
         const json: MeResponse = await res.json().catch(() => ({}));
 
         if (!cancelled) {
-          setUserRole(String(json?.user?.role || "").trim());
+          setUserRole(json?.user?.role || "");
         }
       } catch {
         if (!cancelled) {
@@ -96,7 +90,7 @@ export default function AdminSidebar() {
       }
     }
 
-    void loadMe();
+    loadMe();
 
     return () => {
       cancelled = true;
@@ -104,7 +98,7 @@ export default function AdminSidebar() {
   }, []);
 
   const pageTitle = useMemo(() => {
-    if (pathname.startsWith("/admin/dashboard")) return "Admin Dashboard";
+    if (pathname.startsWith("/admin/dashboard")) return "Dashboard";
     if (pathname.startsWith("/training/async")) return "Asenkron Eğitim";
     if (pathname.startsWith("/training/sync")) return "Senkron Eğitim";
     if (pathname.startsWith("/training")) return "Eğitim Yönetimi";
@@ -125,25 +119,23 @@ export default function AdminSidebar() {
     try {
       setLoggingOut(true);
 
-      await fetch("/api/admin/logout", {
-        method: "POST",
-        credentials: "include",
-      }).catch(() => null);
-
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      }).catch(() => null);
+      await Promise.allSettled([
+        fetch("/api/admin/logout", {
+          method: "POST",
+          credentials: "include",
+        }),
+        fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+        }),
+      ]);
     } finally {
       window.location.href = "/admin/login";
     }
   };
 
   const isActive = (href: string) => {
-    if (href === "/admin/dashboard") {
-      return pathname === href;
-    }
-    return pathname.startsWith(href);
+    return pathname === href || pathname.startsWith(href);
   };
 
   if (!loadingRole && userRole === "training_user") {
@@ -169,7 +161,7 @@ export default function AdminSidebar() {
             <div className="admin-sidebar-hero-badge">AKTİF PANEL</div>
             <div className="admin-sidebar-hero-title">{pageTitle}</div>
             <div className="admin-sidebar-hero-text">
-              Kurumsal yönetim, eğitim takibi ve risk görünümü tek panelde.
+              Kurumsal yönetim paneli
             </div>
           </div>
         </div>
@@ -186,11 +178,8 @@ export default function AdminSidebar() {
                   isActive(item.href) ? "active" : ""
                 }`}
               >
-                <span className="admin-sidebar-link-icon">{item.icon}</span>
-                <span className="admin-sidebar-link-label">{item.label}</span>
-                {item.badge ? (
-                  <span className="admin-sidebar-link-badge">{item.badge}</span>
-                ) : null}
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
               </Link>
             ))}
           </nav>
@@ -204,12 +193,12 @@ export default function AdminSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`admin-sidebar-link admin-sidebar-link-soft ${
+                className={`admin-sidebar-link ${
                   isActive(item.href) ? "active" : ""
                 }`}
               >
-                <span className="admin-sidebar-link-icon">{item.icon}</span>
-                <span className="admin-sidebar-link-label">{item.label}</span>
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
               </Link>
             ))}
           </nav>
@@ -217,7 +206,6 @@ export default function AdminSidebar() {
 
         <div className="admin-sidebar-footer">
           <button
-            type="button"
             onClick={handleLogout}
             disabled={loggingOut}
             className="admin-sidebar-logout"
