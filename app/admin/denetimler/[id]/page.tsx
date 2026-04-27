@@ -10,7 +10,6 @@ function getSupabase() {
 
 function modeLabel(mode?: string | null) {
   const m = String(mode || "").toUpperCase();
-
   if (m.includes("FOTO") || m.includes("PHOTO")) return "Fotoğraflı";
   if (m.includes("PUAN") || m.includes("SCOR")) return "Puanlamalı";
   if (m.includes("ELMERI")) return "ELMERI";
@@ -19,32 +18,33 @@ function modeLabel(mode?: string | null) {
 
 function formatDate(value?: number | string | null) {
   if (!value) return "-";
-
   const numeric = Number(value);
   const date = Number.isFinite(numeric) ? new Date(numeric) : new Date(value);
-
   if (Number.isNaN(date.getTime())) return "-";
-
   return date.toLocaleDateString("tr-TR");
 }
 
-export default async function DenetimDetailPage({ params }: any) {
+export default async function DenetimDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const supabase = getSupabase();
 
-  const routeId = Number(params?.id);
+  const { id } = await params;
+  const appRunId = Number(id);
 
-  const { data: runList } = await supabase
+  const { data: runData, error: runError } = await supabase
     .from("denetim_runs")
     .select("*")
-    .eq("app_run_id", routeId)
-    .limit(1);
+    .eq("app_run_id", appRunId)
+    .maybeSingle();
 
-  const runData = runList?.[0];
-
-  if (!runData) {
+  if (!runData || runError) {
     return (
       <main style={{ padding: 32 }}>
         <h1>Denetim bulunamadı</h1>
+        <p>Aranan App Run ID: {String(id)}</p>
         <Link href="/admin/denetimler">Geri dön</Link>
       </main>
     );
@@ -136,32 +136,26 @@ export default async function DenetimDetailPage({ params }: any) {
           <div>Açıklama</div>
         </div>
 
-        {(answers || []).length === 0 ? (
-          <div style={{ padding: 24, color: "#64748b" }}>
-            Bu denetime ait bulgu/madde kaydı bulunamadı.
+        {(answers || []).map((a: any, index: number) => (
+          <div
+            key={a.id}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "0.4fr 2fr 1fr 2fr 2fr",
+              padding: "16px 18px",
+              borderTop: "1px solid #eef2f7",
+              fontSize: 14,
+              alignItems: "start",
+              gap: 10,
+            }}
+          >
+            <div style={{ fontWeight: 900 }}>{index + 1}</div>
+            <div style={{ fontWeight: 800 }}>{a.item_title || "-"}</div>
+            <div style={{ fontWeight: 900 }}>{a.result || "-"}</div>
+            <div>{a.recommended_action || "-"}</div>
+            <div>{a.note || "-"}</div>
           </div>
-        ) : (
-          (answers || []).map((a: any, index: number) => (
-            <div
-              key={a.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "0.4fr 2fr 1fr 2fr 2fr",
-                padding: "16px 18px",
-                borderTop: "1px solid #eef2f7",
-                fontSize: 14,
-                alignItems: "start",
-                gap: 10,
-              }}
-            >
-              <div style={{ fontWeight: 900 }}>{index + 1}</div>
-              <div style={{ fontWeight: 800 }}>{a.item_title || "-"}</div>
-              <div style={{ fontWeight: 900 }}>{a.result || "-"}</div>
-              <div>{a.recommended_action || "-"}</div>
-              <div>{a.note || "-"}</div>
-            </div>
-          ))
-        )}
+        ))}
       </section>
     </main>
   );
