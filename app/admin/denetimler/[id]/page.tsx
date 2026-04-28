@@ -183,18 +183,48 @@ export default async function DenetimDetailPage({
         minHeight: "100vh",
       }}
     >
-      <Link
-        href="/admin/denetimler"
-        style={{
-          display: "inline-block",
-          marginBottom: 18,
-          color: "#5a0f1f",
-          fontWeight: 900,
-          textDecoration: "none",
-        }}
-      >
-        ← Denetimlere Dön
-      </Link>
+      <div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 22,
+  }}
+>
+  <Link
+    href="/admin/denetimler"
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "12px 18px",
+      borderRadius: 14,
+      background: "#ffffff",
+      border: "1px solid #e5e7eb",
+      color: "#5a0f1f",
+      fontWeight: 1000,
+      textDecoration: "none",
+      boxShadow: "0 12px 30px rgba(15,23,42,0.06)",
+    }}
+  >
+    <span style={{ fontSize: 18 }}>←</span>
+    <span>Denetim Listesine Dön</span>
+  </Link>
+
+  <div
+    style={{
+      fontSize: 12,
+      fontWeight: 900,
+      color: "#64748b",
+      background: "#fff",
+      border: "1px solid #e5e7eb",
+      borderRadius: 999,
+      padding: "8px 14px",
+    }}
+  >
+    D-SEC Denetim Merkezi
+  </div>
+</div>
 
       <section
         style={{
@@ -245,7 +275,8 @@ export default async function DenetimDetailPage({
               textDecoration: "none",
             }}
           >
-            📄 Kurumsal PDF Raporu
+            <span style={{ marginRight: 6 }}>▣</span>
+Kurumsal Raporu Aç
           </Link>
         </div>
       </section>

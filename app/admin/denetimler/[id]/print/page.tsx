@@ -334,11 +334,11 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
 
       <div className="actions no-print">
         <Link className="btn secondary" href={`/admin/denetimler/${appRunId}`}>
-          ← Detaya Dön
+          ← Denetim Detayına Dön
         </Link>
 
         <button className="btn primary" type="button">
-          PDF için: Ctrl + P / Yazdır
+          Kurumsal PDF olarak Yazdır
         </button>
       </div>
 
