@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -12,7 +14,7 @@ function modeLabel(mode?: string | null) {
   const m = String(mode || "").toUpperCase();
 
   if (m.includes("FOTO") || m.includes("PHOTO")) return "Fotoğraflı";
-  if (m.includes("PUAN") || m.includes("SCOR")) return "Puanlamalı";
+  if (m.includes("PUAN") || m.includes("SCOR") || m.includes("SKOR")) return "Puanlamalı";
   if (m.includes("ELMERI")) return "ELMERI";
   return "Klasik";
 }
@@ -37,11 +39,55 @@ function formatDate(value?: number | string | null) {
   return date.toLocaleDateString("tr-TR");
 }
 
+async function deleteDenetimAction(formData: FormData) {
+  "use server";
+
+  const remoteId = Number(formData.get("remoteId") || 0);
+  if (!remoteId) return;
+
+  const supabase = getSupabase();
+
+  await supabase.from("denetim_answers").delete().eq("run_remote_id", remoteId);
+  await supabase.from("denetim_runs").delete().eq("id", remoteId);
+
+  revalidatePath("/admin/denetimler");
+  redirect("/admin/denetimler");
+}
+
+async function updateDenetimAction(formData: FormData) {
+  "use server";
+
+  const remoteId = Number(formData.get("remoteId") || 0);
+  if (!remoteId) return;
+
+  const supabase = getSupabase();
+
+  await supabase
+    .from("denetim_runs")
+    .update({
+      firm_name: String(formData.get("firm_name") || ""),
+      template_type: String(formData.get("template_type") || ""),
+      eval_mode: String(formData.get("eval_mode") || ""),
+      inspector_name: String(formData.get("inspector_name") || ""),
+      responsible: String(formData.get("responsible") || ""),
+      location: String(formData.get("location") || ""),
+      report_no: String(formData.get("report_no") || ""),
+      general_note: String(formData.get("general_note") || ""),
+    })
+    .eq("id", remoteId);
+
+  revalidatePath("/admin/denetimler");
+  redirect("/admin/denetimler");
+}
+
 export default async function AdminDenetimlerPage({
   searchParams,
 }: {
-  searchParams?: { type?: string };
+  searchParams?: Promise<{ type?: string }>;
 }) {
+  const sp = await searchParams;
+  const activeType = String(sp?.type || "ALL").toUpperCase();
+
   const supabase = getSupabase();
 
   const { data: runs, error } = await supabase
@@ -50,22 +96,6 @@ export default async function AdminDenetimlerPage({
     .order("inserted_at", { ascending: false });
 
   const safeRuns = runs || [];
-const activeType = String(searchParams?.type || "ALL").toUpperCase();
-
-const filteredRuns =
-  activeType === "ALL"
-    ? safeRuns
-    : safeRuns.filter((r: any) => {
-        const label = modeLabel(r.eval_mode).toUpperCase();
-
-        if (activeType === "KLASIK") return label === "KLASIK";
-        if (activeType === "FOTO") return label === "FOTOĞRAFLI";
-        if (activeType === "PUAN") return label === "PUANLAMALI";
-        if (activeType === "ELMERI") return label === "ELMERI";
-
-        return true;
-      });
-
   const runIds = safeRuns.map((r: any) => r.id);
 
   const { data: answers } = runIds.length
@@ -75,14 +105,27 @@ const filteredRuns =
         .in("run_remote_id", runIds)
     : { data: [] as any[] };
 
-  const countByRun = new Map<number, number>();
+  const answerList = answers || [];
 
-  (answers || []).forEach((a: any) => {
-    countByRun.set(
-      Number(a.run_remote_id),
-      (countByRun.get(Number(a.run_remote_id)) || 0) + 1
-    );
+  const countByRun = new Map<number, number>();
+  answerList.forEach((a: any) => {
+    const key = Number(a.run_remote_id);
+    countByRun.set(key, (countByRun.get(key) || 0) + 1);
   });
+
+  const filteredRuns =
+    activeType === "ALL"
+      ? safeRuns
+      : safeRuns.filter((r: any) => {
+          const label = modeLabel(r.eval_mode).toUpperCase();
+
+          if (activeType === "KLASIK") return label === "KLASIK";
+          if (activeType === "FOTO") return label === "FOTOĞRAFLI";
+          if (activeType === "PUAN") return label === "PUANLAMALI";
+          if (activeType === "ELMERI") return label === "ELMERI";
+
+          return true;
+        });
 
   const klasikCount = safeRuns.filter(
     (r: any) => modeLabel(r.eval_mode) === "Klasik"
@@ -93,14 +136,14 @@ const filteredRuns =
   ).length;
 
   const puanCount = safeRuns.filter(
-  (r: any) => modeLabel(r.eval_mode) === "Puanlamalı"
-).length;
+    (r: any) => modeLabel(r.eval_mode) === "Puanlamalı"
+  ).length;
 
-const elmeriCount = safeRuns.filter(
-  (r: any) => modeLabel(r.eval_mode) === "ELMERI"
-).length;
+  const elmeriCount = safeRuns.filter(
+    (r: any) => modeLabel(r.eval_mode) === "ELMERI"
+  ).length;
 
-  const totalAnswers = (answers || []).length;
+  const totalAnswers = answerList.length;
 
   return (
     <main
@@ -159,8 +202,8 @@ const elmeriCount = safeRuns.filter(
           }}
         >
           Android app üzerinden tamamlanan klasik, fotoğraflı, puanlamalı ve
-          ELMERI denetimler tek merkezden izlenir. Detay ekranından bulgular,
-          önerilen önlemler ve kurumsal PDF raporu açılır.
+          ELMERI denetimler tek merkezden izlenir. Hatalı kayıtlar bu ekrandan
+          silinebilir veya düzeltilebilir.
         </p>
       </section>
 
@@ -188,12 +231,12 @@ const elmeriCount = safeRuns.filter(
           marginBottom: 24,
         }}
       >
-<Kpi title="Toplam Denetim" value={safeRuns.length} desc="Tüm kayıtlar" href="/admin/denetimler" />
-<Kpi title="Klasik" value={klasikCount} desc="Standart kontrol" href="/admin/denetimler?type=KLASIK" />
-<Kpi title="Fotoğraflı" value={fotografliCount} desc="Görsel kanıtlı" href="/admin/denetimler?type=FOTO" />
-<Kpi title="Puanlamalı" value={puanCount} desc="Skor bazlı denetim" href="/admin/denetimler?type=PUAN" />
-<Kpi title="ELMERI" value={elmeriCount} desc="Gözlemsel risk analizi" href="/admin/denetimler?type=ELMERI" />
-<Kpi title="Toplam Madde" value={totalAnswers} desc="Aktarılan bulgu" href="/admin/denetimler" />
+        <Kpi title="Toplam Denetim" value={safeRuns.length} desc="Tüm kayıtlar" href="/admin/denetimler" />
+        <Kpi title="Klasik" value={klasikCount} desc="Standart kontrol" href="/admin/denetimler?type=KLASIK" />
+        <Kpi title="Fotoğraflı" value={fotografliCount} desc="Görsel kanıtlı" href="/admin/denetimler?type=FOTO" />
+        <Kpi title="Puanlamalı" value={puanCount} desc="Skor bazlı denetim" href="/admin/denetimler?type=PUAN" />
+        <Kpi title="ELMERI" value={elmeriCount} desc="Gözlemsel risk analizi" href="/admin/denetimler?type=ELMERI" />
+        <Kpi title="Toplam Madde" value={totalAnswers} desc="Aktarılan bulgu" href="/admin/denetimler" />
       </section>
 
       <section
@@ -216,13 +259,7 @@ const elmeriCount = safeRuns.filter(
           }}
         >
           <div>
-            <div
-              style={{
-                fontSize: 21,
-                fontWeight: 1000,
-                color: "#111827",
-              }}
-            >
+            <div style={{ fontSize: 21, fontWeight: 1000, color: "#111827" }}>
               Denetim Kayıtları
             </div>
             <div
@@ -233,7 +270,7 @@ const elmeriCount = safeRuns.filter(
                 fontWeight: 650,
               }}
             >
-              Firma, denetim türü, şablon, denetçi, tarih ve madde sayısı
+              Detay açma, kayıt düzeltme ve hatalı kayıt silme alanı
             </div>
           </div>
 
@@ -256,7 +293,7 @@ const elmeriCount = safeRuns.filter(
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.3fr 1fr 1fr 1fr 1fr 0.7fr 1fr",
+            gridTemplateColumns: "1.2fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.6fr",
             padding: "14px 22px",
             background: "#f8fafc",
             fontWeight: 1000,
@@ -290,96 +327,181 @@ const elmeriCount = safeRuns.filter(
             const mode = modeLabel(r.eval_mode);
             const colors = modeColor(r.eval_mode);
             const detailId = r.app_run_id || r.id;
+            const answerCount = countByRun.get(Number(r.id)) || 0;
 
             return (
-              <div
-                key={r.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.3fr 1fr 1fr 1fr 1fr 0.7fr 1fr",
-                  padding: "17px 22px",
-                  borderTop: "1px solid #eef2f7",
-                  alignItems: "center",
-                  fontSize: 14,
-                  gap: 10,
-                  background: index % 2 === 0 ? "#ffffff" : "#fbfbfd",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      fontWeight: 1000,
-                      color: "#111827",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {r.firm_name || "Firma Ünvanı Yok"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: "#64748b",
-                      fontWeight: 700,
-                    }}
-                  >
-                    App Run ID: {r.app_run_id || "-"} • Remote ID: {r.id}
-                  </div>
-                </div>
-
-                <div>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      padding: "7px 10px",
-                      borderRadius: 999,
-                      background: colors.bg,
-                      color: colors.color,
-                      fontWeight: 1000,
-                      fontSize: 12,
-                    }}
-                  >
-                    {mode}
-                  </span>
-                </div>
-
-                <div style={{ fontWeight: 850, color: "#334155" }}>
-                  {r.template_type || "-"}
-                </div>
-
-                <div style={{ color: "#334155", fontWeight: 750 }}>
-                  {r.inspector_name || "-"}
-                </div>
-
-                <div style={{ color: "#334155", fontWeight: 750 }}>
-                  {formatDate(r.audit_date_millis || r.created_at_millis)}
-                </div>
-
+              <div key={r.id}>
                 <div
                   style={{
-                    fontWeight: 1000,
-                    color: "#5a0f1f",
-                    fontSize: 16,
+                    display: "grid",
+                    gridTemplateColumns: "1.2fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.6fr",
+                    padding: "17px 22px",
+                    borderTop: "1px solid #eef2f7",
+                    alignItems: "center",
+                    fontSize: 14,
+                    gap: 10,
+                    background: index % 2 === 0 ? "#ffffff" : "#fbfbfd",
                   }}
                 >
-                  {countByRun.get(Number(r.id)) || 0}
-                </div>
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 1000,
+                        color: "#111827",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {r.firm_name || "Firma Ünvanı Yok"}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: answerCount === 0 ? "#dc2626" : "#64748b",
+                        fontWeight: 800,
+                      }}
+                    >
+                      App Run ID: {r.app_run_id || "-"} • Remote ID: {r.id}
+                      {answerCount === 0 ? " • Bulgu yok" : ""}
+                    </div>
+                  </div>
 
-                <Link
-                  href={`/admin/denetimler/${detailId}`}
-                  style={{
-                    padding: "9px 13px",
-                    borderRadius: 12,
-                    background: "linear-gradient(135deg, #5a0f1f, #c62828)",
-                    color: "#fff",
-                    textDecoration: "none",
-                    fontWeight: 1000,
-                    textAlign: "center",
-                    fontSize: 13,
-                    boxShadow: "0 10px 24px rgba(90,15,31,0.18)",
-                  }}
-                >
-                  Detayı Aç
-                </Link>
+                  <div>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        padding: "7px 10px",
+                        borderRadius: 999,
+                        background: colors.bg,
+                        color: colors.color,
+                        fontWeight: 1000,
+                        fontSize: 12,
+                      }}
+                    >
+                      {mode}
+                    </span>
+                  </div>
+
+                  <div style={{ fontWeight: 850, color: "#334155" }}>
+                    {r.template_type || "-"}
+                  </div>
+
+                  <div style={{ color: "#334155", fontWeight: 750 }}>
+                    {r.inspector_name || "-"}
+                  </div>
+
+                  <div style={{ color: "#334155", fontWeight: 750 }}>
+                    {formatDate(r.audit_date_millis || r.created_at_millis)}
+                  </div>
+
+                  <div
+                    style={{
+                      fontWeight: 1000,
+                      color: answerCount === 0 ? "#dc2626" : "#5a0f1f",
+                      fontSize: 16,
+                    }}
+                  >
+                    {answerCount}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <Link
+                      href={`/admin/denetimler/${detailId}`}
+                      style={{
+                        padding: "9px 12px",
+                        borderRadius: 12,
+                        background: "linear-gradient(135deg, #5a0f1f, #c62828)",
+                        color: "#fff",
+                        textDecoration: "none",
+                        fontWeight: 1000,
+                        textAlign: "center",
+                        fontSize: 13,
+                      }}
+                    >
+                      Detay
+                    </Link>
+
+                    <details>
+                      <summary
+                        style={{
+                          listStyle: "none",
+                          cursor: "pointer",
+                          padding: "9px 12px",
+                          borderRadius: 12,
+                          background: "#fff7ed",
+                          color: "#9a3412",
+                          border: "1px solid #fed7aa",
+                          fontWeight: 1000,
+                          fontSize: 13,
+                        }}
+                      >
+                        Düzenle
+                      </summary>
+
+                      <div
+                        style={{
+                          marginTop: 12,
+                          padding: 14,
+                          borderRadius: 18,
+                          border: "1px solid #e5e7eb",
+                          background: "#fff",
+                          minWidth: 520,
+                          boxShadow: "0 16px 40px rgba(15,23,42,0.10)",
+                        }}
+                      >
+                        <form action={updateDenetimAction}>
+                          <input type="hidden" name="remoteId" value={r.id} />
+
+                          <EditGrid>
+                            <EditInput label="Firma" name="firm_name" defaultValue={r.firm_name || ""} />
+                            <EditInput label="Şablon" name="template_type" defaultValue={r.template_type || ""} />
+                            <EditInput label="Tür" name="eval_mode" defaultValue={r.eval_mode || ""} />
+                            <EditInput label="Denetçi" name="inspector_name" defaultValue={r.inspector_name || ""} />
+                            <EditInput label="Sorumlu" name="responsible" defaultValue={r.responsible || ""} />
+                            <EditInput label="Lokasyon" name="location" defaultValue={r.location || ""} />
+                            <EditInput label="Rapor No" name="report_no" defaultValue={r.report_no || ""} />
+                            <EditInput label="Genel Not" name="general_note" defaultValue={r.general_note || ""} />
+                          </EditGrid>
+
+                          <button
+                            type="submit"
+                            style={{
+                              marginTop: 12,
+                              width: "100%",
+                              border: 0,
+                              borderRadius: 12,
+                              padding: "11px 14px",
+                              background: "linear-gradient(135deg, #5a0f1f, #c62828)",
+                              color: "#fff",
+                              fontWeight: 1000,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Kaydı Güncelle
+                          </button>
+                        </form>
+                      </div>
+                    </details>
+
+                    <form action={deleteDenetimAction}>
+                      <input type="hidden" name="remoteId" value={r.id} />
+                      <button
+                        type="submit"
+                        style={{
+                          padding: "9px 12px",
+                          borderRadius: 12,
+                          background: "#fee2e2",
+                          color: "#991b1b",
+                          border: "1px solid #fecaca",
+                          fontWeight: 1000,
+                          fontSize: 13,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Sil
+                      </button>
+                    </form>
+                  </div>
+                </div>
               </div>
             );
           })
@@ -401,48 +523,84 @@ function Kpi({
   href: string;
 }) {
   return (
-    <Link
-      href={href}
-      style={{
-        display: "block",
-        textDecoration: "none",
-        color: "inherit",
-      }}
-    >
-      <div
-      style={{
-        background: "#fff",
-        borderRadius: 22,
-        padding: 20,
-        border: "1px solid #e5e7eb",
-        boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
-      }}
-    >
-      <div style={{ color: "#64748b", fontSize: 13, fontWeight: 900 }}>
-        {title}
-      </div>
+    <Link href={href} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
       <div
         style={{
-          fontSize: 34,
-          fontWeight: 1000,
-          marginTop: 8,
-          color: "#111827",
-          lineHeight: 1,
+          background: "#fff",
+          borderRadius: 22,
+          padding: 20,
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
         }}
       >
-        {value}
+        <div style={{ color: "#64748b", fontSize: 13, fontWeight: 900 }}>
+          {title}
+        </div>
+        <div
+          style={{
+            fontSize: 34,
+            fontWeight: 1000,
+            marginTop: 8,
+            color: "#111827",
+            lineHeight: 1,
+          }}
+        >
+          {value}
+        </div>
+        <div
+          style={{
+            marginTop: 8,
+            color: "#94a3b8",
+            fontSize: 12,
+            fontWeight: 750,
+          }}
+        >
+          {desc}
+        </div>
       </div>
-      <div
-        style={{
-          marginTop: 8,
-          color: "#94a3b8",
-          fontSize: 12,
-          fontWeight: 750,
-        }}
-      >
-        {desc}
-      </div>
-    </div>
     </Link>
+  );
+}
+
+function EditGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gap: 10,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function EditInput({
+  label,
+  name,
+  defaultValue,
+}: {
+  label: string;
+  name: string;
+  defaultValue: string;
+}) {
+  return (
+    <label style={{ display: "grid", gap: 5 }}>
+      <span style={{ fontSize: 11, fontWeight: 900, color: "#64748b" }}>
+        {label}
+      </span>
+      <input
+        name={name}
+        defaultValue={defaultValue}
+        style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 10,
+          padding: "9px 10px",
+          fontWeight: 700,
+          color: "#111827",
+        }}
+      />
+    </label>
   );
 }
