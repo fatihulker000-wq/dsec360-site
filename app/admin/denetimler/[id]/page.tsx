@@ -12,7 +12,7 @@ function modeLabel(mode?: string | null) {
   const m = String(mode || "").toUpperCase();
 
   if (m.includes("FOTO") || m.includes("PHOTO")) return "Fotoğraflı";
-  if (m.includes("PUAN") || m.includes("SCOR")) return "Puanlamalı";
+  if (m.includes("PUAN") || m.includes("SCOR") || m.includes("SKOR")) return "Puanlamalı";
   if (m.includes("ELMERI")) return "ELMERI";
   return "Klasik";
 }
@@ -27,7 +27,34 @@ function formatDate(value?: number | string | null) {
   return date.toLocaleDateString("tr-TR");
 }
 
+function scoreValue(result?: string | null) {
+  const r = String(result || "").toUpperCase().trim();
+  if (!r.startsWith("SCORE:")) return null;
+  return Number(r.replace("SCORE:", "").trim());
+}
+
+function resultLabel(result?: string | null) {
+  const score = scoreValue(result);
+  if (score !== null && Number.isFinite(score)) return `${score} Puan`;
+
+  const r = String(result || "").toUpperCase();
+  if (r === "UYGUN") return "Uygun";
+  if (r === "KISMEN") return "Kısmen Uygun";
+  if (r === "UYGUNSUZ") return "Uygunsuz";
+  if (r === "KAPSAMDISI" || r === "KAPSAM_DIŞI") return "Kapsam Dışı";
+
+  return result || "-";
+}
+
 function resultColor(result?: string | null) {
+  const score = scoreValue(result);
+
+  if (score !== null && Number.isFinite(score)) {
+    if (score >= 80) return "#16a34a";
+    if (score >= 50) return "#ca8a04";
+    return "#dc2626";
+  }
+
   const r = String(result || "").toUpperCase();
 
   if (r === "UYGUN") return "#16a34a";
@@ -39,6 +66,14 @@ function resultColor(result?: string | null) {
 }
 
 function resultBg(result?: string | null) {
+  const score = scoreValue(result);
+
+  if (score !== null && Number.isFinite(score)) {
+    if (score >= 80) return "#dcfce7";
+    if (score >= 50) return "#fef3c7";
+    return "#fee2e2";
+  }
+
   const r = String(result || "").toUpperCase();
 
   if (r === "UYGUN") return "#dcfce7";
@@ -49,6 +84,11 @@ function resultBg(result?: string | null) {
   return "#f1f5f9";
 }
 
+function isWebPhoto(src?: string | null) {
+  const value = String(src || "").trim();
+  return value.startsWith("http://") || value.startsWith("https://");
+}
+
 export default async function DenetimDetailPage({
   params,
 }: {
@@ -57,36 +97,38 @@ export default async function DenetimDetailPage({
   const supabase = getSupabase();
 
   const { id } = await params;
-  const appRunId = Number(id);
+  const requestedId = Number(id);
 
-let { data: runData, error: runError } = await supabase
-  .from("denetim_runs")
-  .select("*")
-  .eq("app_run_id", appRunId)
-  .maybeSingle();
-
-if (!runData) {
-  const fallback = await supabase
+  let { data: runData, error: runError } = await supabase
     .from("denetim_runs")
     .select("*")
-    .eq("id", appRunId)
+    .eq("app_run_id", requestedId)
     .maybeSingle();
 
-  runData = fallback.data;
-  runError = fallback.error;
-}
+  if (!runData) {
+    const fallback = await supabase
+      .from("denetim_runs")
+      .select("*")
+      .eq("id", requestedId)
+      .maybeSingle();
+
+    runData = fallback.data;
+    runError = fallback.error;
+  }
 
   if (!runData || runError) {
     return (
       <main style={{ padding: 32 }}>
         <h1>Denetim bulunamadı</h1>
-        <p>Aranan App Run ID: {String(id)}</p>
+        <p>Aranan ID: {String(id)}</p>
         <Link href="/admin/denetimler">Geri dön</Link>
       </main>
     );
   }
 
+  const appRunId = runData.app_run_id || runData.id;
   const remoteRunId = Number(runData.id);
+  const mode = modeLabel(runData.eval_mode);
 
   const { data: answers } = await supabase
     .from("denetim_answers")
@@ -96,15 +138,42 @@ if (!runData) {
 
   const answerList = answers || [];
 
-  const uygunCount = answerList.filter((a: any) => a.result === "UYGUN").length;
-  const kismenCount = answerList.filter((a: any) => a.result === "KISMEN").length;
-  const uygunsuzCount = answerList.filter((a: any) => a.result === "UYGUNSUZ").length;
-  const kapsamDisiCount = answerList.filter((a: any) => a.result === "KAPSAMDISI").length;
+  const uygunCount = answerList.filter(
+    (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
+  ).length;
 
-  const uyumSkoru = Math.round(
+  const kismenCount = answerList.filter(
+    (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
+  ).length;
+
+  const uygunsuzCount = answerList.filter(
+    (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
+  ).length;
+
+  const kapsamDisiCount = answerList.filter((a: any) => {
+    const r = String(a.result || "").toUpperCase();
+    return r === "KAPSAMDISI" || r === "KAPSAM_DIŞI";
+  }).length;
+
+  const scores: number[] = answerList
+    .map((a: any) => scoreValue(a.result))
+    .filter((v: number | null): v is number => {
+      return v !== null && Number.isFinite(v);
+    });
+
+  const scoreAverage =
+    scores.length > 0
+      ? Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length)
+      : 0;
+
+  const lowScoreCount = scores.filter((s) => s < 50).length;
+
+  const klasikUyum = Math.round(
     (uygunCount * 100 + kismenCount * 50) /
       (uygunCount + kismenCount + uygunsuzCount || 1)
   );
+
+  const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
 
   return (
     <main
@@ -154,7 +223,7 @@ if (!runData) {
         </h1>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Tag label={modeLabel(runData.eval_mode)} />
+          <Tag label={mode} />
           <Tag label={runData.template_type || "-"} />
           <Tag
             label={formatDate(
@@ -195,19 +264,56 @@ if (!runData) {
         <KPI title="Toplam Madde" value={String(answerList.length)} />
       </section>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-          gap: 16,
-          marginBottom: 28,
-        }}
-      >
-        <StatusCard title="Uygun" value={uygunCount} color="#16a34a" bg="#dcfce7" />
-        <StatusCard title="Kısmen Uygun" value={kismenCount} color="#ca8a04" bg="#fef3c7" />
-        <StatusCard title="Uygunsuz" value={uygunsuzCount} color="#dc2626" bg="#fee2e2" />
-        <StatusCard title="Kapsam Dışı" value={kapsamDisiCount} color="#64748b" bg="#e2e8f0" />
-      </section>
+      {mode === "Puanlamalı" ? (
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 16,
+            marginBottom: 28,
+          }}
+        >
+          <StatusCard
+            title="Ortalama Puan"
+            value={scoreAverage}
+            color="#5a0f1f"
+            bg="#f4e6e6"
+            suffix="%"
+          />
+          <StatusCard
+            title="Skorlu Madde"
+            value={scores.length}
+            color="#2563eb"
+            bg="#dbeafe"
+          />
+          <StatusCard
+            title="Düşük Puan"
+            value={lowScoreCount}
+            color="#dc2626"
+            bg="#fee2e2"
+          />
+          <StatusCard
+            title="Kapsam Dışı"
+            value={kapsamDisiCount}
+            color="#64748b"
+            bg="#e2e8f0"
+          />
+        </section>
+      ) : (
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 16,
+            marginBottom: 28,
+          }}
+        >
+          <StatusCard title="Uygun" value={uygunCount} color="#16a34a" bg="#dcfce7" />
+          <StatusCard title="Kısmen Uygun" value={kismenCount} color="#ca8a04" bg="#fef3c7" />
+          <StatusCard title="Uygunsuz" value={uygunsuzCount} color="#dc2626" bg="#fee2e2" />
+          <StatusCard title="Kapsam Dışı" value={kapsamDisiCount} color="#64748b" bg="#e2e8f0" />
+        </section>
+      )}
 
       <section
         style={{
@@ -220,7 +326,7 @@ if (!runData) {
         }}
       >
         <div style={{ fontWeight: 900, marginBottom: 8 }}>
-          Genel Uyum Skoru
+          {mode === "Puanlamalı" ? "Ortalama Skor" : "Genel Uyum Skoru"}
         </div>
 
         <div style={{ fontSize: 32, fontWeight: 1000, color: "#5a0f1f" }}>
@@ -255,7 +361,7 @@ if (!runData) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "0.35fr 2.2fr 1fr 2fr 2fr 0.8fr",
+            gridTemplateColumns: "0.35fr 2.1fr 1fr 2.2fr 1.8fr 1.1fr",
             padding: "14px 22px",
             background: "#f8fafc",
             fontWeight: 900,
@@ -265,7 +371,7 @@ if (!runData) {
         >
           <div>No</div>
           <div>Madde</div>
-          <div>Sonuç</div>
+          <div>{mode === "Puanlamalı" ? "Puan" : "Sonuç"}</div>
           <div>Önerilen Önlem</div>
           <div>Açıklama</div>
           <div>Foto</div>
@@ -276,79 +382,85 @@ if (!runData) {
             Bu denetime ait bulgu/madde kaydı bulunamadı.
           </div>
         ) : (
-          answerList.map((a: any, index: number) => (
-            <div
-              key={a.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "0.35fr 2.2fr 1fr 2fr 2fr 0.8fr",
-                padding: "18px 22px",
-                borderTop: "1px solid #eef2f7",
-                background: index % 2 === 0 ? "#ffffff" : "#fbfbfb",
-                fontSize: 14,
-                alignItems: "start",
-                gap: 14,
-              }}
-            >
-              <div style={{ fontWeight: 1000, color: "#475569" }}>
-                {index + 1}
-              </div>
+          answerList.map((a: any, index: number) => {
+            const photoSrc = a.photo_url || a.photo_path || "";
+            const canShowPhoto = isWebPhoto(photoSrc);
 
-              <div style={{ fontWeight: 900, color: "#111827", lineHeight: 1.45 }}>
-                {a.item_title || "-"}
-              </div>
+            return (
+              <div
+                key={a.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "0.35fr 2.1fr 1fr 2.2fr 1.8fr 1.1fr",
+                  padding: "18px 22px",
+                  borderTop: "1px solid #eef2f7",
+                  background: index % 2 === 0 ? "#ffffff" : "#fbfbfb",
+                  fontSize: 14,
+                  alignItems: "start",
+                  gap: 14,
+                }}
+              >
+                <div style={{ fontWeight: 1000, color: "#475569" }}>
+                  {index + 1}
+                </div>
 
-              <div>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    padding: "7px 10px",
-                    borderRadius: 999,
-                    background: resultBg(a.result),
-                    color: resultColor(a.result),
-                    fontWeight: 1000,
-                    fontSize: 12,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {a.result || "-"}
-                </span>
-              </div>
+                <div style={{ fontWeight: 900, color: "#111827", lineHeight: 1.45 }}>
+                  {a.item_title || "-"}
+                </div>
 
-              <div style={{ color: "#334155", lineHeight: 1.45 }}>
-                {a.recommended_action || "-"}
-              </div>
+                <div>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      padding: "7px 10px",
+                      borderRadius: 999,
+                      background: resultBg(a.result),
+                      color: resultColor(a.result),
+                      fontWeight: 1000,
+                      fontSize: 12,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {resultLabel(a.result)}
+                  </span>
+                </div>
 
-              <div style={{ color: "#475569", lineHeight: 1.45 }}>
-                {a.note || "-"}
-              </div>
+                <div style={{ color: "#334155", lineHeight: 1.45 }}>
+                  {a.recommended_action || "-"}
+                </div>
 
-              <div>
-  {(a.photo_url || a.photo_path) ? (
-    <a
-      href={a.photo_url || a.photo_path}
-      target="_blank"
-      style={{ display: "inline-block" }}
-    >
-     <img
-  src={a.photo_url || a.photo_path}
-  alt="Denetim fotoğrafı"
-  style={{
-    width: 70,
-    height: 70,
-    objectFit: "cover",
-    borderRadius: 10,
-    border: "2px solid #e5e7eb",
-    cursor: "pointer",
-  }}
-/>
-    </a>
-  ) : (
-    "-"
-  )}
-</div>
-            </div>
-          ))
+                <div style={{ color: "#475569", lineHeight: 1.45 }}>
+                  {a.note || "-"}
+                </div>
+
+                <div>
+                  {canShowPhoto ? (
+                    <a
+                      href={photoSrc}
+                      target="_blank"
+                      style={{ display: "inline-block" }}
+                    >
+                      <img
+                        src={photoSrc}
+                        alt="Denetim fotoğrafı"
+                        style={{
+                          width: 96,
+                          height: 76,
+                          objectFit: "cover",
+                          borderRadius: 12,
+                          border: "2px solid #e5e7eb",
+                          cursor: "pointer",
+                          background: "#f8fafc",
+                        }}
+                      />
+                    </a>
+                  ) : (
+                    "-"
+                  )}
+                </div>
+              </div>
+            );
+          })
         )}
       </section>
     </main>
@@ -388,11 +500,13 @@ function StatusCard({
   value,
   color,
   bg,
+  suffix = "",
 }: {
   title: string;
   value: number;
   color: string;
   bg: string;
+  suffix?: string;
 }) {
   return (
     <div
@@ -416,7 +530,10 @@ function StatusCard({
           marginTop: 10,
         }}
       >
-        <div style={{ fontSize: 32, fontWeight: 1000, color }}>{value}</div>
+        <div style={{ fontSize: 32, fontWeight: 1000, color }}>
+          {value}
+          {suffix}
+        </div>
 
         <div
           style={{

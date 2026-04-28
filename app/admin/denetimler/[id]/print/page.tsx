@@ -110,33 +110,42 @@ export default async function InspectionPrintPage({
     .eq("run_remote_id", runData.id)
     .order("id", { ascending: true });
 
-  const list = answers || [];
-  const mode = modeLabel(runData.eval_mode);
+ const list = answers || [];
+const mode = modeLabel(runData.eval_mode);
 
-  const scores: number[] = list
+const uygun = list.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
+).length;
+
+const kismen = list.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
+).length;
+
+const uygunsuz = list.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
+).length;
+
+const kapsamDisi = list.filter((a: any) => {
+  const r = String(a.result || "").toUpperCase();
+  return r === "KAPSAMDISI" || r === "KAPSAM_DIŞI";
+}).length;
+
+const scores: number[] = list
   .map((a: any) => scoreValue(a.result))
   .filter((v: number | null): v is number => {
     return v !== null && Number.isFinite(v);
   });
 
-  const uygun = list.filter((a: any) => String(a.result).toUpperCase() === "UYGUN").length;
-  const kismen = list.filter((a: any) => String(a.result).toUpperCase() === "KISMEN").length;
-  const uygunsuz = list.filter((a: any) => String(a.result).toUpperCase() === "UYGUNSUZ").length;
-  const kapsamDisi = list.filter((a: any) => {
-    const r = String(a.result || "").toUpperCase();
-    return r === "KAPSAMDISI" || r === "KAPSAM_DIŞI";
-  }).length;
+const scoreAverage =
+  scores.length > 0
+    ? Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length)
+    : 0;
 
-  const scoreAverage =
-    scores.length > 0
-      ? Math.round(scores.reduce((sum: number, v: number) => sum + v, 0) / scores.length)
-      : 0;
+const klasikUyum = Math.round(
+  (uygun * 100 + kismen * 50) / (uygun + kismen + uygunsuz || 1)
+);
 
-  const klasikUyum = Math.round(
-    (uygun * 100 + kismen * 50) / (uygun + kismen + uygunsuz || 1)
-  );
-
-  const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
+const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
 
   return (
     <main className="page">
