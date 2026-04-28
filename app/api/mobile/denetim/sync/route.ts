@@ -54,6 +54,12 @@ export async function POST(req: Request) {
 
     const supabase = getSupabase();
 
+    // 🔥 AYNI DENETİM VARSA SİL (KRİTİK FIX)
+await supabase
+  .from("denetim_runs")
+  .delete()
+  .eq("app_run_id", run.id);
+
     const { data: runData, error: runError } = await supabase
       .from("denetim_runs")
       .insert({
@@ -79,6 +85,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: runError.message }, { status: 500 });
     }
 
+    // 🔥 ESKİ CEVAPLARI TEMİZLE
+await supabase
+  .from("denetim_answers")
+  .delete()
+  .eq("app_run_id", run.id);
+  
     if (Array.isArray(answers) && answers.length > 0) {
       const rows = await Promise.all(
         answers.map(async (a: any) => {
