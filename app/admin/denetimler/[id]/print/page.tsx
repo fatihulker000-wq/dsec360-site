@@ -27,12 +27,13 @@ function modeLabel(mode?: string | null) {
 function scoreValue(result?: string | null) {
   const r = String(result || "").toUpperCase().trim();
   if (!r.startsWith("SCORE:")) return null;
-  return Number(r.replace("SCORE:", "").trim());
+  const value = Number(r.replace("SCORE:", "").trim());
+  return Number.isFinite(value) ? value : null;
 }
 
 function resultLabel(result?: string | null) {
   const score = scoreValue(result);
-  if (score !== null && Number.isFinite(score)) return `${score} Puan`;
+  if (score !== null) return `${score} Puan`;
 
   const r = String(result || "").toUpperCase();
   if (r === "UYGUN") return "Uygun";
@@ -44,7 +45,7 @@ function resultLabel(result?: string | null) {
 
 function badgeClass(result?: string | null) {
   const score = scoreValue(result);
-  if (score !== null && Number.isFinite(score)) {
+  if (score !== null) {
     if (score >= 80) return "badge good";
     if (score >= 50) return "badge mid";
     return "badge bad";
@@ -110,42 +111,42 @@ export default async function InspectionPrintPage({
     .eq("run_remote_id", runData.id)
     .order("id", { ascending: true });
 
- const list = answers || [];
-const mode = modeLabel(runData.eval_mode);
+  const list = answers || [];
+  const mode = modeLabel(runData.eval_mode);
 
-const uygun = list.filter(
-  (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
-).length;
+  const uygun = list.filter(
+    (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
+  ).length;
 
-const kismen = list.filter(
-  (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
-).length;
+  const kismen = list.filter(
+    (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
+  ).length;
 
-const uygunsuz = list.filter(
-  (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
-).length;
+  const uygunsuz = list.filter(
+    (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
+  ).length;
 
-const kapsamDisi = list.filter((a: any) => {
-  const r = String(a.result || "").toUpperCase();
-  return r === "KAPSAMDISI" || r === "KAPSAM_DIŞI";
-}).length;
+  const kapsamDisi = list.filter((a: any) => {
+    const r = String(a.result || "").toUpperCase();
+    return r === "KAPSAMDISI" || r === "KAPSAM_DIŞI";
+  }).length;
 
-const scores: number[] = list
-  .map((a: any) => scoreValue(a.result))
-  .filter((v: number | null): v is number => {
-    return v !== null && Number.isFinite(v);
-  });
+  const scores: number[] = list
+    .map((a: any) => scoreValue(a.result))
+    .filter((v: number | null): v is number => {
+      return v !== null && Number.isFinite(v);
+    });
 
-const scoreAverage =
-  scores.length > 0
-    ? Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length)
-    : 0;
+  const scoreAverage =
+    scores.length > 0
+      ? Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length)
+      : 0;
 
-const klasikUyum = Math.round(
-  (uygun * 100 + kismen * 50) / (uygun + kismen + uygunsuz || 1)
-);
+  const klasikUyum = Math.round(
+    (uygun * 100 + kismen * 50) / (uygun + kismen + uygunsuz || 1)
+  );
 
-const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
+  const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
 
   return (
     <main className="page">
@@ -155,7 +156,7 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
           body { background: white !important; }
           .page { padding: 0 !important; }
           .sheet { box-shadow: none !important; border: none !important; }
-          @page { size: A4; margin: 14mm; }
+          @page { size: A4; margin: 12mm; }
         }
 
         body { background: #f3f4f6; }
@@ -167,7 +168,7 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
         }
 
         .sheet {
-          max-width: 980px;
+          max-width: 1120px;
           margin: 0 auto;
           background: white;
           border: 1px solid #e5e7eb;
@@ -179,7 +180,6 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
         thead { display: table-header-group; }
         tfoot { display: table-footer-group; }
         tr { page-break-inside: avoid; }
-        table { page-break-inside: auto; }
 
         .hero {
           padding: 30px;
@@ -238,37 +238,53 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
         table {
           width: 100%;
           border-collapse: collapse;
+          table-layout: fixed;
           font-size: 12px;
+          page-break-inside: auto;
+        }
+
+        th,
+        td {
+          padding: 11px 10px;
+          border: 1px solid #e5e7eb;
+          vertical-align: top;
+          line-height: 1.45;
+          white-space: normal;
+          word-break: break-word;
+          overflow-wrap: anywhere;
         }
 
         th {
           background: #f8fafc;
           color: #334155;
           text-align: left;
-          padding: 10px;
-          border: 1px solid #e5e7eb;
           font-size: 12px;
+          font-weight: 900;
         }
 
-        td {
-          padding: 10px;
-          border: 1px solid #e5e7eb;
-          vertical-align: top;
-          line-height: 1.45;
-        }
+        .col-no { width: 5%; }
+        .col-madde { width: 24%; }
+        .col-sonuc { width: 12%; }
+        .col-onlem { width: 28%; }
+        .col-aciklama { width: 21%; }
+        .col-foto { width: 10%; }
 
         .section-title {
           font-size: 18px;
           font-weight: 1000;
           margin: 24px 0 10px;
+          border-left: 4px solid #5a0f1f;
+          padding-left: 10px;
         }
 
         .badge {
           display: inline-block;
-          padding: 5px 9px;
+          padding: 6px 10px;
           border-radius: 999px;
           font-size: 11px;
           font-weight: 900;
+          white-space: normal;
+          line-height: 1.25;
         }
 
         .good { background: #dcfce7; color: #15803d; }
@@ -295,7 +311,7 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
         }
 
         .actions {
-          max-width: 980px;
+          max-width: 1120px;
           margin: 0 auto 16px;
           display: flex;
           justify-content: space-between;
@@ -304,12 +320,14 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
 
         .btn {
           border: 0;
-          border-radius: 12px;
+          border-radius: 14px;
           padding: 11px 15px;
           font-weight: 900;
           cursor: pointer;
           text-decoration: none;
-          display: inline-block;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
         }
 
         .primary {
@@ -318,27 +336,42 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
         }
 
         .secondary {
-          background: white;
-          color: #5a0f1f;
-          border: 1px solid #e5e7eb;
+          background: linear-gradient(135deg, #5a0f1f, #8f172c);
+          color: #fff;
+          border: 1px solid rgba(255,255,255,0.14);
+          box-shadow: 0 14px 34px rgba(90,15,31,0.22);
+        }
+
+        .backIcon {
+          width: 28px;
+          height: 28px;
+          border-radius: 10px;
+          background: rgba(255,255,255,0.16);
+          display: inline-grid;
+          place-items: center;
+          font-size: 14px;
+          font-weight: 1000;
         }
 
         .photo {
-          width: 64px;
-          height: 64px;
+          width: 86px;
+          height: 68px;
           object-fit: cover;
           border-radius: 8px;
           border: 1px solid #ddd;
+          display: block;
+          background: #f8fafc;
         }
       `}</style>
 
       <div className="actions no-print">
         <Link className="btn secondary" href={`/admin/denetimler/${appRunId}`}>
-          ← Denetim Detayına Dön
+          <span className="backIcon">‹</span>
+          <span>Denetim Detayına Dön</span>
         </Link>
 
         <button className="btn primary" type="button">
-          Kurumsal PDF olarak Yazdır
+          Kurumsal PDF Olarak Yazdır
         </button>
       </div>
 
@@ -367,7 +400,10 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
             <Info label="Denetçi" value={runData.inspector_name || "-"} />
             <Info label="Sorumlu" value={runData.responsible || "-"} />
             <Info label="Lokasyon" value={runData.location || "-"} />
-            <Info label={mode === "Puanlamalı" ? "Ortalama Skor" : "Uyum Skoru"} value={`%${uyumSkoru}`} />
+            <Info
+              label={mode === "Puanlamalı" ? "Ortalama Skor" : "Uyum Skoru"}
+              value={`%${uyumSkoru}`}
+            />
           </div>
 
           <div className="section-title">Özet Sonuçlar</div>
@@ -394,12 +430,14 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
           <table>
             <thead>
               <tr>
-                <th style={{ width: 42 }}>No</th>
-                <th>Madde</th>
-                <th style={{ width: 110 }}>{mode === "Puanlamalı" ? "Puan" : "Sonuç"}</th>
-                <th>Önerilen Önlem</th>
-                <th>Açıklama</th>
-                <th>Foto</th>
+                <th className="col-no">No</th>
+                <th className="col-madde">Madde</th>
+                <th className="col-sonuc">
+                  {mode === "Puanlamalı" ? "Puan" : "Sonuç"}
+                </th>
+                <th className="col-onlem">Önerilen Önlem</th>
+                <th className="col-aciklama">Açıklama</th>
+                <th className="col-foto">Foto</th>
               </tr>
             </thead>
 
@@ -425,7 +463,11 @@ const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
                       <td>{a.note || "-"}</td>
                       <td>
                         {photoSrc && !String(photoSrc).startsWith("content://") ? (
-                          <img src={photoSrc} className="photo" alt="Denetim fotoğrafı" />
+                          <img
+                            src={photoSrc}
+                            className="photo"
+                            alt="Denetim fotoğrafı"
+                          />
                         ) : (
                           "-"
                         )}
