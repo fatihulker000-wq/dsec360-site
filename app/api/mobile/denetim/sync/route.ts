@@ -1,11 +1,46 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+}
+
+async function uploadPhotoIfExists(
+  supabase: ReturnType<typeof getSupabase>,
+  answer: any
+) {
+  const photoBase64 = String(answer?.photoBase64 || "").trim();
+  const photoFileName = String(answer?.photoFileName || "").trim();
+  const photoMimeType = String(answer?.photoMimeType || "image/jpeg").trim();
+
+  if (!photoBase64 || !photoFileName) {
+    return String(answer?.photoUrl || "").trim();
+  }
+
+  const fileBuffer = Buffer.from(photoBase64, "base64");
+  const filePath = `app/${Date.now()}-${photoFileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("denetim-photos")
+    .upload(filePath, fileBuffer, {
+      contentType: photoMimeType,
+      upsert: true,
+    });
+
+  if (uploadError) {
+    return "";
+  }
+
+  const { data } = supabase.storage
+    .from("denetim-photos")
+    .getPublicUrl(filePath);
+
+  return data.publicUrl || "";
 }
 
 export async function POST(req: Request) {
@@ -45,23 +80,33 @@ export async function POST(req: Request) {
     }
 
     if (Array.isArray(answers) && answers.length > 0) {
-      const rows = answers.map((a: any) => ({
-        run_remote_id: runData.id,
-        app_run_id: run.id,
-        item_title: a.itemTitle,
-        legal_ref: a.legalRef,
-        result: a.result,
-        note: a.note,
-        photo_path: a.photoPath,
-        recommended_action: a.recommendedAction,
-      }));
+      const rows = await Promise.all(
+        answers.map(async (a: any) => {
+          const photoUrl = await uploadPhotoIfExists(supabase, a);
+
+          return {
+            run_remote_id: runData.id,
+            app_run_id: run.id,
+            item_title: a.itemTitle,
+            legal_ref: a.legalRef,
+            result: a.result,
+            note: a.note,
+            photo_path: a.photoPath,
+            photo_url: photoUrl,
+            recommended_action: a.recommendedAction,
+          };
+        })
+      );
 
       const { error: answersError } = await supabase
         .from("denetim_answers")
         .insert(rows);
 
       if (answersError) {
-        return NextResponse.json({ error: answersError.message }, { status: 500 });
+        return NextResponse.json(
+          { error: answersError.message },
+          { status: 500 }
+        );
       }
     }
 

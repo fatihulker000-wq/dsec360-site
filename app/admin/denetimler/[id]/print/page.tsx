@@ -19,9 +19,42 @@ function formatDate(value?: number | string | null) {
 function modeLabel(mode?: string | null) {
   const m = String(mode || "").toUpperCase();
   if (m.includes("FOTO") || m.includes("PHOTO")) return "Fotoğraflı";
-  if (m.includes("PUAN") || m.includes("SCOR")) return "Puanlamalı";
+  if (m.includes("PUAN") || m.includes("SCOR") || m.includes("SKOR")) return "Puanlamalı";
   if (m.includes("ELMERI")) return "ELMERI";
   return "Klasik";
+}
+
+function scoreValue(result?: string | null) {
+  const r = String(result || "").toUpperCase().trim();
+  if (!r.startsWith("SCORE:")) return null;
+  return Number(r.replace("SCORE:", "").trim());
+}
+
+function resultLabel(result?: string | null) {
+  const score = scoreValue(result);
+  if (score !== null && Number.isFinite(score)) return `${score} Puan`;
+
+  const r = String(result || "").toUpperCase();
+  if (r === "UYGUN") return "Uygun";
+  if (r === "KISMEN") return "Kısmen Uygun";
+  if (r === "UYGUNSUZ") return "Uygunsuz";
+  if (r === "KAPSAMDISI" || r === "KAPSAM_DIŞI") return "Kapsam Dışı";
+  return result || "-";
+}
+
+function badgeClass(result?: string | null) {
+  const score = scoreValue(result);
+  if (score !== null && Number.isFinite(score)) {
+    if (score >= 80) return "badge good";
+    if (score >= 50) return "badge mid";
+    return "badge bad";
+  }
+
+  const r = String(result || "").toUpperCase();
+  if (r === "UYGUN") return "badge good";
+  if (r === "KISMEN") return "badge mid";
+  if (r === "UYGUNSUZ") return "badge bad";
+  return "badge neutral";
 }
 
 export default async function InspectionPrintPage({
@@ -32,9 +65,9 @@ export default async function InspectionPrintPage({
   const supabase = getSupabase();
 
   const { id } = await params;
-  const appRunId = Number(id || 0);
+  const requestedId = Number(id || 0);
 
-  if (!appRunId) {
+  if (!requestedId) {
     return (
       <main style={{ padding: 32 }}>
         <h1>Geçersiz denetim ID</h1>
@@ -43,30 +76,33 @@ export default async function InspectionPrintPage({
     );
   }
 
-let { data: runData } = await supabase
-  .from("denetim_runs")
-  .select("*")
-  .eq("app_run_id", appRunId)
-  .maybeSingle();
-
-if (!runData) {
-  const fallback = await supabase
+  let { data: runData } = await supabase
     .from("denetim_runs")
     .select("*")
-    .eq("id", appRunId)
+    .eq("app_run_id", requestedId)
     .maybeSingle();
 
-  runData = fallback.data;
-}
+  if (!runData) {
+    const fallback = await supabase
+      .from("denetim_runs")
+      .select("*")
+      .eq("id", requestedId)
+      .maybeSingle();
+
+    runData = fallback.data;
+  }
 
   if (!runData) {
     return (
       <main style={{ padding: 32 }}>
         <h1>Rapor bulunamadı</h1>
+        <p>Aranan ID: {requestedId}</p>
         <Link href="/admin/denetimler">Geri dön</Link>
       </main>
     );
   }
+
+  const appRunId = runData.app_run_id || runData.id;
 
   const { data: answers } = await supabase
     .from("denetim_answers")
@@ -75,15 +111,32 @@ if (!runData) {
     .order("id", { ascending: true });
 
   const list = answers || [];
+  const mode = modeLabel(runData.eval_mode);
 
-  const uygun = list.filter((a: any) => a.result === "UYGUN").length;
-  const kismen = list.filter((a: any) => a.result === "KISMEN").length;
-  const uygunsuz = list.filter((a: any) => a.result === "UYGUNSUZ").length;
-  const kapsamDisi = list.filter((a: any) => a.result === "KAPSAMDISI").length;
+  const scores: number[] = list
+  .map((a: any) => scoreValue(a.result))
+  .filter((v: number | null): v is number => {
+    return v !== null && Number.isFinite(v);
+  });
 
-  const uyumSkoru = Math.round(
+  const uygun = list.filter((a: any) => String(a.result).toUpperCase() === "UYGUN").length;
+  const kismen = list.filter((a: any) => String(a.result).toUpperCase() === "KISMEN").length;
+  const uygunsuz = list.filter((a: any) => String(a.result).toUpperCase() === "UYGUNSUZ").length;
+  const kapsamDisi = list.filter((a: any) => {
+    const r = String(a.result || "").toUpperCase();
+    return r === "KAPSAMDISI" || r === "KAPSAM_DIŞI";
+  }).length;
+
+  const scoreAverage =
+    scores.length > 0
+      ? Math.round(scores.reduce((sum: number, v: number) => sum + v, 0) / scores.length)
+      : 0;
+
+  const klasikUyum = Math.round(
     (uygun * 100 + kismen * 50) / (uygun + kismen + uygunsuz || 1)
   );
+
+  const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
 
   return (
     <main className="page">
@@ -96,9 +149,7 @@ if (!runData) {
           @page { size: A4; margin: 14mm; }
         }
 
-        body {
-          background: #f3f4f6;
-        }
+        body { background: #f3f4f6; }
 
         .page {
           padding: 28px;
@@ -116,13 +167,10 @@ if (!runData) {
           box-shadow: 0 20px 60px rgba(15,23,42,.10);
         }
 
-   thead {
-  display: table-header-group;
-}
-
-tfoot {
-  display: table-footer-group;
-}
+        thead { display: table-header-group; }
+        tfoot { display: table-footer-group; }
+        tr { page-break-inside: avoid; }
+        table { page-break-inside: auto; }
 
         .hero {
           padding: 30px;
@@ -147,11 +195,10 @@ tfoot {
           font-size: 14px;
           opacity: .92;
           font-weight: 700;
+          line-height: 1.5;
         }
 
-        .content {
-          padding: 26px 30px 34px;
-        }
+        .content { padding: 26px 30px 34px; }
 
         .grid {
           display: grid;
@@ -213,8 +260,12 @@ tfoot {
           border-radius: 999px;
           font-size: 11px;
           font-weight: 900;
-          background: #f1f5f9;
         }
+
+        .good { background: #dcfce7; color: #15803d; }
+        .mid { background: #fef3c7; color: #b45309; }
+        .bad { background: #fee2e2; color: #b91c1c; }
+        .neutral { background: #f1f5f9; color: #475569; }
 
         .footer {
           margin-top: 28px;
@@ -249,6 +300,7 @@ tfoot {
           font-weight: 900;
           cursor: pointer;
           text-decoration: none;
+          display: inline-block;
         }
 
         .primary {
@@ -261,6 +313,14 @@ tfoot {
           color: #5a0f1f;
           border: 1px solid #e5e7eb;
         }
+
+        .photo {
+          width: 64px;
+          height: 64px;
+          object-fit: cover;
+          border-radius: 8px;
+          border: 1px solid #ddd;
+        }
       `}</style>
 
       <div className="actions no-print">
@@ -268,49 +328,56 @@ tfoot {
           ← Detaya Dön
         </Link>
 
-        <button className="btn primary" onClick={() => window.print()}>
-          PDF Olarak Kaydet / Yazdır
+        <button className="btn primary" type="button">
+          PDF için: Ctrl + P / Yazdır
         </button>
       </div>
 
       <section className="sheet">
         <div className="hero">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-  <img 
-    src="/logo.png" 
-    style={{ height: 38 }} 
-  />
-  <div className="brand">D-SEC • Dijital Sağlık • Emniyet • Çevre</div>
-</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <img src="/logo.png" style={{ height: 38 }} alt="D-SEC Logo" />
+            <div className="brand">D-SEC • Dijital Sağlık • Emniyet • Çevre</div>
+          </div>
 
-          <div className="brand">D-SEC • Dijital Sağlık • Emniyet • Çevre</div>
           <div className="title">İş Sağlığı ve Güvenliği Denetim Raporu</div>
-        <div className="subtitle">
-  {runData.firm_name || "Firma Ünvanı Yok"} • {modeLabel(runData.eval_mode)} •{" "}
-  {formatDate(runData.audit_date_millis || runData.created_at_millis)} • 
-  Rapor No: {runData.report_no || "-"}
-</div>
+
+          <div className="subtitle">
+            {runData.firm_name || "Firma Ünvanı Yok"} • {mode} •{" "}
+            {formatDate(runData.audit_date_millis || runData.created_at_millis)} •
+            Rapor No: {runData.report_no || "-"}
+          </div>
         </div>
 
         <div className="content">
           <div className="grid">
             <Info label="Firma" value={runData.firm_name || "-"} />
-            <Info label="Denetim Türü" value={modeLabel(runData.eval_mode)} />
+            <Info label="Denetim Türü" value={mode} />
             <Info label="Şablon" value={runData.template_type || "-"} />
             <Info label="Rapor No" value={runData.report_no || "-"} />
             <Info label="Denetçi" value={runData.inspector_name || "-"} />
             <Info label="Sorumlu" value={runData.responsible || "-"} />
             <Info label="Lokasyon" value={runData.location || "-"} />
-            <Info label="Uyum Skoru" value={`%${uyumSkoru}`} />
+            <Info label={mode === "Puanlamalı" ? "Ortalama Skor" : "Uyum Skoru"} value={`%${uyumSkoru}`} />
           </div>
 
           <div className="section-title">Özet Sonuçlar</div>
 
           <div className="grid">
             <Info label="Toplam Madde" value={String(list.length)} />
-            <Info label="Uygun" value={String(uygun)} />
-            <Info label="Kısmen Uygun" value={String(kismen)} />
-            <Info label="Uygunsuz" value={String(uygunsuz)} />
+            {mode === "Puanlamalı" ? (
+              <>
+                <Info label="Ortalama Puan" value={`%${scoreAverage}`} />
+                <Info label="Skorlu Madde" value={String(scores.length)} />
+                <Info label="Kapsam Dışı" value={String(kapsamDisi)} />
+              </>
+            ) : (
+              <>
+                <Info label="Uygun" value={String(uygun)} />
+                <Info label="Kısmen Uygun" value={String(kismen)} />
+                <Info label="Uygunsuz" value={String(uygunsuz)} />
+              </>
+            )}
           </div>
 
           <div className="section-title">Denetim Bulguları</div>
@@ -320,44 +387,43 @@ tfoot {
               <tr>
                 <th style={{ width: 42 }}>No</th>
                 <th>Madde</th>
-                <th style={{ width: 110 }}>Sonuç</th>
+                <th style={{ width: 110 }}>{mode === "Puanlamalı" ? "Puan" : "Sonuç"}</th>
                 <th>Önerilen Önlem</th>
                 <th>Açıklama</th>
                 <th>Foto</th>
-
               </tr>
             </thead>
+
             <tbody>
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>Bu denetime ait bulgu bulunamadı.</td>
+                  <td colSpan={6}>Bu denetime ait bulgu bulunamadı.</td>
                 </tr>
               ) : (
-                list.map((a: any, index: number) => (
-                  <tr key={a.id}>
-                    <td>{index + 1}</td>
-                    <td>{a.item_title || "-"}</td>
-                    <td>
-                      <span className="badge">{a.result || "-"}</span>
-                    </td>
-                    <td>{a.recommended_action || "-"}</td>
-                    <td>{a.note || "-"}</td>
-                    <td>
-  {a.photo_url ? (
-    <img
-      src={a.photo_url}
-      style={{
-        width: 60,
-        height: 60,
-        objectFit: "cover",
-        borderRadius: 6,
-        border: "1px solid #ddd"
-      }}
-    />
-  ) : "-"}
-</td>
-                  </tr>
-                ))
+                list.map((a: any, index: number) => {
+                  const photoSrc = a.photo_url || a.photo_path || "";
+
+                  return (
+                    <tr key={a.id}>
+                      <td>{index + 1}</td>
+                      <td>{a.item_title || "-"}</td>
+                      <td>
+                        <span className={badgeClass(a.result)}>
+                          {resultLabel(a.result)}
+                        </span>
+                      </td>
+                      <td>{a.recommended_action || "-"}</td>
+                      <td>{a.note || "-"}</td>
+                      <td>
+                        {photoSrc && !String(photoSrc).startsWith("content://") ? (
+                          <img src={photoSrc} className="photo" alt="Denetim fotoğrafı" />
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -366,19 +432,11 @@ tfoot {
 
           <p style={{ lineHeight: 1.7, color: "#334155", fontSize: 13 }}>
             Bu rapor, denetim sırasında elde edilen bulgulara göre hazırlanmıştır.
-            Uygunsuz ve kısmen uygun maddeler için sorumlu kişi, hedef tarih ve
-            doğrulama yöntemi belirlenerek düzeltici faaliyet planı oluşturulması
-            önerilir.
+            Puanlamalı denetimlerde değerlendirme, madde bazlı skor ortalaması üzerinden;
+            klasik denetimlerde uygun, kısmen uygun ve uygunsuz sonuçları üzerinden yapılır.
           </p>
 
           <div className="footer">
-            <div style={{
-  marginTop: 20,
-  fontSize: 11,
-  color: "#64748b"
-}}>
-  Oluşturulma Tarihi: {new Date().toLocaleString("tr-TR")}
-</div>
             <div className="sign">
               <strong>Denetimi Gerçekleştiren</strong>
               <br />
@@ -390,6 +448,10 @@ tfoot {
               <br />
               Ad Soyad / İmza
             </div>
+          </div>
+
+          <div style={{ marginTop: 20, fontSize: 11, color: "#64748b" }}>
+            Oluşturulma Tarihi: {new Date().toLocaleString("tr-TR")}
           </div>
         </div>
       </section>
