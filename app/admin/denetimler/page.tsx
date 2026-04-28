@@ -443,6 +443,23 @@ export default async function AdminDenetimlerPage({
                   </Link>
 
                   <Link
+  href={'/admin/denetimler/${detailId}/print'}
+  target="_blank"
+  style={{
+    padding: "9px 12px",
+    borderRadius: 12,
+    background: "#111827",
+    color: "#fff",
+    textDecoration: "none",
+    fontWeight: 1000,
+    textAlign: "center",
+    fontSize: 13,
+  }}
+>
+  App Raporu
+</Link>
+
+                  <Link
                     href={`/admin/denetimler/${r.id}/edit`}
                     style={{
                       padding: "9px 12px",
