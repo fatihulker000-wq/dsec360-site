@@ -413,7 +413,7 @@ export default async function InspectionPrintPage({
           <span>Denetim Detayına Dön</span>
         </Link>
 
-        <button className="btn primary" type="button" onClick={undefined}>
+        <button className="btn primary" type="button" onClick={() => window.print()}>
           Yazdır / PDF Kaydet
         </button>
       </div>
@@ -428,7 +428,7 @@ export default async function InspectionPrintPage({
           <div className="title">İş Sağlığı ve Güvenliği Denetim Raporu</div>
 
           <div className="subtitle">
-            {cleanFirmName(runData.firm_name)} • {mode} •{" "}
+           {cleanFirmName(runData.firm_name)} • {mode} Denetim • {" "}
             {formatDate(runData.audit_date_millis || runData.created_at_millis)} •
             Rapor No: {runData.report_no || "-"}
           </div>
@@ -507,7 +507,7 @@ export default async function InspectionPrintPage({
                 </tr>
               ) : (
                 list.map((a: any, index: number) => {
-                  const photoSrc = a.photo_url || "";
+                  const photoSrc = a.photo_url || a.photo_path || "";
                   return (
                     <tr key={a.id}>
                       <td>{index + 1}</td>
@@ -520,7 +520,7 @@ export default async function InspectionPrintPage({
                       </td>
                       <td>{a.note || "-"}</td>
                       <td>
-                        {photoSrc ? (
+                        {photoSrc && !photoSrc.startsWith("content://") ? (
                           <img src={photoSrc} className="photo" alt="Denetim fotoğrafı" />
                         ) : (
                           "-"

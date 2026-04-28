@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import type { CSSProperties, ReactNode } from "react";
 
 function getSupabase() {
   return createClient(
@@ -135,6 +136,33 @@ export default async function AdminDenetimlerPage({
   const elmeriCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "ELMERI").length;
   const totalAnswers = answerList.length;
 
+  const emptyRunCount = safeRuns.filter((r: any) => {
+    return (countByRun.get(Number(r.id)) || 0) === 0;
+  }).length;
+
+  const firmCount = firmOptions.length;
+  const avgAnswerPerRun =
+    safeRuns.length > 0 ? Math.round(totalAnswers / safeRuns.length) : 0;
+
+  const topFirmStats = firmOptions
+    .map((firm) => {
+      const firmRuns = safeRuns.filter(
+        (r: any) => cleanFirmName(r.firm_name) === firm
+      );
+
+      const firmAnswers = firmRuns.reduce((sum: number, r: any) => {
+        return sum + (countByRun.get(Number(r.id)) || 0);
+      }, 0);
+
+      return {
+        firm,
+        count: firmRuns.length,
+        answers: firmAnswers,
+      };
+    })
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
   return (
     <main
       style={{
@@ -186,13 +214,14 @@ export default async function AdminDenetimlerPage({
             margin: 0,
             opacity: 0.9,
             fontSize: 15,
-            maxWidth: 820,
+            maxWidth: 860,
             lineHeight: 1.6,
             fontWeight: 600,
           }}
         >
-          Android app üzerinden gelen denetimler firma bazlı, tür bazlı ve tüm kayıtlar
-          olarak izlenir. Hatalı kayıtlar silinebilir veya düzenleme ekranından düzeltilebilir.
+          Android app üzerinden gelen denetimler firma bazlı, tür bazlı ve tüm kayıtlar olarak izlenir.
+          Bu ekran yalnızca kayıt izleme, hızlı kontrol, düzeltme ve silme amacıyla kullanılır.
+          Gelişmiş rapor süreçleri Raporlama Modülü içinde yönetilecektir.
         </p>
       </section>
 
@@ -230,6 +259,34 @@ export default async function AdminDenetimlerPage({
 
       <section
         style={{
+          display: "grid",
+          gridTemplateColumns: "1.15fr 1fr 1fr",
+          gap: 16,
+          marginBottom: 22,
+        }}
+      >
+        <AnalysisCard
+          title="Kayıt Sağlığı"
+          value={emptyRunCount === 0 ? "Temiz" : `${emptyRunCount} uyarı`}
+          desc={emptyRunCount === 0 ? "Bulgu boş kayıt görünmüyor" : "Bulgu sayısı 0 olan kayıt var"}
+          tone={emptyRunCount === 0 ? "good" : "bad"}
+        />
+        <AnalysisCard
+          title="Firma Kapsamı"
+          value={`${firmCount} firma`}
+          desc={activeFirm === "ALL" ? "Tüm firmalar izleniyor" : `${activeFirm} filtresi aktif`}
+          tone="neutral"
+        />
+        <AnalysisCard
+          title="Ortalama Madde"
+          value={`${avgAnswerPerRun}`}
+          desc="Denetim başına ortalama bulgu/madde"
+          tone="neutral"
+        />
+      </section>
+
+      <section
+        style={{
           background: "#fff",
           borderRadius: 24,
           padding: 18,
@@ -238,16 +295,41 @@ export default async function AdminDenetimlerPage({
           boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
         }}
       >
-        <div style={{ fontSize: 15, fontWeight: 1000, color: "#111827", marginBottom: 12 }}>
-          Firma Filtresi
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            marginBottom: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 1000, color: "#111827" }}>
+              Firma Filtresi
+            </div>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700, marginTop: 4 }}>
+              Firma bazlı denetim kayıtlarını hızlı süz.
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "#f8fafc",
+              border: "1px solid #e5e7eb",
+              color: "#334155",
+              fontSize: 12,
+              fontWeight: 900,
+            }}
+          >
+            Aktif: {activeFirm === "ALL" ? "Tüm Firmalar" : activeFirm}
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <FilterPill
-            href={makeQuery(activeType, "ALL")}
-            active={activeFirm === "ALL"}
-            label="Tüm Firmalar"
-          />
+          <FilterPill href={makeQuery(activeType, "ALL")} active={activeFirm === "ALL"} label="Tüm Firmalar" />
 
           {firmOptions.map((firm) => (
             <FilterPill
@@ -258,6 +340,41 @@ export default async function AdminDenetimlerPage({
             />
           ))}
         </div>
+      </section>
+
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 16,
+          marginBottom: 22,
+        }}
+      >
+        <MiniPanel title="Tür Dağılımı">
+          <MiniRow label="Klasik" value={klasikCount} total={safeRuns.length} color="#334155" />
+          <MiniRow label="Fotoğraflı" value={fotografliCount} total={safeRuns.length} color="#1d4ed8" />
+          <MiniRow label="Puanlamalı" value={puanCount} total={safeRuns.length} color="#c2410c" />
+          <MiniRow label="ELMERI" value={elmeriCount} total={safeRuns.length} color="#15803d" />
+        </MiniPanel>
+
+        <MiniPanel title="Firma Bazlı İlk 5">
+          {topFirmStats.length === 0 ? (
+            <div style={{ color: "#64748b", fontWeight: 700, fontSize: 13 }}>
+              Firma kaydı yok.
+            </div>
+          ) : (
+            topFirmStats.map((f) => (
+              <MiniRow
+                key={f.firm}
+                label={f.firm}
+                value={f.count}
+                total={safeRuns.length}
+                color="#5a0f1f"
+                desc={`${f.answers} madde`}
+              />
+            ))
+          )}
+        </MiniPanel>
       </section>
 
       <section
@@ -291,7 +408,7 @@ export default async function AdminDenetimlerPage({
                 fontWeight: 650,
               }}
             >
-              Firma, denetim türü, şablon, denetçi, tarih, bulgu sayısı ve işlem alanı
+              Firma, tür, şablon, denetçi, tarih, bulgu sayısı ve işlem alanı
             </div>
           </div>
 
@@ -314,7 +431,7 @@ export default async function AdminDenetimlerPage({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.3fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.7fr",
+            gridTemplateColumns: "1.3fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.9fr",
             padding: "14px 22px",
             background: "#f8fafc",
             fontWeight: 1000,
@@ -356,7 +473,7 @@ export default async function AdminDenetimlerPage({
                 key={r.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.3fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.7fr",
+                  gridTemplateColumns: "1.3fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.9fr",
                   padding: "17px 22px",
                   borderTop: "1px solid #eef2f7",
                   alignItems: "center",
@@ -426,52 +543,19 @@ export default async function AdminDenetimlerPage({
                 </div>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Link
-                    href={`/admin/denetimler/${detailId}`}
-                    style={{
-                      padding: "9px 12px",
-                      borderRadius: 12,
-                      background: "linear-gradient(135deg, #5a0f1f, #c62828)",
-                      color: "#fff",
-                      textDecoration: "none",
-                      fontWeight: 1000,
-                      textAlign: "center",
-                      fontSize: 13,
-                    }}
-                  >
+                  <Link href={`/admin/denetimler/${detailId}`} style={buttonStyle("primary")}>
                     Detay
                   </Link>
 
                   <Link
-  href={'/admin/denetimler/${detailId}/print'}
-  target="_blank"
-  style={{
-    padding: "9px 12px",
-    borderRadius: 12,
-    background: "#111827",
-    color: "#fff",
-    textDecoration: "none",
-    fontWeight: 1000,
-    textAlign: "center",
-    fontSize: 13,
-  }}
->
-  App Raporu
-</Link>
-
-                  <Link
-                    href={`/admin/denetimler/${r.id}/edit`}
-                    style={{
-                      padding: "9px 12px",
-                      borderRadius: 12,
-                      background: "#fff7ed",
-                      color: "#9a3412",
-                      border: "1px solid #fed7aa",
-                      fontWeight: 1000,
-                      fontSize: 13,
-                      textDecoration: "none",
-                    }}
+                    href={`/admin/denetimler/${detailId}/print`}
+                    target="_blank"
+                    style={buttonStyle("dark")}
                   >
+                    App Raporu
+                  </Link>
+
+                  <Link href={`/admin/denetimler/${r.id}/edit`} style={buttonStyle("warning")}>
                     Düzenle
                   </Link>
 
@@ -501,6 +585,45 @@ export default async function AdminDenetimlerPage({
       </section>
     </main>
   );
+}
+
+function buttonStyle(type: "primary" | "dark" | "warning"): CSSProperties {
+  if (type === "dark") {
+    return {
+      padding: "9px 12px",
+      borderRadius: 12,
+      background: "#111827",
+      color: "#fff",
+      textDecoration: "none",
+      fontWeight: 1000,
+      textAlign: "center",
+      fontSize: 13,
+    };
+  }
+
+  if (type === "warning") {
+    return {
+      padding: "9px 12px",
+      borderRadius: 12,
+      background: "#fff7ed",
+      color: "#9a3412",
+      border: "1px solid #fed7aa",
+      fontWeight: 1000,
+      fontSize: 13,
+      textDecoration: "none",
+    };
+  }
+
+  return {
+    padding: "9px 12px",
+    borderRadius: 12,
+    background: "linear-gradient(135deg, #5a0f1f, #c62828)",
+    color: "#fff",
+    textDecoration: "none",
+    fontWeight: 1000,
+    textAlign: "center",
+    fontSize: 13,
+  };
 }
 
 function Kpi({
@@ -551,6 +674,127 @@ function Kpi({
         </div>
       </div>
     </Link>
+  );
+}
+
+function AnalysisCard({
+  title,
+  value,
+  desc,
+  tone,
+}: {
+  title: string;
+  value: string;
+  desc: string;
+  tone: "good" | "bad" | "neutral";
+}) {
+  const color = tone === "good" ? "#15803d" : tone === "bad" ? "#b91c1c" : "#5a0f1f";
+  const bg = tone === "good" ? "#f0fdf4" : tone === "bad" ? "#fee2e2" : "#fff7f7";
+
+  return (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 22,
+        padding: 20,
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <div style={{ color: "#64748b", fontSize: 13, fontWeight: 900 }}>{title}</div>
+          <div style={{ color, fontSize: 24, fontWeight: 1000, marginTop: 6 }}>{value}</div>
+          <div style={{ color: "#94a3b8", fontSize: 12, fontWeight: 750, marginTop: 6 }}>{desc}</div>
+        </div>
+        <div
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: 16,
+            background: bg,
+            color,
+            display: "grid",
+            placeItems: "center",
+            fontWeight: 1000,
+          }}
+        >
+          ●
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniPanel({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section
+      style={{
+        background: "#fff",
+        borderRadius: 24,
+        padding: 18,
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
+      }}
+    >
+      <div style={{ fontSize: 15, fontWeight: 1000, color: "#111827", marginBottom: 14 }}>
+        {title}
+      </div>
+      <div style={{ display: "grid", gap: 12 }}>{children}</div>
+    </section>
+  );
+}
+
+function MiniRow({
+  label,
+  value,
+  total,
+  color,
+  desc,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  color: string;
+  desc?: string;
+}) {
+  const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 10,
+          fontSize: 13,
+          fontWeight: 900,
+        }}
+      >
+        <span style={{ color: "#334155" }}>{label}</span>
+        <span style={{ color }}>
+          {value} kayıt {desc ? `• ${desc}` : ""}
+        </span>
+      </div>
+      <div
+        style={{
+          height: 8,
+          background: "#f1f5f9",
+          borderRadius: 999,
+          overflow: "hidden",
+          marginTop: 7,
+        }}
+      >
+        <div
+          style={{
+            width: `${percent}%`,
+            height: "100%",
+            background: color,
+            borderRadius: 999,
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
