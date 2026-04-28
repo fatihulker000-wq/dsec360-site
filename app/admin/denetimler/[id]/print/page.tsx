@@ -98,20 +98,20 @@ export default async function InspectionPrintPage({
   const requestedId = Number(id || 0);
 
   let { data: runData } = await supabase
+  .from("denetim_runs")
+  .select("*")
+  .eq("id", requestedId)
+  .maybeSingle();
+
+if (!runData) {
+  const fallback = await supabase
     .from("denetim_runs")
     .select("*")
     .eq("app_run_id", requestedId)
     .maybeSingle();
 
-  if (!runData) {
-    const fallback = await supabase
-      .from("denetim_runs")
-      .select("*")
-      .eq("id", requestedId)
-      .maybeSingle();
-
-    runData = fallback.data;
-  }
+  runData = fallback.data;
+}
 
   if (!runData) {
     return (
@@ -413,9 +413,9 @@ export default async function InspectionPrintPage({
           <span>Denetim Detayına Dön</span>
         </Link>
 
-        <button className="btn primary" type="button" onClick={() => window.print()}>
-          Yazdır / PDF Kaydet
-        </button>
+        <button className="btn primary" type="button">
+  Yazdır / PDF Kaydet
+</button>
       </div>
 
       <section className="sheet">

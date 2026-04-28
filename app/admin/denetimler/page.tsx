@@ -464,7 +464,7 @@ export default async function AdminDenetimlerPage({
           filteredRuns.map((r: any, index: number) => {
             const mode = modeLabel(r.eval_mode);
             const colors = modeColor(r.eval_mode);
-            const detailId = r.app_run_id || r.id;
+            const detailId = r.id;
             const answerCount = countByRun.get(Number(r.id)) || 0;
             const firmName = cleanFirmName(r.firm_name);
 
@@ -548,7 +548,7 @@ export default async function AdminDenetimlerPage({
                   </Link>
 
                   <Link
-                    href={`/admin/denetimler/${detailId}/print`}
+  href={`/admin/denetimler/${detailId}/print`}
                     target="_blank"
                     style={buttonStyle("dark")}
                   >

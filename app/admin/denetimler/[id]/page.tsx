@@ -100,21 +100,21 @@ export default async function DenetimDetailPage({
   const requestedId = Number(id);
 
   let { data: runData, error: runError } = await supabase
+  .from("denetim_runs")
+  .select("*")
+  .eq("id", requestedId)
+  .maybeSingle();
+
+if (!runData) {
+  const fallback = await supabase
     .from("denetim_runs")
     .select("*")
     .eq("app_run_id", requestedId)
     .maybeSingle();
 
-  if (!runData) {
-    const fallback = await supabase
-      .from("denetim_runs")
-      .select("*")
-      .eq("id", requestedId)
-      .maybeSingle();
-
-    runData = fallback.data;
-    runError = fallback.error;
-  }
+  runData = fallback.data;
+  runError = fallback.error;
+}
 
   if (!runData || runError) {
     return (

@@ -25,7 +25,7 @@ async function uploadPhotoIfExists(
   try {
     const fileBuffer = Buffer.from(photoBase64, "base64");
     const safeFileName = photoFileName.replace(/[^a-zA-Z0-9.-]/g, "");
-const filePath = 'app/${Date.now()}-${safeFileName}';
+const filePath = `app/${Date.now()}-${safeFileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from("denetim-photos")
