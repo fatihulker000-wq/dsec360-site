@@ -367,7 +367,21 @@ export default async function InspectionPrintPage({
       <div className="actions no-print">
         <Link className="btn secondary" href={`/admin/denetimler/${appRunId}`}>
           <span className="backIcon">‹</span>
-          <span>Denetim Detayına Dön</span>
+         <span
+  style={{
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.16)",
+    display: "inline-grid",
+    placeItems: "center",
+    fontSize: 14,
+    fontWeight: 1000,
+  }}
+>
+  ‹
+</span>
+<span>Denetim Detayına Dön</span>
         </Link>
 
         <button className="btn primary" type="button">

@@ -199,16 +199,29 @@ export default async function DenetimDetailPage({
       gap: 10,
       padding: "12px 18px",
       borderRadius: 14,
-      background: "#ffffff",
-      border: "1px solid #e5e7eb",
-      color: "#5a0f1f",
+      background: "linear-gradient(135deg, #5a0f1f, #8f172c)",
+      border: "1px solid rgba(255,255,255,0.14)",
+      color: "#fff",
       fontWeight: 1000,
       textDecoration: "none",
-      boxShadow: "0 12px 30px rgba(15,23,42,0.06)",
+      boxShadow: "0 14px 34px rgba(90,15,31,0.22)",
     }}
   >
-    <span style={{ fontSize: 18 }}>←</span>
-    <span>Denetim Listesine Dön</span>
+    <span
+  style={{
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.16)",
+    display: "inline-grid",
+    placeItems: "center",
+    fontSize: 14,
+    fontWeight: 1000,
+  }}
+>
+  ‹
+</span>
+<span>Denetim Listesine Dön</span>
   </Link>
 
   <div
