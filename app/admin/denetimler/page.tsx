@@ -39,6 +39,23 @@ function formatDate(value?: number | string | null) {
   return date.toLocaleDateString("tr-TR");
 }
 
+function cleanFirmName(name?: string | null) {
+  const v = String(name || "").trim();
+  if (!v) return "Firma Ünvanı Yok";
+  if (v.toLowerCase() === "firma") return "Firma Ünvanı Yok";
+  return v;
+}
+
+function makeQuery(type: string, firm: string) {
+  const params = new URLSearchParams();
+
+  if (type && type !== "ALL") params.set("type", type);
+  if (firm && firm !== "ALL") params.set("firm", firm);
+
+  const q = params.toString();
+  return q ? `/admin/denetimler?${q}` : "/admin/denetimler";
+}
+
 async function deleteDenetimAction(formData: FormData) {
   "use server";
 
@@ -54,39 +71,14 @@ async function deleteDenetimAction(formData: FormData) {
   redirect("/admin/denetimler");
 }
 
-async function updateDenetimAction(formData: FormData) {
-  "use server";
-
-  const remoteId = Number(formData.get("remoteId") || 0);
-  if (!remoteId) return;
-
-  const supabase = getSupabase();
-
-  await supabase
-    .from("denetim_runs")
-    .update({
-      firm_name: String(formData.get("firm_name") || ""),
-      template_type: String(formData.get("template_type") || ""),
-      eval_mode: String(formData.get("eval_mode") || ""),
-      inspector_name: String(formData.get("inspector_name") || ""),
-      responsible: String(formData.get("responsible") || ""),
-      location: String(formData.get("location") || ""),
-      report_no: String(formData.get("report_no") || ""),
-      general_note: String(formData.get("general_note") || ""),
-    })
-    .eq("id", remoteId);
-
-  revalidatePath("/admin/denetimler");
-  redirect("/admin/denetimler");
-}
-
 export default async function AdminDenetimlerPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ type?: string }>;
+  searchParams?: Promise<{ type?: string; firm?: string }>;
 }) {
   const sp = await searchParams;
   const activeType = String(sp?.type || "ALL").toUpperCase();
+  const activeFirm = String(sp?.firm || "ALL");
 
   const supabase = getSupabase();
 
@@ -113,36 +105,34 @@ export default async function AdminDenetimlerPage({
     countByRun.set(key, (countByRun.get(key) || 0) + 1);
   });
 
-  const filteredRuns =
-    activeType === "ALL"
-      ? safeRuns
-      : safeRuns.filter((r: any) => {
-          const label = modeLabel(r.eval_mode).toUpperCase();
+  const firmOptions = Array.from(
+    new Set(
+      safeRuns
+        .map((r: any) => cleanFirmName(r.firm_name))
+        .filter((x: string) => x && x !== "Firma Ünvanı Yok")
+    )
+  ).sort((a, b) => a.localeCompare(b, "tr"));
 
-          if (activeType === "KLASIK") return label === "KLASIK";
-          if (activeType === "FOTO") return label === "FOTOĞRAFLI";
-          if (activeType === "PUAN") return label === "PUANLAMALI";
-          if (activeType === "ELMERI") return label === "ELMERI";
+  const filteredRuns = safeRuns.filter((r: any) => {
+    const label = modeLabel(r.eval_mode).toUpperCase();
+    const firmName = cleanFirmName(r.firm_name);
 
-          return true;
-        });
+    const typeOk =
+      activeType === "ALL" ||
+      (activeType === "KLASIK" && label === "KLASIK") ||
+      (activeType === "FOTO" && label === "FOTOĞRAFLI") ||
+      (activeType === "PUAN" && label === "PUANLAMALI") ||
+      (activeType === "ELMERI" && label === "ELMERI");
 
-  const klasikCount = safeRuns.filter(
-    (r: any) => modeLabel(r.eval_mode) === "Klasik"
-  ).length;
+    const firmOk = activeFirm === "ALL" || firmName === activeFirm;
 
-  const fotografliCount = safeRuns.filter(
-    (r: any) => modeLabel(r.eval_mode) === "Fotoğraflı"
-  ).length;
+    return typeOk && firmOk;
+  });
 
-  const puanCount = safeRuns.filter(
-    (r: any) => modeLabel(r.eval_mode) === "Puanlamalı"
-  ).length;
-
-  const elmeriCount = safeRuns.filter(
-    (r: any) => modeLabel(r.eval_mode) === "ELMERI"
-  ).length;
-
+  const klasikCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "Klasik").length;
+  const fotografliCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "Fotoğraflı").length;
+  const puanCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "Puanlamalı").length;
+  const elmeriCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "ELMERI").length;
   const totalAnswers = answerList.length;
 
   return (
@@ -196,14 +186,13 @@ export default async function AdminDenetimlerPage({
             margin: 0,
             opacity: 0.9,
             fontSize: 15,
-            maxWidth: 760,
+            maxWidth: 820,
             lineHeight: 1.6,
             fontWeight: 600,
           }}
         >
-          Android app üzerinden tamamlanan klasik, fotoğraflı, puanlamalı ve
-          ELMERI denetimler tek merkezden izlenir. Hatalı kayıtlar bu ekrandan
-          silinebilir veya düzeltilebilir.
+          Android app üzerinden gelen denetimler firma bazlı, tür bazlı ve tüm kayıtlar
+          olarak izlenir. Hatalı kayıtlar silinebilir veya düzenleme ekranından düzeltilebilir.
         </p>
       </section>
 
@@ -231,12 +220,44 @@ export default async function AdminDenetimlerPage({
           marginBottom: 24,
         }}
       >
-        <Kpi title="Toplam Denetim" value={safeRuns.length} desc="Tüm kayıtlar" href="/admin/denetimler" />
-        <Kpi title="Klasik" value={klasikCount} desc="Standart kontrol" href="/admin/denetimler?type=KLASIK" />
-        <Kpi title="Fotoğraflı" value={fotografliCount} desc="Görsel kanıtlı" href="/admin/denetimler?type=FOTO" />
-        <Kpi title="Puanlamalı" value={puanCount} desc="Skor bazlı denetim" href="/admin/denetimler?type=PUAN" />
-        <Kpi title="ELMERI" value={elmeriCount} desc="Gözlemsel risk analizi" href="/admin/denetimler?type=ELMERI" />
-        <Kpi title="Toplam Madde" value={totalAnswers} desc="Aktarılan bulgu" href="/admin/denetimler" />
+        <Kpi title="Toplam Denetim" value={safeRuns.length} desc="Tüm kayıtlar" href={makeQuery("ALL", activeFirm)} />
+        <Kpi title="Klasik" value={klasikCount} desc="Standart kontrol" href={makeQuery("KLASIK", activeFirm)} />
+        <Kpi title="Fotoğraflı" value={fotografliCount} desc="Görsel kanıtlı" href={makeQuery("FOTO", activeFirm)} />
+        <Kpi title="Puanlamalı" value={puanCount} desc="Skor bazlı denetim" href={makeQuery("PUAN", activeFirm)} />
+        <Kpi title="ELMERI" value={elmeriCount} desc="Gözlemsel analiz" href={makeQuery("ELMERI", activeFirm)} />
+        <Kpi title="Toplam Madde" value={totalAnswers} desc="Aktarılan bulgu" href={makeQuery(activeType, activeFirm)} />
+      </section>
+
+      <section
+        style={{
+          background: "#fff",
+          borderRadius: 24,
+          padding: 18,
+          border: "1px solid #e5e7eb",
+          marginBottom: 22,
+          boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 1000, color: "#111827", marginBottom: 12 }}>
+          Firma Filtresi
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <FilterPill
+            href={makeQuery(activeType, "ALL")}
+            active={activeFirm === "ALL"}
+            label="Tüm Firmalar"
+          />
+
+          {firmOptions.map((firm) => (
+            <FilterPill
+              key={firm}
+              href={makeQuery(activeType, firm)}
+              active={activeFirm === firm}
+              label={firm}
+            />
+          ))}
+        </div>
       </section>
 
       <section
@@ -270,7 +291,7 @@ export default async function AdminDenetimlerPage({
                 fontWeight: 650,
               }}
             >
-              Detay açma, kayıt düzeltme ve hatalı kayıt silme alanı
+              Firma, denetim türü, şablon, denetçi, tarih, bulgu sayısı ve işlem alanı
             </div>
           </div>
 
@@ -293,7 +314,7 @@ export default async function AdminDenetimlerPage({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.2fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.6fr",
+            gridTemplateColumns: "1.3fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.7fr",
             padding: "14px 22px",
             background: "#f8fafc",
             fontWeight: 1000,
@@ -320,7 +341,7 @@ export default async function AdminDenetimlerPage({
               textAlign: "center",
             }}
           >
-            Henüz app üzerinden gelen denetim yok.
+            Seçilen filtreye uygun denetim kaydı yok.
           </div>
         ) : (
           filteredRuns.map((r: any, index: number) => {
@@ -328,133 +349,133 @@ export default async function AdminDenetimlerPage({
             const colors = modeColor(r.eval_mode);
             const detailId = r.app_run_id || r.id;
             const answerCount = countByRun.get(Number(r.id)) || 0;
+            const firmName = cleanFirmName(r.firm_name);
 
             return (
-              <div key={r.id}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1.2fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.6fr",
-                    padding: "17px 22px",
-                    borderTop: "1px solid #eef2f7",
-                    alignItems: "center",
-                    fontSize: 14,
-                    gap: 10,
-                    background: index % 2 === 0 ? "#ffffff" : "#fbfbfd",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 1000,
-                        color: "#111827",
-                        marginBottom: 4,
-                      }}
-                    >
-                      {r.firm_name || "Firma Ünvanı Yok"}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: answerCount === 0 ? "#dc2626" : "#64748b",
-                        fontWeight: 800,
-                      }}
-                    >
-                      App Run ID: {r.app_run_id || "-"} • Remote ID: {r.id}
-                      {answerCount === 0 ? " • Bulgu yok" : ""}
-                    </div>
-                  </div>
-
-                  <div>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        padding: "7px 10px",
-                        borderRadius: 999,
-                        background: colors.bg,
-                        color: colors.color,
-                        fontWeight: 1000,
-                        fontSize: 12,
-                      }}
-                    >
-                      {mode}
-                    </span>
-                  </div>
-
-                  <div style={{ fontWeight: 850, color: "#334155" }}>
-                    {r.template_type || "-"}
-                  </div>
-
-                  <div style={{ color: "#334155", fontWeight: 750 }}>
-                    {r.inspector_name || "-"}
-                  </div>
-
-                  <div style={{ color: "#334155", fontWeight: 750 }}>
-                    {formatDate(r.audit_date_millis || r.created_at_millis)}
-                  </div>
-
+              <div
+                key={r.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1.3fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.7fr",
+                  padding: "17px 22px",
+                  borderTop: "1px solid #eef2f7",
+                  alignItems: "center",
+                  fontSize: 14,
+                  gap: 10,
+                  background: index % 2 === 0 ? "#ffffff" : "#fbfbfd",
+                }}
+              >
+                <div>
                   <div
                     style={{
                       fontWeight: 1000,
-                      color: answerCount === 0 ? "#dc2626" : "#5a0f1f",
-                      fontSize: 16,
+                      color: "#111827",
+                      marginBottom: 4,
                     }}
                   >
-                    {answerCount}
+                    {firmName}
                   </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: answerCount === 0 ? "#dc2626" : "#64748b",
+                      fontWeight: 800,
+                    }}
+                  >
+                    App Run ID: {r.app_run_id || "-"} • Remote ID: {r.id}
+                    {answerCount === 0 ? " • Bulgu yok" : ""}
+                  </div>
+                </div>
 
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <Link
-                      href={`/admin/denetimler/${detailId}`}
+                <div>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      padding: "7px 10px",
+                      borderRadius: 999,
+                      background: colors.bg,
+                      color: colors.color,
+                      fontWeight: 1000,
+                      fontSize: 12,
+                    }}
+                  >
+                    {mode}
+                  </span>
+                </div>
+
+                <div style={{ fontWeight: 850, color: "#334155" }}>
+                  {r.template_type || "-"}
+                </div>
+
+                <div style={{ color: "#334155", fontWeight: 750 }}>
+                  {r.inspector_name || "-"}
+                </div>
+
+                <div style={{ color: "#334155", fontWeight: 750 }}>
+                  {formatDate(r.audit_date_millis || r.created_at_millis)}
+                </div>
+
+                <div
+                  style={{
+                    fontWeight: 1000,
+                    color: answerCount === 0 ? "#dc2626" : "#5a0f1f",
+                    fontSize: 16,
+                  }}
+                >
+                  {answerCount}
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Link
+                    href={`/admin/denetimler/${detailId}`}
+                    style={{
+                      padding: "9px 12px",
+                      borderRadius: 12,
+                      background: "linear-gradient(135deg, #5a0f1f, #c62828)",
+                      color: "#fff",
+                      textDecoration: "none",
+                      fontWeight: 1000,
+                      textAlign: "center",
+                      fontSize: 13,
+                    }}
+                  >
+                    Detay
+                  </Link>
+
+                  <Link
+                    href={`/admin/denetimler/${r.id}/edit`}
+                    style={{
+                      padding: "9px 12px",
+                      borderRadius: 12,
+                      background: "#fff7ed",
+                      color: "#9a3412",
+                      border: "1px solid #fed7aa",
+                      fontWeight: 1000,
+                      fontSize: 13,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Düzenle
+                  </Link>
+
+                  <form action={deleteDenetimAction}>
+                    <input type="hidden" name="remoteId" value={r.id} />
+                    <button
+                      type="submit"
                       style={{
                         padding: "9px 12px",
                         borderRadius: 12,
-                        background: "linear-gradient(135deg, #5a0f1f, #c62828)",
-                        color: "#fff",
-                        textDecoration: "none",
+                        background: "#fee2e2",
+                        color: "#991b1b",
+                        border: "1px solid #fecaca",
                         fontWeight: 1000,
-                        textAlign: "center",
                         fontSize: 13,
+                        cursor: "pointer",
                       }}
                     >
-                      Detay
-                    </Link>
-
-                    <Link
-  href={'/admin/denetimler/${r.id}/edit'}
-  style={{
-    padding: "9px 12px",
-    borderRadius: 12,
-    background: "#fff7ed",
-    color: "#9a3412",
-    border: "1px solid #fed7aa",
-    fontWeight: 1000,
-    fontSize: 13,
-    textDecoration: "none",
-  }}
->
-  Düzenle
-</Link>
-
-                    <form action={deleteDenetimAction}>
-                      <input type="hidden" name="remoteId" value={r.id} />
-                      <button
-                        type="submit"
-                        style={{
-                          padding: "9px 12px",
-                          borderRadius: 12,
-                          background: "#fee2e2",
-                          color: "#991b1b",
-                          border: "1px solid #fecaca",
-                          fontWeight: 1000,
-                          fontSize: 13,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Sil
-                      </button>
-                    </form>
-                  </div>
+                      Sil
+                    </button>
+                  </form>
                 </div>
               </div>
             );
@@ -516,45 +537,31 @@ function Kpi({
   );
 }
 
-function EditGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-        gap: 10,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function EditInput({
+function FilterPill({
+  href,
+  active,
   label,
-  name,
-  defaultValue,
 }: {
+  href: string;
+  active: boolean;
   label: string;
-  name: string;
-  defaultValue: string;
 }) {
   return (
-    <label style={{ display: "grid", gap: 5 }}>
-      <span style={{ fontSize: 11, fontWeight: 900, color: "#64748b" }}>
-        {label}
-      </span>
-      <input
-        name={name}
-        defaultValue={defaultValue}
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 10,
-          padding: "9px 10px",
-          fontWeight: 700,
-          color: "#111827",
-        }}
-      />
-    </label>
+    <Link
+      href={href}
+      style={{
+        textDecoration: "none",
+        padding: "10px 14px",
+        borderRadius: 999,
+        fontSize: 13,
+        fontWeight: 1000,
+        background: active ? "linear-gradient(135deg, #5a0f1f, #c62828)" : "#fff",
+        color: active ? "#fff" : "#5a0f1f",
+        border: active ? "1px solid rgba(90,15,31,0.2)" : "1px solid #ead5d5",
+        boxShadow: active ? "0 10px 24px rgba(90,15,31,0.18)" : "none",
+      }}
+    >
+      {label}
+    </Link>
   );
 }
