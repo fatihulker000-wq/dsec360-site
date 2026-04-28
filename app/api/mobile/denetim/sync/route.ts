@@ -90,7 +90,7 @@ export async function POST(req: Request) {
       .insert({
         app_run_id: run.id,
         firm_id: run.firmId,
-        firm_name: run.firmName,
+        firm_name: run.firmName || run.firm_name || "Firma Ünvanı Belirtilmemiş",
         template_type: run.templateType,
         eval_mode: run.evalMode,
         location: run.location,
@@ -115,37 +115,54 @@ export async function POST(req: Request) {
     }
 
     // 🔥 4) ANSWERS INSERT + FOTO
-    if (Array.isArray(answers) && answers.length > 0) {
-      const rows = await Promise.all(
-        answers.map(async (a: any) => {
-          const photoUrl = await uploadPhotoIfExists(supabase, a);
+    // 🔥 answers garanti array'e çevir
+let safeAnswers: any[] = [];
 
-          return {
-            run_remote_id: runData.id,
-            app_run_id: run.id,
-            item_title: a.itemTitle,
-            legal_ref: a.legalRef,
-            result: a.result,
-            note: a.note,
-            photo_path: a.photoPath || null,
-            photo_url: photoUrl || null,
-            recommended_action: a.recommendedAction,
-          };
-        })
-      );
+if (Array.isArray(answers)) {
+  safeAnswers = answers;
+} else if (typeof answers === "string") {
+  try {
+    safeAnswers = JSON.parse(answers);
+  } catch (e) {
+    console.error("ANSWERS PARSE ERROR:", e);
+  }
+} else if (answers && typeof answers === "object") {
+  safeAnswers = Object.values(answers);
+}
 
-      const { error: answersError } = await supabase
-        .from("denetim_answers")
-        .insert(rows);
+if (safeAnswers.length > 0) {
+  const rows = await Promise.all(
+    safeAnswers.map(async (a: any) => {
+      const photoUrl = await uploadPhotoIfExists(supabase, a);
 
-      if (answersError) {
-        console.error("ANSWERS INSERT ERROR:", answersError);
-        return NextResponse.json(
-          { error: answersError.message },
-          { status: 500 }
-        );
-      }
-    }
+      return {
+        run_remote_id: runData.id,
+        app_run_id: run.id,
+        item_title: a.itemTitle || a.item_title || "",
+        legal_ref: a.legalRef || "",
+        result: a.result || "",
+        note: a.note || "",
+        photo_path: a.photoPath || null,
+        photo_url: photoUrl || null,
+        recommended_action: a.recommendedAction || "",
+      };
+    })
+  );
+
+  console.log("INSERT ANSWERS COUNT:", rows.length);
+
+  const { error: answersError } = await supabase
+    .from("denetim_answers")
+    .insert(rows);
+
+  if (answersError) {
+    console.error("ANSWERS INSERT ERROR:", answersError);
+    return NextResponse.json(
+      { error: answersError.message },
+      { status: 500 }
+    );
+  }
+}
 
     return NextResponse.json({
       success: true,
