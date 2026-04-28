@@ -420,67 +420,21 @@ export default async function AdminDenetimlerPage({
                       Detay
                     </Link>
 
-                    <details>
-                      <summary
-                        style={{
-                          listStyle: "none",
-                          cursor: "pointer",
-                          padding: "9px 12px",
-                          borderRadius: 12,
-                          background: "#fff7ed",
-                          color: "#9a3412",
-                          border: "1px solid #fed7aa",
-                          fontWeight: 1000,
-                          fontSize: 13,
-                        }}
-                      >
-                        Düzenle
-                      </summary>
-
-                      <div
-                        style={{
-                          marginTop: 12,
-                          padding: 14,
-                          borderRadius: 18,
-                          border: "1px solid #e5e7eb",
-                          background: "#fff",
-                          minWidth: 520,
-                          boxShadow: "0 16px 40px rgba(15,23,42,0.10)",
-                        }}
-                      >
-                        <form action={updateDenetimAction}>
-                          <input type="hidden" name="remoteId" value={r.id} />
-
-                          <EditGrid>
-                            <EditInput label="Firma" name="firm_name" defaultValue={r.firm_name || ""} />
-                            <EditInput label="Şablon" name="template_type" defaultValue={r.template_type || ""} />
-                            <EditInput label="Tür" name="eval_mode" defaultValue={r.eval_mode || ""} />
-                            <EditInput label="Denetçi" name="inspector_name" defaultValue={r.inspector_name || ""} />
-                            <EditInput label="Sorumlu" name="responsible" defaultValue={r.responsible || ""} />
-                            <EditInput label="Lokasyon" name="location" defaultValue={r.location || ""} />
-                            <EditInput label="Rapor No" name="report_no" defaultValue={r.report_no || ""} />
-                            <EditInput label="Genel Not" name="general_note" defaultValue={r.general_note || ""} />
-                          </EditGrid>
-
-                          <button
-                            type="submit"
-                            style={{
-                              marginTop: 12,
-                              width: "100%",
-                              border: 0,
-                              borderRadius: 12,
-                              padding: "11px 14px",
-                              background: "linear-gradient(135deg, #5a0f1f, #c62828)",
-                              color: "#fff",
-                              fontWeight: 1000,
-                              cursor: "pointer",
-                            }}
-                          >
-                            Kaydı Güncelle
-                          </button>
-                        </form>
-                      </div>
-                    </details>
+                    <Link
+  href={'/admin/denetimler/${r.id}/edit'}
+  style={{
+    padding: "9px 12px",
+    borderRadius: 12,
+    background: "#fff7ed",
+    color: "#9a3412",
+    border: "1px solid #fed7aa",
+    fontWeight: 1000,
+    fontSize: 13,
+    textDecoration: "none",
+  }}
+>
+  Düzenle
+</Link>
 
                     <form action={deleteDenetimAction}>
                       <input type="hidden" name="remoteId" value={r.id} />
