@@ -27,11 +27,21 @@ function modeLabel(mode?: string | null) {
 export default async function InspectionPrintPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
   const supabase = getSupabase();
-  const { id } = await params;
-  const appRunId = Number(id);
+
+  const id = params.id;
+  const appRunId = Number(id || 0);
+
+  if (!appRunId) {
+    return (
+      <main style={{ padding: 32 }}>
+        <h1>Geçersiz denetim ID</h1>
+        <Link href="/admin/denetimler">Geri dön</Link>
+      </main>
+    );
+  }
 
   const { data: runData } = await supabase
     .from("denetim_runs")
