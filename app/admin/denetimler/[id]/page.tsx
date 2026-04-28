@@ -313,24 +313,36 @@ export default async function DenetimDetailPage({
               </div>
 
               <div>
-                {a.photo_url ? (
-                  <a href={a.photo_url} target="_blank">
-                    <img
-                      src={a.photo_url}
-                      alt="Denetim fotoğrafı"
-                      style={{
-                        width: 60,
-                        height: 60,
-                        objectFit: "cover",
-                        borderRadius: 8,
-                        border: "1px solid #ddd",
-                      }}
-                    />
-                  </a>
-                ) : (
-                  "-"
-                )}
-              </div>
+  {(a.photo_url || a.photo_path) ? (
+    <a
+      href={a.photo_url || a.photo_path}
+      target="_blank"
+      style={{ display: "inline-block" }}
+    >
+      <img
+        src={a.photo_url || a.photo_path}
+        alt="Denetim fotoğrafı"
+        style={{
+          width: 70,
+          height: 70,
+          objectFit: "cover",
+          borderRadius: 10,
+          border: "2px solid #e5e7eb",
+          transition: "0.2s",
+          cursor: "pointer",
+        }}
+        onMouseOver={(e) =>
+          (e.currentTarget.style.transform = "scale(1.08)")
+        }
+        onMouseOut={(e) =>
+          (e.currentTarget.style.transform = "scale(1)")
+        }
+      />
+    </a>
+  ) : (
+    "-"
+  )}
+</div>
             </div>
           ))
         )}
