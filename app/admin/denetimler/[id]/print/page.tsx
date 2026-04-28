@@ -31,9 +31,26 @@ function scoreValue(result?: string | null) {
   return Number.isFinite(value) ? value : null;
 }
 
+function parseElmeri(result?: string | null) {
+  const r = String(result || "").toUpperCase().trim();
+  if (!r.startsWith("ELMERI:")) return null;
+
+  const parts = r.split(":");
+  const correct = Number(parts[1] || 0);
+  const wrong = Number(parts[2] || 0);
+  const out = Number(parts[3] || 0);
+  const observed = correct + wrong;
+  const percent = observed > 0 ? Math.round((correct / observed) * 100) : 0;
+
+  return { correct, wrong, out, observed, percent };
+}
+
 function resultLabel(result?: string | null) {
   const score = scoreValue(result);
   if (score !== null) return `${score} Puan`;
+
+  const elmeri = parseElmeri(result);
+  if (elmeri) return `%${elmeri.percent}`;
 
   const r = String(result || "").toUpperCase();
   if (r === "UYGUN") return "Uygun";
@@ -51,11 +68,24 @@ function badgeClass(result?: string | null) {
     return "badge bad";
   }
 
+  const elmeri = parseElmeri(result);
+  if (elmeri) {
+    if (elmeri.percent >= 80) return "badge good";
+    if (elmeri.percent >= 50) return "badge mid";
+    return "badge bad";
+  }
+
   const r = String(result || "").toUpperCase();
   if (r === "UYGUN") return "badge good";
   if (r === "KISMEN") return "badge mid";
   if (r === "UYGUNSUZ") return "badge bad";
   return "badge neutral";
+}
+
+function cleanFirmName(name?: string | null) {
+  const v = String(name || "").trim();
+  if (!v || v.toLowerCase() === "firma") return "Firma Ünvanı Belirtilmemiş";
+  return v;
 }
 
 export default async function InspectionPrintPage({
@@ -64,18 +94,8 @@ export default async function InspectionPrintPage({
   params: Promise<{ id: string }>;
 }) {
   const supabase = getSupabase();
-
   const { id } = await params;
   const requestedId = Number(id || 0);
-
-  if (!requestedId) {
-    return (
-      <main style={{ padding: 32 }}>
-        <h1>Geçersiz denetim ID</h1>
-        <Link href="/admin/denetimler">Geri dön</Link>
-      </main>
-    );
-  }
 
   let { data: runData } = await supabase
     .from("denetim_runs")
@@ -97,8 +117,7 @@ export default async function InspectionPrintPage({
     return (
       <main style={{ padding: 32 }}>
         <h1>Rapor bulunamadı</h1>
-        <p>Aranan ID: {requestedId}</p>
-        <Link href="/admin/denetimler">Geri dön</Link>
+        <Link href="/admin/denetimler">Denetim listesine dön</Link>
       </main>
     );
   }
@@ -114,39 +133,51 @@ export default async function InspectionPrintPage({
   const list = answers || [];
   const mode = modeLabel(runData.eval_mode);
 
-  const uygun = list.filter(
-    (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
-  ).length;
-
-  const kismen = list.filter(
-    (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
-  ).length;
-
-  const uygunsuz = list.filter(
-    (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
-  ).length;
-
+  const uygun = list.filter((a: any) => String(a.result || "").toUpperCase() === "UYGUN").length;
+  const kismen = list.filter((a: any) => String(a.result || "").toUpperCase() === "KISMEN").length;
+  const uygunsuz = list.filter((a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ").length;
   const kapsamDisi = list.filter((a: any) => {
     const r = String(a.result || "").toUpperCase();
     return r === "KAPSAMDISI" || r === "KAPSAM_DIŞI";
   }).length;
 
-  const scores: number[] = list
+  const scores = list
     .map((a: any) => scoreValue(a.result))
-    .filter((v: number | null): v is number => {
-      return v !== null && Number.isFinite(v);
-    });
+    .filter((v: number | null): v is number => v !== null);
+
+  const elmeriRows = list
+    .map((a: any) => parseElmeri(a.result))
+    .filter(Boolean) as Array<{
+    correct: number;
+    wrong: number;
+    out: number;
+    observed: number;
+    percent: number;
+  }>;
 
   const scoreAverage =
     scores.length > 0
       ? Math.round(scores.reduce((sum, v) => sum + v, 0) / scores.length)
       : 0;
 
+  const elmeriAverage =
+    elmeriRows.length > 0
+      ? Math.round(elmeriRows.reduce((sum, v) => sum + v.percent, 0) / elmeriRows.length)
+      : 0;
+
   const klasikUyum = Math.round(
     (uygun * 100 + kismen * 50) / (uygun + kismen + uygunsuz || 1)
   );
 
-  const uyumSkoru = mode === "Puanlamalı" ? scoreAverage : klasikUyum;
+  const uyumSkoru =
+    mode === "Puanlamalı" ? scoreAverage : mode === "ELMERI" ? elmeriAverage : klasikUyum;
+
+  const summaryText =
+    mode === "ELMERI"
+      ? `ELMERI değerlendirmesinde genel performans, madde bazlı doğru / (doğru + yanlış) oranlarının ortalamasıyla hesaplanmıştır. Genel ELMERI puanı %${uyumSkoru}.`
+      : mode === "Puanlamalı"
+      ? `Puanlamalı denetimde genel performans, skor girilen maddelerin ortalamasıyla hesaplanmıştır. Ortalama skor %${uyumSkoru}.`
+      : `Klasik denetimde uygun, kısmen uygun ve uygunsuz sonuçları üzerinden genel uyum skoru hesaplanmıştır. Genel uyum skoru %${uyumSkoru}.`;
 
   return (
     <main className="page">
@@ -156,7 +187,7 @@ export default async function InspectionPrintPage({
           body { background: white !important; }
           .page { padding: 0 !important; }
           .sheet { box-shadow: none !important; border: none !important; }
-          @page { size: A4; margin: 12mm; }
+          @page { size: A4 landscape; margin: 10mm; }
         }
 
         body { background: #f3f4f6; }
@@ -167,151 +198,8 @@ export default async function InspectionPrintPage({
           color: #111827;
         }
 
-        .sheet {
-          max-width: 1120px;
-          margin: 0 auto;
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 22px;
-          overflow: hidden;
-          box-shadow: 0 20px 60px rgba(15,23,42,.10);
-        }
-
-        thead { display: table-header-group; }
-        tfoot { display: table-footer-group; }
-        tr { page-break-inside: avoid; }
-
-        .hero {
-          padding: 30px;
-          color: white;
-          background: linear-gradient(135deg,#4a0d1a,#c62828,#8f172c);
-        }
-
-        .brand {
-          font-size: 13px;
-          font-weight: 900;
-          opacity: .9;
-          letter-spacing: .4px;
-        }
-
-        .title {
-          font-size: 34px;
-          font-weight: 1000;
-          margin: 10px 0 8px;
-        }
-
-        .subtitle {
-          font-size: 14px;
-          opacity: .92;
-          font-weight: 700;
-          line-height: 1.5;
-        }
-
-        .content { padding: 26px 30px 34px; }
-
-        .grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 12px;
-          margin-bottom: 22px;
-        }
-
-        .card {
-          border: 1px solid #e5e7eb;
-          border-radius: 16px;
-          padding: 14px;
-          background: #fafafa;
-        }
-
-        .label {
-          font-size: 12px;
-          color: #64748b;
-          font-weight: 800;
-        }
-
-        .value {
-          margin-top: 6px;
-          font-size: 17px;
-          font-weight: 1000;
-        }
-
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          table-layout: fixed;
-          font-size: 12px;
-          page-break-inside: auto;
-        }
-
-        th,
-        td {
-          padding: 11px 10px;
-          border: 1px solid #e5e7eb;
-          vertical-align: top;
-          line-height: 1.45;
-          white-space: normal;
-          word-break: break-word;
-          overflow-wrap: anywhere;
-        }
-
-        th {
-          background: #f8fafc;
-          color: #334155;
-          text-align: left;
-          font-size: 12px;
-          font-weight: 900;
-        }
-
-        .col-no { width: 5%; }
-        .col-madde { width: 24%; }
-        .col-sonuc { width: 12%; }
-        .col-onlem { width: 28%; }
-        .col-aciklama { width: 21%; }
-        .col-foto { width: 10%; }
-
-        .section-title {
-          font-size: 18px;
-          font-weight: 1000;
-          margin: 24px 0 10px;
-          border-left: 4px solid #5a0f1f;
-          padding-left: 10px;
-        }
-
-        .badge {
-          display: inline-block;
-          padding: 6px 10px;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 900;
-          white-space: normal;
-          line-height: 1.25;
-        }
-
-        .good { background: #dcfce7; color: #15803d; }
-        .mid { background: #fef3c7; color: #b45309; }
-        .bad { background: #fee2e2; color: #b91c1c; }
-        .neutral { background: #f1f5f9; color: #475569; }
-
-        .footer {
-          margin-top: 28px;
-          padding-top: 16px;
-          border-top: 1px solid #e5e7eb;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 18px;
-        }
-
-        .sign {
-          height: 82px;
-          border: 1px dashed #cbd5e1;
-          border-radius: 14px;
-          padding: 12px;
-          font-size: 12px;
-          color: #475569;
-        }
-
         .actions {
-          max-width: 1120px;
+          max-width: 1180px;
           margin: 0 auto 16px;
           display: flex;
           justify-content: space-between;
@@ -338,7 +226,6 @@ export default async function InspectionPrintPage({
         .secondary {
           background: linear-gradient(135deg, #5a0f1f, #8f172c);
           color: #fff;
-          border: 1px solid rgba(255,255,255,0.14);
           box-shadow: 0 14px 34px rgba(90,15,31,0.22);
         }
 
@@ -353,25 +240,181 @@ export default async function InspectionPrintPage({
           font-weight: 1000;
         }
 
+        .sheet {
+          max-width: 1180px;
+          margin: 0 auto;
+          background: white;
+          border: 1px solid #e5e7eb;
+          border-radius: 24px;
+          overflow: hidden;
+          box-shadow: 0 20px 60px rgba(15,23,42,.10);
+        }
+
+        .hero {
+          padding: 32px;
+          color: white;
+          background: linear-gradient(135deg,#4a0d1a,#c62828,#8f172c);
+        }
+
+        .brand {
+          font-size: 13px;
+          font-weight: 900;
+          opacity: .92;
+          letter-spacing: .4px;
+        }
+
+        .title {
+          font-size: 34px;
+          font-weight: 1000;
+          margin: 12px 0 8px;
+        }
+
+        .subtitle {
+          font-size: 14px;
+          opacity: .92;
+          font-weight: 700;
+          line-height: 1.5;
+        }
+
+        .content { padding: 28px 32px 36px; }
+
+        .section-title {
+          font-size: 18px;
+          font-weight: 1000;
+          margin: 24px 0 12px;
+          border-left: 5px solid #5a0f1f;
+          padding-left: 10px;
+        }
+
+        .grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+          margin-bottom: 20px;
+        }
+
+        .card {
+          border: 1px solid #e5e7eb;
+          border-radius: 16px;
+          padding: 14px;
+          background: #fafafa;
+        }
+
+        .label {
+          font-size: 12px;
+          color: #64748b;
+          font-weight: 800;
+        }
+
+        .value {
+          margin-top: 6px;
+          font-size: 17px;
+          font-weight: 1000;
+          line-height: 1.3;
+        }
+
+        .noteBox {
+          border: 1px solid #ead5d5;
+          background: #fff7f7;
+          border-radius: 18px;
+          padding: 16px;
+          color: #334155;
+          line-height: 1.7;
+          font-size: 13px;
+          font-weight: 650;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          font-size: 12px;
+          page-break-inside: auto;
+        }
+
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+
+        th,
+        td {
+          padding: 11px 10px;
+          border: 1px solid #e5e7eb;
+          vertical-align: top;
+          line-height: 1.45;
+          white-space: normal;
+          word-break: break-word;
+          overflow-wrap: anywhere;
+        }
+
+        th {
+          background: #f8fafc;
+          color: #334155;
+          text-align: left;
+          font-size: 12px;
+          font-weight: 900;
+        }
+
+        tbody tr:nth-child(even) { background: #fbfbfd; }
+
+        .col-no { width: 5%; }
+        .col-madde { width: 23%; }
+        .col-onlem { width: 28%; }
+        .col-sonuc { width: 12%; }
+        .col-aciklama { width: 20%; }
+        .col-foto { width: 12%; }
+
+        .badge {
+          display: inline-block;
+          padding: 6px 10px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 900;
+          white-space: normal;
+          line-height: 1.25;
+        }
+
+        .good { background: #dcfce7; color: #15803d; }
+        .mid { background: #fef3c7; color: #b45309; }
+        .bad { background: #fee2e2; color: #b91c1c; }
+        .neutral { background: #f1f5f9; color: #475569; }
+
         .photo {
-          width: 86px;
-          height: 68px;
+          width: 96px;
+          height: 76px;
           object-fit: cover;
-          border-radius: 8px;
+          border-radius: 10px;
           border: 1px solid #ddd;
           display: block;
           background: #f8fafc;
         }
+
+        .footer {
+          margin-top: 28px;
+          padding-top: 16px;
+          border-top: 1px solid #e5e7eb;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 18px;
+        }
+
+        .sign {
+          height: 86px;
+          border: 1px dashed #cbd5e1;
+          border-radius: 14px;
+          padding: 12px;
+          font-size: 12px;
+          color: #475569;
+        }
       `}</style>
 
       <div className="actions no-print">
-       <Link className="btn secondary" href={'/admin/denetimler/${appRunId}'}>
-  <span className="backIcon">‹</span>
-  <span>Denetim Detayına Dön</span>
-</Link>
+        <Link className="btn secondary" href={`/admin/denetimler/${appRunId}`}>
+          <span className="backIcon">‹</span>
+          <span>Denetim Detayına Dön</span>
+        </Link>
 
-        <button className="btn primary" type="button">
-          Kurumsal PDF Olarak Yazdır
+        <button className="btn primary" type="button" onClick={undefined}>
+          Yazdır / PDF Kaydet
         </button>
       </div>
 
@@ -385,28 +428,35 @@ export default async function InspectionPrintPage({
           <div className="title">İş Sağlığı ve Güvenliği Denetim Raporu</div>
 
           <div className="subtitle">
-            {runData.firm_name || "Firma Ünvanı Yok"} • {mode} •{" "}
+            {cleanFirmName(runData.firm_name)} • {mode} •{" "}
             {formatDate(runData.audit_date_millis || runData.created_at_millis)} •
             Rapor No: {runData.report_no || "-"}
           </div>
         </div>
 
         <div className="content">
+          <div className="section-title">Denetim Bilgileri</div>
+
           <div className="grid">
-            <Info label="Firma" value={runData.firm_name || "-"} />
+            <Info label="Firma Ünvanı" value={cleanFirmName(runData.firm_name)} />
             <Info label="Denetim Türü" value={mode} />
             <Info label="Şablon" value={runData.template_type || "-"} />
             <Info label="Rapor No" value={runData.report_no || "-"} />
             <Info label="Denetçi" value={runData.inspector_name || "-"} />
             <Info label="Sorumlu" value={runData.responsible || "-"} />
             <Info label="Lokasyon" value={runData.location || "-"} />
-            <Info
-              label={mode === "Puanlamalı" ? "Ortalama Skor" : "Uyum Skoru"}
-              value={`%${uyumSkoru}`}
-            />
+            <Info label={mode === "Puanlamalı" ? "Ortalama Skor" : mode === "ELMERI" ? "ELMERI Puanı" : "Uyum Skoru"} value={`%${uyumSkoru}`} />
           </div>
 
-          <div className="section-title">Özet Sonuçlar</div>
+          <div className="section-title">Amaç ve Kapsam</div>
+          <div className="noteBox">
+            Bu rapor, belirtilen tarih ve lokasyonda gerçekleştirilen iş sağlığı ve güvenliği
+            denetiminin bulgularını, değerlendirme sonuçlarını ve iyileştirme önerilerini içerir.
+            Rapor, saha gözlemleri ve app üzerinden aktarılan denetim maddeleri esas alınarak
+            hazırlanmıştır.
+          </div>
+
+          <div className="section-title">Özet Bilgiler</div>
 
           <div className="grid">
             <Info label="Toplam Madde" value={String(list.length)} />
@@ -414,6 +464,12 @@ export default async function InspectionPrintPage({
               <>
                 <Info label="Ortalama Puan" value={`%${scoreAverage}`} />
                 <Info label="Skorlu Madde" value={String(scores.length)} />
+                <Info label="Kapsam Dışı" value={String(kapsamDisi)} />
+              </>
+            ) : mode === "ELMERI" ? (
+              <>
+                <Info label="ELMERI Puanı" value={`%${elmeriAverage}`} />
+                <Info label="ELMERI Madde" value={String(elmeriRows.length)} />
                 <Info label="Kapsam Dışı" value={String(kapsamDisi)} />
               </>
             ) : (
@@ -425,6 +481,9 @@ export default async function InspectionPrintPage({
             )}
           </div>
 
+          <div className="section-title">Bulguların Özeti</div>
+          <div className="noteBox">{summaryText}</div>
+
           <div className="section-title">Denetim Bulguları</div>
 
           <table>
@@ -432,11 +491,11 @@ export default async function InspectionPrintPage({
               <tr>
                 <th className="col-no">No</th>
                 <th className="col-madde">Madde</th>
+                <th className="col-onlem">Önerilen Önlemler</th>
                 <th className="col-sonuc">
-                  {mode === "Puanlamalı" ? "Puan" : "Sonuç"}
+                  {mode === "Puanlamalı" ? "Puan" : mode === "ELMERI" ? "ELMERI" : "Sonuç"}
                 </th>
-                <th className="col-onlem">Önerilen Önlem</th>
-                <th className="col-aciklama">Açıklama</th>
+                <th className="col-aciklama">Açıklama / Not</th>
                 <th className="col-foto">Foto</th>
               </tr>
             </thead>
@@ -448,26 +507,21 @@ export default async function InspectionPrintPage({
                 </tr>
               ) : (
                 list.map((a: any, index: number) => {
-                  const photoSrc = a.photo_url || a.photo_path || "";
-
+                  const photoSrc = a.photo_url || "";
                   return (
                     <tr key={a.id}>
                       <td>{index + 1}</td>
                       <td>{a.item_title || "-"}</td>
+                      <td>{a.recommended_action || "-"}</td>
                       <td>
                         <span className={badgeClass(a.result)}>
                           {resultLabel(a.result)}
                         </span>
                       </td>
-                      <td>{a.recommended_action || "-"}</td>
                       <td>{a.note || "-"}</td>
                       <td>
-                        {photoSrc && !String(photoSrc).startsWith("content://") ? (
-                          <img
-                            src={photoSrc}
-                            className="photo"
-                            alt="Denetim fotoğrafı"
-                          />
+                        {photoSrc ? (
+                          <img src={photoSrc} className="photo" alt="Denetim fotoğrafı" />
                         ) : (
                           "-"
                         )}
@@ -479,25 +533,31 @@ export default async function InspectionPrintPage({
             </tbody>
           </table>
 
-          <div className="section-title">Sonuç ve Değerlendirme</div>
+          <div className="section-title">Sonuç ve İyileştirme Önerileri</div>
+          <div className="noteBox">
+            Denetim kapsamında tespit edilen bulguların ilgili mevzuat, işletme prosedürleri
+            ve saha koşulları dikkate alınarak giderilmesi önerilir. Uygunsuz veya düşük puanlı
+            maddeler için sorumlu kişi, hedef tarih ve doğrulama yöntemi tanımlanarak düzeltici
+            faaliyet planı oluşturulmalıdır.
+          </div>
 
-          <p style={{ lineHeight: 1.7, color: "#334155", fontSize: 13 }}>
-            Bu rapor, denetim sırasında elde edilen bulgulara göre hazırlanmıştır.
-            Puanlamalı denetimlerde değerlendirme, madde bazlı skor ortalaması üzerinden;
-            klasik denetimlerde uygun, kısmen uygun ve uygunsuz sonuçları üzerinden yapılır.
-          </p>
+          <div className="section-title">Genel Değerlendirme Notu</div>
+          <div className="noteBox">
+            {runData.general_note ||
+              "Bu rapor, denetim anındaki gözlemler esas alınarak hazırlanmıştır."}
+          </div>
 
           <div className="footer">
             <div className="sign">
               <strong>Denetimi Gerçekleştiren</strong>
               <br />
-              Ad Soyad / İmza
+              {runData.inspector_name || "Ad Soyad / İmza"}
             </div>
 
             <div className="sign">
               <strong>Firma Yetkilisi</strong>
               <br />
-              Ad Soyad / İmza
+              {runData.responsible || "Ad Soyad / İmza"}
             </div>
           </div>
 
