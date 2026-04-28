@@ -37,7 +37,11 @@ function formatDate(value?: number | string | null) {
   return date.toLocaleDateString("tr-TR");
 }
 
-export default async function AdminDenetimlerPage() {
+export default async function AdminDenetimlerPage({
+  searchParams,
+}: {
+  searchParams?: { type?: string };
+}) {
   const supabase = getSupabase();
 
   const { data: runs, error } = await supabase
@@ -46,6 +50,22 @@ export default async function AdminDenetimlerPage() {
     .order("inserted_at", { ascending: false });
 
   const safeRuns = runs || [];
+const activeType = String(searchParams?.type || "ALL").toUpperCase();
+
+const filteredRuns =
+  activeType === "ALL"
+    ? safeRuns
+    : safeRuns.filter((r: any) => {
+        const label = modeLabel(r.eval_mode).toUpperCase();
+
+        if (activeType === "KLASIK") return label === "KLASIK";
+        if (activeType === "FOTO") return label === "FOTOĞRAFLI";
+        if (activeType === "PUAN") return label === "PUANLAMALI";
+        if (activeType === "ELMERI") return label === "ELMERI";
+
+        return true;
+      });
+
   const runIds = safeRuns.map((r: any) => r.id);
 
   const { data: answers } = runIds.length
@@ -72,9 +92,13 @@ export default async function AdminDenetimlerPage() {
     (r: any) => modeLabel(r.eval_mode) === "Fotoğraflı"
   ).length;
 
-  const puanElmeriCount = safeRuns.filter((r: any) =>
-    ["Puanlamalı", "ELMERI"].includes(modeLabel(r.eval_mode))
-  ).length;
+  const puanCount = safeRuns.filter(
+  (r: any) => modeLabel(r.eval_mode) === "Puanlamalı"
+).length;
+
+const elmeriCount = safeRuns.filter(
+  (r: any) => modeLabel(r.eval_mode) === "ELMERI"
+).length;
 
   const totalAnswers = (answers || []).length;
 
@@ -159,15 +183,17 @@ export default async function AdminDenetimlerPage() {
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
           gap: 16,
           marginBottom: 24,
         }}
       >
-        <Kpi title="Toplam Denetim" value={safeRuns.length} desc="App kaynaklı kayıt" />
-        <Kpi title="Klasik" value={klasikCount} desc="Standart kontrol" />
-        <Kpi title="Fotoğraflı" value={fotografliCount} desc="Görsel kanıtlı" />
-        <Kpi title="Toplam Madde" value={totalAnswers} desc="Aktarılan bulgu" />
+<Kpi title="Toplam Denetim" value={safeRuns.length} desc="Tüm kayıtlar" href="/admin/denetimler" />
+<Kpi title="Klasik" value={klasikCount} desc="Standart kontrol" href="/admin/denetimler?type=KLASIK" />
+<Kpi title="Fotoğraflı" value={fotografliCount} desc="Görsel kanıtlı" href="/admin/denetimler?type=FOTO" />
+<Kpi title="Puanlamalı" value={puanCount} desc="Skor bazlı denetim" href="/admin/denetimler?type=PUAN" />
+<Kpi title="ELMERI" value={elmeriCount} desc="Gözlemsel risk analizi" href="/admin/denetimler?type=ELMERI" />
+<Kpi title="Toplam Madde" value={totalAnswers} desc="Aktarılan bulgu" href="/admin/denetimler" />
       </section>
 
       <section
@@ -223,7 +249,7 @@ export default async function AdminDenetimlerPage() {
               whiteSpace: "nowrap",
             }}
           >
-            {safeRuns.length} kayıt
+            {filteredRuns.length} kayıt
           </div>
         </div>
 
@@ -248,7 +274,7 @@ export default async function AdminDenetimlerPage() {
           <div>İşlem</div>
         </div>
 
-        {safeRuns.length === 0 ? (
+        {filteredRuns.length === 0 ? (
           <div
             style={{
               padding: 34,
@@ -260,7 +286,7 @@ export default async function AdminDenetimlerPage() {
             Henüz app üzerinden gelen denetim yok.
           </div>
         ) : (
-          safeRuns.map((r: any, index: number) => {
+          filteredRuns.map((r: any, index: number) => {
             const mode = modeLabel(r.eval_mode);
             const colors = modeColor(r.eval_mode);
             const detailId = r.app_run_id || r.id;
@@ -367,13 +393,23 @@ function Kpi({
   title,
   value,
   desc,
+  href,
 }: {
   title: string;
   value: number;
   desc: string;
+  href: string;
 }) {
   return (
-    <div
+    <Link
+      href={href}
+      style={{
+        display: "block",
+        textDecoration: "none",
+        color: "inherit",
+      }}
+    >
+      <div
       style={{
         background: "#fff",
         borderRadius: 22,
@@ -407,5 +443,6 @@ function Kpi({
         {desc}
       </div>
     </div>
+    </Link>
   );
 }

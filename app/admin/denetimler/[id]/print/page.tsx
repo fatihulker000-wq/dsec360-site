@@ -27,11 +27,11 @@ function modeLabel(mode?: string | null) {
 export default async function InspectionPrintPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const supabase = getSupabase();
 
-  const id = params.id;
+  const { id } = await params;
   const appRunId = Number(id || 0);
 
   if (!appRunId) {
@@ -43,11 +43,21 @@ export default async function InspectionPrintPage({
     );
   }
 
-  const { data: runData } = await supabase
+let { data: runData } = await supabase
+  .from("denetim_runs")
+  .select("*")
+  .eq("app_run_id", appRunId)
+  .maybeSingle();
+
+if (!runData) {
+  const fallback = await supabase
     .from("denetim_runs")
     .select("*")
-    .eq("app_run_id", appRunId)
+    .eq("id", appRunId)
     .maybeSingle();
+
+  runData = fallback.data;
+}
 
   if (!runData) {
     return (

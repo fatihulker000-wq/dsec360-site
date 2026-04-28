@@ -59,11 +59,22 @@ export default async function DenetimDetailPage({
   const { id } = await params;
   const appRunId = Number(id);
 
-  const { data: runData, error: runError } = await supabase
+let { data: runData, error: runError } = await supabase
+  .from("denetim_runs")
+  .select("*")
+  .eq("app_run_id", appRunId)
+  .maybeSingle();
+
+if (!runData) {
+  const fallback = await supabase
     .from("denetim_runs")
     .select("*")
-    .eq("app_run_id", appRunId)
+    .eq("id", appRunId)
     .maybeSingle();
+
+  runData = fallback.data;
+  runError = fallback.error;
+}
 
   if (!runData || runError) {
     return (
@@ -319,25 +330,18 @@ export default async function DenetimDetailPage({
       target="_blank"
       style={{ display: "inline-block" }}
     >
-      <img
-        src={a.photo_url || a.photo_path}
-        alt="Denetim fotoğrafı"
-        style={{
-          width: 70,
-          height: 70,
-          objectFit: "cover",
-          borderRadius: 10,
-          border: "2px solid #e5e7eb",
-          transition: "0.2s",
-          cursor: "pointer",
-        }}
-        onMouseOver={(e) =>
-          (e.currentTarget.style.transform = "scale(1.08)")
-        }
-        onMouseOut={(e) =>
-          (e.currentTarget.style.transform = "scale(1)")
-        }
-      />
+     <img
+  src={a.photo_url || a.photo_path}
+  alt="Denetim fotoğrafı"
+  style={{
+    width: 70,
+    height: 70,
+    objectFit: "cover",
+    borderRadius: 10,
+    border: "2px solid #e5e7eb",
+    cursor: "pointer",
+  }}
+/>
     </a>
   ) : (
     "-"
