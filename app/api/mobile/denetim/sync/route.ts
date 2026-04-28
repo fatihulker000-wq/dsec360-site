@@ -10,6 +10,25 @@ function getSupabase() {
   );
 }
 
+function normalizeAnswers(answers: any): any[] {
+  if (Array.isArray(answers)) return answers;
+
+  if (typeof answers === "string") {
+    try {
+      const parsed = JSON.parse(answers);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  if (answers && typeof answers === "object") {
+    return Object.values(answers);
+  }
+
+  return [];
+}
+
 async function uploadPhotoIfExists(
   supabase: ReturnType<typeof getSupabase>,
   answer: any
@@ -24,8 +43,10 @@ async function uploadPhotoIfExists(
 
   try {
     const fileBuffer = Buffer.from(photoBase64, "base64");
-    const safeFileName = photoFileName.replace(/[^a-zA-Z0-9.-]/g, "");
-const filePath = `app/${Date.now()}-${safeFileName}`;
+    const safeFileName =
+      photoFileName.replace(/[^a-zA-Z0-9.-]/g, "") || "photo.jpg";
+
+    const filePath = `app/${Date.now()}-${safeFileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from("denetim-photos")
@@ -51,6 +72,8 @@ const filePath = `app/${Date.now()}-${safeFileName}`;
 }
 
 export async function POST(req: Request) {
+  let insertedRunId: number | null = null;
+
   try {
     const body = await req.json();
     const { run, answers } = body;
@@ -62,16 +85,38 @@ export async function POST(req: Request) {
       );
     }
 
+    const safeAnswers = normalizeAnswers(answers);
+
+    console.log("DENETIM SYNC DEBUG:", {
+      runId: run?.id,
+      firmId: run?.firmId,
+      firmName: run?.firmName,
+      answersCount: safeAnswers.length,
+      firstAnswer: safeAnswers[0] || null,
+    });
+
+    // KRİTİK: Bulgu yoksa web'de boş run oluşturma
+    if (safeAnswers.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Bu denetimde web'e aktarılacak bulgu yok. App tarafında answers boş geliyor.",
+          runId: run.id,
+          firmName: run?.firmName,
+          answersCount: 0,
+        },
+        { status: 400 }
+      );
+    }
+
     const supabase = getSupabase();
 
-    // 🔥 1) VAR MI KONTROL ET
     const { data: existingRun } = await supabase
       .from("denetim_runs")
       .select("id")
       .eq("app_run_id", run.id)
       .maybeSingle();
 
-    // 🔥 2) VARSA ÖNCE ANSWERS SİL (DOĞRU SIRA)
     if (existingRun?.id) {
       await supabase
         .from("denetim_answers")
@@ -84,23 +129,25 @@ export async function POST(req: Request) {
         .eq("id", existingRun.id);
     }
 
-    // 🔥 3) RUN INSERT
     const { data: runData, error: runError } = await supabase
       .from("denetim_runs")
       .insert({
         app_run_id: run.id,
-        firm_id: run.firmId,
-        firm_name: run.firmName || run.firm_name || "Firma Ünvanı Belirtilmemiş",
-        template_type: run.templateType,
-        eval_mode: run.evalMode,
-        location: run.location,
-        responsible: run.responsible,
-        inspector_name: run.inspectorName,
-        audit_date_millis: run.auditDateMillis,
-        report_no: run.reportNo,
-        general_note: run.generalNote,
-        status: run.status,
-        created_at_millis: run.createdAt,
+        firm_id: run.firmId || 0,
+        firm_name:
+          run.firmName ||
+          run.firm_name ||
+          "Firma Ünvanı Belirtilmemiş",
+        template_type: run.templateType || "",
+        eval_mode: run.evalMode || "",
+        location: run.location || "",
+        responsible: run.responsible || "",
+        inspector_name: run.inspectorName || "",
+        audit_date_millis: run.auditDateMillis || run.createdAt || Date.now(),
+        report_no: run.reportNo || "",
+        general_note: run.generalNote || "",
+        status: run.status || "TAMAMLANDI",
+        created_at_millis: run.createdAt || Date.now(),
         source: "APP",
       })
       .select("id")
@@ -114,61 +161,57 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔥 4) ANSWERS INSERT + FOTO
-    // 🔥 answers garanti array'e çevir
-let safeAnswers: any[] = [];
+    insertedRunId = runData.id;
 
-if (Array.isArray(answers)) {
-  safeAnswers = answers;
-} else if (typeof answers === "string") {
-  try {
-    safeAnswers = JSON.parse(answers);
-  } catch (e) {
-    console.error("ANSWERS PARSE ERROR:", e);
-  }
-} else if (answers && typeof answers === "object") {
-  safeAnswers = Object.values(answers);
-}
+    const rows = await Promise.all(
+      safeAnswers.map(async (a: any) => {
+        const photoUrl = await uploadPhotoIfExists(supabase, a);
 
-if (safeAnswers.length > 0) {
-  const rows = await Promise.all(
-    safeAnswers.map(async (a: any) => {
-      const photoUrl = await uploadPhotoIfExists(supabase, a);
-
-      return {
-        run_remote_id: runData.id,
-        app_run_id: run.id,
-        item_title: a.itemTitle || a.item_title || "",
-        legal_ref: a.legalRef || "",
-        result: a.result || "",
-        note: a.note || "",
-        photo_path: a.photoPath || null,
-        photo_url: photoUrl || null,
-        recommended_action: a.recommendedAction || "",
-      };
-    })
-  );
-
-  console.log("INSERT ANSWERS COUNT:", rows.length);
-
-  const { error: answersError } = await supabase
-    .from("denetim_answers")
-    .insert(rows);
-
-  if (answersError) {
-    console.error("ANSWERS INSERT ERROR:", answersError);
-    return NextResponse.json(
-      { error: answersError.message },
-      { status: 500 }
+        return {
+          run_remote_id: runData.id,
+          app_run_id: run.id,
+          item_title: a.itemTitle || a.item_title || "",
+          legal_ref: a.legalRef || a.legal_ref || "",
+          result: a.result || "",
+          note: a.note || "",
+          photo_path: a.photoPath || a.photo_path || null,
+          photo_url: photoUrl || null,
+          recommended_action:
+            a.recommendedAction || a.recommended_action || "",
+        };
+      })
     );
-  }
-}
+
+    const { error: answersError } = await supabase
+      .from("denetim_answers")
+      .insert(rows);
+
+    if (answersError) {
+      console.error("ANSWERS INSERT ERROR:", answersError);
+
+      // KRİTİK: Answer insert patlarsa boş run kaydı web'de kalmasın
+      await supabase
+        .from("denetim_answers")
+        .delete()
+        .eq("run_remote_id", runData.id);
+
+      await supabase
+        .from("denetim_runs")
+        .delete()
+        .eq("id", runData.id);
+
+      return NextResponse.json(
+        { error: answersError.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
       remoteRunId: runData.id,
+      answerCount: rows.length,
+      firmName: run.firmName || run.firm_name || "Firma Ünvanı Belirtilmemiş",
     });
-
   } catch (error: any) {
     console.error("SYNC ERROR:", error);
 
