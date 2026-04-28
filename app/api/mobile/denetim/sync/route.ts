@@ -22,25 +22,31 @@ async function uploadPhotoIfExists(
     return String(answer?.photoUrl || "").trim();
   }
 
-  const fileBuffer = Buffer.from(photoBase64, "base64");
-  const filePath = `app/${Date.now()}-${photoFileName}`;
+  try {
+    const fileBuffer = Buffer.from(photoBase64, "base64");
+    const filePath = 'app/${Date.now()}-${photoFileName}';
 
-  const { error: uploadError } = await supabase.storage
-    .from("denetim-photos")
-    .upload(filePath, fileBuffer, {
-      contentType: photoMimeType,
-      upsert: true,
-    });
+    const { error: uploadError } = await supabase.storage
+      .from("denetim-photos")
+      .upload(filePath, fileBuffer, {
+        contentType: photoMimeType,
+        upsert: true,
+      });
 
-  if (uploadError) {
+    if (uploadError) {
+      console.error("PHOTO UPLOAD ERROR:", uploadError);
+      return "";
+    }
+
+    const { data } = supabase.storage
+      .from("denetim-photos")
+      .getPublicUrl(filePath);
+
+    return data?.publicUrl || "";
+  } catch (e) {
+    console.error("PHOTO PROCESS ERROR:", e);
     return "";
   }
-
-  const { data } = supabase.storage
-    .from("denetim-photos")
-    .getPublicUrl(filePath);
-
-  return data.publicUrl || "";
 }
 
 export async function POST(req: Request) {
@@ -48,18 +54,36 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { run, answers } = body;
 
-    if (!run) {
-      return NextResponse.json({ error: "Run verisi yok." }, { status: 400 });
+    if (!run || !run.id) {
+      return NextResponse.json(
+        { error: "Run verisi eksik." },
+        { status: 400 }
+      );
     }
 
     const supabase = getSupabase();
 
-    // 🔥 AYNI DENETİM VARSA SİL (KRİTİK FIX)
-await supabase
-  .from("denetim_runs")
-  .delete()
-  .eq("app_run_id", run.id);
+    // 🔥 1) VAR MI KONTROL ET
+    const { data: existingRun } = await supabase
+      .from("denetim_runs")
+      .select("id")
+      .eq("app_run_id", run.id)
+      .maybeSingle();
 
+    // 🔥 2) VARSA ÖNCE ANSWERS SİL (DOĞRU SIRA)
+    if (existingRun?.id) {
+      await supabase
+        .from("denetim_answers")
+        .delete()
+        .eq("run_remote_id", existingRun.id);
+
+      await supabase
+        .from("denetim_runs")
+        .delete()
+        .eq("id", existingRun.id);
+    }
+
+    // 🔥 3) RUN INSERT
     const { data: runData, error: runError } = await supabase
       .from("denetim_runs")
       .insert({
@@ -81,16 +105,15 @@ await supabase
       .select("id")
       .single();
 
-    if (runError) {
-      return NextResponse.json({ error: runError.message }, { status: 500 });
+    if (runError || !runData) {
+      console.error("RUN INSERT ERROR:", runError);
+      return NextResponse.json(
+        { error: runError?.message || "Run insert hatası" },
+        { status: 500 }
+      );
     }
 
-    // 🔥 ESKİ CEVAPLARI TEMİZLE
-await supabase
-  .from("denetim_answers")
-  .delete()
-  .eq("app_run_id", run.id);
-  
+    // 🔥 4) ANSWERS INSERT + FOTO
     if (Array.isArray(answers) && answers.length > 0) {
       const rows = await Promise.all(
         answers.map(async (a: any) => {
@@ -103,8 +126,8 @@ await supabase
             legal_ref: a.legalRef,
             result: a.result,
             note: a.note,
-            photo_path: a.photoPath,
-            photo_url: photoUrl,
+            photo_path: a.photoPath || null,
+            photo_url: photoUrl || null,
             recommended_action: a.recommendedAction,
           };
         })
@@ -115,6 +138,7 @@ await supabase
         .insert(rows);
 
       if (answersError) {
+        console.error("ANSWERS INSERT ERROR:", answersError);
         return NextResponse.json(
           { error: answersError.message },
           { status: 500 }
@@ -122,8 +146,14 @@ await supabase
       }
     }
 
-    return NextResponse.json({ success: true, remoteRunId: runData.id });
+    return NextResponse.json({
+      success: true,
+      remoteRunId: runData.id,
+    });
+
   } catch (error: any) {
+    console.error("SYNC ERROR:", error);
+
     return NextResponse.json(
       { error: error?.message || "Denetim senkron hatası." },
       { status: 500 }
