@@ -32,9 +32,15 @@ function isPasswordMatched(rawPassword: string, user: LoginUserRow) {
   const hashedPassword = String(user.password_hash || "").trim();
 
   // 🔥 YENİ SİSTEM (HASH)
-  if (hashedPassword) {
-    return sha256(rawPassword) === hashedPassword;
-  }
+  if (hashedPassword && sha256(rawPassword) === hashedPassword) {
+  return true;
+}
+
+if (plainPassword && rawPassword === plainPassword) {
+  return true;
+}
+
+return false;
 
   // 🧩 ESKİ SİSTEM (PLAIN)
   if (plainPassword) {
