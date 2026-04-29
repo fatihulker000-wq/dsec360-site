@@ -11,6 +11,7 @@ type LoginUserRow = {
   email: string | null;
   password: string | null;
   password_hash: string | null;
+  permissions: string[] | null;
   role: string | null;
   company_id: string | null;
   is_active?: boolean | null;
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
 
     // 🔥 ORTAK SELECT (ÇOK ÖNEMLİ)
     const selectFields =
-      "id, full_name, email, password, password_hash, role, company_id, is_active";
+  "id, full_name, email, password, password_hash, role, company_id, is_active, permissions";
 
     // 1️⃣ EMAIL
     let res = await supabase
@@ -258,19 +259,41 @@ if (mustCheckCompany) {
       }
     }
 
-    // 🎯 BAŞARILI LOGIN
-    const response = NextResponse.json({
-      success: true,
-      role: userRole,
-      user: {
-  id: userId,
-  full_name: String(user.full_name ?? ""),
-  email: userEmail,
-  company_id: companyId || appFirms[0]?.id || null,
-  firms: appFirms,
-  has_global_firm_access: hasGlobalFirmAccess,
-},
-    });
+// 🎯 BAŞARILI LOGIN
+const response = NextResponse.json({
+  success: true,
+  role: userRole,
+  user: {
+    id: userId,
+    full_name: String(user.full_name ?? ""),
+    email: userEmail,
+    role: userRole,
+    company_id: companyId || appFirms[0]?.id || null,
+    firms: appFirms,
+    has_global_firm_access: hasGlobalFirmAccess,
+    permissions:
+      userRole === "super_admin"
+        ? [
+            "ADMIN",
+            "AJANDA",
+            "CALISANLAR",
+            "DENETIM",
+            "DOKUMANTASYON",
+            "EGITIM",
+            "MEVZUAT",
+            "RAPORLAMA",
+            "SAGLIK",
+            "CBS",
+            "RISK_YONETIMI",
+            "KAZA_OLAY_YONETIMI",
+            "FIRMA_YONETIM",
+            "KULLANICI_YONETIMI",
+          ]
+        : Array.isArray(user.permissions)
+        ? user.permissions
+        : [],
+  },
+});
 
     const secure = process.env.NODE_ENV === "production";
 
