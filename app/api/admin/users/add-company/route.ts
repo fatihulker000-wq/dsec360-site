@@ -125,23 +125,56 @@ export async function POST(req: NextRequest) {
     }
 
 
-if (isGlobal) {
+    if (isGlobal) {
+  const { data: allCompanies, error: allCompaniesError } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("is_active", true);
+
+  if (allCompaniesError) {
+    console.error("global companies read error:", allCompaniesError);
+    return NextResponse.json(
+      { error: "Firmalar okunamadı." },
+      { status: 500 }
+    );
+  }
+
+  const companyIds = Array.isArray(allCompanies)
+    ? allCompanies.map((c) => String(c.id || "").trim()).filter(Boolean)
+    : [];
+
+  if (companyIds.length === 0) {
+    return NextResponse.json(
+      { error: "Eklenecek aktif firma bulunamadı." },
+      { status: 400 }
+    );
+  }
+
   await supabase
     .from("user_firm_access")
     .delete()
     .eq("user_id", userId);
 
-  const { error: globalInsertError } = await supabase
-    .from("user_firm_access")
-    .insert({
-      user_id: userId,
-      firm_id: "ALL",
-      role: "super_admin",
-      is_primary: true,
-    });
+  const roleToWrite =
+    String(targetUser.role || "").trim() === "super_admin"
+      ? "super_admin"
+      : String(targetUser.role || "").trim() === "company_admin"
+      ? "company_admin"
+      : "operator";
 
-  if (globalInsertError) {
-    console.error("add-company global insert error:", globalInsertError);
+  const rows = companyIds.map((firmId, index) => ({
+    user_id: userId,
+    firm_id: firmId,
+    role: roleToWrite,
+    is_primary: index === 0,
+  }));
+
+  const { error: insertAllError } = await supabase
+    .from("user_firm_access")
+    .insert(rows);
+
+  if (insertAllError) {
+    console.error("global firm access insert error:", insertAllError);
     return NextResponse.json(
       { error: "Tüm firmalar yetkisi eklenemedi." },
       { status: 500 }
@@ -150,10 +183,14 @@ if (isGlobal) {
 
   await supabase
     .from("users")
-    .update({ company_id: null })
+    .update({ company_id: companyIds[0] })
     .eq("id", userId);
 
-  return NextResponse.json({ success: true, global: true });
+  return NextResponse.json({
+    success: true,
+    global: true,
+    addedCount: rows.length,
+  });
 }
 
     const { data: company, error: companyError } = await supabase
