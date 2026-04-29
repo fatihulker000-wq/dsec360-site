@@ -134,6 +134,80 @@ export async function POST(request: Request) {
     const userRole = String(user.role ?? "").trim();
     const companyId = String(user.company_id ?? "").trim();
 
+    const { data: firmAccessRows, error: firmAccessError } = await supabase
+  .from("user_firm_access")
+  .select("firm_id, role, is_primary")
+  .eq("user_id", userId);
+
+if (firmAccessError) {
+  console.error("Auth login firma erişim sorgu hatası:", firmAccessError);
+  return NextResponse.json(
+    { error: "Kullanıcı firma yetkileri okunamadı." },
+    { status: 500 }
+  );
+}
+
+const hasGlobalFirmAccess = Array.isArray(firmAccessRows)
+  ? firmAccessRows.some((f: any) => String(f?.firm_id || "").trim() === "ALL")
+  : false;
+
+let appFirms: any[] = [];
+
+if (hasGlobalFirmAccess) {
+  const { data: allCompanies, error: allCompaniesError } = await supabase
+    .from("companies")
+    .select("id, name, is_active")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  if (allCompaniesError) {
+    console.error("Auth login tüm firmalar sorgu hatası:", allCompaniesError);
+    return NextResponse.json(
+      { error: "Tüm firmalar okunamadı." },
+      { status: 500 }
+    );
+  }
+
+  appFirms = (allCompanies || []).map((c: any, index: number) => ({
+    id: String(c.id || ""),
+    name: String(c.name || "Firma"),
+    is_primary: index === 0,
+    role: "super_admin",
+  }));
+} else if (Array.isArray(firmAccessRows) && firmAccessRows.length > 0) {
+  const firmIds = firmAccessRows
+    .map((f: any) => String(f?.firm_id || "").trim())
+    .filter(Boolean);
+
+  const { data: selectedCompanies, error: selectedCompaniesError } = await supabase
+    .from("companies")
+    .select("id, name, is_active")
+    .in("id", firmIds)
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  if (selectedCompaniesError) {
+    console.error("Auth login bağlı firmalar sorgu hatası:", selectedCompaniesError);
+    return NextResponse.json(
+      { error: "Bağlı firmalar okunamadı." },
+      { status: 500 }
+    );
+  }
+
+  appFirms = (selectedCompanies || []).map((c: any) => {
+    const access = firmAccessRows.find(
+      (f: any) => String(f?.firm_id || "") === String(c.id || "")
+    );
+
+    return {
+      id: String(c.id || ""),
+      name: String(c.name || "Firma"),
+      is_primary: Boolean(access?.is_primary),
+      role: String(access?.role || "operator"),
+    };
+  });
+}
+
     // 🔥 ŞİFRE KONTROL
     if (!isPasswordMatched(rawPassword, user)) {
       return NextResponse.json(
@@ -188,11 +262,13 @@ export async function POST(request: Request) {
       success: true,
       role: userRole,
       user: {
-        id: userId,
-        full_name: String(user.full_name ?? ""),
-        email: userEmail,
-        company_id: companyId || null,
-      },
+  id: userId,
+  full_name: String(user.full_name ?? ""),
+  email: userEmail,
+  company_id: companyId || appFirms[0]?.id || null,
+  firms: appFirms,
+  has_global_firm_access: hasGlobalFirmAccess,
+},
     });
 
     const secure = process.env.NODE_ENV === "production";

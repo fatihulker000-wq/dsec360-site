@@ -128,6 +128,11 @@ export async function POST(req: NextRequest) {
 if (isGlobal) {
   await supabase
     .from("user_firm_access")
+    .delete()
+    .eq("user_id", userId);
+
+  const { error: globalInsertError } = await supabase
+    .from("user_firm_access")
     .insert({
       user_id: userId,
       firm_id: "ALL",
@@ -135,12 +140,20 @@ if (isGlobal) {
       is_primary: true,
     });
 
+  if (globalInsertError) {
+    console.error("add-company global insert error:", globalInsertError);
+    return NextResponse.json(
+      { error: "Tüm firmalar yetkisi eklenemedi." },
+      { status: 500 }
+    );
+  }
+
   await supabase
     .from("users")
     .update({ company_id: null })
     .eq("id", userId);
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, global: true });
 }
 
     const { data: company, error: companyError } = await supabase
