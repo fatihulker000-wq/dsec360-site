@@ -218,10 +218,11 @@ if (hasGlobalFirmAccess) {
 
     // 🏢 FİRMA KONTROL
     const companyBoundRoles = ["company_admin", "operator", "training_user"];
-    const mustCheckCompany = companyBoundRoles.includes(userRole);
+const mustCheckCompany =
+  companyBoundRoles.includes(userRole) && !hasGlobalFirmAccess;
 
-    if (mustCheckCompany) {
-      if (!companyId) {
+if (mustCheckCompany) {
+  if (!companyId) {
         return NextResponse.json(
           { error: "Bu kullanıcıya bağlı firma bulunamadı." },
           { status: 403 }
@@ -293,7 +294,11 @@ if (hasGlobalFirmAccess) {
     response.cookies.set("dsec_user_role", userRole, activeCookieBase);
     response.cookies.set("dsec_user_id", userId, activeCookieBase);
     response.cookies.set("dsec_user_email", userEmail, activeCookieBase);
-    response.cookies.set("dsec_company_id", companyId || "", activeCookieBase);
+   response.cookies.set(
+  "dsec_company_id",
+  companyId || appFirms[0]?.id || "",
+  activeCookieBase
+);
 
     if (userRole === "super_admin" || userRole === "company_admin") {
       response.cookies.set("dsec_admin_auth", "ok", activeCookieBase);
