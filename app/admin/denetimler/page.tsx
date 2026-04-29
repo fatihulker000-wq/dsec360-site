@@ -136,6 +136,18 @@ export default async function AdminDenetimlerPage({
   const elmeriCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "ELMERI").length;
   const totalAnswers = answerList.length;
 
+  const uygunCount = answerList.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
+).length;
+
+const kismenCount = answerList.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
+).length;
+
+const uygunsuzCount = answerList.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
+).length;
+
   const emptyRunCount = safeRuns.filter((r: any) => {
     return (countByRun.get(Number(r.id)) || 0) === 0;
   }).length;
@@ -255,6 +267,9 @@ export default async function AdminDenetimlerPage({
         <Kpi title="Puanlamalı" value={puanCount} desc="Skor bazlı denetim" href={makeQuery("PUAN", activeFirm)} />
         <Kpi title="ELMERI" value={elmeriCount} desc="Gözlemsel analiz" href={makeQuery("ELMERI", activeFirm)} />
         <Kpi title="Toplam Madde" value={totalAnswers} desc="Aktarılan bulgu" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Uygun" value={uygunCount} desc="Pozitif bulgu" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Kısmen" value={kismenCount} desc="Geliştirilmeli" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Uygunsuz" value={uygunsuzCount} desc="Kritik bulgu" href={makeQuery(activeType, activeFirm)} />
       </section>
 
       <section

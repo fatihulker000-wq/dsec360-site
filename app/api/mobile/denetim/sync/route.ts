@@ -95,20 +95,7 @@ export async function POST(req: Request) {
       firstAnswer: safeAnswers[0] || null,
     });
 
-    // KRİTİK: Bulgu yoksa web'de boş run oluşturma
-    if (safeAnswers.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "Bu denetimde web'e aktarılacak bulgu yok. App tarafında answers boş geliyor.",
-          runId: run.id,
-          firmName: run?.firmName,
-          answersCount: 0,
-        },
-        { status: 400 }
-      );
-    }
-
+    
     const supabase = getSupabase();
 
     const { data: existingRun } = await supabase
