@@ -58,6 +58,53 @@ type ReportResponse = {
   error?: string;
 };
 
+type AuditAnalysisResponse = {
+  success?: boolean;
+  company?: {
+    id: string;
+    name: string;
+  };
+  summary?: {
+    total_audits: number;
+    completed_audits: number;
+    draft_audits: number;
+    total_items: number;
+    uygun_count: number;
+    uygunsuz_count: number;
+    kismen_count: number;
+    kapsam_disi_count: number;
+    other_count: number;
+    open_dof_count: number;
+    closed_dof_count: number;
+    compliance_score: number;
+  };
+  result_distribution?: Array<{
+    label: string;
+    value: number;
+  }>;
+  top_nonconformities?: Array<{
+    title: string;
+    count: number;
+  }>;
+  recommended_actions?: Array<{
+    title: string;
+    count: number;
+  }>;
+  audits?: Array<{
+    id: number | string;
+    app_run_id?: number | string | null;
+    template_type?: string | null;
+    eval_mode?: string | null;
+    location?: string | null;
+    responsible?: string | null;
+    inspector_name?: string | null;
+    report_no?: string | null;
+    status?: string | null;
+    audit_date_millis?: number | null;
+  }>;
+  error?: string;
+};
+
 type DetailModalState =
   | {
       open: false;
@@ -292,6 +339,8 @@ export default function AdminReportsPage() {
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
   const [error, setError] = useState("");
+  const [auditReport, setAuditReport] = useState<AuditAnalysisResponse | null>(null);
+  const [loadingAuditReport, setLoadingAuditReport] = useState(false);
 
   const [scope, setScope] = useState<ScopeResponse | null>(null);
   const [loadingScope, setLoadingScope] = useState(true);
@@ -425,6 +474,45 @@ export default function AdminReportsPage() {
       setLoadingReport(false);
     }
   };
+  
+  const loadAuditReport = async (companyId: string) => {
+  if (!companyId) {
+    setAuditReport(null);
+    return;
+  }
+
+  try {
+    setLoadingAuditReport(true);
+
+    const res = await fetch(
+      `/api/admin/reports/audit-analysis?companyId=${encodeURIComponent(companyId)}`,
+      {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      }
+    );
+
+    if (res.status === 401) {
+      window.location.href = "/admin/login";
+      return;
+    }
+
+    const json: AuditAnalysisResponse = await res.json();
+
+    if (!res.ok) {
+      setAuditReport(null);
+      return;
+    }
+
+    setAuditReport(json);
+  } catch (err) {
+    console.error("audit report load error:", err);
+    setAuditReport(null);
+  } finally {
+    setLoadingAuditReport(false);
+  }
+};
 
   useEffect(() => {
     void loadScope();
@@ -441,10 +529,11 @@ export default function AdminReportsPage() {
   }, [scope]);
 
   useEffect(() => {
-    if (selectedCompanyId) {
-      void loadReport(selectedCompanyId);
-    }
-  }, [selectedCompanyId]);
+  if (selectedCompanyId) {
+    void loadReport(selectedCompanyId);
+    void loadAuditReport(selectedCompanyId);
+  }
+}, [selectedCompanyId]);
 
   const completionRate = useMemo(() => {
     const total = report?.summary?.total_assignments || 0;
@@ -668,6 +757,40 @@ export default function AdminReportsPage() {
       .slice(0, 6);
   }, [trainingBasedRows]);
 
+  const auditSummary = auditReport?.summary;
+
+const auditTotalDistribution =
+  (auditSummary?.uygun_count || 0) +
+  (auditSummary?.uygunsuz_count || 0) +
+  (auditSummary?.kismen_count || 0) +
+  (auditSummary?.kapsam_disi_count || 0);
+
+const auditTone = useMemo(() => {
+  const score = auditSummary?.compliance_score || 0;
+
+  if (score >= 85) {
+    return {
+      label: "Güçlü Uyum",
+      bg: "linear-gradient(135deg, #166534 0%, #22c55e 100%)",
+      text: "Denetim uyum skoru güçlü görünüyor. Mevcut kontrol seviyesi korunmalı.",
+    };
+  }
+
+  if (score >= 60) {
+    return {
+      label: "Kontrollü Risk",
+      bg: "linear-gradient(135deg, #92400e 0%, #f59e0b 100%)",
+      text: "Denetim bulguları orta seviyede risk içeriyor. Açık uygunsuzluklar takip edilmeli.",
+    };
+  }
+
+  return {
+    label: "Kritik İzleme",
+    bg: "linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)",
+    text: "Denetim uyum skoru düşük. Uygunsuzluklar için hızlı aksiyon planı önerilir.",
+  };
+}, [auditSummary]);
+
   const openEmployeeDetail = (row: MatrixRow) => {
     const rows = row.statuses
       .map((s) => ({
@@ -791,10 +914,17 @@ export default function AdminReportsPage() {
   headers = ["Başlık", "Değer", "Açıklama"];
 
   rows = [
-    ["Toplam Denetim", "0", "Denetim API bağlantısı sonrası dolacak"],
-    ["Açık Uygunsuzluk", "0", "Denetim cevaplarından hesaplanacak"],
-    ["Kritik Uygunsuzluk", "0", "Risk seviyesiyle hesaplanacak"],
-    ["Kapanan DÖF", "0", "DÖF statülerinden hesaplanacak"],
+    ["Toplam Denetim", String(auditSummary?.total_audits || 0), "Seçili firma denetim sayısı"],
+    ["Tamamlanan Denetim", String(auditSummary?.completed_audits || 0), "Kapanan denetimler"],
+    ["Taslak Denetim", String(auditSummary?.draft_audits || 0), "Taslak / açık denetimler"],
+    ["Toplam Madde", String(auditSummary?.total_items || 0), "Analize dahil madde sayısı"],
+    ["Uygun", String(auditSummary?.uygun_count || 0), "Uygun cevap sayısı"],
+    ["Uygunsuz", String(auditSummary?.uygunsuz_count || 0), "Uygunsuz cevap sayısı"],
+    ["Kısmen Uygun", String(auditSummary?.kismen_count || 0), "Kısmi uygunluk sayısı"],
+    ["Kapsam Dışı", String(auditSummary?.kapsam_disi_count || 0), "Kapsam dışı madde sayısı"],
+    ["DÖF Açık", String(auditSummary?.open_dof_count || 0), "Açık aksiyon sayısı"],
+    ["DÖF Kapalı", String(auditSummary?.closed_dof_count || 0), "Kapanan aksiyon sayısı"],
+    ["Uyum Skoru", `%${auditSummary?.compliance_score || 0}`, "Genel denetim uyum oranı"],
   ];
 }
 
@@ -1487,29 +1617,42 @@ export default function AdminReportsPage() {
               </div>
 
               <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexWrap: "wrap",
-                  marginTop: 16,
-                }}
-              >
-                <button style={pillStyle(activeTab === "matrix")} onClick={() => setActiveTab("matrix")}>
-                  Eğitim Matrisi
-                </button>
-                <button
-                  style={pillStyle(activeTab === "employee")}
-                  onClick={() => setActiveTab("employee")}
-                >
-                  Çalışan Bazlı
-                </button>
-                <button
-  style={pillStyle(activeTab === "audit")}
-  onClick={() => setActiveTab("audit")}
+  style={{
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    marginTop: 16,
+  }}
 >
-  Denetim Analizleri
-</button>
-              </div>
+  <button
+    style={pillStyle(activeTab === "matrix")}
+    onClick={() => setActiveTab("matrix")}
+  >
+    Eğitim Matrisi
+  </button>
+
+  <button
+    style={pillStyle(activeTab === "employee")}
+    onClick={() => setActiveTab("employee")}
+  >
+    Çalışan Bazlı
+  </button>
+
+  <button
+    style={pillStyle(activeTab === "training")}
+    onClick={() => setActiveTab("training")}
+  >
+    Eğitim Bazlı
+  </button>
+
+  <button
+    style={pillStyle(activeTab === "audit")}
+    onClick={() => setActiveTab("audit")}
+  >
+    Denetim Analizleri
+  </button>
+</div>
+
             </div>
 
             {activeTab === "matrix" ? (
@@ -1830,43 +1973,190 @@ export default function AdminReportsPage() {
 
           {activeTab === "audit" ? (
   <div style={{ display: "grid", gap: 20 }}>
+
+    {/* HERO */}
     <div
       style={{
         ...cardStyle(),
-        background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
+        background: auditTone.bg,
         color: "#fff",
       }}
     >
-      <h2 style={{ margin: 0, fontSize: 30, fontWeight: 900 }}>
-        Denetim Analizleri
-      </h2>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              display: "inline-flex",
+              padding: "7px 12px",
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.16)",
+              border: "1px solid rgba(255,255,255,0.22)",
+              fontSize: 12,
+              fontWeight: 900,
+              marginBottom: 12,
+            }}
+          >
+            D-SEC Denetim Analiz
+          </div>
 
-      <p style={{ marginTop: 10, marginBottom: 0, color: "rgba(255,255,255,0.92)", lineHeight: 1.7 }}>
-        Denetim sonuçları, uygunsuzluklar, DÖF durumları ve yönetim aksiyonları burada analiz edilecek.
-      </p>
-    </div>
+          <h2 style={{ margin: 0, fontSize: 30, fontWeight: 900 }}>
+            Denetim Analizleri
+          </h2>
 
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
-      <AuditScoreCard title="Toplam Denetim" value={0} subtitle="Denetim API bağlantısı sonrası dolacak" color={BRAND.slate} soft={BRAND.slateSoft} />
-      <AuditScoreCard title="Açık Uygunsuzluk" value={0} subtitle="Kapanmamış bulgular" color={BRAND.red} soft={BRAND.redSoft} />
-      <AuditScoreCard title="Kritik Uygunsuzluk" value={0} subtitle="Öncelikli müdahale alanı" color={BRAND.amber} soft={BRAND.amberSoft} />
-      <AuditScoreCard title="Kapanan DÖF" value={0} subtitle="Tamamlanan aksiyonlar" color={BRAND.green} soft={BRAND.greenSoft} />
-    </div>
+          <p style={{ marginTop: 10 }}>
+            {loadingAuditReport
+              ? "Veriler yükleniyor..."
+              : auditTone.text}
+          </p>
+        </div>
 
-    <div style={cardStyle()}>
-      <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
-        Uygunsuzluk Dağılımı
-      </h3>
-
-      <div style={{ display: "grid", gap: 12 }}>
-        <MiniBar label="Uygun" value={0} total={1} color={BRAND.green} soft={BRAND.greenSoft} />
-        <MiniBar label="Uygunsuz" value={0} total={1} color={BRAND.red} soft={BRAND.redSoft} />
-        <MiniBar label="Kısmen Uygun" value={0} total={1} color={BRAND.amber} soft={BRAND.amberSoft} />
-        <MiniBar label="Kapsam Dışı" value={0} total={1} color={BRAND.slate} soft={BRAND.slateSoft} />
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 16,
+            background: "rgba(255,255,255,0.15)",
+          }}
+        >
+          <div style={{ fontSize: 12 }}>Uyum Skoru</div>
+          <div style={{ fontSize: 32, fontWeight: 900 }}>
+            %{auditSummary?.compliance_score || 0}
+          </div>
+        </div>
       </div>
     </div>
+
+    {/* KPI */}
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: 16,
+      }}
+    >
+      <AuditScoreCard
+        title="Toplam Denetim"
+        value={auditSummary?.total_audits || 0}
+        subtitle="Tüm kayıtlar"
+        color={BRAND.slate}
+        soft={BRAND.slateSoft}
+      />
+
+      <AuditScoreCard
+        title="Uygunsuz"
+        value={auditSummary?.uygunsuz_count || 0}
+        subtitle="Aksiyon gerekli"
+        color={BRAND.red}
+        soft={BRAND.redSoft}
+      />
+
+      <AuditScoreCard
+        title="Kısmen"
+        value={auditSummary?.kismen_count || 0}
+        subtitle="Orta risk"
+        color={BRAND.amber}
+        soft={BRAND.amberSoft}
+      />
+
+      <AuditScoreCard
+        title="DÖF Açık"
+        value={auditSummary?.open_dof_count || 0}
+        subtitle="Kapanmamış aksiyon"
+        color={BRAND.blue}
+        soft={BRAND.blueSoft}
+      />
+    </div>
+
+    {/* DAĞILIM */}
+    <div style={cardStyle()}>
+      <h3 style={{ marginBottom: 12 }}>Sonuç Dağılımı</h3>
+
+      <MiniBar
+        label="Uygun"
+        value={auditSummary?.uygun_count || 0}
+        total={auditTotalDistribution || 1}
+        color={BRAND.green}
+        soft={BRAND.greenSoft}
+      />
+
+      <MiniBar
+        label="Uygunsuz"
+        value={auditSummary?.uygunsuz_count || 0}
+        total={auditTotalDistribution || 1}
+        color={BRAND.red}
+        soft={BRAND.redSoft}
+      />
+
+      <MiniBar
+        label="Kısmen"
+        value={auditSummary?.kismen_count || 0}
+        total={auditTotalDistribution || 1}
+        color={BRAND.amber}
+        soft={BRAND.amberSoft}
+      />
+    </div>
+
+    {/* TOP UYGUNSUZLUK */}
+    <div style={cardStyle()}>
+      <h3 style={{ marginBottom: 12 }}>En Çok Uygunsuzluk</h3>
+
+      {!auditReport?.top_nonconformities?.length ? (
+        <div>Veri yok</div>
+      ) : (
+        auditReport.top_nonconformities.map((item) => (
+          <MiniBar
+            key={item.title}
+            label={item.title}
+            value={item.count}
+            total={auditReport.top_nonconformities?.[0]?.count || 1}
+            color={BRAND.red}
+            soft={BRAND.redSoft}
+          />
+        ))
+      )}
+    </div>
+
+    {/* TABLO */}
+    <div style={cardStyle()}>
+      <h3 style={{ marginBottom: 12 }}>Denetimler</h3>
+
+      {!auditReport?.audits?.length ? (
+        <div>Denetim yok</div>
+      ) : (
+        <table style={{ width: "100%" }}>
+          <thead>
+            <tr>
+              <th>Rapor</th>
+              <th>Tür</th>
+              <th>Lokasyon</th>
+              <th>Sorumlu</th>
+              <th>Durum</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {auditReport.audits.map((a) => (
+              <tr key={String(a.id)}>
+                <td>{a.report_no || "-"}</td>
+                <td>{a.template_type || "-"}</td>
+                <td>{a.location || "-"}</td>
+                <td>{a.responsible || "-"}</td>
+                <td>{a.status || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+
   </div>
-) : null} 
+) : null}
 
           </div>
         ) : null}
