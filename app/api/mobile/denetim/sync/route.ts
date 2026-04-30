@@ -76,19 +76,21 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { run, answers } = body;
+const { run, answers } = body;
 
-    if (!run || !run.id) {
-      return NextResponse.json(
-        { error: "Run verisi eksik." },
-        { status: 400 }
-      );
-    }
+const appRunId = Number(run?.appRunId || run?.id || run?.app_run_id || 0);
+
+if (!run || !appRunId) {
+  return NextResponse.json(
+    { error: "Run verisi eksik veya appRunId bulunamadı." },
+    { status: 400 }
+  );
+}
 
     const safeAnswers = normalizeAnswers(answers);
 
     console.log("DENETIM SYNC DEBUG:", {
-      runId: run?.id,
+      appRunId,
       firmId: run?.firmId,
       firmName: run?.firmName,
       answersCount: safeAnswers.length,
@@ -101,7 +103,7 @@ export async function POST(req: Request) {
     const { data: existingRun } = await supabase
       .from("denetim_runs")
       .select("id")
-      .eq("app_run_id", run.id)
+      .eq("app_run_id", appRunId)
       .maybeSingle();
 
     if (existingRun?.id) {
@@ -119,8 +121,8 @@ export async function POST(req: Request) {
     const { data: runData, error: runError } = await supabase
       .from("denetim_runs")
       .insert({
-        app_run_id: run.id,
-        firm_id: run.firmId || 0,
+        app_run_id: appRunId,
+        firm_id: Number(run.firmId || run.firm_id || 0),
         firm_name:
           run.firmName ||
           run.firm_name ||
@@ -133,7 +135,10 @@ export async function POST(req: Request) {
         audit_date_millis: run.auditDateMillis || run.createdAt || Date.now(),
         report_no: run.reportNo || "",
         general_note: run.generalNote || "",
-        status: run.status || "TAMAMLANDI",
+        status:
+  String(run.status || "").toUpperCase() === "TASLAK"
+    ? "TASLAK"
+    : "TAMAMLANDI",
         created_at_millis: run.createdAt || Date.now(),
         source: "APP",
       })
@@ -156,7 +161,7 @@ export async function POST(req: Request) {
 
         return {
           run_remote_id: runData.id,
-          app_run_id: run.id,
+          app_run_id: appRunId,
           item_title: a.itemTitle || a.item_title || "",
           legal_ref: a.legalRef || a.legal_ref || "",
           result: a.result || "",
@@ -169,9 +174,12 @@ export async function POST(req: Request) {
       })
     );
 
-    const { error: answersError } = await supabase
-      .from("denetim_answers")
-      .insert(rows);
+    const answersInsertResult =
+  rows.length > 0
+    ? await supabase.from("denetim_answers").insert(rows)
+    : { error: null };
+
+const answersError = answersInsertResult.error;
 
     if (answersError) {
       console.error("ANSWERS INSERT ERROR:", answersError);
@@ -197,7 +205,8 @@ export async function POST(req: Request) {
       success: true,
       remoteRunId: runData.id,
       answerCount: rows.length,
-      firmName: run.firmName || run.firm_name || "Firma Ünvanı Belirtilmemiş",
+      appRunId,
+    firmName: run.firmName || run.firm_name || "Firma Ünvanı Belirtilmemiş",
     });
   } catch (error: any) {
     console.error("SYNC ERROR:", error);
