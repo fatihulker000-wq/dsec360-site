@@ -87,22 +87,49 @@ export async function GET(req: NextRequest) {
 
     const companyName = pickCompanyName(companyData as AnyRow | null);
 
-    let runsQuery = supabase
-      .from("denetim_runs")
-      .select("*")
-      .order("created_at_millis", { ascending: false });
+    let runsData: AnyRow[] = [];
+let runsError: any = null;
 
-    const numericCompanyId = Number(requestedCompanyId);
+const baseRunsSelect = () =>
+  supabase
+    .from("denetim_runs")
+    .select("*")
+    .order("created_at_millis", { ascending: false });
 
-    if (Number.isFinite(numericCompanyId) && requestedCompanyId !== "") {
-      runsQuery = runsQuery.eq("firm_id", numericCompanyId);
-    } else if (companyName) {
-      runsQuery = runsQuery.eq("firm_name", companyName);
-    } else {
-      runsQuery = runsQuery.eq("firm_id", -999999999);
-    }
+const numericCompanyId = Number(requestedCompanyId);
 
-    const { data: runsData, error: runsError } = await runsQuery;
+// 1) Önce gerçek numeric firm_id ile dene
+if (Number.isFinite(numericCompanyId) && requestedCompanyId !== "") {
+  const result = await baseRunsSelect().eq("firm_id", numericCompanyId);
+  runsData = (result.data || []) as AnyRow[];
+  runsError = result.error;
+}
+
+// 2) Sonuç yoksa firma adı ile dene
+if (!runsError && runsData.length === 0 && companyName) {
+  const result = await baseRunsSelect().eq("firm_name", companyName);
+  runsData = (result.data || []) as AnyRow[];
+  runsError = result.error;
+}
+
+// 3) Sonuç yoksa mevcut app senkron yapısındaki firm_id = 0 kayıtlarını al
+// Şu an app tarafı denetimleri Supabase'e firm_id=0 olarak gönderdiği için
+// geçici uyumluluk katmanı olarak bu fallback kullanılıyor.
+if (!runsError && runsData.length === 0) {
+  const result = await baseRunsSelect().eq("firm_id", 0);
+  runsData = (result.data || []) as AnyRow[];
+  runsError = result.error;
+}
+
+if (runsError) {
+  return NextResponse.json(
+    {
+      error: "Denetim kayıtları alınamadı.",
+      detail: runsError.message,
+    },
+    { status: 500 }
+  );
+}
 
     if (runsError) {
       return NextResponse.json(
