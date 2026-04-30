@@ -74,7 +74,7 @@ type DetailModalState =
       }>;
     };
 
-type ReportTab = "matrix" | "employee" | "training";
+type ReportTab = "matrix" | "employee" | "training" | "audit";
 
 const BRAND = {
   bg: "#f7f8fb",
@@ -98,7 +98,7 @@ const BRAND = {
 
 function cardStyle(): React.CSSProperties {
   return {
-    border: '1px solid ${BRAND.border}',
+    border: `1px solid ${BRAND.border}`,
     borderRadius: 18,
     background: BRAND.white,
     padding: 18,
@@ -238,6 +238,49 @@ function MiniBar({
       </div>
 
       <div style={{ marginTop: 8, fontSize: 12, color: BRAND.muted }}>%{percent}</div>
+    </div>
+  );
+}
+
+function AuditScoreCard({
+  title,
+  value,
+  subtitle,
+  color,
+  soft,
+}: {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  color: string;
+  soft: string;
+}) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${BRAND.border}`,
+        borderRadius: 18,
+        padding: 18,
+        background: soft,
+        minWidth: 0,
+      }}
+    >
+      <div style={{ fontSize: 13, color: BRAND.muted, fontWeight: 800 }}>
+        {title}
+      </div>
+      <div
+        style={{
+          marginTop: 8,
+          fontSize: 30,
+          fontWeight: 900,
+          color,
+        }}
+      >
+        {value}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 12, color: BRAND.muted }}>
+        {subtitle}
+      </div>
     </div>
   );
 }
@@ -728,23 +771,32 @@ export default function AdminReportsPage() {
         String(row.notStarted),
         String(row.unassigned),
       ]);
-    } else {
-      headers = [
-        "Eğitim",
-        "Tamamlandı",
-        "Devam Ediyor",
-        "Başlamadı",
-        "Atanmadı",
-      ];
+    } else if (activeTab === "training") {
+  headers = [
+    "Eğitim",
+    "Tamamlandı",
+    "Devam Ediyor",
+    "Başlamadı",
+    "Atanmadı",
+  ];
 
-      rows = trainingBasedRows.map((row) => [
-        row.title,
-        String(row.completed),
-        String(row.inProgress),
-        String(row.notStarted),
-        String(row.unassigned),
-      ]);
-    }
+  rows = trainingBasedRows.map((row) => [
+    row.title,
+    String(row.completed),
+    String(row.inProgress),
+    String(row.notStarted),
+    String(row.unassigned),
+  ]);
+} else if (activeTab === "audit") {
+  headers = ["Başlık", "Değer", "Açıklama"];
+
+  rows = [
+    ["Toplam Denetim", "0", "Denetim API bağlantısı sonrası dolacak"],
+    ["Açık Uygunsuzluk", "0", "Denetim cevaplarından hesaplanacak"],
+    ["Kritik Uygunsuzluk", "0", "Risk seviyesiyle hesaplanacak"],
+    ["Kapanan DÖF", "0", "DÖF statülerinden hesaplanacak"],
+  ];
+}
 
     if (!rows.length) return;
 
@@ -1452,11 +1504,11 @@ export default function AdminReportsPage() {
                   Çalışan Bazlı
                 </button>
                 <button
-                  style={pillStyle(activeTab === "training")}
-                  onClick={() => setActiveTab("training")}
-                >
-                  Eğitim Bazlı
-                </button>
+  style={pillStyle(activeTab === "audit")}
+  onClick={() => setActiveTab("audit")}
+>
+  Denetim Analizleri
+</button>
               </div>
             </div>
 
@@ -1775,6 +1827,47 @@ export default function AdminReportsPage() {
                 ) : null}
               </div>
             ) : null}
+
+          {activeTab === "audit" ? (
+  <div style={{ display: "grid", gap: 20 }}>
+    <div
+      style={{
+        ...cardStyle(),
+        background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
+        color: "#fff",
+      }}
+    >
+      <h2 style={{ margin: 0, fontSize: 30, fontWeight: 900 }}>
+        Denetim Analizleri
+      </h2>
+
+      <p style={{ marginTop: 10, marginBottom: 0, color: "rgba(255,255,255,0.92)", lineHeight: 1.7 }}>
+        Denetim sonuçları, uygunsuzluklar, DÖF durumları ve yönetim aksiyonları burada analiz edilecek.
+      </p>
+    </div>
+
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+      <AuditScoreCard title="Toplam Denetim" value={0} subtitle="Denetim API bağlantısı sonrası dolacak" color={BRAND.slate} soft={BRAND.slateSoft} />
+      <AuditScoreCard title="Açık Uygunsuzluk" value={0} subtitle="Kapanmamış bulgular" color={BRAND.red} soft={BRAND.redSoft} />
+      <AuditScoreCard title="Kritik Uygunsuzluk" value={0} subtitle="Öncelikli müdahale alanı" color={BRAND.amber} soft={BRAND.amberSoft} />
+      <AuditScoreCard title="Kapanan DÖF" value={0} subtitle="Tamamlanan aksiyonlar" color={BRAND.green} soft={BRAND.greenSoft} />
+    </div>
+
+    <div style={cardStyle()}>
+      <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
+        Uygunsuzluk Dağılımı
+      </h3>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        <MiniBar label="Uygun" value={0} total={1} color={BRAND.green} soft={BRAND.greenSoft} />
+        <MiniBar label="Uygunsuz" value={0} total={1} color={BRAND.red} soft={BRAND.redSoft} />
+        <MiniBar label="Kısmen Uygun" value={0} total={1} color={BRAND.amber} soft={BRAND.amberSoft} />
+        <MiniBar label="Kapsam Dışı" value={0} total={1} color={BRAND.slate} soft={BRAND.slateSoft} />
+      </div>
+    </div>
+  </div>
+) : null} 
+
           </div>
         ) : null}
       </div>
@@ -1803,13 +1896,13 @@ export default function AdminReportsPage() {
     background: "#fff",
     borderRadius: 20,
     boxShadow: "0 24px 64px rgba(15,23,42,0.20)",
-    border: '1px solid ${BRAND.border}',
+    border: `1px solid ${BRAND.border}`,
   }}
 >
            <div
   style={{
     padding: 20,
-    borderBottom: '1px solid ${BRAND.border}',
+    borderBottom: `1px solid ${BRAND.border}`,
     display: "flex",
     justifyContent: "space-between",
     gap: 12,
