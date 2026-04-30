@@ -347,31 +347,23 @@ if (duplicateData?.id) {
   });
 }
 
+// ✅ CBS KESİN AKIŞ: App kaydı onay beklemeden web'e düşer.
+// Supabase cbs_forms tablosunda olmayan alanlar gönderilmez.
+// Böylece POST 500 ve çift kayıt riski azaltılır.
 const insertPayload = {
-      full_name,
-      email: email || null,
-      message,
-      firm_id: firm_id || null,
-      category,
-      priority,
-      assigned_to,
-      assigned_username,
-      assigned_role,
-      target_role,
-      resolution_note,
-      response_note,
-      rejected_reason,
-      opened_by_email,
-      mail_subject,
-      mail_message_id,
-      first_receiver_username,
-      forwarded_by,
-      created_by,
-      status,
-      firma_adi,
-      created_at: now,
-      updated_at: now,
-    };
+  full_name,
+  email: email || null,
+  message,
+  firm_id: firm_id || null,
+  firma_adi,
+  category,
+  priority,
+  assigned_to,
+  resolution_note,
+  status: "new",
+  created_at: now,
+  updated_at: now,
+};
 
     const { data, error } = await supabase
       .from("cbs_forms")
@@ -414,12 +406,15 @@ export async function PUT(req: Request) {
 
     const supabase = getSupabase();
 
+    // ✅ CBS STABİL PUT:
+    // Sadece cbs_forms tablosunda kesin olan alanlar güncellenir.
+    // Eksik kolon kaynaklı 500 hatalarını engeller.
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
 
     if (body?.status !== undefined) {
-      updatePayload.status = String(body.status).trim() || null;
+      updatePayload.status = String(body.status).trim() || "new";
     }
 
     if (body?.category !== undefined) {
@@ -427,7 +422,7 @@ export async function PUT(req: Request) {
     }
 
     if (body?.priority !== undefined) {
-      updatePayload.priority = String(body.priority).trim() || null;
+      updatePayload.priority = String(body.priority).trim() || "normal";
     }
 
     if (body?.assigned_to !== undefined) {
@@ -435,8 +430,7 @@ export async function PUT(req: Request) {
     }
 
     if (body?.resolution_note !== undefined) {
-      updatePayload.resolution_note =
-        String(body.resolution_note).trim() || null;
+      updatePayload.resolution_note = String(body.resolution_note).trim() || null;
     }
 
     if (body?.message !== undefined) {
@@ -449,58 +443,6 @@ export async function PUT(req: Request) {
 
     if (body?.email !== undefined) {
       updatePayload.email = String(body.email).trim() || null;
-    }
-
-    if (body?.assigned_username !== undefined) {
-      updatePayload.assigned_username =
-        String(body.assigned_username).trim() || null;
-    }
-
-    if (body?.assigned_role !== undefined) {
-      updatePayload.assigned_role =
-        String(body.assigned_role).trim() || null;
-    }
-
-    if (body?.target_role !== undefined) {
-      updatePayload.target_role = String(body.target_role).trim() || null;
-    }
-
-    if (body?.opened_by_email !== undefined) {
-      updatePayload.opened_by_email =
-        String(body.opened_by_email).trim() || null;
-    }
-
-    if (body?.mail_subject !== undefined) {
-      updatePayload.mail_subject =
-        String(body.mail_subject).trim() || null;
-    }
-
-    if (body?.mail_message_id !== undefined) {
-      updatePayload.mail_message_id =
-        String(body.mail_message_id).trim() || null;
-    }
-
-    if (body?.first_receiver_username !== undefined) {
-      updatePayload.first_receiver_username =
-        String(body.first_receiver_username).trim() || null;
-    }
-
-    if (body?.forwarded_by !== undefined) {
-      updatePayload.forwarded_by = String(body.forwarded_by).trim() || null;
-    }
-
-    if (body?.response_note !== undefined) {
-      updatePayload.response_note =
-        String(body.response_note).trim() || null;
-    }
-
-    if (body?.rejected_reason !== undefined) {
-      updatePayload.rejected_reason =
-        String(body.rejected_reason).trim() || null;
-    }
-
-    if (body?.created_by !== undefined) {
-      updatePayload.created_by = String(body.created_by).trim() || null;
     }
 
     if (body?.firma_adi !== undefined) {
@@ -525,16 +467,26 @@ export async function PUT(req: Request) {
       .eq("id", id);
 
     if (error) {
-      console.error("mobile-sync PUT supabase hata:", error);
+      console.error("mobile-sync PUT supabase hata:", {
+        error,
+        updatePayload,
+      });
+
       return NextResponse.json(
-        { error: "Güncelleme yapılamadı." },
+        {
+          error: "Güncelleme yapılamadı.",
+          detail: error.message ?? null,
+        },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ success: true });
-  } catch (e) {
+  } catch (e: any) {
     console.error("mobile-sync PUT hata:", e);
-    return NextResponse.json({ error: "Sunucu hatası." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Sunucu hatası.", detail: e?.message ?? null },
+      { status: 500 }
+    );
   }
 }
