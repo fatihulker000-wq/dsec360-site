@@ -1973,66 +1973,72 @@ const auditTone = useMemo(() => {
 
           {activeTab === "audit" ? (
   <div style={{ display: "grid", gap: 20 }}>
-
-    {/* HERO */}
     <div
       style={{
         ...cardStyle(),
         background: auditTone.bg,
         color: "#fff",
+        overflow: "hidden",
+        position: "relative",
       }}
     >
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div
+          style={{
+            display: "inline-flex",
+            padding: "7px 12px",
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.16)",
+            border: "1px solid rgba(255,255,255,0.22)",
+            fontSize: 12,
+            fontWeight: 900,
+            marginBottom: 12,
+          }}
+        >
+          D-SEC Denetim Karar Destek
+        </div>
+
+        <h2 style={{ margin: 0, fontSize: "clamp(26px, 4vw, 38px)", fontWeight: 900 }}>
+          Denetim Analizleri
+        </h2>
+
+        <p
+          style={{
+            marginTop: 10,
+            marginBottom: 0,
+            color: "rgba(255,255,255,0.92)",
+            lineHeight: 1.7,
+            maxWidth: 850,
+          }}
+        >
+          {loadingAuditReport ? "Denetim verileri yükleniyor..." : auditTone.text}
+        </p>
+      </div>
+
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
+          position: "absolute",
+          right: 24,
+          top: 24,
+          width: 132,
+          height: 132,
+          borderRadius: "50%",
+          background: "rgba(255,255,255,0.14)",
+          border: "1px solid rgba(255,255,255,0.22)",
+          display: "grid",
+          placeItems: "center",
+          textAlign: "center",
         }}
       >
         <div>
-          <div
-            style={{
-              display: "inline-flex",
-              padding: "7px 12px",
-              borderRadius: 999,
-              background: "rgba(255,255,255,0.16)",
-              border: "1px solid rgba(255,255,255,0.22)",
-              fontSize: 12,
-              fontWeight: 900,
-              marginBottom: 12,
-            }}
-          >
-            D-SEC Denetim Analiz
-          </div>
-
-          <h2 style={{ margin: 0, fontSize: 30, fontWeight: 900 }}>
-            Denetim Analizleri
-          </h2>
-
-          <p style={{ marginTop: 10 }}>
-            {loadingAuditReport
-              ? "Veriler yükleniyor..."
-              : auditTone.text}
-          </p>
-        </div>
-
-        <div
-          style={{
-            padding: 16,
-            borderRadius: 16,
-            background: "rgba(255,255,255,0.15)",
-          }}
-        >
-          <div style={{ fontSize: 12 }}>Uyum Skoru</div>
-          <div style={{ fontSize: 32, fontWeight: 900 }}>
+          <div style={{ fontSize: 12, opacity: 0.9 }}>Uyum Skoru</div>
+          <div style={{ fontSize: 34, fontWeight: 900 }}>
             %{auditSummary?.compliance_score || 0}
           </div>
         </div>
       </div>
     </div>
 
-    {/* KPI */}
     <div
       style={{
         display: "grid",
@@ -2040,121 +2046,141 @@ const auditTone = useMemo(() => {
         gap: 16,
       }}
     >
-      <AuditScoreCard
-        title="Toplam Denetim"
-        value={auditSummary?.total_audits || 0}
-        subtitle="Tüm kayıtlar"
-        color={BRAND.slate}
-        soft={BRAND.slateSoft}
-      />
-
-      <AuditScoreCard
-        title="Uygunsuz"
-        value={auditSummary?.uygunsuz_count || 0}
-        subtitle="Aksiyon gerekli"
-        color={BRAND.red}
-        soft={BRAND.redSoft}
-      />
-
-      <AuditScoreCard
-        title="Kısmen"
-        value={auditSummary?.kismen_count || 0}
-        subtitle="Orta risk"
-        color={BRAND.amber}
-        soft={BRAND.amberSoft}
-      />
-
-      <AuditScoreCard
-        title="DÖF Açık"
-        value={auditSummary?.open_dof_count || 0}
-        subtitle="Kapanmamış aksiyon"
-        color={BRAND.blue}
-        soft={BRAND.blueSoft}
-      />
+      <AuditScoreCard title="Toplam Denetim" value={auditSummary?.total_audits || 0} subtitle="Seçili firma kayıtları" color={BRAND.slate} soft={BRAND.slateSoft} />
+      <AuditScoreCard title="Tamamlanan" value={auditSummary?.completed_audits || 0} subtitle="Raporu tamamlanan denetim" color={BRAND.green} soft={BRAND.greenSoft} />
+      <AuditScoreCard title="Taslak" value={auditSummary?.draft_audits || 0} subtitle="Açık / devam eden denetim" color={BRAND.amber} soft={BRAND.amberSoft} />
+      <AuditScoreCard title="Toplam Madde" value={auditSummary?.total_items || 0} subtitle="Analize dahil edilen cevap" color={BRAND.blue} soft={BRAND.blueSoft} />
+      <AuditScoreCard title="Uygunsuz" value={auditSummary?.uygunsuz_count || 0} subtitle="Aksiyon gerektiren bulgu" color={BRAND.red} soft={BRAND.redSoft} />
+      <AuditScoreCard title="DÖF Açık" value={auditSummary?.open_dof_count || 0} subtitle="Kapanmamış aksiyon" color={BRAND.slate} soft={BRAND.slateSoft} />
     </div>
 
-    {/* DAĞILIM */}
-    <div style={cardStyle()}>
-      <h3 style={{ marginBottom: 12 }}>Sonuç Dağılımı</h3>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+        gap: 20,
+      }}
+    >
+      <div style={cardStyle()}>
+        <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
+          Sonuç Dağılımı
+        </h3>
 
-      <MiniBar
-        label="Uygun"
-        value={auditSummary?.uygun_count || 0}
-        total={auditTotalDistribution || 1}
-        color={BRAND.green}
-        soft={BRAND.greenSoft}
-      />
+        <div style={{ display: "grid", gap: 12 }}>
+          <MiniBar label="Uygun" value={auditSummary?.uygun_count || 0} total={auditTotalDistribution || 1} color={BRAND.green} soft={BRAND.greenSoft} />
+          <MiniBar label="Uygunsuz" value={auditSummary?.uygunsuz_count || 0} total={auditTotalDistribution || 1} color={BRAND.red} soft={BRAND.redSoft} />
+          <MiniBar label="Kısmen Uygun" value={auditSummary?.kismen_count || 0} total={auditTotalDistribution || 1} color={BRAND.amber} soft={BRAND.amberSoft} />
+          <MiniBar label="Kapsam Dışı" value={auditSummary?.kapsam_disi_count || 0} total={auditTotalDistribution || 1} color={BRAND.slate} soft={BRAND.slateSoft} />
+        </div>
+      </div>
 
-      <MiniBar
-        label="Uygunsuz"
-        value={auditSummary?.uygunsuz_count || 0}
-        total={auditTotalDistribution || 1}
-        color={BRAND.red}
-        soft={BRAND.redSoft}
-      />
+      <div style={cardStyle()}>
+        <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
+          En Çok Uygunsuzluk
+        </h3>
 
-      <MiniBar
-        label="Kısmen"
-        value={auditSummary?.kismen_count || 0}
-        total={auditTotalDistribution || 1}
-        color={BRAND.amber}
-        soft={BRAND.amberSoft}
-      />
+        {!auditReport?.top_nonconformities?.length ? (
+          <div style={{ color: BRAND.muted }}>Uygunsuzluk verisi bulunamadı.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            {auditReport.top_nonconformities.map((item) => (
+              <MiniBar
+                key={item.title}
+                label={item.title}
+                value={item.count}
+                total={auditReport.top_nonconformities?.[0]?.count || 1}
+                color={BRAND.red}
+                soft={BRAND.redSoft}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
 
-    {/* TOP UYGUNSUZLUK */}
     <div style={cardStyle()}>
-      <h3 style={{ marginBottom: 12 }}>En Çok Uygunsuzluk</h3>
+      <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
+        Önerilen Aksiyon Yoğunluğu
+      </h3>
 
-      {!auditReport?.top_nonconformities?.length ? (
-        <div>Veri yok</div>
+      {!auditReport?.recommended_actions?.length ? (
+        <div style={{ color: BRAND.muted }}>Aksiyon verisi bulunamadı.</div>
       ) : (
-        auditReport.top_nonconformities.map((item) => (
-          <MiniBar
-            key={item.title}
-            label={item.title}
-            value={item.count}
-            total={auditReport.top_nonconformities?.[0]?.count || 1}
-            color={BRAND.red}
-            soft={BRAND.redSoft}
-          />
-        ))
+        <div style={{ display: "grid", gap: 12 }}>
+          {auditReport.recommended_actions.map((item) => (
+            <MiniBar
+              key={item.title}
+              label={item.title}
+              value={item.count}
+              total={auditReport.recommended_actions?.[0]?.count || 1}
+              color={BRAND.blue}
+              soft={BRAND.blueSoft}
+            />
+          ))}
+        </div>
       )}
     </div>
 
-    {/* TABLO */}
     <div style={cardStyle()}>
-      <h3 style={{ marginBottom: 12 }}>Denetimler</h3>
+      <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
+        Denetim Kayıtları
+      </h3>
 
       {!auditReport?.audits?.length ? (
-        <div>Denetim yok</div>
+        <div style={{ color: BRAND.muted }}>Denetim kaydı bulunamadı.</div>
       ) : (
-        <table style={{ width: "100%" }}>
-          <thead>
-            <tr>
-              <th>Rapor</th>
-              <th>Tür</th>
-              <th>Lokasyon</th>
-              <th>Sorumlu</th>
-              <th>Durum</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {auditReport.audits.map((a) => (
-              <tr key={String(a.id)}>
-                <td>{a.report_no || "-"}</td>
-                <td>{a.template_type || "-"}</td>
-                <td>{a.location || "-"}</td>
-                <td>{a.responsible || "-"}</td>
-                <td>{a.status || "-"}</td>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+            <thead>
+              <tr>
+                {["Rapor No", "Tür", "Mod", "Lokasyon", "Sorumlu", "Denetçi", "Durum"].map((head) => (
+                  <th
+                    key={head}
+                    style={{
+                      textAlign: "left",
+                      padding: 12,
+                      borderBottom: `1px solid ${BRAND.border}`,
+                      background: "#f9fafb",
+                      fontSize: 13,
+                    }}
+                  >
+                    {head}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {auditReport.audits.map((a) => (
+                <tr key={String(a.id)}>
+                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}`, fontWeight: 800 }}>
+                    {a.report_no || "-"}
+                  </td>
+                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                    {a.template_type || "-"}
+                  </td>
+                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                    {a.eval_mode || "-"}
+                  </td>
+                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                    {a.location || "-"}
+                  </td>
+                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                    {a.responsible || "-"}
+                  </td>
+                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                    {a.inspector_name || "-"}
+                  </td>
+                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                    {badge(a.status || "-")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
-
   </div>
 ) : null}
 
