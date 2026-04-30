@@ -332,6 +332,161 @@ function AuditScoreCard({
   );
 }
 
+function CircleGauge({ score }: { score: number }) {
+  const safeScore = Math.max(0, Math.min(100, score || 0));
+  const angle = (safeScore / 100) * 180;
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        minHeight: 210,
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      <div
+        style={{
+          width: 230,
+          height: 115,
+          borderTopLeftRadius: 230,
+          borderTopRightRadius: 230,
+          background:
+            "conic-gradient(from 270deg, #dc2626 0deg, #f59e0b 65deg, #22c55e 140deg, #e5e7eb 180deg)",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: 22,
+            right: 22,
+            bottom: 0,
+            height: 92,
+            borderTopLeftRadius: 190,
+            borderTopRightRadius: 190,
+            background: "#fff",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: 0,
+            width: 4,
+            height: 86,
+            background: "#111827",
+            transformOrigin: "bottom center",
+            transform: `translateX(-50%) rotate(${angle - 90}deg)`,
+            borderRadius: 999,
+          }}
+        />
+      </div>
+
+      <div style={{ marginTop: -28, textAlign: "center" }}>
+        <div style={{ fontSize: 44, fontWeight: 950, color: BRAND.red }}>
+          %{safeScore}
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 900, color: BRAND.muted }}>
+          Genel Uyum Skoru
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DonutChart({
+  total,
+  uygun,
+  uygunsuz,
+  kismen,
+  kapsamDisi,
+}: {
+  total: number;
+  uygun: number;
+  uygunsuz: number;
+  kismen: number;
+  kapsamDisi: number;
+}) {
+  const safeTotal = total || 1;
+
+  const uygunDeg = (uygun / safeTotal) * 360;
+  const uygunsuzDeg = (uygunsuz / safeTotal) * 360;
+  const kismenDeg = (kismen / safeTotal) * 360;
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "160px 1fr",
+        gap: 18,
+        alignItems: "center",
+      }}
+    >
+      <div
+        style={{
+          width: 160,
+          height: 160,
+          borderRadius: "50%",
+          background: `conic-gradient(
+            ${BRAND.green} 0deg ${uygunDeg}deg,
+            ${BRAND.red} ${uygunDeg}deg ${uygunDeg + uygunsuzDeg}deg,
+            #f59e0b ${uygunDeg + uygunsuzDeg}deg ${uygunDeg + uygunsuzDeg + kismenDeg}deg,
+            #64748b ${uygunDeg + uygunsuzDeg + kismenDeg}deg 360deg
+          )`,
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 34,
+            borderRadius: "50%",
+            background: "#fff",
+            display: "grid",
+            placeItems: "center",
+            textAlign: "center",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 12, color: BRAND.muted, fontWeight: 800 }}>
+              Toplam
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 950, color: BRAND.text }}>
+              {total}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: 10 }}>
+        {[
+          ["Uygun", uygun, BRAND.green],
+          ["Uygunsuz", uygunsuz, BRAND.red],
+          ["Kısmen Uygun", kismen, BRAND.amber],
+          ["Kapsam Dışı", kapsamDisi, BRAND.slate],
+        ].map(([label, value, color]) => (
+          <div
+            key={String(label)}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              fontSize: 13,
+              fontWeight: 800,
+            }}
+          >
+            <span style={{ color: String(color) }}>● {label}</span>
+            <span>{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminReportsPage() {
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
@@ -1972,7 +2127,7 @@ const auditTone = useMemo(() => {
             ) : null}
 
           {activeTab === "audit" ? (
-  <div style={{ display: "grid", gap: 20 }}>
+  <div style={{ display: "grid", gap: 22 }}>
     <div
       style={{
         ...cardStyle(),
@@ -1980,6 +2135,7 @@ const auditTone = useMemo(() => {
         color: "#fff",
         overflow: "hidden",
         position: "relative",
+        padding: 28,
       }}
     >
       <div style={{ position: "relative", zIndex: 1 }}>
@@ -1995,10 +2151,17 @@ const auditTone = useMemo(() => {
             marginBottom: 12,
           }}
         >
-          D-SEC Denetim Karar Destek
+          D-SEC360 Denetim Karar Destek
         </div>
 
-        <h2 style={{ margin: 0, fontSize: "clamp(26px, 4vw, 38px)", fontWeight: 900 }}>
+        <h2
+          style={{
+            margin: 0,
+            fontSize: "clamp(30px, 4vw, 46px)",
+            fontWeight: 950,
+            letterSpacing: -1,
+          }}
+        >
           Denetim Analizleri
         </h2>
 
@@ -2009,6 +2172,7 @@ const auditTone = useMemo(() => {
             color: "rgba(255,255,255,0.92)",
             lineHeight: 1.7,
             maxWidth: 850,
+            fontSize: 15,
           }}
         >
           {loadingAuditReport ? "Denetim verileri yükleniyor..." : auditTone.text}
@@ -2018,10 +2182,10 @@ const auditTone = useMemo(() => {
       <div
         style={{
           position: "absolute",
-          right: 24,
+          right: 26,
           top: 24,
-          width: 132,
-          height: 132,
+          width: 150,
+          height: 150,
           borderRadius: "50%",
           background: "rgba(255,255,255,0.14)",
           border: "1px solid rgba(255,255,255,0.22)",
@@ -2032,7 +2196,7 @@ const auditTone = useMemo(() => {
       >
         <div>
           <div style={{ fontSize: 12, opacity: 0.9 }}>Uyum Skoru</div>
-          <div style={{ fontSize: 34, fontWeight: 900 }}>
+          <div style={{ fontSize: 38, fontWeight: 950 }}>
             %{auditSummary?.compliance_score || 0}
           </div>
         </div>
@@ -2042,12 +2206,12 @@ const auditTone = useMemo(() => {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
         gap: 16,
       }}
     >
       <AuditScoreCard title="Toplam Denetim" value={auditSummary?.total_audits || 0} subtitle="Seçili firma kayıtları" color={BRAND.slate} soft={BRAND.slateSoft} />
-      <AuditScoreCard title="Tamamlanan" value={auditSummary?.completed_audits || 0} subtitle="Raporu tamamlanan denetim" color={BRAND.green} soft={BRAND.greenSoft} />
+      <AuditScoreCard title="Tamamlanan" value={auditSummary?.completed_audits || 0} subtitle="Raporu kapanan denetim" color={BRAND.green} soft={BRAND.greenSoft} />
       <AuditScoreCard title="Taslak" value={auditSummary?.draft_audits || 0} subtitle="Açık / devam eden denetim" color={BRAND.amber} soft={BRAND.amberSoft} />
       <AuditScoreCard title="Toplam Madde" value={auditSummary?.total_items || 0} subtitle="Analize dahil edilen cevap" color={BRAND.blue} soft={BRAND.blueSoft} />
       <AuditScoreCard title="Uygunsuz" value={auditSummary?.uygunsuz_count || 0} subtitle="Aksiyon gerektiren bulgu" color={BRAND.red} soft={BRAND.redSoft} />
@@ -2057,25 +2221,46 @@ const auditTone = useMemo(() => {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
         gap: 20,
       }}
     >
       <div style={cardStyle()}>
-        <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
-          Sonuç Dağılımı
+        <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 21, fontWeight: 950 }}>
+          Uyum Skoru
         </h3>
 
-        <div style={{ display: "grid", gap: 12 }}>
-          <MiniBar label="Uygun" value={auditSummary?.uygun_count || 0} total={auditTotalDistribution || 1} color={BRAND.green} soft={BRAND.greenSoft} />
-          <MiniBar label="Uygunsuz" value={auditSummary?.uygunsuz_count || 0} total={auditTotalDistribution || 1} color={BRAND.red} soft={BRAND.redSoft} />
-          <MiniBar label="Kısmen Uygun" value={auditSummary?.kismen_count || 0} total={auditTotalDistribution || 1} color={BRAND.amber} soft={BRAND.amberSoft} />
-          <MiniBar label="Kapsam Dışı" value={auditSummary?.kapsam_disi_count || 0} total={auditTotalDistribution || 1} color={BRAND.slate} soft={BRAND.slateSoft} />
+        <CircleGauge score={auditSummary?.compliance_score || 0} />
+
+        <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13, lineHeight: 1.7 }}>
+          Uyum skoru; uygun cevaplar ve kısmen uygun cevapların ağırlıklı etkisiyle hesaplanır.
         </div>
       </div>
 
       <div style={cardStyle()}>
-        <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
+        <h3 style={{ marginTop: 0, marginBottom: 18, fontSize: 21, fontWeight: 950 }}>
+          Sonuç Dağılımı
+        </h3>
+
+        <DonutChart
+          total={auditTotalDistribution}
+          uygun={auditSummary?.uygun_count || 0}
+          uygunsuz={auditSummary?.uygunsuz_count || 0}
+          kismen={auditSummary?.kismen_count || 0}
+          kapsamDisi={auditSummary?.kapsam_disi_count || 0}
+        />
+      </div>
+    </div>
+
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+        gap: 20,
+      }}
+    >
+      <div style={cardStyle()}>
+        <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 21, fontWeight: 950 }}>
           En Çok Uygunsuzluk
         </h3>
 
@@ -2083,7 +2268,7 @@ const auditTone = useMemo(() => {
           <div style={{ color: BRAND.muted }}>Uygunsuzluk verisi bulunamadı.</div>
         ) : (
           <div style={{ display: "grid", gap: 12 }}>
-            {auditReport.top_nonconformities.map((item) => (
+            {auditReport.top_nonconformities.slice(0, 5).map((item) => (
               <MiniBar
                 key={item.title}
                 label={item.title}
@@ -2096,41 +2281,56 @@ const auditTone = useMemo(() => {
           </div>
         )}
       </div>
+
+      <div style={cardStyle()}>
+        <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 21, fontWeight: 950 }}>
+          Önerilen Aksiyon Yoğunluğu
+        </h3>
+
+        {!auditReport?.recommended_actions?.length ? (
+          <div style={{ color: BRAND.muted }}>Aksiyon verisi bulunamadı.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            {auditReport.recommended_actions.slice(0, 5).map((item) => (
+              <MiniBar
+                key={item.title}
+                label={item.title}
+                value={item.count}
+                total={auditReport.recommended_actions?.[0]?.count || 1}
+                color={BRAND.blue}
+                soft={BRAND.blueSoft}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
 
     <div style={cardStyle()}>
-      <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
-        Önerilen Aksiyon Yoğunluğu
-      </h3>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 14,
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 21, fontWeight: 950 }}>
+          Denetim Kayıtları
+        </h3>
 
-      {!auditReport?.recommended_actions?.length ? (
-        <div style={{ color: BRAND.muted }}>Aksiyon verisi bulunamadı.</div>
-      ) : (
-        <div style={{ display: "grid", gap: 12 }}>
-          {auditReport.recommended_actions.map((item) => (
-            <MiniBar
-              key={item.title}
-              label={item.title}
-              value={item.count}
-              total={auditReport.recommended_actions?.[0]?.count || 1}
-              color={BRAND.blue}
-              soft={BRAND.blueSoft}
-            />
-          ))}
+        <div style={{ color: BRAND.muted, fontSize: 13, fontWeight: 800 }}>
+          Toplam {auditReport?.audits?.length || 0} kayıt
         </div>
-      )}
-    </div>
-
-    <div style={cardStyle()}>
-      <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 20, fontWeight: 900 }}>
-        Denetim Kayıtları
-      </h3>
+      </div>
 
       {!auditReport?.audits?.length ? (
         <div style={{ color: BRAND.muted }}>Denetim kaydı bulunamadı.</div>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
             <thead>
               <tr>
                 {["Rapor No", "Tür", "Mod", "Lokasyon", "Sorumlu", "Denetçi", "Durum"].map((head) => (
@@ -2138,10 +2338,11 @@ const auditTone = useMemo(() => {
                     key={head}
                     style={{
                       textAlign: "left",
-                      padding: 12,
+                      padding: 13,
                       borderBottom: `1px solid ${BRAND.border}`,
                       background: "#f9fafb",
                       fontSize: 13,
+                      color: BRAND.muted,
                     }}
                   >
                     {head}
@@ -2153,25 +2354,25 @@ const auditTone = useMemo(() => {
             <tbody>
               {auditReport.audits.map((a) => (
                 <tr key={String(a.id)}>
-                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}`, fontWeight: 800 }}>
+                  <td style={{ padding: 13, borderBottom: `1px solid ${BRAND.border}`, fontWeight: 900 }}>
                     {a.report_no || "-"}
                   </td>
-                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                  <td style={{ padding: 13, borderBottom: `1px solid ${BRAND.border}` }}>
                     {a.template_type || "-"}
                   </td>
-                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                  <td style={{ padding: 13, borderBottom: `1px solid ${BRAND.border}` }}>
                     {a.eval_mode || "-"}
                   </td>
-                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                  <td style={{ padding: 13, borderBottom: `1px solid ${BRAND.border}` }}>
                     {a.location || "-"}
                   </td>
-                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                  <td style={{ padding: 13, borderBottom: `1px solid ${BRAND.border}` }}>
                     {a.responsible || "-"}
                   </td>
-                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                  <td style={{ padding: 13, borderBottom: `1px solid ${BRAND.border}` }}>
                     {a.inspector_name || "-"}
                   </td>
-                  <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                  <td style={{ padding: 13, borderBottom: `1px solid ${BRAND.border}` }}>
                     {badge(a.status || "-")}
                   </td>
                 </tr>
