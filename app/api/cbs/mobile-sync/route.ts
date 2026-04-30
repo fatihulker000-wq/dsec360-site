@@ -252,10 +252,21 @@ export async function GET(req: Request) {
       return byDirectFirmId || byRequestedCompanyId || byRawFirmaAdi;
     });
 
+   const includeAllIfEmpty =
+      String(url.searchParams.get("includeAllIfEmpty") || "").trim() === "1";
+
+    const finalData =
+      filtered.length > 0
+        ? filtered
+        : includeAllIfEmpty
+        ? ((data || []) as CbsRow[])
+        : filtered;
+
     return NextResponse.json({
       success: true,
-      count: filtered.length,
-      data: filtered,
+      count: finalData.length,
+      data: finalData,
+      fallback_used: filtered.length === 0 && includeAllIfEmpty,
     });
   } catch (e: any) {
     console.error("mobile-sync GET catch hata:", e);
