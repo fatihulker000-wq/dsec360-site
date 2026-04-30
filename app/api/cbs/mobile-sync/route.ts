@@ -312,10 +312,31 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = getSupabase();
-    const now = new Date().toISOString();
+   const supabase = getSupabase();
+const now = new Date().toISOString();
 
-    const insertPayload = {
+// ✅ CBS KALICI KORUMA:
+// Aynı app kaydı tekrar gönderilirse web'de ikinci kayıt açılmasın.
+const duplicateQuery = supabase
+  .from("cbs_forms")
+  .select("id")
+  .eq("firm_id", firm_id || "")
+  .eq("created_by", created_by || "")
+  .eq("message", message)
+  .order("created_at", { ascending: false })
+  .limit(1);
+
+const { data: duplicateData } = await duplicateQuery.maybeSingle();
+
+if (duplicateData?.id) {
+  return NextResponse.json({
+    success: true,
+    remoteId: duplicateData.id,
+    duplicateProtected: true,
+  });
+}
+
+const insertPayload = {
       full_name,
       email: email || null,
       message,
