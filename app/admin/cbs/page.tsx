@@ -263,7 +263,7 @@ const [pageError, setPageError] = useState("");
         return;
       }
 
-      setRecords(result?.data ?? []);
+      setRecords(Array.isArray(result?.data) ? result.data : []);
       setCompanies(result?.companies ?? []);
     } catch (error) {
       console.error("CBS kayıt yükleme hatası:", error);
@@ -275,8 +275,8 @@ const [pageError, setPageError] = useState("");
   };
 
   useEffect(() => {
-    void loadRecords();
-  }, []);
+  void loadRecords();
+}, [selectedFirmId]);
 
   const updateStatus = async (
     id: number,

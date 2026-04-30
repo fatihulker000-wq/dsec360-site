@@ -220,76 +220,85 @@ export async function GET(req: Request) {
   try {
     const supabase = getSupabase();
 
-    // 🔥 header'dan rol ve firma al
+    const session = await getAdminSession();
+
+    const headerRole = String(req.headers.get("x-role") || "").trim();
+    const headerFirmId = String(req.headers.get("x-firm-id") || "").trim();
+
     const userRole =
-      req.headers.get("x-role") || "super_admin";
+      session?.role || (headerRole === "company_admin" ? "company_admin" : "super_admin");
 
     const userFirmId =
-      req.headers.get("x-firm-id") || null;
+      session?.companyId || headerFirmId || "";
 
-    // 🔥 TEMEL SORGU (FİLTRESİZ)
     let query = supabase
       .from("cbs_forms")
       .select("*")
       .order("created_at", { ascending: false });
 
-    // 🔥 SADECE FİRMA ADMİN FİLTRE
-    if (userRole !== "super_admin" && userFirmId) {
+    if (userRole === "company_admin" && userFirmId) {
       query = query.eq("firm_id", userFirmId);
     }
 
-   const { data, error } = await query;
+    const { data, error } = await query;
 
-if (error) {
-  return NextResponse.json(
-    { error: "Kayıtlar alınamadı." },
-    { status: 500 }
-  );
-}
+    if (error) {
+      console.error("CBS GET hata:", error);
+      return NextResponse.json(
+        { error: "Kayıtlar alınamadı." },
+        { status: 500 }
+      );
+    }
 
-const { data: companies } = await supabase
-  .from("companies")
-  .select("id, name");
+    const { data: companies, error: companiesError } = await supabase
+      .from("companies")
+      .select("id, name")
+      .order("name", { ascending: true });
 
-const companyList: CompanyRow[] = companies || [];
+    if (companiesError) {
+      console.error("CBS companies hata:", companiesError);
+    }
 
-const formatted = ((data || []) as CbsRow[]).map((item) => {
-  const directFirmId = String(item.firm_id ?? "").trim() || null;
+    const companyList: CompanyRow[] = companies || [];
 
-  const { suggestedFirmId, suggestedFirmName } = findSuggestedCompany(
-    item,
-    companyList
-  );
+    const formatted = ((data || []) as CbsRow[]).map((item) => {
+      const directFirmId = String(item.firm_id ?? "").trim() || null;
 
-  return {
-    id: item.id,
-    full_name: item.full_name,
-    email: item.email,
-    message: item.message,
-    created_at: item.created_at,
-    status: item.status,
-    category: item.category,
-    firmId: directFirmId,
-    assignedTo: item.assigned_to,
-    resolutionNote: item.resolution_note,
-    firma_adi: item.firma_adi,
-    priority: item.priority,
-    sla_due_at: item.sla_due_at,
-    closed_at: item.closed_at,
-    suggestedFirmId,
-    suggestedFirmName,
-  };
-});
+      const { suggestedFirmId, suggestedFirmName } = findSuggestedCompany(
+        item,
+        companyList
+      );
 
-return NextResponse.json({
-  success: true,
-  data: formatted,
-  companies: companyList.map((c) => ({
-    id: String(c.id || "").trim(),
-    name: String(c.name || "").trim(),
-  })),
-});
+      return {
+        id: item.id,
+        full_name: item.full_name || "",
+        email: item.email || "",
+        message: item.message || "",
+        created_at: item.created_at,
+        status: item.status || "new",
+        category: item.category || "Genel",
+        firmId: directFirmId,
+        assignedTo: item.assigned_to || "",
+        resolutionNote: item.resolution_note || "",
+        firma_adi: item.firma_adi || "",
+        priority: item.priority || "normal",
+        sla_due_at: item.sla_due_at || null,
+        closed_at: item.closed_at || null,
+        suggestedFirmId,
+        suggestedFirmName,
+      };
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: formatted,
+      companies: companyList.map((c) => ({
+        id: String(c.id || "").trim(),
+        name: String(c.name || "").trim(),
+      })),
+    });
   } catch (e: any) {
+    console.error("CBS GET genel hata:", e);
     return NextResponse.json(
       { error: "Sunucu hatası." },
       { status: 500 }
@@ -378,19 +387,10 @@ export async function PUT(req: Request) {
 
     const body = await req.json();
     const id = Number(body?.id);
-    const { category, assignedTo, resolutionNote, priority, firmId } = body ?? {};
 
     if (!id) {
       return NextResponse.json(
         { error: "ID zorunludur." },
-        { status: 400 }
-      );
-    }
-
-    const allowedPriorities = ["low", "normal", "high", "critical"];
-    if (priority && !allowedPriorities.includes(priority)) {
-      return NextResponse.json(
-        { error: "Geçersiz öncelik değeri." },
         { status: 400 }
       );
     }
@@ -406,18 +406,38 @@ export async function PUT(req: Request) {
     const supabase = getSupabase();
 
     const updatePayload: Record<string, unknown> = {
-      category: category ?? null,
-      assigned_to: assignedTo ?? null,
-      resolution_note: resolutionNote ?? null,
       updated_at: new Date().toISOString(),
     };
 
-    if (priority) {
-      updatePayload.priority = priority;
+    if (body?.category !== undefined) {
+      updatePayload.category = String(body.category || "").trim() || null;
     }
 
-    if (firmId !== undefined) {
-      const cleanFirmId = String(firmId || "").trim() || null;
+    if (body?.assignedTo !== undefined) {
+      updatePayload.assigned_to = String(body.assignedTo || "").trim() || null;
+    }
+
+    if (body?.resolutionNote !== undefined) {
+      updatePayload.resolution_note =
+        String(body.resolutionNote || "").trim() || null;
+    }
+
+    if (body?.priority !== undefined) {
+      const cleanPriority = String(body.priority || "").trim();
+      const allowedPriorities = ["low", "normal", "high", "critical"];
+
+      if (!allowedPriorities.includes(cleanPriority)) {
+        return NextResponse.json(
+          { error: "Geçersiz öncelik değeri." },
+          { status: 400 }
+        );
+      }
+
+      updatePayload.priority = cleanPriority;
+    }
+
+    if (body?.firmId !== undefined) {
+      const cleanFirmId = String(body.firmId || "").trim() || null;
 
       if (
         session.role === "company_admin" &&
