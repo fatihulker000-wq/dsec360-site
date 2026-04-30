@@ -333,65 +333,61 @@ function AuditScoreCard({
 }
 
 function CircleGauge({ score }: { score: number }) {
+  const radius = 50;
+  const circumference = 2 * Math.PI * radius;
   const safeScore = Math.max(0, Math.min(100, score || 0));
-  const angle = (safeScore / 100) * 180;
+  const offset = circumference - (circumference * safeScore) / 100;
+
+  // 🎯 RENK LOGİĞİ
+  let color = "#22c55e"; // yeşil
+  if (safeScore < 60) color = "#f59e0b"; // turuncu
+  if (safeScore < 40) color = "#dc2626"; // kırmızı
 
   return (
-    <div
-      style={{
-        width: "100%",
-        minHeight: 210,
-        display: "grid",
-        placeItems: "center",
-      }}
-    >
+    <div style={{ position: "relative", width: 120, height: 120 }}>
+      <svg width="120" height="120">
+        {/* Arka halka */}
+        <circle
+          cx="60"
+          cy="60"
+          r={radius}
+          stroke="rgba(255,255,255,0.2)"
+          strokeWidth="10"
+          fill="none"
+        />
+
+        {/* Animasyonlu ön halka */}
+        <circle
+          cx="60"
+          cy="60"
+          r={radius}
+          stroke={color}
+          strokeWidth="10"
+          fill="none"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform="rotate(-90 60 60)"
+          style={{
+            transition: "stroke-dashoffset 1s ease, stroke 0.5s ease",
+          }}
+        />
+      </svg>
+
+      {/* Ortadaki yüzde */}
       <div
         style={{
-          width: 230,
-          height: 115,
-          borderTopLeftRadius: 230,
-          borderTopRightRadius: 230,
-          background:
-            "conic-gradient(from 270deg, #dc2626 0deg, #f59e0b 65deg, #22c55e 140deg, #e5e7eb 180deg)",
-          position: "relative",
-          overflow: "hidden",
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 22,
+          fontWeight: 900,
+          color: "#fff",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            left: 22,
-            right: 22,
-            bottom: 0,
-            height: 92,
-            borderTopLeftRadius: 190,
-            borderTopRightRadius: 190,
-            background: "#fff",
-          }}
-        />
-
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            bottom: 0,
-            width: 4,
-            height: 86,
-            background: "#111827",
-            transformOrigin: "bottom center",
-            transform: `translateX(-50%) rotate(${angle - 90}deg)`,
-            borderRadius: 999,
-          }}
-        />
-      </div>
-
-      <div style={{ marginTop: -28, textAlign: "center" }}>
-        <div style={{ fontSize: 44, fontWeight: 950, color: BRAND.red }}>
-          %{safeScore}
-        </div>
-        <div style={{ fontSize: 13, fontWeight: 900, color: BRAND.muted }}>
-          Genel Uyum Skoru
-        </div>
+        %{safeScore}
       </div>
     </div>
   );
@@ -2132,6 +2128,7 @@ const auditTone = useMemo(() => {
       style={{
         ...cardStyle(),
         background: auditTone.bg,
+        boxShadow: "0 30px 80px rgba(0,0,0,0.25)",
         color: "#fff",
         overflow: "hidden",
         position: "relative",
@@ -2197,7 +2194,7 @@ const auditTone = useMemo(() => {
         <div>
           <div style={{ fontSize: 12, opacity: 0.9 }}>Uyum Skoru</div>
           <div style={{ fontSize: 38, fontWeight: 950 }}>
-            %{auditSummary?.compliance_score || 0}
+            <CircleGauge score={auditSummary?.compliance_score || 0} />
           </div>
         </div>
       </div>
@@ -2373,7 +2370,28 @@ const auditTone = useMemo(() => {
                     {a.inspector_name || "-"}
                   </td>
                   <td style={{ padding: 13, borderBottom: `1px solid ${BRAND.border}` }}>
-                    {badge(a.status || "-")}
+                    <span
+  style={{
+    padding: "6px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 900,
+    background:
+      a.status === "TAMAMLANDI"
+        ? "#dcfce7"
+        : a.status === "TASLAK"
+        ? "#fef3c7"
+        : "#f3f4f6",
+    color:
+      a.status === "TAMAMLANDI"
+        ? "#166534"
+        : a.status === "TASLAK"
+        ? "#92400e"
+        : "#374151",
+  }}
+>
+  {a.status}
+</span>
                   </td>
                 </tr>
               ))}
