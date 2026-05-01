@@ -8,27 +8,19 @@ function getSupabase() {
   );
 }
 
-export async function GET(req: Request) {
+export async function GET(request: Request) {
   try {
-    const url = new URL(req.url);
-    const firmId = String(url.searchParams.get("firmId") || "").trim();
+    const { searchParams } = new URL(request.url);
+    const firmId = searchParams.get("firmId");
 
     const supabase = getSupabase();
-
-    const { data: companies, error: companyError } = await supabase
-      .from("companies")
-      .select("id, name")
-      .order("name", { ascending: true });
-
-    if (companyError) {
-      return NextResponse.json({ error: companyError.message }, { status: 500 });
-    }
 
     let query = supabase
       .from("employees")
       .select("*")
       .order("full_name", { ascending: true });
 
+    // ✅ Firma filtresi
     if (firmId && firmId !== "all") {
       query = query.eq("firm_id", firmId);
     }
@@ -36,15 +28,26 @@ export async function GET(req: Request) {
     const { data, error } = await query;
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
     }
+
+    // ✅ Firma listesi
+    const { data: companies } = await supabase
+      .from("companies")
+      .select("id, name");
 
     return NextResponse.json({
       data: data || [],
       companies: companies || [],
-      selectedFirmId: firmId || "all",
     });
+
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json(
+      { error: e.message },
+      { status: 500 }
+    );
   }
 }
