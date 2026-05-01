@@ -89,6 +89,21 @@ export default function EmployeesPage() {
 
   const activeCount = data.filter((x) => x.active).length;
   const passiveCount = data.filter((x) => !x.active).length;
+  const maleCount = data.filter((x: any) => {
+  const v = String(x.gender || "").toLowerCase().trim();
+  return v === "erkek" || v === "e" || v === "male" || v === "bay";
+}).length;
+
+const femaleCount = data.filter((x: any) => {
+  const v = String(x.gender || "").toLowerCase().trim();
+  return v === "kadın" || v === "kadin" || v === "k" || v === "female" || v === "bayan";
+}).length;
+
+const disabledCount = data.filter((x: any) => {
+  const v = String(x.disability_status || "").toLowerCase().trim();
+  if (!v || v === "yok" || v === "hayır" || v === "hayir" || v === "0" || v === "false") return false;
+  return true;
+}).length;
 
   return (
     <main style={{ padding: 28 }}>
@@ -124,9 +139,12 @@ export default function EmployeesPage() {
         }}
       >
         <Kpi title="Toplam" value={data.length} />
-        <Kpi title="Aktif" value={activeCount} />
-        <Kpi title="Pasif" value={passiveCount} />
-        <Kpi title="Görünen" value={filtered.length} />
+<Kpi title="Aktif" value={activeCount} />
+<Kpi title="Pasif" value={passiveCount} />
+<Kpi title="Görünen" value={filtered.length} />
+<Kpi title="Erkek" value={maleCount} />
+<Kpi title="Kadın" value={femaleCount} />
+<Kpi title="Engelli" value={disabledCount} />
       </section>
 
       <section
