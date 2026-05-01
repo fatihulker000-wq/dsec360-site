@@ -89,22 +89,23 @@ export default function EmployeesPage() {
 
   const activeCount = data.filter((x) => x.active).length;
   const passiveCount = data.filter((x) => !x.active).length;
-  const maleCount = data.filter((x: any) => {
+ const activeEmployees = data.filter((x) => x.active);
+
+const maleCount = activeEmployees.filter((x: any) => {
   const v = String(x.gender || "").toLowerCase().trim();
   return v === "erkek" || v === "e" || v === "male" || v === "bay";
 }).length;
 
-const femaleCount = data.filter((x: any) => {
+const femaleCount = activeEmployees.filter((x: any) => {
   const v = String(x.gender || "").toLowerCase().trim();
   return v === "kadın" || v === "kadin" || v === "k" || v === "female" || v === "bayan";
 }).length;
 
-const disabledCount = data.filter((x: any) => {
+const disabledCount = activeEmployees.filter((x: any) => {
   const v = String(x.disability_status || "").toLowerCase().trim();
   if (!v || v === "yok" || v === "hayır" || v === "hayir" || v === "0" || v === "false") return false;
   return true;
 }).length;
-
   return (
     <main style={{ padding: 28 }}>
       <div
