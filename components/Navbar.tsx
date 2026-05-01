@@ -8,9 +8,11 @@ import { useState } from "react";
 const navItems = [
   { href: "/", label: "Ana Sayfa" },
   { href: "/services", label: "Hizmetler" },
+{ href: "/admin/employees", label: "Çalışanlar", icon: "👤" },
   { href: "/cbs", label: "ÇBS" },
   { href: "/pricing", label: "Fiyatlar" },
   { href: "/contact", label: "İletişim" },
+  
 ];
 
 const trainingItems = [
