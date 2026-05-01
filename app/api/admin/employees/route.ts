@@ -26,14 +26,37 @@ export async function GET(request: Request) {
       query = query.eq("firm_id", firmId);
     }
 
-    const { data, error } = await query;
+    let allEmployees: any[] = [];
+let from = 0;
+const step = 1000;
 
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
+while (true) {
+  let pagedQuery = supabase
+    .from("employees")
+    .select("*")
+    .order("full_name", { ascending: true })
+    .range(from, from + step - 1);
+
+  if (firmId && firmId !== "all") {
+    pagedQuery = pagedQuery.eq("firm_id", firmId);
+  }
+
+  const { data, error } = await pagedQuery;
+
+  if (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+
+  const rows = data || [];
+  allEmployees = [...allEmployees, ...rows];
+
+  if (rows.length < step) break;
+
+  from += step;
+}
 
     // ✅ Firma listesi
     const { data: companies } = await supabase
@@ -41,9 +64,9 @@ export async function GET(request: Request) {
       .select("id, name");
 
     return NextResponse.json({
-      data: data || [],
-      companies: companies || [],
-    });
+  data: allEmployees,
+  companies: companies || [],
+});
 
   } catch (e: any) {
     return NextResponse.json(

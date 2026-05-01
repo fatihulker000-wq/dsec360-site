@@ -75,25 +75,39 @@ export async function GET(req: Request) {
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
-  .from("employees")
-  .select("*")
-  .eq("firm_id", firmId)
-  .order("full_name", { ascending: true })
-  .range(0, 5000);
+   let allEmployees: any[] = [];
+let from = 0;
+const step = 1000;
 
-    if (error) {
-      return NextResponse.json(
-        { error: "Çalışanlar alınamadı.", detail: error.message },
-        { status: 500 }
-      );
-    }
+while (true) {
+  const { data, error } = await supabase
+    .from("employees")
+    .select("*")
+    .eq("firm_id", firmId)
+    .order("full_name", { ascending: true })
+    .range(from, from + step - 1);
 
-    return NextResponse.json({
-      success: true,
-      count: data?.length || 0,
-      data: data || [],
-    });
+  if (error) {
+    return NextResponse.json(
+      { error: "Çalışanlar alınamadı.", detail: error.message },
+      { status: 500 }
+    );
+  }
+
+  const rows = data || [];
+  allEmployees = [...allEmployees, ...rows];
+
+  if (rows.length < step) break;
+
+  from += step;
+}
+
+return NextResponse.json({
+  success: true,
+  count: allEmployees.length,
+  data: allEmployees,
+});
+
   } catch (e: any) {
     return NextResponse.json(
       { error: "Sunucu hatası.", detail: e?.message || null },
