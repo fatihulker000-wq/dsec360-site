@@ -16,19 +16,26 @@ type Employee = {
   active: boolean;
 };
 
+type Company = {
+  id: string;
+  name: string;
+};
+
 export default function EmployeesPage() {
   const [data, setData] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [firmFilter, setFirmFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "passive">("all");
 
-  const loadEmployees = async () => {
+  const loadEmployees = async (firmId = firmFilter) => {
     try {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/admin/employees", {
+      const res = await fetch(`/api/admin/employees?firmId=${encodeURIComponent(firmId)}`, {
         cache: "no-store",
         credentials: "include",
       });
@@ -42,6 +49,7 @@ export default function EmployeesPage() {
       }
 
       setData(json?.data || []);
+      setCompanies(json?.companies || []);
     } catch {
       setData([]);
       setError("Çalışan listesi yüklenirken hata oluştu.");
@@ -51,7 +59,8 @@ export default function EmployeesPage() {
   };
 
   useEffect(() => {
-    void loadEmployees();
+    void loadEmployees("all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(() => {
@@ -102,7 +111,7 @@ export default function EmployeesPage() {
         </h1>
 
         <p style={{ margin: 0, opacity: 0.88 }}>
-          Web-app entegrasyonlu çalışan listesi, aktif/pasif takip ve hızlı arama ekranı.
+          Web-app entegrasyonlu çalışan listesi, aktif/pasif takip ve firma bazlı arama ekranı.
         </p>
       </div>
 
@@ -130,6 +139,32 @@ export default function EmployeesPage() {
         }}
       >
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <select
+            value={firmFilter}
+            onChange={(e) => {
+              const nextFirmId = e.target.value;
+              setFirmFilter(nextFirmId);
+              void loadEmployees(nextFirmId);
+            }}
+            style={{
+              minWidth: 240,
+              border: "1px solid #e5e7eb",
+              borderRadius: 14,
+              padding: "12px 14px",
+              fontSize: 14,
+              background: "#fff",
+              fontWeight: 800,
+              color: "#374151",
+            }}
+          >
+            <option value="all">Tüm firmalar</option>
+            {companies.map((firm) => (
+              <option key={firm.id} value={firm.id}>
+                {firm.name || "Firma"}
+              </option>
+            ))}
+          </select>
+
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -155,7 +190,7 @@ export default function EmployeesPage() {
           </button>
 
           <button
-            onClick={loadEmployees}
+            onClick={() => loadEmployees(firmFilter)}
             style={{
               border: 0,
               borderRadius: 14,
@@ -201,6 +236,7 @@ export default function EmployeesPage() {
                     <div>Telefon: {emp.phone || "-"}</div>
                     <div>E-posta: {emp.email || "-"}</div>
                     <div>Sicil: {emp.registry_no || "-"}</div>
+                    <div>Firma ID: {emp.firm_id || "-"}</div>
                   </div>
                 </div>
 

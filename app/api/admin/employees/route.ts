@@ -1,8 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-
-export const dynamic = "force-dynamic";
 
 function getSupabase() {
   return createClient(
@@ -11,55 +8,43 @@ function getSupabase() {
   );
 }
 
-function unauthorized() {
-  return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
-}
-
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const cookieStore = await cookies();
-
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = String(
-      cookieStore.get("dsec_admin_role")?.value || ""
-    ).trim();
-    const companyId = String(
-      cookieStore.get("dsec_company_id")?.value || ""
-    ).trim();
-
-    if (adminAuth !== "ok") return unauthorized();
+    const url = new URL(req.url);
+    const firmId = String(url.searchParams.get("firmId") || "").trim();
 
     const supabase = getSupabase();
+
+    const { data: companies, error: companyError } = await supabase
+      .from("companies")
+      .select("id, name")
+      .order("name", { ascending: true });
+
+    if (companyError) {
+      return NextResponse.json({ error: companyError.message }, { status: 500 });
+    }
 
     let query = supabase
       .from("employees")
       .select("*")
       .order("full_name", { ascending: true });
 
-    // 🔴 Firma admin sadece kendi firmasını görür
-    if (adminRole === "company_admin") {
-      if (!companyId) return unauthorized();
-      query = query.eq("firm_id", companyId);
+    if (firmId && firmId !== "all") {
+      query = query.eq("firm_id", firmId);
     }
 
     const { data, error } = await query;
 
     if (error) {
-      return NextResponse.json(
-        { error: "Çalışanlar alınamadı.", detail: error.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({
-      success: true,
-      count: data?.length || 0,
       data: data || [],
+      companies: companies || [],
+      selectedFirmId: firmId || "all",
     });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: "Sunucu hatası.", detail: e?.message || null },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
