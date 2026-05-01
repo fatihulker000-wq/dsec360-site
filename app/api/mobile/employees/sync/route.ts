@@ -20,6 +20,48 @@ function unauthorized() {
   return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
 }
 
+function clean(value: any) {
+  const v = String(value ?? "").trim();
+  return v || null;
+}
+
+function buildPayload(body: any) {
+  return {
+    firm_id: String(body?.firm_id || "").trim(),
+    full_name: String(body?.full_name || "").trim(),
+    job_title: clean(body?.job_title),
+    start_date: clean(body?.start_date),
+    exit_date: clean(body?.exit_date),
+    active: Boolean(body?.active ?? true),
+    registry_no: clean(body?.registry_no),
+    birth_date: clean(body?.birth_date),
+    disability_status: clean(body?.disability_status),
+    gender: clean(body?.gender),
+    education_level: clean(body?.education_level),
+    phone: clean(body?.phone),
+    email: clean(body?.email),
+    blood_type: clean(body?.blood_type),
+    tc_no: clean(body?.tc_no),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function findDuplicate(supabase: any, payload: any) {
+  let query = supabase
+    .from("employees")
+    .select("id")
+    .eq("firm_id", payload.firm_id)
+    .limit(1);
+
+  if (payload.tc_no) query = query.eq("tc_no", payload.tc_no);
+  else if (payload.registry_no) query = query.eq("registry_no", payload.registry_no);
+  else if (payload.email) query = query.eq("email", payload.email);
+  else query = query.eq("full_name", payload.full_name);
+
+  const { data } = await query.maybeSingle();
+  return data?.id || null;
+}
+
 export async function GET(req: Request) {
   try {
     if (!authorized(req)) return unauthorized();
@@ -28,10 +70,7 @@ export async function GET(req: Request) {
     const firmId = String(url.searchParams.get("firmId") || "").trim();
 
     if (!firmId) {
-      return NextResponse.json(
-        { error: "firmId zorunlu." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "firmId zorunlu." }, { status: 400 });
     }
 
     const supabase = getSupabase();
@@ -67,74 +106,106 @@ export async function POST(req: Request) {
     if (!authorized(req)) return unauthorized();
 
     const body = await req.json();
+    const supabase = getSupabase();
 
-    const firm_id = String(body?.firm_id || "").trim();
-    const full_name = String(body?.full_name || "").trim();
+    // ✅ BULK SYNC: 1000+ çalışan tek istekle gelir
+    if (Array.isArray(body?.employees)) {
+      const results: any[] = [];
 
-    if (!firm_id || !full_name) {
+      for (const item of body.employees) {
+        const payload = buildPayload(item);
+        const localId = String(item?.local_id || "").trim();
+        const remoteId = String(item?.id || item?.remote_id || "").trim();
+
+        if (!payload.firm_id || !payload.full_name) {
+          results.push({
+            localId,
+            success: false,
+            error: "firm_id/full_name eksik",
+          });
+          continue;
+        }
+
+        if (remoteId) {
+          const { error } = await supabase
+            .from("employees")
+            .update(payload)
+            .eq("id", remoteId);
+
+          results.push({
+            localId,
+            remoteId,
+            success: !error,
+            error: error?.message || null,
+          });
+
+          continue;
+        }
+
+        const duplicateId = await findDuplicate(supabase, payload);
+
+        if (duplicateId) {
+          const { error } = await supabase
+            .from("employees")
+            .update(payload)
+            .eq("id", duplicateId);
+
+          results.push({
+            localId,
+            remoteId: duplicateId,
+            success: !error,
+            duplicateProtected: true,
+            error: error?.message || null,
+          });
+
+          continue;
+        }
+
+        const { data, error } = await supabase
+          .from("employees")
+          .insert([{ ...payload, created_at: new Date().toISOString() }])
+          .select("id")
+          .single();
+
+        results.push({
+          localId,
+          remoteId: data?.id || null,
+          success: !error && !!data?.id,
+          error: error?.message || null,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        bulk: true,
+        count: results.length,
+        results,
+      });
+    }
+
+    // ✅ Tek çalışan eski yapı bozulmasın
+    const payload = buildPayload(body);
+
+    if (!payload.firm_id || !payload.full_name) {
       return NextResponse.json(
         { error: "firm_id ve full_name zorunlu." },
         { status: 400 }
       );
     }
 
-    const supabase = getSupabase();
+    const duplicateId = await findDuplicate(supabase, payload);
 
-    const tc_no = String(body?.tc_no || "").trim();
-    const registry_no = String(body?.registry_no || "").trim();
-    const email = String(body?.email || "").trim();
-
-    let duplicateQuery = supabase
-      .from("employees")
-      .select("id")
-      .eq("firm_id", firm_id)
-      .limit(1);
-
-    if (tc_no) {
-      duplicateQuery = duplicateQuery.eq("tc_no", tc_no);
-    } else if (registry_no) {
-      duplicateQuery = duplicateQuery.eq("registry_no", registry_no);
-    } else if (email) {
-      duplicateQuery = duplicateQuery.eq("email", email);
-    } else {
-      duplicateQuery = duplicateQuery.eq("full_name", full_name);
-    }
-
-    const { data: duplicate } = await duplicateQuery.maybeSingle();
-
-    if (duplicate?.id) {
+    if (duplicateId) {
       return NextResponse.json({
         success: true,
-        remoteId: duplicate.id,
+        remoteId: duplicateId,
         duplicateProtected: true,
       });
     }
 
-    const now = new Date().toISOString();
-
-    const payload = {
-      firm_id,
-      full_name,
-      job_title: String(body?.job_title || "").trim() || null,
-      start_date: String(body?.start_date || "").trim() || null,
-      exit_date: String(body?.exit_date || "").trim() || null,
-      active: Boolean(body?.active ?? true),
-      registry_no: registry_no || null,
-      birth_date: String(body?.birth_date || "").trim() || null,
-      disability_status: String(body?.disability_status || "").trim() || null,
-      gender: String(body?.gender || "").trim() || null,
-      education_level: String(body?.education_level || "").trim() || null,
-      phone: String(body?.phone || "").trim() || null,
-      email: email || null,
-      blood_type: String(body?.blood_type || "").trim() || null,
-      tc_no: tc_no || null,
-      created_at: now,
-      updated_at: now,
-    };
-
     const { data, error } = await supabase
       .from("employees")
-      .insert([payload])
+      .insert([{ ...payload, created_at: new Date().toISOString() }])
       .select("id")
       .single();
 
@@ -165,32 +236,11 @@ export async function PUT(req: Request) {
     const id = String(body?.id || "").trim();
 
     if (!id) {
-      return NextResponse.json(
-        { error: "id zorunlu." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "id zorunlu." }, { status: 400 });
     }
 
     const supabase = getSupabase();
-
-    const payload = {
-      firm_id: String(body?.firm_id || "").trim() || null,
-      full_name: String(body?.full_name || "").trim() || null,
-      job_title: String(body?.job_title || "").trim() || null,
-      start_date: String(body?.start_date || "").trim() || null,
-      exit_date: String(body?.exit_date || "").trim() || null,
-      active: Boolean(body?.active ?? true),
-      registry_no: String(body?.registry_no || "").trim() || null,
-      birth_date: String(body?.birth_date || "").trim() || null,
-      disability_status: String(body?.disability_status || "").trim() || null,
-      gender: String(body?.gender || "").trim() || null,
-      education_level: String(body?.education_level || "").trim() || null,
-      phone: String(body?.phone || "").trim() || null,
-      email: String(body?.email || "").trim() || null,
-      blood_type: String(body?.blood_type || "").trim() || null,
-      tc_no: String(body?.tc_no || "").trim() || null,
-      updated_at: new Date().toISOString(),
-    };
+    const payload = buildPayload(body);
 
     const { error } = await supabase
       .from("employees")
