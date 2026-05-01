@@ -76,10 +76,11 @@ export async function GET(req: Request) {
     const supabase = getSupabase();
 
     const { data, error } = await supabase
-      .from("employees")
-      .select("*")
-      .eq("firm_id", firmId)
-      .order("full_name", { ascending: true });
+  .from("employees")
+  .select("*")
+  .eq("firm_id", firmId)
+  .order("full_name", { ascending: true })
+  .range(0, 5000);
 
     if (error) {
       return NextResponse.json(

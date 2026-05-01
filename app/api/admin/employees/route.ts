@@ -15,10 +15,11 @@ export async function GET(request: Request) {
 
     const supabase = getSupabase();
 
-    let query = supabase
-      .from("employees")
-      .select("*")
-      .order("full_name", { ascending: true });
+  let query = supabase
+  .from("employees")
+  .select("*")
+  .order("full_name", { ascending: true })
+  .range(0, 5000);
 
     // ✅ Firma filtresi
     if (firmId && firmId !== "all") {
