@@ -149,6 +149,7 @@ export default function AdminLayout({
   // { name: "Eğitim Katılımcıları", href: "/admin/participants" },
       { name: "Sistem Kullanıcıları", href: "/admin/users" },
       { name: "Denetimler", href: "/admin/denetimler" },
+      { name: "Çalışanlar", href: "/admin/employees" },
       { name: "Raporlar", href: "/admin/reports" },
       { name: "ÇBS Yönetimi", href: "/admin/cbs" },
     ];
