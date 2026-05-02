@@ -280,9 +280,9 @@ export default function EmployeesPage() {
 }, [data, search, statusFilter, letterFilter]);
 
   
-  const activeCount = data.filter((x) => x.active).length;
-  const passiveCount = data.filter((x) => !x.active).length;
-  const activeEmployees = data.filter((x) => x.active);
+  const activeCount = filtered.filter((x) => x.active).length;
+const passiveCount = filtered.filter((x) => !x.active).length;
+const activeEmployees = filtered.filter((x) => x.active);
 
   const maleCount = activeEmployees.filter((x) => {
     const v = String(x.gender || "").toLowerCase().trim();
@@ -332,7 +332,7 @@ export default function EmployeesPage() {
           marginBottom: 20,
         }}
       >
-        <Kpi title="Toplam" value={data.length} />
+        <Kpi title="Toplam" value={filtered.length} />
         <Kpi title="Aktif" value={activeCount} />
         <Kpi title="Pasif" value={passiveCount} />
         <Kpi title="Görünen" value={filtered.length} />
