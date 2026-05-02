@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type UserApiRow = {
   id: string;
+  employee_id?: string | null;
   full_name?: string | null;
   email?: string | null;
   company?: string | null;
@@ -34,6 +35,7 @@ type CompanyApiRow = {
 
 type UserRow = {
   id: string;
+  employee_id: string
   full_name: string;
   email: string;
   company: string;
@@ -227,7 +229,8 @@ const [savingUser, setSavingUser] = useState(false);
       const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
         ? usersJson.data.map((u: UserApiRow) => ({
             id: String(u.id || ""),
-            full_name: (u.full_name || "Adsız Kullanıcı").trim(),
+employee_id: String((u as any).employee_id || "").trim(),
+full_name: (u.full_name || "Adsız Kullanıcı").trim(),
             email: (u.email || "-").trim(),
             company: buildCompanyLabel(u),
 company_id: String(u.company_id || ""),
@@ -300,7 +303,7 @@ is_active: Boolean(u.is_active),
     const matchesSearch = !search || text.includes(search.toLowerCase());
 
     const matchesCompany =
-      companyFilter === "all" ? true : u.company === companyFilter;
+  companyFilter === "all" ? true : u.company_id === companyFilter;
 
     const matchesStatus =
       statusFilter === "all"
@@ -1078,9 +1081,9 @@ const deleteTrainingUser = async (user: UserRow) => {
     >
       <option value="all">Tüm Firmalar</option>
       {companies.map((company) => (
-        <option key={company.name} value={company.name}>
-          {company.name}
-        </option>
+        <option key={company.id} value={company.id}>
+  {company.name}
+</option>
       ))}
     </select>
   </div>

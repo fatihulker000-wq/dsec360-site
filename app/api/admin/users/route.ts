@@ -79,7 +79,7 @@ export async function GET(req: Request) {
 
     const { data: usersData, error: userError } = await supabase
       .from("users")
-     .select("id, full_name, email, role, is_active, created_at, app_user_type, password_hash")
+.select("id, full_name, email, role, is_active, created_at, app_user_type, password_hash, employee_id")
       .order("full_name", { ascending: true, nullsFirst: false });
 
     if (userError) {
@@ -191,9 +191,10 @@ const type = url.searchParams.get("type");
 
     // 🔵 TRAINING USERS
     // /api/admin/users?type=training → sadece eğitim katılımcıları
-    if (type === "training") {
-      return role === "training_user";
-    }
+   if (type === "training") {
+  return role === "training_user" && String((u as 
+    any).employee_id || "").trim();
+}
 
     // 🔴 SYSTEM USERS
     // /api/admin/users?type=system → eğitim katılımcıları hariç sistem/app/web kullanıcıları
@@ -258,7 +259,8 @@ const type = url.searchParams.get("type");
           role: String(user.role || "").trim(),
           app_user_type: String((user as any).app_user_type || "").trim(),
           password_hash: String((user as any).password_hash || "").trim(),
-          company_id: primaryFirm?.firm_id || "",
+employee_id: String((user as any).employee_id || "").trim(),
+company_id: primaryFirm?.firm_id || "",
           company: primaryFirm?.firm_name || "",
           is_active: Boolean(user.is_active),
           created_at: user.created_at || null,

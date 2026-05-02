@@ -284,7 +284,7 @@ export async function POST(req: Request) {
 
     const { data: users, error: usersError } = await supabase
       .from("users")
-      .select("id, full_name, email, phone, company_id")
+      .select("id, full_name, email, phone, company_id, employee_id")
       .in("id", uniqueUserIds);
 
     if (usersError) {
@@ -299,6 +299,17 @@ export async function POST(req: Request) {
     const usersWithoutCompany = typedUsers.filter(
   (user) => !String(user.company_id || "").trim()
 );
+
+const usersWithoutEmployee = typedUsers.filter(
+  (user: any) => !String(user.employee_id || "").trim()
+);
+
+if (usersWithoutEmployee.length > 0) {
+  return NextResponse.json(
+    { error: "Çalışanlar modülüne bağlı olmayan kullanıcıya eğitim atanamaz." },
+    { status: 400 }
+  );
+}
 
 if (usersWithoutCompany.length > 0) {
   return NextResponse.json(
