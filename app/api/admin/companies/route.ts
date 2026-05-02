@@ -79,19 +79,39 @@ export async function GET() {
       return NextResponse.json({ error: "Firmalar alınamadı." }, { status: 500 });
     }
 
-    const { data: employees, error: employeeCountError } = await supabase
-  .from("employees")
-  .select("id, firm_id, active");
+    let allEmployees: Array<{
+  id: string;
+  firm_id: string | null;
+  active: boolean | null;
+}> = [];
 
-if (employeeCountError) {
-  console.error("employees count error:", employeeCountError);
+let from = 0;
+const step = 1000;
+
+while (true) {
+  const { data: employeesPage, error: employeeCountError } = await supabase
+    .from("employees")
+    .select("id, firm_id, active")
+    .range(from, from + step - 1);
+
+  if (employeeCountError) {
+    console.error("employees count error:", employeeCountError);
+    break;
+  }
+
+  const rows = employeesPage || [];
+  allEmployees = [...allEmployees, ...rows];
+
+  if (rows.length < step) break;
+
+  from += step;
 }
 
 const counts: Record<string, number> = {};
 
-(employees || []).forEach((emp: { id: string; firm_id: string | null; active: boolean | null }) => {
+allEmployees.forEach((emp) => {
   if (!emp.firm_id) return;
-  if (emp.active !== true) return;
+  if (emp.active === false) return;
 
   counts[emp.firm_id] = (counts[emp.firm_id] || 0) + 1;
 });
