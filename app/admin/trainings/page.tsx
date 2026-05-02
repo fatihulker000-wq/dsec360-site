@@ -35,13 +35,24 @@ type CompanyApiRow = {
 
 type UserRow = {
   id: string;
-  employee_id: string
+  employee_id: string;
   full_name: string;
   email: string;
   company: string;
   company_id: string;
   role: string;
   is_active: boolean;
+};
+
+type EmployeeRow = {
+  id: string;
+  firm_id: string;
+  full_name: string;
+  job_title?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  registry_no?: string | null;
+  active: boolean;
 };
 
 type CompanyRow = {
@@ -150,6 +161,9 @@ function badgeStyle(
 
 export default function AdminTrainingPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
   const [trainings, setTrainings] = useState<TrainingRow[]>([]);
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
@@ -188,9 +202,9 @@ const [savingUser, setSavingUser] = useState(false);
 
       const [usersRes, trainingsRes, companiesRes] = await Promise.all([
       fetch("/api/admin/users?type=training", {
-  cache: "no-store",
-  credentials: "include",
-}),
+      cache: "no-store",
+      credentials: "include",
+      }),
         fetch("/api/admin/trainings", {
           cache: "no-store",
           credentials: "include",
@@ -229,17 +243,17 @@ const [savingUser, setSavingUser] = useState(false);
       const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
         ? usersJson.data.map((u: UserApiRow) => ({
             id: String(u.id || ""),
-employee_id: String((u as any).employee_id || "").trim(),
-full_name: (u.full_name || "Adsız Kullanıcı").trim(),
+          employee_id: String((u as any).employee_id || "").trim(),
+          full_name: (u.full_name || "Adsız Kullanıcı").trim(),
             email: (u.email || "-").trim(),
             company: buildCompanyLabel(u),
-company_id: String(u.company_id || ""),
-role: getRoleLabel(u.role),
-is_active: Boolean(u.is_active),
-          }))
-        : [];
+            company_id: String(u.company_id || ""),
+            role: getRoleLabel(u.role),
+           is_active: Boolean(u.is_active),
+           }))
+            : [];
 
-      const normalizedTrainings: TrainingRow[] = Array.isArray(trainingsJson?.data)
+            const normalizedTrainings: TrainingRow[] = Array.isArray(trainingsJson?.data)
         ? trainingsJson.data.map((t: TrainingApiRow) => ({
             id: String(t.id || ""),
             title: (t.title || "Adsız Eğitim").trim(),
@@ -287,6 +301,49 @@ is_active: Boolean(u.is_active),
     }
   };
 
+  const loadEmployeesByCompany = async (firmId: string) => {
+  if (!firmId || firmId === "all") {
+    setEmployees([]);
+    setSelectedEmployees([]);
+    return;
+  }
+
+  try {
+    setEmployeesLoading(true);
+    setSelectedEmployees([]);
+
+    const res = await fetch(`/api/admin/employees?firmId=${encodeURIComponent(firmId)}`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      alert(json?.error || "Çalışanlar alınamadı.");
+      setEmployees([]);
+      return;
+    }
+
+    setEmployees(
+      Array.isArray(json?.data)
+        ? json.data.map((e: any) => ({
+            id: String(e.id || ""),
+            firm_id: String(e.firm_id || ""),
+            full_name: String(e.full_name || "Adsız çalışan"),
+            job_title: e.job_title || null,
+            phone: e.phone || null,
+            email: e.email || null,
+            registry_no: e.registry_no || null,
+            active: Boolean(e.active),
+          }))
+        : []
+    );
+  } finally {
+    setEmployeesLoading(false);
+  }
+};
+
   useEffect(() => {
     void loadAll();
   }, []);
@@ -316,7 +373,7 @@ is_active: Boolean(u.is_active),
   });
 }, [users, search, companyFilter, statusFilter]);
 
-  const selectedCount = selectedUsers.length;
+  const selectedCount = selectedEmployees.length;
 
   const allFilteredSelected =
     filteredUsers.length > 0 &&
@@ -379,7 +436,7 @@ is_active: Boolean(u.is_active),
   };
 
   const clearSelection = () => {
-    setSelectedUsers([]);
+    setSelectedEmployees([]);
   };
 
   const assign = async () => {
@@ -388,10 +445,10 @@ is_active: Boolean(u.is_active),
       return;
     }
 
-    if (!selectedUsers.length) {
-      alert("En az bir çalışan seç.");
-      return;
-    }
+    if (!selectedEmployees.length) {
+  alert("En az bir çalışan seç.");
+  return;
+}
 
     try {
       setAssigning(true);
@@ -403,9 +460,10 @@ is_active: Boolean(u.is_active),
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userIds: selectedUsers,
-          trainingId,
-        }),
+  employeeIds: selectedEmployees,
+  trainingId,
+  companyId: companyFilter,
+}),
       });
 
       if (res.status === 401) {
@@ -423,7 +481,7 @@ is_active: Boolean(u.is_active),
 
       setAssignSummary(data);
       alert(data?.message || "Eğitim atandı ✅");
-      setSelectedUsers([]);
+      setSelectedEmployees([]);
       await loadAll();
     } catch (err) {
       console.error(err);
@@ -1069,7 +1127,11 @@ const deleteTrainingUser = async (user: UserRow) => {
     </div>
     <select
       value={companyFilter}
-      onChange={(e) => setCompanyFilter(e.target.value)}
+      onChange={(e) => {
+  const firmId = e.target.value;
+  setCompanyFilter(firmId);
+  void loadEmployeesByCompany(firmId);
+}}
       style={{
         width: "100%",
         padding: "12px 14px",
@@ -1335,7 +1397,7 @@ const deleteTrainingUser = async (user: UserRow) => {
 
               <button
                 type="button"
-                onClick={clearSelection}
+                onClick={() => setSelectedEmployees([])}
                 style={{
                   border: "none",
                   borderRadius: 10,
@@ -1351,160 +1413,121 @@ const deleteTrainingUser = async (user: UserRow) => {
             </div>
           </div>
 
-          {loading ? (
-            <div>Yükleniyor...</div>
-          ) : filteredUsers.length === 0 ? (
-            <div style={{ color: BRAND.muted }}>Uygun çalışan bulunamadı.</div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-                gap: 14,
-              }}
-            >
-              {filteredUsers.map((u) => {
-                const checked = selectedUsers.includes(u.id);
-
-                return (
-                  <label
-                    key={u.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 12,
-                      padding: 16,
-                      borderRadius: 16,
-                      border: checked
-                        ? "2px solid #2563eb"
-                        : `1px solid ${BRAND.border}`,
-                      background: checked ? "#eff6ff" : "#f9fafb",
-                      cursor: "pointer",
-                      minWidth: 0,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => toggleUser(u.id, e.target.checked)}
-                      style={{ marginTop: 4 }}
-                    />
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 16, fontWeight: 900 }}>
-                        {u.full_name}
-                      </div>
-                      <div
-                        style={{
-                          marginTop: 6,
-                          fontSize: 13,
-                          color: BRAND.muted,
-                          lineHeight: 1.6,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {u.email}
-                      </div>
-
-                      <div
-                        style={{
-                          marginTop: 8,
-                          display: "flex",
-                          gap: 8,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <span style={badgeStyle("#fff", "#e5e7eb", "#374151")}>
-                          {u.company}
-                        </span>
-                        <span
-                          style={
-                            u.is_active
-                              ? badgeStyle("#dcfce7", "#86efac", "#166534")
-                              : badgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
-                          }
-                        >
-                          {u.is_active ? "Aktif" : "Pasif"}
-                        </span>
-                        <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
-                          {u.role}
-                        </span>
-
-<div
-  style={{
-    width: "100%",
-    marginTop: 10,
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-  }}
->
-  <button
-    type="button"
-    onClick={(e) => {
-      e.preventDefault();
-      openEditUserModal(u);
-    }}
+          {companyFilter === "all" ? (
+  <div style={{ color: BRAND.muted }}>
+    Önce firma seç. Eğitim ataması sadece seçili firmaya bağlı çalışanlara yapılabilir.
+  </div>
+) : employeesLoading ? (
+  <div>Çalışanlar yükleniyor...</div>
+) : employees.length === 0 ? (
+  <div style={{ color: BRAND.muted }}>
+    Bu firmaya bağlı çalışan bulunamadı.
+  </div>
+) : (
+  <div
     style={{
-      border: "1px solid #d1d5db",
-      background: "#fff",
-      borderRadius: 10,
-      padding: "8px 12px",
-      fontWeight: 800,
-      cursor: "pointer",
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+      gap: 14,
     }}
   >
-    Düzenle
-  </button>
+    {employees
+      .filter((emp) => emp.active)
+      .filter((emp) => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
 
-  <button
-    type="button"
-    onClick={(e) => {
-      e.preventDefault();
-      void toggleUserActive(u);
-    }}
-    style={{
-      border: "1px solid #fde68a",
-      background: "#fffbeb",
-      color: "#92400e",
-      borderRadius: 10,
-      padding: "8px 12px",
-      fontWeight: 800,
-      cursor: "pointer",
-    }}
-  >
-    {u.is_active ? "Pasife Al" : "Aktif Yap"}
-  </button>
+        return [
+          emp.full_name,
+          emp.email,
+          emp.phone,
+          emp.job_title,
+          emp.registry_no,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q);
+      })
+      .map((emp) => {
+        const checked = selectedEmployees.includes(emp.id);
 
-  <button
-    type="button"
-    onClick={(e) => {
-      e.preventDefault();
-      void deleteTrainingUser(u);
-    }}
-    style={{
-      border: "1px solid #fecaca",
-      background: "#fff5f5",
-      color: "#b91c1c",
-      borderRadius: 10,
-      padding: "8px 12px",
-      fontWeight: 800,
-      cursor: "pointer",
-    }}
-  >
-    Sil
-  </button>
-</div>
+        return (
+          <label
+            key={emp.id}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              padding: 16,
+              borderRadius: 16,
+              border: checked ? "2px solid #2563eb" : `1px solid ${BRAND.border}`,
+              background: checked ? "#eff6ff" : "#f9fafb",
+              cursor: "pointer",
+              minWidth: 0,
+              overflow: "hidden",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={(e) => {
+                const isChecked = e.target.checked;
 
-                      </div>
-
-                    </div>
-                  </label>
+                setSelectedEmployees((prev) =>
+                  isChecked
+                    ? prev.includes(emp.id)
+                      ? prev
+                      : [...prev, emp.id]
+                    : prev.filter((id) => id !== emp.id)
                 );
-              })}
+              }}
+              style={{ marginTop: 4 }}
+            />
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 900 }}>
+                {emp.full_name}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 13,
+                  color: BRAND.muted,
+                  lineHeight: 1.6,
+                  wordBreak: "break-word",
+                }}
+              >
+                {emp.job_title || "Ünvan yok"}
+                <br />
+                {emp.email || "E-posta yok"}
+                <br />
+                {emp.phone || "Telefon yok"}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 8,
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={badgeStyle("#dcfce7", "#86efac", "#166534")}>
+                  Aktif Çalışan
+                </span>
+
+                <span style={badgeStyle("#fff", "#e5e7eb", "#374151")}>
+                  Sicil: {emp.registry_no || "-"}
+                </span>
+              </div>
             </div>
-          )}
+          </label>
+        );
+      })}
+  </div>
+)}
+        
         </div>
 
         <div

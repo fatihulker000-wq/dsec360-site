@@ -16,6 +16,7 @@ function getSupabase() {
 
 type UserRow = {
   id: string;
+  employee_id: string | null;
   full_name: string | null;
   email: string | null;
   phone: string | null;
@@ -301,7 +302,7 @@ export async function POST(req: Request) {
 );
 
 const usersWithoutEmployee = typedUsers.filter(
-  (user: any) => !String(user.employee_id || "").trim()
+  (user) => !String(user.employee_id || "").trim()
 );
 
 if (usersWithoutEmployee.length > 0) {
