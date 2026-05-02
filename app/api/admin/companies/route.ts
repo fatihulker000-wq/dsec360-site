@@ -91,7 +91,7 @@ const counts: Record<string, number> = {};
 
 (employees || []).forEach((emp: { id: string; firm_id: string | null; active: boolean | null }) => {
   if (!emp.firm_id) return;
-  if (emp.active === false) return;
+  if (emp.active !== true) return;
 
   counts[emp.firm_id] = (counts[emp.firm_id] || 0) + 1;
 });
