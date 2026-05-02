@@ -23,6 +23,28 @@ type Company = {
   name: string;
 };
 
+type EmployeeForm = {
+  full_name: string;
+  job_title: string;
+  phone: string;
+  email: string;
+  registry_no: string;
+  tc_no: string;
+  gender: string;
+  disability_status: string;
+};
+
+const emptyForm: EmployeeForm = {
+  full_name: "",
+  job_title: "",
+  phone: "",
+  email: "",
+  registry_no: "",
+  tc_no: "",
+  gender: "",
+  disability_status: "",
+};
+
 export default function EmployeesPage() {
   const [data, setData] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +54,9 @@ export default function EmployeesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [firmFilter, setFirmFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "passive">("all");
+
+  const [editModal, setEditModal] = useState<Employee | null>(null);
+  const [editForm, setEditForm] = useState<EmployeeForm>(emptyForm);
 
   const loadEmployees = async (firmId = firmFilter) => {
     try {
@@ -111,17 +136,27 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleEditEmployee = async (emp: Employee) => {
-    const fullName = prompt("Ad Soyad", emp.full_name || "");
-    if (!fullName?.trim()) return;
+  const openEditModal = (emp: Employee) => {
+    setEditModal(emp);
+    setEditForm({
+      full_name: emp.full_name || "",
+      job_title: emp.job_title || "",
+      phone: emp.phone || "",
+      email: emp.email || "",
+      registry_no: emp.registry_no || "",
+      tc_no: emp.tc_no || "",
+      gender: emp.gender || "",
+      disability_status: emp.disability_status || "",
+    });
+  };
 
-    const jobTitle = prompt("Ünvan", emp.job_title || "") || "";
-    const phone = prompt("Telefon", emp.phone || "") || "";
-    const email = prompt("E-posta", emp.email || "") || "";
-    const registryNo = prompt("Sicil No", emp.registry_no || "") || "";
-    const tcNo = prompt("TC No", emp.tc_no || "") || "";
-    const gender = prompt("Cinsiyet", emp.gender || "") || "";
-    const disabilityStatus = prompt("Engellilik Durumu", emp.disability_status || "") || "";
+  const saveEditEmployee = async () => {
+    if (!editModal) return;
+
+    if (!editForm.full_name.trim()) {
+      alert("Ad Soyad zorunlu.");
+      return;
+    }
 
     try {
       setActionLoading(true);
@@ -131,15 +166,15 @@ export default function EmployeesPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          id: emp.id,
-          full_name: fullName.trim(),
-          job_title: jobTitle.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
-          registry_no: registryNo.trim(),
-          tc_no: tcNo.trim(),
-          gender: gender.trim(),
-          disability_status: disabilityStatus.trim(),
+          id: editModal.id,
+          full_name: editForm.full_name.trim(),
+          job_title: editForm.job_title.trim(),
+          phone: editForm.phone.trim(),
+          email: editForm.email.trim(),
+          registry_no: editForm.registry_no.trim(),
+          tc_no: editForm.tc_no.trim(),
+          gender: editForm.gender.trim(),
+          disability_status: editForm.disability_status.trim(),
         }),
       });
 
@@ -150,6 +185,8 @@ export default function EmployeesPage() {
         return;
       }
 
+      setEditModal(null);
+      setEditForm(emptyForm);
       await loadEmployees(firmFilter);
     } finally {
       setActionLoading(false);
@@ -381,7 +418,7 @@ export default function EmployeesPage() {
                   </div>
 
                   <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => handleEditEmployee(emp)} disabled={actionLoading} style={smallBtn("#2563eb")}>
+                    <button onClick={() => openEditModal(emp)} disabled={actionLoading} style={smallBtn("#2563eb")}>
                       Düzenle
                     </button>
 
@@ -415,7 +452,116 @@ export default function EmployeesPage() {
           ))}
         </section>
       )}
+
+      {editModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              width: "min(720px, 100%)",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              background: "#fff",
+              borderRadius: 24,
+              padding: 24,
+              boxShadow: "0 30px 80px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div
+              style={{
+                borderRadius: 20,
+                padding: 20,
+                background: "linear-gradient(135deg, #4a0d1a 0%, #c62828 100%)",
+                color: "#fff",
+                marginBottom: 18,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>
+                Çalışan Bilgisi
+              </div>
+              <h2 style={{ margin: "6px 0 0", fontSize: 26, fontWeight: 950 }}>
+                Düzenle
+              </h2>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <FormInput label="Ad Soyad *" value={editForm.full_name} onChange={(v) => setEditForm({ ...editForm, full_name: v })} />
+              <FormInput label="Ünvan" value={editForm.job_title} onChange={(v) => setEditForm({ ...editForm, job_title: v })} />
+              <FormInput label="Telefon" value={editForm.phone} onChange={(v) => setEditForm({ ...editForm, phone: v })} />
+              <FormInput label="E-posta" value={editForm.email} onChange={(v) => setEditForm({ ...editForm, email: v })} />
+              <FormInput label="Sicil No" value={editForm.registry_no} onChange={(v) => setEditForm({ ...editForm, registry_no: v })} />
+              <FormInput label="TC No" value={editForm.tc_no} onChange={(v) => setEditForm({ ...editForm, tc_no: v })} />
+              <FormInput label="Cinsiyet" value={editForm.gender} onChange={(v) => setEditForm({ ...editForm, gender: v })} />
+              <FormInput label="Engellilik Durumu" value={editForm.disability_status} onChange={(v) => setEditForm({ ...editForm, disability_status: v })} />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
+              <button
+                onClick={() => {
+                  setEditModal(null);
+                  setEditForm(emptyForm);
+                }}
+                disabled={actionLoading}
+                style={darkBtn()}
+              >
+                İptal
+              </button>
+
+              <button onClick={saveEditEmployee} disabled={actionLoading} style={blueBtn(actionLoading)}>
+                {actionLoading ? "Kaydediliyor..." : "Kaydet"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+function FormInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label style={{ display: "grid", gap: 6 }}>
+      <span style={{ fontSize: 13, fontWeight: 800, color: "#374151" }}>
+        {label}
+      </span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: "100%",
+          border: "1px solid #e5e7eb",
+          borderRadius: 14,
+          padding: "12px 14px",
+          fontSize: 14,
+          color: "#111827",
+          boxSizing: "border-box",
+        }}
+      />
+    </label>
   );
 }
 
