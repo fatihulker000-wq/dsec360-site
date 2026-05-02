@@ -23,6 +23,15 @@ type UserRow = {
   company_id: string | null;
 };
 
+type EmployeeRow = {
+  id: string;
+  firm_id: string | null;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  active: boolean | null;
+};
+
 type TrainingRow = {
   id: string;
   title: string | null;
@@ -257,18 +266,22 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    const userIds = Array.isArray(body?.userIds)
-      ? body.userIds.map((x: unknown) => String(x)).filter(Boolean)
-      : [];
+    const employeeIds = Array.isArray(body?.employeeIds)
+  ? body.employeeIds.map((x: unknown) => String(x)).filter(Boolean)
+  : [];
 
-    const trainingId = body?.trainingId ? String(body.trainingId) : "";
+const trainingId = body?.trainingId ? String(body.trainingId) : "";
+const companyId = body?.companyId ? String(body.companyId).trim() : "";
 
-    if (!userIds.length || !trainingId) {
-      return NextResponse.json({ error: "Eksik veri" }, { status: 400 });
-    }
+if (!employeeIds.length || !trainingId || !companyId || companyId === "all") {
+  return NextResponse.json(
+    { error: "Eğitim, firma ve çalışan seçimi zorunludur." },
+    { status: 400 }
+  );
+}
 
-    const uniqueUserIds = Array.from(new Set(userIds));
-    const supabase = getSupabase();
+const uniqueEmployeeIds = Array.from(new Set(employeeIds));
+const supabase = getSupabase();
 
     const { data: training, error: trainingError } = await supabase
       .from("trainings")
@@ -283,23 +296,76 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: users, error: usersError } = await supabase
-      .from("users")
-      .select("id, full_name, email, phone, company_id, employee_id")
-      .in("id", uniqueUserIds);
+    const { data: employeesData, error: employeesError } = await supabase
+  .from("employees")
+  .select("id, firm_id, full_name, email, phone, active")
+  .in("id", uniqueEmployeeIds);
 
-    if (usersError) {
-      return NextResponse.json(
-        { error: "Kullanıcılar alınamadı." },
-        { status: 500 }
-      );
-    }
+if (employeesError) {
+  return NextResponse.json(
+    { error: "Çalışanlar alınamadı." },
+    { status: 500 }
+  );
+}
 
-    const typedUsers = (users || []) as UserRow[];
+const typedEmployees = (employeesData || []) as EmployeeRow[];
 
-    const usersWithoutCompany = typedUsers.filter(
-  (user) => !String(user.company_id || "").trim()
+if (typedEmployees.length !== uniqueEmployeeIds.length) {
+  return NextResponse.json(
+    { error: "Seçilen çalışanların bir kısmı bulunamadı." },
+    { status: 400 }
+  );
+}
+
+const wrongFirmEmployee = typedEmployees.find(
+  (emp) => String(emp.firm_id || "").trim() !== companyId
 );
+
+if (wrongFirmEmployee) {
+  return NextResponse.json(
+    { error: "Seçilen çalışanlar seçili firmaya ait değil." },
+    { status: 400 }
+  );
+}
+
+const passiveEmployee = typedEmployees.find((emp) => emp.active === false);
+
+if (passiveEmployee) {
+  return NextResponse.json(
+    { error: "Pasif çalışana eğitim atanamaz." },
+    { status: 400 }
+  );
+}
+
+const { data: users, error: usersError } = await supabase
+  .from("users")
+  .select("id, employee_id, full_name, email, phone, company_id")
+  .in("employee_id", uniqueEmployeeIds);
+
+if (usersError) {
+  return NextResponse.json(
+    { error: "Eğitim kullanıcıları alınamadı." },
+    { status: 500 }
+  );
+}
+
+const typedUsers = (users || []) as UserRow[];
+
+const missingUserEmployees = typedEmployees.filter(
+  (emp) => !typedUsers.some((user) => user.employee_id === emp.id)
+);
+
+if (missingUserEmployees.length > 0) {
+  return NextResponse.json(
+    {
+      error:
+        "Seçilen çalışanlardan bazıları eğitim kullanıcısına bağlı değil. Önce çalışan için eğitim kullanıcı bağlantısı oluşturulmalı.",
+    },
+    { status: 400 }
+  );
+}
+
+const uniqueUserIds = Array.from(new Set(typedUsers.map((u) => u.id)));
 
 const usersWithoutEmployee = typedUsers.filter(
   (user) => !String(user.employee_id || "").trim()
@@ -312,13 +378,6 @@ if (usersWithoutEmployee.length > 0) {
   );
 }
 
-if (usersWithoutCompany.length > 0) {
-  return NextResponse.json(
-    { error: "Firma ilişkisi olmayan kullanıcıya eğitim atanamaz." },
-    { status: 400 }
-  );
-}
-
     if (typedUsers.length !== uniqueUserIds.length) {
       return NextResponse.json(
         { error: "Seçilen kullanıcıların bir kısmı bulunamadı." },
@@ -326,12 +385,16 @@ if (usersWithoutCompany.length > 0) {
       );
     }
 
-    if (adminRole === "company_admin") {
-      const unauthorizedUser = typedUsers.find(
-        (user) => String(user.company_id || "").trim() !== companyIdFromCookie
-      );
+   if (adminRole === "company_admin") {
+  const unauthorizedUser = typedUsers.find(
+    (user) => String(user.company_id || "").trim() !== companyIdFromCookie
+  );
 
-      if (unauthorizedUser) {
+  const unauthorizedEmployee = typedEmployees.find(
+    (emp) => String(emp.firm_id || "").trim() !== companyIdFromCookie
+  );
+
+      if (unauthorizedUser || unauthorizedEmployee) {
         return NextResponse.json(
           { error: "Sadece kendi firmanızdaki çalışanlara eğitim atayabilirsiniz." },
           { status: 403 }
