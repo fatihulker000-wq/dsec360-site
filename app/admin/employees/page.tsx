@@ -54,6 +54,7 @@ export default function EmployeesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [firmFilter, setFirmFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "passive">("all");
+  const [letterFilter, setLetterFilter] = useState<string | null>(null);
 
   const [editModal, setEditModal] = useState<Employee | null>(null);
   const [editForm, setEditForm] = useState<EmployeeForm>(emptyForm);
@@ -246,46 +247,39 @@ export default function EmployeesPage() {
   };
 
   const filtered = useMemo(() => {
-    let list = data;
+  let list = data;
 
-    if (statusFilter === "active") list = list.filter((x) => x.active);
-    if (statusFilter === "passive") list = list.filter((x) => !x.active);
+  if (statusFilter === "active") list = list.filter((x) => x.active);
+  if (statusFilter === "passive") list = list.filter((x) => !x.active);
 
-    const q = search.trim().toLowerCase();
-    if (!q) return list;
-
-    return list.filter((emp) =>
-      [
-        emp.full_name,
-        emp.job_title,
-        emp.phone,
-        emp.email,
-        emp.registry_no,
-        emp.tc_no,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
+  if (letterFilter) {
+    list = list.filter((emp) =>
+      String(emp.full_name || "")
+        .trim()
+        .toLocaleUpperCase("tr-TR")
+        .startsWith(letterFilter)
     );
-  }, [data, search, statusFilter]);
+  }
 
-  const groupedEmployees = useMemo(() => {
-  const groups: Record<string, Employee[]> = {};
+  const q = search.trim().toLowerCase();
+  if (!q) return list;
 
-  filtered.forEach((emp) => {
-    const firstLetter =
-      (emp.full_name || "#").trim().charAt(0).toLocaleUpperCase("tr-TR") || "#";
+  return list.filter((emp) =>
+    [
+      emp.full_name,
+      emp.job_title,
+      emp.phone,
+      emp.email,
+      emp.registry_no,
+      emp.tc_no,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(q)
+  );
+}, [data, search, statusFilter, letterFilter]);
 
-    if (!groups[firstLetter]) {
-      groups[firstLetter] = [];
-    }
-
-    groups[firstLetter].push(emp);
-  });
-
-  return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, "tr"));
-}, [filtered]);
-
+  
   const activeCount = data.filter((x) => x.active).length;
   const passiveCount = data.filter((x) => !x.active).length;
   const activeEmployees = data.filter((x) => x.active);
@@ -347,16 +341,62 @@ export default function EmployeesPage() {
         <Kpi title="Engelli" value={disabledCount} />
       </section>
 
-      <section
+<section
         style={{
-          background: "#fff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 22,
-          padding: 18,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 6,
           marginBottom: 20,
+          background: "#fff",
+          padding: 12,
+          borderRadius: 16,
+          border: "1px solid #e5e7eb",
         }}
       >
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {"ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ".split("").map((letter) => (
+          <button
+            key={letter}
+            onClick={() => setLetterFilter(letter)}
+            style={{
+              padding: "7px 11px",
+              borderRadius: 10,
+              border: "none",
+              fontWeight: 900,
+              cursor: "pointer",
+              background: letterFilter === letter ? "#c62828" : "#f3f4f6",
+              color: letterFilter === letter ? "#fff" : "#374151",
+            }}
+          >
+            {letter}
+          </button>
+        ))}
+
+        <button
+          onClick={() => setLetterFilter(null)}
+          style={{
+            padding: "7px 12px",
+            borderRadius: 10,
+            border: "none",
+            fontWeight: 900,
+            cursor: "pointer",
+            background: "#111827",
+            color: "#fff",
+          }}
+        >
+          Tümü
+        </button>
+      </section>
+
+             <section
+  style={{
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 20,
+  }}
+>
+  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <select
             value={firmFilter}
             onChange={(e) => {
@@ -409,85 +449,62 @@ export default function EmployeesPage() {
         <CardText title="Kayıt bulunamadı" text="Seçili filtreye uygun çalışan görünmüyor." />
       ) : (
         
-        <section style={{ display: "grid", gap: 22 }}>
-  {groupedEmployees.map(([letter, employees]) => (
-    <div key={letter}>
-      <div
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 5,
-          background: "#fafafa",
-          padding: "10px 0",
-          marginBottom: 10,
-          fontSize: 22,
-          fontWeight: 950,
-          color: "#7f1734",
-          borderBottom: "2px solid #f1d5dc",
-        }}
-      >
-        {letter}
-      </div>
-
-      <div style={{ display: "grid", gap: 14 }}>
-        {employees.map((emp) => (
-          <div
-            key={emp.id}
-            style={{
-              background: "#fff",
-              border: "1px solid #e5e7eb",
-              borderRadius: 22,
-              padding: 18,
-              boxShadow: "0 12px 30px rgba(15,23,42,0.04)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 19, fontWeight: 900, color: "#111827" }}>
-                  {emp.full_name || "Adsız çalışan"}
-                </div>
-
-                <div style={{ marginTop: 6, color: "#6b7280", lineHeight: 1.7 }}>
-                  <div>Ünvan: {emp.job_title || "-"}</div>
-                  <div>Telefon: {emp.phone || "-"}</div>
-                  <div>E-posta: {emp.email || "-"}</div>
-                  <div>Sicil: {emp.registry_no || "-"}</div>
-                  <div>Firma ID: {emp.firm_id || "-"}</div>
-                </div>
-
-                <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button onClick={() => openEditModal(emp)} disabled={actionLoading} style={smallBtn("#2563eb")}>
-                    Düzenle
-                  </button>
-
-                  {emp.active ? (
-                    <button onClick={() => handlePassiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#dc2626")}>
-                      Pasife Al
-                    </button>
-                  ) : (
-                    <button onClick={() => handleActiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#16a34a")}>
-                      Aktif Yap
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <span
-                style={{
-                  height: 34,
-                  padding: "8px 12px",
-                  borderRadius: 999,
-                  fontSize: 13,
-                  fontWeight: 900,
-                  background: emp.active ? "#ecfdf5" : "#fef2f2",
-                  color: emp.active ? "#166534" : "#b91c1c",
-                }}
-              >
-                {emp.active ? "Aktif" : "Pasif"}
-              </span>
-            </div>
+        <section style={{ display: "grid", gap: 14 }}>
+  {filtered.map((emp) => (
+    <div
+      key={emp.id}
+      style={{
+        background: "#fff",
+        border: "1px solid #e5e7eb",
+        borderRadius: 22,
+        padding: 18,
+        boxShadow: "0 12px 30px rgba(15,23,42,0.04)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 19, fontWeight: 900, color: "#111827" }}>
+            {emp.full_name || "Adsız çalışan"}
           </div>
-        ))}
+
+          <div style={{ marginTop: 6, color: "#6b7280", lineHeight: 1.7 }}>
+            <div>Ünvan: {emp.job_title || "-"}</div>
+            <div>Telefon: {emp.phone || "-"}</div>
+            <div>E-posta: {emp.email || "-"}</div>
+            <div>Sicil: {emp.registry_no || "-"}</div>
+            <div>Firma ID: {emp.firm_id || "-"}</div>
+          </div>
+
+          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => openEditModal(emp)} disabled={actionLoading} style={smallBtn("#2563eb")}>
+              Düzenle
+            </button>
+
+            {emp.active ? (
+              <button onClick={() => handlePassiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#dc2626")}>
+                Pasife Al
+              </button>
+            ) : (
+              <button onClick={() => handleActiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#16a34a")}>
+                Aktif Yap
+              </button>
+            )}
+          </div>
+        </div>
+
+        <span
+          style={{
+            height: 34,
+            padding: "8px 12px",
+            borderRadius: 999,
+            fontSize: 13,
+            fontWeight: 900,
+            background: emp.active ? "#ecfdf5" : "#fef2f2",
+            color: emp.active ? "#166534" : "#b91c1c",
+          }}
+        >
+          {emp.active ? "Aktif" : "Pasif"}
+        </span>
       </div>
     </div>
   ))}
