@@ -88,18 +88,46 @@ export async function POST(req: NextRequest) {
 
     const password_hash = sha256(password);
 
-    const { data: insertedUser, error: insertError } = await supabase
-      .from("users")
-      .insert({
-        full_name,
-        email,
-        password_hash,
-        role,
-        company_id: company_id || null,
-        is_active,
-      })
-      .select("id")
-      .single();
+    let employeeId: string | null = null;
+
+if (role === "training_user") {
+  const { data: insertedEmployee, error: employeeError } = await supabase
+    .from("employees")
+    .insert({
+      firm_id: company_id,
+      full_name,
+      email,
+      active: is_active,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (employeeError) {
+    console.error("create employee error:", employeeError);
+    return NextResponse.json(
+      { error: "Çalışan kaydı oluşturulamadı." },
+      { status: 500 }
+    );
+  }
+
+  employeeId = insertedEmployee?.id || null;
+}
+
+const { data: insertedUser, error: insertError } = await supabase
+  .from("users")
+  .insert({
+    full_name,
+    email,
+    password_hash,
+    role,
+    company_id: company_id || null,
+    employee_id: employeeId,
+    is_active,
+  })
+  .select("id")
+  .single();
 
     if (insertError) {
       console.error("create user insert error:", insertError);

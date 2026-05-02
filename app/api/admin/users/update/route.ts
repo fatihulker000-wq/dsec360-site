@@ -110,16 +110,30 @@ if (role === "training_user" && !company_id) {
     }
 
     const payload: Record<string, unknown> = {
-      full_name,
-      email,
-      role,
-      company_id: company_id || null,
-      is_active,
-    };
+  full_name,
+  email,
+  role,
+  company_id: company_id || null,
+  is_active,
+};
 
     if (password) {
       payload.password_hash = sha256(password);
     }
+
+  const { data: currentUser, error: currentUserError } = await supabase
+  .from("users")
+  .select("id, employee_id")
+  .eq("id", userId)
+  .maybeSingle();
+
+if (currentUserError) {
+  console.error("current user read error:", currentUserError);
+  return NextResponse.json(
+    { error: "Mevcut kullanıcı bilgisi alınamadı." },
+    { status: 500 }
+  );
+}
 
     const { error: updateError } = await supabase
       .from("users")
@@ -130,6 +144,51 @@ if (role === "training_user" && !company_id) {
       console.error("update user error:", updateError);
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
+ 
+  if (company_id) {
+  await supabase
+    .from("user_firm_access")
+    .delete()
+    .eq("user_id", userId);
+
+  const { error: firmAccessError } = await supabase
+    .from("user_firm_access")
+    .insert({
+      user_id: userId,
+      firm_id: company_id,
+      role: role || "training_user",
+      is_primary: true,
+    });
+
+  if (firmAccessError) {
+    console.error("update user firm access error:", firmAccessError);
+    return NextResponse.json(
+      { error: "Firma erişimi güncellenemedi." },
+      { status: 500 }
+    );
+  }
+}
+
+if (role === "training_user" && currentUser?.employee_id) {
+  const { error: employeeUpdateError } = await supabase
+    .from("employees")
+    .update({
+      firm_id: company_id,
+      full_name,
+      email,
+      active: is_active,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", currentUser.employee_id);
+
+  if (employeeUpdateError) {
+    console.error("linked employee update error:", employeeUpdateError);
+    return NextResponse.json(
+      { error: "Bağlı çalışan kaydı güncellenemedi." },
+      { status: 500 }
+    );
+  }
+}
 
     return NextResponse.json({ success: true });
   } catch (error) {
