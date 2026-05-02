@@ -13,6 +13,8 @@ type Employee = {
   tc_no?: string | null;
   start_date?: string | null;
   exit_date?: string | null;
+  gender?: string | null;
+  disability_status?: string | null;
   active: boolean;
 };
 
@@ -24,6 +26,7 @@ type Company = {
 export default function EmployeesPage() {
   const [data, setData] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -63,6 +66,148 @@ export default function EmployeesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleAddEmployee = async () => {
+    if (firmFilter === "all") {
+      alert("Önce firma seçmelisin.");
+      return;
+    }
+
+    const fullName = prompt("Ad Soyad?");
+    if (!fullName?.trim()) return;
+
+    const jobTitle = prompt("Ünvan?") || "";
+    const phone = prompt("Telefon?") || "";
+    const email = prompt("E-posta?") || "";
+    const registryNo = prompt("Sicil No?") || "";
+
+    try {
+      setActionLoading(true);
+
+      const res = await fetch("/api/admin/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          firm_id: firmFilter,
+          full_name: fullName.trim(),
+          job_title: jobTitle.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          registry_no: registryNo.trim(),
+          active: true,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json?.error || "Çalışan eklenemedi.");
+        return;
+      }
+
+      await loadEmployees(firmFilter);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleEditEmployee = async (emp: Employee) => {
+    const fullName = prompt("Ad Soyad", emp.full_name || "");
+    if (!fullName?.trim()) return;
+
+    const jobTitle = prompt("Ünvan", emp.job_title || "") || "";
+    const phone = prompt("Telefon", emp.phone || "") || "";
+    const email = prompt("E-posta", emp.email || "") || "";
+    const registryNo = prompt("Sicil No", emp.registry_no || "") || "";
+    const tcNo = prompt("TC No", emp.tc_no || "") || "";
+    const gender = prompt("Cinsiyet", emp.gender || "") || "";
+    const disabilityStatus = prompt("Engellilik Durumu", emp.disability_status || "") || "";
+
+    try {
+      setActionLoading(true);
+
+      const res = await fetch("/api/admin/employees", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          id: emp.id,
+          full_name: fullName.trim(),
+          job_title: jobTitle.trim(),
+          phone: phone.trim(),
+          email: email.trim(),
+          registry_no: registryNo.trim(),
+          tc_no: tcNo.trim(),
+          gender: gender.trim(),
+          disability_status: disabilityStatus.trim(),
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json?.error || "Çalışan güncellenemedi.");
+        return;
+      }
+
+      await loadEmployees(firmFilter);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePassiveEmployee = async (emp: Employee) => {
+    if (!confirm(`${emp.full_name} pasife alınsın mı?`)) return;
+
+    try {
+      setActionLoading(true);
+
+      const res = await fetch(`/api/admin/employees?id=${encodeURIComponent(emp.id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json?.error || "Çalışan pasife alınamadı.");
+        return;
+      }
+
+      await loadEmployees(firmFilter);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleActiveEmployee = async (emp: Employee) => {
+    try {
+      setActionLoading(true);
+
+      const res = await fetch("/api/admin/employees", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          id: emp.id,
+          active: true,
+          exit_date: "",
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json?.error || "Çalışan aktifleştirilemedi.");
+        return;
+      }
+
+      await loadEmployees(firmFilter);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const filtered = useMemo(() => {
     let list = data;
 
@@ -89,31 +234,31 @@ export default function EmployeesPage() {
 
   const activeCount = data.filter((x) => x.active).length;
   const passiveCount = data.filter((x) => !x.active).length;
- const activeEmployees = data.filter((x) => x.active);
+  const activeEmployees = data.filter((x) => x.active);
 
-const maleCount = activeEmployees.filter((x: any) => {
-  const v = String(x.gender || "").toLowerCase().trim();
-  return v === "erkek" || v === "e" || v === "male" || v === "bay";
-}).length;
+  const maleCount = activeEmployees.filter((x) => {
+    const v = String(x.gender || "").toLowerCase().trim();
+    return v === "erkek" || v === "e" || v === "male" || v === "bay";
+  }).length;
 
-const femaleCount = activeEmployees.filter((x: any) => {
-  const v = String(x.gender || "").toLowerCase().trim();
-  return v === "kadın" || v === "kadin" || v === "k" || v === "female" || v === "bayan";
-}).length;
+  const femaleCount = activeEmployees.filter((x) => {
+    const v = String(x.gender || "").toLowerCase().trim();
+    return v === "kadın" || v === "kadin" || v === "k" || v === "female" || v === "bayan";
+  }).length;
 
-const disabledCount = activeEmployees.filter((x: any) => {
-  const v = String(x.disability_status || "").toLowerCase().trim();
-  if (!v || v === "yok" || v === "hayır" || v === "hayir" || v === "0" || v === "false") return false;
-  return true;
-}).length;
+  const disabledCount = activeEmployees.filter((x) => {
+    const v = String(x.disability_status || "").toLowerCase().trim();
+    if (!v || v === "yok" || v === "hayır" || v === "hayir" || v === "0" || v === "false") return false;
+    return true;
+  }).length;
+
   return (
     <main style={{ padding: 28 }}>
       <div
         style={{
           borderRadius: 28,
           padding: 28,
-          background:
-            "linear-gradient(135deg, #4a0d1a 0%, #7f1734 48%, #c62828 100%)",
+          background: "linear-gradient(135deg, #4a0d1a 0%, #7f1734 48%, #c62828 100%)",
           color: "#fff",
           marginBottom: 24,
         }}
@@ -140,12 +285,12 @@ const disabledCount = activeEmployees.filter((x: any) => {
         }}
       >
         <Kpi title="Toplam" value={data.length} />
-<Kpi title="Aktif" value={activeCount} />
-<Kpi title="Pasif" value={passiveCount} />
-<Kpi title="Görünen" value={filtered.length} />
-<Kpi title="Erkek" value={maleCount} />
-<Kpi title="Kadın" value={femaleCount} />
-<Kpi title="Engelli" value={disabledCount} />
+        <Kpi title="Aktif" value={activeCount} />
+        <Kpi title="Pasif" value={passiveCount} />
+        <Kpi title="Görünen" value={filtered.length} />
+        <Kpi title="Erkek" value={maleCount} />
+        <Kpi title="Kadın" value={femaleCount} />
+        <Kpi title="Engelli" value={disabledCount} />
       </section>
 
       <section
@@ -165,16 +310,7 @@ const disabledCount = activeEmployees.filter((x: any) => {
               setFirmFilter(nextFirmId);
               void loadEmployees(nextFirmId);
             }}
-            style={{
-              minWidth: 240,
-              border: "1px solid #e5e7eb",
-              borderRadius: 14,
-              padding: "12px 14px",
-              fontSize: 14,
-              background: "#fff",
-              fontWeight: 800,
-              color: "#374151",
-            }}
+            style={inputStyle}
           >
             <option value="all">Tüm firmalar</option>
             {companies.map((firm) => (
@@ -188,14 +324,7 @@ const disabledCount = activeEmployees.filter((x: any) => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Ad, ünvan, telefon, e-posta, sicil veya TC ara"
-            style={{
-              flex: 1,
-              minWidth: 260,
-              border: "1px solid #e5e7eb",
-              borderRadius: 14,
-              padding: "12px 14px",
-              fontSize: 14,
-            }}
+            style={{ ...inputStyle, flex: 1, minWidth: 260 }}
           />
 
           <button onClick={() => setStatusFilter("all")} style={btn(statusFilter === "all")}>
@@ -208,19 +337,12 @@ const disabledCount = activeEmployees.filter((x: any) => {
             Pasif
           </button>
 
-          <button
-            onClick={() => loadEmployees(firmFilter)}
-            style={{
-              border: 0,
-              borderRadius: 14,
-              padding: "12px 16px",
-              background: "#111827",
-              color: "#fff",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={() => loadEmployees(firmFilter)} style={darkBtn()}>
             Yenile
+          </button>
+
+          <button onClick={handleAddEmployee} disabled={actionLoading} style={blueBtn(actionLoading)}>
+            + Çalışan Ekle
           </button>
         </div>
       </section>
@@ -257,6 +379,22 @@ const disabledCount = activeEmployees.filter((x: any) => {
                     <div>Sicil: {emp.registry_no || "-"}</div>
                     <div>Firma ID: {emp.firm_id || "-"}</div>
                   </div>
+
+                  <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={() => handleEditEmployee(emp)} disabled={actionLoading} style={smallBtn("#2563eb")}>
+                      Düzenle
+                    </button>
+
+                    {emp.active ? (
+                      <button onClick={() => handlePassiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#dc2626")}>
+                        Pasife Al
+                      </button>
+                    ) : (
+                      <button onClick={() => handleActiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#16a34a")}>
+                        Aktif Yap
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <span
@@ -280,6 +418,17 @@ const disabledCount = activeEmployees.filter((x: any) => {
     </main>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  minWidth: 240,
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  padding: "12px 14px",
+  fontSize: 14,
+  background: "#fff",
+  fontWeight: 800,
+  color: "#374151",
+};
 
 function Kpi({ title, value }: { title: string; value: number }) {
   return (
@@ -322,6 +471,42 @@ function btn(active: boolean): React.CSSProperties {
     padding: "12px 16px",
     background: active ? "#c62828" : "#fff",
     color: active ? "#fff" : "#374151",
+    fontWeight: 800,
+    cursor: "pointer",
+  };
+}
+
+function darkBtn(): React.CSSProperties {
+  return {
+    border: 0,
+    borderRadius: 14,
+    padding: "12px 16px",
+    background: "#111827",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  };
+}
+
+function blueBtn(disabled: boolean): React.CSSProperties {
+  return {
+    border: 0,
+    borderRadius: 14,
+    padding: "12px 16px",
+    background: disabled ? "#93c5fd" : "#2563eb",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: disabled ? "not-allowed" : "pointer",
+  };
+}
+
+function smallBtn(bg: string): React.CSSProperties {
+  return {
+    border: 0,
+    borderRadius: 12,
+    padding: "8px 12px",
+    background: bg,
+    color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
   };
