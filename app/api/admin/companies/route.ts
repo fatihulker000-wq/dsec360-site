@@ -79,16 +79,22 @@ export async function GET() {
       return NextResponse.json({ error: "Firmalar alınamadı." }, { status: 500 });
     }
 
-    const { data: users } = await supabase
-      .from("users")
-      .select("id, company_id");
+    const { data: employees, error: employeeCountError } = await supabase
+  .from("employees")
+  .select("id, firm_id, active");
 
-    const counts: Record<string, number> = {};
+if (employeeCountError) {
+  console.error("employees count error:", employeeCountError);
+}
 
-    (users || []).forEach((u: { id: string; company_id: string | null }) => {
-      if (!u.company_id) return;
-      counts[u.company_id] = (counts[u.company_id] || 0) + 1;
-    });
+const counts: Record<string, number> = {};
+
+(employees || []).forEach((emp: { id: string; firm_id: string | null; active: boolean | null }) => {
+  if (!emp.firm_id) return;
+  if (emp.active === false) return;
+
+  counts[emp.firm_id] = (counts[emp.firm_id] || 0) + 1;
+});
 
     const normalized = ((data || []) as CompanyRow[]).map((item) => ({
       id: String(item.id),
@@ -99,7 +105,7 @@ export async function GET() {
       address: item.address?.trim() || null,
 
       // 🔥 YENİ ALANLAR
-      calisan_sayisi: item.calisan_sayisi ?? 0,
+      calisan_sayisi: counts[String(item.id)] || 0,
       nace_kodu: item.nace_kodu ?? "",
       tehlike_sinifi: item.tehlike_sinifi ?? "",
       sgk_sicil_no: item.sgk_sicil_no ?? "",
