@@ -269,6 +269,23 @@ export default function EmployeesPage() {
     );
   }, [data, search, statusFilter]);
 
+  const groupedEmployees = useMemo(() => {
+  const groups: Record<string, Employee[]> = {};
+
+  filtered.forEach((emp) => {
+    const firstLetter =
+      (emp.full_name || "#").trim().charAt(0).toLocaleUpperCase("tr-TR") || "#";
+
+    if (!groups[firstLetter]) {
+      groups[firstLetter] = [];
+    }
+
+    groups[firstLetter].push(emp);
+  });
+
+  return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b, "tr"));
+}, [filtered]);
+
   const activeCount = data.filter((x) => x.active).length;
   const passiveCount = data.filter((x) => !x.active).length;
   const activeEmployees = data.filter((x) => x.active);
@@ -391,66 +408,90 @@ export default function EmployeesPage() {
       ) : filtered.length === 0 ? (
         <CardText title="Kayıt bulunamadı" text="Seçili filtreye uygun çalışan görünmüyor." />
       ) : (
-        <section style={{ display: "grid", gap: 14 }}>
-          {filtered.map((emp) => (
-            <div
-              key={emp.id}
-              style={{
-                background: "#fff",
-                border: "1px solid #e5e7eb",
-                borderRadius: 22,
-                padding: 18,
-                boxShadow: "0 12px 30px rgba(15,23,42,0.04)",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-                <div>
-                  <div style={{ fontSize: 19, fontWeight: 900, color: "#111827" }}>
-                    {emp.full_name || "Adsız çalışan"}
-                  </div>
+        
+        <section style={{ display: "grid", gap: 22 }}>
+  {groupedEmployees.map(([letter, employees]) => (
+    <div key={letter}>
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
+          background: "#fafafa",
+          padding: "10px 0",
+          marginBottom: 10,
+          fontSize: 22,
+          fontWeight: 950,
+          color: "#7f1734",
+          borderBottom: "2px solid #f1d5dc",
+        }}
+      >
+        {letter}
+      </div>
 
-                  <div style={{ marginTop: 6, color: "#6b7280", lineHeight: 1.7 }}>
-                    <div>Ünvan: {emp.job_title || "-"}</div>
-                    <div>Telefon: {emp.phone || "-"}</div>
-                    <div>E-posta: {emp.email || "-"}</div>
-                    <div>Sicil: {emp.registry_no || "-"}</div>
-                    <div>Firma ID: {emp.firm_id || "-"}</div>
-                  </div>
-
-                  <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => openEditModal(emp)} disabled={actionLoading} style={smallBtn("#2563eb")}>
-                      Düzenle
-                    </button>
-
-                    {emp.active ? (
-                      <button onClick={() => handlePassiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#dc2626")}>
-                        Pasife Al
-                      </button>
-                    ) : (
-                      <button onClick={() => handleActiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#16a34a")}>
-                        Aktif Yap
-                      </button>
-                    )}
-                  </div>
+      <div style={{ display: "grid", gap: 14 }}>
+        {employees.map((emp) => (
+          <div
+            key={emp.id}
+            style={{
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 22,
+              padding: 18,
+              boxShadow: "0 12px 30px rgba(15,23,42,0.04)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 19, fontWeight: 900, color: "#111827" }}>
+                  {emp.full_name || "Adsız çalışan"}
                 </div>
 
-                <span
-                  style={{
-                    height: 34,
-                    padding: "8px 12px",
-                    borderRadius: 999,
-                    fontSize: 13,
-                    fontWeight: 900,
-                    background: emp.active ? "#ecfdf5" : "#fef2f2",
-                    color: emp.active ? "#166534" : "#b91c1c",
-                  }}
-                >
-                  {emp.active ? "Aktif" : "Pasif"}
-                </span>
+                <div style={{ marginTop: 6, color: "#6b7280", lineHeight: 1.7 }}>
+                  <div>Ünvan: {emp.job_title || "-"}</div>
+                  <div>Telefon: {emp.phone || "-"}</div>
+                  <div>E-posta: {emp.email || "-"}</div>
+                  <div>Sicil: {emp.registry_no || "-"}</div>
+                  <div>Firma ID: {emp.firm_id || "-"}</div>
+                </div>
+
+                <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button onClick={() => openEditModal(emp)} disabled={actionLoading} style={smallBtn("#2563eb")}>
+                    Düzenle
+                  </button>
+
+                  {emp.active ? (
+                    <button onClick={() => handlePassiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#dc2626")}>
+                      Pasife Al
+                    </button>
+                  ) : (
+                    <button onClick={() => handleActiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#16a34a")}>
+                      Aktif Yap
+                    </button>
+                  )}
+                </div>
               </div>
+
+              <span
+                style={{
+                  height: 34,
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 900,
+                  background: emp.active ? "#ecfdf5" : "#fef2f2",
+                  color: emp.active ? "#166534" : "#b91c1c",
+                }}
+              >
+                {emp.active ? "Aktif" : "Pasif"}
+              </span>
             </div>
-          ))}
-        </section>
+          </div>
+        ))}
+      </div>
+    </div>
+  ))}
+</section>
       )}
 
       {editModal && (
