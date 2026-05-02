@@ -194,6 +194,7 @@ export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const id = clean(searchParams.get("id"));
+    const mode = clean(searchParams.get("mode"));
 
     if (!id) {
       return NextResponse.json(
@@ -204,6 +205,27 @@ export async function DELETE(req: Request) {
 
     const supabase = getSupabase();
 
+    // ✅ Kalıcı silme
+    if (mode === "hard") {
+      const { error } = await supabase
+        .from("employees")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        return NextResponse.json(
+          { error: "Çalışan kalıcı olarak silinemedi.", detail: error.message },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        deleted: true,
+      });
+    }
+
+    // ✅ Normal silme = pasife alma
     const { data, error } = await supabase
       .from("employees")
       .update({

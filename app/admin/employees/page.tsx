@@ -58,6 +58,8 @@ export default function EmployeesPage() {
 
   const [editModal, setEditModal] = useState<Employee | null>(null);
   const [editForm, setEditForm] = useState<EmployeeForm>(emptyForm);
+  const [addModal, setAddModal] = useState(false);
+const [addForm, setAddForm] = useState<EmployeeForm>(emptyForm);
 
   const loadEmployees = async (firmId = firmFilter) => {
     try {
@@ -92,50 +94,62 @@ export default function EmployeesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleAddEmployee = async () => {
-    if (firmFilter === "all") {
-      alert("Önce firma seçmelisin.");
+  const handleAddEmployee = () => {
+  if (firmFilter === "all") {
+    alert("Önce firma seçmelisin.");
+    return;
+  }
+
+  setAddForm(emptyForm);
+  setAddModal(true);
+};
+
+const saveNewEmployee = async () => {
+  if (firmFilter === "all") {
+    alert("Önce firma seçmelisin.");
+    return;
+  }
+
+  if (!addForm.full_name.trim()) {
+    alert("Ad Soyad zorunlu.");
+    return;
+  }
+
+  try {
+    setActionLoading(true);
+
+    const res = await fetch("/api/admin/employees", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        firm_id: firmFilter,
+        full_name: addForm.full_name.trim(),
+        job_title: addForm.job_title.trim(),
+        phone: addForm.phone.trim(),
+        email: addForm.email.trim(),
+        registry_no: addForm.registry_no.trim(),
+        tc_no: addForm.tc_no.trim(),
+        gender: addForm.gender.trim(),
+        disability_status: addForm.disability_status.trim(),
+        active: true,
+      }),
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      alert(json?.error || "Çalışan eklenemedi.");
       return;
     }
 
-    const fullName = prompt("Ad Soyad?");
-    if (!fullName?.trim()) return;
-
-    const jobTitle = prompt("Ünvan?") || "";
-    const phone = prompt("Telefon?") || "";
-    const email = prompt("E-posta?") || "";
-    const registryNo = prompt("Sicil No?") || "";
-
-    try {
-      setActionLoading(true);
-
-      const res = await fetch("/api/admin/employees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          firm_id: firmFilter,
-          full_name: fullName.trim(),
-          job_title: jobTitle.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
-          registry_no: registryNo.trim(),
-          active: true,
-        }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        alert(json?.error || "Çalışan eklenemedi.");
-        return;
-      }
-
-      await loadEmployees(firmFilter);
-    } finally {
-      setActionLoading(false);
-    }
-  };
+    setAddModal(false);
+    setAddForm(emptyForm);
+    await loadEmployees(firmFilter);
+  } finally {
+    setActionLoading(false);
+  }
+};
 
   const openEditModal = (emp: Employee) => {
     setEditModal(emp);
@@ -245,6 +259,37 @@ export default function EmployeesPage() {
       setActionLoading(false);
     }
   };
+
+const handleHardDeleteEmployee = async (emp: Employee) => {
+  const ok = confirm(
+    `${emp.full_name} kaydı kalıcı olarak silinecek. Bu işlem geri alınamaz. Emin misin?`
+  );
+
+  if (!ok) return;
+
+  try {
+    setActionLoading(true);
+
+    const res = await fetch(
+      `/api/admin/employees?id=${encodeURIComponent(emp.id)}&mode=hard`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      }
+    );
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      alert(json?.error || "Çalışan silinemedi.");
+      return;
+    }
+
+    await loadEmployees(firmFilter);
+  } finally {
+    setActionLoading(false);
+  }
+};
 
   const filtered = useMemo(() => {
   let list = data;
@@ -489,6 +534,15 @@ const activeEmployees = filtered.filter((x) => x.active);
                 Aktif Yap
               </button>
             )}
+
+<button
+  onClick={() => handleHardDeleteEmployee(emp)}
+  disabled={actionLoading}
+  style={smallBtn("#7f1d1d")}
+>
+  Sil
+</button>
+
           </div>
         </div>
 
@@ -510,6 +564,84 @@ const activeEmployees = filtered.filter((x) => x.active);
   ))}
 </section>
       )}
+
+{addModal && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(15,23,42,0.55)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 9999,
+      padding: 20,
+    }}
+  >
+    <div
+      style={{
+        width: "min(760px, 100%)",
+        maxHeight: "90vh",
+        overflowY: "auto",
+        background: "#fff",
+        borderRadius: 24,
+        padding: 24,
+        boxShadow: "0 30px 80px rgba(0,0,0,0.25)",
+      }}
+    >
+      <div
+        style={{
+          borderRadius: 20,
+          padding: 20,
+          background: "linear-gradient(135deg, #4a0d1a 0%, #c62828 100%)",
+          color: "#fff",
+          marginBottom: 18,
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>
+          Yeni Çalışan
+        </div>
+        <h2 style={{ margin: "6px 0 0", fontSize: 26, fontWeight: 950 }}>
+          Çalışan Ekle
+        </h2>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 12,
+        }}
+      >
+        <FormInput label="Ad Soyad *" value={addForm.full_name} onChange={(v) => setAddForm({ ...addForm, full_name: v })} />
+        <FormInput label="Ünvan" value={addForm.job_title} onChange={(v) => setAddForm({ ...addForm, job_title: v })} />
+        <FormInput label="Telefon" value={addForm.phone} onChange={(v) => setAddForm({ ...addForm, phone: v })} />
+        <FormInput label="E-posta" value={addForm.email} onChange={(v) => setAddForm({ ...addForm, email: v })} />
+        <FormInput label="Sicil No" value={addForm.registry_no} onChange={(v) => setAddForm({ ...addForm, registry_no: v })} />
+        <FormInput label="TC No" value={addForm.tc_no} onChange={(v) => setAddForm({ ...addForm, tc_no: v })} />
+        <FormInput label="Cinsiyet" value={addForm.gender} onChange={(v) => setAddForm({ ...addForm, gender: v })} />
+        <FormInput label="Engellilik Durumu" value={addForm.disability_status} onChange={(v) => setAddForm({ ...addForm, disability_status: v })} />
+      </div>
+
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
+        <button
+          onClick={() => {
+            setAddModal(false);
+            setAddForm(emptyForm);
+          }}
+          disabled={actionLoading}
+          style={darkBtn()}
+        >
+          İptal
+        </button>
+
+        <button onClick={saveNewEmployee} disabled={actionLoading} style={blueBtn(actionLoading)}>
+          {actionLoading ? "Kaydediliyor..." : "Kaydet"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {editModal && (
         <div
