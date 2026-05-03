@@ -454,6 +454,25 @@ const [savingUser, setSavingUser] = useState(false);
       setAssigning(true);
       setAssignSummary(null);
 
+const linkRes = await fetch("/api/admin/training-users/link-employees", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  credentials: "include",
+  body: JSON.stringify({
+    employeeIds: selectedEmployees,
+    companyId: companyFilter,
+  }),
+});
+
+const linkJson = await linkRes.json().catch(() => ({}));
+
+if (!linkRes.ok) {
+  alert(linkJson?.error || "Çalışanlar eğitim kullanıcısına bağlanamadı.");
+  return;
+}
+
       const res = await fetch("/api/training/assign", {
         method: "POST",
         headers: {
