@@ -11,31 +11,32 @@ function getSupabase() {
   );
 }
 
-type UserRow = {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  role: string | null;
-  is_active: boolean | null;
-  created_at: string | null;
-};
+async function fetchInChunks<T>(
+  table: string,
+  select: string,
+  column: string,
+  values: string[],
+  chunkSize = 300
+): Promise<{ data: T[]; error: any }> {
+  const supabase = getSupabase();
+  const all: T[] = [];
 
-type CompanyRow = {
-  id: string;
-  name: string | null;
-};
+  for (let i = 0; i < values.length; i += chunkSize) {
+    const chunk = values.slice(i, i + chunkSize);
+    if (chunk.length === 0) continue;
 
-type UserPermissionRow = {
-  user_id: string | null;
-  permission_key: string | null;
-};
+    const { data, error } = await supabase
+      .from(table)
+      .select(select)
+      .in(column, chunk);
 
-type UserFirmAccessRow = {
-  user_id: string | null;
-  firm_id: string | null;
-  role: string | null;
-  is_primary: boolean | null;
-};
+    if (error) return { data: [], error };
+
+    all.push(...((data || []) as T[]));
+  }
+
+  return { data: all, error: null };
+}
 
 export async function GET(req: Request) {
   try {
@@ -47,21 +48,16 @@ export async function GET(req: Request) {
 
     if (apiKey !== MOBILE_API_KEY) {
       const cookieStore = await cookies();
-
       const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+
       adminRole = String(cookieStore.get("dsec_admin_role")?.value || "").trim();
-      companyIdFromCookie = String(
-        cookieStore.get("dsec_company_id")?.value || ""
-      ).trim();
+      companyIdFromCookie = String(cookieStore.get("dsec_company_id")?.value || "").trim();
 
       const isAllowedRole =
         adminRole === "super_admin" || adminRole === "company_admin";
 
       if (adminAuth !== "ok" || !isAllowedRole) {
-        return NextResponse.json(
-          { error: "Yetkisiz erişim." },
-          { status: 401 }
-        );
+        return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
       }
 
       if (adminRole === "company_admin" && !companyIdFromCookie) {
@@ -72,195 +68,169 @@ export async function GET(req: Request) {
       }
     } else {
       adminRole = "super_admin";
-      companyIdFromCookie = "";
     }
 
     const supabase = getSupabase();
+    const url = new URL(req.url);
+    const type = url.searchParams.get("type");
 
     const { data: usersData, error: userError } = await supabase
       .from("users")
-.select("id, full_name, email, role, is_active, created_at, app_user_type, password_hash, employee_id")
+      .select(
+        "id, full_name, email, role, is_active, created_at, app_user_type, password_hash, employee_id, company_id"
+      )
       .order("full_name", { ascending: true, nullsFirst: false });
 
     if (userError) {
       console.error("users error:", userError);
-      return NextResponse.json(
-        { error: "Kullanıcılar alınamadı." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Kullanıcılar alınamadı." }, { status: 500 });
     }
 
-    const userRows = (usersData || []) as UserRow[];
-    const url = new URL(req.url);
-const type = url.searchParams.get("type"); 
-// type = system | training
+    const userRows = usersData || [];
+
     const userIds = userRows
-      .map((u) => String(u.id || "").trim())
+      .map((u: any) => String(u.id || "").trim())
       .filter(Boolean);
 
     const permissionMap = new Map<string, string[]>();
+    const userFirmMap = new Map<string, any[]>();
 
     if (userIds.length > 0) {
-      const { data: permData, error: permError } = await supabase
-        .from("user_permissions")
-        .select("user_id, permission_key")
-        .in("user_id", userIds);
+      const permResult = await fetchInChunks<any>(
+        "user_permissions",
+        "user_id, permission_key",
+        "user_id",
+        userIds
+      );
 
-      if (permError) {
-        console.error("user_permissions error:", permError);
-      } else {
-        ((permData || []) as UserPermissionRow[]).forEach((p) => {
+      if (!permResult.error) {
+        permResult.data.forEach((p: any) => {
           const uid = String(p.user_id || "").trim();
           const key = String(p.permission_key || "").trim();
-
           if (!uid || !key) return;
 
-          if (!permissionMap.has(uid)) {
-            permissionMap.set(uid, []);
-          }
-
+          if (!permissionMap.has(uid)) permissionMap.set(uid, []);
           permissionMap.get(uid)!.push(key);
         });
       }
-    }
 
-    const { data: userFirmAccessData, error: userFirmAccessError } = await supabase
-      .from("user_firm_access")
-      .select("user_id, firm_id, role, is_primary")
-      .in("user_id", userIds);
-
-    if (userFirmAccessError) {
-      console.error("user_firm_access error:", userFirmAccessError);
-      return NextResponse.json(
-        { error: "Kullanıcı firma erişimleri alınamadı." },
-        { status: 500 }
+      const firmResult = await fetchInChunks<any>(
+        "user_firm_access",
+        "user_id, firm_id, role, is_primary",
+        "user_id",
+        userIds
       );
-    }
 
-    const accessRows = (userFirmAccessData || []) as UserFirmAccessRow[];
-
-    const userFirmMap = new Map<string, UserFirmAccessRow[]>();
-
-    accessRows.forEach((row) => {
-      const uid = String(row.user_id || "").trim();
-      if (!uid) return;
-
-      if (!userFirmMap.has(uid)) {
-        userFirmMap.set(uid, []);
+      if (firmResult.error) {
+        console.error("user_firm_access error:", firmResult.error);
+        return NextResponse.json(
+          { error: "Kullanıcı firma erişimleri alınamadı." },
+          { status: 500 }
+        );
       }
 
-      userFirmMap.get(uid)!.push(row);
-    });
+      firmResult.data.forEach((row: any) => {
+        const uid = String(row.user_id || "").trim();
+        if (!uid) return;
+
+        if (!userFirmMap.has(uid)) userFirmMap.set(uid, []);
+        userFirmMap.get(uid)!.push(row);
+      });
+    }
 
     const allFirmIds = Array.from(
       new Set(
-        accessRows
-          .map((row) => String(row.firm_id || "").trim())
-          .filter(Boolean)
+        Array.from(userFirmMap.values())
+          .flat()
+          .map((row: any) => String(row.firm_id || "").trim())
+          .filter((id) => id && id !== "ALL")
       )
     );
 
     const companyMap = new Map<string, string>();
 
     if (allFirmIds.length > 0) {
-      const { data: companiesData, error: companiesError } = await supabase
-        .from("companies")
-        .select("id, name")
-        .in("id", allFirmIds);
+      const companyResult = await fetchInChunks<any>(
+        "companies",
+        "id, name",
+        "id",
+        allFirmIds
+      );
 
-      if (companiesError) {
-        console.error("companies error:", companiesError);
-        return NextResponse.json(
-          { error: "Firmalar alınamadı." },
-          { status: 500 }
-        );
+      if (companyResult.error) {
+        console.error("companies error:", companyResult.error);
+        return NextResponse.json({ error: "Firmalar alınamadı." }, { status: 500 });
       }
 
-      ((companiesData || []) as CompanyRow[]).forEach((c) => {
+      companyResult.data.forEach((c: any) => {
         const id = String(c.id || "").trim();
         const name = String(c.name || "").trim();
-
-        if (!id) return;
-        companyMap.set(id, name || "Firma");
+        if (id) companyMap.set(id, name || "Firma");
       });
     }
 
- const normalized = userRows
-  .filter((u) => {
-    const role = String(u.role || "").trim();
+    const normalized = userRows
+      .filter((u: any) => {
+        const role = String(u.role || "").trim();
 
-    // 🔵 TRAINING USERS
-    // /api/admin/users?type=training → sadece eğitim katılımcıları
-   if (type === "training") {
-  return role === "training_user" && String((u as 
-    any).employee_id || "").trim();
-}
-
-    // 🔴 SYSTEM USERS
-    // /api/admin/users?type=system → eğitim katılımcıları hariç sistem/app/web kullanıcıları
-    if (type === "system") {
-      return role !== "training_user";
-    }
-
-    // default: sistem kullanıcıları gibi davran
-    return role !== "training_user";
-  })
-      .map((user) => {
-        const userId = String(user.id || "").trim();
-        const userFirmRows = userFirmMap.get(userId) || [];
-
-        const firms = userFirmRows
-  .map((row) => {
-    const firmId = String(row.firm_id || "").trim();
-
-    // 🌍 GLOBAL
-    if (firmId === "ALL") {
-      return {
-        firm_id: "ALL",
-        firm_name: "Tüm Firmalar",
-        role: "super_admin",
-        is_primary: true,
-      };
-    }
-
-    // 🏢 NORMAL FİRMA
-    return {
-      firm_id: firmId,
-      firm_name: companyMap.get(firmId) || "Firma",
-      role: String(row.role || "").trim() || "operator",
-      is_primary: Boolean(row.is_primary),
-    };
-  })
-  .filter(Boolean)
-  .sort((a, b) => {
-    if (a.is_primary === b.is_primary) {
-      return a.firm_name.localeCompare(b.firm_name, "tr");
-    }
-    return a.is_primary ? -1 : 1;
-  });
-
-        if (adminRole === "company_admin") {
-          const hasAccess = firms.some(
-            (firm) => firm.firm_id === companyIdFromCookie
-          );
-
-          if (!hasAccess) {
-            return null;
-          }
+        if (type === "training") {
+          return role === "training_user" && String(u.employee_id || "").trim();
         }
 
-        const primaryFirm =
-          firms.find((firm) => firm.is_primary) || firms[0] || null;
+        if (type === "system") {
+          return role !== "training_user";
+        }
+
+        return role !== "training_user";
+      })
+      .map((user: any) => {
+        const userId = String(user.id || "").trim();
+        const accessRows = userFirmMap.get(userId) || [];
+
+        const firms = accessRows
+          .map((row: any) => {
+            const firmId = String(row.firm_id || "").trim();
+
+            if (firmId === "ALL") {
+              return {
+                firm_id: "ALL",
+                firm_name: "Tüm Firmalar",
+                role: "super_admin",
+                is_primary: true,
+              };
+            }
+
+            return {
+              firm_id: firmId,
+              firm_name: companyMap.get(firmId) || "Firma",
+              role: String(row.role || "").trim() || "operator",
+              is_primary: Boolean(row.is_primary),
+            };
+          })
+          .filter((f: any) => f.firm_id)
+          .sort((a: any, b: any) => {
+            if (a.is_primary === b.is_primary) {
+              return a.firm_name.localeCompare(b.firm_name, "tr");
+            }
+            return a.is_primary ? -1 : 1;
+          });
+
+        if (adminRole === "company_admin") {
+          const hasAccess = firms.some((f: any) => f.firm_id === companyIdFromCookie);
+          if (!hasAccess) return null;
+        }
+
+        const primaryFirm = firms.find((f: any) => f.is_primary) || firms[0] || null;
 
         return {
           id: userId,
           full_name: String(user.full_name || "Adsız Kullanıcı").trim(),
           email: String(user.email || "").trim(),
           role: String(user.role || "").trim(),
-          app_user_type: String((user as any).app_user_type || "").trim(),
-          password_hash: String((user as any).password_hash || "").trim(),
-employee_id: String((user as any).employee_id || "").trim(),
-company_id: primaryFirm?.firm_id || "",
+          app_user_type: String(user.app_user_type || "").trim(),
+          password_hash: String(user.password_hash || "").trim(),
+          employee_id: String(user.employee_id || "").trim(),
+          company_id: primaryFirm?.firm_id || String(user.company_id || "").trim(),
           company: primaryFirm?.firm_name || "",
           is_active: Boolean(user.is_active),
           created_at: user.created_at || null,
