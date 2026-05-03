@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -13,6 +14,81 @@ function getSupabase() {
 function clean(value: any) {
   const v = String(value ?? "").trim();
   return v || null;
+}
+
+function sha256(input: string) {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+
+function generatePassword() {
+  return Math.random().toString(36).slice(-8);
+}
+
+async function ensureTrainingUserForEmployee(params: {
+  supabase: ReturnType<typeof getSupabase>;
+  employee: any;
+}) {
+  const { supabase, employee } = params;
+
+  const email = clean(employee.email);
+  const fullName = clean(employee.full_name);
+  const firmId = clean(employee.firm_id);
+
+  if (!email || !fullName || !firmId || !employee.id) {
+    return;
+  }
+
+  const normalizedEmail = email.toLowerCase();
+
+  const { data: existingUser } = await supabase
+    .from("users")
+    .select("id, employee_id")
+    .ilike("email", normalizedEmail)
+    .maybeSingle();
+
+  if (existingUser?.id) {
+    await supabase
+      .from("users")
+      .update({
+        employee_id: employee.id,
+        company_id: firmId,
+        role: "training_user",
+        is_active: employee.active !== false,
+      })
+      .eq("id", existingUser.id);
+
+    return;
+  }
+
+  const tempPassword = generatePassword();
+
+  const { data: insertedUser, error: userError } = await supabase
+    .from("users")
+    .insert({
+      full_name: fullName,
+      email: normalizedEmail,
+      password_hash: sha256(tempPassword),
+      role: "training_user",
+      company_id: firmId,
+      employee_id: employee.id,
+      is_active: employee.active !== false,
+    })
+    .select("id")
+    .single();
+
+  if (userError) {
+    console.error("AUTO TRAINING USER CREATE ERROR:", userError);
+    return;
+  }
+
+  if (insertedUser?.id) {
+    await supabase.from("user_firm_access").insert({
+      user_id: insertedUser.id,
+      firm_id: firmId,
+      role: "training_user",
+      is_primary: true,
+    });
+  }
 }
 
 function buildEmployeePayload(body: any) {
@@ -135,6 +211,11 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+await ensureTrainingUserForEmployee({
+  supabase,
+  employee: data,
+});
 
     return NextResponse.json({
       success: true,

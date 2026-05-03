@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -13,6 +14,14 @@ function getSupabase() {
 function clean(v: any) {
   const s = String(v ?? "").trim();
   return s || null;
+}
+
+function sha256(input: string) {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+
+function generatePassword() {
+  return Math.random().toString(36).slice(-8);
 }
 
 function parseBool(v: any) {

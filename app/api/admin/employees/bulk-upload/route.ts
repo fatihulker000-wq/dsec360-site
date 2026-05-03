@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -13,6 +14,14 @@ function getSupabase() {
 function clean(value: any) {
   const v = String(value ?? "").trim();
   return v || null;
+}
+
+function sha256(input: string) {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+
+function generatePassword() {
+  return Math.random().toString(36).slice(-8);
 }
 
 function parseBool(value: any) {
@@ -180,18 +189,97 @@ if (tcNo && (existingTcSet.has(tcNo.toLowerCase()) || seenTc.has(tcNo.toLowerCas
 
    const chunkSize = 500;
 
+const allInsertedEmployees: any[] = [];
+
 for (let i = 0; i < inserts.length; i += chunkSize) {
   const chunk = inserts.slice(i, i + chunkSize);
 
-  const { error } = await supabase
+  const { data: insertedEmployees, error } = await supabase
     .from("employees")
-    .insert(chunk);
+    .insert(chunk)
+    .select("*");
 
   if (error) {
     return NextResponse.json(
       { error: "Toplu ekleme sırasında hata.", detail: error.message },
       { status: 500 }
     );
+  }
+
+  allInsertedEmployees.push(...(insertedEmployees || []));
+}
+
+const usersToInsert: any[] = [];
+const accessToInsert: any[] = [];
+
+for (const emp of allInsertedEmployees) {
+  const email = clean(emp.email);
+  const fullName = clean(emp.full_name);
+
+  if (!email || !fullName || !emp.id) continue;
+
+  const normalizedEmail = email.toLowerCase();
+
+  const { data: existingUser } = await supabase
+    .from("users")
+    .select("id")
+    .ilike("email", normalizedEmail)
+    .maybeSingle();
+
+  if (existingUser?.id) {
+    await supabase
+      .from("users")
+      .update({
+        employee_id: emp.id,
+        company_id: firmId,
+        role: "training_user",
+        is_active: emp.active !== false,
+      })
+      .eq("id", existingUser.id);
+
+    continue;
+  }
+
+  usersToInsert.push({
+    full_name: fullName,
+    email: normalizedEmail,
+    password_hash: sha256(generatePassword()),
+    role: "training_user",
+    company_id: firmId,
+    employee_id: emp.id,
+    is_active: emp.active !== false,
+  });
+}
+
+if (usersToInsert.length > 0) {
+  const { data: insertedUsers, error: userInsertError } = await supabase
+    .from("users")
+    .insert(usersToInsert)
+    .select("id, company_id");
+
+  if (userInsertError) {
+    return NextResponse.json(
+      {
+        error: "Çalışanlar yüklendi ancak eğitim kullanıcıları oluşturulamadı.",
+        detail: userInsertError.message,
+      },
+      { status: 500 }
+    );
+  }
+
+  for (const user of insertedUsers || []) {
+    if (!user.id || !user.company_id) continue;
+
+    accessToInsert.push({
+      user_id: user.id,
+      firm_id: user.company_id,
+      role: "training_user",
+      is_primary: true,
+    });
+  }
+
+  if (accessToInsert.length > 0) {
+    await supabase.from("user_firm_access").insert(accessToInsert);
   }
 }
 
