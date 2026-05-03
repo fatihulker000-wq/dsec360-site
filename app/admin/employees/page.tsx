@@ -62,6 +62,9 @@ export default function EmployeesPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [addModal, setAddModal] = useState(false);
   const [addForm, setAddForm] = useState<EmployeeForm>(emptyForm);
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [previewSummary, setPreviewSummary] = useState<any>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const loadEmployees = async (firmId = firmFilter) => {
     try {
@@ -266,6 +269,44 @@ const uploadBulkEmployees = async () => {
   } finally {
     setBulkLoading(false);
   }
+ };
+
+const uploadFromPreview = async () => {
+  if (!previewData.length) {
+    alert("Önizleme verisi yok");
+    return;
+  }
+
+  try {
+    setBulkLoading(true);
+
+    const res = await fetch("/api/admin/employees/bulk-upload-from-preview", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        firm_id: firmFilter,
+        rows: previewData,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json.error || "Yükleme hatası");
+      return;
+    }
+
+    alert(`Eklenen: ${json.insertedCount}`);
+
+    setPreviewOpen(false);
+    setPreviewData([]);
+
+    await loadEmployees(firmFilter);
+  } finally {
+    setBulkLoading(false);
+  }
 };
 
   const handleActiveEmployee = async (emp: Employee) => {
@@ -296,7 +337,7 @@ const uploadBulkEmployees = async () => {
     }
   };
 
-const handlePassiveEmployee = async (emp: Employee) => {
+ const handlePassiveEmployee = async (emp: Employee) => {
   if (!confirm(`${emp.full_name} pasife alınsın mı?`)) return;
 
   try {
@@ -318,9 +359,9 @@ const handlePassiveEmployee = async (emp: Employee) => {
   } finally {
     setActionLoading(false);
   }
-};
+ };
 
-const handleHardDeleteEmployee = async (emp: Employee) => {
+ const handleHardDeleteEmployee = async (emp: Employee) => {
   const ok = confirm(
     `${emp.full_name} kaydı kalıcı olarak silinecek. Bu işlem geri alınamaz. Emin misin?`
   );
@@ -349,7 +390,7 @@ const handleHardDeleteEmployee = async (emp: Employee) => {
   } finally {
     setActionLoading(false);
   }
-};
+ };
 
   const filtered = useMemo(() => {
   let list = data;
@@ -382,12 +423,12 @@ const handleHardDeleteEmployee = async (emp: Employee) => {
       .toLowerCase()
       .includes(q)
   );
-}, [data, search, statusFilter, letterFilter]);
+ }, [data, search, statusFilter, letterFilter]);
 
   
   const activeCount = filtered.filter((x) => x.active).length;
-const passiveCount = filtered.filter((x) => !x.active).length;
-const activeEmployees = filtered.filter((x) => x.active);
+  const passiveCount = filtered.filter((x) => !x.active).length;
+  const activeEmployees = filtered.filter((x) => x.active);
 
   const maleCount = activeEmployees.filter((x) => {
     const v = String(x.gender || "").toLowerCase().trim();
@@ -446,7 +487,7 @@ const activeEmployees = filtered.filter((x) => x.active);
         <Kpi title="Engelli" value={disabledCount} />
       </section>
 
-<section
+ <section
         style={{
           display: "flex",
           flexWrap: "wrap",
@@ -545,9 +586,9 @@ const activeEmployees = filtered.filter((x) => x.active);
           </button>
           <button onClick={downloadEmployeeTemplate} style={darkBtn()}>
   Şablon İndir
-</button>
+ </button>
 
-<input
+ <input
   type="file"
   accept=".csv,.xlsx"
   onChange={(e) => setBulkFile(e.target.files?.[0] || null)}
@@ -560,6 +601,33 @@ const activeEmployees = filtered.filter((x) => x.active);
     fontWeight: 800,
   }}
 />
+<button
+  onClick={async () => {
+    if (!bulkFile) return alert("Dosya seç");
+    if (firmFilter === "all") return alert("Firma seç");
+
+    const fd = new FormData();
+    fd.append("file", bulkFile);
+    fd.append("firm_id", firmFilter);
+
+    const res = await fetch("/api/admin/employees/bulk-preview", {
+      method: "POST",
+      body: fd,
+      credentials: "include",
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) return alert(json.error || "Preview hatası");
+
+    setPreviewData(json.preview);
+    setPreviewSummary(json.summary);
+    setPreviewOpen(true);
+  }}
+  style={darkBtn()}
+>
+  Önizleme
+</button>
 
 <button
   onClick={uploadBulkEmployees}
@@ -805,9 +873,88 @@ const activeEmployees = filtered.filter((x) => x.active);
           </div>
         </div>
       )}
+
+{previewOpen && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.6)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 9999,
+    }}
+  >
+    <div
+      style={{
+        width: "95%",
+        maxHeight: "90vh",
+        overflow: "auto",
+        background: "#fff",
+        borderRadius: 20,
+        padding: 20,
+      }}
+    >
+      <h2>Toplu Yükleme Önizleme</h2>
+
+      <div style={{ marginBottom: 12 }}>
+        Toplam: {previewSummary?.total} |
+        Hatalı: {previewSummary?.errorCount} |
+        Uyarı: {previewSummary?.warningCount} |
+        Hazır: {previewSummary?.readyCount}
+      </div>
+
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th>Ad Soyad</th>
+            <th>Email</th>
+            <th>Sicil</th>
+            <th>Durum</th>
+          </tr>
+        </thead>
+        <tbody>
+          {previewData.map((row, i) => {
+            let bg = "#ecfdf5";
+
+            if (row.errors.length > 0) bg = "#fee2e2";
+            else if (row.warnings.length > 0) bg = "#fef9c3";
+
+            return (
+              <tr key={i} style={{ background: bg }}>
+                <td>{row.full_name}</td>
+                <td>{row.email}</td>
+                <td>{row.registry_no}</td>
+                <td>
+                  {row.errors.join(", ") ||
+                    row.warnings.join(", ") ||
+                    "OK"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
+        <button onClick={() => setPreviewOpen(false)} style={darkBtn()}>
+          Kapat
+        </button>
+
+       <button onClick={uploadFromPreview} style={blueBtn(false)}>
+       Onayla ve Yükle
+     </button>
+      </div>
+    </div>
+  </div>
+)}
+
     </main>
   );
 }
+
+
 
 function FormInput({
   label,

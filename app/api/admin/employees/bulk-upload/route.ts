@@ -112,11 +112,16 @@ export async function POST(req: Request) {
     const errors: string[] = [];
     let skippedCount = 0;
 
+    const seenEmail = new Set<string>();
+    const seenRegistry = new Set<string>();
+    const seenTc = new Set<string>();
+
     rows.forEach((row, index) => {
       const fullName = clean(row.full_name || row["Ad Soyad"] || row.ad_soyad);
       const email = clean(row.email || row["E-posta"] || row.eposta);
       const registryNo = clean(row.registry_no || row["Sicil No"] || row.sicil_no);
       const tcNo = clean(row.tc_no || row["TC No"] || row.tc);
+
 
       if (!fullName) {
         errors.push(`${index + 2}. satır: Ad Soyad boş.`);
@@ -124,21 +129,23 @@ export async function POST(req: Request) {
         return;
       }
 
-      if (email && existingEmailSet.has(email.toLowerCase())) {
-        skippedCount += 1;
-        return;
-      }
+      if (email && (existingEmailSet.has(email.toLowerCase()) || seenEmail.has(email.toLowerCase()))) {
+  skippedCount++;
+  return;
+}
 
-      if (registryNo && existingRegistrySet.has(registryNo.toLowerCase())) {
-        skippedCount += 1;
-        return;
-      }
+if (registryNo && (existingRegistrySet.has(registryNo.toLowerCase()) || seenRegistry.has(registryNo.toLowerCase()))) {
+  skippedCount++;
+  return;
+}
 
-      if (tcNo && existingTcSet.has(tcNo.toLowerCase())) {
-        skippedCount += 1;
-        return;
-      }
-
+if (tcNo && (existingTcSet.has(tcNo.toLowerCase()) || seenTc.has(tcNo.toLowerCase()))) {
+  skippedCount++;
+  return;
+}
+      if (email) seenEmail.add(email.toLowerCase());
+      if (registryNo) seenRegistry.add(registryNo.toLowerCase());
+      if (tcNo) seenTc.add(tcNo.toLowerCase());
       if (email) existingEmailSet.add(email.toLowerCase());
       if (registryNo) existingRegistrySet.add(registryNo.toLowerCase());
       if (tcNo) existingTcSet.add(tcNo.toLowerCase());
@@ -171,16 +178,24 @@ export async function POST(req: Request) {
       });
     }
 
-    const { error: insertError } = await supabase.from("employees").insert(inserts);
+   const chunkSize = 500;
 
-    if (insertError) {
-      return NextResponse.json(
-        { error: "Toplu çalışan yükleme başarısız.", detail: insertError.message },
-        { status: 500 }
-      );
-    }
+for (let i = 0; i < inserts.length; i += chunkSize) {
+  const chunk = inserts.slice(i, i + chunkSize);
 
-    return NextResponse.json({
+  const { error } = await supabase
+    .from("employees")
+    .insert(chunk);
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Toplu ekleme sırasında hata.", detail: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+       return NextResponse.json({
       success: true,
       insertedCount: inserts.length,
       skippedCount,
