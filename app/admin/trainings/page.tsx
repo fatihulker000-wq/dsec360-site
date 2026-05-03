@@ -161,6 +161,7 @@ function badgeStyle(
 
 export default function AdminTrainingPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [totalEmployeeCount, setTotalEmployeeCount] = useState(0);
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [employeesLoading, setEmployeesLoading] = useState(false);
@@ -200,20 +201,24 @@ const [savingUser, setSavingUser] = useState(false);
       setError("");
       setLoading(true);
 
-      const [usersRes, trainingsRes, companiesRes] = await Promise.all([
-      fetch("/api/admin/users?type=training", {
-      cache: "no-store",
-      credentials: "include",
-      }),
-        fetch("/api/admin/trainings", {
-          cache: "no-store",
-          credentials: "include",
-        }),
-        fetch("/api/admin/companies", {
-          cache: "no-store",
-          credentials: "include",
-        }),
-      ]);
+      const [usersRes, trainingsRes, companiesRes, employeesRes] = await Promise.all([
+  fetch("/api/admin/users?type=training", {
+    cache: "no-store",
+    credentials: "include",
+  }),
+  fetch("/api/admin/trainings", {
+    cache: "no-store",
+    credentials: "include",
+  }),
+  fetch("/api/admin/companies", {
+    cache: "no-store",
+    credentials: "include",
+  }),
+  fetch("/api/admin/employees?firmId=all", {
+    cache: "no-store",
+    credentials: "include",
+  }),
+]);
 
       if (
         usersRes.status === 401 ||
@@ -227,6 +232,13 @@ const [savingUser, setSavingUser] = useState(false);
       const usersJson = await usersRes.json();
       const trainingsJson = await trainingsRes.json();
       const companiesJson = await companiesRes.json();
+      const employeesJson = await employeesRes.json();
+
+setTotalEmployeeCount(
+  Array.isArray(employeesJson?.data)
+    ? employeesJson.data.filter((e: any) => e.active !== false).length
+    : 0
+);
 
       if (!usersRes.ok) {
         throw new Error(usersJson?.error || "Kullanıcı listesi alınamadı.");
@@ -990,7 +1002,7 @@ const deleteTrainingUser = async (user: UserRow) => {
           <div style={cardStyle()}>
             <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Çalışan</div>
             <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
-              {users.length}
+              {totalEmployeeCount}
             </div>
           </div>
           <div style={cardStyle()}>
