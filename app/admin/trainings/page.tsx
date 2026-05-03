@@ -163,6 +163,7 @@ export default function AdminTrainingPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [totalEmployeeCount, setTotalEmployeeCount] = useState(0);
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const [employeeTrainingMap, setEmployeeTrainingMap] = useState<Record<string, any[]>>({});
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [employeesLoading, setEmployeesLoading] = useState(false);
   const [trainings, setTrainings] = useState<TrainingRow[]>([]);
@@ -351,6 +352,31 @@ setTotalEmployeeCount(
           }))
         : []
     );
+
+  const employeeIds = Array.isArray(json?.data)
+  ? json.data.map((e: any) => String(e.id || "")).filter(Boolean)
+  : [];
+
+if (employeeIds.length > 0) {
+  const historyRes = await fetch(
+    `/api/admin/employees/training-history?employeeIds=${encodeURIComponent(employeeIds.join(","))}`,
+    {
+      cache: "no-store",
+      credentials: "include",
+    }
+  );
+
+  const historyJson = await historyRes.json().catch(() => ({}));
+
+  if (historyRes.ok) {
+    setEmployeeTrainingMap(historyJson?.data || {});
+  } else {
+    setEmployeeTrainingMap({});
+  }
+} else {
+  setEmployeeTrainingMap({});
+}
+
   } finally {
     setEmployeesLoading(false);
   }
@@ -1537,6 +1563,54 @@ const deleteTrainingUser = async (user: UserRow) => {
                   Sicil: {emp.registry_no || "-"}
                 </span>
               </div>
+            <div
+  style={{
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+  }}
+>
+  <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 8 }}>
+    Atanmış Eğitimler
+  </div>
+
+  {(employeeTrainingMap[emp.id] || []).length === 0 ? (
+    <div style={{ fontSize: 12, color: BRAND.muted }}>
+      Henüz eğitim atanmamış.
+    </div>
+  ) : (
+    <div style={{ display: "grid", gap: 6 }}>
+      {employeeTrainingMap[emp.id].map((item: any, index: number) => (
+        <div
+          key={`${emp.id}-${item.training_id}-${index}`}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 8,
+            alignItems: "center",
+            fontSize: 12,
+            padding: "7px 9px",
+            borderRadius: 10,
+            background: "#f8fafc",
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <span style={{ fontWeight: 800 }}>{item.title}</span>
+          <span>
+            {item.status === "completed"
+              ? "Tamamlandı"
+              : item.status === "in_progress"
+              ? "Devam ediyor"
+              : "Başlamadı"}
+          </span>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
             </div>
           </label>
         );
