@@ -25,13 +25,12 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const employeeIds = searchParams
-      .get("employeeIds")
-      ?.split(",")
+    const employeeIds = String(searchParams.get("employeeIds") || "")
+      .split(",")
       .map((x) => x.trim())
       .filter(Boolean);
 
-    if (!employeeIds || employeeIds.length === 0) {
+    if (employeeIds.length === 0) {
       return NextResponse.json({ data: {} });
     }
 
@@ -44,67 +43,84 @@ export async function GET(req: Request) {
 
     if (usersError) {
       return NextResponse.json(
-        { error: "Eğitim kullanıcıları alınamadı." },
+        { error: "Eğitim kullanıcıları alınamadı.", detail: usersError.message },
         { status: 500 }
       );
     }
 
-    const userIds = (users || []).map((u: any) => u.id).filter(Boolean);
+    const userRows = users || [];
+    const userIds = userRows.map((u: any) => String(u.id)).filter(Boolean);
 
     if (userIds.length === 0) {
       return NextResponse.json({ data: {} });
     }
 
-    const { data: assignments, error: assignmentsError } = await supabase
-      .from("training_assignments")
-      .select(`
-        user_id,
-        training_id,
-        status,
-        trainings (
-          id,
-          title,
-          type
-        )
-      `)
-      .in("user_id", userIds);
-
-    if (assignmentsError) {
-      return NextResponse.json(
-        { error: "Atanmış eğitimler alınamadı." },
-        { status: 500 }
-      );
-    }
-
     const userToEmployee = new Map<string, string>();
 
-    (users || []).forEach((u: any) => {
+    userRows.forEach((u: any) => {
       if (u.id && u.employee_id) {
         userToEmployee.set(String(u.id), String(u.employee_id));
       }
     });
 
+    const { data: assignments, error: assignmentError } = await supabase
+      .from("training_assignments")
+      .select("user_id, training_id, status")
+      .in("user_id", userIds);
+
+    if (assignmentError) {
+      return NextResponse.json(
+        { error: "Atamalar alınamadı.", detail: assignmentError.message },
+        { status: 500 }
+      );
+    }
+
+    const trainingIds = Array.from(
+      new Set((assignments || []).map((a: any) => String(a.training_id)).filter(Boolean))
+    );
+
+    const trainingMap = new Map<string, any>();
+
+    if (trainingIds.length > 0) {
+      const { data: trainings, error: trainingsError } = await supabase
+        .from("trainings")
+        .select("id, title, type")
+        .in("id", trainingIds);
+
+      if (trainingsError) {
+        return NextResponse.json(
+          { error: "Eğitim bilgileri alınamadı.", detail: trainingsError.message },
+          { status: 500 }
+        );
+      }
+
+      (trainings || []).forEach((t: any) => {
+        trainingMap.set(String(t.id), t);
+      });
+    }
+
     const result: Record<string, any[]> = {};
 
-    (assignments || []).forEach((row: any) => {
-      const employeeId = userToEmployee.get(String(row.user_id));
+    (assignments || []).forEach((a: any) => {
+      const employeeId = userToEmployee.get(String(a.user_id));
       if (!employeeId) return;
+
+      const training = trainingMap.get(String(a.training_id));
 
       if (!result[employeeId]) result[employeeId] = [];
 
       result[employeeId].push({
-        training_id: row.training_id,
-        title: row.trainings?.title || "Adsız Eğitim",
-        type: row.trainings?.type || "online",
-        status: row.status || "not_started",
+        training_id: String(a.training_id),
+        title: training?.title || "Adsız Eğitim",
+        type: training?.type || "online",
+        status: a.status || "not_started",
       });
     });
 
     return NextResponse.json({ data: result });
-  } catch (error) {
-    console.error("training-history error:", error);
+  } catch (error: any) {
     return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
+      { error: "Sunucu hatası oluştu.", detail: error?.message || null },
       { status: 500 }
     );
   }
