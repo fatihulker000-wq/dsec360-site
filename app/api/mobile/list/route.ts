@@ -14,6 +14,7 @@ export async function GET() {
   try {
     const supabase = getSupabase();
 
+    // ✅ RUNS
     const { data: runs, error } = await supabase
       .from("denetim_runs")
       .select("*")
@@ -23,9 +24,33 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    if (!runs || runs.length === 0) {
+      return NextResponse.json({
+        success: true,
+        runs: [],
+      });
+    }
+
+    // 🔥 RUN IDS AL
+    const runIds = runs.map((r) => r.id);
+
+    // ✅ ANSWERS
+    const { data: answers } = await supabase
+      .from("denetim_answers")
+      .select("*")
+      .in("run_remote_id", runIds);
+
+    // 🔥 MAPLE
+    const runsWithAnswers = runs.map((run) => ({
+      ...run,
+      answers: (answers || []).filter(
+        (a) => a.run_remote_id === run.id
+      ),
+    }));
+
     return NextResponse.json({
       success: true,
-      runs: runs || [],
+      runs: runsWithAnswers,
     });
   } catch (e: any) {
     return NextResponse.json(

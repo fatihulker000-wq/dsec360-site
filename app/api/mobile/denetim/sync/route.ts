@@ -160,17 +160,27 @@ if (!run || !appRunId) {
         const photoUrl = await uploadPhotoIfExists(supabase, a);
 
         return {
-          run_remote_id: runData.id,
-          app_run_id: appRunId,
-          item_title: a.itemTitle || a.item_title || "",
-          legal_ref: a.legalRef || a.legal_ref || "",
-          result: a.result || "",
-          note: a.note || "",
-          photo_path: a.photoPath || a.photo_path || null,
-          photo_url: photoUrl || null,
-          recommended_action:
-            a.recommendedAction || a.recommended_action || "",
-        };
+  run_remote_id: runData.id,
+  app_run_id: appRunId,
+  item_title: a.itemTitle || a.item_title || "",
+  legal_ref: a.legalRef || a.legal_ref || "",
+  result: a.result || "",
+  note: a.note || "",
+  photo_path: a.photoPath || a.photo_path || null,
+  photo_url: photoUrl || null,
+  recommended_action:
+    a.recommendedAction || a.recommended_action || "",
+
+  // ✅ DÖF TAKİBİ - App → Web
+  dof_status:
+    a.dofStatus || a.dof_status || "NONE",
+  dof_closed_at:
+    Number(a.dofClosedAt || a.dof_closed_at || 0) > 0
+      ? Number(a.dofClosedAt || a.dof_closed_at)
+      : null,
+  dof_note:
+    a.dofNote || a.dof_note || "",
+      };
       })
     );
 
