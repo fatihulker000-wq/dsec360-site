@@ -205,44 +205,6 @@ export async function POST(req: Request) {
       .select("*")
       .single();
 
-// ✅ OTOMATİK USER OLUŞTUR
-if (data?.email) {
-  const email = data.email.toLowerCase();
-
-  const { data: existingUser } = await supabase
-    .from("users")
-    .select("id")
-    .ilike("email", email)
-    .maybeSingle();
-
-  if (!existingUser) {
-    const password = Math.random().toString(36).slice(-8);
-
-    const { data: newUser } = await supabase
-      .from("users")
-      .insert({
-        full_name: data.full_name,
-        email,
-        password_hash: sha256(password),
-        role: "training_user",
-        company_id: firmId,
-        employee_id: data.id,
-        is_active: true,
-      })
-      .select("id, company_id")
-      .single();
-
-    if (newUser?.id) {
-      await supabase.from("user_firm_access").insert({
-        user_id: newUser.id,
-        firm_id: newUser.company_id,
-        role: "training_user",
-        is_primary: true,
-      });
-    }
-  }
-}
-
     if (error) {
       return NextResponse.json(
         { error: "Çalışan eklenemedi.", detail: error.message },
@@ -290,7 +252,6 @@ export async function PUT(req: Request) {
       .select("*")
       .single();
 
-      
     if (error) {
       return NextResponse.json(
         { error: "Çalışan güncellenemedi.", detail: error.message },
