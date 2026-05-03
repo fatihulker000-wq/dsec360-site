@@ -58,8 +58,10 @@ export default function EmployeesPage() {
 
   const [editModal, setEditModal] = useState<Employee | null>(null);
   const [editForm, setEditForm] = useState<EmployeeForm>(emptyForm);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [addModal, setAddModal] = useState(false);
-const [addForm, setAddForm] = useState<EmployeeForm>(emptyForm);
+  const [addForm, setAddForm] = useState<EmployeeForm>(emptyForm);
 
   const loadEmployees = async (firmId = firmFilter) => {
     try {
@@ -102,7 +104,7 @@ const [addForm, setAddForm] = useState<EmployeeForm>(emptyForm);
 
   setAddForm(emptyForm);
   setAddModal(true);
-};
+ };
 
 const saveNewEmployee = async () => {
   if (firmFilter === "all") {
@@ -208,29 +210,63 @@ const saveNewEmployee = async () => {
     }
   };
 
-  const handlePassiveEmployee = async (emp: Employee) => {
-    if (!confirm(`${emp.full_name} pasife alınsın mı?`)) return;
+  const downloadEmployeeTemplate = () => {
+  const csv =
+    "full_name,job_title,phone,email,registry_no,tc_no,gender,disability_status,active\n" +
+    "Ali Veli,Operatör,05551234567,ali.veli@mail.com,SCL-001,11111111111,Erkek,Yok,true\n";
 
-    try {
-      setActionLoading(true);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
 
-      const res = await fetch(`/api/admin/employees?id=${encodeURIComponent(emp.id)}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "dsec-calisan-toplu-yukleme-sablon.csv";
+  a.click();
 
-      const json = await res.json().catch(() => ({}));
+  URL.revokeObjectURL(url);
+};
 
-      if (!res.ok) {
-        alert(json?.error || "Çalışan pasife alınamadı.");
-        return;
-      }
+const uploadBulkEmployees = async () => {
+  if (firmFilter === "all") {
+    alert("Toplu yükleme için önce firma seçmelisin.");
+    return;
+  }
 
-      await loadEmployees(firmFilter);
-    } finally {
-      setActionLoading(false);
+  if (!bulkFile) {
+    alert("Önce CSV veya Excel dosyası seç.");
+    return;
+  }
+
+  try {
+    setBulkLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", bulkFile);
+    formData.append("firm_id", firmFilter);
+
+    const res = await fetch("/api/admin/employees/bulk-upload", {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      alert(json?.error || "Toplu çalışan yükleme başarısız.");
+      return;
     }
-  };
+
+    alert(
+      `Toplu yükleme tamamlandı.\nEklenen: ${json.insertedCount || 0}\nAtlanan: ${json.skippedCount || 0}`
+    );
+
+    setBulkFile(null);
+    await loadEmployees(firmFilter);
+  } finally {
+    setBulkLoading(false);
+  }
+};
 
   const handleActiveEmployee = async (emp: Employee) => {
     try {
@@ -259,6 +295,30 @@ const saveNewEmployee = async () => {
       setActionLoading(false);
     }
   };
+
+const handlePassiveEmployee = async (emp: Employee) => {
+  if (!confirm(`${emp.full_name} pasife alınsın mı?`)) return;
+
+  try {
+    setActionLoading(true);
+
+    const res = await fetch(`/api/admin/employees?id=${encodeURIComponent(emp.id)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      alert(json?.error || "Çalışan pasife alınamadı.");
+      return;
+    }
+
+    await loadEmployees(firmFilter);
+  } finally {
+    setActionLoading(false);
+  }
+};
 
 const handleHardDeleteEmployee = async (emp: Employee) => {
   const ok = confirm(
@@ -483,6 +543,31 @@ const activeEmployees = filtered.filter((x) => x.active);
           <button onClick={handleAddEmployee} disabled={actionLoading} style={blueBtn(actionLoading)}>
             + Çalışan Ekle
           </button>
+          <button onClick={downloadEmployeeTemplate} style={darkBtn()}>
+  Şablon İndir
+</button>
+
+<input
+  type="file"
+  accept=".csv,.xlsx"
+  onChange={(e) => setBulkFile(e.target.files?.[0] || null)}
+  style={{
+    minWidth: 220,
+    border: "1px solid #e5e7eb",
+    borderRadius: 14,
+    padding: "10px 12px",
+    background: "#fff",
+    fontWeight: 800,
+  }}
+/>
+
+<button
+  onClick={uploadBulkEmployees}
+  disabled={bulkLoading || !bulkFile}
+  style={blueBtn(bulkLoading || !bulkFile)}
+>
+  {bulkLoading ? "Yükleniyor..." : "Toplu Yükle"}
+</button>
         </div>
       </section>
 
