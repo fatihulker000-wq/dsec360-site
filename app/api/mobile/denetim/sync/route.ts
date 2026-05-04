@@ -72,18 +72,55 @@ async function uploadPhotoIfExists(
 }
 
 function calculateDofStatus(answer: any) {
-  const incoming = String(answer?.dofStatus || answer?.dof_status || "").trim().toUpperCase();
-  const result = String(answer?.result || "").trim().toUpperCase();
+  const incoming = String(answer?.dofStatus || answer?.dof_status || "")
+    .trim()
+    .toUpperCase();
 
-  if (incoming === "CLOSED") return "CLOSED";
+  const result = String(answer?.result || "")
+    .trim()
+    .toUpperCase();
 
-  if (result === "UYGUNSUZ" || result === "KISMEN") return "OPEN";
+  // ✅ App ne gönderdiyse önce ona güven
+  if (incoming === "CLOSED" || incoming === "KAPALI") return "CLOSED";
+  if (incoming === "OPEN" || incoming === "AÇIK" || incoming === "IN_PROGRESS") return "OPEN";
+  if (incoming === "NONE") return "NONE";
 
-  if (result.startsWith("SCORE:")) {
-    const score = Number(result.replace("SCORE:", ""));
-    if (Number.isFinite(score) && score < 75) return "OPEN";
+  // ✅ Kesin uygun / kapsam dışı ise DÖF yok
+  if (
+    result === "UYGUN" ||
+    result === "YETERLI" ||
+    result === "YETERLİ" ||
+    result === "KAPSAMDISI" ||
+    result === "KAPSAM DIŞI" ||
+    result === "KAPSAM_DIŞI" ||
+    result === "KAPSAM_DISI"
+  ) {
+    return "NONE";
   }
 
+  // ✅ Klasik / metinsel uygunsuzluklar
+  if (
+    result.includes("UYGUNSUZ") ||
+    result.includes("KISMEN") ||
+    result.includes("YETERSIZ") ||
+    result.includes("YETERSİZ") ||
+    result.includes("EKSIK") ||
+    result.includes("EKSİK") ||
+    result.includes("MAJOR") ||
+    result.includes("MINOR") ||
+    result.includes("RISK") ||
+    result.includes("BAD")
+  ) {
+    return "OPEN";
+  }
+
+  // ✅ Puanlamalı: 100 altı DÖF kabul
+  if (result.startsWith("SCORE:")) {
+    const score = Number(result.replace("SCORE:", ""));
+    if (Number.isFinite(score) && score < 100) return "OPEN";
+  }
+
+  // ✅ ELMERI: yanlış sayısı varsa DÖF
   if (result.startsWith("ELMERI:")) {
     const parts = result.split(":");
     const wrong = Number(parts[2] || 0);
