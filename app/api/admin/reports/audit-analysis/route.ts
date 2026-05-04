@@ -105,11 +105,12 @@ function runMatchesCompany(run: AnyRow, companyId: string, companyName: string) 
     if (companyNameKey.includes(firmNameKey)) return true;
   }
 
-  // App tarafında gelen Firma#1033038177 gibi kayıtları yakalar
+  // App kayıtları Firma#1033038177 gibi geldiyse yakala
   if (firmNameKey.startsWith("firma") && companyIdKey) {
     if (firmNameKey.includes(companyIdKey)) return true;
   }
 
+  // App kayıtları firm_id=0 / -1 / boş geldiyse firma bazlı eşleştirme yapılamaz
   return false;
 }
 
