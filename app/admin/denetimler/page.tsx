@@ -57,6 +57,18 @@ function makeQuery(type: string, firm: string) {
   return q ? `/admin/denetimler?${q}` : "/admin/denetimler";
 }
 
+function makePagedQuery(type: string, firm: string, dofPage: number, runPage: number) {
+  const params = new URLSearchParams();
+
+  if (type && type !== "ALL") params.set("type", type);
+  if (firm && firm !== "ALL") params.set("firm", firm);
+  if (dofPage > 1) params.set("dofPage", String(dofPage));
+  if (runPage > 1) params.set("runPage", String(runPage));
+
+  const q = params.toString();
+  return q ? `/admin/denetimler?${q}` : "/admin/denetimler";
+}
+
 async function deleteDenetimAction(formData: FormData) {
   "use server";
 
@@ -107,11 +119,17 @@ async function closeDofAction(formData: FormData) {
 export default async function AdminDenetimlerPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ type?: string; firm?: string }>;
+  searchParams?: Promise<{ type?: string; firm?: string; dofPage?: string; runPage?: string }>;
 }) {
   const sp = await searchParams;
   const activeType = String(sp?.type || "ALL").toUpperCase();
   const activeFirm = String(sp?.firm || "ALL");
+
+  const activeDofPage = Math.max(1, Number(sp?.dofPage || 1));
+  const activeRunPage = Math.max(1, Number(sp?.runPage || 1));
+
+  const dofPageSize = 5;
+  const runPageSize = 10;
 
   const supabase = getSupabase();
 
@@ -131,31 +149,39 @@ export default async function AdminDenetimlerPage({
     : { data: [] as any[] };
 
   const answerList = answers || [];
+
   function normalizeDofStatus(value?: string | null) {
-  const v = String(value || "").trim().toUpperCase();
-  if (v === "CLOSED" || v === "KAPALI") return "CLOSED";
-  if (v === "OPEN" || v === "IN_PROGRESS" || v === "AÇIK") return "OPEN";
-  return "NONE";
-}
+    const v = String(value || "").trim().toUpperCase();
+    if (v === "CLOSED" || v === "KAPALI") return "CLOSED";
+    if (v === "OPEN" || v === "IN_PROGRESS" || v === "AÇIK") return "OPEN";
+    return "NONE";
+  }
 
-const dofItems = answerList.filter((a: any) => {
-  const status = normalizeDofStatus(a.dof_status || a.dofStatus);
-  return status !== "NONE";
-});
+  const dofItems = answerList.filter((a: any) => {
+    const status = normalizeDofStatus(a.dof_status || a.dofStatus);
+    return status !== "NONE";
+  });
 
-const openDofItems = dofItems.filter(
-  (a: any) => normalizeDofStatus(a.dof_status || a.dofStatus) === "OPEN"
-);
+  const openDofItems = dofItems.filter(
+    (a: any) => normalizeDofStatus(a.dof_status || a.dofStatus) === "OPEN"
+  );
 
-const closedDofItems = dofItems.filter(
-  (a: any) => normalizeDofStatus(a.dof_status || a.dofStatus) === "CLOSED"
-);
+  const closedDofItems = dofItems.filter(
+    (a: any) => normalizeDofStatus(a.dof_status || a.dofStatus) === "CLOSED"
+  );
 
-const dofCountByRun = new Map<number, number>();
-dofItems.forEach((a: any) => {
-  const key = Number(a.run_remote_id);
-  dofCountByRun.set(key, (dofCountByRun.get(key) || 0) + 1);
-});
+  const dofCountByRun = new Map<number, number>();
+  dofItems.forEach((a: any) => {
+    const key = Number(a.run_remote_id);
+    dofCountByRun.set(key, (dofCountByRun.get(key) || 0) + 1);
+  });
+
+  const dofTotalPages = Math.max(1, Math.ceil(dofItems.length / dofPageSize));
+  const safeDofPage = Math.min(activeDofPage, dofTotalPages);
+  const pagedDofItems = dofItems.slice(
+    (safeDofPage - 1) * dofPageSize,
+    safeDofPage * dofPageSize
+  );
 
   const countByRun = new Map<number, number>();
   answerList.forEach((a: any) => {
@@ -187,6 +213,13 @@ dofItems.forEach((a: any) => {
     return typeOk && firmOk;
   });
 
+  const runTotalPages = Math.max(1, Math.ceil(filteredRuns.length / runPageSize));
+  const safeRunPage = Math.min(activeRunPage, runTotalPages);
+  const pagedRuns = filteredRuns.slice(
+    (safeRunPage - 1) * runPageSize,
+    safeRunPage * runPageSize
+  );
+
   const klasikCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "Klasik").length;
   const fotografliCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "Fotoğraflı").length;
   const puanCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "Puanlamalı").length;
@@ -194,16 +227,16 @@ dofItems.forEach((a: any) => {
   const totalAnswers = answerList.length;
 
   const uygunCount = answerList.filter(
-  (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
-).length;
+    (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
+  ).length;
 
-const kismenCount = answerList.filter(
-  (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
-).length;
+  const kismenCount = answerList.filter(
+    (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
+  ).length;
 
-const uygunsuzCount = answerList.filter(
-  (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
-).length;
+  const uygunsuzCount = answerList.filter(
+    (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
+  ).length;
 
   const emptyRunCount = safeRuns.filter((r: any) => {
     return (countByRun.get(Number(r.id)) || 0) === 0;
@@ -212,6 +245,9 @@ const uygunsuzCount = answerList.filter(
   const firmCount = firmOptions.length;
   const avgAnswerPerRun =
     safeRuns.length > 0 ? Math.round(totalAnswers / safeRuns.length) : 0;
+
+  const dofClosureRate =
+    dofItems.length > 0 ? Math.round((closedDofItems.length / dofItems.length) * 100) : 0;
 
   const topFirmStats = firmOptions
     .map((firm) => {
@@ -451,150 +487,176 @@ const uygunsuzCount = answerList.filter(
         </MiniPanel>
       </section>
 
-    <section
-  style={{
-    background: "#fff",
-    borderRadius: 26,
-    border: "1px solid #e5e7eb",
-    overflow: "hidden",
-    boxShadow: "0 18px 54px rgba(15,23,42,0.06)",
-    marginBottom: 22,
-  }}
->
-  <div
-    style={{
-      padding: "20px 22px",
-      borderBottom: "1px solid #eef2f7",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 14,
-    }}
-  >
-    <div>
-      <div style={{ fontSize: 21, fontWeight: 1000, color: "#111827" }}>
-        DÖF Takip Merkezi
-      </div>
-      <div style={{ marginTop: 4, fontSize: 13, color: "#64748b", fontWeight: 650 }}>
-        Denetimlerde tespit edilen uygunsuzluk ve kısmen uygun maddelerden oluşan düzeltici/önleyici faaliyet kayıtları.
-      </div>
-    </div>
-
-    <div
-      style={{
-        padding: "8px 12px",
-        borderRadius: 999,
-        background: openDofItems.length > 0 ? "#fff7ed" : "#f0fdf4",
-        border: openDofItems.length > 0 ? "1px solid #fed7aa" : "1px solid #bbf7d0",
-        color: openDofItems.length > 0 ? "#c2410c" : "#15803d",
-        fontSize: 12,
-        fontWeight: 1000,
-        whiteSpace: "nowrap",
-      }}
-    >
-      Açık: {openDofItems.length} • Kapalı: {closedDofItems.length}
-    </div>
-  </div>
-
-  {dofItems.length === 0 ? (
-    <div style={{ padding: 28, color: "#64748b", fontWeight: 800, textAlign: "center" }}>
-      Henüz DÖF kaydı yok.
-    </div>
-  ) : (
-    <div style={{ display: "grid", gap: 10, padding: 18 }}>
-      {dofItems.slice(0, 12).map((a: any, index: number) => {
-        const status = normalizeDofStatus(a.dof_status || a.dofStatus);
-        const isClosed = status === "CLOSED";
-
-        const relatedRun = safeRuns.find(
-          (r: any) => Number(r.id) === Number(a.run_remote_id)
-        );
-
-        return (
-          <div
-            key={`${a.run_remote_id}-${a.item_title || a.itemTitle}-${index}`}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1.2fr 1.6fr 0.7fr 0.9fr",
-              gap: 12,
-              alignItems: "center",
-              padding: 14,
-              borderRadius: 18,
-              border: "1px solid #e5e7eb",
-              background: isClosed ? "#f8fafc" : "#fff7ed",
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 1000, color: "#111827" }}>
-                {cleanFirmName(relatedRun?.firm_name)}
-              </div>
-              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800, marginTop: 4 }}>
-                Run: {a.run_remote_id} • {modeLabel(relatedRun?.eval_mode)}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontWeight: 900, color: "#334155" }}>
-                {a.item_title || a.itemTitle || "-"}
-              </div>
-              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700, marginTop: 4 }}>
-                {a.dof_note || a.dofNote || a.note || "DÖF notu girilmemiş"}
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "inline-flex",
-                justifyContent: "center",
-                padding: "7px 10px",
-                borderRadius: 999,
-                background: isClosed ? "#dcfce7" : "#fed7aa",
-                color: isClosed ? "#15803d" : "#c2410c",
-                fontSize: 12,
-                fontWeight: 1000,
-              }}
-            >
-              {isClosed ? "Kapalı" : "Açık"}
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-  <Link
-    href={`/admin/denetimler/${a.run_remote_id}`}
-    style={buttonStyle("primary")}
-  >
-    Denetime Git
-  </Link>
-
-  {!isClosed && (
-    <form action={closeDofAction}>
-      <input type="hidden" name="answerId" value={a.id || ""} />
-      <input type="hidden" name="runRemoteId" value={a.run_remote_id || ""} />
-      <input type="hidden" name="itemTitle" value={a.item_title || a.itemTitle || ""} />
-
-      <button
-        type="submit"
+      <section
         style={{
-          padding: "9px 12px",
-          borderRadius: 12,
-          background: "#dcfce7",
-          color: "#15803d",
-          border: "1px solid #bbf7d0",
-          fontWeight: 1000,
-          fontSize: 13,
-          cursor: "pointer",
+          background: "#fff",
+          borderRadius: 26,
+          border: "1px solid #e5e7eb",
+          overflow: "hidden",
+          boxShadow: "0 18px 54px rgba(15,23,42,0.06)",
+          marginBottom: 22,
         }}
       >
-        DÖF Kapat
-      </button>
-    </form>
-  )}
-</div>
+        <div
+          style={{
+            padding: "20px 22px",
+            borderBottom: "1px solid #eef2f7",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 21, fontWeight: 1000, color: "#111827" }}>
+              DÖF Takip Merkezi
+            </div>
+            <div style={{ marginTop: 4, fontSize: 13, color: "#64748b", fontWeight: 650 }}>
+              Denetimlerde tespit edilen uygunsuzluk ve kısmen uygun maddelerden oluşan düzeltici/önleyici faaliyet kayıtları.
+            </div>
           </div>
-        );
-      })}
-    </div>
-  )}
-</section>
+
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: openDofItems.length > 0 ? "#fff7ed" : "#f0fdf4",
+              border: openDofItems.length > 0 ? "1px solid #fed7aa" : "1px solid #bbf7d0",
+              color: openDofItems.length > 0 ? "#c2410c" : "#15803d",
+              fontSize: 12,
+              fontWeight: 1000,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Açık: {openDofItems.length} • Kapalı: {closedDofItems.length}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 12,
+            padding: 18,
+            borderBottom: "1px solid #eef2f7",
+            background: "#fbfbfd",
+          }}
+        >
+          <DofDashCard title="Toplam DÖF" value={dofItems.length} desc="Tüm faaliyetler" tone="neutral" />
+          <DofDashCard title="Açık DÖF" value={openDofItems.length} desc="Kapanış bekliyor" tone="warning" />
+          <DofDashCard title="Kapalı DÖF" value={closedDofItems.length} desc="Tamamlanan" tone="good" />
+          <DofDashCard title="Kapanma Oranı" value={`%${dofClosureRate}`} desc="Kapalı / toplam" tone="neutral" />
+        </div>
+
+        {dofItems.length === 0 ? (
+          <div style={{ padding: 28, color: "#64748b", fontWeight: 800, textAlign: "center" }}>
+            Henüz DÖF kaydı yok.
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 10, padding: 18 }}>
+            {pagedDofItems.map((a: any, index: number) => {
+              const status = normalizeDofStatus(a.dof_status || a.dofStatus);
+              const isClosed = status === "CLOSED";
+
+              const relatedRun = safeRuns.find(
+                (r: any) => Number(r.id) === Number(a.run_remote_id)
+              );
+
+              return (
+                <div
+                  key={`${a.run_remote_id}-${a.item_title || a.itemTitle}-${index}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1.2fr 1.6fr 0.7fr 0.9fr",
+                    gap: 12,
+                    alignItems: "center",
+                    padding: 14,
+                    borderRadius: 18,
+                    border: "1px solid #e5e7eb",
+                    background: isClosed ? "#f8fafc" : "#fff7ed",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 1000, color: "#111827" }}>
+                      {cleanFirmName(relatedRun?.firm_name)}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800, marginTop: 4 }}>
+                      Run: {a.run_remote_id} • {modeLabel(relatedRun?.eval_mode)}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontWeight: 900, color: "#334155" }}>
+                      {a.item_title || a.itemTitle || "-"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700, marginTop: 4 }}>
+                      {a.dof_note || a.dofNote || a.note || "DÖF notu girilmemiş"}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      justifyContent: "center",
+                      padding: "7px 10px",
+                      borderRadius: 999,
+                      background: isClosed ? "#dcfce7" : "#fed7aa",
+                      color: isClosed ? "#15803d" : "#c2410c",
+                      fontSize: 12,
+                      fontWeight: 1000,
+                    }}
+                  >
+                    {isClosed ? "Kapalı" : "Açık"}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <Link
+                      href={`/admin/denetimler/${a.run_remote_id}`}
+                      style={buttonStyle("primary")}
+                    >
+                      Denetime Git
+                    </Link>
+
+                    {!isClosed && (
+                      <form action={closeDofAction}>
+                        <input type="hidden" name="answerId" value={a.id || ""} />
+                        <input type="hidden" name="runRemoteId" value={a.run_remote_id || ""} />
+                        <input type="hidden" name="itemTitle" value={a.item_title || a.itemTitle || ""} />
+
+                        <button
+                          type="submit"
+                          style={{
+                            padding: "9px 12px",
+                            borderRadius: 12,
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            border: "1px solid #bbf7d0",
+                            fontWeight: 1000,
+                            fontSize: 13,
+                            cursor: "pointer",
+                          }}
+                        >
+                          DÖF Kapat
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {dofItems.length > dofPageSize && (
+          <Pagination
+            currentPage={safeDofPage}
+            totalPages={dofTotalPages}
+            makeHref={(page) =>
+              makePagedQuery(activeType, activeFirm, page, safeRunPage)
+            }
+          />
+        )}
+      </section>
 
       <section
         style={{
@@ -680,7 +742,7 @@ const uygunsuzCount = answerList.filter(
             Seçilen filtreye uygun denetim kaydı yok.
           </div>
         ) : (
-          filteredRuns.map((r: any, index: number) => {
+          pagedRuns.map((r: any, index: number) => {
             const mode = modeLabel(r.eval_mode);
             const colors = modeColor(r.eval_mode);
             const detailId = r.id;
@@ -760,10 +822,10 @@ const uygunsuzCount = answerList.filter(
                   }}
                 >
                   <div>{answerCount}</div>
-                 {dofCount > 0 && (
-                 <div style={{ fontSize: 11, color: "#c2410c", fontWeight: 1000, marginTop: 4 }}>
-                 DÖF: {dofCount}
-                 </div> 
+                  {dofCount > 0 && (
+                    <div style={{ fontSize: 11, color: "#c2410c", fontWeight: 1000, marginTop: 4 }}>
+                      DÖF: {dofCount}
+                    </div>
                   )}
                 </div>
 
@@ -773,7 +835,7 @@ const uygunsuzCount = answerList.filter(
                   </Link>
 
                   <Link
-  href={`/admin/denetimler/${detailId}/print`}
+                    href={`/admin/denetimler/${detailId}/print`}
                     target="_blank"
                     style={buttonStyle("dark")}
                   >
@@ -806,6 +868,16 @@ const uygunsuzCount = answerList.filter(
               </div>
             );
           })
+        )}
+
+        {filteredRuns.length > runPageSize && (
+          <Pagination
+            currentPage={safeRunPage}
+            totalPages={runTotalPages}
+            makeHref={(page) =>
+              makePagedQuery(activeType, activeFirm, safeDofPage, page)
+            }
+          />
         )}
       </section>
     </main>
@@ -951,6 +1023,42 @@ function AnalysisCard({
   );
 }
 
+function DofDashCard({
+  title,
+  value,
+  desc,
+  tone,
+}: {
+  title: string;
+  value: number | string;
+  desc: string;
+  tone: "good" | "warning" | "neutral";
+}) {
+  const color = tone === "good" ? "#15803d" : tone === "warning" ? "#c2410c" : "#5a0f1f";
+  const bg = tone === "good" ? "#f0fdf4" : tone === "warning" ? "#fff7ed" : "#fff7f7";
+
+  return (
+    <div
+      style={{
+        borderRadius: 20,
+        padding: 16,
+        background: bg,
+        border: "1px solid #e5e7eb",
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b" }}>
+        {title}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 30, fontWeight: 1000, color }}>
+        {value}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 12, fontWeight: 750, color: "#64748b" }}>
+        {desc}
+      </div>
+    </div>
+  );
+}
+
 function MiniPanel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section
@@ -1019,6 +1127,56 @@ function MiniRow({
           }}
         />
       </div>
+    </div>
+  );
+}
+
+function Pagination({
+  currentPage,
+  totalPages,
+  makeHref,
+}: {
+  currentPage: number;
+  totalPages: number;
+  makeHref: (page: number) => string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        justifyContent: "center",
+        flexWrap: "wrap",
+        padding: "16px 18px 20px",
+        borderTop: "1px solid #eef2f7",
+      }}
+    >
+      {Array.from({ length: totalPages }).map((_, i) => {
+        const page = i + 1;
+        const active = page === currentPage;
+
+        return (
+          <Link
+            key={page}
+            href={makeHref(page)}
+            style={{
+              minWidth: 38,
+              height: 38,
+              display: "grid",
+              placeItems: "center",
+              borderRadius: 12,
+              textDecoration: "none",
+              fontSize: 13,
+              fontWeight: 1000,
+              background: active ? "linear-gradient(135deg, #5a0f1f, #c62828)" : "#fff",
+              color: active ? "#fff" : "#5a0f1f",
+              border: active ? "1px solid rgba(90,15,31,0.2)" : "1px solid #ead5d5",
+            }}
+          >
+            {page}
+          </Link>
+        );
+      })}
     </div>
   );
 }
