@@ -94,14 +94,20 @@ function runMatchesCompany(run: AnyRow, companyId: string, companyName: string) 
 
   const companyIdKey = key(companyId);
   const companyNameKey = key(companyName);
+  const firmIdKey = key(firmId);
   const firmNameKey = key(firmName);
 
-  if (companyId && firmId && firmId === companyId) return true;
+  if (companyIdKey && firmIdKey && firmIdKey === companyIdKey) return true;
 
   if (companyNameKey && firmNameKey) {
     if (firmNameKey === companyNameKey) return true;
     if (firmNameKey.includes(companyNameKey)) return true;
     if (companyNameKey.includes(firmNameKey)) return true;
+  }
+
+  // App tarafında gelen Firma#1033038177 gibi kayıtları yakalar
+  if (firmNameKey.startsWith("firma") && companyIdKey) {
+    if (firmNameKey.includes(companyIdKey)) return true;
   }
 
   return false;
