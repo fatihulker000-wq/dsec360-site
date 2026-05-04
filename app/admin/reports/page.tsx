@@ -545,50 +545,80 @@ export default function AdminReportsPage() {
   };
 
   const loadCompanies = async () => {
-    try {
-      setLoadingCompanies(true);
+  try {
+    setLoadingCompanies(true);
 
-      const res = await fetch("/api/admin/companies", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "include",
-      });
+    const res = await fetch("/api/admin/companies", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "include",
+    });
 
-      if (res.status === 401) {
-        window.location.href = "/admin/login";
-        return;
-      }
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        setError(json?.error || "Firmalar alınamadı.");
-        setCompanies([]);
-        return;
-      }
-
-      const list = Array.isArray(json?.data)
-        ? json.data.map((item: { id: string; name: string }) => ({
-            id: String(item.id),
-            name: String(item.name || "").trim(),
-          }))
-        : [];
-
-      setCompanies(list);
-    } catch (err) {
-      console.error(err);
-      setError("Firmalar alınamadı.");
-      setCompanies([]);
-    } finally {
-      setLoadingCompanies(false);
-    }
-  };
-
-  const loadReport = async (companyId: string) => {
-    if (!companyId) {
-      setReport(null);
+    if (res.status === 401) {
+      window.location.href = "/admin/login";
       return;
     }
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      setError(json?.error || "Firmalar alınamadı.");
+      setCompanies([]);
+      return;
+    }
+
+    const list: CompanyRow[] = Array.isArray(json?.data)
+      ? json.data.map((item: { id: string; name: string }) => ({
+          id: String(item.id),
+          name: String(item.name || "").trim(),
+        }))
+      : [];
+
+    setCompanies([
+      { id: "ALL", name: "Tüm Firmalar" },
+      ...list,
+    ]);
+  } catch (err) {
+    console.error(err);
+    setError("Firmalar alınamadı.");
+    setCompanies([]);
+  } finally {
+    setLoadingCompanies(false);
+  }
+};
+
+
+
+  const loadReport = async (companyId: string) => {
+  if (!companyId) {
+    setReport(null);
+    return;
+  }
+
+  if (companyId === "ALL") {
+    setReport({
+      success: true,
+      company: {
+        id: "ALL",
+        name: "Tüm Firmalar",
+        company_title: "-",
+        address: "-",
+        employer_representative: "-",
+        employee_count: 0,
+      },
+      summary: {
+        total_employees: 0,
+        total_trainings: 0,
+        total_assignments: 0,
+        completed_count: 0,
+        in_progress_count: 0,
+        not_started_count: 0,
+      },
+      trainings: [],
+      matrix: [],
+    });
+    return;
+  }
 
     try {
       setLoadingReport(true);

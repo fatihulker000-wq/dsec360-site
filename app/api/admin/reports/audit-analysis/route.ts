@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Firma seçilmedi." }, { status: 400 });
     }
 
-    const showAllCompanies = requestedCompanyId === "ALL"
+    const showAllCompanies = requestedCompanyId === "ALL";
 
     const supabase = getSupabase();
 
