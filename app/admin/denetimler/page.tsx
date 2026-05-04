@@ -72,6 +72,38 @@ async function deleteDenetimAction(formData: FormData) {
   redirect("/admin/denetimler");
 }
 
+async function closeDofAction(formData: FormData) {
+  "use server";
+
+  const answerId = Number(formData.get("answerId") || 0);
+  const runRemoteId = Number(formData.get("runRemoteId") || 0);
+  const itemTitle = String(formData.get("itemTitle") || "").trim();
+
+  const supabase = getSupabase();
+
+  if (answerId > 0) {
+    await supabase
+      .from("denetim_answers")
+      .update({
+        dof_status: "CLOSED",
+        dof_closed_at: Date.now(),
+      })
+      .eq("id", answerId);
+  } else if (runRemoteId > 0 && itemTitle) {
+    await supabase
+      .from("denetim_answers")
+      .update({
+        dof_status: "CLOSED",
+        dof_closed_at: Date.now(),
+      })
+      .eq("run_remote_id", runRemoteId)
+      .eq("item_title", itemTitle);
+  }
+
+  revalidatePath("/admin/denetimler");
+  redirect("/admin/denetimler");
+}
+
 export default async function AdminDenetimlerPage({
   searchParams,
 }: {
@@ -525,12 +557,38 @@ const uygunsuzCount = answerList.filter(
               {isClosed ? "Kapalı" : "Açık"}
             </div>
 
-            <Link
-              href={`/admin/denetimler/${a.run_remote_id}`}
-              style={buttonStyle("primary")}
-            >
-              Denetime Git
-            </Link>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+  <Link
+    href={`/admin/denetimler/${a.run_remote_id}`}
+    style={buttonStyle("primary")}
+  >
+    Denetime Git
+  </Link>
+
+  {!isClosed && (
+    <form action={closeDofAction}>
+      <input type="hidden" name="answerId" value={a.id || ""} />
+      <input type="hidden" name="runRemoteId" value={a.run_remote_id || ""} />
+      <input type="hidden" name="itemTitle" value={a.item_title || a.itemTitle || ""} />
+
+      <button
+        type="submit"
+        style={{
+          padding: "9px 12px",
+          borderRadius: 12,
+          background: "#dcfce7",
+          color: "#15803d",
+          border: "1px solid #bbf7d0",
+          fontWeight: 1000,
+          fontSize: 13,
+          cursor: "pointer",
+        }}
+      >
+        DÖF Kapat
+      </button>
+    </form>
+  )}
+</div>
           </div>
         );
       })}
