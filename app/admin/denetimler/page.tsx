@@ -99,6 +99,31 @@ export default async function AdminDenetimlerPage({
     : { data: [] as any[] };
 
   const answerList = answers || [];
+  function normalizeDofStatus(value?: string | null) {
+  const v = String(value || "").trim().toUpperCase();
+  if (v === "CLOSED" || v === "KAPALI") return "CLOSED";
+  if (v === "OPEN" || v === "IN_PROGRESS" || v === "AÇIK") return "OPEN";
+  return "NONE";
+}
+
+const dofItems = answerList.filter((a: any) => {
+  const status = normalizeDofStatus(a.dof_status || a.dofStatus);
+  return status !== "NONE";
+});
+
+const openDofItems = dofItems.filter(
+  (a: any) => normalizeDofStatus(a.dof_status || a.dofStatus) === "OPEN"
+);
+
+const closedDofItems = dofItems.filter(
+  (a: any) => normalizeDofStatus(a.dof_status || a.dofStatus) === "CLOSED"
+);
+
+const dofCountByRun = new Map<number, number>();
+dofItems.forEach((a: any) => {
+  const key = Number(a.run_remote_id);
+  dofCountByRun.set(key, (dofCountByRun.get(key) || 0) + 1);
+});
 
   const countByRun = new Map<number, number>();
   answerList.forEach((a: any) => {
@@ -270,6 +295,8 @@ const uygunsuzCount = answerList.filter(
         <Kpi title="Uygun" value={uygunCount} desc="Pozitif bulgu" href={makeQuery(activeType, activeFirm)} />
         <Kpi title="Kısmen" value={kismenCount} desc="Geliştirilmeli" href={makeQuery(activeType, activeFirm)} />
         <Kpi title="Uygunsuz" value={uygunsuzCount} desc="Kritik bulgu" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Açık DÖF" value={openDofItems.length} desc="Takip bekliyor" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Kapalı DÖF" value={closedDofItems.length} desc="Tamamlanan faaliyet" href={makeQuery(activeType, activeFirm)} />
       </section>
 
       <section
@@ -392,6 +419,125 @@ const uygunsuzCount = answerList.filter(
         </MiniPanel>
       </section>
 
+    <section
+  style={{
+    background: "#fff",
+    borderRadius: 26,
+    border: "1px solid #e5e7eb",
+    overflow: "hidden",
+    boxShadow: "0 18px 54px rgba(15,23,42,0.06)",
+    marginBottom: 22,
+  }}
+>
+  <div
+    style={{
+      padding: "20px 22px",
+      borderBottom: "1px solid #eef2f7",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 14,
+    }}
+  >
+    <div>
+      <div style={{ fontSize: 21, fontWeight: 1000, color: "#111827" }}>
+        DÖF Takip Merkezi
+      </div>
+      <div style={{ marginTop: 4, fontSize: 13, color: "#64748b", fontWeight: 650 }}>
+        Denetimlerde tespit edilen uygunsuzluk ve kısmen uygun maddelerden oluşan düzeltici/önleyici faaliyet kayıtları.
+      </div>
+    </div>
+
+    <div
+      style={{
+        padding: "8px 12px",
+        borderRadius: 999,
+        background: openDofItems.length > 0 ? "#fff7ed" : "#f0fdf4",
+        border: openDofItems.length > 0 ? "1px solid #fed7aa" : "1px solid #bbf7d0",
+        color: openDofItems.length > 0 ? "#c2410c" : "#15803d",
+        fontSize: 12,
+        fontWeight: 1000,
+        whiteSpace: "nowrap",
+      }}
+    >
+      Açık: {openDofItems.length} • Kapalı: {closedDofItems.length}
+    </div>
+  </div>
+
+  {dofItems.length === 0 ? (
+    <div style={{ padding: 28, color: "#64748b", fontWeight: 800, textAlign: "center" }}>
+      Henüz DÖF kaydı yok.
+    </div>
+  ) : (
+    <div style={{ display: "grid", gap: 10, padding: 18 }}>
+      {dofItems.slice(0, 12).map((a: any, index: number) => {
+        const status = normalizeDofStatus(a.dof_status || a.dofStatus);
+        const isClosed = status === "CLOSED";
+
+        const relatedRun = safeRuns.find(
+          (r: any) => Number(r.id) === Number(a.run_remote_id)
+        );
+
+        return (
+          <div
+            key={`${a.run_remote_id}-${a.item_title || a.itemTitle}-${index}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.2fr 1.6fr 0.7fr 0.9fr",
+              gap: 12,
+              alignItems: "center",
+              padding: 14,
+              borderRadius: 18,
+              border: "1px solid #e5e7eb",
+              background: isClosed ? "#f8fafc" : "#fff7ed",
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 1000, color: "#111827" }}>
+                {cleanFirmName(relatedRun?.firm_name)}
+              </div>
+              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800, marginTop: 4 }}>
+                Run: {a.run_remote_id} • {modeLabel(relatedRun?.eval_mode)}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontWeight: 900, color: "#334155" }}>
+                {a.item_title || a.itemTitle || "-"}
+              </div>
+              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700, marginTop: 4 }}>
+                {a.dof_note || a.dofNote || a.note || "DÖF notu girilmemiş"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "inline-flex",
+                justifyContent: "center",
+                padding: "7px 10px",
+                borderRadius: 999,
+                background: isClosed ? "#dcfce7" : "#fed7aa",
+                color: isClosed ? "#15803d" : "#c2410c",
+                fontSize: 12,
+                fontWeight: 1000,
+              }}
+            >
+              {isClosed ? "Kapalı" : "Açık"}
+            </div>
+
+            <Link
+              href={`/admin/denetimler/${a.run_remote_id}`}
+              style={buttonStyle("primary")}
+            >
+              Denetime Git
+            </Link>
+          </div>
+        );
+      })}
+    </div>
+  )}
+</section>
+
       <section
         style={{
           background: "#fff",
@@ -482,6 +628,7 @@ const uygunsuzCount = answerList.filter(
             const detailId = r.id;
             const answerCount = countByRun.get(Number(r.id)) || 0;
             const firmName = cleanFirmName(r.firm_name);
+            const dofCount = dofCountByRun.get(Number(r.id)) || 0;
 
             return (
               <div
@@ -554,7 +701,12 @@ const uygunsuzCount = answerList.filter(
                     fontSize: 16,
                   }}
                 >
-                  {answerCount}
+                  <div>{answerCount}</div>
+                 {dofCount > 0 && (
+                 <div style={{ fontSize: 11, color: "#c2410c", fontWeight: 1000, marginTop: 4 }}>
+                 DÖF: {dofCount}
+                 </div> 
+                  )}
                 </div>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
