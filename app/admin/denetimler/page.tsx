@@ -150,25 +150,65 @@ export default async function AdminDenetimlerPage({
 
   const answerList = answers || [];
 
-  function normalizeDofStatus(value?: string | null) {
-    const v = String(value || "").trim().toUpperCase();
-    if (v === "CLOSED" || v === "KAPALI") return "CLOSED";
-    if (v === "OPEN" || v === "IN_PROGRESS" || v === "AÇIK") return "OPEN";
-    return "NONE";
+function normalizeText(value?: string | null) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function resultRequiresDof(result?: string | null) {
+  const r = normalizeText(result);
+
+  if (!r) return false;
+
+  if (
+    r === "UYGUNSUZ" ||
+    r === "KISMEN" ||
+    r.includes("UYGUNSUZ") ||
+    r.includes("KISMEN") ||
+    r.includes("YETERSIZ") ||
+    r.includes("YETERSİZ") ||
+    r.includes("EKSIK") ||
+    r.includes("EKSİK")
+  ) {
+    return true;
   }
 
-  const dofItems = answerList.filter((a: any) => {
-    const status = normalizeDofStatus(a.dof_status || a.dofStatus);
-    return status !== "NONE";
-  });
+  if (r.startsWith("SCORE:")) {
+    const score = Number(r.replace("SCORE:", ""));
+    return Number.isFinite(score) && score < 100;
+  }
 
-  const openDofItems = dofItems.filter(
-    (a: any) => normalizeDofStatus(a.dof_status || a.dofStatus) === "OPEN"
-  );
+  if (r.startsWith("ELMERI:")) {
+    const parts = r.split(":");
+    const wrong = Number(parts[2] || 0);
+    return Number.isFinite(wrong) && wrong > 0;
+  }
 
-  const closedDofItems = dofItems.filter(
-    (a: any) => normalizeDofStatus(a.dof_status || a.dofStatus) === "CLOSED"
-  );
+  return false;
+}
+
+function normalizeDofStatusFromAnswer(a: any) {
+  const status = normalizeText(a.dof_status || a.dofStatus);
+
+  if (status === "CLOSED" || status === "KAPALI") return "CLOSED";
+  if (status === "OPEN" || status === "IN_PROGRESS" || status === "AÇIK") return "OPEN";
+
+  if (resultRequiresDof(a.result)) return "OPEN";
+
+  return "NONE";
+}
+
+ const dofItems = answerList.filter((a: any) => {
+  const status = normalizeDofStatusFromAnswer(a);
+  return status !== "NONE";
+});
+
+const openDofItems = dofItems.filter(
+  (a: any) => normalizeDofStatusFromAnswer(a) === "OPEN"
+);
+
+const closedDofItems = dofItems.filter(
+  (a: any) => normalizeDofStatusFromAnswer(a) === "CLOSED"
+);
 
   const dofCountByRun = new Map<number, number>();
   dofItems.forEach((a: any) => {
@@ -555,7 +595,7 @@ export default async function AdminDenetimlerPage({
         ) : (
           <div style={{ display: "grid", gap: 10, padding: 18 }}>
             {pagedDofItems.map((a: any, index: number) => {
-              const status = normalizeDofStatus(a.dof_status || a.dofStatus);
+              const status = normalizeDofStatusFromAnswer(a);
               const isClosed = status === "CLOSED";
 
               const relatedRun = safeRuns.find(
