@@ -574,10 +574,14 @@ export default function AdminReportsPage() {
         }))
       : [];
 
-    setCompanies([
-      { id: "ALL", name: "Tüm Firmalar" },
-      ...list,
-    ]);
+    const cleanList = list.filter(
+  (c) => c.id !== "ALL" && c.name !== "Tüm Firmalar"
+);
+
+setCompanies([
+  { id: "ALL", name: "Tüm Firmalar" },
+  ...cleanList,
+]);
   } catch (err) {
     console.error(err);
     setError("Firmalar alınamadı.");
