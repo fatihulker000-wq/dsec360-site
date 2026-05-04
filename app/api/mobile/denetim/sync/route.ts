@@ -71,6 +71,28 @@ async function uploadPhotoIfExists(
   }
 }
 
+function calculateDofStatus(answer: any) {
+  const incoming = String(answer?.dofStatus || answer?.dof_status || "").trim().toUpperCase();
+  const result = String(answer?.result || "").trim().toUpperCase();
+
+  if (incoming === "CLOSED") return "CLOSED";
+
+  if (result === "UYGUNSUZ" || result === "KISMEN") return "OPEN";
+
+  if (result.startsWith("SCORE:")) {
+    const score = Number(result.replace("SCORE:", ""));
+    if (Number.isFinite(score) && score < 75) return "OPEN";
+  }
+
+  if (result.startsWith("ELMERI:")) {
+    const parts = result.split(":");
+    const wrong = Number(parts[2] || 0);
+    if (wrong > 0) return "OPEN";
+  }
+
+  return "NONE";
+}
+
 export async function POST(req: Request) {
   let insertedRunId: number | null = null;
 
@@ -172,8 +194,7 @@ if (!run || !appRunId) {
     a.recommendedAction || a.recommended_action || "",
 
   // ✅ DÖF TAKİBİ - App → Web
-  dof_status:
-    a.dofStatus || a.dof_status || "NONE",
+  dof_status: calculateDofStatus(a),
   dof_closed_at:
     Number(a.dofClosedAt || a.dof_closed_at || 0) > 0
       ? Number(a.dofClosedAt || a.dof_closed_at)
