@@ -141,15 +141,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Firma seçilmedi." }, { status: 400 });
     }
 
+    const showAllCompanies = requestedCompanyId === "ALL"
+
     const supabase = getSupabase();
 
-    const { data: companyData } = await supabase
-      .from("companies")
-      .select("*")
-      .eq("id", requestedCompanyId)
-      .maybeSingle();
+    let companyName = "Tüm Firmalar";
 
-    const companyName = pickCompanyName(companyData as AnyRow | null);
+if (!showAllCompanies) {
+  const { data: companyData } = await supabase
+    .from("companies")
+    .select("*")
+    .eq("id", requestedCompanyId)
+    .maybeSingle();
+
+  companyName = pickCompanyName(companyData as AnyRow | null);
+}
 
     const { data: allRuns, error: runsError } = await supabase
       .from("denetim_runs")
@@ -166,7 +172,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const runs = (allRuns || []).filter((run: AnyRow) =>
+    const runs = showAllCompanies
+  ? (allRuns || [])
+  : (allRuns || []).filter((run: AnyRow) =>
       runMatchesCompany(run, requestedCompanyId, companyName)
     );
 
