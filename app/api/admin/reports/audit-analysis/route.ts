@@ -2,6 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL!,
@@ -11,31 +14,97 @@ function getSupabase() {
 
 type AnyRow = Record<string, any>;
 
-function normalizeText(value: unknown) {
+function text(value: unknown) {
   return String(value || "").trim();
 }
 
-function normalizeResult(value: unknown) {
-  const raw = normalizeText(value).toUpperCase();
-
-  if (raw.includes("UYGUNSUZ")) return "UYGUNSUZ";
-  if (raw.includes("KISMEN")) return "KISMEN";
-  if (raw.includes("KAPSAM")) return "KAPSAMDISI";
-  if (raw.includes("UYGUN")) return "UYGUN";
-
-  return "DIGER";
+function key(value: unknown) {
+  return text(value)
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .replace(/İ/g, "i")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function pickCompanyName(row: AnyRow | null) {
   if (!row) return "";
 
   return (
-    normalizeText(row.name) ||
-    normalizeText(row.company_name) ||
-    normalizeText(row.firma_adi) ||
-    normalizeText(row.company_title) ||
-    normalizeText(row.title)
+    text(row.name) ||
+    text(row.company_name) ||
+    text(row.firma_adi) ||
+    text(row.company_title) ||
+    text(row.title)
   );
+}
+
+function normalizeResult(value: unknown) {
+  const raw = text(value).toUpperCase();
+
+  if (!raw) return "DIGER";
+
+  if (raw.startsWith("SCORE:")) {
+    const score = Number(raw.replace("SCORE:", ""));
+    if (!Number.isFinite(score)) return "DIGER";
+    if (score >= 100) return "UYGUN";
+    if (score >= 75) return "KISMEN";
+    return "UYGUNSUZ";
+  }
+
+  if (raw.startsWith("ELMERI:")) {
+    const parts = raw.split(":");
+    const wrong = Number(parts[2] || 0);
+    const out = Number(parts[3] || 0);
+
+    if (wrong > 0) return "UYGUNSUZ";
+    if (out > 0) return "KAPSAMDISI";
+    return "UYGUN";
+  }
+
+  if (raw.includes("KAPSAM")) return "KAPSAMDISI";
+  if (raw.includes("UYGUNSUZ")) return "UYGUNSUZ";
+  if (raw.includes("KISMEN")) return "KISMEN";
+  if (raw.includes("YETERSIZ") || raw.includes("YETERSİZ")) return "UYGUNSUZ";
+  if (raw.includes("EKSIK") || raw.includes("EKSİK")) return "UYGUNSUZ";
+  if (raw.includes("UYGUN")) return "UYGUN";
+
+  return "DIGER";
+}
+
+function normalizeDofStatus(value: unknown, result: unknown) {
+  const s = text(value).toUpperCase();
+  const r = normalizeResult(result);
+
+  if (s === "CLOSED" || s === "KAPALI") return "CLOSED";
+  if (s === "OPEN" || s === "AÇIK" || s === "IN_PROGRESS") return "OPEN";
+
+  if (r === "UYGUNSUZ" || r === "KISMEN") return "OPEN";
+
+  return "NONE";
+}
+
+function runMatchesCompany(run: AnyRow, companyId: string, companyName: string) {
+  const firmId = text(run.firm_id);
+  const firmName = text(run.firm_name);
+
+  const companyIdKey = key(companyId);
+  const companyNameKey = key(companyName);
+  const firmNameKey = key(firmName);
+
+  if (companyId && firmId && firmId === companyId) return true;
+
+  if (companyNameKey && firmNameKey) {
+    if (firmNameKey === companyNameKey) return true;
+    if (firmNameKey.includes(companyNameKey)) return true;
+    if (companyNameKey.includes(firmNameKey)) return true;
+  }
+
+  return false;
 }
 
 export async function GET(req: NextRequest) {
@@ -44,13 +113,8 @@ export async function GET(req: NextRequest) {
 
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
     const adminRole = cookieStore.get("dsec_admin_role")?.value;
-    const companyIdFromCookie = normalizeText(
-      cookieStore.get("dsec_company_id")?.value
-    );
-
-    const companyIdFromQuery = normalizeText(
-      req.nextUrl.searchParams.get("companyId")
-    );
+    const companyIdFromCookie = text(cookieStore.get("dsec_company_id")?.value);
+    const companyIdFromQuery = text(req.nextUrl.searchParams.get("companyId"));
 
     const isAllowed =
       adminAuth === "ok" &&
@@ -59,25 +123,19 @@ export async function GET(req: NextRequest) {
         adminRole === "company_admin");
 
     if (!isAllowed) {
-      return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
-    const supabase = getSupabase();
-
-    let requestedCompanyId =
+    const requestedCompanyId =
       adminRole === "company_admin"
         ? companyIdFromCookie || companyIdFromQuery
         : companyIdFromQuery;
 
     if (!requestedCompanyId) {
-      return NextResponse.json(
-        { error: "Firma seçilmedi." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Firma seçilmedi." }, { status: 400 });
     }
+
+    const supabase = getSupabase();
 
     const { data: companyData } = await supabase
       .from("companies")
@@ -87,30 +145,10 @@ export async function GET(req: NextRequest) {
 
     const companyName = pickCompanyName(companyData as AnyRow | null);
 
-    let runsData: AnyRow[] = [];
-let runsError: any = null;
-
-const baseRunsSelect = () =>
-  supabase
-    .from("denetim_runs")
-    .select("*")
-    .order("created_at_millis", { ascending: false });
-
-const numericCompanyId = Number(requestedCompanyId);
-
-// 1) Önce gerçek numeric firm_id ile dene
-if (Number.isFinite(numericCompanyId) && requestedCompanyId !== "") {
-  const result = await baseRunsSelect().eq("firm_id", numericCompanyId);
-  runsData = (result.data || []) as AnyRow[];
-  runsError = result.error;
-}
-
-// 2) Sonuç yoksa firma adı ile dene
-if (!runsError && runsData.length === 0 && companyName) {
-  const result = await baseRunsSelect().eq("firm_name", companyName);
-  runsData = (result.data || []) as AnyRow[];
-  runsError = result.error;
-}
+    const { data: allRuns, error: runsError } = await supabase
+      .from("denetim_runs")
+      .select("*")
+      .order("created_at_millis", { ascending: false });
 
     if (runsError) {
       return NextResponse.json(
@@ -122,28 +160,21 @@ if (!runsError && runsData.length === 0 && companyName) {
       );
     }
 
-    const runs = (runsData || []) as AnyRow[];
+    const runs = (allRuns || []).filter((run: AnyRow) =>
+      runMatchesCompany(run, requestedCompanyId, companyName)
+    );
 
     const runRemoteIds = runs
-      .map((r) => r.id)
-      .filter((id) => id !== null && id !== undefined);
-
-    const appRunIds = runs
-      .map((r) => r.app_run_id)
-      .filter((id) => id !== null && id !== undefined);
+      .map((r: AnyRow) => r.id)
+      .filter((id: any) => id !== null && id !== undefined);
 
     let answers: AnyRow[] = [];
 
-    if (runRemoteIds.length > 0 || appRunIds.length > 0) {
-      let answerQuery = supabase.from("denetim_answers").select("*");
-
-      if (runRemoteIds.length > 0) {
-        answerQuery = answerQuery.in("run_remote_id", runRemoteIds);
-      } else {
-        answerQuery = answerQuery.in("app_run_id", appRunIds);
-      }
-
-      const { data: answersData, error: answersError } = await answerQuery;
+    if (runRemoteIds.length > 0) {
+      const { data: answersData, error: answersError } = await supabase
+        .from("denetim_answers")
+        .select("*")
+        .in("run_remote_id", runRemoteIds);
 
       if (answersError) {
         return NextResponse.json(
@@ -155,7 +186,7 @@ if (!runsError && runsData.length === 0 && companyName) {
         );
       }
 
-      answers = (answersData || []) as AnyRow[];
+      answers = answersData || [];
     }
 
     let uygunCount = 0;
@@ -163,19 +194,26 @@ if (!runsError && runsData.length === 0 && companyName) {
     let kismenCount = 0;
     let kapsamDisiCount = 0;
     let otherCount = 0;
+    let openDofCount = 0;
+    let closedDofCount = 0;
 
     const nonconformityMap = new Map<string, number>();
-    const categoryMap = new Map<string, number>();
+    const actionMap = new Map<string, number>();
 
     answers.forEach((answer) => {
       const result = normalizeResult(answer.result);
-      const itemTitle = normalizeText(answer.item_title || answer.itemTitle);
-      const action = normalizeText(answer.recommended_action);
+      const dofStatus = normalizeDofStatus(answer.dof_status, answer.result);
+
+      const itemTitle = text(answer.item_title || answer.itemTitle);
+      const action = text(answer.recommended_action || answer.recommendedAction);
 
       if (result === "UYGUN") uygunCount += 1;
-      else if (result === "UYGUNSUZ") {
-        uygunsuzCount += 1;
+      else if (result === "UYGUNSUZ") uygunsuzCount += 1;
+      else if (result === "KISMEN") kismenCount += 1;
+      else if (result === "KAPSAMDISI") kapsamDisiCount += 1;
+      else otherCount += 1;
 
+      if (result === "UYGUNSUZ" || result === "KISMEN") {
         if (itemTitle) {
           nonconformityMap.set(
             itemTitle,
@@ -184,11 +222,12 @@ if (!runsError && runsData.length === 0 && companyName) {
         }
 
         if (action) {
-          categoryMap.set(action, (categoryMap.get(action) || 0) + 1);
+          actionMap.set(action, (actionMap.get(action) || 0) + 1);
         }
-      } else if (result === "KISMEN") kismenCount += 1;
-      else if (result === "KAPSAMDISI") kapsamDisiCount += 1;
-      else otherCount += 1;
+      }
+
+      if (dofStatus === "OPEN") openDofCount += 1;
+      if (dofStatus === "CLOSED") closedDofCount += 1;
     });
 
     const totalItems = answers.length;
@@ -197,18 +236,16 @@ if (!runsError && runsData.length === 0 && companyName) {
       totalItems > 0
         ? Math.max(
             0,
-            Math.round(
-              ((uygunCount + kismenCount * 0.5) / totalItems) * 100
-            )
+            Math.round(((uygunCount + kismenCount * 0.5) / totalItems) * 100)
           )
         : 0;
 
     const completedRuns = runs.filter(
-      (r) => normalizeText(r.status).toUpperCase() === "TAMAMLANDI"
+      (r: AnyRow) => text(r.status).toUpperCase() === "TAMAMLANDI"
     ).length;
 
     const draftRuns = runs.filter(
-      (r) => normalizeText(r.status).toUpperCase() === "TASLAK"
+      (r: AnyRow) => text(r.status).toUpperCase() === "TASLAK"
     ).length;
 
     const topNonconformities = Array.from(nonconformityMap.entries())
@@ -216,7 +253,7 @@ if (!runsError && runsData.length === 0 && companyName) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    const recommendedActions = Array.from(categoryMap.entries())
+    const recommendedActions = Array.from(actionMap.entries())
       .map(([title, count]) => ({ title, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
@@ -237,8 +274,8 @@ if (!runsError && runsData.length === 0 && companyName) {
         kismen_count: kismenCount,
         kapsam_disi_count: kapsamDisiCount,
         other_count: otherCount,
-        open_dof_count: 0,
-        closed_dof_count: 0,
+        open_dof_count: openDofCount,
+        closed_dof_count: closedDofCount,
         compliance_score: complianceScore,
       },
       result_distribution: [
@@ -249,7 +286,7 @@ if (!runsError && runsData.length === 0 && companyName) {
       ],
       top_nonconformities: topNonconformities,
       recommended_actions: recommendedActions,
-      audits: runs.map((r) => ({
+      audits: runs.map((r: AnyRow) => ({
         id: r.id,
         app_run_id: r.app_run_id,
         firm_id: r.firm_id,
