@@ -112,25 +112,6 @@ if (!runsError && runsData.length === 0 && companyName) {
   runsError = result.error;
 }
 
-// 3) Sonuç yoksa mevcut app senkron yapısındaki firm_id = 0 kayıtlarını al
-// Şu an app tarafı denetimleri Supabase'e firm_id=0 olarak gönderdiği için
-// geçici uyumluluk katmanı olarak bu fallback kullanılıyor.
-if (!runsError && runsData.length === 0) {
-  const result = await baseRunsSelect().eq("firm_id", 0);
-  runsData = (result.data || []) as AnyRow[];
-  runsError = result.error;
-}
-
-if (runsError) {
-  return NextResponse.json(
-    {
-      error: "Denetim kayıtları alınamadı.",
-      detail: runsError.message,
-    },
-    { status: 500 }
-  );
-}
-
     if (runsError) {
       return NextResponse.json(
         {
