@@ -8,11 +8,10 @@ import { useState } from "react";
 const navItems = [
   { href: "/", label: "Ana Sayfa" },
   { href: "/services", label: "Hizmetler" },
-{ href: "/admin/employees", label: "Çalışanlar", icon: "👤" },
+  { href: "/denetim", label: "Denetim" },
   { href: "/cbs", label: "ÇBS" },
   { href: "/pricing", label: "Fiyatlar" },
   { href: "/contact", label: "İletişim" },
-  
 ];
 
 const trainingItems = [
@@ -281,6 +280,14 @@ const showLogoutButton =
                 ))}
               </div>
             )}
+
+<Link
+  href="/denetim"
+  className="nav-link-item"
+  onClick={() => setMobileOpen(false)}
+>
+  Denetim
+</Link>
 
             <Link href="/cbs" className="nav-link-item" onClick={() => setMobileOpen(false)}>
               ÇBS
