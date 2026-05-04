@@ -611,10 +611,32 @@ export default function AdminReportsPage() {
       const json: ReportResponse = await res.json();
 
       if (!res.ok) {
-        setError(json?.error || "Rapor alınamadı.");
-        setReport(null);
-        return;
-      }
+  console.warn("Eğitim raporu alınamadı:", json?.error);
+
+  setReport({
+    success: true,
+    company: {
+      id: companyId,
+      name: companies.find((c) => c.id === companyId)?.name || "Seçili Firma",
+      company_title: "-",
+      address: "-",
+      employer_representative: "-",
+      employee_count: 0,
+    },
+    summary: {
+      total_employees: 0,
+      total_trainings: 0,
+      total_assignments: 0,
+      completed_count: 0,
+      in_progress_count: 0,
+      not_started_count: 0,
+    },
+    trainings: [],
+    matrix: [],
+  });
+
+  return;
+}
 
       setReport(json);
     } catch (err) {
@@ -1191,7 +1213,7 @@ const auditTone = useMemo(() => {
     lineHeight: 1.2,
   }}
 >
-                Firma Eğitim Raporları
+                Raporlama Merkezi
               </h1>
               <p
                 style={{
@@ -1200,7 +1222,7 @@ const auditTone = useMemo(() => {
                   lineHeight: 1.7,
                 }}
               >
-                Firma seç, filtrele, detay aç ve çalışan / eğitim bazlı interaktif rapor üret.
+               Firma bazlı eğitim, denetim, çalışan ve yönetim raporlarını tek merkezden analiz et.
               </p>
             </div>
 
