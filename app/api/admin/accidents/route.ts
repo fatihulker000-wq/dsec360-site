@@ -52,7 +52,7 @@ export async function GET(_req: NextRequest) {
         source,
         created_at,
         updated_at,
-        created_at_server,
+        created_at_server
         
       `
       )
