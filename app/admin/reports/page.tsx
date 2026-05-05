@@ -1333,11 +1333,13 @@ const auditTone = useMemo(() => {
               >
                 
                 <option value="ALL">Tüm Firmalar</option>
-                {companies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {company.name}
-                  </option>
-                ))}
+                {companies
+  .filter((c) => c.id !== "ALL")
+  .map((company) => (
+    <option key={company.id} value={company.id}>
+      {company.name}
+    </option>
+))}
               </select>
             ) : (
               <div

@@ -98,6 +98,7 @@ function runMatchesCompany(run: AnyRow, companyId: string, companyName: string) 
   const firmNameKey = key(firmName);
 
   if (companyIdKey && firmIdKey && firmIdKey === companyIdKey) return true;
+  if (firmNameKey === companyNameKey) return true;
 
   if (companyNameKey && firmNameKey) {
     if (firmNameKey === companyNameKey) return true;
