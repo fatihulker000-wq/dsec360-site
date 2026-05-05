@@ -574,7 +574,8 @@ export default function AdminReportsPage() {
         }))
       : [];
 
-    const cleanList = list.filter(
+  
+const cleanList = list.filter(
   (c) => c.id !== "ALL" && c.name !== "Tüm Firmalar"
 );
 
@@ -692,7 +693,11 @@ setCompanies([
     setLoadingAuditReport(true);
 
     const res = await fetch(
-      `/api/admin/reports/audit-analysis?companyId=${encodeURIComponent(companyId)}`,
+    `/api/admin/reports/audit-analysis?companyId=$
+    {encodeURIComponent(companyId)}&companyName=$
+    {encodeURIComponent(
+    companies.find((c) => c.id === companyId)?.name || ""
+)}`,
       {
         method: "GET",
         cache: "no-store",

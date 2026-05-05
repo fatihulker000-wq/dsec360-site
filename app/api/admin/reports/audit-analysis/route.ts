@@ -123,6 +123,7 @@ export async function GET(req: NextRequest) {
     const adminRole = cookieStore.get("dsec_admin_role")?.value;
     const companyIdFromCookie = text(cookieStore.get("dsec_company_id")?.value);
     const companyIdFromQuery = text(req.nextUrl.searchParams.get("companyId"));
+    const companyNameFromQuery = text(req.nextUrl.searchParams.get("companyName"));
 
     const isAllowed =
       adminAuth === "ok" &&
@@ -148,7 +149,7 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabase();
 
     let companyName = "Tüm Firmalar";
-
+ 
 if (!showAllCompanies) {
   const { data: companyData } = await supabase
     .from("companies")
@@ -156,7 +157,7 @@ if (!showAllCompanies) {
     .eq("id", requestedCompanyId)
     .maybeSingle();
 
-  companyName = pickCompanyName(companyData as AnyRow | null);
+  companyName = companyNameFromQuery || pickCompanyName(companyData as AnyRow | null);
 }
 
     const { data: allRuns, error: runsError } = await supabase
