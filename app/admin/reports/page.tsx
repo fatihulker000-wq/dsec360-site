@@ -577,7 +577,7 @@ export default function AdminReportsPage() {
   
 setCompanies([
   { id: "ALL", name: "Tüm Firmalar" },
-  ...list
+  ...list,
 ]);
 
   } catch (err) {
@@ -596,32 +596,7 @@ setCompanies([
     setReport(null);
     return;
   }
-
-  if (companyId === "ALL") {
-    setReport({
-      success: true,
-      company: {
-        id: "ALL",
-        name: "Tüm Firmalar",
-        company_title: "-",
-        address: "-",
-        employer_representative: "-",
-        employee_count: 0,
-      },
-      summary: {
-        total_employees: 0,
-        total_trainings: 0,
-        total_assignments: 0,
-        completed_count: 0,
-        in_progress_count: 0,
-        not_started_count: 0,
-      },
-      trainings: [],
-      matrix: [],
-    });
-    return;
-  }
-
+ 
     try {
       setLoadingReport(true);
       setError("");
@@ -689,12 +664,14 @@ setCompanies([
   try {
     setLoadingAuditReport(true);
 
-    const res = await fetch(
-    `/api/admin/reports/audit-analysis?companyId=$
-    {encodeURIComponent(companyId)}&companyName=$
-    {encodeURIComponent(
-    companies.find((c) => c.id === companyId)?.name || ""
-)}`,
+    const companyName = companies.find((c) => c.id === 
+    companyId)?.name || "";
+
+const res = await fetch(
+  `/api/admin/reports/audit-analysis?companyId=$
+  {encodeURIComponent(
+    companyId
+  )}&companyName=${encodeURIComponent(companyName)}`,
       {
         method: "GET",
         cache: "no-store",
@@ -737,12 +714,12 @@ setCompanies([
     }
   }, [scope]);
 
-  useEffect(() => {
+ useEffect(() => {
   if (selectedCompanyId) {
     void loadReport(selectedCompanyId);
     void loadAuditReport(selectedCompanyId);
   }
-}, [selectedCompanyId]);
+}, [selectedCompanyId, companies]); 
 
   const completionRate = useMemo(() => {
     const total = report?.summary?.total_assignments || 0;
