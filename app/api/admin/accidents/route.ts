@@ -53,8 +53,7 @@ export async function GET(_req: NextRequest) {
         created_at,
         updated_at,
         created_at_server,
-        sync_status,
-        last_synced_at
+        
       `
       )
       .order("event_date", { ascending: false });
@@ -102,8 +101,7 @@ export async function GET(_req: NextRequest) {
 
       isActive: item.is_active ?? 1,
       source: item.source || "APP",
-      syncStatus: item.sync_status || "-",
-      lastSyncedAt: item.last_synced_at ?? null,
+      
     }));
 
     return NextResponse.json({
