@@ -12,6 +12,11 @@ type AccidentRow = {
   eventDate?: number | null;
   createdAt?: number | null;
   syncStatus?: string | null;
+  lostWorkDays?: number | null;
+  department?: string | null;
+  shift?: string | null;
+  injuryType?: string | null;
+  rootCauseCategory?: string | null;
 };
 
 export default function AdminAccidentsPage() {
@@ -176,6 +181,11 @@ export default function AdminAccidentsPage() {
                 <Th>Şiddet</Th>
                 <Th>Tarih</Th>
                 <Th>Senkron</Th>
+                <th>Kayıp Gün</th>
+                <th>Departman</th>
+                <th>Vardiya</th>
+                <th>Yaralanma</th>
+                <th>Kök Neden</th>
               </tr>
             </thead>
 
@@ -198,6 +208,11 @@ export default function AdminAccidentsPage() {
                       : "-"}
                   </Td>
                   <Td>{row.syncStatus || "-"}</Td>
+                  <Td>{row.lostWorkDays ?? 0}</Td>
+                  <Td>{row.department || "-"}</Td>
+                  <Td>{row.shift || "-"}</Td>
+                  <Td>{row.injuryType || "-"}</Td>
+                  <Td>{row.rootCauseCategory || "-"}</Td>
                 </tr>
               ))}
             </tbody>
