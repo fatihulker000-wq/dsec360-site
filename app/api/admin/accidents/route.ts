@@ -25,8 +25,18 @@ export async function GET(_req: NextRequest) {
 
     const { data, error } = await supabase
       .from("accident_records")
-      .select("*")
-      .order("eventDate", { ascending: false });
+      .select(`
+  id,
+  title,
+  employee_name,
+  event_type,
+  location,
+  severity,
+  event_date,
+  created_at,
+  sync_status
+`)
+      .order("event_date", { ascending: false });
 
     if (error) {
       return NextResponse.json(
