@@ -34,7 +34,6 @@ export async function GET(_req: NextRequest) {
   severity,
   event_date,
   created_at,
-  sync_status
 `)
       .order("event_date", { ascending: false });
 
