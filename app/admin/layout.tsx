@@ -20,6 +20,7 @@ const ACTIVE_LABELS: Record<string, string> = {
   "/admin/reports": "Raporlar",
   "/admin/cbs": "ÇBS Yönetimi",
   "/admin/companies": "Firmalar",
+  "/admin/accidents": "Kaza ve Olay Yönetimi",
 };
 
 export default function AdminLayout({
@@ -147,11 +148,13 @@ export default function AdminLayout({
       { name: "Dashboard", href: "/admin/dashboard" },
       { name: "Eğitimler", href: "/admin/trainings" },
   // { name: "Eğitim Katılımcıları", href: "/admin/participants" },
+      { name: "Kaza ve Olay", href: "/admin/accidents" },
       { name: "Sistem Kullanıcıları", href: "/admin/users" },
       { name: "Denetimler", href: "/admin/denetimler" },
       { name: "Çalışanlar", href: "/admin/employees" },
       { name: "Raporlar", href: "/admin/reports" },
       { name: "ÇBS Yönetimi", href: "/admin/cbs" },
+      { name: "Kaza ve Olay Yönetimi", href: "/admin/accidents" },
     ];
 
     if (role === "super_admin") {
