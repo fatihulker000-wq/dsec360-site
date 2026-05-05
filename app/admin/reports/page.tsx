@@ -664,12 +664,13 @@ setCompanies([
   try {
     setLoadingAuditReport(true);
 
-    const companyName = companies.find((c) => c.id === 
-    companyId)?.name || "";
+const companyName =
+  companyId === "ALL"
+    ? "Tüm Firmalar"
+    : companies.find((c) => c.id === companyId)?.name || "";
 
 const res = await fetch(
-  `/api/admin/reports/audit-analysis?companyId=$
-  {encodeURIComponent(
+  `/api/admin/reports/audit-analysis?companyId=${encodeURIComponent(
     companyId
   )}&companyName=${encodeURIComponent(companyName)}`,
       {
