@@ -104,3 +104,67 @@ function mapRecord(r: any) {
     source: "APP"
   };
 }
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const firmId = Number(searchParams.get("firmId") || 0);
+
+    let query = supabase
+      .from("accident_records")
+      .select(
+        `
+        id,
+        app_record_id,
+        firm_id,
+        employee_id,
+        event_type,
+        event_date,
+        title,
+        description,
+        location,
+        severity,
+        lost_work_days,
+        employee_name,
+        department,
+        shift,
+        injury_body_part,
+        injury_type,
+        root_cause_category,
+        event_hour,
+        event_week_day,
+        incident_photo_path,
+        root_cause_photo_path,
+        correction_photo_path,
+        is_active,
+        created_at,
+        updated_at,
+        source
+      `
+      )
+      .order("event_date", { ascending: false });
+
+    if (firmId > 0) {
+      query = query.eq("firm_id", firmId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      rows: data || [],
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { success: false, error: e?.message || "pull error" },
+      { status: 500 }
+    );
+  }
+}

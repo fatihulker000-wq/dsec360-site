@@ -23,6 +23,13 @@ type AccidentRow = {
   source?: string | null;
 };
 
+type CompanyRow = {
+  id: number | string;
+  name?: string | null;
+  title?: string | null;
+  company_name?: string | null;
+};
+
 const BRAND = {
   redDark: "#4a0d1a",
   red: "#7a0017",
@@ -44,13 +51,20 @@ export default function AdminAccidentsPage() {
   const [editRow, setEditRow] = useState<AccidentRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [companies, setCompanies] = useState<CompanyRow[]>([]);
+  const [selectedFirmId, setSelectedFirmId] = useState<string>("all");
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/admin/accidents", {
+      const url =
+  selectedFirmId === "all"
+    ? "/api/admin/accidents"
+    : `/api/admin/accidents?firmId=${encodeURIComponent(selectedFirmId)}`;
+
+    const res = await fetch(url, {
         method: "GET",
         cache: "no-store",
         credentials: "include",
@@ -127,10 +141,36 @@ const passiveDelete = async (id: number) => {
     setDeleting(false);
   }
 };
+
+const loadCompanies = async () => {
+  try {
+    const res = await fetch("/api/admin/companies", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    const list =
+      json?.rows ||
+      json?.companies ||
+      json?.data ||
+      [];
+
+    setCompanies(Array.isArray(list) ? list : []);
+  } catch {
+    setCompanies([]);
+  }
+};
+
+useEffect(() => {
+  void loadCompanies();
+}, []);
   
   useEffect(() => {
-    void loadData();
-  }, []);
+  void loadData();
+}, [selectedFirmId]);
 
   
   const stats = useMemo(() => {
@@ -189,6 +229,51 @@ const passiveDelete = async (id: number) => {
           İş kazaları, ramak kala kayıtları, olay bildirimleri ve tehlikeli durum kayıtlarını merkezi olarak yönetin.
         </div>
       </div>
+
+      <div
+  style={{
+    background: "#fff",
+    borderRadius: 18,
+    padding: 16,
+    border: `1px solid ${BRAND.border}`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+  }}
+>
+  <div>
+    <div style={{ fontSize: 13, color: BRAND.muted, fontWeight: 800 }}>
+      Firma Filtresi
+    </div>
+    <div style={{ fontSize: 16, color: BRAND.text, fontWeight: 950 }}>
+      Süper Admin kayıt görünümü
+    </div>
+  </div>
+
+  <select
+    value={selectedFirmId}
+    onChange={(e) => setSelectedFirmId(e.target.value)}
+    style={{
+      minWidth: 260,
+      border: `1px solid ${BRAND.border}`,
+      borderRadius: 14,
+      padding: "12px 14px",
+      fontSize: 14,
+      fontWeight: 800,
+      color: BRAND.text,
+      background: "#fff",
+    }}
+  >
+    <option value="all">Tüm Firmalar</option>
+    {companies.map((firm) => (
+      <option key={String(firm.id)} value={String(firm.id)}>
+        {firm.name || firm.title || firm.company_name || `Firma #${firm.id}`}
+      </option>
+    ))}
+  </select>
+</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 16 }}>
         <StatCard title="Toplam Kayıt" value={stats.total} />

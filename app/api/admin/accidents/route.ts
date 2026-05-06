@@ -7,18 +7,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+    const firmIdParam = req.nextUrl.searchParams.get("firmId");
+    const firmId = firmIdParam && firmIdParam !== "all" ? Number(firmIdParam) : null;
 
     if (!adminAuth) {
       return NextResponse.json({ success: false, error: "Yetkisiz erişim" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from("accident_records")
-      .select(`
+    let query = supabase
+     .from("accident_records")
+     .select(`
         id,
         app_record_id,
         firm_id,
@@ -46,9 +48,16 @@ export async function GET(_req: NextRequest) {
         created_at,
         updated_at,
         created_at_server
-      `)
       
-      .order("event_date", { ascending: false });
+      `);
+
+if (firmId && !Number.isNaN(firmId)) {
+  query = query.eq("firm_id", firmId);
+}
+
+const { data, error } = await query.order("event_date", {
+  ascending: false,
+});
 
     if (error) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
