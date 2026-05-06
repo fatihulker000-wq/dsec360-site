@@ -31,6 +31,7 @@ type CompanyRow = {
   name?: string | null;
   title?: string | null;
   company_name?: string | null;
+  localId?: number | null;
 };
 
 const BRAND = {
@@ -147,31 +148,34 @@ const passiveDelete = async (id: number) => {
 
 const loadCompanies = async () => {
   try {
-    const res = await fetch("/api/admin/accidents", {
+    const res = await fetch("/api/admin/companies", {
       method: "GET",
       cache: "no-store",
       credentials: "include",
     });
 
     const json = await res.json().catch(() => ({}));
-    const list = Array.isArray(json.rows) ? json.rows : [];
+    const list = json?.data || json?.rows || json?.companies || [];
 
-    const firmMap = new Map<string, CompanyRow>();
+    const normalized = (Array.isArray(list) ? list : []).map((firm: any) => {
+      const name = String(firm.name || firm.title || firm.company_name || "").trim();
 
-    list.forEach((row: AccidentRow) => {
-      if (row.firmId == null) return;
+      return {
+        id: firm.id,
+        name,
 
-      const id = String(row.firmId);
-
-      if (!firmMap.has(id)) {
-        firmMap.set(id, {
-          id,
-          name: `Firma #${id}`,
-        });
-      }
+        // GEÇİCİ KÖPRÜ: accident_records.firm_id şu an BIGINT olduğu için
+        // firmaları web şirket adıyla local firma ID’ye bağlıyoruz.
+        localId:
+          name === "App Yazılım"
+            ? 1
+            : name === "Ülker Danışmanlık"
+            ? 1033038177
+            : null,
+      };
     });
 
-    setCompanies(Array.from(firmMap.values()));
+    setCompanies(normalized);
   } catch {
     setCompanies([]);
   }
@@ -282,14 +286,13 @@ useEffect(() => {
   >
     <option value="all">Tüm Firmalar</option>
     {companies.map((firm) => (
-    <option
-  key={String(firm.id)}
-  value={String(firm.firm_id || firm.app_record_id || firm.id)}
->
-  {firm.name || firm.title || firm.company_name || `Firma #${firm.id}`} - ID:
-  {String(firm.firm_id || firm.app_record_id || firm.id)}
-</option>
-    ))}
+  <option
+    key={String(firm.id)}
+    value={String(firm.localId || firm.id)}
+  >
+    {firm.name || firm.title || firm.company_name || `Firma #${firm.id}`}
+  </option>
+))}
   </select>
 </div>
 
