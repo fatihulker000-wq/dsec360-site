@@ -41,6 +41,9 @@ export default function AdminAccidentsPage() {
   const [rows, setRows] = useState<AccidentRow[]>([]);
   const [error, setError] = useState("");
   const [selectedRow, setSelectedRow] = useState<AccidentRow | null>(null);
+  const [editRow, setEditRow] = useState<AccidentRow | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadData = async () => {
     try {
@@ -67,10 +70,69 @@ export default function AdminAccidentsPage() {
     }
   };
 
+  const saveEdit = async () => {
+  if (!editRow) return;
+
+  try {
+    setSaving(true);
+
+    const res = await fetch("/api/admin/accidents/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(editRow),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.error || "Güncelleme yapılamadı");
+    }
+
+    setEditRow(null);
+    setSelectedRow(null);
+    await loadData();
+  } catch (err: any) {
+    alert(err?.message || "Güncelleme hatası");
+  } finally {
+    setSaving(false);
+  }
+};
+
+const passiveDelete = async (id: number) => {
+  const ok = window.confirm("Bu kayıt pasifleştirilecek. Devam edilsin mi?");
+  if (!ok) return;
+
+  try {
+    setDeleting(true);
+
+    const res = await fetch("/api/admin/accidents/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.error || "Kayıt pasifleştirilemedi");
+    }
+
+    setSelectedRow(null);
+    await loadData();
+  } catch (err: any) {
+    alert(err?.message || "Silme hatası");
+  } finally {
+    setDeleting(false);
+  }
+};
+  
   useEffect(() => {
     void loadData();
   }, []);
 
+  
   const stats = useMemo(() => {
     const last30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const totalLostDays = rows.reduce((sum, x) => sum + Number(x.lostWorkDays || 0), 0);
@@ -243,6 +305,37 @@ export default function AdminAccidentsPage() {
                 </div>
               </div>
 
+<button
+  onClick={() => setEditRow(selectedRow)}
+  style={{
+    border: "none",
+    borderRadius: 12,
+    padding: "10px 14px",
+    background: BRAND.blue,
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  }}
+>
+  Düzenle
+</button>
+
+<button
+  onClick={() => passiveDelete(selectedRow.id)}
+  disabled={deleting}
+  style={{
+    border: "none",
+    borderRadius: 12,
+    padding: "10px 14px",
+    background: "#111827",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: deleting ? "not-allowed" : "pointer",
+  }}
+>
+  {deleting ? "İşleniyor..." : "Pasifleştir"}
+</button>
+
               <button
                 onClick={() => setSelectedRow(null)}
                 style={{
@@ -285,6 +378,106 @@ export default function AdminAccidentsPage() {
           </div>
         </div>
       ) : null}
+
+{editRow ? (
+  <div
+    onClick={() => setEditRow(null)}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(15,23,42,0.45)",
+      zIndex: 10000,
+      display: "grid",
+      placeItems: "center",
+      padding: 20,
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: "min(920px, 100%)",
+        maxHeight: "90vh",
+        overflow: "auto",
+        background: "#fff",
+        borderRadius: 22,
+        padding: 22,
+        border: `1px solid ${BRAND.border}`,
+      }}
+    >
+      <div style={{ fontSize: 24, fontWeight: 950, marginBottom: 16 }}>
+        Kaza / Olay Kaydı Düzenle
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
+        <EditField label="Başlık" value={editRow.title || ""} onChange={(v) => setEditRow({ ...editRow, title: v })} />
+        <EditField label="Çalışan" value={editRow.employeeName || ""} onChange={(v) => setEditRow({ ...editRow, employeeName: v })} />
+        <EditField label="Tür" value={editRow.eventType || ""} onChange={(v) => setEditRow({ ...editRow, eventType: v })} />
+        <EditField label="Lokasyon" value={editRow.location || ""} onChange={(v) => setEditRow({ ...editRow, location: v })} />
+        <EditField label="Şiddet" value={String(editRow.severity ?? 0)} onChange={(v) => setEditRow({ ...editRow, severity: Number(v || 0) })} />
+        <EditField label="Kayıp Gün" value={String(editRow.lostWorkDays ?? 0)} onChange={(v) => setEditRow({ ...editRow, lostWorkDays: Number(v || 0) })} />
+        <EditField label="Departman" value={editRow.department || ""} onChange={(v) => setEditRow({ ...editRow, department: v })} />
+        <EditField label="Vardiya" value={editRow.shift || ""} onChange={(v) => setEditRow({ ...editRow, shift: v })} />
+        <EditField label="Yaralanan Bölge" value={editRow.injuryBodyPart || ""} onChange={(v) => setEditRow({ ...editRow, injuryBodyPart: v })} />
+        <EditField label="Yaralanma Türü" value={editRow.injuryType || ""} onChange={(v) => setEditRow({ ...editRow, injuryType: v })} />
+        <EditField label="Kök Neden" value={editRow.rootCauseCategory || ""} onChange={(v) => setEditRow({ ...editRow, rootCauseCategory: v })} />
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontSize: 12, color: BRAND.muted, fontWeight: 800, marginBottom: 6 }}>
+          Açıklama
+        </div>
+
+        <textarea
+          value={editRow.description || ""}
+          onChange={(e) => setEditRow({ ...editRow, description: e.target.value })}
+          rows={6}
+          style={{
+            width: "100%",
+            border: `1px solid ${BRAND.border}`,
+            borderRadius: 14,
+            padding: 12,
+            fontSize: 14,
+            fontFamily: "inherit",
+          }}
+        />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
+        <button
+          onClick={() => setEditRow(null)}
+          style={{
+            border: "none",
+            borderRadius: 12,
+            padding: "10px 14px",
+            background: "#f3f4f6",
+            color: BRAND.text,
+            fontWeight: 900,
+            cursor: "pointer",
+          }}
+        >
+          Vazgeç
+        </button>
+
+        <button
+          onClick={saveEdit}
+          disabled={saving}
+          style={{
+            border: "none",
+            borderRadius: 12,
+            padding: "10px 14px",
+            background: BRAND.redBright,
+            color: "#fff",
+            fontWeight: 900,
+            cursor: saving ? "not-allowed" : "pointer",
+          }}
+        >
+          {saving ? "Kaydediliyor..." : "Kaydet"}
+        </button>
+      </div>
+    </div>
+  </div>
+) : null}
+
     </div>
   );
 }
@@ -356,6 +549,36 @@ function Detail({ label, value }: { label: string; value?: string | null }) {
       <div style={{ fontSize: 12, color: BRAND.muted, fontWeight: 800 }}>{label}</div>
       <div style={{ marginTop: 6, fontWeight: 900 }}>{value || "-"}</div>
     </div>
+  );
+}
+
+function EditField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label style={{ display: "grid", gap: 6 }}>
+      <span style={{ fontSize: 12, color: BRAND.muted, fontWeight: 800 }}>
+        {label}
+      </span>
+
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: "100%",
+          border: `1px solid ${BRAND.border}`,
+          borderRadius: 14,
+          padding: 12,
+          fontSize: 14,
+        }}
+      />
+    </label>
   );
 }
 
