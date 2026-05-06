@@ -73,7 +73,8 @@ export async function POST(req: NextRequest) {
 // 📦 MAP (APP → DB)
 function mapRecord(r: any) {
   return {
-    firm_id: r.webFirmId || r.companyId || r.firmId,
+    firm_id: Number(r.firmId || 0),
+    web_firm_id: r.webFirmId || null, 
     employee_id: r.employeeId,
 
     event_type: r.eventType,
@@ -145,7 +146,7 @@ export async function GET(req: NextRequest) {
       .order("event_date", { ascending: false });
 
     if (firmId && firmId !== "all") {
-  query = query.eq("firm_id", firmId);
+  query = query.eq("web_firm_id", firmId);
 }
 
     const { data, error } = await query;
