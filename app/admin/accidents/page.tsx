@@ -21,6 +21,7 @@ type AccidentRow = {
   eventWeekDay?: string | null;
   description?: string | null;
   source?: string | null;
+  firmId?: number | string | null;
 };
 
 type CompanyRow = {
@@ -146,25 +147,36 @@ const passiveDelete = async (id: number) => {
 
 const loadCompanies = async () => {
   try {
-    const res = await fetch("/api/admin/companies", {
+    const res = await fetch("/api/admin/accidents", {
       method: "GET",
       cache: "no-store",
       credentials: "include",
     });
 
     const json = await res.json().catch(() => ({}));
+    const list = Array.isArray(json.rows) ? json.rows : [];
 
-    const list =
-      json?.rows ||
-      json?.companies ||
-      json?.data ||
-      [];
+    const firmMap = new Map<string, CompanyRow>();
 
-    setCompanies(Array.isArray(list) ? list : []);
+    list.forEach((row: AccidentRow) => {
+      if (row.firmId == null) return;
+
+      const id = String(row.firmId);
+
+      if (!firmMap.has(id)) {
+        firmMap.set(id, {
+          id,
+          name: `Firma #${id}`,
+        });
+      }
+    });
+
+    setCompanies(Array.from(firmMap.values()));
   } catch {
     setCompanies([]);
   }
 };
+
 
 useEffect(() => {
   void loadCompanies();
