@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 // 📦 MAP (APP → DB)
 function mapRecord(r: any) {
   return {
-    firm_id: r.firmId,
+    firm_id: r.webFirmId || r.companyId || r.firmId,
     employee_id: r.employeeId,
 
     event_type: r.eventType,
@@ -108,7 +108,7 @@ function mapRecord(r: any) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const firmId = Number(searchParams.get("firmId") || 0);
+    const firmId = searchParams.get("firmId");
 
     let query = supabase
       .from("accident_records")
@@ -144,9 +144,9 @@ export async function GET(req: NextRequest) {
       )
       .order("event_date", { ascending: false });
 
-    if (firmId > 0) {
-      query = query.eq("firm_id", firmId);
-    }
+    if (firmId && firmId !== "all") {
+  query = query.eq("firm_id", firmId);
+}
 
     const { data, error } = await query;
 
