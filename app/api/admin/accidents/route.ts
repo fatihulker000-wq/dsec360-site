@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       
       `);
 
-if (firmId && !Number.isNaN(firmId)) {
+if (firmId !== null && !Number.isNaN(firmId)) {
   query = query.eq("firm_id", firmId);
 }
 

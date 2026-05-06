@@ -25,6 +25,8 @@ type AccidentRow = {
 
 type CompanyRow = {
   id: number | string;
+  firm_id?: number | string | null;
+  app_record_id?: number | string | null;
   name?: string | null;
   title?: string | null;
   company_name?: string | null;
@@ -268,9 +270,13 @@ useEffect(() => {
   >
     <option value="all">Tüm Firmalar</option>
     {companies.map((firm) => (
-      <option key={String(firm.id)} value={String(firm.id)}>
-        {firm.name || firm.title || firm.company_name || `Firma #${firm.id}`}
-      </option>
+    <option
+  key={String(firm.id)}
+  value={String(firm.firm_id || firm.app_record_id || firm.id)}
+>
+  {firm.name || firm.title || firm.company_name || `Firma #${firm.id}`} - ID:
+  {String(firm.firm_id || firm.app_record_id || firm.id)}
+</option>
     ))}
   </select>
 </div>
