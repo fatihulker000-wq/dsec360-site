@@ -12,7 +12,17 @@ export async function GET(req: NextRequest) {
     const cookieStore = await cookies();
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
     const firmIdParam = req.nextUrl.searchParams.get("firmId");
-    const firmId = firmIdParam && firmIdParam !== "all" ? Number(firmIdParam) : null;
+
+    const shouldFilterFirm =
+  firmIdParam &&
+  firmIdParam !== "all" &&
+  firmIdParam.trim() !== "";
+
+   const firmIdNumber = shouldFilterFirm ? Number(firmIdParam) : null;
+
+if (shouldFilterFirm && Number.isNaN(firmIdNumber)) {
+  return NextResponse.json({ success: true, rows: [] });
+}
 
     if (!adminAuth) {
       return NextResponse.json({ success: false, error: "Yetkisiz erişim" }, { status: 401 });
@@ -51,8 +61,8 @@ export async function GET(req: NextRequest) {
       
       `);
 
-if (firmId !== null && !Number.isNaN(firmId)) {
-  query = query.eq("firm_id", firmId);
+if (firmIdNumber !== null) {
+  query = query.eq("firm_id", firmIdNumber);
 }
 
 const { data, error } = await query.order("event_date", {
