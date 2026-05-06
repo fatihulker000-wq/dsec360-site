@@ -47,6 +47,7 @@ export async function GET(_req: NextRequest) {
         updated_at,
         created_at_server
       `)
+      .eq("is_active", 1)
       .order("event_date", { ascending: false });
 
     if (error) {
