@@ -31,24 +31,19 @@ function isPasswordMatched(rawPassword: string, user: LoginUserRow) {
   const plainPassword = String(user.password || "").trim();
   const hashedPassword = String(user.password_hash || "").trim();
 
-  // 🔥 YENİ SİSTEM (HASH)
+  // Yeni sistem: SHA-256 hash
   if (hashedPassword && sha256(rawPassword) === hashedPassword) {
-  return true;
-}
+    return true;
+  }
 
-if (plainPassword && rawPassword === plainPassword) {
-  return true;
-}
-
-return false;
-
-  // 🧩 ESKİ SİSTEM (PLAIN)
-  if (plainPassword) {
-    return rawPassword === plainPassword;
+  // Eski sistem: düz şifre
+  if (plainPassword && rawPassword === plainPassword) {
+    return true;
   }
 
   return false;
 }
+ 
 
 export async function POST(request: Request) {
   try {
@@ -154,9 +149,17 @@ if (firmAccessError) {
   );
 }
 
-const hasGlobalFirmAccess = Array.isArray(firmAccessRows)
-  ? firmAccessRows.some((f: any) => String(f?.firm_id || "").trim() === "ALL")
+const normalizedUserRole = String(userRole || "").trim().toLowerCase();
+
+const hasAllFirmRow = Array.isArray(firmAccessRows)
+  ? firmAccessRows.some((f: any) => String(f?.firm_id || "").trim().toUpperCase() === "ALL")
   : false;
+
+// ✅ KURAL:
+// ALL firma erişimi sadece super_admin için tüm firmaları açar.
+// Normal kullanıcı / demo / operator / training_user / company_admin ALL satırı alsa bile
+// app'e tüm firmalar gönderilmez.
+const hasGlobalFirmAccess = normalizedUserRole === "super_admin" && hasAllFirmRow;
 
 let appFirms: any[] = [];
 
