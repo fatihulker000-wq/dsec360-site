@@ -167,6 +167,7 @@ export async function POST(req: NextRequest) {
 
     const { error } = await supabase.from("companies").insert({
       name: body.name,
+      local_firm_id: body.local_firm_id ?? null,
       yetkili: body.yetkili || null,
       phone: body.phone || null,
       email: body.email || null,
@@ -214,6 +215,7 @@ export async function PUT(req: NextRequest) {
       .from("companies")
       .update({
         name: body.name,
+        local_firm_id: body.local_firm_id ?? null,
         yetkili: body.yetkili || null,
         phone: body.phone || null,
         email: body.email || null,
