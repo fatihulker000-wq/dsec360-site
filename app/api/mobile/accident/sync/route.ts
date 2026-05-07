@@ -12,14 +12,23 @@ export async function POST(req: NextRequest) {
     const record = body?.record;
 
     if (!record) {
+      return NextResponse.json({ error: "record missing" }, { status: 400 });
+    }
+
+    const appRunId = record.localId?.toString();
+
+    if (!appRunId) {
+      return NextResponse.json({ error: "localId missing" }, { status: 400 });
+    }
+
+    const mappedRecord = mapRecord(record);
+
+    if (!mappedRecord.firm_id || Number.isNaN(mappedRecord.firm_id)) {
       return NextResponse.json(
-        { error: "record missing" },
+        { error: "firm_id missing or invalid" },
         { status: 400 }
       );
     }
-
-    // 🔑 unique kontrol (çakışmayı önler)
-    const appRunId = record.localId?.toString();
 
     const { data: existing } = await supabase
       .from("accident_records")
@@ -30,20 +39,18 @@ export async function POST(req: NextRequest) {
     let result;
 
     if (existing) {
-      // UPDATE
       result = await supabase
         .from("accident_records")
-        .update(mapRecord(record))
+        .update(mappedRecord)
         .eq("app_record_id", appRunId)
         .select()
         .single();
     } else {
-      // INSERT
       result = await supabase
         .from("accident_records")
         .insert({
-          ...mapRecord(record),
-          app_record_id: appRunId
+          ...mappedRecord,
+          app_record_id: appRunId,
         })
         .select()
         .single();
@@ -58,31 +65,30 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      remoteId: result.data.id
+      remoteId: result.data.id,
     });
-
   } catch (e: any) {
     return NextResponse.json(
-      { error: e.message || "unknown error" },
+      { error: e?.message || "unknown error" },
       { status: 500 }
     );
   }
 }
 
-
-// 📦 MAP (APP → DB)
 function mapRecord(r: any) {
+  const firmId = Number(r.firmId || r.localFirmId || r.appFirmId || 0);
+
   return {
-    firm_id: Number(r.webFirmId || 0),
-    employee_id: r.employeeId,
+    firm_id: firmId,
+    employee_id: Number(r.employeeId || 0),
 
     event_type: r.eventType,
     event_date: r.eventDate,
     title: r.title,
     description: r.description,
     location: r.location,
-    severity: r.severity,
-    lost_work_days: r.lostWorkDays,
+    severity: Number(r.severity || 0),
+    lost_work_days: Number(r.lostWorkDays || 0),
 
     employee_name: r.employeeName,
     department: r.department,
@@ -93,15 +99,15 @@ function mapRecord(r: any) {
     event_hour: r.eventHour,
     event_week_day: r.eventWeekDay,
 
-    incident_photo_path: r.incidentPhotoPath,
-    root_cause_photo_path: r.rootCausePhotoPath,
-    correction_photo_path: r.correctionPhotoPath,
+    incident_photo_path: r.incidentPhotoPath || "",
+    root_cause_photo_path: r.rootCausePhotoPath || "",
+    correction_photo_path: r.correctionPhotoPath || "",
 
-    is_active: r.isActive,
+    is_active: r.isActive ?? 1,
     created_at: r.createdAt,
     updated_at: r.updatedAt,
 
-    source: "APP"
+    source: "APP",
   };
 }
 
@@ -112,8 +118,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from("accident_records")
-      .select(
-        `
+      .select(`
         id,
         app_record_id,
         firm_id,
@@ -140,13 +145,12 @@ export async function GET(req: NextRequest) {
         created_at,
         updated_at,
         source
-      `
-      )
+      `)
       .order("event_date", { ascending: false });
 
     if (firmId && firmId !== "all") {
-  query = query.eq("firm_id", Number(firmId));
-}
+      query = query.eq("firm_id", Number(firmId));
+    }
 
     const { data, error } = await query;
 
