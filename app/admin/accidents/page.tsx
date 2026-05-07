@@ -164,13 +164,13 @@ const loadCompanies = async () => {
         id: firm.id,
         name,
 
-        // GEÇİCİ KÖPRÜ: accident_records.firm_id şu an BIGINT olduğu için
-        // firmaları web şirket adıyla local firma ID’ye bağlıyoruz.
+        // Kaza modülü şu an accident_records.firm_id BIGINT local firma ID ile çalışıyor.
+        // App Yazılım kayıtları Supabase'de firm_id = 1033038177 olarak geldiği için filtre değeri bu olmalı.
         localId:
           name === "App Yazılım"
-            ? 1
-            : name === "Ülker Danışmanlık"
             ? 1033038177
+            : name === "Ülker Danışmanlık"
+            ? 1
             : null,
       };
     });
