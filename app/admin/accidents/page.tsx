@@ -27,6 +27,7 @@ type AccidentRow = {
 type CompanyRow = {
   id: number | string;
   firm_id?: number | string | null;
+  local_firm_id?: number | string | null;
   app_record_id?: number | string | null;
   name?: string | null;
   title?: string | null;
@@ -158,22 +159,17 @@ const loadCompanies = async () => {
     const list = json?.data || json?.rows || json?.companies || [];
 
     const normalized = (Array.isArray(list) ? list : []).map((firm: any) => {
-      const name = String(firm.name || firm.title || firm.company_name || "").trim();
+  const name = String(firm.name || firm.title || firm.company_name || "").trim();
 
-      return {
-        id: firm.id,
-        name,
-
-        // Kaza modülü şu an accident_records.firm_id BIGINT local firma ID ile çalışıyor.
-        // App Yazılım kayıtları Supabase'de firm_id = 1033038177 olarak geldiği için filtre değeri bu olmalı.
-        localId:
-          name === "App Yazılım"
-            ? 1033038177
-            : name === "Ülker Danışmanlık"
-            ? 1
-            : null,
-      };
-    });
+  return {
+    id: firm.id,
+    name,
+    title: firm.title || null,
+    company_name: firm.company_name || null,
+    local_firm_id: firm.local_firm_id ?? firm.localId ?? null,
+    localId: firm.local_firm_id ?? firm.localId ?? null,
+  };
+});
 
     setCompanies(normalized);
   } catch {
@@ -285,14 +281,20 @@ useEffect(() => {
     }}
   >
     <option value="all">Tüm Firmalar</option>
-    {companies.map((firm) => (
-  <option
-    key={String(firm.id)}
-    value={String(firm.localId || firm.id)}
-  >
-    {firm.name || firm.title || firm.company_name || `Firma #${firm.id}`}
-  </option>
-))}
+    {companies.map((firm) => {
+  const filterId = firm.local_firm_id || firm.localId;
+
+  return (
+    <option
+      key={String(firm.id)}
+      value={filterId ? String(filterId) : ""}
+      disabled={!filterId}
+    >
+      {firm.name || firm.title || firm.company_name || `Firma #${firm.id}`}
+      {!filterId ? " - eşleşme yok" : ""}
+    </option>
+  );
+})}
   </select>
 </div>
 

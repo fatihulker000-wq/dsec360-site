@@ -23,6 +23,7 @@ async function checkAdmin() {
 type CompanyRow = {
   id: string;
   name: string | null;
+  local_firm_id: number | null;
   yetkili: string | null;
   phone: string | null;
   email: string | null;
@@ -57,6 +58,7 @@ export async function GET() {
       .select(`
         id,
         name,
+        local_firm_id,
         yetkili,
         phone,
         email,
@@ -119,6 +121,8 @@ allEmployees.forEach((emp) => {
     const normalized = ((data || []) as CompanyRow[]).map((item) => ({
       id: String(item.id),
       name: String(item.name || "").trim(),
+      local_firm_id: item.local_firm_id ?? null,
+      localId: item.local_firm_id ?? null,
       yetkili: item.yetkili?.trim() || null,
       phone: item.phone?.trim() || null,
       email: item.email?.trim() || null,
