@@ -135,6 +135,42 @@ export async function POST(request: Request) {
     const userEmail = String(user.email ?? "").trim().toLowerCase();
     const userRole = String(user.role ?? "").trim();
     const companyId = String(user.company_id ?? "").trim();
+    const { data: userPermissionRows, error: userPermissionError } = await supabase
+  .from("user_permissions")
+  .select("*")
+  .eq("user_id", userId);
+
+if (userPermissionError) {
+  console.error("Auth login kullanıcı yetki sorgu hatası:", userPermissionError);
+}
+
+const permissionSet = new Set<string>();
+
+if (Array.isArray(user.permissions)) {
+  user.permissions.forEach((p: any) => {
+    const key = String(p || "").trim();
+    if (key) permissionSet.add(key);
+  });
+}
+
+if (Array.isArray(userPermissionRows)) {
+  userPermissionRows.forEach((p: any) => {
+    const key =
+      String(
+        p?.permission_key ||
+          p?.permission ||
+          p?.module_key ||
+          p?.module ||
+          p?.key ||
+          p?.code ||
+          ""
+      ).trim();
+
+    if (key) permissionSet.add(key);
+  });
+}
+
+const resolvedPermissions = Array.from(permissionSet);
 
     const { data: firmAccessRows, error: firmAccessError } = await supabase
   .from("user_firm_access")
@@ -281,26 +317,24 @@ const response = NextResponse.json({
     firms: appFirms,
     has_global_firm_access: hasGlobalFirmAccess,
     permissions:
-      userRole === "super_admin"
-        ? [
-            "ADMIN",
-            "AJANDA",
-            "CALISANLAR",
-            "DENETIM",
-            "DOKUMANTASYON",
-            "EGITIM",
-            "MEVZUAT",
-            "RAPORLAMA",
-            "SAGLIK",
-            "CBS",
-            "RISK_YONETIMI",
-            "KAZA_OLAY_YONETIMI",
-            "FIRMA_YONETIM",
-            "KULLANICI_YONETIMI",
-          ]
-        : Array.isArray(user.permissions)
-        ? user.permissions
-        : [],
+  userRole === "super_admin"
+    ? [
+        "ADMIN",
+        "AJANDA",
+        "CALISANLAR",
+        "DENETIM",
+        "DOKUMANTASYON",
+        "EGITIM",
+        "MEVZUAT",
+        "RAPORLAMA",
+        "SAGLIK",
+        "CBS",
+        "RISK_YONETIMI",
+        "KAZA_OLAY_YONETIMI",
+        "FIRMA_YONETIM",
+        "KULLANICI_YONETIMI",
+      ]
+    : resolvedPermissions,
   },
 });
 
