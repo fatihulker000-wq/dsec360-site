@@ -488,42 +488,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  const setPrimaryCompany = async (userId: string, companyId: string) => {
-    try {
-      setSavingCompany(true);
-
-      const res = await fetch("/api/admin/users/set-primary-company", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          userId,
-          companyId,
-        }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (res.status === 401) {
-        window.location.href = "/admin/login";
-        return;
-      }
-
-      if (!res.ok) {
-        alert(json?.error || "Primary firma güncellenemedi.");
-        return;
-      }
-
-      await loadUsers();
-    } catch (err) {
-      console.error(err);
-      alert("Primary firma güncellenemedi.");
-    } finally {
-      setSavingCompany(false);
-    }
-  };
+  
 
   const updatePermissions = async (userId: string, perms: string[]) => {
     try {
@@ -1243,11 +1208,7 @@ export default function AdminUsersPage() {
                           u.firms.map((f) => (
                             <span
                               key={`${u.id}-${f.firm_id}`}
-                              style={badgeStyle(
-                                f.is_primary ? "#dcfce7" : "#f1f5f9",
-                                f.is_primary ? "#86efac" : "#cbd5e1",
-                                f.is_primary ? "#166534" : "#334155"
-                              )}
+                              style={badgeStyle("#f1f5f9", "#cbd5e1", "#334155")}
                             >
                               {f.firm_id === "ALL" ? "🌍 TÜM FİRMALAR" : f.firm_name}
                             </span>
@@ -1260,30 +1221,7 @@ export default function AdminUsersPage() {
                   <div style={{ marginTop: 10, minWidth: 0 }}>
                     {adminRole === "super_admin" && (
                       <>
-                        <select
-                          value={u.company_id || ""}
-                          onChange={(e) => void updateCompany(u.id, e.target.value)}
-                          disabled={savingCompany}
-                          style={{
-                            padding: "10px 12px",
-                            borderRadius: 10,
-                            border: "1px solid #d1d5db",
-                            fontSize: 13,
-                            minWidth: 220,
-                            width: "100%",
-                            maxWidth: 320,
-                            background: "#fff",
-                            marginBottom: 10,
-                          }}
-                        >
-                          <option value="">Eski tekil firma alanı</option>
-                          {companies.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-
+                        
                         <div
                           style={{
                             border: "1px solid #e5e7eb",
@@ -1375,7 +1313,7 @@ export default function AdminUsersPage() {
                                       color: BRAND.text,
                                     }}
                                   >
-                                    {f.firm_name} {f.is_primary ? "⭐ Primary" : ""}
+                                    {f.firm_name}
                                   </div>
 
                                   <div
@@ -1385,28 +1323,7 @@ export default function AdminUsersPage() {
                                       flexWrap: "wrap",
                                     }}
                                   >
-                                    {!f.is_primary && (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          void setPrimaryCompany(u.id, f.firm_id)
-                                        }
-                                        disabled={savingCompany}
-                                        style={{
-                                          border: "1px solid #bbf7d0",
-                                          background: "#f0fdf4",
-                                          color: "#166534",
-                                          borderRadius: 8,
-                                          padding: "6px 10px",
-                                          fontSize: 12,
-                                          fontWeight: 700,
-                                          cursor: "pointer",
-                                        }}
-                                      >
-                                        Primary Yap
-                                      </button>
-                                    )}
-
+                                    9
                                     <button
                                       type="button"
                                       onClick={() =>
