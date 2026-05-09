@@ -101,6 +101,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+     const { error: userPermissionsSyncError } = await supabase
+  .from("users")
+  .update({
+    permissions,
+  })
+  .eq("id", userId);
+
+if (userPermissionsSyncError) {
+  console.error(
+    "users permissions sync error:",
+    userPermissionsSyncError
+  );
+
+  return NextResponse.json(
+    {
+      error:
+        String(userPermissionsSyncError?.message || "") ||
+        "Kullanıcı yetki özeti güncellenemedi.",
+    },
+    { status: 500 }
+  );
+}
+
     return NextResponse.json({
       success: true,
       userId,
