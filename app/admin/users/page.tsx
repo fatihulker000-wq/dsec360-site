@@ -20,7 +20,8 @@ type UserApiRow = {
   is_active?: boolean | null;
   created_at?: string | null;
   permissions?: string[] | null;
-  firms?: UserFirmRow[] | null;
+permission_modules?: string[] | null;
+firms?: UserFirmRow[] | null;
 };
 
 type UserResponse = {
@@ -56,7 +57,8 @@ type UserRow = {
   is_active: boolean;
   created_at: string;
   permissions: string[];
-  firms: {
+permission_modules: string[];
+firms: {
     firm_id: string;
     firm_name: string;
     role: string;
@@ -333,9 +335,12 @@ export default function AdminUsersPage() {
             is_active: Boolean(u.is_active),
             created_at: String(u.created_at || ""),
             permissions: Array.isArray(u.permissions)
-              ? u.permissions.map((p) => String(p || "").trim()).filter(Boolean)
-              : [],
-            firms: Array.isArray(u.firms)
+  ? u.permissions.map((p) => String(p || "").trim()).filter(Boolean)
+  : [],
+permission_modules: Array.isArray(u.permission_modules)
+  ? u.permission_modules.map((p) => String(p || "").trim()).filter(Boolean)
+  : [],
+firms: Array.isArray(u.firms)
               ? u.firms
                   .map((f) => ({
                     firm_id: String(f?.firm_id || "").trim(),
@@ -1001,7 +1006,7 @@ export default function AdminUsersPage() {
                           flexWrap: "wrap",
                         }}
                       >
-                        {getPermissionModuleLabels(u.permissions || [])
+                        {(u.permission_modules || [])
   .slice(0, 3)
   .map((label) => (
     <span
@@ -1023,7 +1028,7 @@ export default function AdminUsersPage() {
     </span>
 ))}
 
-                        {getPermissionModuleLabels(u.permissions || []).length > 3 ? (
+                        {(u.permission_modules || []).length > 3 ? (
                           <span
                             style={{
                               display: "inline-flex",
@@ -1038,7 +1043,7 @@ export default function AdminUsersPage() {
                               lineHeight: 1,
                             }}
                           >
-                            +{getPermissionModuleLabels(u.permissions || []).length - 3}
+                           +{(u.permission_modules || []).length - 3}
                           </span>
                         ) : null}
                       </div>

@@ -219,10 +219,29 @@ export async function GET(req: Request) {
           if (!hasAccess) return null;
         }
 
-        const primaryFirm = firms.find((f: any) => f.is_primary) || firms[0] || null;
+        
+const primaryFirm = firms.find((f: any) => f.is_primary) || firms[0] || null;
+
+const finalPermissions = Array.from(
+  new Set(
+    (permissionMap.get(userId) || [])
+      .map((p) => String(p || "").trim())
+      .filter(Boolean)
+  )
+).sort((a, b) => a.localeCompare(b, "tr"));
+
+const permissionModules = Array.from(
+  new Set(
+    finalPermissions
+      .map((p) => String(p || "").split(".")[0])
+      .filter(Boolean)
+  )
+).sort((a, b) => a.localeCompare(b, "tr"));
+
 
         return {
           id: userId,
+          
           full_name: String(user.full_name || "Adsız Kullanıcı").trim(),
           email: String(user.email || "").trim(),
           role: String(user.role || "").trim(),
@@ -233,14 +252,9 @@ export async function GET(req: Request) {
           company: primaryFirm?.firm_name || "",
           is_active: Boolean(user.is_active),
           created_at: user.created_at || null,
-          permissions: Array.from(
-  new Set(
-    (permissionMap.get(userId) || [])
-      .map((p) => String(p || "").trim())
-      .filter(Boolean)
-  )
-).sort((a, b) => a.localeCompare(b, "tr")),
-          firms,
+          permissions: finalPermissions,
+permission_modules: permissionModules,
+firms,
         };
       })
       .filter(Boolean);
