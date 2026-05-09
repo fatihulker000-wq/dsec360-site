@@ -14,15 +14,25 @@ function getSupabase() {
 async function checkAdmin(req: NextRequest) {
   const apiKey = req.headers.get("x-api-key");
 
-  if (apiKey === MOBILE_API_KEY) {
-    return true;
-  }
+  if (apiKey === MOBILE_API_KEY) return true;
 
   const cookieStore = await cookies();
   const auth = cookieStore.get("dsec_admin_auth")?.value;
   const role = cookieStore.get("dsec_admin_role")?.value;
 
   return auth === "ok" && role === "super_admin";
+}
+
+function normalizePermissions(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+
+  return Array.from(
+    new Set(
+      raw
+        .map((p) => String(p || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "tr"));
 }
 
 export async function POST(req: NextRequest) {
@@ -36,21 +46,28 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const userId = String(body?.userId || "").trim();
-    const permissionsRaw = Array.isArray(body?.permissions) ? body.permissions : [];
+    const permissions = normalizePermissions(body?.permissions);
 
     if (!userId) {
       return NextResponse.json({ error: "userId gerekli" }, { status: 400 });
     }
 
-    const permissions = Array.from(
-      new Set(
-        permissionsRaw
-          .map((p: unknown) => String(p || "").trim())
-          .filter(Boolean)
-      )
-    );
-
     const supabase = getSupabase();
+
+    const { error: userUpdateError } = await supabase
+      .from("users")
+      .update({
+        permissions,
+      })
+      .eq("id", userId);
+
+    if (userUpdateError) {
+      console.error("users.permissions update error:", userUpdateError);
+      return NextResponse.json(
+        { error: userUpdateError.message || "Kullanıcı yetki özeti güncellenemedi." },
+        { status: 500 }
+      );
+    }
 
     const { error: deleteError } = await supabase
       .from("user_permissions")
@@ -87,13 +104,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       userId,
+      permissions,
       permissionCount: permissions.length,
     });
   } catch (err) {
     console.error("update-permissions general error:", err);
-    return NextResponse.json(
-      { error: "Sunucu hatası" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Sunucu hatası" }, { status: 500 });
   }
 }
