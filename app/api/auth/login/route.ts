@@ -268,7 +268,7 @@ const mustCheckCompany =
   companyBoundRoles.includes(userRole) && !hasGlobalFirmAccess;
 
 if (mustCheckCompany) {
-  if (!companyId) {
+  if (!companyId && appFirms.length === 0) {
         return NextResponse.json(
           { error: "Bu kullanıcıya bağlı firma bulunamadı." },
           { status: 403 }
@@ -320,19 +320,57 @@ const response = NextResponse.json({
   userRole === "super_admin"
     ? [
         "ADMIN",
+        "ADMIN.VIEW",
+
         "AJANDA",
+        "AJANDA.VIEW",
+
         "CALISANLAR",
+        "CALISANLAR.VIEW",
+        "CALISANLAR.DETAIL.VIEW",
+
         "DENETIM",
+        "DENETIM.VIEW",
+        "DENETIM.DASHBOARD.VIEW",
+        "DENETIM.CLASSIC.VIEW",
+        "DENETIM.CLASSIC.CREATE",
+        "DENETIM.CLASSIC.DETAIL",
+        "DENETIM.CLASSIC.PDF",
+        "DENETIM.CLASSIC.DELETE",
+
         "DOKUMANTASYON",
+        "DOKUMANTASYON.VIEW",
+
         "EGITIM",
+        "EGITIM.VIEW",
+
         "MEVZUAT",
+        "MEVZUAT.VIEW",
+
         "RAPORLAMA",
+        "RAPORLAMA.VIEW",
+
         "SAGLIK",
+        "SAGLIK.VIEW",
+        "SAGLIK.EK2.VIEW",
+        "SAGLIK.EK2.CREATE",
+        "SAGLIK.EK2.DELETE",
+        "SAGLIK.EK2.DETAIL",
+
         "CBS",
+        "CBS.VIEW",
+
         "RISK_YONETIMI",
+        "RISK_YONETIMI.VIEW",
+
         "KAZA_OLAY_YONETIMI",
+        "KAZA_OLAY_YONETIMI.VIEW",
+
         "FIRMA_YONETIM",
+        "FIRMA_YONETIM.VIEW",
+
         "KULLANICI_YONETIMI",
+        "KULLANICI_YONETIMI.VIEW",
       ]
     : resolvedPermissions,
   },
