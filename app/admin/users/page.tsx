@@ -1053,60 +1053,17 @@ export default function AdminUsersPage() {
                         alignItems: "center",
                       }}
                     >
-                      <select
-                        value={u.role}
-                        
-onChange={async (e) => {
-  const newRole = e.target.value;
-  const roleSaved = await updateRole(u.id, newRole);
-  if (!roleSaved) return;
+                                            
+<span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
+  {getRoleLabel(u.role)}
+</span>
 
-  alert(
-    "Rol güncellendi. Detaylı modül ve alt yetkiler için Yetki Matrisi V3 ekranını kullanın."
-  );
-
-  await loadUsers();
-}}
-
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: 8,
-                          border: `1px solid ${BRAND.border}`,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          background: "#fff",
-                        }}
-                      >
-                        <option value="operator">Operatör</option>
-                        <option value="company_admin">Firma Yöneticisi</option>
-                        <option value="super_admin">Süper Admin</option>
-                      </select>
-
-                      <select
-                        value={u.app_user_type || ""}
-                        onChange={async (e) => {
-                          const newType = e.target.value;
-                          const saved = await updateAppUserType(u.id, newType);
-                          if (!saved) return;
-                          await loadUsers();
-                        }}
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: 8,
-                          border: `1px solid ${BRAND.border}`,
-                          fontSize: 12,
-                          fontWeight: 700,
-                          background: "#fff",
-                          marginTop: 6,
-                        }}
-                      >
-                        <option value="">App Kullanıcısı Değil</option>
-                        <option value="isg_uzmani">İSG Uzmanı</option>
-                        <option value="hekim">İşyeri Hekimi</option>
-                        <option value="dsp">DSP</option>
-                        <option value="diger">Diğer Kullanıcı</option>
-                      </select>
-
+{u.app_user_type ? (
+  <span style={badgeStyle("#f3e8ff", "#d8b4fe", "#7e22ce")}>
+    {getAppUserTypeLabel(u.app_user_type)}
+  </span>
+) : null}
+                      
                       <div
                         style={{
                           width: "100%",
