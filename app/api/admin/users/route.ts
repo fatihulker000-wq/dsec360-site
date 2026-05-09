@@ -77,8 +77,7 @@ export async function GET(req: Request) {
     const { data: usersData, error: userError } = await supabase
       .from("users")
       .select(
-      "id, full_name, email, role, is_active, created_at, app_user_type, password_hash, employee_id, company_id, permissions"
-      )
+"id, full_name, email, role, is_active, created_at, app_user_type, password_hash, employee_id, company_id"      )
       .order("full_name", { ascending: true, nullsFirst: false });
 
     if (userError) {
@@ -236,10 +235,7 @@ export async function GET(req: Request) {
           created_at: user.created_at || null,
           permissions: Array.from(
   new Set(
-    [
-      ...(Array.isArray(user.permissions) ? user.permissions : []),
-      ...(permissionMap.get(userId) || []),
-    ]
+    (permissionMap.get(userId) || [])
       .map((p) => String(p || "").trim())
       .filter(Boolean)
   )

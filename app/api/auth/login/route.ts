@@ -146,12 +146,7 @@ if (userPermissionError) {
 
 const permissionSet = new Set<string>();
 
-if (Array.isArray(user.permissions)) {
-  user.permissions.forEach((p: any) => {
-    const key = String(p || "").trim();
-    if (key) permissionSet.add(key);
-  });
-}
+
 
 if (Array.isArray(userPermissionRows)) {
   userPermissionRows.forEach((p: any) => {
