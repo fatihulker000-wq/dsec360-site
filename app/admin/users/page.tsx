@@ -150,6 +150,56 @@ function prettyPermissionLabel(perm: string) {
     .trim();
 }
 
+function getPermissionModuleLabels(perms: string[]) {
+  const map = new Map<string, string>();
+
+  perms.forEach((perm) => {
+    const p = String(perm || "").toUpperCase();
+
+    if (p.startsWith("DENETIM")) {
+      map.set("DENETIM", "Denetim");
+    }
+
+    if (p.startsWith("EGITIM")) {
+      map.set("EGITIM", "Eğitim");
+    }
+
+    if (p.startsWith("RAPOR")) {
+      map.set("RAPOR", "Raporlama");
+    }
+
+    if (p.startsWith("SAGLIK")) {
+      map.set("SAGLIK", "Sağlık");
+    }
+
+    if (p.startsWith("CBS")) {
+      map.set("CBS", "ÇBS");
+    }
+
+    if (p.startsWith("CALISAN")) {
+      map.set("CALISAN", "Çalışanlar");
+    }
+
+    if (p.startsWith("AJANDA")) {
+      map.set("AJANDA", "Ajanda");
+    }
+
+    if (p.startsWith("MEVZUAT")) {
+      map.set("MEVZUAT", "Mevzuat");
+    }
+
+    if (p.startsWith("RISK")) {
+      map.set("RISK", "Risk");
+    }
+
+    if (p.startsWith("KAZA")) {
+      map.set("KAZA", "Kaza/Olay");
+    }
+  });
+
+  return Array.from(map.values());
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
@@ -951,27 +1001,29 @@ export default function AdminUsersPage() {
                           flexWrap: "wrap",
                         }}
                       >
-                        {(u.permissions || []).slice(0, 3).map((perm) => (
-                          <span
-                            key={`${u.id}-${perm}`}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              padding: "5px 9px",
-                              borderRadius: 999,
-                              background: "#f8fafc",
-                              border: "1px solid #e2e8f0",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: "#334155",
-                              lineHeight: 1,
-                            }}
-                          >
-                            {prettyPermissionLabel(perm)}
-                          </span>
-                        ))}
+                        {getPermissionModuleLabels(u.permissions || [])
+  .slice(0, 3)
+  .map((label) => (
+    <span
+      key={`${u.id}-${label}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "5px 9px",
+        borderRadius: 999,
+        background: "#f8fafc",
+        border: "1px solid #e2e8f0",
+        fontSize: 11,
+        fontWeight: 700,
+        color: "#334155",
+        lineHeight: 1,
+      }}
+    >
+      {label}
+    </span>
+))}
 
-                        {(u.permissions || []).length > 3 ? (
+                        {getPermissionModuleLabels(u.permissions || []).length > 3 ? (
                           <span
                             style={{
                               display: "inline-flex",
@@ -986,7 +1038,7 @@ export default function AdminUsersPage() {
                               lineHeight: 1,
                             }}
                           >
-                            +{u.permissions.length - 3}
+                            +{getPermissionModuleLabels(u.permissions || []).length - 3}
                           </span>
                         ) : null}
                       </div>
