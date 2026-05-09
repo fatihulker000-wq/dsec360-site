@@ -1011,7 +1011,6 @@ firms: Array.isArray(u.firms)
                         }}
                       >
                         {(u.permission_modules || [])
-  .slice(0, 3)
   .map((label) => (
     <span
       key={`${u.id}-${label}`}
@@ -1032,24 +1031,7 @@ firms: Array.isArray(u.firms)
     </span>
 ))}
 
-                        {(u.permission_modules || []).length > 3 ? (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              padding: "5px 9px",
-                              borderRadius: 999,
-                              background: "#eef2ff",
-                              border: "1px solid #c7d2fe",
-                              fontSize: 11,
-                              fontWeight: 800,
-                              color: "#3730a3",
-                              lineHeight: 1,
-                            }}
-                          >
-                           +{(u.permission_modules || []).length - 3}
-                          </span>
-                        ) : null}
+                        
                       </div>
                     </div>
 
