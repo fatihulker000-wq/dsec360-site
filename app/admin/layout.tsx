@@ -21,6 +21,7 @@ const ACTIVE_LABELS: Record<string, string> = {
   "/admin/cbs": "ÇBS Yönetimi",
   "/admin/companies": "Firmalar",
   "/admin/accidents": "Kaza ve Olay Yönetimi",
+  "/admin/permissions": "Modül ve Yetki Yönetimi V3",
 };
 
 export default function AdminLayout({
@@ -149,6 +150,7 @@ export default function AdminLayout({
       { name: "Eğitimler", href: "/admin/trainings" },
   // { name: "Eğitim Katılımcıları", href: "/admin/participants" },
       { name: "Sistem Kullanıcıları", href: "/admin/users" },
+      { name: "Modül ve Yetki Yönetimi V3", href: "/admin/permissions" },
       { name: "Denetimler", href: "/admin/denetimler" },
       { name: "Çalışanlar", href: "/admin/employees" },
       { name: "Raporlar", href: "/admin/reports" },
