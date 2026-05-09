@@ -338,17 +338,11 @@ export default function AdminUsersPage() {
             permissions: Array.isArray(u.permissions)     
   ? u.permissions.map((p) => String(p || "").trim()).filter(Boolean)
   : [],
-permission_modules: Array.from(
-  new Set(
-    (
-      Array.isArray(u.permissions)
-        ? u.permissions
-        : []
-    )
-      .map((p) => String(p || "").split(".")[0].trim())
+permission_modules: Array.isArray(u.permission_modules)
+  ? u.permission_modules
+      .map((p) => String(p || "").trim())
       .filter(Boolean)
-  )
-).sort((a, b) => a.localeCompare(b, "tr")),
+  : [],
 
 firms: Array.isArray(u.firms)
               ? u.firms
