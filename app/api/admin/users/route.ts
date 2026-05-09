@@ -77,7 +77,7 @@ export async function GET(req: Request) {
     const { data: usersData, error: userError } = await supabase
       .from("users")
       .select(
-        "id, full_name, email, role, is_active, created_at, app_user_type, password_hash, employee_id, company_id"
+      "id, full_name, email, role, is_active, created_at, app_user_type, password_hash, employee_id, company_id, permissions"
       )
       .order("full_name", { ascending: true, nullsFirst: false });
 
@@ -235,12 +235,15 @@ export async function GET(req: Request) {
           is_active: Boolean(user.is_active),
           created_at: user.created_at || null,
           permissions: Array.from(
-            new Set(
-              (permissionMap.get(userId) || [])
-                .map((p) => String(p || "").trim())
-                .filter(Boolean)
-            )
-          ).sort((a, b) => a.localeCompare(b, "tr")),
+  new Set(
+    [
+      ...(Array.isArray(user.permissions) ? user.permissions : []),
+      ...(permissionMap.get(userId) || []),
+    ]
+      .map((p) => String(p || "").trim())
+      .filter(Boolean)
+  )
+).sort((a, b) => a.localeCompare(b, "tr")),
           firms,
         };
       })
