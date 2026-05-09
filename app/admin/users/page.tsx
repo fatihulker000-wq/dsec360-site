@@ -58,6 +58,7 @@ type UserRow = {
   created_at: string;
   permissions: string[];
 permission_modules: string[];
+
 firms: {
     firm_id: string;
     firm_name: string;
@@ -334,12 +335,21 @@ export default function AdminUsersPage() {
             company: String(u.company || "").trim(),
             is_active: Boolean(u.is_active),
             created_at: String(u.created_at || ""),
-            permissions: Array.isArray(u.permissions)
+            permissions: Array.isArray(u.permissions)     
   ? u.permissions.map((p) => String(p || "").trim()).filter(Boolean)
   : [],
-permission_modules: Array.isArray(u.permission_modules)
-  ? u.permission_modules.map((p) => String(p || "").trim()).filter(Boolean)
-  : [],
+permission_modules: Array.from(
+  new Set(
+    (
+      Array.isArray(u.permissions)
+        ? u.permissions
+        : []
+    )
+      .map((p) => String(p || "").split(".")[0].trim())
+      .filter(Boolean)
+  )
+).sort((a, b) => a.localeCompare(b, "tr")),
+
 firms: Array.isArray(u.firms)
               ? u.firms
                   .map((f) => ({
