@@ -82,22 +82,7 @@ const BRAND = {
   shadow: "0 10px 30px rgba(15,23,42,0.06)",
 };
 
-const ALL_PERMISSIONS = [
-  "AJANDA",
-  "CALISANLAR",
-  "DENETIM",
-  "DOKUMANTASYON",
-  "EGITIM",
-  "MEVZUAT",
-  "RAPORLAMA",
-  "SAGLIK",
-  "CBS",
-  "RISK_YONETIMI",
-  "KAZA_OLAY_YONETIMI",
-  "FIRMA_YONETIM",
-  "KULLANICI_YONETIMI",
-  "ADMIN",
-];
+
 
 function getRoleLabel(role?: string | null) {
   if (role === "app_users") return "App Kullanıcıları";
@@ -170,16 +155,13 @@ export default function AdminUsersPage() {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingCompany, setSavingCompany] = useState(false);
-  const [savingPerm, setSavingPerm] = useState(false);
   const [savingUser, setSavingUser] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [adminRole, setAdminRole] = useState<string | null>(null);
-  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
-  const [autoApplyRole, setAutoApplyRole] = useState(true);
-
+  
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
@@ -490,38 +472,7 @@ export default function AdminUsersPage() {
 
   
 
-  const updatePermissions = async (userId: string, perms: string[]) => {
-    try {
-      setSavingPerm(true);
-
-      const res = await fetch("/api/admin/users/update-permissions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          userId,
-          permissions: perms,
-        }),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        alert(json?.error || "Yetki güncellenemedi");
-        return;
-      }
-
-      await loadUsers();
-    } catch (err) {
-      console.error(err);
-      alert("Yetki güncellenemedi");
-    } finally {
-      setSavingPerm(false);
-    }
-  };
-
+  
   const updateRole = async (userId: string, role: string) => {
     try {
       const res = await fetch("/api/admin/users/update-role", {
@@ -892,23 +843,7 @@ export default function AdminUsersPage() {
           </div>
         </div>
 
-        <div style={{ marginTop: 10, marginBottom: 20 }}>
-          <label
-            style={{
-              fontSize: 13,
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={autoApplyRole}
-              onChange={(e) => setAutoApplyRole(e.target.checked)}
-            />
-            Rol değişince yetkileri otomatik uygula
-          </label>
-        </div>
+        
 
         <div style={cardStyle()}>
           <div
@@ -1068,64 +1003,19 @@ export default function AdminUsersPage() {
                     >
                       <select
                         value={u.role}
-                        onChange={async (e) => {
-                          const newRole = e.target.value;
+                        
+onChange={async (e) => {
+  const newRole = e.target.value;
+  const roleSaved = await updateRole(u.id, newRole);
+  if (!roleSaved) return;
 
-                          const roleSaved = await updateRole(u.id, newRole);
-                          if (!roleSaved) return;
+  alert(
+    "Rol güncellendi. Detaylı modül ve alt yetkiler için Yetki Matrisi V3 ekranını kullanın."
+  );
 
-                          if (autoApplyRole) {
-                            const res = await fetch("/api/admin/roles/template", {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                              },
-                              body: JSON.stringify({ role: newRole }),
-                            });
+  await loadUsers();
+}}
 
-                            const json = await res.json();
-
-                            if (!res.ok) {
-                              alert(
-                                "Rol kaydedildi ama varsayılan yetkiler alınamadı"
-                              );
-                              await loadUsers();
-                              return;
-                            }
-
-                            await updatePermissions(u.id, json.permissions || []);
-                            return;
-                          }
-
-                          const confirmChange = window.confirm(
-                            "Rol güncellendi. Bu role ait varsayılan yetkiler de yüklensin mi?"
-                          );
-
-                          if (!confirmChange) {
-                            await loadUsers();
-                            return;
-                          }
-
-                          const res = await fetch("/api/admin/roles/template", {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({ role: newRole }),
-                          });
-
-                          const json = await res.json();
-
-                          if (!res.ok) {
-                            alert(
-                              "Rol kaydedildi ama varsayılan yetkiler alınamadı"
-                            );
-                            await loadUsers();
-                            return;
-                          }
-
-                          await updatePermissions(u.id, json.permissions || []);
-                        }}
                         style={{
                           padding: "6px 10px",
                           borderRadius: 8,
@@ -1353,176 +1243,79 @@ export default function AdminUsersPage() {
                     )}
                   </div>
 
-                  <div
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 800,
-                      color: BRAND.muted,
-                      marginRight: 2,
-                      marginTop: 10,
-                    }}
-                  >
-                    İşlemler:
-                  </div>
+                <div
+  style={{
+    fontSize: 11,
+    fontWeight: 800,
+    color: BRAND.muted,
+    marginRight: 2,
+    marginTop: 10,
+  }}
+>
+  İşlemler:
+</div>
 
-                  <div
-                    style={{
-                      marginTop: 14,
-                      display: "flex",
-                      gap: 8,
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                    }}
-                  >
-                    <button
-                      onClick={async () => {
-                        const res = await fetch("/api/admin/roles/template", {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                          },
-                          body: JSON.stringify({ role: u.role }),
-                        });
+<div
+  style={{
+    marginTop: 14,
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+  }}
+>
+  <button
+    type="button"
+    onClick={() => {
+      window.location.href = "/admin/permissions";
+    }}
+    style={{
+      background: "#111827",
+      color: "#fff",
+      border: "none",
+      borderRadius: 10,
+      padding: "9px 14px",
+      fontSize: 13,
+      fontWeight: 800,
+      cursor: "pointer",
+    }}
+  >
+    Yetki Matrisi V3’e Git
+  </button>
 
-                        const json = await res.json();
+  <button
+    type="button"
+    onClick={() => openEditModal(u)}
+    style={{
+      border: "1px solid #d1d5db",
+      background: "#fff",
+      borderRadius: 10,
+      padding: "9px 14px",
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    Düzenle
+  </button>
 
-                        if (!res.ok) {
-                          alert("Rol yetkileri alınamadı");
-                          return;
-                        }
-
-                        await updatePermissions(u.id, json.permissions || []);
-                      }}
-                      style={{
-                        background: "#111827",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: 10,
-                        padding: "8px 12px",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      🔥 Role Göre Yetki Yükle
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedUserId((prev) => (prev === u.id ? null : u.id))
-                      }
-                      style={{
-                        border: `1px solid ${BRAND.border}`,
-                        background: expandedUserId === u.id ? "#111827" : "#fff",
-                        borderRadius: 12,
-                        padding: "10px 14px",
-                        fontSize: 13,
-                        fontWeight: 800,
-                        cursor: "pointer",
-                        color: expandedUserId === u.id ? "#fff" : BRAND.text,
-                      }}
-                    >
-                      {expandedUserId === u.id
-                        ? "Yetkileri Gizle"
-                        : `Yetkileri Göster (${u.permissions?.length || 0})`}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(u)}
-                      style={{
-                        border: "1px solid #d1d5db",
-                        background: "#fff",
-                        borderRadius: 10,
-                        padding: "9px 14px",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Düzenle
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => void deleteUser(u.id, u.full_name)}
-                      style={{
-                        border: "1px solid #fecaca",
-                        background: "#fff5f5",
-                        color: "#b91c1c",
-                        borderRadius: 10,
-                        padding: "9px 14px",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Sil
-                    </button>
-                  </div>
-
-                  {expandedUserId === u.id && (
-                    <div
-                      style={{
-                        marginTop: 12,
-                        border: `1px solid ${BRAND.border}`,
-                        borderRadius: 14,
-                        padding: 14,
-                        background: "#fafafa",
-                      }}
-                    >
-                      {!u.permissions || u.permissions.length === 0 ? (
-                        <div style={{ fontSize: 13, color: BRAND.muted }}>
-                          Yetki yok
-                        </div>
-                      ) : null}
-
-                      <div style={{ display: "grid", gap: 8 }}>
-                        {ALL_PERMISSIONS.map((perm) => {
-                          const isChecked = u.permissions?.includes(perm);
-
-                          return (
-                            <label
-                              key={`${u.id}-${perm}-checkbox`}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                fontSize: 13,
-                                cursor: "pointer",
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                disabled={savingPerm}
-                                onChange={(e) => {
-                                  const currentPerms = u.permissions || [];
-
-                                  let newPerms: string[];
-
-                                  if (e.target.checked) {
-                                    newPerms = [...currentPerms, perm];
-                                  } else {
-                                    newPerms = currentPerms.filter(
-                                      (p) => p !== perm
-                                    );
-                                  }
-
-                                  newPerms = Array.from(new Set(newPerms));
-
-                                  void updatePermissions(u.id, newPerms);
-                                }}
-                              />
-                              {prettyPermissionLabel(perm)}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
+  <button
+    type="button"
+    onClick={() => void deleteUser(u.id, u.full_name)}
+    style={{
+      border: "1px solid #fecaca",
+      background: "#fff5f5",
+      color: "#b91c1c",
+      borderRadius: 10,
+      padding: "9px 14px",
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer",
+    }}
+  >
+    Sil
+  </button>
+</div>
                   <div
                     style={{
                       marginTop: 12,
