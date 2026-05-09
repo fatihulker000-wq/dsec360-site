@@ -54,21 +54,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabase();
 
-    const { error: userUpdateError } = await supabase
-      .from("users")
-      .update({
-        permissions,
-      })
-      .eq("id", userId);
-
-    if (userUpdateError) {
-      console.error("users.permissions update error:", userUpdateError);
-      return NextResponse.json(
-        { error: userUpdateError.message || "Kullanıcı yetki özeti güncellenemedi." },
-        { status: 500 }
-      );
-    }
-
+    
     const { error: deleteError } = await supabase
       .from("user_permissions")
       .delete()
