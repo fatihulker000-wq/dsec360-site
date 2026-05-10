@@ -11,14 +11,23 @@ function getSupabase() {
   );
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const supabase = getSupabase();
 
-    const { data: runs, error: runsError } = await supabase
-      .from("denetim_runs")
-      .select("*")
-      .order("created_at_millis", { ascending: false, nullsFirst: false });
+   const { searchParams } = new URL(req.url);
+const firmId = Number(searchParams.get("firmId") || 0);
+
+let runsQuery = supabase
+  .from("denetim_runs")
+  .select("*")
+  .order("created_at_millis", { ascending: false, nullsFirst: false });
+
+if (firmId > 0) {
+  runsQuery = runsQuery.eq("firm_id", firmId);
+}
+
+const { data: runs, error: runsError } = await runsQuery;
 
     if (runsError) {
       return NextResponse.json({ success: false, error: runsError.message }, { status: 500 });
