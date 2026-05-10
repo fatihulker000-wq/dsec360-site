@@ -15,15 +15,15 @@ export async function GET(req: Request) {
   try {
     const supabase = getSupabase();
 
-   const { searchParams } = new URL(req.url);
-const firmId = Number(searchParams.get("firmId") || 0);
+  const { searchParams } = new URL(req.url);
+const firmId = (searchParams.get("firmId") || "").trim();
 
 let runsQuery = supabase
   .from("denetim_runs")
   .select("*")
   .order("created_at_millis", { ascending: false, nullsFirst: false });
 
-if (firmId > 0) {
+if (firmId && firmId !== "0") {
   runsQuery = runsQuery.eq("firm_id", firmId);
 }
 
