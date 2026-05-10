@@ -16,16 +16,36 @@ export async function GET(req: Request) {
     const supabase = getSupabase();
 
     const { searchParams } = new URL(req.url);
+
     const firmIdRaw = (searchParams.get("firmId") || "").trim();
+    const localFirmIdRaw = (searchParams.get("localFirmId") || "").trim();
+    const firmNameRaw = (searchParams.get("firmName") || "").trim();
+
     const firmIdNum = Number(firmIdRaw);
+    const localFirmIdNum = Number(localFirmIdRaw);
 
     let runsQuery = supabase
       .from("denetim_runs")
       .select("*")
-      .order("created_at_millis", { ascending: false });
+      .order("created_at_millis", { ascending: false, nullsFirst: false });
+
+    const filters: string[] = [];
 
     if (firmIdRaw && firmIdRaw !== "0" && !Number.isNaN(firmIdNum)) {
-      runsQuery = runsQuery.eq("firm_id", firmIdNum);
+      filters.push(`firm_id.eq.${firmIdNum}`);
+    }
+
+    if (localFirmIdRaw && localFirmIdRaw !== "0" && !Number.isNaN(localFirmIdNum)) {
+      filters.push(`firm_id.eq.${localFirmIdNum}`);
+    }
+
+    if (firmNameRaw) {
+      const safeFirmName = firmNameRaw.replace(/[%_,]/g, "");
+      filters.push(`firm_name.ilike.*${safeFirmName}*`);
+    }
+
+    if (filters.length > 0) {
+      runsQuery = runsQuery.or(filters.join(","));
     }
 
     const { data: runs, error: runsError } = await runsQuery;
@@ -83,21 +103,30 @@ export async function GET(req: Request) {
 
       return {
         ...run,
+
         appRunId: run.app_run_id || run.id,
         firmId: run.firm_id || 0,
         firmName: run.firm_name || "",
         templateType: run.template_type || "",
         evalMode: run.eval_mode || "KLASIK",
+        location: run.location || "",
+        responsible: run.responsible || "",
         inspectorName: run.inspector_name || "",
-        auditDateMillis: run.audit_date_millis || run.created_at_millis || Date.now(),
+        auditDateMillis:
+          run.audit_date_millis || run.created_at_millis || Date.now(),
         reportNo: run.report_no || "",
         generalNote: run.general_note || "",
+        status: run.status || "TASLAK",
         createdAt: run.created_at_millis || Date.now(),
+
         answers: runAnswers,
       };
     });
 
-    return NextResponse.json({ success: true, runs: runsWithAnswers });
+    return NextResponse.json({
+      success: true,
+      runs: runsWithAnswers,
+    });
   } catch (e: any) {
     return NextResponse.json(
       { success: false, step: "catch", error: e?.message || "Liste hatası" },
