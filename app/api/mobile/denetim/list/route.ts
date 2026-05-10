@@ -15,22 +15,26 @@ export async function GET(req: Request) {
   try {
     const supabase = getSupabase();
 
-  const { searchParams } = new URL(req.url);
-const firmId = (searchParams.get("firmId") || "").trim();
+    const { searchParams } = new URL(req.url);
+    const firmIdRaw = (searchParams.get("firmId") || "").trim();
+    const firmIdNum = Number(firmIdRaw);
 
-let runsQuery = supabase
-  .from("denetim_runs")
-  .select("*")
-  .order("created_at_millis", { ascending: false, nullsFirst: false });
+    let runsQuery = supabase
+      .from("denetim_runs")
+      .select("*")
+      .order("created_at_millis", { ascending: false });
 
-if (firmId && firmId !== "0") {
-  runsQuery = runsQuery.eq("firm_id", firmId);
-}
+    if (firmIdRaw && firmIdRaw !== "0" && !Number.isNaN(firmIdNum)) {
+      runsQuery = runsQuery.eq("firm_id", firmIdNum);
+    }
 
-const { data: runs, error: runsError } = await runsQuery;
+    const { data: runs, error: runsError } = await runsQuery;
 
     if (runsError) {
-      return NextResponse.json({ success: false, error: runsError.message }, { status: 500 });
+      return NextResponse.json(
+        { success: false, step: "runs", error: runsError.message },
+        { status: 500 }
+      );
     }
 
     const safeRuns = runs || [];
@@ -39,18 +43,27 @@ const { data: runs, error: runsError } = await runsQuery;
       return NextResponse.json({ success: true, runs: [] });
     }
 
-    const runIds = safeRuns.map((r: any) => Number(r.id)).filter((id) => id > 0);
+    const runIds = safeRuns
+      .map((r: any) => Number(r.id))
+      .filter((id) => id > 0);
 
-    const { data: answers, error: answersError } = await supabase
-      .from("denetim_answers")
-      .select("*")
-      .in("run_remote_id", runIds);
+    let safeAnswers: any[] = [];
 
-    if (answersError) {
-      return NextResponse.json({ success: false, error: answersError.message }, { status: 500 });
+    if (runIds.length > 0) {
+      const { data: answers, error: answersError } = await supabase
+        .from("denetim_answers")
+        .select("*")
+        .in("run_remote_id", runIds);
+
+      if (answersError) {
+        return NextResponse.json(
+          { success: false, step: "answers", error: answersError.message },
+          { status: 500 }
+        );
+      }
+
+      safeAnswers = answers || [];
     }
-
-    const safeAnswers = answers || [];
 
     const runsWithAnswers = safeRuns.map((run: any) => {
       const runRemoteId = Number(run.id);
@@ -59,21 +72,17 @@ const { data: runs, error: runsError } = await runsQuery;
         .filter((a: any) => Number(a.run_remote_id) === runRemoteId)
         .map((a: any) => ({
           ...a,
-
           itemTitle: a.item_title || "",
           legalRef: a.legal_ref || "",
           recommendedAction: a.recommended_action || "",
-
           dofStatus: a.dof_status || "NONE",
           dofClosedAt: a.dof_closed_at || 0,
           dofNote: a.dof_note || "",
-
           photoUrl: a.photo_url || "",
         }));
 
       return {
         ...run,
-
         appRunId: run.app_run_id || run.id,
         firmId: run.firm_id || 0,
         firmName: run.firm_name || "",
@@ -84,18 +93,14 @@ const { data: runs, error: runsError } = await runsQuery;
         reportNo: run.report_no || "",
         generalNote: run.general_note || "",
         createdAt: run.created_at_millis || Date.now(),
-
         answers: runAnswers,
       };
     });
 
-    return NextResponse.json({
-      success: true,
-      runs: runsWithAnswers,
-    });
+    return NextResponse.json({ success: true, runs: runsWithAnswers });
   } catch (e: any) {
     return NextResponse.json(
-      { success: false, error: e?.message || "Liste hatası" },
+      { success: false, step: "catch", error: e?.message || "Liste hatası" },
       { status: 500 }
     );
   }
