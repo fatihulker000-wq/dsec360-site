@@ -106,20 +106,22 @@ export default function PanelPage() {
             </div>
 
             <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              style={{
-                border: "none",
-                borderRadius: "14px",
-                padding: "12px 18px",
-                background: "#111827",
-                color: "#ffffff",
-                fontWeight: 800,
-                fontSize: "14px",
-                cursor: loggingOut ? "not-allowed" : "pointer",
-                opacity: loggingOut ? 0.7 : 1,
-              }}
-            >
+  onClick={handleLogout}
+  disabled={loggingOut}
+  style={{
+    border: "none",
+    borderRadius: "14px",
+    padding: "12px 18px",
+    background: "#111827",
+    color: "#ffffff",
+    fontWeight: 800,
+    fontSize: "14px",
+    cursor: loggingOut ? "not-allowed" : "pointer",
+    opacity: loggingOut ? 0.7 : 1,
+    width: "fit-content",
+    maxWidth: "100%",
+  }}
+>
               {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
             </button>
           </div>
@@ -131,7 +133,7 @@ export default function PanelPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
               gap: "20px",
               marginBottom: "24px",
             }}
@@ -161,7 +163,7 @@ export default function PanelPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
               gap: "20px",
             }}
           >

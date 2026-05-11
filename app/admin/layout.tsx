@@ -253,7 +253,7 @@ if (roleLoaded && role === "training_user") {
       className="admin-layout"
       style={{
         display: "flex",
-        flexDirection: "row",
+        flexDirection: isMobile ? "column" : "row",
         minHeight: "100vh",
         background: "#fafafa",
         overflowX: "hidden",
