@@ -223,44 +223,60 @@ export async function GET(req: Request) {
       }
     }
 
-    const filtered = ((data || []) as CbsRow[]).filter((row) => {
-      const rowFirmId = String(row?.firm_id || "").trim();
-      const rowFirmaAdiRaw = String(row?.firma_adi || "").trim();
-      const rowFirmaAdi = normalizeFirmName(rowFirmaAdiRaw);
+  const filtered = ((data || []) as CbsRow[]).filter((row) => {
+  const rowFirmId = String(row?.firm_id || "").trim();
+  const rowFirmaAdiRaw = String(row?.firma_adi || "").trim();
+  const rowFirmaAdi = normalizeFirmName(rowFirmaAdiRaw);
 
-      const { suggestedFirmId } = findSuggestedCompany(row, companyList);
+  const { suggestedFirmId, suggestedFirmName } = findSuggestedCompany(
+    row,
+    companyList
+  );
 
-      if (!firmIdParam && !normalizedFirmaAdi) return true;
+  if (!firmIdParam && !normalizedFirmaAdi) return true;
 
-      const byDirectFirmId =
-        firmIdParam.length > 0 &&
-        rowFirmId.length > 0 &&
-        rowFirmId === firmIdParam;
+  const byDirectFirmId =
+    firmIdParam.length > 0 &&
+    rowFirmId.length > 0 &&
+    rowFirmId === firmIdParam;
 
-      const byRequestedCompanyId =
-        !!requestedCompanyId &&
-        (rowFirmId === requestedCompanyId ||
-          String(suggestedFirmId || "").trim() === requestedCompanyId);
+  const bySuggestedFirmId =
+    firmIdParam.length > 0 &&
+    String(suggestedFirmId || "").trim() === firmIdParam;
 
-      const byRawFirmaAdi =
-        normalizedFirmaAdi.length > 0 &&
-        rowFirmaAdi.length > 0 &&
-        (rowFirmaAdi === normalizedFirmaAdi ||
-          rowFirmaAdi.includes(normalizedFirmaAdi) ||
-          normalizedFirmaAdi.includes(rowFirmaAdi));
+  const byRequestedCompanyId =
+    !!requestedCompanyId &&
+    (rowFirmId === requestedCompanyId ||
+      String(suggestedFirmId || "").trim() === requestedCompanyId);
 
-      return byDirectFirmId || byRequestedCompanyId || byRawFirmaAdi;
-    });
+  const byRawFirmaAdi =
+    normalizedFirmaAdi.length > 0 &&
+    rowFirmaAdi.length > 0 &&
+    (rowFirmaAdi === normalizedFirmaAdi ||
+      rowFirmaAdi.includes(normalizedFirmaAdi) ||
+      normalizedFirmaAdi.includes(rowFirmaAdi));
+
+  const bySuggestedFirmName =
+    normalizedFirmaAdi.length > 0 &&
+    normalizeFirmName(String(suggestedFirmName || "")).length > 0 &&
+    (normalizeFirmName(String(suggestedFirmName || "")) === normalizedFirmaAdi ||
+      normalizeFirmName(String(suggestedFirmName || "")).includes(normalizedFirmaAdi) ||
+      normalizedFirmaAdi.includes(normalizeFirmName(String(suggestedFirmName || ""))));
+
+  return (
+    byDirectFirmId ||
+    bySuggestedFirmId ||
+    byRequestedCompanyId ||
+    byRawFirmaAdi ||
+    bySuggestedFirmName
+  );
+});
 
    const includeAllIfEmpty =
       String(url.searchParams.get("includeAllIfEmpty") || "").trim() === "1";
 
-    const finalData =
-      filtered.length > 0
-        ? filtered
-        : includeAllIfEmpty
-        ? ((data || []) as CbsRow[])
-        : filtered;
+    const finalData = filtered
+      
 
     return NextResponse.json({
       success: true,
