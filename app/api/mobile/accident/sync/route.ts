@@ -15,35 +15,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "record missing" }, { status: 400 });
     }
 
-    const appRunId = record.localId?.toString();
+    const appRecordId = record.localId?.toString();
+    const localFirmId = Number(record.firmId || 0);
+    const webFirmId = String(record.webFirmId || "").trim();
 
-    if (!appRunId) {
+    if (!appRecordId) {
       return NextResponse.json({ success: false, error: "localId missing" }, { status: 400 });
+    }
+
+    if (!webFirmId) {
+      return NextResponse.json({ success: false, error: "webFirmId missing" }, { status: 400 });
     }
 
     const payload = mapRecord(record);
 
-    const { data: existing } = await supabase
-  .from("accident_records")
-  .select("id")
-  .eq("app_record_id", appRunId)
-  .eq("firm_id", Number(record.firmId || 0))
-  .maybeSingle();
+    const { data: existing, error: existingError } = await supabase
+      .from("accident_records")
+      .select("id")
+      .eq("app_record_id", appRecordId)
+      .eq("web_firm_id", webFirmId)
+      .maybeSingle();
+
+    if (existingError) {
+      return NextResponse.json(
+        { success: false, error: existingError.message },
+        { status: 500 }
+      );
+    }
 
     const result = existing
       ? await supabase
           .from("accident_records")
           .update(payload)
-          .eq("app_record_id", appRunId)
-          .eq("firm_id", Number(record.firmId || 0))
+          .eq("id", existing.id)
           .select()
           .single()
       : await supabase
           .from("accident_records")
           .insert({
-          ...payload,
-          app_record_id: appRunId,
-          web_firm_id: record.webFirmId || "",
+            ...payload,
+            app_record_id: appRecordId,
+            firm_id: localFirmId,
+            web_firm_id: webFirmId,
           })
           .select()
           .single();
@@ -69,14 +82,12 @@ export async function POST(req: NextRequest) {
 
 function mapRecord(r: any) {
   return {
-    // ✅ ASIL ÇÖZÜM:
-    // firm_id bigint olduğu için APP local firmId burada kalacak.
-    // webFirmId UUID/text olduğu için firm_id içine yazılmayacak.
-    web_firm_id: r.webFirmId || "",
+    firm_id: Number(r.firmId || 0),
+    web_firm_id: String(r.webFirmId || "").trim(),
 
     employee_id: Number(r.employeeId || 0),
 
-    event_type: r.eventType,
+    event_type: r.eventType || "KAZA",
     event_date: Number(r.eventDate || 0),
     title: r.title || "",
     description: r.description || "",
@@ -90,7 +101,7 @@ function mapRecord(r: any) {
     injury_body_part: r.injuryBodyPart || "",
     injury_type: r.injuryType || "",
     root_cause_category: r.rootCauseCategory || "",
-    event_hour: Number(r.eventHour || 0),
+    event_hour: Number(r.eventHour ?? -1),
     event_week_day: r.eventWeekDay || "",
 
     incident_photo_path: r.incidentPhotoPath || "",
@@ -101,7 +112,7 @@ function mapRecord(r: any) {
     created_at: Number(r.createdAt || Date.now()),
     updated_at: Number(r.updatedAt || Date.now()),
 
-    source: "APP",
+    source: r.source || "APP",
   };
 }
 
@@ -116,6 +127,7 @@ export async function GET(req: NextRequest) {
         id,
         app_record_id,
         firm_id,
+        web_firm_id,
         employee_id,
         event_type,
         event_date,
