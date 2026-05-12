@@ -20,12 +20,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const shouldFilterFirm =
-      firmIdParam &&
-      firmIdParam !== "all" &&
-      firmIdParam.trim() !== "";
-
-    const webFirmId = shouldFilterFirm ? firmIdParam.trim() : null;
+    const selectedFirmId =
+      firmIdParam && firmIdParam !== "all" && firmIdParam.trim() !== ""
+        ? firmIdParam.trim()
+        : null;
 
     let query = supabase
       .from("accident_records")
@@ -60,11 +58,17 @@ export async function GET(req: NextRequest) {
         created_at_server
       `);
 
-    if (webFirmId) {
-  query = query.or(
-    `web_firm_id.eq.${webFirmId},firm_id.eq.${webFirmId}`
-  );
-}
+    if (selectedFirmId) {
+      const numericFirmId = Number(selectedFirmId);
+
+      if (Number.isFinite(numericFirmId)) {
+        query = query.or(
+          `web_firm_id.eq.${selectedFirmId},firm_id.eq.${numericFirmId}`
+        );
+      } else {
+        query = query.eq("web_firm_id", selectedFirmId);
+      }
+    }
 
     const { data, error } = await query.order("event_date", {
       ascending: false,
