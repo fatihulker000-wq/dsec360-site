@@ -24,23 +24,26 @@ export async function POST(req: NextRequest) {
     const payload = mapRecord(record);
 
     const { data: existing } = await supabase
-      .from("accident_records")
-      .select("id")
-      .eq("app_record_id", appRunId)
-      .maybeSingle();
+  .from("accident_records")
+  .select("id")
+  .eq("app_record_id", appRunId)
+  .eq("firm_id", Number(record.firmId || 0))
+  .maybeSingle();
 
     const result = existing
       ? await supabase
           .from("accident_records")
           .update(payload)
           .eq("app_record_id", appRunId)
+          .eq("firm_id", Number(record.firmId || 0))
           .select()
           .single()
       : await supabase
           .from("accident_records")
           .insert({
-            ...payload,
-            app_record_id: appRunId,
+          ...payload,
+          app_record_id: appRunId,
+          web_firm_id: record.webFirmId || "",
           })
           .select()
           .single();
@@ -69,7 +72,7 @@ function mapRecord(r: any) {
     // ✅ ASIL ÇÖZÜM:
     // firm_id bigint olduğu için APP local firmId burada kalacak.
     // webFirmId UUID/text olduğu için firm_id içine yazılmayacak.
-    firm_id: Number(r.firmId || 0),
+    web_firm_id: r.webFirmId || "",
 
     employee_id: Number(r.employeeId || 0),
 
@@ -140,7 +143,7 @@ export async function GET(req: NextRequest) {
       .order("event_date", { ascending: false });
 
     if (firmId && firmId !== "all") {
-      query = query.eq("firm_id", Number(firmId));
+      query = query.eq("web_firm_id", firmId);
     }
 
     const { data, error } = await query;
