@@ -274,13 +274,15 @@ const firmOk =
   return typeOk && firmOk;
 });
 
-const filteredRunIdSet = new Set(filteredRuns.map((r: any) => Number(r.id)));
-
-const filteredAnswers = answerList.filter((a: any) =>
-  filteredRunIdSet.has(Number(a.run_remote_id))
+const scopedRunIds = new Set(
+  filteredRuns.map((r: any) => Number(r.id))
 );
 
-const dofItems = filteredAnswers.filter((a: any) => {
+const scopedAnswers = answerList.filter((a: any) =>
+  scopedRunIds.has(Number(a.run_remote_id))
+);
+
+const dofItems = scopedAnswers.filter((a: any) => {
   const status = normalizeDofStatusFromAnswer(a);
   return status !== "NONE";
 });
@@ -307,7 +309,7 @@ const pagedDofItems = dofItems.slice(
 );
 
 const countByRun = new Map<number, number>();
-filteredAnswers.forEach((a: any) => {
+scopedAnswers.forEach((a: any) => {
   const key = Number(a.run_remote_id);
   countByRun.set(key, (countByRun.get(key) || 0) + 1);
 });
@@ -323,17 +325,18 @@ const klasikCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "
 const fotografliCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "Fotoğraflı").length;
 const puanCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "Puanlamalı").length;
 const elmeriCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "ELMERI").length;
-const totalAnswers = filteredAnswers.length;
 
-const uygunCount = filteredAnswers.filter(
+const totalAnswers = scopedAnswers.length;
+
+const uygunCount = scopedAnswers.filter(
   (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
 ).length;
 
-const kismenCount = filteredAnswers.filter(
+const kismenCount = scopedAnswers.filter(
   (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
 ).length;
 
-const uygunsuzCount = filteredAnswers.filter(
+const uygunsuzCount = scopedAnswers.filter(
   (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
 ).length;
 
