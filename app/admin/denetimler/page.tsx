@@ -220,19 +220,33 @@ function normalizeDofStatusFromAnswer(a: any) {
   return "NONE";
 }
 
-const runFirmIds = new Set(
-  safeRuns
-    .map((r: any) => getRunFirmId(r))
-    .filter(Boolean)
-);
+const firmMap = new Map<string, { id: string; name: string }>();
 
-const firmOptions = companyList
-  .map((c: any) => ({
-    id: String(c.id || "").trim(),
-    name: cleanFirmName(c.name),
-  }))
-  .filter((c) => c.id && runFirmIds.has(c.id))
-  .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+safeRuns.forEach((r: any) => {
+  const firmId = String(r.firm_id || "").trim();
+
+  let firmName =
+    cleanFirmName(
+      companyNameById.get(firmId) ||
+      r.firm_name ||
+      r.firma_adi
+    );
+
+  if (!firmName || firmName === "Firma Ünvanı Yok") return;
+
+  const key = firmId || firmName;
+
+  if (!firmMap.has(key)) {
+    firmMap.set(key, {
+      id: key,
+      name: firmName,
+    });
+  }
+});
+
+const firmOptions = Array.from(firmMap.values()).sort((a, b) =>
+  a.name.localeCompare(b.name, "tr")
+);
 
 const activeFirmName =
   activeFirm === "ALL"
@@ -250,7 +264,12 @@ const filteredRuns = safeRuns.filter((r: any) => {
     (activeType === "PUAN" && label === "PUANLAMALI") ||
     (activeType === "ELMERI" && label === "ELMERI");
 
-  const firmOk = activeFirm === "ALL" || firmId === activeFirm;
+  const firmName = getRunFirmName(r);
+
+const firmOk =
+  activeFirm === "ALL" ||
+  firmId === activeFirm ||
+  firmName === activeFirm;
 
   return typeOk && firmOk;
 });
