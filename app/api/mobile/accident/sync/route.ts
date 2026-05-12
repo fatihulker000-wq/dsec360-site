@@ -15,39 +15,69 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "record missing" }, { status: 400 });
     }
 
-    const appRecordId = record.localId?.toString();
+    const rawAppRecordId = record.localId?.toString();
     const localFirmId = Number(record.firmId || 0);
     const webFirmId = String(record.webFirmId || "").trim();
 
-    if (!appRecordId) {
+    if (!rawAppRecordId) {
       return NextResponse.json({ success: false, error: "localId missing" }, { status: 400 });
+    }
+
+    if (localFirmId <= 0) {
+      return NextResponse.json({ success: false, error: "firmId missing" }, { status: 400 });
     }
 
     if (!webFirmId) {
       return NextResponse.json({ success: false, error: "webFirmId missing" }, { status: 400 });
     }
 
-    const payload = mapRecord(record);
+    const appRecordId = `${localFirmId}_${rawAppRecordId}`;
+    const payload = mapRecord(record, localFirmId, webFirmId);
 
-    const { data: existing, error: existingError } = await supabase
+    let existingId: string | null = null;
+
+    const { data: existingComposite, error: existingCompositeError } = await supabase
       .from("accident_records")
       .select("id")
       .eq("app_record_id", appRecordId)
       .eq("web_firm_id", webFirmId)
       .maybeSingle();
 
-    if (existingError) {
+    if (existingCompositeError) {
       return NextResponse.json(
-        { success: false, error: existingError.message },
+        { success: false, error: existingCompositeError.message },
         { status: 500 }
       );
     }
 
-    const result = existing
+    existingId = existingComposite?.id ?? null;
+
+    if (!existingId) {
+      const { data: existingLegacy, error: existingLegacyError } = await supabase
+        .from("accident_records")
+        .select("id")
+        .eq("app_record_id", rawAppRecordId)
+        .eq("firm_id", localFirmId)
+        .maybeSingle();
+
+      if (existingLegacyError) {
+        return NextResponse.json(
+          { success: false, error: existingLegacyError.message },
+          { status: 500 }
+        );
+      }
+
+      existingId = existingLegacy?.id ?? null;
+    }
+
+    const result = existingId
       ? await supabase
           .from("accident_records")
-          .update(payload)
-          .eq("id", existing.id)
+          .update({
+            ...payload,
+            app_record_id: appRecordId,
+          })
+          .eq("id", existingId)
           .select()
           .single()
       : await supabase
@@ -55,8 +85,6 @@ export async function POST(req: NextRequest) {
           .insert({
             ...payload,
             app_record_id: appRecordId,
-            firm_id: localFirmId,
-            web_firm_id: webFirmId,
           })
           .select()
           .single();
@@ -80,10 +108,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function mapRecord(r: any) {
+function mapRecord(r: any, localFirmId: number, webFirmId: string) {
   return {
-    firm_id: Number(r.firmId || 0),
-    web_firm_id: String(r.webFirmId || "").trim(),
+    firm_id: localFirmId,
+    web_firm_id: webFirmId,
 
     employee_id: Number(r.employeeId || 0),
 
@@ -155,7 +183,7 @@ export async function GET(req: NextRequest) {
       .order("event_date", { ascending: false });
 
     if (firmId && firmId !== "all") {
-      query = query.eq("web_firm_id", firmId);
+      query = query.eq("web_firm_id", firmId.trim());
     }
 
     const { data, error } = await query;
