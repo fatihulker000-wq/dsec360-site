@@ -162,13 +162,16 @@ const loadCompanies = async () => {
   const name = String(firm.name || firm.title || firm.company_name || "").trim();
 
   return {
-    id: firm.id,
-    name,
-    title: firm.title || null,
-    company_name: firm.company_name || null,
-    local_firm_id: firm.local_firm_id ?? firm.localId ?? null,
-    localId: firm.local_firm_id ?? firm.localId ?? null,
-  };
+  id: firm.id,
+  firm_id: firm.firm_id ?? firm.id ?? null,
+
+  name,
+  title: firm.title || null,
+  company_name: firm.company_name || null,
+
+  local_firm_id: firm.local_firm_id ?? firm.localId ?? null,
+  localId: firm.local_firm_id ?? firm.localId ?? null,
+};
 });
 
     setCompanies(normalized);
@@ -282,7 +285,11 @@ useEffect(() => {
   >
     <option value="all">Tüm Firmalar</option>
     {companies.map((firm) => {
-  const filterId = firm.local_firm_id || firm.localId;
+  const filterId =
+  firm.firm_id ||
+  firm.id ||
+  firm.local_firm_id ||
+  firm.localId;
 
   return (
     <option
