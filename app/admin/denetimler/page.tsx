@@ -150,6 +150,29 @@ export default async function AdminDenetimlerPage({
 
   const answerList = answers || [];
 
+  const { data: companies } = await supabase
+  .from("companies")
+  .select("id, name")
+  .order("name", { ascending: true });
+
+const companyList = companies || [];
+
+const companyNameById = new Map<string, string>();
+companyList.forEach((c: any) => {
+  const id = String(c.id || "").trim();
+  const name = cleanFirmName(c.name);
+  if (id) companyNameById.set(id, name);
+});
+
+function getRunFirmId(run: any) {
+  return String(run.firm_id || "").trim();
+}
+
+function getRunFirmName(run: any) {
+  const firmId = getRunFirmId(run);
+  return cleanFirmName(companyNameById.get(firmId) || run.firm_name);
+}
+
 function normalizeText(value?: string | null) {
   return String(value || "").trim().toUpperCase();
 }
@@ -197,7 +220,48 @@ function normalizeDofStatusFromAnswer(a: any) {
   return "NONE";
 }
 
- const dofItems = answerList.filter((a: any) => {
+const runFirmIds = new Set(
+  safeRuns
+    .map((r: any) => getRunFirmId(r))
+    .filter(Boolean)
+);
+
+const firmOptions = companyList
+  .map((c: any) => ({
+    id: String(c.id || "").trim(),
+    name: cleanFirmName(c.name),
+  }))
+  .filter((c) => c.id && runFirmIds.has(c.id))
+  .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+
+const activeFirmName =
+  activeFirm === "ALL"
+    ? "Tüm Firmalar"
+    : firmOptions.find((f) => f.id === activeFirm)?.name || "Firma";
+
+const filteredRuns = safeRuns.filter((r: any) => {
+  const label = modeLabel(r.eval_mode).toUpperCase();
+  const firmId = getRunFirmId(r);
+
+  const typeOk =
+    activeType === "ALL" ||
+    (activeType === "KLASIK" && label === "KLASIK") ||
+    (activeType === "FOTO" && label === "FOTOĞRAFLI") ||
+    (activeType === "PUAN" && label === "PUANLAMALI") ||
+    (activeType === "ELMERI" && label === "ELMERI");
+
+  const firmOk = activeFirm === "ALL" || firmId === activeFirm;
+
+  return typeOk && firmOk;
+});
+
+const filteredRunIdSet = new Set(filteredRuns.map((r: any) => Number(r.id)));
+
+const filteredAnswers = answerList.filter((a: any) =>
+  filteredRunIdSet.has(Number(a.run_remote_id))
+);
+
+const dofItems = filteredAnswers.filter((a: any) => {
   const status = normalizeDofStatusFromAnswer(a);
   return status !== "NONE";
 });
@@ -210,103 +274,81 @@ const closedDofItems = dofItems.filter(
   (a: any) => normalizeDofStatusFromAnswer(a) === "CLOSED"
 );
 
-  const dofCountByRun = new Map<number, number>();
-  dofItems.forEach((a: any) => {
-    const key = Number(a.run_remote_id);
-    dofCountByRun.set(key, (dofCountByRun.get(key) || 0) + 1);
-  });
+const dofCountByRun = new Map<number, number>();
+dofItems.forEach((a: any) => {
+  const key = Number(a.run_remote_id);
+  dofCountByRun.set(key, (dofCountByRun.get(key) || 0) + 1);
+});
 
-  const dofTotalPages = Math.max(1, Math.ceil(dofItems.length / dofPageSize));
-  const safeDofPage = Math.min(activeDofPage, dofTotalPages);
-  const pagedDofItems = dofItems.slice(
-    (safeDofPage - 1) * dofPageSize,
-    safeDofPage * dofPageSize
-  );
+const dofTotalPages = Math.max(1, Math.ceil(dofItems.length / dofPageSize));
+const safeDofPage = Math.min(activeDofPage, dofTotalPages);
+const pagedDofItems = dofItems.slice(
+  (safeDofPage - 1) * dofPageSize,
+  safeDofPage * dofPageSize
+);
 
-  const countByRun = new Map<number, number>();
-  answerList.forEach((a: any) => {
-    const key = Number(a.run_remote_id);
-    countByRun.set(key, (countByRun.get(key) || 0) + 1);
-  });
+const countByRun = new Map<number, number>();
+filteredAnswers.forEach((a: any) => {
+  const key = Number(a.run_remote_id);
+  countByRun.set(key, (countByRun.get(key) || 0) + 1);
+});
 
-  const firmOptions = Array.from(
-    new Set(
-      safeRuns
-        .map((r: any) => cleanFirmName(r.firm_name))
-        .filter((x: string) => x && x !== "Firma Ünvanı Yok")
-    )
-  ).sort((a, b) => a.localeCompare(b, "tr"));
+const runTotalPages = Math.max(1, Math.ceil(filteredRuns.length / runPageSize));
+const safeRunPage = Math.min(activeRunPage, runTotalPages);
+const pagedRuns = filteredRuns.slice(
+  (safeRunPage - 1) * runPageSize,
+  safeRunPage * runPageSize
+);
 
-  const filteredRuns = safeRuns.filter((r: any) => {
-    const label = modeLabel(r.eval_mode).toUpperCase();
-    const firmName = cleanFirmName(r.firm_name);
+const klasikCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "Klasik").length;
+const fotografliCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "Fotoğraflı").length;
+const puanCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "Puanlamalı").length;
+const elmeriCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "ELMERI").length;
+const totalAnswers = filteredAnswers.length;
 
-    const typeOk =
-      activeType === "ALL" ||
-      (activeType === "KLASIK" && label === "KLASIK") ||
-      (activeType === "FOTO" && label === "FOTOĞRAFLI") ||
-      (activeType === "PUAN" && label === "PUANLAMALI") ||
-      (activeType === "ELMERI" && label === "ELMERI");
+const uygunCount = filteredAnswers.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
+).length;
 
-    const firmOk = activeFirm === "ALL" || firmName === activeFirm;
+const kismenCount = filteredAnswers.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
+).length;
 
-    return typeOk && firmOk;
-  });
+const uygunsuzCount = filteredAnswers.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
+).length;
 
-  const runTotalPages = Math.max(1, Math.ceil(filteredRuns.length / runPageSize));
-  const safeRunPage = Math.min(activeRunPage, runTotalPages);
-  const pagedRuns = filteredRuns.slice(
-    (safeRunPage - 1) * runPageSize,
-    safeRunPage * runPageSize
-  );
+const emptyRunCount = filteredRuns.filter((r: any) => {
+  return (countByRun.get(Number(r.id)) || 0) === 0;
+}).length;
 
-  const klasikCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "Klasik").length;
-  const fotografliCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "Fotoğraflı").length;
-  const puanCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "Puanlamalı").length;
-  const elmeriCount = safeRuns.filter((r: any) => modeLabel(r.eval_mode) === "ELMERI").length;
-  const totalAnswers = answerList.length;
+const firmCount = activeFirm === "ALL" ? firmOptions.length : 1;
 
-  const uygunCount = answerList.filter(
-    (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
-  ).length;
+const avgAnswerPerRun =
+  filteredRuns.length > 0 ? Math.round(totalAnswers / filteredRuns.length) : 0;
 
-  const kismenCount = answerList.filter(
-    (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
-  ).length;
+const dofClosureRate =
+  dofItems.length > 0 ? Math.round((closedDofItems.length / dofItems.length) * 100) : 0;
 
-  const uygunsuzCount = answerList.filter(
-    (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
-  ).length;
+const topFirmStats = firmOptions
+  .map((firm) => {
+    const firmRuns = safeRuns.filter((r: any) => getRunFirmId(r) === firm.id);
 
-  const emptyRunCount = safeRuns.filter((r: any) => {
-    return (countByRun.get(Number(r.id)) || 0) === 0;
-  }).length;
+    const firmRunIds = new Set(firmRuns.map((r: any) => Number(r.id)));
 
-  const firmCount = firmOptions.length;
-  const avgAnswerPerRun =
-    safeRuns.length > 0 ? Math.round(totalAnswers / safeRuns.length) : 0;
+    const firmAnswers = answerList.filter((a: any) =>
+      firmRunIds.has(Number(a.run_remote_id))
+    ).length;
 
-  const dofClosureRate =
-    dofItems.length > 0 ? Math.round((closedDofItems.length / dofItems.length) * 100) : 0;
-
-  const topFirmStats = firmOptions
-    .map((firm) => {
-      const firmRuns = safeRuns.filter(
-        (r: any) => cleanFirmName(r.firm_name) === firm
-      );
-
-      const firmAnswers = firmRuns.reduce((sum: number, r: any) => {
-        return sum + (countByRun.get(Number(r.id)) || 0);
-      }, 0);
-
-      return {
-        firm,
-        count: firmRuns.length,
-        answers: firmAnswers,
-      };
-    })
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+    return {
+      firm: firm.name,
+      firmId: firm.id,
+      count: firmRuns.length,
+      answers: firmAnswers,
+    };
+  })
+  .sort((a, b) => b.count - a.count)
+  .slice(0, 5);
 
   return (
     <main
@@ -424,7 +466,7 @@ const closedDofItems = dofItems.filter(
         <AnalysisCard
           title="Firma Kapsamı"
           value={`${firmCount} firma`}
-          desc={activeFirm === "ALL" ? "Tüm firmalar izleniyor" : `${activeFirm} filtresi aktif`}
+          desc={activeFirm === "ALL" ? "Tüm firmalar izleniyor" : `${activeFirmName} filtresi aktif`}
           tone="neutral"
         />
         <AnalysisCard
@@ -474,7 +516,7 @@ const closedDofItems = dofItems.filter(
               fontWeight: 900,
             }}
           >
-            Aktif: {activeFirm === "ALL" ? "Tüm Firmalar" : activeFirm}
+            Aktif: {activeFirmName}
           </div>
         </div>
 
@@ -482,13 +524,13 @@ const closedDofItems = dofItems.filter(
           <FilterPill href={makeQuery(activeType, "ALL")} active={activeFirm === "ALL"} label="Tüm Firmalar" />
 
           {firmOptions.map((firm) => (
-            <FilterPill
-              key={firm}
-              href={makeQuery(activeType, firm)}
-              active={activeFirm === firm}
-              label={firm}
-            />
-          ))}
+  <FilterPill
+    key={firm.id}
+    href={makeQuery(activeType, firm.id)}
+    active={activeFirm === firm.id}
+    label={firm.name}
+  />
+))}
         </div>
       </section>
 
@@ -618,7 +660,7 @@ const closedDofItems = dofItems.filter(
                 >
                   <div>
                     <div style={{ fontWeight: 1000, color: "#111827" }}>
-                      {cleanFirmName(relatedRun?.firm_name)}
+                      {relatedRun ? getRunFirmName(relatedRun) : "Firma Ünvanı Yok"}
                     </div>
                     <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800, marginTop: 4 }}>
                       Run: {a.run_remote_id} • {modeLabel(relatedRun?.eval_mode)}
@@ -787,7 +829,7 @@ const closedDofItems = dofItems.filter(
             const colors = modeColor(r.eval_mode);
             const detailId = r.id;
             const answerCount = countByRun.get(Number(r.id)) || 0;
-            const firmName = cleanFirmName(r.firm_name);
+            const firmName = getRunFirmName(r);
             const dofCount = dofCountByRun.get(Number(r.id)) || 0;
 
             return (
