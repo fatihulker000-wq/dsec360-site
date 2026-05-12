@@ -225,6 +225,9 @@ export async function GET(req: Request) {
     const headerRole = String(req.headers.get("x-role") || "").trim();
     const headerFirmId = String(req.headers.get("x-firm-id") || "").trim();
 
+    const url = new URL(req.url);
+const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
+
     const userRole =
       session?.role || (headerRole === "company_admin" ? "company_admin" : "super_admin");
 
@@ -237,8 +240,12 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: false });
 
     if (userRole === "company_admin" && userFirmId) {
-      query = query.eq("firm_id", userFirmId);
-    }
+  query = query.eq("firm_id", userFirmId);
+}
+
+if (userRole === "super_admin" && firmIdParam && firmIdParam !== "all") {
+  query = query.eq("firm_id", firmIdParam);
+}
 
     const { data, error } = await query;
 
