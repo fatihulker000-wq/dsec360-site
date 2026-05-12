@@ -32,7 +32,7 @@ type CompanyRow = {
   name?: string | null;
   title?: string | null;
   company_name?: string | null;
-  localId?: number | null;
+  localId?: number | string | null;
 };
 
 const BRAND = {
@@ -286,10 +286,10 @@ useEffect(() => {
     <option value="all">Tüm Firmalar</option>
     {companies.map((firm) => {
   const filterId =
-  firm.firm_id ||
-  firm.id ||
   firm.local_firm_id ||
-  firm.localId;
+  firm.localId ||
+  firm.firm_id ||
+  firm.id;
 
   return (
     <option
