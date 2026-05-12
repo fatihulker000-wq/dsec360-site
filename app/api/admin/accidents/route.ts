@@ -13,27 +13,27 @@ export async function GET(req: NextRequest) {
     const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
     const firmIdParam = req.nextUrl.searchParams.get("firmId");
 
-    const shouldFilterFirm =
-  firmIdParam &&
-  firmIdParam !== "all" &&
-  firmIdParam.trim() !== "";
-
-   const firmIdNumber = shouldFilterFirm ? Number(firmIdParam) : null;
-
-if (shouldFilterFirm && Number.isNaN(firmIdNumber)) {
-  return NextResponse.json({ success: true, rows: [] });
-}
-
     if (!adminAuth) {
-      return NextResponse.json({ success: false, error: "Yetkisiz erişim" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, error: "Yetkisiz erişim" },
+        { status: 401 }
+      );
     }
 
+    const shouldFilterFirm =
+      firmIdParam &&
+      firmIdParam !== "all" &&
+      firmIdParam.trim() !== "";
+
+    const webFirmId = shouldFilterFirm ? firmIdParam.trim() : null;
+
     let query = supabase
-     .from("accident_records")
-     .select(`
+      .from("accident_records")
+      .select(`
         id,
         app_record_id,
         firm_id,
+        web_firm_id,
         employee_id,
         event_type,
         event_date,
@@ -58,25 +58,28 @@ if (shouldFilterFirm && Number.isNaN(firmIdNumber)) {
         created_at,
         updated_at,
         created_at_server
-      
       `);
 
-if (firmIdNumber !== null) {
-  query = query.eq("firm_id", firmIdNumber);
-}
+    if (webFirmId) {
+      query = query.eq("web_firm_id", webFirmId);
+    }
 
-const { data, error } = await query.order("event_date", {
-  ascending: false,
-});
+    const { data, error } = await query.order("event_date", {
+      ascending: false,
+    });
 
     if (error) {
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
     }
 
     const rows = (data || []).map((item: any) => ({
       id: item.id,
       appRecordId: item.app_record_id,
       firmId: item.firm_id,
+      webFirmId: item.web_firm_id,
       employeeId: item.employee_id,
       title: item.title || "-",
       employeeName: item.employee_name || "-",
