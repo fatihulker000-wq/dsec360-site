@@ -233,7 +233,10 @@ export async function GET(req: Request) {
     companyList
   );
 
-  if (!firmIdParam && !normalizedFirmaAdi) return true;
+  // ✅ CBS KURUMSAL KORUMA:
+// App tarafına firma seçimi olmadan asla tüm kayıtlar dönmez.
+// Böylece App Yazılım ekranında diğer firmaların / boş firmaların kayıtları şişme yapmaz.
+if (!firmIdParam && !normalizedFirmaAdi) return false;
 
   const byDirectFirmId =
     firmIdParam.length > 0 &&
@@ -275,7 +278,7 @@ export async function GET(req: Request) {
    const includeAllIfEmpty =
       String(url.searchParams.get("includeAllIfEmpty") || "").trim() === "1";
 
-    const finalData = filtered
+    const finalData = filtered;
       
 
     return NextResponse.json({
