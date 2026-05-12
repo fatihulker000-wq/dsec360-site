@@ -1,0 +1,154 @@
+import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+
+const MOBILE_API_KEY = "dsec_mobile_123";
+
+function getSupabase() {
+  return createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+function authorized(req: Request) {
+  return String(req.headers.get("x-api-key") || "").trim() === MOBILE_API_KEY;
+}
+
+function unauthorized() {
+  return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
+}
+
+export async function GET(req: Request) {
+  try {
+    if (!authorized(req)) return unauthorized();
+
+    const url = new URL(req.url);
+    const firmId = String(url.searchParams.get("firmId") || "").trim();
+
+    if (!firmId) {
+      return NextResponse.json({ error: "firmId zorunlu." }, { status: 400 });
+    }
+
+    const supabase = getSupabase();
+
+    const { data: employees, error: empError } = await supabase
+      .from("employees")
+      .select("id, firm_id, full_name, active")
+      .eq("firm_id", firmId)
+      .eq("active", true);
+
+    if (empError) {
+      return NextResponse.json(
+        { error: "Çalışanlar alınamadı.", detail: empError.message },
+        { status: 500 }
+      );
+    }
+
+    const employeeIds = (employees || []).map((e: any) => e.id);
+
+    if (employeeIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        count: 0,
+        data: [],
+      });
+    }
+
+    const { data: users, error: usersError } = await supabase
+      .from("users")
+      .select("id, employee_id, company_id")
+      .in("employee_id", employeeIds);
+
+    if (usersError) {
+      return NextResponse.json(
+        { error: "Kullanıcılar alınamadı.", detail: usersError.message },
+        { status: 500 }
+      );
+    }
+
+    const safeUsers = users || [];
+    const userIds = safeUsers.map((u: any) => u.id);
+
+    if (userIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        count: 0,
+        data: [],
+      });
+    }
+
+    const { data: assignments, error: assignmentError } = await supabase
+      .from("training_assignments")
+      .select(
+        "id, user_id, training_id, status, started_at, completed_at, created_at, watch_completed, final_exam_passed"
+      )
+      .in("user_id", userIds)
+      .order("created_at", { ascending: false });
+
+    if (assignmentError) {
+      return NextResponse.json(
+        { error: "Eğitim atamaları alınamadı.", detail: assignmentError.message },
+        { status: 500 }
+      );
+    }
+
+    const trainingIds = Array.from(
+      new Set((assignments || []).map((a: any) => a.training_id).filter(Boolean))
+    );
+
+    const { data: trainings, error: trainingsError } = await supabase
+      .from("trainings")
+      .select("id, title, description, type, content_url, duration_minutes")
+      .in("id", trainingIds);
+
+    if (trainingsError) {
+      return NextResponse.json(
+        { error: "Eğitimler alınamadı.", detail: trainingsError.message },
+        { status: 500 }
+      );
+    }
+
+    const userMap = Object.fromEntries(safeUsers.map((u: any) => [u.id, u]));
+    const trainingMap = Object.fromEntries((trainings || []).map((t: any) => [t.id, t]));
+
+    const result = (assignments || [])
+      .map((a: any) => {
+        const user = userMap[a.user_id];
+        const training = trainingMap[a.training_id];
+
+        if (!user || !training) return null;
+
+        return {
+          assignment_id: a.id,
+          employee_remote_id: user.employee_id,
+          user_id: a.user_id,
+          training_id: a.training_id,
+          title: training.title || "Eğitim",
+          description: training.description || "",
+          type: training.type || "asenkron",
+          content_url: training.content_url || "",
+          duration_minutes: training.duration_minutes || 0,
+          status: a.status || "not_started",
+          started_at: a.started_at,
+          completed_at: a.completed_at,
+          created_at: a.created_at,
+          watch_completed: Boolean(a.watch_completed),
+          final_exam_passed: Boolean(a.final_exam_passed),
+        };
+      })
+      .filter(Boolean);
+
+    return NextResponse.json({
+      success: true,
+      count: result.length,
+      data: result,
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "Sunucu hatası.", detail: e?.message || null },
+      { status: 500 }
+    );
+  }
+}
