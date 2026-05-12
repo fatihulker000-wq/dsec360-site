@@ -61,8 +61,10 @@ export async function GET(req: NextRequest) {
       `);
 
     if (webFirmId) {
-      query = query.eq("web_firm_id", webFirmId);
-    }
+  query = query.or(
+    `web_firm_id.eq.${webFirmId},firm_id.eq.${webFirmId}`
+  );
+}
 
     const { data, error } = await query.order("event_date", {
       ascending: false,
