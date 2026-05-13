@@ -123,7 +123,22 @@ export async function GET(req: Request) {
     const trainingMap = Object.fromEntries(trainings.map((t: any) => [t.id, t]));
 
     const result = (assignments || [])
-      .map((a: any) => {
+  .filter((a: any) => {
+    const training = trainingMap[a.training_id];
+    const typeRaw = String(training?.type || "").toLowerCase();
+
+    const isOnlineTraining =
+      typeRaw.includes("online") || typeRaw.includes("asenkron");
+
+    if (!isOnlineTraining) return true;
+
+    return (
+      a.status === "completed" &&
+      Boolean(a.watch_completed) === true &&
+      Boolean(a.final_exam_passed) === true
+    );
+  })
+  .map((a: any) => {
         const user = userMap[a.user_id];
         const training = trainingMap[a.training_id];
 
@@ -167,8 +182,11 @@ export async function POST(req: Request) {
     if (!authorized(req)) return unauthorized();
 
     const body = await req.json();
-    const firmId = String(body?.firmId || body?.firm_id || "").trim();
     const records = Array.isArray(body?.records) ? body.records : [];
+    const firstRecordFirmId =
+    records.length > 0 ? String(records[0]?.firm_id || records[0]?.firmId || "").trim() : "";
+
+   const firmId = String(body?.firmId || body?.firm_id || firstRecordFirmId || "").trim();
 
     if (!firmId) {
       return NextResponse.json({ error: "firmId zorunlu." }, { status: 400 });
