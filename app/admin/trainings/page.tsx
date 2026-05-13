@@ -159,6 +159,51 @@ function badgeStyle(
   };
 }
 
+function normalizeTrainingTypeText(value?: string | null) {
+  const t = String(value || "").toLowerCase();
+
+  if (t.includes("asenkron")) return "Asenkron";
+  if (t.includes("senkron")) return "Senkron";
+  if (t.includes("orgun") || t.includes("örgün")) return "Örgün";
+  if (t.includes("ozel") || t.includes("özel")) return "Özel";
+  if (t.includes("online")) return "Asenkron";
+
+  return "Eğitim";
+}
+
+function isAppTrainingRecord(item: any) {
+  const source = String(item?.source || "").toLowerCase();
+  const type = String(item?.type || "").toLowerCase();
+  const status = String(item?.status || "").toLowerCase();
+
+  return (
+    source.includes("app") ||
+    status === "app_record" ||
+    type.includes("orgun") ||
+    type.includes("örgün") ||
+    type.includes("ozel") ||
+    type.includes("özel")
+  );
+}
+
+function getTrainingStatusLabel(status?: string | null) {
+  const s = String(status || "").toLowerCase();
+
+  if (s === "completed") return "Tamamlandı";
+  if (s === "in_progress") return "Devam ediyor";
+  if (s === "app_record") return "App Kaydı";
+  return "Başlamadı";
+}
+
+function getTrainingStatusColor(status?: string | null) {
+  const s = String(status || "").toLowerCase();
+
+  if (s === "completed") return "#166534";
+  if (s === "in_progress") return "#1d4ed8";
+  if (s === "app_record") return "#7c2d12";
+  return "#92400e";
+}
+
 export default function AdminTrainingPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [totalEmployeeCount, setTotalEmployeeCount] = useState(0);
@@ -1567,70 +1612,185 @@ const deleteTrainingUser = async (user: UserRow) => {
                   Sicil: {emp.registry_no || "-"}
                 </span>
               </div>
-            <div
+            
+<div
   style={{
     marginTop: 12,
-    padding: 12,
-    borderRadius: 12,
-    background: "#ffffff",
-    border: "1px solid #e5e7eb",
+    display: "grid",
+    gap: 10,
   }}
 >
-  <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 8 }}>
-    Eğitim Geçmişi / Atamalar
-  </div>
+  {(() => {
+    const allRecords = employeeTrainingMap[emp.id] || [];
+    const appRecords = allRecords.filter((item: any) => isAppTrainingRecord(item));
+    const portalRecords = allRecords.filter((item: any) => !isAppTrainingRecord(item));
 
-  {(employeeTrainingMap[emp.id] || []).length === 0 ? (
-    <div style={{ fontSize: 12, color: BRAND.muted }}>
-      Henüz eğitim atanmamış.
-    </div>
-  ) : (
-    <div style={{ display: "grid", gap: 6 }}>
-      {employeeTrainingMap[emp.id].map((item: any, index: number) => (
+    return (
+      <>
         <div
-          key={`${emp.id}-${item.training_id}-${index}`}
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 8,
-            alignItems: "center",
-            fontSize: 12,
-            padding: "7px 9px",
-            borderRadius: 10,
-            background: "#f8fafc",
-            border: "1px solid #e5e7eb",
+            padding: 12,
+            borderRadius: 12,
+            background: "#ffffff",
+            border: "1px solid #dbeafe",
           }}
         >
-          <span style={{ fontWeight: 800 }}>{item.title}</span>
-          <span style={{ color: BRAND.muted }}>
-  {item.source || item.type || "Eğitim Kaydı"}
-</span>
-          <span
-  style={{
-    fontWeight: 900,
-    color:
-      item.status === "completed"
-        ? "#166534"
-        : item.status === "in_progress"
-        ? "#1d4ed8"
-        : item.status === "app_record"
-        ? "#7c2d12"
-        : "#92400e",
-  }}
->
-  {item.status === "completed"
-    ? "Tamamlandı"
-    : item.status === "in_progress"
-    ? "Devam ediyor"
-    : item.status === "app_record"
-    ? "App Kaydı"
-    : "Başlamadı"}
-</span>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 8,
+              alignItems: "center",
+              marginBottom: 8,
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 900 }}>
+              Portal Eğitim Atamaları
+            </div>
+
+            <span style={badgeStyle("#eff6ff", "#bfdbfe", "#1d4ed8")}>
+              Asenkron / Senkron
+            </span>
+          </div>
+
+          {portalRecords.length === 0 ? (
+            <div style={{ fontSize: 12, color: BRAND.muted }}>
+              Portal üzerinden atanmış eğitim yok.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 6 }}>
+              {portalRecords.map((item: any, index: number) => (
+                <div
+                  key={`${emp.id}-portal-${item.training_id || item.assignment_id || index}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 8,
+                    alignItems: "center",
+                    fontSize: 12,
+                    padding: "8px 10px",
+                    borderRadius: 10,
+                    background: "#f8fafc",
+                    border: "1px solid #e5e7eb",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        color: BRAND.text,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {item.title || "Eğitim"}
+                    </div>
+
+                    <div style={{ marginTop: 3, color: BRAND.muted }}>
+                      {normalizeTrainingTypeText(item.type)} • Portal Eğitimi
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      fontWeight: 900,
+                      color: getTrainingStatusColor(item.status),
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {getTrainingStatusLabel(item.status)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      ))}
-    </div>
-  )}
+
+        <div
+          style={{
+            padding: 12,
+            borderRadius: 12,
+            background: "#fff7ed",
+            border: "1px solid #fed7aa",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 8,
+              alignItems: "center",
+              marginBottom: 8,
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 900 }}>
+              App Eğitim Kayıtları
+            </div>
+
+            <span style={badgeStyle("#ffedd5", "#fdba74", "#9a3412")}>
+              Örgün / Özel
+            </span>
+          </div>
+
+          {appRecords.length === 0 ? (
+            <div style={{ fontSize: 12, color: BRAND.muted }}>
+              App üzerinden gelen örgün/özel eğitim kaydı yok.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 6 }}>
+              {appRecords.map((item: any, index: number) => (
+                <div
+                  key={`${emp.id}-app-${item.training_id || item.assignment_id || index}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 8,
+                    alignItems: "center",
+                    fontSize: 12,
+                    padding: "8px 10px",
+                    borderRadius: 10,
+                    background: "#ffffff",
+                    border: "1px solid #fed7aa",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        color: BRAND.text,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {item.title || "Eğitim"}
+                    </div>
+
+                    <div style={{ marginTop: 3, color: BRAND.muted }}>
+                      {normalizeTrainingTypeText(item.type)} • App Kaydı
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      fontWeight: 900,
+                      color: "#7c2d12",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    App Kaydı
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  })()}
 </div>
+
 
             </div>
           </label>
@@ -1729,7 +1889,7 @@ const deleteTrainingUser = async (user: UserRow) => {
                 maxWidth: 260,
               }}
             >
-              {assigning ? "İşleniyor..." : "Online Eğitimi Ata"}
+              {assigning ? "İşleniyor..." : "Asenkron / Senkron Eğitimi Ata"}
             </button>
           </div>
         </div>
