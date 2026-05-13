@@ -1602,7 +1602,22 @@ const deleteTrainingUser = async (user: UserRow) => {
           }}
         >
           <span style={{ fontWeight: 800 }}>{item.title}</span>
-          <span>
+          <span style={{ color: BRAND.muted }}>
+  {item.source || item.type || "Eğitim Kaydı"}
+</span>
+          <span
+  style={{
+    fontWeight: 900,
+    color:
+      item.status === "completed"
+        ? "#166534"
+        : item.status === "in_progress"
+        ? "#1d4ed8"
+        : item.status === "app_record"
+        ? "#7c2d12"
+        : "#92400e",
+  }}
+>
   {item.status === "completed"
     ? "Tamamlandı"
     : item.status === "in_progress"
