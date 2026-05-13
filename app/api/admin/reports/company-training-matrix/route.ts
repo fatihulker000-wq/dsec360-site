@@ -122,27 +122,41 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { data: companyData, error: companyError } = await supabase
-      .from("companies")
-      .select("*")
-      .eq("id", requestedCompanyId)
-      .maybeSingle();
+    let companyRow: CompanyAnyRow;
 
-    if (companyError || !companyData) {
-      return NextResponse.json(
-        { error: "Firma bilgisi alınamadı." },
-        { status: 500 }
-      );
-    }
+if (requestedCompanyId === "ALL") {
+  companyRow = {
+    id: "ALL",
+    name: "Tüm Firmalar",
+  };
+} else {
+  const { data: companyData, error: companyError } = await supabase
+    .from("companies")
+    .select("*")
+    .eq("id", requestedCompanyId)
+    .maybeSingle();
 
-    const companyRow = companyData as CompanyAnyRow;
+  if (companyError || !companyData) {
+    return NextResponse.json(
+      { error: "Firma bilgisi alınamadı." },
+      { status: 500 }
+    );
+  }
 
-    const { data: usersData, error: usersError } = await supabase
-      .from("users")
-      .select("id, full_name, email, company_id, role, is_active")
-      .eq("company_id", requestedCompanyId)
-      .eq("role", "training_user")
-      .order("full_name", { ascending: true });
+  companyRow = companyData as CompanyAnyRow;
+}
+
+    let usersQuery = supabase
+  .from("users")
+  .select("id, full_name, email, company_id, role, is_active")
+  .eq("role", "training_user")
+  .order("full_name", { ascending: true });
+
+if (requestedCompanyId !== "ALL") {
+  usersQuery = usersQuery.eq("company_id", requestedCompanyId);
+}
+
+const { data: usersData, error: usersError } = await usersQuery;
 
     if (usersError) {
       return NextResponse.json(
