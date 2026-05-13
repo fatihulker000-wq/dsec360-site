@@ -344,21 +344,76 @@ if (false as boolean) {
         }
       }
 
-      const { data: userRow, error: userError } = await supabase
-        .from("users")
-        .select("id, employee_id")
-        .eq("employee_id", employeeRemoteId)
-        .maybeSingle();
+      let userRow: any = null;
 
-      if (userError || !userRow?.id) {
-        results.push({
-          localId,
-          remoteId: trainingId,
-          success: false,
-          error: "Bu çalışan için eğitim kullanıcısı bulunamadı.",
-        });
-        continue;
-      }
+const { data: foundUser, error: userError } = await supabase
+  .from("users")
+  .select("id, employee_id")
+  .eq("employee_id", employeeRemoteId)
+  .maybeSingle();
+
+if (userError) {
+  results.push({
+    localId,
+    remoteId: trainingId,
+    success: false,
+    error: userError.message,
+  });
+  continue;
+}
+
+userRow = foundUser;
+
+if (!userRow?.id) {
+  const { data: employeeRow, error: employeeError } = await supabase
+    .from("employees")
+    .select("id, firm_id, full_name, email, active")
+    .eq("id", employeeRemoteId)
+    .maybeSingle();
+
+  if (employeeError || !employeeRow?.id) {
+    results.push({
+      localId,
+      remoteId: trainingId,
+      success: false,
+      error: "Çalışan web tarafında bulunamadı.",
+    });
+    continue;
+  }
+
+  const autoEmail =
+    clean(employeeRow.email) ||
+    `employee-${String(employeeRow.id).slice(0, 8)}@dsec.local`;
+
+  const { data: newUser, error: createUserError } = await supabase
+    .from("users")
+    .insert([
+      {
+        full_name: employeeRow.full_name || "Eğitim Kullanıcısı",
+        email: autoEmail,
+        password: "123456",
+        role: "training_user",
+        company_id: firmId,
+        employee_id: employeeRow.id,
+        is_active: true,
+        created_at: new Date().toISOString(),
+      },
+    ])
+    .select("id, employee_id")
+    .single();
+
+  if (createUserError || !newUser?.id) {
+    results.push({
+      localId,
+      remoteId: trainingId,
+      success: false,
+      error: createUserError?.message || "Eğitim kullanıcısı oluşturulamadı.",
+    });
+    continue;
+  }
+
+  userRow = newUser;
+}
 
     const assignmentPayload = {
   user_id: userRow.id,
