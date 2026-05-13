@@ -249,7 +249,13 @@ const title = String(
           ? "ozel"
           : "orgun";
 
-      const status = item?.completed === true ? "completed" : "not_started";
+      const isAppRecord = webType === "orgun" || webType === "ozel";
+
+const status = isAppRecord
+  ? "completed"
+  : item?.completed === true
+  ? "completed"
+  : "not_started";
 
       const trainingPayload = {
         firm_id: firmId,
@@ -336,14 +342,25 @@ if (false as boolean) {
         continue;
       }
 
-      const assignmentPayload = {
-        user_id: userRow.id,
-        training_id: trainingId,
-        status,
-        started_at: toIsoFromMillis(item?.started_at || item?.startedAt),
-completed_at: toIsoFromMillis(item?.completed_at || item?.completedAt),
-      };
-
+    const assignmentPayload = {
+  user_id: userRow.id,
+  training_id: trainingId,
+  status,
+  started_at: toIsoFromMillis(
+    item?.started_at || item?.startedAt || item?.training_date
+  ),
+  completed_at: isAppRecord
+    ? toIsoFromMillis(
+        item?.completed_at || item?.completedAt || item?.training_date
+      )
+    : toIsoFromMillis(item?.completed_at || item?.completedAt),
+  watch_completed: isAppRecord
+    ? true
+    : Boolean(item?.watch_completed || item?.watchCompleted),
+  final_exam_passed: isAppRecord
+    ? true
+    : Boolean(item?.final_exam_passed || item?.finalExamPassed),
+};
       let existingAssignment: any = null;
       let insertedAssignment: any = null;
 
