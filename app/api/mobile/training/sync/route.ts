@@ -208,11 +208,19 @@ export async function POST(req: Request) {
 const remoteId = String(item?.remote_id ?? item?.remoteId ?? "").trim();
 
 const employeeRemoteId = String(
-  item?.employee_remote_id ?? item?.employeeRemoteId ?? ""
+  item?.employee_remote_id ||
+    item?.employeeRemoteId ||
+    item?.employee_id ||
+    item?.employeeId ||
+    ""
 ).trim();
 
 const title = String(
-  item?.training_title ?? item?.trainingTitle ?? item?.title ?? ""
+  item?.training_title ||
+    item?.trainingTitle ||
+    item?.title ||
+    item?.training_name ||
+    ""
 ).trim();
 
       if (!employeeRemoteId || !title) {
