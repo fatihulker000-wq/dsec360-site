@@ -173,9 +173,10 @@ export async function GET(req: NextRequest) {
     }
 
     const trainings = ((trainingsData || []) as TrainingRow[]).map((t) => ({
-      id: String(t.id),
-      title: String(t.title || "Adsız Eğitim").trim(),
-    }));
+  id: String(t.id),
+  title: String(t.title || "Adsız Eğitim").trim(),
+  type: String(t.type || "").trim().toLowerCase(),
+}));
 
     let assignments: AssignmentRow[] = [];
 
@@ -198,8 +199,8 @@ export async function GET(req: NextRequest) {
 
     const trainingTypeMap = new Map<string, string>();
 
-trainings.forEach((t) => {
-  trainingTypeMap.set(String(t.id), String((t as any).type || "").toLowerCase());
+trainings.forEach((t: any) => {
+  trainingTypeMap.set(String(t.id), String(t.type || "").toLowerCase());
 });
 
 function resolveTrainingStatus(a: AssignmentRow) {
