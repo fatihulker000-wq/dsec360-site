@@ -11,10 +11,24 @@ function getSupabase() {
   );
 }
 
-function normalizeStatus(status?: string | null) {
+function normalizeStatus(
+  status?: string | null,
+  type?: string | null,
+  watchCompleted?: boolean | null,
+  finalExamPassed?: boolean | null
+) {
   const s = String(status || "").toLowerCase();
+  const t = String(type || "").toLowerCase();
 
-  if (s === "completed") return "completed";
+  if (t === "orgun" || t === "örgün" || t === "ozel" || t === "özel") {
+    return "app_record";
+  }
+
+  // Online eğitim ancak %100 + final başarılıysa tamamlandı sayılır.
+  if (s === "completed" && watchCompleted === true && finalExamPassed === true) {
+    return "completed";
+  }
+
   if (s === "in_progress") return "in_progress";
   return "not_started";
 }
@@ -136,8 +150,13 @@ export async function GET(req: Request) {
       if (!employeeId) return;
 
       const training = trainingMap.get(String(a.training_id));
-      const status = normalizeStatus(a.status);
       const type = String(training?.type || "online").toLowerCase();
+const status = normalizeStatus(
+  a.status,
+  type,
+  Boolean(a.watch_completed),
+  Boolean(a.final_exam_passed)
+);
 
       if (!result[employeeId]) result[employeeId] = [];
 
