@@ -20,6 +20,7 @@ type AssignmentRow = {
 type TrainingRow = {
   id: string;
   title: string | null;
+  type: string | null;
 };
 
 type UserRow = {
@@ -33,6 +34,28 @@ type CompanyRow = {
   id: string;
   name: string | null;
 };
+
+function isOnlineTraining(training?: TrainingRow) {
+  const type = String(training?.type || "").toLowerCase();
+
+  return (
+    type.includes("online") ||
+    type.includes("asenkron") ||
+    type.includes("senkron")
+  );
+}
+
+function isTrainingCompleted(row: AssignmentRow, training?: TrainingRow) {
+  if (isOnlineTraining(training)) {
+    return (
+      row.status === "completed" &&
+      row.watch_completed === true &&
+      row.final_exam_passed === true
+    );
+  }
+
+  return row.status === "completed";
+}
 
 export async function GET() {
   try {
@@ -94,7 +117,7 @@ export async function GET() {
     if (trainingIds.length > 0) {
       const { data: trainings, error: trainingsError } = await supabase
         .from("trainings")
-        .select("id, title")
+        .select("id, title, type")
         .in("id", trainingIds)
         .returns<TrainingRow[]>();
 
@@ -201,10 +224,7 @@ companyMap = Object.fromEntries(
       current.assigned_count += 1;
       totalAssigned += 1;
 
-      const isCompleted =
-  row.status === "completed" &&
-  row.watch_completed === true &&
-  row.final_exam_passed === true;
+      const isCompleted = isTrainingCompleted(row, trainingsMap[row.training_id]);
 
       if (isCompleted) {
         current.completed_count += 1;
@@ -222,10 +242,7 @@ companyMap = Object.fromEntries(
 
     const riskyUsers = assignmentRows
       .filter((row) => {
-        const isCompleted =
-  row.status === "completed" &&
-  row.watch_completed === true &&
-  row.final_exam_passed === true;
+        const isCompleted = isTrainingCompleted(row, trainingsMap[row.training_id]);
         return !isCompleted && row.status !== "in_progress";
       })
       .map((row) => {
@@ -245,10 +262,7 @@ companyMap = Object.fromEntries(
 
     const inProgressUsers = assignmentRows
       .filter((row) => {
-  const isCompleted =
-    row.status === "completed" &&
-    row.watch_completed === true &&
-    row.final_exam_passed === true;
+  const isCompleted = isTrainingCompleted(row, trainingsMap[row.training_id]);
 
   return row.status === "in_progress" && !isCompleted;
 })
@@ -268,13 +282,7 @@ companyMap = Object.fromEntries(
       });
 
     const completedUsers = assignmentRows
-      .filter((row) => {
-  return (
-    row.status === "completed" &&
-    row.watch_completed === true &&
-    row.final_exam_passed === true
-  );
-})
+  .filter((row) => isTrainingCompleted(row, trainingsMap[row.training_id]))
       .map((row) => {
         const rawCompanyId = String(usersMap[row.user_id]?.company_id || "").trim();
 
