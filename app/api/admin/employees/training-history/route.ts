@@ -150,13 +150,13 @@ export async function GET(req: Request) {
       if (!employeeId) return;
 
       const training = trainingMap.get(String(a.training_id));
-      const type = String(training?.type || "online").toLowerCase();
-const status = normalizeStatus(
-  a.status,
-  type,
-  Boolean(a.watch_completed),
-  Boolean(a.final_exam_passed)
-);
+      const type = String(training?.type || "").toLowerCase();
+      const status = normalizeStatus(
+        a.status,
+        type,
+        Boolean(a.watch_completed),
+        Boolean(a.final_exam_passed)
+      );
 
       if (!result[employeeId]) result[employeeId] = [];
 
