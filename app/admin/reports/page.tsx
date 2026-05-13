@@ -168,6 +168,13 @@ function pillStyle(active: boolean): React.CSSProperties {
 }
 
 function statusStyle(status: string): React.CSSProperties {
+  if (status === "App Kaydı") {
+  return {
+    background: "#ede9fe",
+    color: "#6d28d9",
+    border: "1px solid #c4b5fd",
+  };
+}
   if (status === "Tamamlandı") {
     return {
       background: "#dcfce7",
