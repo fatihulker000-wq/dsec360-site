@@ -412,6 +412,7 @@ if (!userRow?.id) {
     continue;
   }
 
+  
   userRow = newUser;
 }
 
