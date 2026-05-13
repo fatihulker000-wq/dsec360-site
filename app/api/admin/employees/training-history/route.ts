@@ -11,6 +11,22 @@ function getSupabase() {
   );
 }
 
+function normalizeType(type?: string | null) {
+  const t = String(type || "").toLowerCase();
+
+  if (t.includes("senkron")) return "senkron";
+  if (t.includes("asenkron") || t.includes("online")) return "asenkron";
+  if (t.includes("orgun") || t.includes("örgün")) return "orgun";
+  if (t.includes("ozel") || t.includes("özel")) return "ozel";
+
+  return "egitim";
+}
+
+function isAppRecord(type?: string | null) {
+  const t = normalizeType(type);
+  return t === "orgun" || t === "ozel";
+}
+
 function normalizeStatus(
   status?: string | null,
   type?: string | null,
@@ -18,33 +34,31 @@ function normalizeStatus(
   finalExamPassed?: boolean | null
 ) {
   const s = String(status || "").toLowerCase();
-  const t = String(type || "").toLowerCase();
 
-  if (t === "orgun" || t === "örgün" || t === "ozel" || t === "özel") {
-    return "app_record";
-  }
+  if (isAppRecord(type)) return "app_record";
 
-  // Online eğitim ancak %100 + final başarılıysa tamamlandı sayılır.
   if (s === "completed" && watchCompleted === true && finalExamPassed === true) {
     return "completed";
   }
 
   if (s === "in_progress") return "in_progress";
+
   return "not_started";
 }
 
 function getSourceLabel(type?: string | null) {
-  const t = String(type || "").toLowerCase();
+  return isAppRecord(type) ? "App Kaydı" : "Portal Eğitimi";
+}
 
-  if (t === "online" || t === "asenkron" || t === "senkron") {
-    return "Portal Eğitimi";
-  }
+function getTypeLabel(type?: string | null) {
+  const t = normalizeType(type);
 
-  if (t === "orgun" || t === "örgün" || t === "ozel" || t === "özel") {
-    return "App Kaydı";
-  }
+  if (t === "asenkron") return "Asenkron";
+  if (t === "senkron") return "Senkron";
+  if (t === "orgun") return "Örgün";
+  if (t === "ozel") return "Özel";
 
-  return "Eğitim Kaydı";
+  return "Eğitim";
 }
 
 export async function GET(req: Request) {
@@ -150,10 +164,11 @@ export async function GET(req: Request) {
       if (!employeeId) return;
 
       const training = trainingMap.get(String(a.training_id));
-      const type = String(training?.type || "").toLowerCase();
+      const rawType = String(training?.type || "").toLowerCase();
+      const normalizedType = normalizeType(rawType);
       const status = normalizeStatus(
         a.status,
-        type,
+        normalizedType,
         Boolean(a.watch_completed),
         Boolean(a.final_exam_passed)
       );
@@ -164,14 +179,23 @@ export async function GET(req: Request) {
         assignment_id: String(a.id || ""),
         training_id: String(a.training_id || ""),
         title: training?.title || "Adsız Eğitim",
-        type,
-        source: getSourceLabel(type),
+
+        type: normalizedType,
+        type_label: getTypeLabel(normalizedType),
+
+        source: getSourceLabel(normalizedType),
+        source_key: isAppRecord(normalizedType) ? "app" : "portal",
+        is_app_record: isAppRecord(normalizedType),
+
         status,
         duration_minutes: training?.duration_minutes || 0,
         content_url: training?.content_url || "",
+
         started_at: a.started_at || null,
         completed_at: a.completed_at || null,
         created_at: a.created_at || null,
+        record_date: a.completed_at || a.started_at || a.created_at || null,
+
         watch_completed: Boolean(a.watch_completed),
         final_exam_passed: Boolean(a.final_exam_passed),
       });
