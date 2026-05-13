@@ -23,12 +23,14 @@ type UserRow = {
 type TrainingRow = {
   id: string;
   title: string | null;
+  type: string | null;
 };
 
 type AssignmentRow = {
   user_id: string;
   training_id: string;
   status: string | null;
+  watch_completed?: boolean | null;
   final_exam_passed?: boolean | null;
 };
 
@@ -160,7 +162,7 @@ export async function GET(req: NextRequest) {
 
     const { data: trainingsData, error: trainingsError } = await supabase
       .from("trainings")
-      .select("id, title")
+      .select("id, title, type")
       .order("title", { ascending: true });
 
     if (trainingsError) {
@@ -180,7 +182,7 @@ export async function GET(req: NextRequest) {
     if (participantIds.length > 0) {
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from("training_assignments")
-        .select("user_id, training_id, status, final_exam_passed")
+        .select("user_id, training_id, status, watch_completed, final_exam_passed")
         .in("user_id", participantIds);
 
       if (assignmentsError) {
@@ -193,19 +195,41 @@ export async function GET(req: NextRequest) {
       assignments = (assignmentsData || []) as AssignmentRow[];
     }
 
+
+    const trainingTypeMap = new Map<string, string>();
+
+trainings.forEach((t) => {
+  trainingTypeMap.set(String(t.id), String((t as any).type || "").toLowerCase());
+});
+
+function resolveTrainingStatus(a: AssignmentRow) {
+  const type = trainingTypeMap.get(String(a.training_id)) || "";
+
+  const isAppRecord =
+    type === "orgun" ||
+    type === "örgün" ||
+    type === "ozel" ||
+    type === "özel";
+
+  if (isAppRecord) return "App Kaydı";
+
+  const isCompleted =
+    a.status === "completed" &&
+    a.watch_completed === true &&
+    a.final_exam_passed === true;
+
+  if (isCompleted) return "Tamamlandı";
+  if (a.status === "in_progress") return "Devam Ediyor";
+
+  return "Başlamadı";
+}
+
     const assignmentMap = new Map<string, string>();
 
-    assignments.forEach((a) => {
-      const key = `${a.user_id}__${a.training_id}`;
-      const status =
-        a.final_exam_passed === true || a.status === "completed"
-          ? "Tamamlandı"
-          : a.status === "in_progress"
-          ? "Devam Ediyor"
-          : "Başlamadı";
-
-      assignmentMap.set(key, status);
-    });
+   assignments.forEach((a) => {
+  const key = `${a.user_id}__${a.training_id}`;
+  assignmentMap.set(key, resolveTrainingStatus(a));
+});
 
     const matrix = participants.map((participant) => {
       const statuses = trainings.map((training) => {
@@ -225,20 +249,18 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const completedCount = assignments.filter(
-      (a) => a.final_exam_passed === true || a.status === "completed"
-    ).length;
+    const completedCount = assignments.filter((a) => {
+  const status = resolveTrainingStatus(a);
+  return status === "Tamamlandı" || status === "App Kaydı";
+}).length;
 
-    const inProgressCount = assignments.filter(
-      (a) => a.status === "in_progress" && a.final_exam_passed !== true
-    ).length;
+const inProgressCount = assignments.filter((a) => {
+  return resolveTrainingStatus(a) === "Devam Ediyor";
+}).length;
 
-    const notStartedCount = assignments.filter(
-      (a) =>
-        a.final_exam_passed !== true &&
-        a.status !== "completed" &&
-        a.status !== "in_progress"
-    ).length;
+const notStartedCount = assignments.filter((a) => {
+  return resolveTrainingStatus(a) === "Başlamadı";
+}).length;
 
     return NextResponse.json({
       success: true,
