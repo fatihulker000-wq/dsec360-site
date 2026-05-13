@@ -108,8 +108,21 @@ export async function GET() {
 
         current.assigned_count += 1;
 
-        const isCompleted =
-          row.final_exam_passed === true || row.status === "completed";
+        const isOnlineType =
+  String(
+    trainingRows.find(t => String(t.id) === trainingId)?.type || ""
+  )
+    .toLowerCase()
+    .includes("online") ||
+  String(
+    trainingRows.find(t => String(t.id) === trainingId)?.type || ""
+  )
+    .toLowerCase()
+    .includes("asenkron");
+
+const isCompleted = isOnlineType
+  ? row.status === "completed" && row.final_exam_passed === true
+  : row.status === "completed";
 
         if (isCompleted) {
           current.completed_count += 1;
