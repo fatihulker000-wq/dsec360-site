@@ -20,6 +20,17 @@ function unauthorized() {
   return NextResponse.json({ error: "Yetkisiz." }, { status: 401 });
 }
 
+function clean(value: any) {
+  const v = String(value ?? "").trim();
+  return v || null;
+}
+
+function toIsoFromMillis(value: any) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return new Date(n).toISOString();
+}
+
 export async function GET(req: Request) {
   try {
     if (!authorized(req)) return unauthorized();
@@ -49,11 +60,7 @@ export async function GET(req: Request) {
     const employeeIds = (employees || []).map((e: any) => e.id);
 
     if (employeeIds.length === 0) {
-      return NextResponse.json({
-        success: true,
-        count: 0,
-        data: [],
-      });
+      return NextResponse.json({ success: true, count: 0, data: [] });
     }
 
     const { data: users, error: usersError } = await supabase
@@ -72,11 +79,7 @@ export async function GET(req: Request) {
     const userIds = safeUsers.map((u: any) => u.id);
 
     if (userIds.length === 0) {
-      return NextResponse.json({
-        success: true,
-        count: 0,
-        data: [],
-      });
+      return NextResponse.json({ success: true, count: 0, data: [] });
     }
 
     const { data: assignments, error: assignmentError } = await supabase
@@ -98,20 +101,26 @@ export async function GET(req: Request) {
       new Set((assignments || []).map((a: any) => a.training_id).filter(Boolean))
     );
 
-    const { data: trainings, error: trainingsError } = await supabase
-      .from("trainings")
-      .select("id, title, description, type, content_url, duration_minutes")
-      .in("id", trainingIds);
+    let trainings: any[] = [];
 
-    if (trainingsError) {
-      return NextResponse.json(
-        { error: "Eğitimler alınamadı.", detail: trainingsError.message },
-        { status: 500 }
-      );
+    if (trainingIds.length > 0) {
+      const { data, error } = await supabase
+        .from("trainings")
+        .select("id, title, description, type, content_url, duration_minutes")
+        .in("id", trainingIds);
+
+      if (error) {
+        return NextResponse.json(
+          { error: "Eğitimler alınamadı.", detail: error.message },
+          { status: 500 }
+        );
+      }
+
+      trainings = data || [];
     }
 
     const userMap = Object.fromEntries(safeUsers.map((u: any) => [u.id, u]));
-    const trainingMap = Object.fromEntries((trainings || []).map((t: any) => [t.id, t]));
+    const trainingMap = Object.fromEntries(trainings.map((t: any) => [t.id, t]));
 
     const result = (assignments || [])
       .map((a: any) => {
@@ -144,6 +153,218 @@ export async function GET(req: Request) {
       success: true,
       count: result.length,
       data: result,
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "Sunucu hatası.", detail: e?.message || null },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    if (!authorized(req)) return unauthorized();
+
+    const body = await req.json();
+    const firmId = String(body?.firmId || body?.firm_id || "").trim();
+    const records = Array.isArray(body?.records) ? body.records : [];
+
+    if (!firmId) {
+      return NextResponse.json({ error: "firmId zorunlu." }, { status: 400 });
+    }
+
+    if (records.length === 0) {
+      return NextResponse.json({
+        success: true,
+        count: 0,
+        results: [],
+      });
+    }
+
+    const supabase = getSupabase();
+    const results: any[] = [];
+
+    for (const item of records) {
+      const localId = String(item?.localId || item?.local_id || "").trim();
+      const remoteId = String(item?.remoteId || item?.remote_id || "").trim();
+
+      const employeeRemoteId = String(
+        item?.employeeRemoteId || item?.employee_remote_id || ""
+      ).trim();
+
+      const title = String(item?.trainingTitle || item?.title || "").trim();
+
+      if (!employeeRemoteId || !title) {
+        results.push({
+          localId,
+          remoteId: remoteId || null,
+          success: false,
+          error: "employeeRemoteId veya trainingTitle eksik.",
+        });
+        continue;
+      }
+
+      const typeRaw = String(item?.trainingType || item?.type || "ORGUN")
+        .trim()
+        .toUpperCase();
+
+      const webType =
+        typeRaw === "ONLINE"
+          ? "online"
+          : typeRaw === "OZEL"
+          ? "ozel"
+          : "orgun";
+
+      const status = item?.completed === true ? "completed" : "not_started";
+
+      const trainingPayload = {
+        firm_id: firmId,
+        title,
+        description: clean(item?.description) || "App üzerinden gelen eğitim kaydı.",
+        type: webType,
+        content_url: clean(item?.onlineUrl),
+        duration_minutes: Number(item?.durationMinutes || 0),
+        updated_at: new Date().toISOString(),
+      };
+
+      let trainingId = remoteId;
+
+      if (trainingId) {
+        const { error: updateTrainingError } = await supabase
+          .from("trainings")
+          .update(trainingPayload)
+          .eq("id", trainingId);
+
+        if (updateTrainingError) {
+          results.push({
+            localId,
+            remoteId: trainingId,
+            success: false,
+            error: updateTrainingError.message,
+          });
+          continue;
+        }
+      } else {
+        const { data: existingTraining } = await supabase
+          .from("trainings")
+          .select("id")
+          .eq("firm_id", firmId)
+          .eq("title", title)
+          .maybeSingle();
+
+        if (existingTraining?.id) {
+          trainingId = existingTraining.id;
+
+          await supabase
+            .from("trainings")
+            .update(trainingPayload)
+            .eq("id", trainingId);
+        } else {
+          const { data: newTraining, error: insertTrainingError } = await supabase
+            .from("trainings")
+            .insert([
+              {
+                ...trainingPayload,
+                created_at: new Date().toISOString(),
+              },
+            ])
+            .select("id")
+            .single();
+
+          if (insertTrainingError || !newTraining?.id) {
+            results.push({
+              localId,
+              remoteId: null,
+              success: false,
+              error: insertTrainingError?.message || "Eğitim oluşturulamadı.",
+            });
+            continue;
+          }
+
+          trainingId = newTraining.id;
+        }
+      }
+
+      const { data: userRow, error: userError } = await supabase
+        .from("users")
+        .select("id, employee_id")
+        .eq("employee_id", employeeRemoteId)
+        .maybeSingle();
+
+      if (userError || !userRow?.id) {
+        results.push({
+          localId,
+          remoteId: trainingId,
+          success: false,
+          error: "Bu çalışan için eğitim kullanıcısı bulunamadı.",
+        });
+        continue;
+      }
+
+      const assignmentPayload = {
+        user_id: userRow.id,
+        training_id: trainingId,
+        status,
+        started_at: toIsoFromMillis(item?.startedAt),
+        completed_at: toIsoFromMillis(item?.completedAt),
+      };
+
+      const { data: existingAssignment } = await supabase
+        .from("training_assignments")
+        .select("id")
+        .eq("user_id", userRow.id)
+        .eq("training_id", trainingId)
+        .maybeSingle();
+
+      if (existingAssignment?.id) {
+        const { error: updateAssignmentError } = await supabase
+          .from("training_assignments")
+          .update(assignmentPayload)
+          .eq("id", existingAssignment.id);
+
+        if (updateAssignmentError) {
+          results.push({
+            localId,
+            remoteId: trainingId,
+            success: false,
+            error: updateAssignmentError.message,
+          });
+          continue;
+        }
+      } else {
+        const { error: insertAssignmentError } = await supabase
+          .from("training_assignments")
+          .insert([
+            {
+              ...assignmentPayload,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+
+        if (insertAssignmentError) {
+          results.push({
+            localId,
+            remoteId: trainingId,
+            success: false,
+            error: insertAssignmentError.message,
+          });
+          continue;
+        }
+      }
+
+      results.push({
+        localId,
+        remoteId: trainingId,
+        success: true,
+        error: null,
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      count: results.length,
+      results,
     });
   } catch (e: any) {
     return NextResponse.json(
