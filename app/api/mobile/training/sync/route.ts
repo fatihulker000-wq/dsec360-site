@@ -204,14 +204,16 @@ export async function POST(req: Request) {
     const results: any[] = [];
 
     for (const item of records) {
-      const localId = String(item?.localId || item?.local_id || "").trim();
-      const remoteId = String(item?.remoteId || item?.remote_id || "").trim();
+    const localId = String(item?.local_id ?? item?.localId ?? "").trim();
+const remoteId = String(item?.remote_id ?? item?.remoteId ?? "").trim();
 
-      const employeeRemoteId = String(
-        item?.employeeRemoteId || item?.employee_remote_id || ""
-      ).trim();
+const employeeRemoteId = String(
+  item?.employee_remote_id ?? item?.employeeRemoteId ?? ""
+).trim();
 
-      const title = String(item?.trainingTitle || item?.title || "").trim();
+const title = String(
+  item?.training_title ?? item?.trainingTitle ?? item?.title ?? ""
+).trim();
 
       if (!employeeRemoteId || !title) {
         results.push({
