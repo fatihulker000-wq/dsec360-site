@@ -128,7 +128,9 @@ export async function GET(req: Request) {
     const typeRaw = String(training?.type || "").toLowerCase();
 
     const isOnlineTraining =
-      typeRaw.includes("online") || typeRaw.includes("asenkron");
+  typeRaw.includes("online") ||
+  typeRaw.includes("asenkron") ||
+  typeRaw.includes("senkron");
 
     if (!isOnlineTraining) return true;
 
