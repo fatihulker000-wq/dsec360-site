@@ -13,7 +13,21 @@ function getSupabase() {
 }
 
 function authorized(req: Request) {
-  return String(req.headers.get("x-api-key") || "").trim() === MOBILE_API_KEY;
+  const headerKey = String(req.headers.get("x-api-key") || "").trim();
+
+  const authHeader = String(req.headers.get("authorization") || "").trim();
+  const bearerKey = authHeader.toLowerCase().startsWith("bearer ")
+    ? authHeader.slice(7).trim()
+    : "";
+
+  const url = new URL(req.url);
+  const queryKey = String(url.searchParams.get("apiKey") || "").trim();
+
+  return (
+    headerKey === MOBILE_API_KEY ||
+    bearerKey === MOBILE_API_KEY ||
+    queryKey === MOBILE_API_KEY
+  );
 }
 
 function unauthorized() {
