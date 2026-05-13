@@ -233,9 +233,14 @@ const title = String(
         continue;
       }
 
-      const typeRaw = String(item?.trainingType || item?.type || "ORGUN")
-        .trim()
-        .toUpperCase();
+      const typeRaw = String(
+  item?.training_type ||
+  item?.trainingType ||
+  item?.type ||
+  "ORGUN"
+)
+  .trim()
+  .toUpperCase();
 
       const webType =
         typeRaw === "ONLINE"
@@ -251,8 +256,8 @@ const title = String(
         title,
         description: clean(item?.description) || "App üzerinden gelen eğitim kaydı.",
         type: webType,
-        content_url: clean(item?.onlineUrl),
-        duration_minutes: Number(item?.durationMinutes || 0),
+        content_url: clean(item?.online_url || item?.onlineUrl),
+duration_minutes: Number(item?.duration_minutes || item?.durationMinutes || 0),
         updated_at: new Date().toISOString(),
       };
 
@@ -335,8 +340,8 @@ if (false as boolean) {
         user_id: userRow.id,
         training_id: trainingId,
         status,
-        started_at: toIsoFromMillis(item?.startedAt),
-        completed_at: toIsoFromMillis(item?.completedAt),
+        started_at: toIsoFromMillis(item?.started_at || item?.startedAt),
+completed_at: toIsoFromMillis(item?.completed_at || item?.completedAt),
       };
 
       let existingAssignment: any = null;
