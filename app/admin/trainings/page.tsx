@@ -537,9 +537,13 @@ if (!linkRes.ok) {
       }
 
       setAssignSummary(data);
-      alert(data?.message || "Eğitim atandı ✅");
-      setSelectedEmployees([]);
-      await loadAll();
+alert(data?.message || "Eğitim atandı ✅");
+setSelectedEmployees([]);
+await loadAll();
+
+if (companyFilter !== "all") {
+  await loadEmployeesByCompany(companyFilter);
+}
     } catch (err) {
       console.error(err);
       alert("Sunucu hatası oluştu.");
@@ -909,7 +913,7 @@ const deleteTrainingUser = async (user: UserRow) => {
                   lineHeight: 1.15,
                 }}
               >
-                Eğitim Atama Paneli
+                Eğitim Yönetim Paneli
               </h1>
 
               <p
@@ -920,8 +924,8 @@ const deleteTrainingUser = async (user: UserRow) => {
                   fontSize: "clamp(14px, 2.5vw, 16px)",
                 }}
               >
-                Eğitimleri merkezi olarak yönet, çalışanları filtrele, toplu atama yap ve
-                tüm süreci tek ekrandan kontrol et.
+                Online eğitim atamalarını, app üzerinden gelen örgün/özel eğitim kayıtlarını
+                ve çalışan bazlı eğitim durumlarını tek merkezden yönet.
               </p>
             </div>
 
@@ -1410,11 +1414,11 @@ const deleteTrainingUser = async (user: UserRow) => {
      
             <div>
   <h2 style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
-    Çalışan Yönetimi ve Seçimi
+    Çalışan Eğitim Yönetimi
   </h2>
 
   <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
-    Çalışan ekle, düzenle, aktif/pasif yönet, sil ve eğitim ataması yap.
+    Çalışan seç, online eğitim ata; app üzerinden gelen örgün/özel eğitim kayıtlarını ve tamamlanma durumlarını takip et.
   </div>
 </div>
 
@@ -1573,7 +1577,7 @@ const deleteTrainingUser = async (user: UserRow) => {
   }}
 >
   <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 8 }}>
-    Atanmış Eğitimler
+    Eğitim Geçmişi / Atamalar
   </div>
 
   {(employeeTrainingMap[emp.id] || []).length === 0 ? (
@@ -1599,12 +1603,14 @@ const deleteTrainingUser = async (user: UserRow) => {
         >
           <span style={{ fontWeight: 800 }}>{item.title}</span>
           <span>
-            {item.status === "completed"
-              ? "Tamamlandı"
-              : item.status === "in_progress"
-              ? "Devam ediyor"
-              : "Başlamadı"}
-          </span>
+  {item.status === "completed"
+    ? "Tamamlandı"
+    : item.status === "in_progress"
+    ? "Devam ediyor"
+    : item.status === "app_record"
+    ? "App Kaydı"
+    : "Başlamadı"}
+</span>
         </div>
       ))}
     </div>
@@ -1708,7 +1714,7 @@ const deleteTrainingUser = async (user: UserRow) => {
                 maxWidth: 260,
               }}
             >
-              {assigning ? "Atanıyor..." : "Eğitimi Ata"}
+              {assigning ? "İşleniyor..." : "Online Eğitimi Ata"}
             </button>
           </div>
         </div>
