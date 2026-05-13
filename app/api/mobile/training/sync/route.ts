@@ -127,12 +127,12 @@ export async function GET(req: Request) {
     const training = trainingMap[a.training_id];
     const typeRaw = String(training?.type || "").toLowerCase();
 
-    const isOnlineTraining =
-  typeRaw.includes("online") ||
+    const isPortalTraining =
+  
   typeRaw.includes("asenkron") ||
   typeRaw.includes("senkron");
 
-    if (!isOnlineTraining) return true;
+    if (!isPortalTraining) return true;
 
     return (
       a.status === "completed" &&
@@ -245,11 +245,13 @@ const title = String(
   .toUpperCase();
 
       const webType =
-        typeRaw === "ONLINE"
-          ? "online"
-          : typeRaw === "OZEL"
-          ? "ozel"
-          : "orgun";
+  typeRaw === "ASENKRON"
+    ? "asenkron"
+    : typeRaw === "SENKRON"
+    ? "senkron"
+    : typeRaw === "OZEL"
+    ? "ozel"
+    : "orgun";
 
       const isAppRecord = webType === "orgun" || webType === "ozel";
 
