@@ -330,6 +330,7 @@ if (false as boolean) {
       };
 
       let existingAssignment: any = null;
+      let insertedAssignment: any = null;
 
 if (assignmentRemoteId) {
   const { data } = await supabase
@@ -368,15 +369,22 @@ if (!existingAssignment?.id) {
           continue;
         }
       } else {
-        const { error: insertAssignmentError } = await supabase
-          .from("training_assignments")
-          .insert([
-            {
-              ...assignmentPayload,
-              created_at: new Date().toISOString(),
-            },
-          ]);
+const {
+  data,
+  error: insertAssignmentError,
+} = await supabase
+  .from("training_assignments")
+  .insert([
+    {
+      ...assignmentPayload,
+      created_at: new Date().toISOString(),
+    },
+  ])
+  .select("id")
+  .single();
 
+insertedAssignment = data;
+  
         if (insertAssignmentError) {
           results.push({
             localId,
@@ -388,9 +396,13 @@ if (!existingAssignment?.id) {
         }
       }
 
-      results.push({
+     results.push({
   localId,
-  remoteId: existingAssignment?.id || assignmentRemoteId || trainingId,
+  remoteId:
+    existingAssignment?.id ||
+    insertedAssignment?.id ||
+    assignmentRemoteId ||
+    trainingId,
   trainingId,
   success: true,
   error: null,
