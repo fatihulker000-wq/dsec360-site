@@ -246,9 +246,10 @@ export async function POST(req: Request) {
         updated_at: new Date().toISOString(),
       };
 
-      let trainingId = remoteId;
+      let trainingId = "";
+const assignmentRemoteId = remoteId;
 
-      if (trainingId) {
+if (false as boolean) {
         const { error: updateTrainingError } = await supabase
           .from("trainings")
           .update(trainingPayload)
@@ -328,12 +329,28 @@ export async function POST(req: Request) {
         completed_at: toIsoFromMillis(item?.completedAt),
       };
 
-      const { data: existingAssignment } = await supabase
-        .from("training_assignments")
-        .select("id")
-        .eq("user_id", userRow.id)
-        .eq("training_id", trainingId)
-        .maybeSingle();
+      let existingAssignment: any = null;
+
+if (assignmentRemoteId) {
+  const { data } = await supabase
+    .from("training_assignments")
+    .select("id")
+    .eq("id", assignmentRemoteId)
+    .maybeSingle();
+
+  existingAssignment = data;
+}
+
+if (!existingAssignment?.id) {
+  const { data } = await supabase
+    .from("training_assignments")
+    .select("id")
+    .eq("user_id", userRow.id)
+    .eq("training_id", trainingId)
+    .maybeSingle();
+
+  existingAssignment = data;
+}
 
       if (existingAssignment?.id) {
         const { error: updateAssignmentError } = await supabase
@@ -372,11 +389,12 @@ export async function POST(req: Request) {
       }
 
       results.push({
-        localId,
-        remoteId: trainingId,
-        success: true,
-        error: null,
-      });
+  localId,
+  remoteId: existingAssignment?.id || assignmentRemoteId || trainingId,
+  trainingId,
+  success: true,
+  error: null,
+});
     }
 
     return NextResponse.json({
