@@ -23,6 +23,7 @@ type TrainingRow = {
 type AssignmentAggRow = {
   training_id: string;
   status: "not_started" | "in_progress" | "completed" | null;
+  watch_completed?: boolean | null;
   final_exam_passed?: boolean | null;
 };
 
@@ -83,7 +84,7 @@ export async function GET() {
     if (trainingIds.length > 0) {
       const { data: assignments, error: assignmentsError } = await supabase
         .from("training_assignments")
-        .select("training_id, status, final_exam_passed")
+        .select("training_id, status, watch_completed, final_exam_passed")
         .in("training_id", trainingIds)
         .returns<AssignmentAggRow[]>();
 
@@ -121,7 +122,9 @@ export async function GET() {
     .includes("asenkron");
 
 const isCompleted = isOnlineType
-  ? row.status === "completed" && row.final_exam_passed === true
+  ? row.status === "completed" &&
+    row.watch_completed === true &&
+    row.final_exam_passed === true
   : row.status === "completed";
 
         if (isCompleted) {
