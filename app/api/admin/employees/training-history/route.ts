@@ -11,6 +11,28 @@ function getSupabase() {
   );
 }
 
+function normalizeStatus(status?: string | null) {
+  const s = String(status || "").toLowerCase();
+
+  if (s === "completed") return "completed";
+  if (s === "in_progress") return "in_progress";
+  return "not_started";
+}
+
+function getSourceLabel(type?: string | null) {
+  const t = String(type || "").toLowerCase();
+
+  if (t === "online" || t === "asenkron" || t === "senkron") {
+    return "Portal Eğitimi";
+  }
+
+  if (t === "orgun" || t === "örgün" || t === "ozel" || t === "özel") {
+    return "App Kaydı";
+  }
+
+  return "Eğitim Kaydı";
+}
+
 export async function GET(req: Request) {
   try {
     const cookieStore = await cookies();
@@ -25,6 +47,7 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
+
     const employeeIds = String(searchParams.get("employeeIds") || "")
       .split(",")
       .map((x) => x.trim())
@@ -65,8 +88,11 @@ export async function GET(req: Request) {
 
     const { data: assignments, error: assignmentError } = await supabase
       .from("training_assignments")
-      .select("user_id, training_id, status")
-      .in("user_id", userIds);
+      .select(
+        "id, user_id, training_id, status, started_at, completed_at, created_at, watch_completed, final_exam_passed"
+      )
+      .in("user_id", userIds)
+      .order("created_at", { ascending: false });
 
     if (assignmentError) {
       return NextResponse.json(
@@ -76,7 +102,11 @@ export async function GET(req: Request) {
     }
 
     const trainingIds = Array.from(
-      new Set((assignments || []).map((a: any) => String(a.training_id)).filter(Boolean))
+      new Set(
+        (assignments || [])
+          .map((a: any) => String(a.training_id || ""))
+          .filter(Boolean)
+      )
     );
 
     const trainingMap = new Map<string, any>();
@@ -84,7 +114,7 @@ export async function GET(req: Request) {
     if (trainingIds.length > 0) {
       const { data: trainings, error: trainingsError } = await supabase
         .from("trainings")
-        .select("id, title, type")
+        .select("id, title, type, duration_minutes, content_url")
         .in("id", trainingIds);
 
       if (trainingsError) {
@@ -106,14 +136,25 @@ export async function GET(req: Request) {
       if (!employeeId) return;
 
       const training = trainingMap.get(String(a.training_id));
+      const status = normalizeStatus(a.status);
+      const type = String(training?.type || "online").toLowerCase();
 
       if (!result[employeeId]) result[employeeId] = [];
 
       result[employeeId].push({
-        training_id: String(a.training_id),
+        assignment_id: String(a.id || ""),
+        training_id: String(a.training_id || ""),
         title: training?.title || "Adsız Eğitim",
-        type: training?.type || "online",
-        status: a.status || "not_started",
+        type,
+        source: getSourceLabel(type),
+        status,
+        duration_minutes: training?.duration_minutes || 0,
+        content_url: training?.content_url || "",
+        started_at: a.started_at || null,
+        completed_at: a.completed_at || null,
+        created_at: a.created_at || null,
+        watch_completed: Boolean(a.watch_completed),
+        final_exam_passed: Boolean(a.final_exam_passed),
       });
     });
 
