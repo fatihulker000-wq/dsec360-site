@@ -19,6 +19,10 @@ type ScopeResponse = {
 type MatrixStatus = {
   training_id: string;
   status: string;
+  source?: string | null;
+  type?: string | null;
+  training_date?: string | null;
+  duration_minutes?: number | null;
 };
 
 type MatrixRow = {
@@ -232,6 +236,7 @@ function matchesStatusFilter(status: string, filter: string) {
   if (filter === "in_progress") return status === "Devam Ediyor";
   if (filter === "not_started") return status === "Başlamadı";
   if (filter === "unassigned") return status === "Atanmadı";
+  if (filter === "app_record") return status === "App Kaydı";
   if (filter === "missing") return status === "Başlamadı" || status === "Atanmadı";
   return true;
 }
@@ -796,17 +801,19 @@ const res = await fetch(
   const employeeBasedRows = useMemo(() => {
     return filteredMatrix.map((row) => {
       const completed = row.statuses.filter((s) => s.status === "Tamamlandı").length;
+      const appRecord = row.statuses.filter((s) => s.status === "App Kaydı").length;
       const inProgress = row.statuses.filter((s) => s.status === "Devam Ediyor").length;
       const notStarted = row.statuses.filter((s) => s.status === "Başlamadı").length;
       const unassigned = row.statuses.filter((s) => s.status === "Atanmadı").length;
 
       return {
-        ...row,
-        completed,
-        inProgress,
-        notStarted,
-        unassigned,
-      };
+  ...row,
+  completed,
+  appRecord,
+  inProgress,
+  notStarted,
+  unassigned,
+};
     });
   }, [filteredMatrix]);
 
@@ -1737,6 +1744,7 @@ const auditTone = useMemo(() => {
                   >
                     <option value="all">Tümü</option>
                     <option value="completed">Tamamlandı</option>
+                    <option value="app_record">App Kaydı</option>
                     <option value="in_progress">Devam Ediyor</option>
                     <option value="not_started">Başlamadı</option>
                     <option value="unassigned">Atanmadı</option>
@@ -1999,7 +2007,7 @@ const auditTone = useMemo(() => {
                   >
                     <thead>
                       <tr>
-                        {["Çalışan", "E-Posta", "Tamamlandı", "Devam Ediyor", "Başlamadı", "Atanmadı", "İşlem"].map(
+                        {["Çalışan", "E-Posta", "Tamamlandı", "App Kaydı", "Devam Ediyor", "Başlamadı", "Atanmadı", "İşlem"].map(
                           (head) => (
                             <th
                               key={head}
@@ -2023,6 +2031,11 @@ const auditTone = useMemo(() => {
                           <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
                             <div style={{ fontWeight: 800 }}>{row.full_name}</div>
                           </td>
+
+ <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
+                          {row.appRecord}
+                        </td>
+
                           <td
                             style={{
                               padding: 12,
@@ -2561,6 +2574,9 @@ const auditTone = useMemo(() => {
                         <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
                           {row.training}
                         </td>
+
+                       
+
                         <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
                           {badge(row.status)}
                         </td>
