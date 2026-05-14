@@ -281,7 +281,6 @@ const status = isAppRecord
   type: webType,
   content_url: clean(item?.online_url || item?.onlineUrl),
   duration_minutes: Number(item?.duration_minutes || item?.durationMinutes || 0),
-  updated_at: new Date().toISOString(),
 };
 
       let trainingId = "";
@@ -321,11 +320,10 @@ if (false as boolean) {
           const { data: newTraining, error: insertTrainingError } = await supabase
             .from("trainings")
             .insert([
-              {
-                ...trainingPayload,
-                created_at: new Date().toISOString(),
-              },
-            ])
+  {
+    ...trainingPayload,
+  },
+])
             .select("id")
             .single();
 
