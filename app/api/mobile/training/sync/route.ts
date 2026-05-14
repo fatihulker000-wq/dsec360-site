@@ -276,14 +276,13 @@ const status = isAppRecord
   : "not_started";
 
       const trainingPayload = {
-        firm_id: firmId,
-        title,
-        description: clean(item?.description) || "App üzerinden gelen eğitim kaydı.",
-        type: webType,
-        content_url: clean(item?.online_url || item?.onlineUrl),
-duration_minutes: Number(item?.duration_minutes || item?.durationMinutes || 0),
-        updated_at: new Date().toISOString(),
-      };
+  title,
+  description: clean(item?.description) || "App üzerinden gelen eğitim kaydı.",
+  type: webType,
+  content_url: clean(item?.online_url || item?.onlineUrl),
+  duration_minutes: Number(item?.duration_minutes || item?.durationMinutes || 0),
+  updated_at: new Date().toISOString(),
+};
 
       let trainingId = "";
 const assignmentRemoteId = remoteId;
@@ -305,11 +304,11 @@ if (false as boolean) {
         }
       } else {
         const { data: existingTraining } = await supabase
-          .from("trainings")
-          .select("id")
-          .eq("firm_id", firmId)
-          .eq("title", title)
-          .maybeSingle();
+  .from("trainings")
+  .select("id")
+  .eq("title", title)
+  .eq("type", webType)
+  .maybeSingle();
 
         if (existingTraining?.id) {
           trainingId = existingTraining.id;
@@ -412,7 +411,7 @@ if (!userRow?.id) {
     continue;
   }
 
-  
+
   userRow = newUser;
 }
 
