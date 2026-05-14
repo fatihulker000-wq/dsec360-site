@@ -204,6 +204,24 @@ function getTrainingStatusColor(status?: string | null) {
   return "#92400e";
 }
 
+function formatTrainingDate(value?: string | null) {
+  if (!value) return "-";
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+
+  return d.toLocaleDateString("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function getTrainingDurationText(value?: number | null) {
+  if (!value || value <= 0) return "Süre yok";
+  return `${value} dk`;
+}
+
 export default function AdminTrainingPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [totalEmployeeCount, setTotalEmployeeCount] = useState(0);
@@ -1687,9 +1705,12 @@ const deleteTrainingUser = async (user: UserRow) => {
                       {item.title || "Eğitim"}
                     </div>
 
-                    <div style={{ marginTop: 3, color: BRAND.muted }}>
-                      {normalizeTrainingTypeText(item.type)} • Portal Eğitimi
-                    </div>
+                    <div style={{ marginTop: 3, color: BRAND.muted, lineHeight: 1.5 }}>
+  {normalizeTrainingTypeText(item.type)} • Portal Eğitimi
+  <br />
+  Süre: {getTrainingDurationText(item.duration_minutes)} • Tarih:{" "}
+  {formatTrainingDate(item.completed_at || item.started_at || item.created_at)}
+</div>
                   </div>
 
                   <span
@@ -1767,9 +1788,12 @@ const deleteTrainingUser = async (user: UserRow) => {
                       {item.title || "Eğitim"}
                     </div>
 
-                    <div style={{ marginTop: 3, color: BRAND.muted }}>
-                      {normalizeTrainingTypeText(item.type)} • App Kaydı
-                    </div>
+                    <div style={{ marginTop: 3, color: BRAND.muted, lineHeight: 1.5 }}>
+  {normalizeTrainingTypeText(item.type)} • App Kaydı
+  <br />
+  Süre: {getTrainingDurationText(item.duration_minutes)} • Tarih:{" "}
+  {formatTrainingDate(item.completed_at || item.started_at || item.created_at)}
+</div>
                   </div>
 
                   <span
