@@ -24,12 +24,16 @@ type TrainingRow = {
   id: string;
   title: string | null;
   type: string | null;
+  duration_minutes?: number | null;
 };
 
 type AssignmentRow = {
   user_id: string;
   training_id: string;
   status: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
   watch_completed?: boolean | null;
   final_exam_passed?: boolean | null;
 };
@@ -176,7 +180,7 @@ const { data: usersData, error: usersError } = await usersQuery;
 
     const { data: trainingsData, error: trainingsError } = await supabase
       .from("trainings")
-      .select("id, title, type")
+      .select("id, title, type, duration_minutes")
       .order("title", { ascending: true });
 
     if (trainingsError) {
@@ -190,6 +194,8 @@ const { data: usersData, error: usersError } = await usersQuery;
   id: String(t.id),
   title: String(t.title || "Adsız Eğitim").trim(),
   type: String(t.type || "").trim().toLowerCase(),
+  duration_minutes:
+    typeof t.duration_minutes === "number" ? t.duration_minutes : 0,
 }));
 
     let assignments: AssignmentRow[] = [];
@@ -197,7 +203,7 @@ const { data: usersData, error: usersError } = await usersQuery;
     if (participantIds.length > 0) {
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from("training_assignments")
-        .select("user_id, training_id, status, watch_completed, final_exam_passed")
+        .select("user_id, training_id, status, started_at, completed_at, created_at, watch_completed, final_exam_passed")
         .in("user_id", participantIds);
 
       if (assignmentsError) {
@@ -215,6 +221,12 @@ const { data: usersData, error: usersError } = await usersQuery;
 
 trainings.forEach((t: any) => {
   trainingTypeMap.set(String(t.id), String(t.type || "").toLowerCase());
+});
+
+const trainingMetaMap = new Map<string, any>();
+
+trainings.forEach((t: any) => {
+  trainingMetaMap.set(String(t.id), t);
 });
 
 function resolveTrainingStatus(a: AssignmentRow) {
@@ -239,21 +251,33 @@ function resolveTrainingStatus(a: AssignmentRow) {
   return "Başlamadı";
 }
 
-    const assignmentMap = new Map<string, string>();
+   const assignmentMap = new Map<string, any>();
 
-   assignments.forEach((a) => {
+assignments.forEach((a) => {
   const key = `${a.user_id}__${a.training_id}`;
-  assignmentMap.set(key, resolveTrainingStatus(a));
+  const trainingMeta = trainingMetaMap.get(String(a.training_id));
+
+  assignmentMap.set(key, {
+    status: resolveTrainingStatus(a),
+    training_date: a.completed_at || a.started_at || a.created_at || null,
+    duration_minutes: trainingMeta?.duration_minutes || 0,
+    type: trainingMeta?.type || "",
+  });
 });
 
     const matrix = participants.map((participant) => {
       const statuses = trainings.map((training) => {
-        const key = `${participant.id}__${training.id}`;
-        return {
-          training_id: training.id,
-          status: assignmentMap.get(key) || "Atanmadı",
-        };
-      });
+  const key = `${participant.id}__${training.id}`;
+  const found = assignmentMap.get(key);
+
+  return {
+    training_id: training.id,
+    status: found?.status || "Atanmadı",
+    type: found?.type || training.type || "",
+    duration_minutes: found?.duration_minutes || training.duration_minutes || 0,
+    training_date: found?.training_date || null,
+  };
+});
 
       return {
         user_id: participant.id,
@@ -271,6 +295,10 @@ function resolveTrainingStatus(a: AssignmentRow) {
 
 const inProgressCount = assignments.filter((a) => {
   return resolveTrainingStatus(a) === "Devam Ediyor";
+}).length;
+
+const appRecordCount = assignments.filter((a) => {
+  return resolveTrainingStatus(a) === "App Kaydı";
 }).length;
 
 const notStartedCount = assignments.filter((a) => {
@@ -299,13 +327,14 @@ const notStartedCount = assignments.filter((a) => {
         employee_count: participants.length,
       },
       summary: {
-        total_employees: participants.length,
-        total_trainings: trainings.length,
-        total_assignments: assignments.length,
-        completed_count: completedCount,
-        in_progress_count: inProgressCount,
-        not_started_count: notStartedCount,
-      },
+  total_employees: participants.length,
+  total_trainings: trainings.length,
+  total_assignments: assignments.length,
+  completed_count: completedCount,
+  app_record_count: appRecordCount,
+  in_progress_count: inProgressCount,
+  not_started_count: notStartedCount,
+},
       trainings,
       matrix,
     });
