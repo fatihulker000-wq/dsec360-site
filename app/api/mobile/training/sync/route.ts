@@ -239,6 +239,49 @@ const title = String(
     ""
 ).trim();
 
+const deleted =
+  item?.deleted === true ||
+  item?.is_deleted === true ||
+  item?.isDeleted === true ||
+  item?.delete === true;
+
+if (deleted) {
+  if (!remoteId) {
+    results.push({
+      localId,
+      remoteId: null,
+      success: false,
+      error: "Silme için remoteId eksik.",
+    });
+    continue;
+  }
+
+  const { error: deleteAssignmentError } = await supabase
+    .from("training_assignments")
+    .delete()
+    .eq("id", remoteId);
+
+  if (deleteAssignmentError) {
+    results.push({
+      localId,
+      remoteId,
+      success: false,
+      error: deleteAssignmentError.message,
+    });
+    continue;
+  }
+
+  results.push({
+    localId,
+    remoteId,
+    success: true,
+    deleted: true,
+    error: null,
+  });
+
+  continue;
+}
+
       if (!employeeRemoteId || !title) {
         results.push({
           localId,
@@ -516,6 +559,46 @@ insertedAssignment = data;
       success: true,
       count: results.length,
       results,
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "Sunucu hatası.", detail: e?.message || null },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    if (!authorized(req)) return unauthorized();
+
+    const url = new URL(req.url);
+    const assignmentId = String(url.searchParams.get("assignmentId") || "").trim();
+
+    if (!assignmentId) {
+      return NextResponse.json(
+        { error: "assignmentId zorunlu." },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getSupabase();
+
+    const { error } = await supabase
+      .from("training_assignments")
+      .delete()
+      .eq("id", assignmentId);
+
+    if (error) {
+      return NextResponse.json(
+        { error: "Eğitim ataması silinemedi.", detail: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      deletedAssignmentId: assignmentId,
     });
   } catch (e: any) {
     return NextResponse.json(
