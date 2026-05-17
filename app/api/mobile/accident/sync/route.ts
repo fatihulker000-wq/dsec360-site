@@ -19,9 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     const rawAppRecordId = record.localId?.toString();
-
     const localFirmId = Number(record.firmId || 0);
-
     const webFirmId = String(record.webFirmId || "").trim();
 
     if (!rawAppRecordId) {
@@ -47,30 +45,21 @@ export async function POST(req: NextRequest) {
 
     const appRecordId = `${localFirmId}_${rawAppRecordId}`;
 
-    const payload = mapRecord(
-      record,
-      localFirmId,
-      webFirmId
-    );
+    const payload = mapRecord(record, localFirmId, webFirmId);
 
     let existingId: string | null = null;
 
-    const {
-      data: existingComposite,
-      error: existingCompositeError,
-    } = await supabase
-      .from("accident_records")
-      .select("id")
-      .eq("app_record_id", appRecordId)
-      .eq("web_firm_id", webFirmId)
-      .maybeSingle();
+    const { data: existingComposite, error: existingCompositeError } =
+      await supabase
+        .from("accident_records")
+        .select("id")
+        .eq("app_record_id", appRecordId)
+        .eq("web_firm_id", webFirmId)
+        .maybeSingle();
 
     if (existingCompositeError) {
       return NextResponse.json(
-        {
-          success: false,
-          error: existingCompositeError.message,
-        },
+        { success: false, error: existingCompositeError.message },
         { status: 500 }
       );
     }
@@ -78,22 +67,17 @@ export async function POST(req: NextRequest) {
     existingId = existingComposite?.id ?? null;
 
     if (!existingId) {
-      const {
-        data: existingLegacy,
-        error: existingLegacyError,
-      } = await supabase
-        .from("accident_records")
-        .select("id")
-        .eq("app_record_id", rawAppRecordId)
-        .eq("firm_id", localFirmId)
-        .maybeSingle();
+      const { data: existingLegacy, error: existingLegacyError } =
+        await supabase
+          .from("accident_records")
+          .select("id")
+          .eq("app_record_id", rawAppRecordId)
+          .eq("firm_id", localFirmId)
+          .maybeSingle();
 
       if (existingLegacyError) {
         return NextResponse.json(
-          {
-            success: false,
-            error: existingLegacyError.message,
-          },
+          { success: false, error: existingLegacyError.message },
           { status: 500 }
         );
       }
@@ -122,10 +106,7 @@ export async function POST(req: NextRequest) {
 
     if (result.error) {
       return NextResponse.json(
-        {
-          success: false,
-          error: result.error.message,
-        },
+        { success: false, error: result.error.message },
         { status: 500 }
       );
     }
@@ -134,26 +115,24 @@ export async function POST(req: NextRequest) {
       success: true,
       remoteId: result.data.id,
     });
-
   } catch (e: any) {
-
     return NextResponse.json(
-      {
-        success: false,
-        error: e?.message || "unknown error",
-      },
+      { success: false, error: e?.message || "unknown error" },
       { status: 500 }
     );
   }
 }
 
-function mapRecord(
-  r: any,
-  localFirmId: number,
-  webFirmId: string
-) {
-  return {
+function mapRecord(r: any, localFirmId: number, webFirmId: string) {
+  const isDeleted =
+    r.isDeleted === true ||
+    r.isDeleted === 1 ||
+    r.isDeleted === "1" ||
+    r.isDeleted === "true";
 
+  const deletedAtValue = Number(r.deletedAt || 0);
+
+  return {
     firm_id: localFirmId,
     web_firm_id: webFirmId,
 
@@ -186,9 +165,8 @@ function mapRecord(
 
     is_active: Number(r.isActive ?? 1),
 
-    // 🔥 SOFT DELETE
-    is_deleted: Number(r.isDeleted ?? 0),
-    deleted_at: Number(r.deletedAt || 0),
+    is_deleted: isDeleted,
+    deleted_at: deletedAtValue > 0 ? deletedAtValue : null,
 
     created_at: Number(r.createdAt || Date.now()),
     updated_at: Number(r.updatedAt || Date.now()),
@@ -198,11 +176,8 @@ function mapRecord(
 }
 
 export async function GET(req: NextRequest) {
-
   try {
-
     const { searchParams } = new URL(req.url);
-
     const firmId = searchParams.get("firmId");
 
     let query = supabase
@@ -238,24 +213,18 @@ export async function GET(req: NextRequest) {
         updated_at,
         source
       `)
-      .eq("is_deleted", 0)
+      .eq("is_deleted", false)
       .order("event_date", { ascending: false });
 
     if (firmId && firmId !== "all") {
-      query = query.eq(
-        "web_firm_id",
-        firmId.trim()
-      );
+      query = query.eq("web_firm_id", firmId.trim());
     }
 
     const { data, error } = await query;
 
     if (error) {
       return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        },
+        { success: false, error: error.message },
         { status: 500 }
       );
     }
@@ -264,14 +233,9 @@ export async function GET(req: NextRequest) {
       success: true,
       rows: data || [],
     });
-
   } catch (e: any) {
-
     return NextResponse.json(
-      {
-        success: false,
-        error: e?.message || "pull error",
-      },
+      { success: false, error: e?.message || "pull error" },
       { status: 500 }
     );
   }
