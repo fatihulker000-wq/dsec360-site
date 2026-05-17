@@ -213,7 +213,7 @@ export async function GET(req: NextRequest) {
         updated_at,
         source
       `)
-      .eq("is_deleted", false)
+      .or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0")
       .order("event_date", { ascending: false });
 
     if (firmId && firmId !== "all") {
