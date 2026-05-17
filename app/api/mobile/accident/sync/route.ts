@@ -12,31 +12,53 @@ export async function POST(req: NextRequest) {
     const record = body?.record;
 
     if (!record) {
-      return NextResponse.json({ success: false, error: "record missing" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "record missing" },
+        { status: 400 }
+      );
     }
 
     const rawAppRecordId = record.localId?.toString();
+
     const localFirmId = Number(record.firmId || 0);
+
     const webFirmId = String(record.webFirmId || "").trim();
 
     if (!rawAppRecordId) {
-      return NextResponse.json({ success: false, error: "localId missing" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "localId missing" },
+        { status: 400 }
+      );
     }
 
     if (localFirmId <= 0) {
-      return NextResponse.json({ success: false, error: "firmId missing" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "firmId missing" },
+        { status: 400 }
+      );
     }
 
     if (!webFirmId) {
-      return NextResponse.json({ success: false, error: "webFirmId missing" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "webFirmId missing" },
+        { status: 400 }
+      );
     }
 
     const appRecordId = `${localFirmId}_${rawAppRecordId}`;
-    const payload = mapRecord(record, localFirmId, webFirmId);
+
+    const payload = mapRecord(
+      record,
+      localFirmId,
+      webFirmId
+    );
 
     let existingId: string | null = null;
 
-    const { data: existingComposite, error: existingCompositeError } = await supabase
+    const {
+      data: existingComposite,
+      error: existingCompositeError,
+    } = await supabase
       .from("accident_records")
       .select("id")
       .eq("app_record_id", appRecordId)
@@ -45,7 +67,10 @@ export async function POST(req: NextRequest) {
 
     if (existingCompositeError) {
       return NextResponse.json(
-        { success: false, error: existingCompositeError.message },
+        {
+          success: false,
+          error: existingCompositeError.message,
+        },
         { status: 500 }
       );
     }
@@ -53,7 +78,10 @@ export async function POST(req: NextRequest) {
     existingId = existingComposite?.id ?? null;
 
     if (!existingId) {
-      const { data: existingLegacy, error: existingLegacyError } = await supabase
+      const {
+        data: existingLegacy,
+        error: existingLegacyError,
+      } = await supabase
         .from("accident_records")
         .select("id")
         .eq("app_record_id", rawAppRecordId)
@@ -62,7 +90,10 @@ export async function POST(req: NextRequest) {
 
       if (existingLegacyError) {
         return NextResponse.json(
-          { success: false, error: existingLegacyError.message },
+          {
+            success: false,
+            error: existingLegacyError.message,
+          },
           { status: 500 }
         );
       }
@@ -91,7 +122,10 @@ export async function POST(req: NextRequest) {
 
     if (result.error) {
       return NextResponse.json(
-        { success: false, error: result.error.message },
+        {
+          success: false,
+          error: result.error.message,
+        },
         { status: 500 }
       );
     }
@@ -100,16 +134,26 @@ export async function POST(req: NextRequest) {
       success: true,
       remoteId: result.data.id,
     });
+
   } catch (e: any) {
+
     return NextResponse.json(
-      { success: false, error: e?.message || "unknown error" },
+      {
+        success: false,
+        error: e?.message || "unknown error",
+      },
       { status: 500 }
     );
   }
 }
 
-function mapRecord(r: any, localFirmId: number, webFirmId: string) {
+function mapRecord(
+  r: any,
+  localFirmId: number,
+  webFirmId: string
+) {
   return {
+
     firm_id: localFirmId,
     web_firm_id: webFirmId,
 
@@ -117,18 +161,22 @@ function mapRecord(r: any, localFirmId: number, webFirmId: string) {
 
     event_type: r.eventType || "KAZA",
     event_date: Number(r.eventDate || 0),
+
     title: r.title || "",
     description: r.description || "",
     location: r.location || "",
+
     severity: Number(r.severity || 0),
     lost_work_days: Number(r.lostWorkDays || 0),
 
     employee_name: r.employeeName || "",
     department: r.department || "",
     shift: r.shift || "",
+
     injury_body_part: r.injuryBodyPart || "",
     injury_type: r.injuryType || "",
     root_cause_category: r.rootCauseCategory || "",
+
     event_hour: Number(r.eventHour ?? -1),
     event_week_day: r.eventWeekDay || "",
 
@@ -137,6 +185,11 @@ function mapRecord(r: any, localFirmId: number, webFirmId: string) {
     correction_photo_path: r.correctionPhotoPath || "",
 
     is_active: Number(r.isActive ?? 1),
+
+    // 🔥 SOFT DELETE
+    is_deleted: Number(r.isDeleted ?? 0),
+    deleted_at: Number(r.deletedAt || 0),
+
     created_at: Number(r.createdAt || Date.now()),
     updated_at: Number(r.updatedAt || Date.now()),
 
@@ -145,8 +198,11 @@ function mapRecord(r: any, localFirmId: number, webFirmId: string) {
 }
 
 export async function GET(req: NextRequest) {
+
   try {
+
     const { searchParams } = new URL(req.url);
+
     const firmId = searchParams.get("firmId");
 
     let query = supabase
@@ -176,21 +232,30 @@ export async function GET(req: NextRequest) {
         root_cause_photo_path,
         correction_photo_path,
         is_active,
+        is_deleted,
+        deleted_at,
         created_at,
         updated_at,
         source
       `)
+      .eq("is_deleted", 0)
       .order("event_date", { ascending: false });
 
     if (firmId && firmId !== "all") {
-      query = query.eq("web_firm_id", firmId.trim());
+      query = query.eq(
+        "web_firm_id",
+        firmId.trim()
+      );
     }
 
     const { data, error } = await query;
 
     if (error) {
       return NextResponse.json(
-        { success: false, error: error.message },
+        {
+          success: false,
+          error: error.message,
+        },
         { status: 500 }
       );
     }
@@ -199,9 +264,14 @@ export async function GET(req: NextRequest) {
       success: true,
       rows: data || [],
     });
+
   } catch (e: any) {
+
     return NextResponse.json(
-      { success: false, error: e?.message || "pull error" },
+      {
+        success: false,
+        error: e?.message || "pull error",
+      },
       { status: 500 }
     );
   }
