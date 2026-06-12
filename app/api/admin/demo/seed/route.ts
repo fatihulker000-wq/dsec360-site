@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-const DEMO_COMPANY_NAME = "D-SEC Demo Lojistik ve Depolama A.Ş.";
+const DEMO_COMPANY_NAME = "D-SEC Demo Lojistik ve Depolama A.Ş";
 
 function getSupabase() {
   return createClient(
@@ -166,17 +166,19 @@ const demoEmployees = [
 ];
 
 async function ensureDemoCompany(supabase: ReturnType<typeof getSupabase>) {
-  const { data: existing, error: existingError } = await supabase
+  const { data: existingList, error: existingError } = await supabase
     .from("companies")
     .select("id, name")
-    .eq("name", DEMO_COMPANY_NAME)
-    .maybeSingle();
+    .ilike("name", "%D-SEC Demo Lojistik ve Depolama%")
+    .order("created_at", { ascending: true });
 
   if (existingError) {
     throw new Error(existingError.message);
   }
 
-  if (existing?.id) return existing;
+  if (Array.isArray(existingList) && existingList.length > 0) {
+    return existingList[0];
+  }
 
   const { data, error } = await supabase
     .from("companies")
