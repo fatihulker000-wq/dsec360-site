@@ -668,7 +668,7 @@ async function seedAccidents(
       firm_id: null,
       employee_id: null,
       event_type: x.event_type,
-      event_date: new Date(Date.now() - (index + 2) * 86400000).toISOString(),
+      event_date: Date.now() - (index + 2) * 86400000,
       title: x.title,
       description: x.description,
       location: x.location,
