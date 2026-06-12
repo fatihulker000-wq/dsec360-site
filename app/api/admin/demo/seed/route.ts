@@ -165,6 +165,69 @@ const demoEmployees = [
   },
 ];
 
+const demoTrainings = [
+  {
+    title: "Temel İş Sağlığı ve Güvenliği Eğitimi",
+    description:
+      "Çalışanların temel İSG kuralları, yasal sorumluluklar, güvenli çalışma davranışları ve işyerindeki tehlikeler hakkında bilgilendirilmesi.",
+    type: "asenkron",
+    duration_minutes: 240,
+    content_url: "",
+    topics_text:
+      "İSG mevzuatı, çalışan sorumlulukları, iş kazalarının önlenmesi, KKD kullanımı, acil durum davranışları",
+  },
+  {
+    title: "Yangın Güvenliği ve Acil Durum Eğitimi",
+    description:
+      "Yangın türleri, yangın söndürme yöntemleri, tahliye kuralları ve acil durum ekiplerinin görevlerini kapsayan demo eğitim.",
+    type: "asenkron",
+    duration_minutes: 90,
+    content_url: "",
+    topics_text:
+      "Yangın sınıfları, söndürücü kullanımı, tahliye, toplanma alanı, acil durum planı",
+  },
+  {
+    title: "Elle Taşıma ve Ergonomi Eğitimi",
+    description:
+      "Depo ve lojistik personeli için doğru kaldırma, taşıma, itme-çekme ve ergonomik çalışma prensipleri.",
+    type: "asenkron",
+    duration_minutes: 60,
+    content_url: "",
+    topics_text:
+      "Elle taşıma, bel sağlığı, yük kaldırma teknikleri, ergonomi, kas iskelet sistemi riskleri",
+  },
+  {
+    title: "Forklift ve Depo Trafik Güvenliği Eğitimi",
+    description:
+      "Forklift operatörleri ve depo çalışanları için saha içi trafik, görüş alanı, yaya yolları ve yük güvenliği eğitimi.",
+    type: "asenkron",
+    duration_minutes: 75,
+    content_url: "",
+    topics_text:
+      "Forklift güvenliği, yaya yolu, hız sınırı, yükleme, raf güvenliği, kör nokta riskleri",
+  },
+  {
+    title: "KKD Kullanımı Eğitimi",
+    description:
+      "Kişisel koruyucu donanımların doğru seçimi, kullanımı, bakımı ve çalışan sorumluluklarını anlatan eğitim.",
+    type: "asenkron",
+    duration_minutes: 45,
+    content_url: "",
+    topics_text:
+      "Baret, iş ayakkabısı, reflektörlü yelek, eldiven, gözlük, KKD bakım ve kontrolü",
+  },
+  {
+    title: "İş Kazası Sonrası İşe Dönüş Eğitimi",
+    description:
+      "İş kazası yaşayan çalışanların işe dönüş öncesi bilgilendirilmesi ve tekrar kazaların önlenmesi için hazırlanan eğitim.",
+    type: "asenkron",
+    duration_minutes: 45,
+    content_url: "",
+    topics_text:
+      "Kaza nedeni, güvenli davranış, işe dönüş kontrolü, ramak kala bildirimi, tekrar kaza önleme",
+  },
+];
+
 async function ensureDemoCompany(supabase: ReturnType<typeof getSupabase>) {
   const { data: existingList, error: existingError } = await supabase
     .from("companies")
@@ -172,9 +235,7 @@ async function ensureDemoCompany(supabase: ReturnType<typeof getSupabase>) {
     .ilike("name", "%D-SEC Demo Lojistik ve Depolama%")
     .order("created_at", { ascending: true });
 
-  if (existingError) {
-    throw new Error(existingError.message);
-  }
+  if (existingError) throw new Error(existingError.message);
 
   if (Array.isArray(existingList) && existingList.length > 0) {
     return existingList[0];
@@ -201,9 +262,7 @@ async function ensureDemoCompany(supabase: ReturnType<typeof getSupabase>) {
     .select("id, name")
     .single();
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   return data;
 }
@@ -217,9 +276,7 @@ async function seedEmployees(
     .select("id, email, registry_no")
     .eq("firm_id", firmId);
 
-  if (existingError) {
-    throw new Error(existingError.message);
-  }
+  if (existingError) throw new Error(existingError.message);
 
   const existingEmails = new Set(
     (existingEmployees || []).map((e) => String(e.email || "").toLowerCase())
@@ -258,13 +315,55 @@ async function seedEmployees(
     .from("employees")
     .insert(rowsToInsert);
 
-  if (insertError) {
-    throw new Error(insertError.message);
-  }
+  if (insertError) throw new Error(insertError.message);
 
   return {
     inserted: rowsToInsert.length,
     skipped: demoEmployees.length - rowsToInsert.length,
+  };
+}
+
+async function seedTrainings(supabase: ReturnType<typeof getSupabase>) {
+  const { data: existingTrainings, error: existingError } = await supabase
+    .from("trainings")
+    .select("id, title");
+
+  if (existingError) throw new Error(existingError.message);
+
+  const existingTitles = new Set(
+    (existingTrainings || []).map((t) =>
+      String(t.title || "").trim().toLowerCase()
+    )
+  );
+
+  const rowsToInsert = demoTrainings
+    .filter((t) => !existingTitles.has(t.title.trim().toLowerCase()))
+    .map((t) => ({
+      title: t.title,
+      description: t.description,
+      type: t.type,
+      duration_minutes: t.duration_minutes,
+      content_url: t.content_url,
+      topics_text: t.topics_text,
+      created_at: new Date().toISOString(),
+    }));
+
+  if (rowsToInsert.length === 0) {
+    return {
+      inserted: 0,
+      skipped: demoTrainings.length,
+    };
+  }
+
+  const { error: insertError } = await supabase
+    .from("trainings")
+    .insert(rowsToInsert);
+
+  if (insertError) throw new Error(insertError.message);
+
+  return {
+    inserted: rowsToInsert.length,
+    skipped: demoTrainings.length - rowsToInsert.length,
   };
 }
 
@@ -283,12 +382,14 @@ export async function POST() {
 
     const company = await ensureDemoCompany(supabase);
     const employeesResult = await seedEmployees(supabase, String(company.id));
+    const trainingsResult = await seedTrainings(supabase);
 
     return NextResponse.json({
       success: true,
-      message: "Demo firma ve çalışan verileri oluşturuldu.",
+      message: "Demo firma, çalışan ve eğitim verileri oluşturuldu.",
       company,
       employees: employeesResult,
+      trainings: trainingsResult,
     });
   } catch (error: any) {
     console.error("demo seed error:", error);
