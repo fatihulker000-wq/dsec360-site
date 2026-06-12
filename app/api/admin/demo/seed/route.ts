@@ -348,22 +348,144 @@ async function seedTrainings(supabase: ReturnType<typeof getSupabase>) {
       created_at: new Date().toISOString(),
     }));
 
+  if (rowsToInsert.length > 0) {
+    const { error: insertError } = await supabase
+      .from("trainings")
+      .insert(rowsToInsert);
+
+    if (insertError) throw new Error(insertError.message);
+  }
+
+  const { data: finalTrainings, error: finalError } = await supabase
+    .from("trainings")
+    .select("id, title")
+    .in(
+      "title",
+      demoTrainings.map((t) => t.title)
+    );
+
+  if (finalError) throw new Error(finalError.message);
+
+  return {
+    inserted: rowsToInsert.length,
+    skipped: demoTrainings.length - rowsToInsert.length,
+    trainings: finalTrainings || [],
+  };
+}
+
+async function seedTrainingAssignments(
+  supabase: ReturnType<typeof getSupabase>,
+  firmId: string,
+  trainings: Array<{ id: string; title: string | null }>
+) {
+  const { data: employees, error: employeesError } = await supabase
+    .from("employees")
+    .select("id, full_name")
+    .eq("firm_id", firmId)
+    .eq("active", true);
+
+  if (employeesError) throw new Error(employeesError.message);
+
+  const employeeIds = (employees || []).map((e) => String(e.id)).filter(Boolean);
+
+  if (employeeIds.length === 0 || trainings.length === 0) {
+    return {
+      inserted: 0,
+      skipped: 0,
+    };
+  }
+
+  const { data: users, error: usersError } = await supabase
+    .from("users")
+    .select("id, employee_id")
+    .in("employee_id", employeeIds);
+
+  if (usersError) throw new Error(usersError.message);
+
+  const linkedUsers = (users || [])
+    .filter((u) => u.id && u.employee_id)
+    .map((u) => ({
+      user_id: String(u.id),
+      employee_id: String(u.employee_id),
+    }));
+
+  if (linkedUsers.length === 0) {
+    return {
+      inserted: 0,
+      skipped: 0,
+      note: "Demo çalışanlara bağlı eğitim kullanıcısı bulunamadı.",
+    };
+  }
+
+  const userIds = linkedUsers.map((u) => u.user_id);
+  const trainingIds = trainings.map((t) => String(t.id)).filter(Boolean);
+
+  const { data: existingAssignments, error: existingError } = await supabase
+    .from("training_assignments")
+    .select("user_id, training_id")
+    .in("user_id", userIds)
+    .in("training_id", trainingIds);
+
+  if (existingError) throw new Error(existingError.message);
+
+  const existingSet = new Set(
+    (existingAssignments || []).map(
+      (a) => `${String(a.user_id)}::${String(a.training_id)}`
+    )
+  );
+
+  const statuses = ["completed", "completed", "in_progress", "not_started"];
+
+  const rowsToInsert: Array<{
+    user_id: string;
+    training_id: string;
+    status: string;
+    watch_completed: boolean;
+    final_exam_passed: boolean;
+    assigned_at: string;
+    completed_at: string | null;
+  }> = [];
+
+  linkedUsers.forEach((user, userIndex) => {
+    trainingIds.forEach((trainingId, trainingIndex) => {
+      const key = `${user.user_id}::${trainingId}`;
+      if (existingSet.has(key)) return;
+
+      const status = statuses[(userIndex + trainingIndex) % statuses.length];
+      const isCompleted = status === "completed";
+
+      rowsToInsert.push({
+        user_id: user.user_id,
+        training_id: trainingId,
+        status,
+        watch_completed: isCompleted,
+        final_exam_passed: isCompleted,
+        assigned_at: new Date(
+          Date.now() - (trainingIndex + 1) * 86400000
+        ).toISOString(),
+        completed_at: isCompleted
+          ? new Date(Date.now() - trainingIndex * 43200000).toISOString()
+          : null,
+      });
+    });
+  });
+
   if (rowsToInsert.length === 0) {
     return {
       inserted: 0,
-      skipped: demoTrainings.length,
+      skipped: linkedUsers.length * trainingIds.length,
     };
   }
 
   const { error: insertError } = await supabase
-    .from("trainings")
+    .from("training_assignments")
     .insert(rowsToInsert);
 
   if (insertError) throw new Error(insertError.message);
 
   return {
     inserted: rowsToInsert.length,
-    skipped: demoTrainings.length - rowsToInsert.length,
+    skipped: linkedUsers.length * trainingIds.length - rowsToInsert.length,
   };
 }
 
@@ -384,12 +506,19 @@ export async function POST() {
     const employeesResult = await seedEmployees(supabase, String(company.id));
     const trainingsResult = await seedTrainings(supabase);
 
+    const assignmentsResult = await seedTrainingAssignments(
+  supabase,
+  String(company.id),
+  trainingsResult.trainings
+);
+
     return NextResponse.json({
       success: true,
       message: "Demo firma, çalışan ve eğitim verileri oluşturuldu.",
       company,
       employees: employeesResult,
       trainings: trainingsResult,
+      assignments: assignmentsResult,
     });
   } catch (error: any) {
     console.error("demo seed error:", error);
