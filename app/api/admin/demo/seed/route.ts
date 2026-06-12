@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -20,6 +21,10 @@ async function checkSuperAdmin() {
   const role = String(cookieStore.get("dsec_admin_role")?.value || "").trim();
 
   return auth === "ok" && role === "super_admin";
+}
+
+function sha256(input: string) {
+  return crypto.createHash("sha256").update(input).digest("hex");
 }
 
 const demoEmployees = [
@@ -323,6 +328,115 @@ async function seedEmployees(
   };
 }
 
+async function seedDemoTrainingUsers(
+  supabase: ReturnType<typeof getSupabase>,
+  firmId: string
+) {
+  const { data: employees, error: employeesError } = await supabase
+    .from("employees")
+    .select("id, full_name, email, phone, active")
+    .eq("firm_id", firmId)
+    .eq("active", true);
+
+  if (employeesError) throw new Error(employeesError.message);
+
+  const rows = employees || [];
+
+  if (rows.length === 0) {
+    return {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+    };
+  }
+
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const emp of rows) {
+    const email = String(emp.email || "").trim().toLowerCase();
+    const fullName = String(emp.full_name || "Demo Eğitim Kullanıcısı").trim();
+
+    if (!email || !emp.id) {
+      skipped += 1;
+      continue;
+    }
+
+    const { data: existingUser, error: existingError } = await supabase
+      .from("users")
+      .select("id")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (existingError) throw new Error(existingError.message);
+
+    if (existingUser?.id) {
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({
+          full_name: fullName,
+          employee_id: emp.id,
+          company_id: firmId,
+          role: "training_user",
+          is_active: true,
+        })
+        .eq("id", existingUser.id);
+
+      if (updateError) throw new Error(updateError.message);
+
+      await supabase.from("user_firm_access").upsert(
+        {
+          user_id: existingUser.id,
+          firm_id: firmId,
+          role: "training_user",
+          is_primary: true,
+        },
+        {
+          onConflict: "user_id,firm_id",
+        }
+      );
+
+      updated += 1;
+      continue;
+    }
+
+    const { data: insertedUser, error: insertError } = await supabase
+      .from("users")
+      .insert({
+        full_name: fullName,
+        email,
+        phone: emp.phone || null,
+        password_hash: sha256("Demo12345"),
+        role: "training_user",
+        company_id: firmId,
+        employee_id: emp.id,
+        is_active: true,
+      })
+      .select("id")
+      .single();
+
+    if (insertError) throw new Error(insertError.message);
+
+    if (insertedUser?.id) {
+      await supabase.from("user_firm_access").insert({
+        user_id: insertedUser.id,
+        firm_id: firmId,
+        role: "training_user",
+        is_primary: true,
+      });
+    }
+
+    created += 1;
+  }
+
+  return {
+    created,
+    updated,
+    skipped,
+  };
+}
+
 async function seedTrainings(supabase: ReturnType<typeof getSupabase>) {
   const { data: existingTrainings, error: existingError } = await supabase
     .from("trainings")
@@ -504,6 +618,10 @@ export async function POST() {
 
     const company = await ensureDemoCompany(supabase);
     const employeesResult = await seedEmployees(supabase, String(company.id));
+    const trainingUsersResult = await seedDemoTrainingUsers(
+  supabase,
+  String(company.id)
+);
     const trainingsResult = await seedTrainings(supabase);
 
     const assignmentsResult = await seedTrainingAssignments(
@@ -517,8 +635,9 @@ export async function POST() {
       message: "Demo firma, çalışan ve eğitim verileri oluşturuldu.",
       company,
       employees: employeesResult,
-      trainings: trainingsResult,
-      assignments: assignmentsResult,
+trainingUsers: trainingUsersResult,
+trainings: trainingsResult,
+assignments: assignmentsResult,
     });
   } catch (error: any) {
     console.error("demo seed error:", error);
