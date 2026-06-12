@@ -685,9 +685,9 @@ async function seedAccidents(
       is_active: 1,
       is_deleted: 0,
       source: "DEMO",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      created_at_server: new Date().toISOString(),
+      created_at: Date.now(),
+updated_at: Date.now(),
+created_at_server: Date.now(),
     }));
 
   if (rowsToInsert.length === 0) {
