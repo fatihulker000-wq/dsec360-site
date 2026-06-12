@@ -679,8 +679,6 @@ async function seedAccidents(
   injury_body_part: x.injury_body_part,
   injury_type: x.injury_type,
   root_cause_category: x.root_cause_category,
-  event_hour: "10:30",
-  event_week_day: "Pazartesi",
   is_active: 1,
   is_deleted: 0,
   source: "DEMO",
