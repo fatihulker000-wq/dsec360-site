@@ -20,6 +20,7 @@ export async function GET() {
     const adminAuth = String(cookieStore.get("dsec_admin_auth")?.value || "").trim();
     const adminRole = String(cookieStore.get("dsec_admin_role")?.value || "").trim();
     const userId = String(cookieStore.get("dsec_user_id")?.value || "").trim();
+    const companyIdFromCookie = String(cookieStore.get("dsec_company_id")?.value || "").trim();
 
     if (
       adminAuth !== "ok" ||
@@ -27,7 +28,7 @@ export async function GET() {
       (adminRole !== "super_admin" && adminRole !== "company_admin")
     ) {
       return NextResponse.json(
-        { error: "Yetkisiz erişim." },
+        { success: false, error: "Yetkisiz erişim." },
         { status: 401 }
       );
     }
@@ -43,21 +44,39 @@ export async function GET() {
     if (error) {
       console.error("admin/me kullanıcı sorgu hatası:", error);
       return NextResponse.json(
-        { error: "Kullanıcı bilgileri okunamadı." },
+        { success: false, error: "Kullanıcı bilgileri okunamadı." },
         { status: 500 }
       );
     }
 
     if (!data) {
       return NextResponse.json(
-        { error: "Kullanıcı bulunamadı." },
+        { success: false, error: "Kullanıcı bulunamadı." },
         { status: 404 }
       );
     }
 
     if (data.is_active === false) {
       return NextResponse.json(
-        { error: "Kullanıcı pasif durumda." },
+        { success: false, error: "Kullanıcı pasif durumda." },
+        { status: 403 }
+      );
+    }
+
+    const dbRole = String(data.role || "").trim();
+
+    if (dbRole !== adminRole) {
+      return NextResponse.json(
+        { success: false, error: "Oturum rolü ile kullanıcı rolü uyuşmuyor." },
+        { status: 403 }
+      );
+    }
+
+    const companyId = String(data.company_id || companyIdFromCookie || "").trim();
+
+    if (adminRole === "company_admin" && !companyId) {
+      return NextResponse.json(
+        { success: false, error: "Firma admini için firma bilgisi bulunamadı." },
         { status: 403 }
       );
     }
@@ -66,16 +85,18 @@ export async function GET() {
       success: true,
       user: {
         id: String(data.id || "").trim(),
-        full_name: String(data.full_name || ""),
+        full_name: String(data.full_name || "").trim(),
         email: String(data.email || "").trim().toLowerCase(),
-        role: String(data.role || "").trim(),
-        company_id: String(data.company_id || "").trim(),
+        role: adminRole as "super_admin" | "company_admin",
+        company_id: companyId,
+        is_super_admin: adminRole === "super_admin",
+        is_company_admin: adminRole === "company_admin",
       },
     });
   } catch (error) {
     console.error("admin/me genel hata:", error);
     return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
+      { success: false, error: "Sunucu hatası oluştu." },
       { status: 500 }
     );
   }
