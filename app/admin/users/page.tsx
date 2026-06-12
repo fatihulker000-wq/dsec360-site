@@ -93,6 +93,7 @@ function getRoleLabel(role?: string | null) {
   if (role === "company_admin") return "Firma Yöneticisi";
   if (role === "operator") return "Operatör";
   if (role === "training_user") return "Eğitim Kullanıcısı";
+  if (role === "demo_user") return "Demo Kullanıcı";
   return role || "-";
 }
 
@@ -114,6 +115,7 @@ function getRoleDescription(role?: string | null, appUserType?: string | null) {
   if (role === "company_admin") return "Firma bazlı yönetim yetkisi";
   if (role === "operator") return "Operasyon / sınırlı erişim";
   if (role === "training_user") return "Eğitim portal kullanıcısı";
+  if (role === "demo_user") return "Satış öncesi demo / salt okunur kullanıcı";
   return "Rol tanımı yok";
 }
 
@@ -608,6 +610,11 @@ firms: Array.isArray(u.firms)
         alert("Şifre zorunlu.");
         return;
       }
+
+      if (formRole === "demo_user" && !formCompanyId) {
+  alert("Demo kullanıcı için demo firma seçilmelidir.");
+  return;
+}
 
       setSavingUser(true);
 
@@ -1493,9 +1500,29 @@ firms: Array.isArray(u.firms)
                     }}
                   >
                     <option value="operator">Operatör</option>
-                    <option value="company_admin">Firma Yöneticisi</option>
-                    <option value="super_admin">Süper Admin</option>
+<option value="company_admin">Firma Yöneticisi</option>
+<option value="super_admin">Süper Admin</option>
+<option value="training_user">Eğitim Kullanıcısı</option>
+<option value="demo_user">🎯 Demo Kullanıcı</option>
                   </select>
+                  {formRole === "demo_user" && (
+  <div
+    style={{
+      marginTop: 8,
+      padding: 10,
+      borderRadius: 10,
+      background: "#fff7ed",
+      border: "1px solid #fed7aa",
+      color: "#9a3412",
+      fontSize: 12,
+      fontWeight: 700,
+      lineHeight: 1.5,
+    }}
+  >
+    🎯 Demo kullanıcı sadece seçilen demo firmayı görüntüler. Kayıt ekleme,
+    düzenleme, silme ve doküman indirme yetkisi verilmez.
+  </div>
+)}
                 </div>
 
                 <div>

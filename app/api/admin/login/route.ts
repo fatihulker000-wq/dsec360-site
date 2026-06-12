@@ -9,6 +9,7 @@ type LoginUserRow = {
   full_name: string | null;
   email: string | null;
   password: string | null;
+  password_hash?: string | null;
   role: string | null;
   company_id: string | null;
   is_active: boolean | null;
@@ -18,9 +19,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const email = String(body?.email ?? "")
-      .trim()
-      .toLowerCase();
+    const email = String(body?.email ?? "").trim().toLowerCase();
     const password = String(body?.password ?? "").trim();
 
     if (!email || !password) {
@@ -41,9 +40,9 @@ export async function POST(request: Request) {
 
     const { data: adminUser, error } = await supabase
       .from("users")
-      .select("id, full_name, email, password, role, company_id, is_active")
+      .select("id, full_name, email, password, password_hash, role, company_id, is_active")
       .ilike("email", email)
-      .in("role", ["super_admin", "company_admin"])
+      .in("role", ["super_admin", "company_admin", "demo_user"])
       .maybeSingle<LoginUserRow>();
 
     if (error) {
@@ -68,7 +67,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const dbPassword = String(adminUser.password ?? "").trim();
+    const dbPassword = String(
+      adminUser.password || adminUser.password_hash || ""
+    ).trim();
 
     if (!dbPassword) {
       return NextResponse.json(
@@ -78,10 +79,7 @@ export async function POST(request: Request) {
     }
 
     if (password !== dbPassword) {
-      return NextResponse.json(
-        { error: "Hatalı şifre." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Hatalı şifre." }, { status: 401 });
     }
 
     const secure = process.env.NODE_ENV === "production";
@@ -92,15 +90,18 @@ export async function POST(request: Request) {
     const userId = String(adminUser.id);
     const userEmail = String(adminUser.email ?? email).trim().toLowerCase();
     const companyId = String(adminUser.company_id ?? "").trim();
+    const isDemo = roleValue === "demo_user";
 
     const response = NextResponse.json({
       success: true,
       role: roleValue,
+      is_demo: isDemo,
       user: {
         id: userId,
         full_name: String(adminUser.full_name ?? "Kullanıcı"),
         email: userEmail,
         company_id: companyId || null,
+        is_demo: isDemo,
       },
     });
 
@@ -159,6 +160,15 @@ export async function POST(request: Request) {
     });
 
     response.cookies.set("dsec_company_id", companyId || "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure,
+      domain: cookieDomain,
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
+
+    response.cookies.set("dsec_is_demo", isDemo ? "true" : "false", {
       httpOnly: true,
       sameSite: "lax",
       secure,

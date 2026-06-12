@@ -1,104 +1,43 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-function redirectTo(request: NextRequest, path: string) {
-  return NextResponse.redirect(new URL(path, request.url));
-}
+const WRITE_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+const DEMO_ALLOWED_PATHS = [
+  "/api/admin/login",
+  "/api/admin/logout",
+  "/api/admin/me",
+];
 
-  const isAdminPage = pathname.startsWith("/admin");
-  const isAdminPublicPage =
-  pathname === "/admin/login" ||
-  pathname === "/admin/forgot-password" ||
-  pathname === "/admin/reset-password";
+export function middleware(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+  const method = req.method.toUpperCase();
 
+  const role =
+    req.cookies.get("dsec_admin_role")?.value ||
+    req.cookies.get("dsec_user_role")?.value ||
+    "";
 
-  const isPanelPage = pathname.startsWith("/panel");
-  const isPortalTrainingPage = pathname.startsWith("/portal/training");
-  const isLoginPage = pathname === "/login";
+  const isDemoCookie = req.cookies.get("dsec_is_demo")?.value === "true";
+  const isDemo = role === "demo_user" || isDemoCookie;
 
-  const adminAuthCookie = request.cookies.get("dsec_admin_auth")?.value;
-  const adminRoleCookie = request.cookies.get("dsec_admin_role")?.value;
+  const isApi = pathname.startsWith("/api/");
+  const isWrite = WRITE_METHODS.includes(method);
+  const isAllowedPath = DEMO_ALLOWED_PATHS.some((p) => pathname.startsWith(p));
 
-  const userAuthCookie = request.cookies.get("dsec_user_auth")?.value;
-  const userRoleCookie = request.cookies.get("dsec_user_role")?.value;
-  const companyIdCookie = request.cookies.get("dsec_company_id")?.value;
-
-  const isAllowedAdminRole =
-    adminRoleCookie === "super_admin" || adminRoleCookie === "company_admin";
-
-  const isAllowedPanelRole =
-    userRoleCookie === "company_admin" ||
-    userRoleCookie === "operator" ||
-    userRoleCookie === "super_admin";
-
-  const isAllowedPortalRole =
-    userRoleCookie === "training_user" ||
-    userRoleCookie === "company_admin" ||
-    userRoleCookie === "operator" ||
-    userRoleCookie === "super_admin";
-
-  // ADMIN
-  if (isAdminPage) {
-    if (isAdminPublicPage) {
-      if (adminAuthCookie === "ok" && isAllowedAdminRole) {
-        return redirectTo(request, "/admin/dashboard");
-      }
-
-      return NextResponse.next();
-    }
-
-    if (adminAuthCookie === "ok" && isAllowedAdminRole) {
-      return NextResponse.next();
-    }
-
-    return redirectTo(request, "/admin/login");
-  }
-
-  // USER LOGIN
-  if (isLoginPage) {
-    return NextResponse.next();
-  }
-
-  // PANEL
-  if (isPanelPage) {
-    if (userAuthCookie !== "ok") {
-      return redirectTo(request, "/login");
-    }
-
-    if (!companyIdCookie) {
-      return redirectTo(request, "/login");
-    }
-
-    if (isAllowedPanelRole) {
-      return NextResponse.next();
-    }
-
-    return redirectTo(request, "/login");
-  }
-
-  // TRAINING PORTAL
-  if (isPortalTrainingPage) {
-    if (userAuthCookie !== "ok") {
-      return redirectTo(request, "/login");
-    }
-
-    if (!companyIdCookie) {
-      return redirectTo(request, "/login");
-    }
-
-    if (isAllowedPortalRole) {
-      return NextResponse.next();
-    }
-
-    return redirectTo(request, "/login");
+  if (isDemo && isApi && isWrite && !isAllowedPath) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Demo sürümünde kayıt oluşturma, güncelleme, silme ve indirme işlemleri kapalıdır.",
+      },
+      { status: 403 }
+    );
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/panel/:path*", "/portal/training/:path*", "/login"],
+  matcher: ["/api/:path*"],
 };

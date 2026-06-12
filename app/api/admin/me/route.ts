@@ -21,11 +21,14 @@ export async function GET() {
     const adminRole = String(cookieStore.get("dsec_admin_role")?.value || "").trim();
     const userId = String(cookieStore.get("dsec_user_id")?.value || "").trim();
     const companyIdFromCookie = String(cookieStore.get("dsec_company_id")?.value || "").trim();
+    const isDemoCookie = String(cookieStore.get("dsec_is_demo")?.value || "").trim() === "true";
 
     if (
       adminAuth !== "ok" ||
       !userId ||
-      (adminRole !== "super_admin" && adminRole !== "company_admin")
+      (adminRole !== "super_admin" &&
+        adminRole !== "company_admin" &&
+        adminRole !== "demo_user")
     ) {
       return NextResponse.json(
         { success: false, error: "Yetkisiz erişim." },
@@ -73,10 +76,11 @@ export async function GET() {
     }
 
     const companyId = String(data.company_id || companyIdFromCookie || "").trim();
+    const isDemo = dbRole === "demo_user" || isDemoCookie;
 
-    if (adminRole === "company_admin" && !companyId) {
+    if ((adminRole === "company_admin" || adminRole === "demo_user") && !companyId) {
       return NextResponse.json(
-        { success: false, error: "Firma admini için firma bilgisi bulunamadı." },
+        { success: false, error: "Kullanıcı için firma bilgisi bulunamadı." },
         { status: 403 }
       );
     }
@@ -87,10 +91,11 @@ export async function GET() {
         id: String(data.id || "").trim(),
         full_name: String(data.full_name || "").trim(),
         email: String(data.email || "").trim().toLowerCase(),
-        role: adminRole as "super_admin" | "company_admin",
+        role: adminRole as "super_admin" | "company_admin" | "demo_user",
         company_id: companyId,
         is_super_admin: adminRole === "super_admin",
         is_company_admin: adminRole === "company_admin",
+        is_demo: isDemo,
       },
     });
   } catch (error) {
