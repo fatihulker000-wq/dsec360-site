@@ -663,30 +663,28 @@ async function seedAccidents(
 
   const rowsToInsert = demoAccidents
     .filter((x) => !existingTitles.has(x.title.trim().toLowerCase()))
-    .map((x, index) => ({
-      web_firm_id: firmId,
-      firm_id: null,
-      employee_id: null,
-      event_type: x.event_type,
-      event_date: Date.now() - (index + 2) * 86400000,
-      title: x.title,
-      description: x.description,
-      location: x.location,
-      severity: x.severity,
-      lost_work_days: x.lost_work_days,
-      employee_name: x.employee_name,
-      department: x.department,
-      shift: x.shift,
-      injury_body_part: x.injury_body_part,
-      injury_type: x.injury_type,
-      root_cause_category: x.root_cause_category,
-      event_hour: "10:30",
-      event_week_day: "Pazartesi",
-      is_active: 1,
-      is_deleted: 0,
-      source: "DEMO",
-       
-    }));
+    .map((x) => ({
+  web_firm_id: firmId,
+  firm_id: null,
+  employee_id: null,
+  event_type: x.event_type,
+  title: x.title,
+  description: x.description,
+  location: x.location,
+  severity: x.severity,
+  lost_work_days: x.lost_work_days,
+  employee_name: x.employee_name,
+  department: x.department,
+  shift: x.shift,
+  injury_body_part: x.injury_body_part,
+  injury_type: x.injury_type,
+  root_cause_category: x.root_cause_category,
+  event_hour: "10:30",
+  event_week_day: "Pazartesi",
+  is_active: 1,
+  is_deleted: 0,
+  source: "DEMO",
+}));
 
   if (rowsToInsert.length === 0) {
     return {
