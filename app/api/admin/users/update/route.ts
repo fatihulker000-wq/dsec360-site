@@ -65,12 +65,12 @@ export async function POST(req: NextRequest) {
   "company_admin",
   "super_admin",
   "training_user",
+  "demo_user",
 ];
 
-// 🔴 TRAINING USER = FİRMA ZORUNLU
-if (role === "training_user" && !company_id) {
+if ((role === "training_user" || role === "demo_user") && !company_id) {
   return NextResponse.json(
-    { error: "Eğitim kullanıcısı için firma zorunludur." },
+    { error: "Bu kullanıcı tipi için firma zorunludur." },
     { status: 400 }
   );
 }
@@ -79,12 +79,7 @@ if (role === "training_user" && !company_id) {
       return NextResponse.json({ error: "Geçersiz rol." }, { status: 400 });
     }
 
-    if (role === "training_user" && !company_id) {
-  return NextResponse.json(
-    { error: "Eğitim katılımcısı için firma zorunludur." },
-    { status: 400 }
-  );
-}
+    
     const supabase = getSupabase();
 
     const { data: emailOwner, error: emailOwnerError } = await supabase
