@@ -74,6 +74,7 @@ export default function AdminCompaniesPage() {
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [seedingDemo, setSeedingDemo] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
@@ -373,6 +374,50 @@ const [newCompany, setNewCompany] = useState({
       setSaving(false);
     }
   };
+
+const seedDemoData = async () => {
+  const ok = window.confirm(
+    "Demo firma ve örnek çalışan verileri oluşturulsun mu?"
+  );
+
+  if (!ok) return;
+
+  try {
+    setSeedingDemo(true);
+
+    const res = await fetch("/api/admin/demo/seed", {
+      method: "POST",
+      credentials: "include",
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (res.status === 401) {
+      window.location.href = "/admin/login";
+      return;
+    }
+
+    if (!res.ok) {
+      alert(json?.error || "Demo verileri oluşturulamadı.");
+      return;
+    }
+
+    alert(
+      `Demo verileri oluşturuldu.\nFirma: ${
+        json?.company?.name || "Demo Firma"
+      }\nEklenen çalışan: ${json?.employees?.inserted ?? 0}\nAtlanan çalışan: ${
+        json?.employees?.skipped ?? 0
+      }`
+    );
+
+    await loadCompanies();
+  } catch (err) {
+    console.error(err);
+    alert("Demo verileri oluşturulamadı.");
+  } finally {
+    setSeedingDemo(false);
+  }
+};
 
   return (
     <main
@@ -701,6 +746,24 @@ const [newCompany, setNewCompany] = useState({
           </div>
 
           <div style={cardStyle()}>
+            <button
+  type="button"
+  onClick={seedDemoData}
+  disabled={seedingDemo}
+  style={{
+    border: "none",
+    borderRadius: 12,
+    padding: "12px 16px",
+    background: "#111827",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: seedingDemo ? "not-allowed" : "pointer",
+    width: "100%",
+    marginBottom: 14,
+  }}
+>
+  {seedingDemo ? "Demo Verileri Oluşturuluyor..." : "🚀 Demo Verilerini Oluştur"}
+</button>
             <div
               style={{
                 fontSize: 14,
