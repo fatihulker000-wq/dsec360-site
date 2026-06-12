@@ -492,52 +492,32 @@ async function seedTrainingAssignments(
   firmId: string,
   trainings: Array<{ id: string; title: string | null }>
 ) {
-  const { data: employees, error: employeesError } = await supabase
-    .from("employees")
-    .select("id, full_name")
-    .eq("firm_id", firmId)
-    .eq("active", true);
-
-  if (employeesError) throw new Error(employeesError.message);
-
-  const employeeIds = (employees || []).map((e) => String(e.id)).filter(Boolean);
-
-  if (employeeIds.length === 0 || trainings.length === 0) {
-    return {
-      inserted: 0,
-      skipped: 0,
-    };
-  }
-
   const { data: users, error: usersError } = await supabase
     .from("users")
-    .select("id, employee_id")
-    .in("employee_id", employeeIds);
+    .select("id, employee_id, company_id, role")
+    .eq("company_id", firmId)
+    .eq("role", "training_user");
 
   if (usersError) throw new Error(usersError.message);
 
   const linkedUsers = (users || [])
-    .filter((u) => u.id && u.employee_id)
-    .map((u) => ({
-      user_id: String(u.id),
-      employee_id: String(u.employee_id),
-    }));
+    .filter((u) => u.id)
+    .map((u) => String(u.id));
 
-  if (linkedUsers.length === 0) {
+  const trainingIds = trainings.map((t) => String(t.id)).filter(Boolean);
+
+  if (linkedUsers.length === 0 || trainingIds.length === 0) {
     return {
       inserted: 0,
       skipped: 0,
-      note: "Demo çalışanlara bağlı eğitim kullanıcısı bulunamadı.",
+      note: "Training user veya eğitim bulunamadı.",
     };
   }
-
-  const userIds = linkedUsers.map((u) => u.user_id);
-  const trainingIds = trainings.map((t) => String(t.id)).filter(Boolean);
 
   const { data: existingAssignments, error: existingError } = await supabase
     .from("training_assignments")
     .select("user_id, training_id")
-    .in("user_id", userIds)
+    .in("user_id", linkedUsers)
     .in("training_id", trainingIds);
 
   if (existingError) throw new Error(existingError.message);
@@ -554,32 +534,17 @@ async function seedTrainingAssignments(
     user_id: string;
     training_id: string;
     status: string;
-    watch_completed: boolean;
-    final_exam_passed: boolean;
-    assigned_at: string;
-    completed_at: string | null;
   }> = [];
 
-  linkedUsers.forEach((user, userIndex) => {
+  linkedUsers.forEach((userId, userIndex) => {
     trainingIds.forEach((trainingId, trainingIndex) => {
-      const key = `${user.user_id}::${trainingId}`;
+      const key = `${userId}::${trainingId}`;
       if (existingSet.has(key)) return;
 
-      const status = statuses[(userIndex + trainingIndex) % statuses.length];
-      const isCompleted = status === "completed";
-
       rowsToInsert.push({
-        user_id: user.user_id,
+        user_id: userId,
         training_id: trainingId,
-        status,
-        watch_completed: isCompleted,
-        final_exam_passed: isCompleted,
-        assigned_at: new Date(
-          Date.now() - (trainingIndex + 1) * 86400000
-        ).toISOString(),
-        completed_at: isCompleted
-          ? new Date(Date.now() - trainingIndex * 43200000).toISOString()
-          : null,
+        status: statuses[(userIndex + trainingIndex) % statuses.length],
       });
     });
   });
