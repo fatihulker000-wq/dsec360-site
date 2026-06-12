@@ -233,6 +233,84 @@ const demoTrainings = [
   },
 ];
 
+const demoAccidents = [
+  {
+    event_type: "İş Kazası",
+    title: "Forklift manevrası sırasında ayak ezilmesi",
+    description:
+      "Depo alanında forklift manevrası sırasında yaya yolu ihlali nedeniyle çalışanın sağ ayağında ezilme meydana gelmiştir.",
+    location: "Ana Depo - Sevkiyat Alanı",
+    severity: 4,
+    lost_work_days: 3,
+    employee_name: "Mehmet Kaya",
+    department: "Depo Operasyon",
+    shift: "Gündüz",
+    injury_body_part: "Sağ Ayak",
+    injury_type: "Ezilme",
+    root_cause_category: "Yaya-forklift trafik ayrımı yetersizliği",
+  },
+  {
+    event_type: "İş Kazası",
+    title: "Elle taşıma sırasında bel zorlanması",
+    description:
+      "Ağır kolinin manuel kaldırılması sırasında çalışanda bel zorlanması oluşmuştur.",
+    location: "Paketleme Alanı",
+    severity: 3,
+    lost_work_days: 1,
+    employee_name: "Can Özdemir",
+    department: "Paketleme",
+    shift: "Gündüz",
+    injury_body_part: "Bel",
+    injury_type: "Kas zorlanması",
+    root_cause_category: "Ergonomi ve elle taşıma kurallarına uyulmaması",
+  },
+  {
+    event_type: "Ramak Kala",
+    title: "Raf üzerinden malzeme düşmesi",
+    description:
+      "Üst rafta dengesiz istiflenen koli zemine düşmüş, çalışan yaralanmadan olay atlatılmıştır.",
+    location: "Raflı Depo Alanı",
+    severity: 2,
+    lost_work_days: 0,
+    employee_name: "Ahmet Yılmaz",
+    department: "Depo",
+    shift: "Gündüz",
+    injury_body_part: "",
+    injury_type: "",
+    root_cause_category: "İstifleme kurallarına uyulmaması",
+  },
+  {
+    event_type: "Ramak Kala",
+    title: "Elektrik panosu önünde uygunsuz malzeme birikimi",
+    description:
+      "Elektrik panosu önünde palet ve koli biriktiği tespit edilmiş, acil müdahale alanı kapatılmadan düzeltilmiştir.",
+    location: "Bakım Alanı",
+    severity: 2,
+    lost_work_days: 0,
+    employee_name: "Murat Şahin",
+    department: "Bakım / Depo",
+    shift: "Akşam",
+    injury_body_part: "",
+    injury_type: "",
+    root_cause_category: "Elektrik güvenliği ve saha düzeni eksikliği",
+  },
+  {
+    event_type: "Olay Bildirimi",
+    title: "Acil çıkış kapısı önünde geçici engel",
+    description:
+      "Acil çıkış kapısı önünde geçici malzeme bırakıldığı görülmüş, alan boşaltılmıştır.",
+    location: "Acil Çıkış Koridoru",
+    severity: 1,
+    lost_work_days: 0,
+    employee_name: "Zeynep Koç",
+    department: "İdari İşler",
+    shift: "Gündüz",
+    injury_body_part: "",
+    injury_type: "",
+    root_cause_category: "Acil durum yollarının kontrol eksikliği",
+  },
+];
+
 async function ensureDemoCompany(supabase: ReturnType<typeof getSupabase>) {
   const { data: existingList, error: existingError } = await supabase
     .from("companies")
@@ -568,6 +646,69 @@ async function seedTrainingAssignments(
   };
 }
 
+async function seedAccidents(
+  supabase: ReturnType<typeof getSupabase>,
+  firmId: string
+) {
+  const { data: existing, error: existingError } = await supabase
+    .from("accident_records")
+    .select("id, title")
+    .eq("web_firm_id", firmId);
+
+  if (existingError) throw new Error(existingError.message);
+
+  const existingTitles = new Set(
+    (existing || []).map((x) => String(x.title || "").trim().toLowerCase())
+  );
+
+  const rowsToInsert = demoAccidents
+    .filter((x) => !existingTitles.has(x.title.trim().toLowerCase()))
+    .map((x, index) => ({
+      web_firm_id: firmId,
+      firm_id: null,
+      employee_id: null,
+      event_type: x.event_type,
+      event_date: new Date(Date.now() - (index + 2) * 86400000).toISOString(),
+      title: x.title,
+      description: x.description,
+      location: x.location,
+      severity: x.severity,
+      lost_work_days: x.lost_work_days,
+      employee_name: x.employee_name,
+      department: x.department,
+      shift: x.shift,
+      injury_body_part: x.injury_body_part,
+      injury_type: x.injury_type,
+      root_cause_category: x.root_cause_category,
+      event_hour: "10:30",
+      event_week_day: "Pazartesi",
+      is_active: 1,
+      is_deleted: 0,
+      source: "DEMO",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      created_at_server: new Date().toISOString(),
+    }));
+
+  if (rowsToInsert.length === 0) {
+    return {
+      inserted: 0,
+      skipped: demoAccidents.length,
+    };
+  }
+
+  const { error: insertError } = await supabase
+    .from("accident_records")
+    .insert(rowsToInsert);
+
+  if (insertError) throw new Error(insertError.message);
+
+  return {
+    inserted: rowsToInsert.length,
+    skipped: demoAccidents.length - rowsToInsert.length,
+  };
+}
+
 export async function POST() {
   try {
     const allowed = await checkSuperAdmin();
@@ -595,15 +736,21 @@ export async function POST() {
   trainingsResult.trainings
 );
 
+const accidentsResult = await seedAccidents(
+  supabase,
+  String(company.id)
+);
+
     return NextResponse.json({
-      success: true,
-      message: "Demo firma, çalışan ve eğitim verileri oluşturuldu.",
-      company,
-      employees: employeesResult,
-trainingUsers: trainingUsersResult,
-trainings: trainingsResult,
-assignments: assignmentsResult,
-    });
+  success: true,
+  message: "Demo firma, çalışan ve eğitim verileri oluşturuldu.",
+  company,
+  employees: employeesResult,
+  trainingUsers: trainingUsersResult,
+  trainings: trainingsResult,
+  assignments: assignmentsResult,
+  accidents: accidentsResult,
+});
   } catch (error: any) {
     console.error("demo seed error:", error);
 
