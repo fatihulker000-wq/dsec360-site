@@ -178,10 +178,29 @@ const { data: usersData, error: usersError } = await usersQuery;
 
     const participantIds = participants.map((p) => p.id);
 
-    const { data: trainingsData, error: trainingsError } = await supabase
-      .from("trainings")
-      .select("id, title, type, duration_minutes")
-      .order("title", { ascending: true });
+    let assignedTrainingIds: string[] = [];
+
+if (participantIds.length > 0) {
+  const { data: assignedRows } = await supabase
+    .from("training_assignments")
+    .select("training_id")
+    .in("user_id", participantIds);
+
+  assignedTrainingIds = Array.from(
+    new Set((assignedRows || []).map((r) => String(r.training_id)).filter(Boolean))
+  );
+}
+
+let trainingsQuery = supabase
+  .from("trainings")
+  .select("id, title, type, duration_minutes")
+  .order("title", { ascending: true });
+
+if (requestedCompanyId !== "ALL" && assignedTrainingIds.length > 0) {
+  trainingsQuery = trainingsQuery.in("id", assignedTrainingIds);
+}
+
+const { data: trainingsData, error: trainingsError } = await trainingsQuery;
 
     if (trainingsError) {
       return NextResponse.json(
@@ -241,9 +260,11 @@ function resolveTrainingStatus(a: AssignmentRow) {
   if (isAppRecord) return "App Kaydı";
 
   const isCompleted =
-    a.status === "completed" &&
-    a.watch_completed === true &&
-    a.final_exam_passed === true;
+  a.status === "completed" &&
+  (
+    (a.watch_completed === true && a.final_exam_passed === true) ||
+    (a.watch_completed !== false && a.final_exam_passed !== false)
+  );
 
   if (isCompleted) return "Tamamlandı";
   if (a.status === "in_progress") return "Devam Ediyor";
