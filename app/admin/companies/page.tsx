@@ -96,6 +96,7 @@ const [editingIsActive, setEditingIsActive] = useState(true);
 
 const [detailCompany, setDetailCompany] = useState<CompanyRow | null>(null);
 const [showDetailModal, setShowDetailModal] = useState(false);
+const [isMobile, setIsMobile] = useState(false);
 
 const [newCompany, setNewCompany] = useState({
   name: "",
@@ -150,6 +151,20 @@ const [newCompany, setNewCompany] = useState({
   useEffect(() => {
     void loadCompanies();
   }, []);
+
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const media = window.matchMedia("(max-width: 900px)");
+
+  const apply = () => setIsMobile(media.matches);
+
+  apply();
+
+  media.addEventListener?.("change", apply);
+
+  return () => media.removeEventListener?.("change", apply);
+}, []);
 
   const filteredCompanies = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -435,7 +450,7 @@ const seedDemoData = async () => {
             color: "#fff",
             marginBottom: 20,
             padding: "clamp(16px, 2.4vw, 24px)",
-            borderRadius: 24,
+            borderRadius: isMobile ? 0 : 24,
           }}
         >
           <h1
@@ -1286,7 +1301,7 @@ const seedDemoData = async () => {
     gap: 8,
     flexWrap: "wrap",
     width: "100%",
-    maxWidth: 320,
+maxWidth: isMobile ? "100%" : 320,
     justifyContent: "flex-start",
   }}
 >
@@ -1300,8 +1315,8 @@ const seedDemoData = async () => {
       color: "#fff",
       fontWeight: 800,
       cursor: "pointer",
-      flex: 1,
-      minWidth: 96,
+      flex: isMobile ? "1 1 100%" : 1,
+minWidth: isMobile ? "100%" : 96,
     }}
   >
     Detay
@@ -1317,8 +1332,8 @@ const seedDemoData = async () => {
       color: "#fff",
       fontWeight: 800,
       cursor: "pointer",
-      flex: 1,
-      minWidth: 96,
+      flex: isMobile ? "1 1 100%" : 1,
+minWidth: isMobile ? "100%" : 96,
     }}
   >
     Düzenle
@@ -1334,8 +1349,8 @@ const seedDemoData = async () => {
       color: "#fff",
       fontWeight: 800,
       cursor: "pointer",
-      flex: 1,
-      minWidth: 96,
+      flex: isMobile ? "1 1 100%" : 1,
+minWidth: isMobile ? "100%" : 96,
     }}
   >
     Sil
@@ -1368,11 +1383,11 @@ const seedDemoData = async () => {
       onClick={(e) => e.stopPropagation()}
       style={{
         width: "100%",
-        maxWidth: 760,
-        maxHeight: "90vh",
+        maxWidth: isMobile ? "100%" : 760,
+        maxHeight: isMobile ? "100vh" : "90vh",
         overflowY: "auto",
         background: "#fff",
-        borderRadius: 24,
+        borderRadius: isMobile ? 0 : 24,
         boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
         border: `1px solid ${BRAND.border}`,
       }}

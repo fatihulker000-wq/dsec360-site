@@ -39,6 +39,8 @@ export async function POST(req: NextRequest) {
     const role = String(body?.role || "").trim();
     const company_id = String(body?.company_id || "").trim();
     const is_active = Boolean(body?.is_active);
+    const access_type = String(body?.access_type || "WEB_ONLY").trim();
+const app_user_type = String(body?.app_user_type || "").trim();
 
     if (!userId) {
       return NextResponse.json({ error: "userId zorunlu." }, { status: 400 });
@@ -52,7 +54,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email zorunlu." }, { status: 400 });
     }
 
-  const allowedRoles = ["operator", "company_admin", "super_admin", "training_user"];
+  const allowedRoles = [
+  "operator",
+  "company_admin",
+  "super_admin",
+  "training_user",
+  "demo_user",
+];
 
   if (role === "training_user" && !company_id) {
   return NextResponse.json(
@@ -64,6 +72,19 @@ export async function POST(req: NextRequest) {
     if (!allowedRoles.includes(role)) {
       return NextResponse.json({ error: "Geçersiz rol." }, { status: 400 });
     }
+
+    const allowedAccessTypes = ["WEB_ONLY", "APP_ONLY", "WEB_AND_APP"];
+
+if (!allowedAccessTypes.includes(access_type)) {
+  return NextResponse.json({ error: "Geçersiz kullanıcı erişim tipi." }, { status: 400 });
+}
+
+if ((access_type === "APP_ONLY" || access_type === "WEB_AND_APP") && !app_user_type) {
+  return NextResponse.json(
+    { error: "App kullanıcısı için app kullanıcı tipi zorunludur." },
+    { status: 400 }
+  );
+}
 
     const supabase = getSupabase();
 
@@ -90,12 +111,17 @@ export async function POST(req: NextRequest) {
     }
 
     const payload: Record<string, unknown> = {
-      full_name,
-      email,
-      role,
-      company_id: company_id || null,
-      is_active,
-    };
+  full_name,
+  email,
+  role,
+  access_type,
+  app_user_type:
+    access_type === "APP_ONLY" || access_type === "WEB_AND_APP"
+      ? app_user_type
+      : null,
+  company_id: company_id || null,
+  is_active,
+};
 
     if (password) {
       payload.password_hash = sha256(password);

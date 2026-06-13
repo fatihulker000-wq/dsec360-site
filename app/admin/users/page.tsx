@@ -97,6 +97,35 @@ function getRoleLabel(role?: string | null) {
   return role || "-";
 }
 
+function isWebUser(u: UserRow) {
+  return ["super_admin", "company_admin", "operator", "training_user", "demo_user"].includes(
+    String(u.role || "").trim()
+  );
+}
+
+function isAppUser(u: UserRow) {
+  if (u.app_user_type) return true;
+
+  const modules = u.permission_modules || [];
+  const permissions = u.permissions || [];
+
+  return [...modules, ...permissions].some((p) => {
+    const key = String(p || "").toUpperCase();
+    return (
+      key.startsWith("AI_ISG") ||
+      key.startsWith("CALISANLAR") ||
+      key.startsWith("DASHBOARD") ||
+      key.startsWith("RAPORLAMA") ||
+      key.startsWith("AJANDA") ||
+      key.startsWith("DENETIM") ||
+      key.startsWith("EGITIM") ||
+      key.startsWith("SAGLIK") ||
+      key.startsWith("RISK") ||
+      key.startsWith("CBS")
+    );
+  });
+}
+
 function getAppUserTypeLabel(type?: string | null) {
   if (type === "isg_uzmani") return "İSG Uzmanı";
   if (type === "hekim") return "İşyeri Hekimi";
@@ -227,6 +256,10 @@ export default function AdminUsersPage() {
   const [formRole, setFormRole] = useState("operator");
   const [formCompanyId, setFormCompanyId] = useState("");
   const [formIsActive, setFormIsActive] = useState(true);
+  const [formAccessType, setFormAccessType] = useState("web_app");
+// web_only | app_only | web_app
+
+const [formAppUserType, setFormAppUserType] = useState("isg_uzmani");
 
   const resetForm = () => {
     setFormFullName("");
@@ -235,6 +268,8 @@ export default function AdminUsersPage() {
     setFormRole("operator");
     setFormCompanyId("");
     setFormIsActive(true);
+    setFormAccessType("web_app");
+setFormAppUserType("isg_uzmani");
     setSelectedUser(null);
   };
 
@@ -251,6 +286,15 @@ export default function AdminUsersPage() {
     setFormRole(user.role);
     setFormCompanyId(user.company_id || "");
     setFormIsActive(user.is_active);
+    setFormAppUserType(user.app_user_type || "isg_uzmani");
+
+if (isWebUser(user) && isAppUser(user)) {
+  setFormAccessType("web_app");
+} else if (isAppUser(user)) {
+  setFormAccessType("app_only");
+} else {
+  setFormAccessType("web_only");
+}
     setShowEditModal(true);
   };
 
@@ -625,13 +669,18 @@ firms: Array.isArray(u.firms)
         },
         credentials: "include",
         body: JSON.stringify({
-          full_name: formFullName.trim(),
-          email: formEmail.trim().toLowerCase(),
-          password: formPassword,
-          role: formRole,
-          company_id: formCompanyId || null,
-          is_active: formIsActive,
-        }),
+  full_name: formFullName.trim(),
+  email: formEmail.trim().toLowerCase(),
+  password: formPassword,
+  role: formAccessType === "app_only" ? "operator" : formRole,
+  access_type: formAccessType,
+  app_user_type:
+    formAccessType === "app_only" || formAccessType === "web_app"
+      ? formAppUserType
+      : null,
+  company_id: formCompanyId || null,
+  is_active: formIsActive,
+}),
       });
 
       const json = await res.json();
@@ -678,14 +727,19 @@ firms: Array.isArray(u.firms)
         },
         credentials: "include",
         body: JSON.stringify({
-          userId: selectedUser.id,
-          full_name: formFullName.trim(),
-          email: formEmail.trim().toLowerCase(),
-          password: formPassword.trim() || null,
-          role: formRole,
-          company_id: formCompanyId || null,
-          is_active: formIsActive,
-        }),
+  userId: selectedUser.id,
+  full_name: formFullName.trim(),
+  email: formEmail.trim().toLowerCase(),
+  password: formPassword.trim() || null,
+  role: formAccessType === "app_only" ? "operator" : formRole,
+  access_type: formAccessType,
+  app_user_type:
+    formAccessType === "app_only" || formAccessType === "web_app"
+      ? formAppUserType
+      : null,
+  company_id: formCompanyId || null,
+  is_active: formIsActive,
+}),
       });
 
       const json = await res.json();
@@ -1076,17 +1130,23 @@ firms: Array.isArray(u.firms)
                         {getRoleDescription(u.role, u.app_user_type)}
                       </div>
 
-                      {u.app_user_type ? (
-                        <span style={badgeStyle("#dbeafe", "#93c5fd", "#1d4ed8")}>
-                          App Kullanıcısı
-                        </span>
-                      ) : null}
+                      {isWebUser(u) ? (
+  <span style={badgeStyle("#fef3c7", "#fcd34d", "#92400e")}>
+    Web Kullanıcısı
+  </span>
+) : null}
 
-                      {u.app_user_type ? (
-                        <span style={badgeStyle("#f3e8ff", "#d8b4fe", "#7e22ce")}>
-                          {getAppUserTypeLabel(u.app_user_type)}
-                        </span>
-                      ) : null}
+{isAppUser(u) ? (
+  <span style={badgeStyle("#dbeafe", "#93c5fd", "#1d4ed8")}>
+    App Kullanıcısı
+  </span>
+) : null}
+
+{u.app_user_type ? (
+  <span style={badgeStyle("#f3e8ff", "#d8b4fe", "#7e22ce")}>
+    {getAppUserTypeLabel(u.app_user_type)}
+  </span>
+) : null}
 
                       <span
                         style={
@@ -1476,6 +1536,30 @@ firms: Array.isArray(u.firms)
                   gap: 14,
                 }}
               >
+
+                <div>
+  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8, color: BRAND.text }}>
+    Kullanıcı Erişim Tipi
+  </div>
+
+  <select
+    value={formAccessType}
+    onChange={(e) => setFormAccessType(e.target.value)}
+    style={{
+      width: "100%",
+      padding: "12px 14px",
+      borderRadius: 12,
+      border: `1px solid ${BRAND.border}`,
+      background: "#fff",
+      fontSize: 14,
+    }}
+  >
+    <option value="web_only">Sadece Web Kullanıcısı</option>
+    <option value="app_only">Sadece App Kullanıcısı</option>
+    <option value="web_app">Web + App Kullanıcısı</option>
+  </select>
+</div>
+
                 <div>
                   <div
                     style={{

@@ -122,6 +122,7 @@ export default async function AdminDenetimlerPage({
   searchParams?: Promise<{ type?: string; firm?: string; dofPage?: string; runPage?: string }>;
 }) {
   const sp = await searchParams;
+  const isMobile = false;
   const activeType = String(sp?.type || "ALL").toUpperCase();
   const activeFirm = String(sp?.firm || "ALL");
 
@@ -453,7 +454,7 @@ const topFirmStats = firmOptions
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: 16,
           marginBottom: 24,
         }}
@@ -474,7 +475,7 @@ const topFirmStats = firmOptions
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "1.15fr 1fr 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
           gap: 16,
           marginBottom: 22,
         }}
@@ -559,7 +560,7 @@ const topFirmStats = firmOptions
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
           gap: 16,
           marginBottom: 22,
         }}
@@ -639,7 +640,7 @@ const topFirmStats = firmOptions
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 12,
             padding: 18,
             borderBottom: "1px solid #eef2f7",
@@ -671,7 +672,8 @@ const topFirmStats = firmOptions
                   key={`${a.run_remote_id}-${a.item_title || a.itemTitle}-${index}`}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1.2fr 1.6fr 0.7fr 0.9fr",
+                    gridTemplateColumns:
+  "repeat(auto-fit, minmax(260px, 1fr))",
                     gap: 12,
                     alignItems: "center",
                     padding: 14,
@@ -816,7 +818,9 @@ const topFirmStats = firmOptions
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.3fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.9fr",
+            gridTemplateColumns:
+"repeat(7,minmax(140px,1fr))",
+overflowX: "auto",
             padding: "14px 22px",
             background: "#f8fafc",
             fontWeight: 1000,
@@ -859,7 +863,9 @@ const topFirmStats = firmOptions
                 key={r.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.3fr 0.8fr 0.9fr 0.9fr 0.8fr 0.55fr 1.9fr",
+                  gridTemplateColumns:
+"repeat(7,minmax(140px,1fr))",
+overflowX: "auto",
                   padding: "17px 22px",
                   borderTop: "1px solid #eef2f7",
                   alignItems: "center",
@@ -984,6 +990,20 @@ const topFirmStats = firmOptions
           />
         )}
       </section>
+      <style>{`
+@media (max-width:900px){
+
+main{
+padding:12px !important;
+}
+
+section{
+max-width:100%;
+overflow-x:auto;
+}
+
+}
+`}</style>
     </main>
   );
 }
@@ -1311,5 +1331,6 @@ function FilterPill({
     >
       {label}
     </Link>
+    
   );
 }

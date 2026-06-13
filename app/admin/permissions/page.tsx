@@ -768,6 +768,7 @@ export default function AdminPermissionsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currentAdmin, setCurrentAdmin] = useState<AdminMe | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   const selectedUser = useMemo(
     () => users.find((u) => u.id === selectedUserId) || null,
@@ -894,6 +895,18 @@ const loadCurrentAdmin = async () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const media = window.matchMedia("(max-width: 900px)");
+
+  const apply = () => setIsMobile(media.matches);
+  apply();
+
+  media.addEventListener?.("change", apply);
+  return () => media.removeEventListener?.("change", apply);
+}, []);
 
   useEffect(() => {
   void loadCurrentAdmin();
@@ -1509,7 +1522,7 @@ void savePermissions(selectedUser.id, Array.from(new Set(finalKeys)));
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(280px, 360px) minmax(0, 1fr)",
+            gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 360px) minmax(0, 1fr)",
             gap: 18,
             alignItems: "start",
           }}
@@ -1560,7 +1573,14 @@ void savePermissions(selectedUser.id, Array.from(new Set(finalKeys)));
             {loading ? (
               <div style={{ color: BRAND.muted }}>Yükleniyor...</div>
             ) : (
-              <div style={{ display: "grid", gap: 8, maxHeight: 650, overflowY: "auto" }}>
+              <div
+  style={{
+    display: "grid",
+    gap: 8,
+    maxHeight: isMobile ? 320 : 650,
+    overflowY: "auto",
+  }}
+>
                 {filteredUsers.map((u) => {
                   const active = selectedUserId === u.id;
 
@@ -1629,8 +1649,10 @@ void savePermissions(selectedUser.id, Array.from(new Set(finalKeys)));
                   <div
                     style={{
                       display: "flex",
-                      gap: 8,
-                      flexWrap: "wrap",
+gap: 8,
+flexWrap: isMobile ? "nowrap" : "wrap",
+overflowX: isMobile ? "auto" : "visible",
+paddingBottom: isMobile ? 8 : 0,
                       marginTop: 16,
                     }}
                   >
@@ -1700,8 +1722,10 @@ void savePermissions(selectedUser.id, Array.from(new Set(finalKeys)));
 <div
   style={{
     display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
+gap: 8,
+flexWrap: isMobile ? "nowrap" : "wrap",
+overflowX: isMobile ? "auto" : "visible",
+paddingBottom: isMobile ? 8 : 0,
     marginTop: 12,
   }}
 >
@@ -1744,7 +1768,7 @@ void savePermissions(selectedUser.id, Array.from(new Set(finalKeys)));
                       onChange={(e) => setSelectedModuleKey(e.target.value)}
                       style={{
                         width: "100%",
-                        maxWidth: 420,
+                        maxWidth: isMobile ? "100%" : 420,
                         padding: "12px 14px",
                         borderRadius: 12,
                         border: `1px solid ${BRAND.border}`,
@@ -1859,7 +1883,7 @@ void savePermissions(selectedUser.id, Array.from(new Set(finalKeys)));
                             <div
                               style={{
                                 display: "grid",
-                                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                                gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))",
                                 gap: 8,
                               }}
                             >
@@ -1943,6 +1967,42 @@ void savePermissions(selectedUser.id, Array.from(new Set(finalKeys)));
           </section>
         </div>
       </div>
+      <style jsx global>{`
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  button,
+  input,
+  select {
+    max-width: 100%;
+  }
+
+  @media (max-width: 900px) {
+    main {
+      overflow-x: hidden;
+    }
+
+    section {
+      max-width: 100%;
+    }
+
+    label {
+      min-width: 0;
+    }
+
+    label span {
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    button {
+      white-space: nowrap;
+    }
+  }
+`}</style>
     </main>
   );
 }
