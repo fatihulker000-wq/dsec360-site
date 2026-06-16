@@ -14,39 +14,12 @@ function requiredPresenceClicks(durationSeconds: number) {
 
   let count = 0;
 
-  // V2 kuralı: 6 dakikada bir ekran başı doğrulama
   for (let sec = 360; sec < durationSeconds; sec += 360) {
     count += 1;
   }
 
   return count;
 }
-
-type ActionType = "heartbeat" | "presence" | "complete";
-
-type AssignmentRow = {
-  id: string;
-  user_id: string;
-  training_id: string | null;
-};
-
-type VideoRow = {
-  id: string;
-  training_id: string;
-  duration_seconds: number | null;
-};
-
-type ProgressRow = {
-  id: string;
-  watch_seconds: number | null;
-  max_watched_seconds: number | null;
-  last_position_seconds: number | null;
-  locked_duration_seconds: number | null;
-  presence_clicks: number | null;
-  presence_check_count: number | null;
-  required_presence_clicks: number | null;
-  watch_completed: boolean | null;
-};
 
 export async function POST(request: Request) {
   try {
@@ -61,45 +34,21 @@ export async function POST(request: Request) {
 
     const assignmentId = String(body?.assignmentId || "").trim();
     const videoId = String(body?.videoId || "").trim();
-    const action = String(body?.action || "").trim() as ActionType;
-
-    const currentSecond = Math.max(
-      0,
-      Math.floor(Number(body?.currentSecond || 0))
-    );
-
-    const duration = Math.max(
-      0,
-      Math.floor(Number(body?.duration || 0))
-    );
+    const action = String(body?.action || "").trim();
+    const currentSecond = Math.max(0, Math.floor(Number(body?.currentSecond || 0)));
+    const duration = Math.max(0, Math.floor(Number(body?.duration || 0)));
 
     if (!assignmentId || !videoId || !action) {
-      return NextResponse.json(
-        { error: "assignmentId, videoId ve action gerekli." },
-        { status: 400 }
-      );
-    }
-
-    if (!["heartbeat", "presence", "complete"].includes(action)) {
-      return NextResponse.json(
-        { error: "Geçersiz işlem." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Eksik veri." }, { status: 400 });
     }
 
     const supabase = getSupabase();
 
-    let assignmentQuery = supabase
+    const { data: assignment, error: assignmentError } = await supabase
       .from("training_assignments")
       .select("id, user_id, training_id")
-      .eq("id", assignmentId);
-
-    if (userId !== "admin-1") {
-      assignmentQuery = assignmentQuery.eq("user_id", userId);
-    }
-
-    const { data: assignment, error: assignmentError } =
-      await assignmentQuery.maybeSingle<AssignmentRow>();
+      .eq("id", assignmentId)
+      .maybeSingle();
 
     if (assignmentError || !assignment) {
       return NextResponse.json(
@@ -108,159 +57,113 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: video, error: videoError } = await supabase
-      .from("training_videos")
-      .select("id, training_id, duration_seconds")
-      .eq("id", videoId)
-      .maybeSingle<VideoRow>();
-
-    if (videoError || !video) {
+    if (String(assignment.user_id).trim() !== userId) {
       return NextResponse.json(
-        { error: "Video bulunamadı." },
-        { status: 404 }
-      );
-    }
-
-    if (String(video.training_id) !== String(assignment.training_id)) {
-      return NextResponse.json(
-        { error: "Video bu eğitim atamasına ait değil." },
+        { error: "Bu eğitim bu kullanıcıya ait değil." },
         { status: 403 }
       );
     }
 
-    const lockedDuration =
-      duration > 0
-        ? duration
-        : Math.max(0, Number(video.duration_seconds || 0));
+    const { data: video, error: videoError } = await supabase
+      .from("training_videos")
+      .select("id, training_id, duration_seconds, is_active")
+      .eq("id", videoId)
+      .maybeSingle();
 
-    const requiredClicks = requiredPresenceClicks(lockedDuration);
+    if (videoError || !video) {
+      return NextResponse.json({ error: "Video bulunamadı." }, { status: 404 });
+    }
 
-    const { data: existing, error: existingError } = await supabase
-      .from("training_video_progress")
-      .select(
-        "id, watch_seconds, max_watched_seconds, last_position_seconds, locked_duration_seconds, presence_clicks, presence_check_count, required_presence_clicks, watch_completed"
-      )
-      .eq("assignment_id", assignmentId)
-      .eq("video_id", videoId)
-      .maybeSingle<ProgressRow>();
-
-    if (existingError) {
+    if (String(video.training_id) !== String(assignment.training_id)) {
       return NextResponse.json(
-        { error: "İlerleme kaydı okunamadı." },
-        { status: 500 }
+        { error: "Video bu eğitime ait değil." },
+        { status: 400 }
       );
     }
 
-    const now = new Date().toISOString();
+    const lockedDuration = Math.max(
+      duration,
+      Math.floor(Number(video.duration_seconds || 0))
+    );
 
-    if (!existing) {
-      const { error: insertError } = await supabase
+    const requiredClicks = requiredPresenceClicks(lockedDuration);
+
+    const { data: existing } = await supabase
+      .from("training_video_progress")
+      .select("*")
+      .eq("assignment_id", assignmentId)
+      .eq("video_id", videoId)
+      .maybeSingle();
+
+    const currentPresenceClicks = Math.max(
+      0,
+      Number(existing?.presence_clicks || 0)
+    );
+
+    const nextPresenceClicks =
+      action === "presence" ? currentPresenceClicks + 1 : currentPresenceClicks;
+
+    const shouldComplete =
+      action === "complete" ||
+      (lockedDuration > 0 && currentSecond >= Math.max(0, lockedDuration - 1));
+
+    const progressPayload = {
+      assignment_id: assignmentId,
+      video_id: videoId,
+      watch_seconds: shouldComplete ? lockedDuration : currentSecond,
+      max_watched_seconds: Math.max(
+        Number(existing?.max_watched_seconds || 0),
+        shouldComplete ? lockedDuration : currentSecond
+      ),
+      last_position_seconds: shouldComplete ? lockedDuration : currentSecond,
+      locked_duration_seconds: lockedDuration,
+      presence_clicks: nextPresenceClicks,
+      required_presence_clicks: requiredClicks,
+      presence_check_count: nextPresenceClicks,
+      watch_completed: shouldComplete ? true : existing?.watch_completed === true,
+      watch_completed_at:
+        shouldComplete && !existing?.watch_completed_at
+          ? new Date().toISOString()
+          : existing?.watch_completed_at || null,
+      completed_at:
+        shouldComplete && !existing?.completed_at
+          ? new Date().toISOString()
+          : existing?.completed_at || null,
+    };
+
+    let savedProgress;
+
+    if (existing?.id) {
+      const { data, error } = await supabase
         .from("training_video_progress")
-        .insert({
-          assignment_id: assignmentId,
-          video_id: videoId,
-          watch_seconds: currentSecond,
-          max_watched_seconds: currentSecond,
-          last_position_seconds: currentSecond,
-          locked_duration_seconds: lockedDuration,
-          presence_clicks: action === "presence" ? 1 : 0,
-          presence_check_count: action === "presence" ? 1 : 0,
-          required_presence_clicks: requiredClicks,
-          watch_completed: false,
-          last_presence_check_at: action === "presence" ? now : null,
-        });
+        .update(progressPayload)
+        .eq("id", existing.id)
+        .select()
+        .maybeSingle();
 
-      if (insertError) {
+      if (error) {
         return NextResponse.json(
-          { error: "İlerleme kaydı oluşturulamadı." },
+          { error: "Video ilerleme güncellenemedi.", detail: error.message },
           { status: 500 }
         );
       }
+
+      savedProgress = data;
     } else {
-      const currentWatch = Math.max(0, Number(existing.watch_seconds || 0));
-      const currentMax = Math.max(0, Number(existing.max_watched_seconds || 0));
-      const currentPresence = Math.max(0, Number(existing.presence_clicks || 0));
-      const currentPresenceCheck = Math.max(
-        0,
-        Number(existing.presence_check_count || 0)
-      );
-
-      const newPresence =
-        action === "presence" ? currentPresence + 1 : currentPresence;
-
-      const newPresenceCheck =
-        action === "presence" ? currentPresenceCheck + 1 : currentPresenceCheck;
-
-      const payload: Record<string, unknown> = {
-        watch_seconds: Math.max(currentWatch, currentSecond),
-        max_watched_seconds: Math.max(currentMax, currentSecond),
-        last_position_seconds: Math.max(
-          Number(existing.last_position_seconds || 0),
-          currentSecond
-        ),
-        locked_duration_seconds:
-          Number(existing.locked_duration_seconds || 0) > 0
-            ? Number(existing.locked_duration_seconds || 0)
-            : lockedDuration,
-        presence_clicks: newPresence,
-        presence_check_count: newPresenceCheck,
-        required_presence_clicks: requiredClicks,
-      };
-
-      if (action === "presence") {
-        payload.last_presence_check_at = now;
-      }
-
-      if (action === "complete") {
-        const finalWatch = Math.max(currentWatch, currentMax, currentSecond);
-        const finalLocked =
-          Number(existing.locked_duration_seconds || 0) > 0
-            ? Number(existing.locked_duration_seconds || 0)
-            : lockedDuration;
-
-        const finalRequiredClicks = requiredPresenceClicks(finalLocked);
-
-        if (finalLocked <= 0) {
-          return NextResponse.json(
-            { error: "Video süresi doğrulanamadı." },
-            { status: 400 }
-          );
-        }
-
-        if (finalWatch < finalLocked) {
-          return NextResponse.json(
-            { error: "Video süresi tamamlanmadı." },
-            { status: 400 }
-          );
-        }
-
-        if (newPresence < finalRequiredClicks) {
-          return NextResponse.json(
-            { error: "Ekran başı doğrulama sayısı yetersiz." },
-            { status: 400 }
-          );
-        }
-
-        payload.watch_seconds = finalWatch;
-        payload.max_watched_seconds = finalWatch;
-        payload.last_position_seconds = finalWatch;
-        payload.required_presence_clicks = finalRequiredClicks;
-        payload.watch_completed = true;
-        payload.watch_completed_at = now;
-        payload.completed_at = now;
-      }
-
-      const { error: updateError } = await supabase
+      const { data, error } = await supabase
         .from("training_video_progress")
-        .update(payload)
-        .eq("id", existing.id);
+        .insert(progressPayload)
+        .select()
+        .maybeSingle();
 
-      if (updateError) {
+      if (error) {
         return NextResponse.json(
-          { error: "İlerleme kaydı güncellenemedi." },
+          { error: "Video ilerleme kaydedilemedi.", detail: error.message },
           { status: 500 }
         );
       }
+
+      savedProgress = data;
     }
 
     const { data: allVideos } = await supabase
@@ -270,37 +173,45 @@ export async function POST(request: Request) {
       .eq("is_active", true);
 
     const videoIds = (allVideos || []).map((v) => v.id);
-
-    const { data: completedRows } = await supabase
-      .from("training_video_progress")
-      .select("video_id")
-      .eq("assignment_id", assignmentId)
-      .eq("watch_completed", true)
-      .in("video_id", videoIds);
-
     const totalVideos = videoIds.length;
-    const completedVideos = completedRows?.length || 0;
+
+    let completedVideos = 0;
+
+    if (totalVideos > 0) {
+      const { data: completedRows } = await supabase
+        .from("training_video_progress")
+        .select("video_id")
+        .eq("assignment_id", assignmentId)
+        .eq("watch_completed", true)
+        .in("video_id", videoIds);
+
+      completedVideos = completedRows?.length || 0;
+    }
+
     const chainCompleted = totalVideos > 0 && completedVideos >= totalVideos;
 
     await supabase
       .from("training_assignments")
       .update({
+        status: chainCompleted ? "in_progress" : "in_progress",
+        watch_completed: chainCompleted,
+        video_chain_completed: chainCompleted,
         total_videos: totalVideos,
         completed_videos: completedVideos,
-        video_chain_completed: chainCompleted,
-        watch_completed: chainCompleted,
-        status: chainCompleted ? "in_progress" : "in_progress",
+        watch_seconds: chainCompleted ? lockedDuration : currentSecond,
+        click_count: nextPresenceClicks,
       })
       .eq("id", assignmentId);
 
     return NextResponse.json({
       success: true,
+      progress: savedProgress,
       totalVideos,
       completedVideos,
-      video_chain_completed: chainCompleted,
+      videoChainCompleted: chainCompleted,
     });
   } catch (err) {
-    console.error("video progress route error:", err);
+    console.error("video progress error:", err);
     return NextResponse.json({ error: "Sunucu hatası." }, { status: 500 });
   }
 }
