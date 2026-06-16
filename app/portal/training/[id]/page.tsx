@@ -273,7 +273,7 @@ export default function TrainingDetailPage() {
   };
 
   const fetchVideos = async () => {
-    const res = await fetch(`/api/training/videos/${assignmentId}`, {
+    const res = await fetch(`/api/training/videos?assignmentId=${assignmentId}`, {
       method: "GET",
       cache: "no-store",
       credentials: "include",

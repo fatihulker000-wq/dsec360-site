@@ -43,10 +43,7 @@ type ProgressRow = {
   completed_at: string | null;
 };
 
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
     const userId = cookieStore.get("dsec_user_id")?.value?.trim();
@@ -55,8 +52,8 @@ export async function GET(
       return NextResponse.json({ error: "Kullanıcı yok." }, { status: 401 });
     }
 
-    const { id } = await context.params;
-    const assignmentId = String(id || "").trim();
+    const url = new URL(request.url);
+    const assignmentId = String(url.searchParams.get("assignmentId") || "").trim();
 
     if (!assignmentId) {
       return NextResponse.json(
@@ -87,10 +84,7 @@ export async function GET(
     }
 
     if (!assignment.training_id) {
-      return NextResponse.json({
-        success: true,
-        data: [],
-      });
+      return NextResponse.json({ success: true, data: [] });
     }
 
     const { data: videos, error: videosError } = await supabase
@@ -113,10 +107,7 @@ export async function GET(
     const safeVideos = videos || [];
 
     if (safeVideos.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: [],
-      });
+      return NextResponse.json({ success: true, data: [] });
     }
 
     const videoIds = safeVideos.map((v) => v.id);
@@ -150,12 +141,10 @@ export async function GET(
         return prevProgress?.watch_completed === true;
       });
 
-      const unlocked = index === 0 || previousCompleted;
-
       return {
         ...video,
         progress,
-        unlocked,
+        unlocked: index === 0 || previousCompleted,
       };
     });
 
