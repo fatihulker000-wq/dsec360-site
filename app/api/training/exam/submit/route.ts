@@ -35,6 +35,9 @@ type AssignmentRow = {
   completed_at?: string | null;
   training_repeat_count?: number | null;
   locked_duration_seconds?: number | null;
+  video_chain_completed?: boolean | null;
+  total_videos?: number | null;
+  completed_videos?: number | null;
 };
 
 type QuestionRow = {
@@ -61,7 +64,7 @@ function normalizeType(type?: string | null) {
 function requiredPresenceClicks(durationSeconds: number) {
   if (durationSeconds <= 0) return 0;
   let count = 0;
-  for (let sec = 90; sec < durationSeconds; sec += 90) {
+  for (let sec = 360; sec < durationSeconds; sec += 360) {
     count += 1;
   }
   return count;
@@ -99,7 +102,7 @@ export async function POST(request: Request) {
     const { data: assignmentById, error: assignmentByIdError } = await supabase
       .from("training_assignments")
       .select(
-        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count, completed_at, training_repeat_count, locked_duration_seconds"
+        "id, user_id, training_id, status, watch_completed, pre_exam_completed, pre_exam_score, final_exam_score, final_exam_attempts, final_exam_passed, training_reset_required, watch_seconds, click_count, completed_at, training_repeat_count, locked_duration_seconds , video_chain_completed, total_videos, completed_videos"
       )
       .eq("id", assignmentId)
       .maybeSingle<AssignmentRow>();
@@ -210,11 +213,15 @@ export async function POST(request: Request) {
       }
 
       if (trainingType === "asenkron") {
-        if (assignment.watch_completed !== true) {
+  const chainCompleted =
+    assignment.video_chain_completed === true ||
+    assignment.watch_completed === true;
+
+  if (!chainCompleted) {
           return NextResponse.json(
             {
               error:
-                "Asenkron eğitim kurallara uygun tamamlanmadan final sınavına girilemez.",
+  "Asenkron eğitim kurallara uygun tamamlanmadan final sınavına girilemez. Tüm videolar tamamlanmalıdır.",
             },
             { status: 400 }
           );
@@ -363,6 +370,9 @@ export async function POST(request: Request) {
           max_watched_seconds: 0,
           locked_duration_seconds: 0,
           training_repeat_count: nextRepeatCount,
+          video_chain_completed: false,
+          completed_videos: 0,
+          current_video_order: 1,
         })
         .eq("id", assignmentId);
 

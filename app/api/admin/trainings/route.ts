@@ -24,6 +24,7 @@ type AssignmentAggRow = {
   training_id: string;
   status: "not_started" | "in_progress" | "completed" | null;
   watch_completed?: boolean | null;
+  video_chain_completed?: boolean | null;
   final_exam_passed?: boolean | null;
 };
 
@@ -84,7 +85,7 @@ export async function GET() {
     if (trainingIds.length > 0) {
       const { data: assignments, error: assignmentsError } = await supabase
         .from("training_assignments")
-        .select("training_id, status, watch_completed, final_exam_passed")
+        .select("training_id, status, watch_completed, video_chain_completed, final_exam_passed")
         .in("training_id", trainingIds)
         .returns<AssignmentAggRow[]>();
 
@@ -123,7 +124,7 @@ export async function GET() {
 
 const isCompleted = isOnlineType
   ? row.status === "completed" &&
-    row.watch_completed === true &&
+    (row.video_chain_completed === true || row.watch_completed === true) &&
     row.final_exam_passed === true
   : row.status === "completed";
 
@@ -138,6 +139,62 @@ const isCompleted = isOnlineType
         assignmentMap.set(trainingId, current);
       }
     }
+
+    let videoCountMap = new Map<string, number>();
+let preExamCountMap = new Map<string, number>();
+let finalExamCountMap = new Map<string, number>();
+
+if (trainingIds.length > 0) {
+  const { data: videos, error: videosError } = await supabase
+    .from("training_videos")
+    .select("training_id")
+    .in("training_id", trainingIds)
+    .eq("is_active", true);
+
+  if (videosError) {
+    return NextResponse.json(
+      { error: "Video istatistikleri alınamadı." },
+      { status: 500 }
+    );
+  }
+
+  for (const row of videos || []) {
+    const trainingId = String(row.training_id || "").trim();
+    videoCountMap.set(trainingId, (videoCountMap.get(trainingId) || 0) + 1);
+  }
+
+  const { data: examQuestions, error: examQuestionError } = await supabase
+    .from("training_exam_questions")
+    .select("training_id, exam_type")
+    .in("training_id", trainingIds)
+    .eq("is_active", true);
+
+  if (examQuestionError) {
+    return NextResponse.json(
+      { error: "Sınav istatistikleri alınamadı." },
+      { status: 500 }
+    );
+  }
+
+  for (const row of examQuestions || []) {
+    const trainingId = String(row.training_id || "").trim();
+    const examType = String(row.exam_type || "").trim();
+
+    if (examType === "pre") {
+      preExamCountMap.set(
+        trainingId,
+        (preExamCountMap.get(trainingId) || 0) + 1
+      );
+    }
+
+    if (examType === "final") {
+      finalExamCountMap.set(
+        trainingId,
+        (finalExamCountMap.get(trainingId) || 0) + 1
+      );
+    }
+  }
+}
 
     const normalized = trainingRows.map((training) => {
       const stats = assignmentMap.get(String(training.id)) || {
@@ -158,6 +215,9 @@ const isCompleted = isOnlineType
             : null,
         content_url: (training.content_url || "").trim(),
         topics_text: (training.topics_text || "").trim(),
+        video_count: videoCountMap.get(String(training.id)) || 0,
+        pre_exam_count: preExamCountMap.get(String(training.id)) || 0,
+        final_exam_count: finalExamCountMap.get(String(training.id)) || 0,
         assigned_count: stats.assigned_count,
         not_started_count: stats.not_started_count,
         in_progress_count: stats.in_progress_count,

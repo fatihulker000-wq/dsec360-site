@@ -37,6 +37,9 @@ type GuardState = {
 type TrainingRow = {
   id: string;
   status?: "not_started" | "in_progress" | "completed";
+  video_chain_completed?: boolean | null;
+  total_videos?: number | null;
+  completed_videos?: number | null;
   pre_exam_completed?: boolean | null;
   watch_completed?: boolean | null;
   watch_seconds?: number | null;
@@ -207,7 +210,9 @@ export default function FinalExamPage() {
         setTrainingType(type);
 
         const preExamCompleted = currentTraining.pre_exam_completed === true;
-        const watchCompleted = currentTraining.watch_completed === true;
+        const watchCompleted =
+  currentTraining.video_chain_completed === true ||
+  currentTraining.watch_completed === true;
         const watchSeconds = Number(currentTraining.watch_seconds || 0);
         const clickCount = Number(currentTraining.click_count || 0);
         const status =
@@ -261,7 +266,7 @@ export default function FinalExamPage() {
           setGuardState({
             ok: false,
             message:
-              "Asenkron eğitim tamamlanmadan final sınavına girilemez. Önce videoyu kurallara uygun şekilde tamamlamalısınız.",
+              "Final sınavına geçebilmeniz için eğitim programındaki tüm videoları eksiksiz tamamlamanız gerekmektedir.",
           });
           setGuardChecked(true);
           setLoading(false);
@@ -408,12 +413,16 @@ export default function FinalExamPage() {
         return;
       }
 
-      if (latestType === "asenkron" && latestAssignment.watch_completed !== true) {
-        setError(
-          "Asenkron eğitim tamamlanmadan final sınavına girilemez. Önce videoyu tamamlamalısınız."
-        );
-        return;
-      }
+      const chainCompleted =
+  latestAssignment.video_chain_completed === true ||
+  latestAssignment.watch_completed === true;
+
+if (latestType === "asenkron" && !chainCompleted) {
+  setError(
+    "Asenkron eğitim tamamlanmadan final sınavına girilemez. Önce tüm videoları kurallara uygun şekilde tamamlamalısınız."
+  );
+  return;
+}
 
       const { res, json } = await submitFinalOnce();
 
