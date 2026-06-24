@@ -332,11 +332,11 @@ export default function HomePage() {
 <section className="section section-soft">
   <div className="page-container">
     <div className="section-title-wrap">
-      <h2 className="section-title">D-SEC Ekranlarından Görüntüler</h2>
+      <h2 className="section-title">Gerçek D-SEC360 Ekranları</h2>
       <p className="section-subtitle">
-        Eğitim, denetim, sağlık ve raporlama süreçlerini gerçek ürün ekranları
-        mantığında görünür hale getiren kurumsal arayüz yapısı.
-      </p>
+  Dashboard, eğitim, denetim, sağlık, çalışan ve raporlama ekranlarıyla
+  D-SEC360’ın kurumsal yönetim gücünü yakından inceleyin.
+</p>
     </div>
 
     <div className="product-screen-grid">

@@ -2631,3 +2631,40 @@ div {
     grid-template-columns: 1fr;
   }
 }
+.home-premium-hero {
+  background:
+    radial-gradient(circle at top right, rgba(198, 40, 40, 0.08), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #fffafa 45%, #fff4f5 100%);
+}
+
+.section-light {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%);
+}
+
+.section-soft {
+  background: linear-gradient(180deg, #fff7f8 0%, #ffffff 100%);
+}
+
+.premium-dashboard-card,
+.product-screen-card,
+.card {
+  backdrop-filter: blur(10px);
+}
+
+.premium-hero-title {
+  color: #172033;
+}
+
+.premium-hero-desc {
+  color: #4b5563;
+}
+
+.product-screen-card {
+  border: 1px solid #f1d7dc;
+  box-shadow: 0 18px 50px rgba(120, 20, 35, 0.08);
+}
+
+.product-screen-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 26px 70px rgba(120, 20, 35, 0.14);
+}
