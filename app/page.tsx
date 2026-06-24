@@ -329,6 +329,67 @@ export default function HomePage() {
 </div>
 </section>
 
+<section className="section platform-overview-section">
+  <div className="page-container">
+    <div className="section-title-wrap">
+      <h2 className="section-title">
+        D-SEC360 Platformunda Neler Var?
+      </h2>
+
+      <p className="section-subtitle">
+        Eğitimden denetime, çalışan yönetiminden sağlık ve çevre süreçlerine
+        kadar tüm operasyonlar tek platform altında birleşir.
+      </p>
+    </div>
+
+    <div className="platform-overview-grid">
+
+      <div className="platform-overview-card">
+        <h3>📚 Eğitim Yönetimi</h3>
+        <p>
+          Senkron, asenkron ve online eğitim süreçlerini çalışan bazlı yönetin.
+        </p>
+      </div>
+
+      <div className="platform-overview-card">
+        <h3>🔎 Dijital Denetim</h3>
+        <p>
+          Mobil saha denetimleri, uygunsuzluklar ve DÖF süreçlerini takip edin.
+        </p>
+      </div>
+
+      <div className="platform-overview-card">
+        <h3>❤️ Sağlık Takibi</h3>
+        <p>
+          EK-2, muayene ve çalışan sağlık kayıtlarını merkezi yönetin.
+        </p>
+      </div>
+
+      <div className="platform-overview-card">
+        <h3>👷 Çalışan Yönetimi</h3>
+        <p>
+          Personel bilgileri, eğitim geçmişi ve yetkilendirmeleri tek noktadan yönetin.
+        </p>
+      </div>
+
+      <div className="platform-overview-card">
+        <h3>♻️ ÇBS Süreçleri</h3>
+        <p>
+          Çevre kayıtları, öneri sistemleri ve sürdürülebilirlik süreçlerini takip edin.
+        </p>
+      </div>
+
+      <div className="platform-overview-card">
+        <h3>📊 Yönetim Dashboardları</h3>
+        <p>
+          Üst yönetim için anlık raporlar ve karar destek ekranları oluşturun.
+        </p>
+      </div>
+ 
+    </div>
+  </div>
+</section>
+
 <section className="section section-soft">
   <div className="page-container">
     <div className="section-title-wrap">
@@ -446,36 +507,84 @@ export default function HomePage() {
 
 <section className="section section-light">
   <div className="page-container">
-    <div className="section-title-wrap">
 
-      <h2 className="section-title">Neden D-SEC?</h2>
+    <div className="section-title-wrap">
+      <h2 className="section-title">
+        Kimler İçin Tasarlandı?
+      </h2>
+
       <p className="section-subtitle">
-        Sadece kayıt tutan bir yazılım değil; süreçlerinizi görünür, takip edilebilir ve yönetilebilir hale getiren kurumsal altyapı
+        D-SEC360 farklı sektörlerin ihtiyaçlarına uyum sağlayan esnek yapıya sahiptir.
       </p>
     </div>
 
     <div className="grid-3">
-      <div className="card">
-        <div className="card-icon" />
-        <h3 className="card-title">Tek Platform Mantığı</h3>
-        <p className="card-text">
-          Ayrı Excel dosyaları, dağınık takip yöntemleri ve kopuk süreçler yerine tüm operasyonu tek yapıda toplayın.
+      {targetSectors.map((item) => {
+        const Icon = item.icon;
+
+        return (
+          <div key={item.title} className="card sector-card">
+            <div className="sector-icon">
+              <Icon size={30} />
+            </div>
+
+            <h3 className="card-title">{item.title}</h3>
+
+            <p className="card-text">
+              {item.desc}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+
+  </div>
+</section>
+
+      <section className="section dsec-value-section">
+  <div className="page-container">
+    <div className="section-title-wrap">
+      <h2 className="section-title">D-SEC360 Size Ne Kazandırır?</h2>
+      <p className="section-subtitle">
+        D-SEC360 sadece kayıt tutmaz; İSG süreçlerinizi ölçülebilir, izlenebilir
+        ve yönetilebilir hale getirir.
+      </p>
+    </div>
+
+    <div className="dsec-value-grid">
+      <div className="dsec-value-card">
+        <span>01</span>
+        <h3>Eğitim Takibinde Kontrol</h3>
+        <p>
+          Senkron ve asenkron eğitimleri çalışan bazlı takip edin; eksik,
+          tamamlanan ve geciken eğitimleri tek ekranda görün.
         </p>
       </div>
 
-      <div className="card">
-        <div className="card-icon" />
-        <h3 className="card-title">Gerçek Zamanlı Takip</h3>
-        <p className="card-text">
-          Eğitim, denetim, sağlık ve kayıt akışlarındaki durum değişimlerini daha hızlı görün ve gecikmeleri azaltın.
+      <div className="dsec-value-card">
+        <span>02</span>
+        <h3>Denetim ve DÖF Yönetimi</h3>
+        <p>
+          Saha denetimleri, uygunsuzluklar, aksiyonlar ve kapatma süreçleri
+          dijital olarak kayıt altında ilerler.
         </p>
       </div>
 
-      <div className="card">
-        <div className="card-icon" />
-        <h3 className="card-title">Yönetim İçin Net Sonuç</h3>
-        <p className="card-text">
-          Üst yönetim ve operasyon ekipleri için anlamlı raporlar, özet ekranlar ve takip göstergeleri üretin.
+      <div className="dsec-value-card">
+        <span>03</span>
+        <h3>Sağlık ve EK-2 Takibi</h3>
+        <p>
+          Muayene, sağlık evrakları, periyodik takipler ve çalışan bazlı sağlık
+          kayıtları daha görünür hale gelir.
+        </p>
+      </div>
+
+      <div className="dsec-value-card">
+        <span>04</span>
+        <h3>Yönetim İçin Net Raporlama</h3>
+        <p>
+          Eğitim, denetim, çalışan, sağlık ve ÇBS verileri yönetime uygun
+          özetlerle raporlanır.
         </p>
       </div>
     </div>

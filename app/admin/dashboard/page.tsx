@@ -2,6 +2,32 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  FileDown,
+  RefreshCw,
+  ShieldCheck,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
+
 type Training = {
   id: string;
   title: string;
@@ -750,170 +776,130 @@ const heroRiskHeadline =
     transition: "opacity 0.2s ease",
   }}
 >
-        <div
-          style={{
-            ...cardStyle(),
-            background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
-            color: "#fff",
-            marginBottom: 20,
-            padding: 24,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: isMobile ? "column" : "row",
-              justifyContent: "space-between",
-              gap: 16,
-              alignItems: isMobile ? "stretch" : "flex-start",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ maxWidth: isMobile ? "100%" : 860 }}>
-              <div
-                style={{
-                  ...badgeStyle(
-                    "rgba(255,255,255,0.16)",
-                    "#fff",
-                    "rgba(255,255,255,0.22)"
-                  ),
-                  marginBottom: 12,
-                }}
-              >
-               {adminRole === "company_admin"
-  ? "D-SEC • Firma Admin Dashboard"
-  : "D-SEC • Admin Dashboard"}
-              </div>
+        <section
+  style={{
+    marginBottom: 24,
+    borderRadius: isMobile ? 22 : 30,
+    padding: isMobile ? 20 : 30,
+    background:
+      "linear-gradient(135deg, #4b0d1b 0%, #8f172c 48%, #f97316 100%)",
+    color: "#fff",
+    boxShadow: "0 28px 70px rgba(90,15,31,0.28)",
+    overflow: "hidden",
+  }}
+>
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: isMobile ? "1fr" : "1.4fr 0.6fr",
+      gap: 24,
+      alignItems: "center",
+    }}
+  >
+    <div>
+      <div
+        style={{
+          display: "inline-flex",
+          padding: "8px 14px",
+          borderRadius: 999,
+          background: "rgba(255,255,255,0.14)",
+          border: "1px solid rgba(255,255,255,0.18)",
+          fontWeight: 900,
+          fontSize: 12,
+          marginBottom: 14,
+        }}
+      >
+        D-SEC360 Executive Dashboard
+      </div>
 
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: isMobile ? 28 : 38,
-                  fontWeight: 900,
-                  lineHeight: 1.15,
-                }}
-              >
-                Yönetici & CEO Dashboard
-              </h1>
+      <h1
+        style={{
+          margin: 0,
+          fontSize: isMobile ? 30 : 46,
+          lineHeight: 1.08,
+          fontWeight: 950,
+          letterSpacing: "-1px",
+        }}
+      >
+        Canlı HSE Yönetim Merkezi
+      </h1>
 
-              <p
-                style={{
-                  marginTop: 10,
-                  marginBottom: 0,
-                  color: "rgba(255,255,255,0.92)",
-                  maxWidth: 820,
-                  lineHeight: 1.7,
-                  fontSize: isMobile ? 14 : 16,
-                }}
-              >
-                Eğitim operasyonu, ÇBS yoğunluğu, firma bazlı risk, açık kayıtlar,
-                SLA alarmı ve üst yönetim karar desteği tek ekranda izlenir.
-              </p>
+      <p
+        style={{
+          marginTop: 14,
+          maxWidth: 760,
+          color: "rgba(255,255,255,0.9)",
+          fontSize: isMobile ? 14 : 17,
+          lineHeight: 1.7,
+        }}
+      >
+        Eğitim, ÇBS, firma riski, açık kayıtlar ve yönetim karar desteği tek
+        ekranda izlenir.
+      </p>
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexWrap: "wrap",
-                  marginTop: 16,
-                  alignItems: "center",
-                }}
-              >
-                <span
-                  style={badgeStyle(
-                    "rgba(255,255,255,0.14)",
-                    "#fff",
-                    "rgba(255,255,255,0.20)"
-                  )}
-                >
-                  {loading ? "Veriler Hazırlanıyor" : heroCompletionHeadline}
-                </span>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 10,
+          marginTop: 18,
+        }}
+      >
+        <span style={badgeStyle("rgba(255,255,255,0.16)", "#fff")}>
+          {loading ? "Veriler hazırlanıyor" : heroCompletionHeadline}
+        </span>
 
-                <span
-                  style={badgeStyle(
-                    "rgba(255,255,255,0.14)",
-                    "#fff",
-                    "rgba(255,255,255,0.20)"
-                  )}
-                >
-                  {loading ? "Risk Analizi Yükleniyor" : heroRiskHeadline}
-                </span>
+        <span style={badgeStyle("rgba(255,255,255,0.16)", "#fff")}>
+          Risk: {loading ? "Hesaplanıyor" : heroRiskStatus}
+        </span>
 
-                <span
-                  style={badgeStyle(
-                    "rgba(255,255,255,0.14)",
-                    "#fff",
-                    "rgba(255,255,255,0.20)"
-                  )}
-                >
-                  Toplam Eğitim: {loading ? "..." : heroTotalTrainings}
-                </span>
-              </div>
-            </div>
+        <span style={badgeStyle("rgba(255,255,255,0.16)", "#fff")}>
+          Eğitim: {loading ? "..." : heroTotalTrainings}
+        </span>
+      </div>
+    </div>
 
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                minWidth: isMobile ? "100%" : 240,
-                width: isMobile ? "100%" : "auto",
-              }}
-            >
-              <div
-                style={{
-                  ...badgeStyle(
-                    riskStatus === "KRITIK"
-                      ? "#7f1d1d"
-                      : riskStatus === "ORTA"
-                      ? "#92400e"
-                      : "#166534",
-                    "#ffffff"
-                  ),
-                  fontSize: 13,
-                  padding: "8px 12px",
-                  justifyContent: "center",
-                }}
-              >
-                Risk Durumu: {loading ? "Hesaplanıyor" : heroRiskStatus}
-              </div>
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      <button
+        onClick={exportPDF}
+        style={{
+          border: "none",
+          borderRadius: 16,
+          padding: "14px 18px",
+          background: "#fff",
+          color: BRAND.red,
+          fontWeight: 950,
+          cursor: "pointer",
+        }}
+      >
+        PDF Rapor İndir
+      </button>
 
-              <button
-                onClick={exportPDF}
-                style={{
-                  border: "none",
-                  borderRadius: 14,
-                  padding: "12px 18px",
-                  background: "#fff",
-                  color: BRAND.red,
-                  fontWeight: 900,
-                  cursor: "pointer",
-                  width: isMobile ? "100%" : "auto",
-                }}
-              >
-                PDF İndir
-              </button>
-
-              <button
-                onClick={() => {
-                  void loadDashboard();
-                  void loadCbs();
-                }}
-                style={{
-                  border: "1px solid rgba(255,255,255,0.18)",
-                  borderRadius: 14,
-                  padding: "12px 18px",
-                  background: "rgba(255,255,255,0.10)",
-                  color: "#fff",
-                  fontWeight: 900,
-                  cursor: "pointer",
-                  width: isMobile ? "100%" : "auto",
-                }}
-              >
-                Veriyi Yenile
-              </button>
-            </div>
-          </div>
-        </div>
+      <button
+        onClick={() => {
+          void loadDashboard();
+          void loadCbs();
+        }}
+        style={{
+          border: "1px solid rgba(255,255,255,0.2)",
+          borderRadius: 16,
+          padding: "14px 18px",
+          background: "rgba(255,255,255,0.12)",
+          color: "#fff",
+          fontWeight: 950,
+          cursor: "pointer",
+        }}
+      >
+        Veriyi Yenile
+      </button>
+    </div>
+  </div>
+</section>
 
         <div
           style={{
