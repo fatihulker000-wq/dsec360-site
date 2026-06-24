@@ -1,29 +1,82 @@
 import Link from "next/link";
+import {
+  CalendarDays,
+  ClipboardCheck,
+  GraduationCap,
+  HeartPulse,
+  Leaf,
+  BarChart3,
+  Factory,
+  HardHat,
+  Truck,
+  Building2,
+  Hospital,
+  School,
+} from "lucide-react";
 
 const modules = [
   {
     title: "Ajanda ve Görev Yönetimi",
-    desc: "Görev, ziyaret, saha planı ve kritik hatırlatmaları tek merkezden yöneterek operasyon akışınızı düzenli hale getirin.",
+    icon: CalendarDays,
+    desc: "Görev, ziyaret, saha planı ve kritik hatırlatmaları tek merkezden yönetin.",
   },
   {
     title: "Dijital Denetim Sistemi",
-    desc: "Form bazlı saha denetimleri, uygunsuzluk takibi ve düzeltici faaliyet süreçlerini dijitalleştirerek kontrol gücü kazanın.",
+    icon: ClipboardCheck,
+    desc: "Denetim, uygunsuzluk ve DÖF süreçlerini dijital yönetin.",
   },
   {
     title: "Eğitim Yönetim Platformu",
-    desc: "Senkron ve asenkron eğitimleri çalışan bazlı planlayın, katılım ve tamamlama durumlarını merkezi olarak takip edin.",
+    icon: GraduationCap,
+    desc: "Senkron ve asenkron eğitimleri merkezi olarak takip edin.",
   },
   {
     title: "Sağlık Takip Modülü",
-    desc: "Muayene, sağlık evrakları ve periyodik takip süreçlerini tek panel üzerinden daha görünür yönetin.",
+    icon: HeartPulse,
+    desc: "Muayene, EK-2 ve sağlık süreçlerini görünür hale getirin.",
   },
   {
     title: "ÇBS Kayıt Yönetimi",
-    desc: "Şikayet, öneri ve talepleri sistematik şekilde toplayın, kayıt altına alın ve sonuçlandırma sürecini izleyin.",
+    icon: Leaf,
+    desc: "Çevre, öneri ve kayıt süreçlerini yönetin.",
   },
   {
     title: "Raporlama ve Analitik",
-    desc: "Yönetim kararlarını hızlandıran özet ekranlar, performans göstergeleri ve aksiyon odaklı kurumsal raporlar alın.",
+    icon: BarChart3,
+    desc: "Yönetime özel dashboard ve rapor çıktıları oluşturun.",
+  },
+];
+
+const targetSectors = [
+  {
+    title: "Üretim Tesisleri",
+    icon: Factory,
+    desc: "Saha denetimi, eğitim takibi, risk yönetimi ve aksiyon süreçlerini tek merkezde yönetin.",
+  },
+  {
+    title: "Şantiyeler",
+    icon: HardHat,
+    desc: "Taşeron, çalışan, eğitim, uygunsuzluk ve saha kontrol süreçlerinde güçlü takip sağlayın.",
+  },
+  {
+    title: "Lojistik Firmaları",
+    icon: Truck,
+    desc: "Depo, sevkiyat, sürücü, saha operasyonları ve güvenlik süreçlerini daha görünür hale getirin.",
+  },
+  {
+    title: "Ofisler",
+    icon: Building2,
+    desc: "Ofis ergonomisi, eğitim, acil durum, çalışan kayıtları ve periyodik kontrolleri düzenli yönetin.",
+  },
+  {
+    title: "Sağlık Kuruluşları",
+    icon: Hospital,
+    desc: "Personel eğitimleri, sağlık takipleri, denetim kayıtları ve dokümantasyon süreçlerini dijitalleştirin.",
+  },
+  {
+    title: "Eğitim Kurumları",
+    icon: School,
+    desc: "Çalışan ve öğrenci güvenliği, acil durum planları, eğitim ve denetim kayıtlarını takip edin.",
   },
 ];
 
@@ -143,6 +196,80 @@ export default function HomePage() {
         <p>Yönetim için aksiyon alınabilir raporlar üretin.</p>
       </div>
     </div>
+<div className="hero-product-showcase">
+      <div className="showcase-left">
+        <div className="showcase-window">
+          <div className="showcase-topbar">
+            <span />
+            <span />
+            <span />
+          </div>
+
+          <div className="showcase-content">
+            <div className="showcase-sidebar">
+              <strong>D-SEC360</strong>
+              <p>Dashboard</p>
+              <p>Eğitimler</p>
+              <p>Denetimler</p>
+              <p>Çalışanlar</p>
+              <p>Raporlar</p>
+            </div>
+
+            <div className="showcase-main">
+              <div className="showcase-header">
+                <div>
+                  <small>D-SEC Yönetim Paneli</small>
+                  <h3>Kurumsal İSG Kontrol Merkezi</h3>
+                </div>
+                <span>Canlı İzleme</span>
+              </div>
+
+              <div className="showcase-cards">
+                <div>
+                  <strong>18</strong>
+                  <p>Denetim</p>
+                </div>
+                <div>
+                  <strong>192</strong>
+                  <p>Bulgu</p>
+                </div>
+                <div>
+                  <strong>142</strong>
+                  <p>Açık DÖF</p>
+                </div>
+              </div>
+
+              <div className="showcase-chart">
+                <span style={{ height: "42%" }} />
+                <span style={{ height: "68%" }} />
+                <span style={{ height: "35%" }} />
+                <span style={{ height: "82%" }} />
+                <span style={{ height: "55%" }} />
+                <span style={{ height: "74%" }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="showcase-right">
+        <div className="mini-feature-card">
+          <strong>Eğitim Takibi</strong>
+          <p>Senkron ve asenkron eğitim durumlarını çalışan bazlı izleyin.</p>
+        </div>
+
+        <div className="mini-feature-card">
+          <strong>Denetim & DÖF</strong>
+          <p>Uygunsuzlukları, aksiyonları ve açık faaliyetleri tek panelde yönetin.</p>
+        </div>
+
+        <div className="mini-feature-card">
+          <strong>Sağlık & Dokümantasyon</strong>
+          <p>Muayene, EK-2, arşiv ve kayıt süreçlerini görünür hale getirin.</p>
+        </div>
+      </div>
+    </div>
+
   </div>
 </section>
 
@@ -220,21 +347,144 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid-3">
-            {modules.map((item) => (
-              <div key={item.title} className="card">
-                <div className="card-icon" />
-                <h3 className="card-title">{item.title}</h3>
-                <p className="card-text">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+<div className="grid-3">
+  {modules.map((item) => {
+    const Icon = item.icon;
 
-     <section className="section section-light">
+    return (
+      <div key={item.title} className="card module-card">
+        <div className="module-icon">
+          <Icon size={30} />
+        </div>
+
+        <h3 className="card-title">{item.title}</h3>
+        <p className="card-text">{item.desc}</p>
+      </div>
+    );
+  })}
+</div>
+</div>
+</section>
+
+<section className="section section-soft">
   <div className="page-container">
     <div className="section-title-wrap">
+      <h2 className="section-title">D-SEC Ekranlarından Görüntüler</h2>
+      <p className="section-subtitle">
+        Eğitim, denetim, sağlık ve raporlama süreçlerini gerçek ürün ekranları
+        mantığında görünür hale getiren kurumsal arayüz yapısı.
+      </p>
+    </div>
+
+    <div className="product-screen-grid">
+      <div className="product-screen-card large">
+        <div className="screen-top">
+          <span>Dashboard</span>
+          <strong>Yönetim Paneli</strong>
+        </div>
+
+        <div className="screen-body">
+          <div className="screen-metric-row">
+            <div>
+              <strong>428</strong>
+              <p>Çalışan</p>
+            </div>
+            <div>
+              <strong>36</strong>
+              <p>Eğitim</p>
+            </div>
+            <div>
+              <strong>24</strong>
+              <p>Açık Aksiyon</p>
+            </div>
+          </div>
+
+          <div className="screen-bars">
+            <span style={{ height: "72%" }} />
+            <span style={{ height: "46%" }} />
+            <span style={{ height: "84%" }} />
+            <span style={{ height: "58%" }} />
+            <span style={{ height: "76%" }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="product-screen-card">
+        <div className="screen-top">
+          <span>Eğitim</span>
+          <strong>Katılım Takibi</strong>
+        </div>
+
+        <div className="screen-list">
+          <p>
+            <b>Temel İSG Eğitimi</b>
+            <small>%86 tamamlandı</small>
+          </p>
+          <p>
+            <b>Yangın Eğitimi</b>
+            <small>%72 tamamlandı</small>
+          </p>
+          <p>
+            <b>Acil Durum Eğitimi</b>
+            <small>%91 tamamlandı</small>
+          </p>
+        </div>
+      </div>
+
+      <div className="product-screen-card">
+        <div className="screen-top">
+          <span>Denetim</span>
+          <strong>DÖF ve Bulgu Yönetimi</strong>
+        </div>
+
+        <div className="screen-status-list">
+          <div>
+            <span className="dot red" /> Açık Uygunsuzluk
+          </div>
+          <div>
+            <span className="dot orange" /> Devam Eden Aksiyon
+          </div>
+          <div>
+            <span className="dot green" /> Kapatılan Faaliyet
+          </div>
+        </div>
+      </div>
+
+      <div className="product-screen-card">
+        <div className="screen-top">
+          <span>Sağlık</span>
+          <strong>Muayene & EK-2</strong>
+        </div>
+
+        <div className="screen-health-box">
+          <strong>Periyodik Takip</strong>
+          <p>
+            Muayene, sağlık evrakları ve çalışan bazlı takip kayıtları tek panelde.
+          </p>
+        </div>
+      </div>
+
+      <div className="product-screen-card">
+        <div className="screen-top">
+          <span>Raporlama</span>
+          <strong>Kurumsal Çıktılar</strong>
+        </div>
+
+        <div className="screen-report-lines">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section className="section section-light">
+  <div className="page-container">
+    <div className="section-title-wrap">
+
       <h2 className="section-title">Neden D-SEC?</h2>
       <p className="section-subtitle">
         Sadece kayıt tutan bir yazılım değil; süreçlerinizi görünür, takip edilebilir ve yönetilebilir hale getiren kurumsal altyapı
@@ -272,70 +522,57 @@ export default function HomePage() {
 <section className="section section-soft">
   <div className="page-container" style={{ textAlign: "center" }}>
     <div className="section-title-wrap">
-      <h2 className="section-title">Size Uygun Paketi Seçin</h2>
+      <h2 className="section-title">
+        Her Ölçekteki İşletme İçin Uygun Çözüm
+      </h2>
+
       <p className="section-subtitle">
-        İşletmenizin ölçeğine uygun paketi seçin, D-SEC ile süreçlerinizi kontrollü ve kurumsal şekilde yönetin.
+        İhtiyacınıza uygun modüller ve kullanım yapısı ile işletmenize özel
+        D-SEC çözümünü oluşturun.
       </p>
     </div>
 
-    <div
-      style={{
-        marginTop: 20,
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-        gap: 20,
-      }}
-    >
-      <div className="card">
+    <div className="package-grid">
+      <div className="card package-card">
         <h3 className="card-title">Başlangıç</h3>
-        <p className="card-text">Küçük işletmeler için temel yapı</p>
-        <div style={{ marginTop: 16, fontSize: 30, fontWeight: 900, color: "#111827" }}>
-          ₺4.999<span style={{ fontSize: 15, color: "#6b7280" }}> / yıl</span>
-        </div>
+
+        <p className="card-text">
+          Küçük ve orta ölçekli işletmeler için temel eğitim, denetim ve
+          çalışan yönetim altyapısı.
+        </p>
+
+        <div className="package-badge">Temel Modüller</div>
       </div>
 
-      <div
-        className="card"
-        style={{
-          border: "2px solid #c62828",
-          boxShadow: "0 22px 46px rgba(198, 40, 40, 0.16)",
-        }}
-      >
-        <div
-          style={{
-            display: "inline-block",
-            marginBottom: 12,
-            padding: "6px 12px",
-            borderRadius: 999,
-            background: "#c62828",
-            color: "#fff",
-            fontSize: 12,
-            fontWeight: 800,
-          }}
-        >
-          EN ÇOK TERCİH EDİLEN
-        </div>
+      <div className="card package-card package-featured">
+        <div className="package-top-label">EN ÇOK TERCİH EDİLEN</div>
 
         <h3 className="card-title">Profesyonel</h3>
-        <p className="card-text">Büyüyen firmalar için tam kontrol</p>
-        <div style={{ marginTop: 16, fontSize: 30, fontWeight: 900, color: "#111827" }}>
-          ₺9.999<span style={{ fontSize: 15, color: "#6b7280" }}> / yıl</span>
-        </div>
+
+        <p className="card-text">
+          Birden fazla süreci yöneten işletmeler için gelişmiş raporlama,
+          yetkilendirme ve operasyon yönetimi.
+        </p>
+
+        <div className="package-badge featured">Gelişmiş Yönetim</div>
       </div>
 
-      <div className="card">
+      <div className="card package-card">
         <h3 className="card-title">Kurumsal</h3>
-        <p className="card-text">Özel ihtiyaçlar için teklif bazlı çözüm</p>
-        <div style={{ marginTop: 16, fontSize: 30, fontWeight: 900, color: "#111827" }}>
-          Teklif Al
-        </div>
+
+        <p className="card-text">
+          Çok lokasyonlu yapılar, özel entegrasyonlar ve kurumsal ihtiyaçlar
+          için özelleştirilebilir çözüm.
+        </p>
+
+        <div className="package-badge">Özel Yapılandırma</div>
       </div>
     </div>
 
     <div style={{ marginTop: 26 }}>
-      <Link href="/pricing" className="nav-cta">
-        Tüm Paketleri Gör
-      </Link> 
+      <Link href="/contact" className="nav-cta">
+        Demo Talep Et
+      </Link>
     </div>
   </div>
 </section>
