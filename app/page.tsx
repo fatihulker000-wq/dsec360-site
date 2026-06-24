@@ -145,131 +145,94 @@ const entryPoints = [
 export default function HomePage() {
   return (
     <main>
-    <section className="hero hero-premium home-hero">
-  <div className="hero-orb hero-orb-1" />
-  <div className="hero-orb hero-orb-2" />
-
-  <div className="hero-inner">
-    <div className="hero-badge">D-SEC Kurumsal İSG Yönetim Platformu</div>
-
-    <h1 className="hero-title">
-      İSG Süreçlerinizi Dijitalleştirin,
-      <br />
-      Denetim ve Eğitim Yönetimini Tek Platformda Toplayın
-    </h1>
-
-    <p className="hero-desc">
-      D-SEC; eğitim, denetim, sağlık, ÇBS ve raporlama süreçlerini tek merkezde
-      toplayarak işletmelere hız, kontrol, görünürlük ve kurumsal yönetim gücü sağlar.
-    </p>
-
-    <div className="hero-actions">
-      <Link href="/demo" className="btn-primary">
-        Ücretsiz Demo Talep Et
-      </Link>
-
-      <Link href="/contact" className="btn-outline-light">
-        Teklif Al
-      </Link>
-    </div>
-
-    <div className="hero-trust-row">
-      <span>13+ yıl İSG tecrübesi</span>
-      <span>Kurumsal modül mimarisi</span>
-      <span>Web + mobil uyumlu yapı</span>
-      <span>Eğitim + denetim + raporlama entegrasyonu</span>
-    </div>
-
-    <div className="hero-stats">
-      <div className="hero-stat-card">
-        <strong>Tek Platform</strong>
-        <p>Dağınık süreçleri tek merkezde toplayın.</p>
+    
+    <section className="home-premium-hero">
+  <div className="page-container premium-hero-grid">
+    <div className="premium-hero-content">
+      <div className="premium-badge">
+        D-SEC360 Kurumsal İSG Yönetim Platformu
       </div>
 
-      <div className="hero-stat-card">
-        <strong>Anlık Görünürlük</strong>
-        <p>Eksik, açık ve kritik kayıtları hızlıca görün.</p>
+      <h1 className="premium-hero-title">
+        İSG, Eğitim, Sağlık ve Denetim Süreçlerini Tek Platformda Yönetin
+      </h1>
+
+      <p className="premium-hero-desc">
+        D-SEC360; eğitim yönetimi, dijital denetim, sağlık takibi, ÇBS,
+        çalışan yönetimi ve kurumsal raporlamayı web ve mobil uyumlu tek
+        yapıda birleştirir.
+      </p>
+
+      <div className="premium-hero-actions">
+        <Link href="/demo" className="premium-primary-btn">
+          Demo Talep Et
+        </Link>
+
+        <Link href="/contact" className="premium-secondary-btn">
+          Teklif Al
+        </Link>
       </div>
 
-      <div className="hero-stat-card">
-        <strong>Kurumsal Yönetim</strong>
-        <p>Yönetim için aksiyon alınabilir raporlar üretin.</p>
+      <div className="premium-trust-list">
+        <span>✓ Web + Mobil Uyumlu</span>
+        <span>✓ Senkron & Asenkron Eğitim</span>
+        <span>✓ Denetim & DÖF Yönetimi</span>
+        <span>✓ Sağlık, Çevre ve Raporlama</span>
       </div>
     </div>
-<div className="hero-product-showcase">
-      <div className="showcase-left">
-        <div className="showcase-window">
-          <div className="showcase-topbar">
-            <span />
-            <span />
-            <span />
+
+    <div className="premium-hero-visual">
+      <div className="premium-dashboard-card">
+        <div className="premium-dashboard-top">
+          <span />
+          <span />
+          <span />
+        </div>
+
+        <div className="premium-dashboard-body">
+          <div className="premium-side">
+            <strong>D-SEC360</strong>
+            <p>Dashboard</p>
+            <p>Eğitimler</p>
+            <p>Denetimler</p>
+            <p>Çalışanlar</p>
+            <p>Raporlar</p>
           </div>
 
-          <div className="showcase-content">
-            <div className="showcase-sidebar">
-              <strong>D-SEC360</strong>
-              <p>Dashboard</p>
-              <p>Eğitimler</p>
-              <p>Denetimler</p>
-              <p>Çalışanlar</p>
-              <p>Raporlar</p>
+          <div className="premium-main">
+            <div className="premium-main-head">
+              <div>
+                <small>Yönetim Paneli</small>
+                <h3>Kurumsal İSG Kontrol Merkezi</h3>
+              </div>
+              <b>Canlı</b>
             </div>
 
-            <div className="showcase-main">
-              <div className="showcase-header">
-                <div>
-                  <small>D-SEC Yönetim Paneli</small>
-                  <h3>Kurumsal İSG Kontrol Merkezi</h3>
-                </div>
-                <span>Canlı İzleme</span>
+            <div className="premium-mini-stats">
+              <div>
+                <strong>428</strong>
+                <p>Çalışan</p>
               </div>
+              <div>
+                <strong>36</strong>
+                <p>Eğitim</p>
+              </div>
+              <div>
+                <strong>24</strong>
+                <p>Açık Aksiyon</p>
+              </div>
+            </div>
 
-              <div className="showcase-cards">
-                <div>
-                  <strong>18</strong>
-                  <p>Denetim</p>
-                </div>
-                <div>
-                  <strong>192</strong>
-                  <p>Bulgu</p>
-                </div>
-                <div>
-                  <strong>142</strong>
-                  <p>Açık DÖF</p>
-                </div>
-              </div>
-
-              <div className="showcase-chart">
-                <span style={{ height: "42%" }} />
-                <span style={{ height: "68%" }} />
-                <span style={{ height: "35%" }} />
-                <span style={{ height: "82%" }} />
-                <span style={{ height: "55%" }} />
-                <span style={{ height: "74%" }} />
-              </div>
+            <div className="premium-lines">
+              <span />
+              <span />
+              <span />
+              <span />
             </div>
           </div>
         </div>
       </div>
-
-      <div className="showcase-right">
-        <div className="mini-feature-card">
-          <strong>Eğitim Takibi</strong>
-          <p>Senkron ve asenkron eğitim durumlarını çalışan bazlı izleyin.</p>
-        </div>
-
-        <div className="mini-feature-card">
-          <strong>Denetim & DÖF</strong>
-          <p>Uygunsuzlukları, aksiyonları ve açık faaliyetleri tek panelde yönetin.</p>
-        </div>
-
-        <div className="mini-feature-card">
-          <strong>Sağlık & Dokümantasyon</strong>
-          <p>Muayene, EK-2, arşiv ve kayıt süreçlerini görünür hale getirin.</p>
-        </div>
-      </div>
     </div>
-
   </div>
 </section>
 
