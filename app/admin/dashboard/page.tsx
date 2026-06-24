@@ -749,6 +749,25 @@ const heroRiskHeadline =
     };
   }, [trainings, summary, totals, cbsSummary, riskRate]);
 
+const dashboardTrendData =
+  trend.length > 0
+    ? trend
+    : [
+        { label: "Oca", value: 20 },
+        { label: "Şub", value: 35 },
+        { label: "Mar", value: 42 },
+        { label: "Nis", value: 58 },
+        { label: "May", value: 74 },
+        { label: "Haz", value: Math.round(completionRate) },
+      ];
+
+const dashboardPieData = [
+  { name: "Tamamlandı", value: summary?.completed_count ?? totals.completed },
+  { name: "Devam", value: summary?.in_progress_count ?? totals.inProgress },
+  { name: "Başlamadı", value: summary?.not_started_count ?? totals.notStarted },
+];
+
+const pieColors = ["#16a34a", "#2563eb", "#f59e0b"];
 
   if (error) {
     return (
@@ -901,16 +920,161 @@ const heroRiskHeadline =
   </div>
 </section>
 
+        <section
+  style={{
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))",
+    gap: 16,
+    marginBottom: 22,
+  }}
+>
+  {[
+    {
+      title: "Genel Sağlık",
+      value: ceoSummary.healthLabel,
+      desc: "Kurumsal operasyon durumu",
+      icon: ShieldCheck,
+      color:
+        ceoSummary.healthLabel === "Kritik"
+          ? BRAND.red
+          : ceoSummary.healthLabel === "Dikkat"
+          ? BRAND.amber
+          : BRAND.green,
+    },
+    {
+      title: "Risk Skoru",
+      value: ceoSummary.executiveRiskScore,
+      desc: "Executive risk değerlendirmesi",
+      icon: AlertTriangle,
+      color: BRAND.red,
+    },
+    {
+      title: "Eğitim Uyumu",
+      value: `%${formatPercent(completionRate)}`,
+      desc: "Tamamlanan eğitim oranı",
+      icon: CheckCircle2,
+      color: BRAND.green,
+    },
+    {
+      title: "Açık ÇBS",
+      value: ceoSummary.cbsOpen,
+      desc: "Bekleyen şikayet / öneri",
+      icon: Activity,
+      color: BRAND.blue,
+    },
+  ].map((item) => {
+    const Icon = item.icon;
+
+    return (
+      <div
+        key={item.title}
+        style={{
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: 24,
+          padding: 20,
+          background: "#ffffff",
+          border: "1px solid #eceff3",
+          boxShadow: "0 18px 45px rgba(15,23,42,0.08)",
+        }}
+      >
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: isMobile
-              ? "1fr"
-              : "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 12,
-            marginBottom: 20,
+            width: 48,
+            height: 48,
+            borderRadius: 16,
+            background: `${item.color}18`,
+            color: item.color,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 18,
           }}
         >
+          <Icon size={24} />
+        </div>
+
+        <div style={{ fontSize: 13, color: BRAND.muted, fontWeight: 800 }}>
+          {item.title}
+        </div>
+
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 34,
+            fontWeight: 950,
+            color: BRAND.text,
+            lineHeight: 1,
+          }}
+        >
+          {item.value}
+        </div>
+
+        <div style={{ marginTop: 10, color: BRAND.muted, fontSize: 13 }}>
+          {item.desc}
+        </div>
+      </div>
+    );
+  })}
+</section>
+
+<section
+  style={{
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr" : "1.4fr 0.6fr",
+    gap: 18,
+    marginBottom: 22,
+  }}
+>
+  <div style={cardStyle(isMobile)}>
+    <h2 style={{ margin: 0, fontSize: 22, fontWeight: 950 }}>
+      Eğitim Performans Trendi
+    </h2>
+
+    <div style={{ height: 280, marginTop: 18 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={dashboardTrendData}>
+          <XAxis dataKey="label" />
+          <YAxis />
+          <Tooltip />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={BRAND.red}
+            fill="#fee2e2"
+            strokeWidth={3}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+
+  <div style={cardStyle(isMobile)}>
+    <h2 style={{ margin: 0, fontSize: 22, fontWeight: 950 }}>
+      Eğitim Durum Dağılımı
+    </h2>
+
+    <div style={{ height: 280, marginTop: 18 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={dashboardPieData}
+            dataKey="value"
+            nameKey="name"
+            innerRadius={60}
+            outerRadius={95}
+            paddingAngle={4}
+          >
+            {dashboardPieData.map((_, index) => (
+              <Cell key={index} fill={pieColors[index % pieColors.length]} />
+            ))}
+          </Pie>
+          <Tooltip />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+</section>
           <div style={cardStyle(isMobile)}>
             <div style={{ fontSize: 12, color: BRAND.muted }}>Genel Sağlık</div>
             <div
@@ -2113,7 +2277,7 @@ const heroRiskHeadline =
             </div>
           </div>
         </div>
-      </div>
+      
     </main>
   );
 }
