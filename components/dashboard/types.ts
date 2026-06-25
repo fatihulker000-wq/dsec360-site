@@ -49,6 +49,16 @@ export type DashboardResponse = {
   company_list?: string[];
   trend?: TrendItem[];
   summary?: DashboardSummary;
+
+  activities?: DashboardActivity[];
+  upcoming_trainings?: UpcomingTraining[];
+  upcoming_healths?: UpcomingHealth[];
+  upcoming_inspections?: UpcomingInspection[];
+  upcoming_periodic_controls?: UpcomingPeriodicControl[];
+  dof_summary?: DofSummary;
+  risk_summary?: RiskSummary;
+  dora_summary?: DoraSummary;
+
   error?: string;
   detail?: string;
 };
@@ -112,4 +122,58 @@ export type MiniBarChartProps = {
 
 export type EmptyStateProps = {
   text: string;
+};
+
+export type DashboardActivity = {
+  id: string;
+  type: string;
+  title: string;
+  company: string;
+  created_at: string;
+};
+
+export type UpcomingTraining = {
+  id: string;
+  title: string;
+  company: string;
+  date: string;
+};
+
+export type UpcomingHealth = {
+  id: string;
+  employee: string;
+  company: string;
+  due_date: string;
+};
+
+export type UpcomingInspection = {
+  id: string;
+  title: string;
+  company: string;
+  due_date: string;
+};
+
+export type UpcomingPeriodicControl = {
+  id: string;
+  equipment: string;
+  company: string;
+  due_date: string;
+};
+
+export type DofSummary = {
+  open: number;
+  overdue: number;
+  closed: number;
+};
+
+export type RiskSummary = {
+  veryHigh: number;
+  high: number;
+  medium: number;
+  low: number;
+};
+
+export type DoraSummary = {
+  level: "İyi" | "Orta" | "Kritik";
+  message: string;
 };

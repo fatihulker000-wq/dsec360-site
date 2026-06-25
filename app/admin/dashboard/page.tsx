@@ -11,6 +11,14 @@ import type {
   TrendItem,
   DashboardResponse,
   MeResponse,
+  DashboardActivity,
+  UpcomingTraining,
+  UpcomingHealth,
+  UpcomingInspection,
+  UpcomingPeriodicControl,
+  DofSummary,
+  RiskSummary,
+  DoraSummary,
 } from "@/components/dashboard/types";
 
 import HeroSection from "@/components/dashboard/HeroSection";
@@ -31,6 +39,7 @@ import {
 export default function AdminDashboardPage() {
   const [adminRole, setAdminRole] = useState<string>("");
   const [adminCompanyId, setAdminCompanyId] = useState<string>("");
+  const [inspectionSummary, setInspectionSummary] = useState<any>(null);
 
   const [trainings, setTrainings] = useState<Training[]>([]);
   const [riskyUsers, setRiskyUsers] = useState<RiskUser[]>([]);
@@ -42,11 +51,29 @@ export default function AdminDashboardPage() {
 const [companyList, setCompanyList] = useState<string[]>([]);
 const [trend, setTrend] = useState<TrendItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [upcomingTrainings, setUpcomingTrainings] = useState<
+  {
+    id: string;
+    title: string;
+    company: string;
+    date: string;
+  }[]
+>([]);
+  const [activities, setActivities] = useState<DashboardActivity[]>([]);
+
+const [upcomingHealths, setUpcomingHealths] = useState<UpcomingHealth[]>([]);
+const [upcomingInspections, setUpcomingInspections] = useState<UpcomingInspection[]>([]);
+const [upcomingPeriodicControls, setUpcomingPeriodicControls] = useState<UpcomingPeriodicControl[]>([]);
+
+const [dofSummary, setDofSummary] = useState<DofSummary | null>(null);
+const [riskSummary, setRiskSummary] = useState<RiskSummary | null>(null);
+const [doraSummary, setDoraSummary] = useState<DoraSummary | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("all");
   const [isMobile, setIsMobile] = useState(false);
+
   const [cbsSummary, setCbsSummary] = useState<{
     total: number;
     new: number;
@@ -56,6 +83,8 @@ const [trend, setTrend] = useState<TrendItem[]>([]);
     slaExceeded: number;
   } | null>(null);
 
+
+  
   useEffect(() => {
     const loadAdminContext = async () => {
       try {
@@ -140,6 +169,26 @@ setSummary(null);
     }
   };
 
+const loadUpcomingTrainings = async () => {
+  try {
+    const res = await fetch("/api/admin/upcoming-trainings", {
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      setUpcomingTrainings([]);
+      return;
+    }
+
+    setUpcomingTrainings(json.upcoming_trainings || []);
+  } catch {
+    setUpcomingTrainings([]);
+  }
+};
+
   const loadCbs = async () => {
     try {
       const res = await fetch("/api/admin/cbs-dashboard", {
@@ -162,10 +211,34 @@ setSummary(null);
     }
   };
 
+const loadInspectionDashboard = async () => {
+  try {
+    const res = await fetch("/api/admin/inspection-dashboard", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setInspectionSummary(null);
+      return;
+    }
+
+    setInspectionSummary(json.summary || null);
+  } catch (e) {
+    console.error("Inspection dashboard:", e);
+    setInspectionSummary(null);
+  }
+};
+
   useEffect(() => {
-    void loadDashboard();
-    void loadCbs();
-  }, []);
+  void loadDashboard();
+  void loadCbs();
+  void loadInspectionDashboard();
+  void loadUpcomingTrainings();
+}, []);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -435,9 +508,11 @@ const dashboardPieData = [
   ceoSummary={ceoSummary}
   exportPDF={exportPDF}
   refreshDashboard={() => {
-    void loadDashboard();
-    void loadCbs();
-  }}
+  void loadDashboard();
+  void loadCbs();
+  void loadInspectionDashboard();
+  void loadUpcomingTrainings();
+}}
 />
 
 <ChartsSection
@@ -479,6 +554,7 @@ const dashboardPieData = [
   topRiskTrainings={topRiskTrainings}
   bestTrainings={bestTrainings}
   topEmployees={topEmployees}
+  upcomingTrainings={upcomingTrainings}
 />
 
 <AlarmPanel

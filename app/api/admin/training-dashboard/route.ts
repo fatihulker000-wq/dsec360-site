@@ -338,6 +338,43 @@ companyMap = Object.fromEntries(
       { label: "Başlamadı", value: totalNotStarted },
     ];
 
+const upcomingTrainings = trainings
+  .slice(0, 5)
+  .map((training) => ({
+    id: training.id,
+    title: training.title,
+    company: adminRole === "company_admin" ? companyMap[companyIdFromCookie] || "Firma" : "Genel",
+    date: new Date().toISOString(),
+  }));
+
+const activities = [
+  ...completedUsers.slice(0, 3).map((user) => ({
+    id: `completed-${user.assignment_id}`,
+    type: "training_completed",
+    title: `${user.full_name} eğitimi tamamladı`,
+    company: user.company_id,
+    created_at: new Date().toISOString(),
+  })),
+  ...riskyUsers.slice(0, 3).map((user) => ({
+    id: `training-risk-${user.assignment_id}`,
+    type: "training_risk",
+    title: `${user.full_name} eğitime başlamadı`,
+    company: user.company_id,
+    created_at: new Date().toISOString(),
+  })),
+];
+
+const doraSummary = {
+  level:
+    riskRate >= 60 ? "Kritik" : riskRate >= 30 ? "Orta" : "İyi",
+  message:
+    riskRate >= 60
+      ? "Eğitim riski yüksek. Başlamayan eğitimler için hızlı aksiyon önerilir."
+      : riskRate >= 30
+      ? "Eğitim riski orta seviyede. Devam eden ve başlamayan eğitimler izlenmelidir."
+      : "Eğitim görünümü kontrollü. Tamamlama oranı sürdürülebilir seviyededir.",
+} as const;
+
   return NextResponse.json({
   success: true,
   trainings,
@@ -359,6 +396,9 @@ companyMap = Object.fromEntries(
         risk_rate: riskRate,
         risk_status: riskStatus,
       },
+      activities,
+  upcoming_trainings: upcomingTrainings,
+  dora_summary: doraSummary,
     });
   } catch (err) {
     console.error("admin training dashboard route error:", err);

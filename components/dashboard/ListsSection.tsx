@@ -16,6 +16,13 @@ type Training = {
   not_started_count: number;
 };
 
+type UpcomingTraining = {
+  id: string;
+  title: string;
+  company: string;
+  date: string;
+};
+
 type Props = {
   isMobile: boolean;
   aiComment: string;
@@ -27,6 +34,7 @@ type Props = {
   topRiskTrainings: Training[];
   bestTrainings: Training[];
   topEmployees: { full_name: string; email: string; count: number }[];
+  upcomingTrainings: UpcomingTraining[];
 };
 
 export default function ListsSection({
@@ -40,6 +48,7 @@ export default function ListsSection({
   topRiskTrainings,
   bestTrainings,
   topEmployees,
+  upcomingTrainings,
 }: Props) {
   return (
     <>
@@ -59,6 +68,53 @@ export default function ListsSection({
             {aiComment}
           </div>
         </div>
+
+<div style={cardStyle(isMobile)}>
+  <h3 style={{ margin: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
+    Yaklaşan Eğitimler
+  </h3>
+
+  {upcomingTrainings.length === 0 ? (
+    <EmptyState text="Yaklaşan eğitim bulunamadı." />
+  ) : (
+    <div style={{ display: "grid", gap: 12 }}>
+      {upcomingTrainings.map((item) => (
+        <div
+          key={item.id}
+          style={{
+            padding: "12px 14px",
+            borderRadius: 14,
+            border: `1px solid ${BRAND.border}`,
+            background: "#fff",
+          }}
+        >
+          <div style={{ fontWeight: 900, color: BRAND.text }}>
+            {item.title}
+          </div>
+
+          <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
+            {item.company}
+          </div>
+
+          <div
+            style={{
+              marginTop: 8,
+              display: "inline-flex",
+              padding: "5px 9px",
+              borderRadius: 999,
+              background: "#eff6ff",
+              color: BRAND.blue,
+              fontSize: 12,
+              fontWeight: 900,
+            }}
+          >
+            {new Date(item.date).toLocaleDateString("tr-TR")}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
 
         <div style={cardStyle(isMobile)}>
           <h3 style={{ margin: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
