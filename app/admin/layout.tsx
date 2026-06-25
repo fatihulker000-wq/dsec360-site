@@ -47,6 +47,7 @@ const ACTIVE_LABELS: Record<string, string> = {
   "/admin/companies": "Firmalar",
   "/admin/accidents": "Kaza ve Olay Yönetimi",
   "/admin/permissions": "Modül ve Yetki Yönetimi V3",
+  "/admin/ibys": "İBYS Entegrasyon Merkezi",
   "/admin/denetimler": "Denetimler",
   "/admin/employees": "Çalışanlar",
 };
@@ -163,6 +164,12 @@ export default function AdminLayout({
         href: "/admin/permissions",
         icon: Settings2,
       },
+
+      {
+  name: "İBYS Entegrasyon Merkezi",
+  href: "/admin/ibys",
+  icon: ShieldCheck,
+},
       { name: "Denetimler", href: "/admin/denetimler", icon: ClipboardCheck },
       { name: "Çalışanlar", href: "/admin/employees", icon: ShieldCheck },
       { name: "Raporlar", href: "/admin/reports", icon: FileBarChart },

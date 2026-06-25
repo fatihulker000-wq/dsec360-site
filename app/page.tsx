@@ -12,38 +12,97 @@ import {
   Building2,
   Hospital,
   School,
+  ShieldCheck,
+  FileText,
+  Users,
+  AlertTriangle,
+  Bot,
+  Activity,
+  ClipboardList,
+  Stethoscope,
+  Smartphone,
+  Cloud,
 } from "lucide-react";
 
 const modules = [
   {
-    title: "Ajanda ve Görev Yönetimi",
-    icon: CalendarDays,
-    desc: "Görev, ziyaret, saha planı ve kritik hatırlatmaları tek merkezden yönetin.",
-  },
-  {
-    title: "Dijital Denetim Sistemi",
-    icon: ClipboardCheck,
-    desc: "Denetim, uygunsuzluk ve DÖF süreçlerini dijital yönetin.",
-  },
-  {
-    title: "Eğitim Yönetim Platformu",
+    title: "Eğitim Yönetimi",
     icon: GraduationCap,
-    desc: "Senkron ve asenkron eğitimleri merkezi olarak takip edin.",
+    desc: "Senkron, asenkron ve online eğitimleri çalışan bazlı atayın, takip edin ve raporlayın.",
   },
   {
-    title: "Sağlık Takip Modülü",
+    title: "Dijital Denetim",
+    icon: ClipboardCheck,
+    desc: "Saha denetimleri, fotoğraflı kayıtlar, uygunsuzluklar ve DÖF süreçlerini dijital yönetin.",
+  },
+  {
+    title: "Risk Yönetimi",
+    icon: AlertTriangle,
+    desc: "Fine-Kinney, 5x5 matris ve gelişmiş risk analizleriyle tehlikeleri görünür hale getirin.",
+  },
+  {
+    title: "Sağlık Takibi",
     icon: HeartPulse,
-    desc: "Muayene, EK-2 ve sağlık süreçlerini görünür hale getirin.",
+    desc: "EK-2, işe giriş/periyodik muayene ve çalışan sağlık süreçlerini merkezi takip edin.",
   },
   {
-    title: "ÇBS Kayıt Yönetimi",
+    title: "ÇBS Yönetimi",
     icon: Leaf,
-    desc: "Çevre, öneri ve kayıt süreçlerini yönetin.",
+    desc: "Şikayet, öneri, çevre kayıtları ve başvuru süreçlerini kurumsal şekilde yönetin.",
   },
   {
-    title: "Raporlama ve Analitik",
+    title: "Yönetici Dashboard",
     icon: BarChart3,
-    desc: "Yönetime özel dashboard ve rapor çıktıları oluşturun.",
+    desc: "Eğitim, denetim, ÇBS, risk ve aksiyon durumlarını tek ekrandan izleyin.",
+  },
+  {
+    title: "Çalışan Yönetimi",
+    icon: Users,
+    desc: "Çalışan bilgileri, görevler, eğitim geçmişi ve yetkilendirmeleri tek merkezde toplayın.",
+  },
+  {
+    title: "Dokümantasyon",
+    icon: FileText,
+    desc: "Formlar, talimatlar, kurul kayıtları, raporlar ve arşiv dokümanlarını düzenli yönetin.",
+  },
+  {
+    title: "Ajanda ve Hatırlatmalar",
+    icon: CalendarDays,
+    desc: "Eğitim, denetim, sağlık, tatbikat ve kritik görevleri planlı şekilde takip edin.",
+  },
+  {
+    title: "Kaza/Olay Yönetimi",
+    icon: Activity,
+    desc: "Kaza, ramak kala ve olay kayıtlarını analiz edilebilir şekilde yönetin.",
+  },
+  {
+    title: "Mobil Uygulama",
+    icon: Smartphone,
+    desc: "Saha ekiplerinin eğitim, denetim, sağlık ve görev süreçlerine mobil erişmesini sağlayın.",
+  },
+  {
+    title: "DORA AI",
+    icon: Bot,
+    desc: "İSG kurulum, risk analizi, eğitim planlama ve yönetici özetlerinde yapay zekâ desteği alın.",
+  },
+];
+
+const stats = [
+  {
+    value: "30+",
+    label: "Kurumsal Modül",
+  },
+  {
+    value: "100+",
+    label: "Rapor ve Doküman Çıktısı",
+  },
+  {
+    value: "20+",
+    label: "Dijital İSG Süreci",
+  },
+  {
+    value: "7/24",
+    label: "Bulut Erişimi",
   },
 ];
 
@@ -98,6 +157,39 @@ const trainingTypes = [
   },
 ];
 
+const platformBenefits = [
+  {
+    title: "Tek Platform",
+    desc: "Eğitim, denetim, sağlık, risk, ÇBS ve raporlama süreçlerini ayrı dosyalar yerine tek sistemde yönetin.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Web + Mobil",
+    desc: "Yönetim web panelinden, saha süreçleri mobil uygulamadan takip edilir.",
+    icon: Smartphone,
+  },
+  {
+    title: "Bulut Tabanlı",
+    desc: "Verilere yetki dahilinde her yerden erişin, süreçleri gerçek zamanlı izleyin.",
+    icon: Cloud,
+  },
+  {
+    title: "Yapay Zekâ Desteği",
+    desc: "DORA ile kurulum, risk, eğitim ve yönetici özetlerinde karar desteği alın.",
+    icon: Bot,
+  },
+  {
+    title: "Denetim Standardı",
+    desc: "Saha kontrol, uygunsuzluk, DÖF ve raporlama süreçlerinde kurumsal standart oluşturun.",
+    icon: ClipboardList,
+  },
+  {
+    title: "Sağlık Görünürlüğü",
+    desc: "Çalışan sağlığı, muayene ve EK-2 süreçlerini görünür ve takip edilebilir hale getirin.",
+    icon: Stethoscope,
+  },
+];
+
 const processSteps = [
   {
     step: "01",
@@ -146,7 +238,7 @@ export default function HomePage() {
   return (
     <main>
     
-    <section className="home-premium-hero">
+   <section className="home-premium-hero">
   <div className="page-container premium-hero-grid">
     <div className="premium-hero-content">
       <div className="premium-badge">
@@ -154,30 +246,30 @@ export default function HomePage() {
       </div>
 
       <h1 className="premium-hero-title">
-        İSG, Eğitim, Sağlık ve Denetim Süreçlerini Tek Platformda Yönetin
+        İş Sağlığı, Güvenliği ve Çevre Yönetimini Tek Platformdan Yönetin
       </h1>
 
       <p className="premium-hero-desc">
-        D-SEC360; eğitim yönetimi, dijital denetim, sağlık takibi, ÇBS,
-        çalışan yönetimi ve kurumsal raporlamayı web ve mobil uyumlu tek
-        yapıda birleştirir.
+        Eğitim, denetim, risk yönetimi, sağlık takibi, ÇBS, dokümantasyon ve
+        yönetici raporlamasını web ve mobil uyumlu tek bir bulut platformunda
+        birleştirin.
       </p>
 
       <div className="premium-hero-actions">
         <Link href="/demo" className="premium-primary-btn">
-          Demo Talep Et
+          Ücretsiz Demo Planla
         </Link>
 
         <Link href="/contact" className="premium-secondary-btn">
-          Teklif Al
+          Canlı Sunum Talep Et
         </Link>
       </div>
 
       <div className="premium-trust-list">
-        <span>✓ Web + Mobil Uyumlu</span>
-        <span>✓ Senkron & Asenkron Eğitim</span>
-        <span>✓ Denetim & DÖF Yönetimi</span>
-        <span>✓ Sağlık, Çevre ve Raporlama</span>
+        <span>✓ 30+ Kurumsal Modül</span>
+        <span>✓ Web + Android</span>
+        <span>✓ Bulut Altyapısı</span>
+        <span>✓ Yapay Zekâ Destekli</span>
       </div>
     </div>
 
@@ -195,7 +287,8 @@ export default function HomePage() {
             <p>Dashboard</p>
             <p>Eğitimler</p>
             <p>Denetimler</p>
-            <p>Çalışanlar</p>
+            <p>Risk</p>
+            <p>ÇBS</p>
             <p>Raporlar</p>
           </div>
 
@@ -237,33 +330,38 @@ export default function HomePage() {
 </section>
 
       <section className="section section-light">
-        <div className="page-container">
-          <div className="section-title-wrap">
-         <h2 className="section-title">Platforma Nasıl Başlarsınız?</h2>
+  <div className="page-container">
 
-<p className="section-subtitle">
-  Kullanıcı, firma yöneticisi ve admin tarafı için ayrıştırılmış giriş yapısıyla
-  D-SEC’e hızlı ve kontrollü şekilde başlayın.
-</p>
-          </div>
+    <div className="section-title-wrap">
+      <h2 className="section-title">
+        Sayılarla D-SEC360
+      </h2>
 
-          <div className="grid-3 entry-grid">
-  {entryPoints.map((item) => (
-    <div key={item.title} className="card entry-card">
-      <div className="card-icon" />
-      <h3 className="card-title">{item.title}</h3>
-      <p className="card-text">{item.desc}</p>
-
-      <div style={{ marginTop: 18 }}>
-        <Link href={item.href} className="nav-cta entry-cta">
-          {item.cta}
-        </Link>
-      </div>
+      <p className="section-subtitle">
+        İşletmelerin İSG süreçlerini dijitalleştirmek için geliştirilen kapsamlı platform.
+      </p>
     </div>
-  ))}
-</div>
+
+    <div className="stats-grid">
+
+      {stats.map((item) => (
+
+        <div
+          key={item.label}
+          className="stats-card"
+        >
+          <h3>{item.value}</h3>
+
+          <p>{item.label}</p>
+
         </div>
-      </section>
+
+      ))}
+
+    </div>
+
+  </div>
+</section>
 
       <section className="section section-soft">
         <div className="page-container">
