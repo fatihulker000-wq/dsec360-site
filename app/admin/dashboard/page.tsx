@@ -189,6 +189,26 @@ const loadUpcomingTrainings = async () => {
   }
 };
 
+const loadUpcomingInspections = async () => {
+  try {
+    const res = await fetch("/api/admin/upcoming-inspections", {
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      setUpcomingInspections([]);
+      return;
+    }
+
+    setUpcomingInspections(json.upcoming_inspections || []);
+  } catch {
+    setUpcomingInspections([]);
+  }
+};
+
   const loadCbs = async () => {
     try {
       const res = await fetch("/api/admin/cbs-dashboard", {
@@ -238,6 +258,7 @@ const loadInspectionDashboard = async () => {
   void loadCbs();
   void loadInspectionDashboard();
   void loadUpcomingTrainings();
+  void loadUpcomingInspections();
 }, []);
 
   useEffect(() => {
@@ -555,6 +576,7 @@ const dashboardPieData = [
   bestTrainings={bestTrainings}
   topEmployees={topEmployees}
   upcomingTrainings={upcomingTrainings}
+  upcomingInspections={upcomingInspections}
 />
 
 <AlarmPanel
