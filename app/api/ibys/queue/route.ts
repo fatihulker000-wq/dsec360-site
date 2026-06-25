@@ -1,8 +1,15 @@
+export const dynamic = "force-dynamic";
+
 import {
   createIbysQueueItem,
   listIbysQueueItems,
   type IbysQueueStatus,
 } from "@/lib/ibys/ibysService";
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
 
 export async function GET(request: Request) {
   try {
@@ -34,7 +41,7 @@ export async function GET(request: Request) {
     return Response.json(
       {
         success: false,
-        error: "İBYS kuyruğu alınamadı.",
+        error: getErrorMessage(error),
       },
       { status: 500 }
     );
@@ -70,15 +77,15 @@ export async function POST(request: Request) {
       success: true,
       data,
     });
-  } catch (error: any) {
-  console.error(error);
+  } catch (error) {
+    console.error("IBYS queue POST error:", error);
 
-  return Response.json(
-    {
-      success: false,
-      error: error?.message ?? String(error),
-    },
-    { status: 500 }
-  );
+    return Response.json(
+      {
+        success: false,
+        error: getErrorMessage(error),
+      },
+      { status: 500 }
+    );
   }
 }
