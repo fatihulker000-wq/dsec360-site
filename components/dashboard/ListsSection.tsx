@@ -125,11 +125,11 @@ export default function ListsSection({
 
 <div style={cardStyle(isMobile)}>
   <h3 style={{ margin: 0, marginBottom: 16, fontSize: 22, fontWeight: 900 }}>
-    Yaklaşan Denetimler
+    Son Denetimler
   </h3>
 
   {upcomingInspections.length === 0 ? (
-    <EmptyState text="Yaklaşan denetim bulunamadı." />
+    <EmptyState text="Henüz denetim kaydı bulunamadı." />
   ) : (
     <div style={{ display: "grid", gap: 12 }}>
       {upcomingInspections.map((item) => (

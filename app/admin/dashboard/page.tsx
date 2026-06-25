@@ -203,7 +203,7 @@ const loadUpcomingInspections = async () => {
       return;
     }
 
-    setUpcomingInspections(json.upcoming_inspections || []);
+    setUpcomingInspections(json.recent_inspections || []);
   } catch {
     setUpcomingInspections([]);
   }

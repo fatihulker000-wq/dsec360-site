@@ -48,7 +48,7 @@ export async function GET() {
       .from("denetim_runs")
       .select("*")
       .order("inserted_at", { ascending: false })
-      .limit(8);
+      .limit(5);
 
     if (adminRole === "company_admin" && companyIdFromCookie) {
       query = query.eq("firm_id", companyIdFromCookie);
@@ -80,7 +80,7 @@ export async function GET() {
       );
     }
 
-    const upcoming_inspections = (runs || []).slice(0, 5).map((row: any) => {
+    const recent_inspections = (runs || []).slice(0, 5).map((row: any) => {
       const firmId = String(row.firm_id || "").trim();
 
       return {
@@ -93,7 +93,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      upcoming_inspections,
+      recent_inspections,
     });
   } catch (e: any) {
     return NextResponse.json(
