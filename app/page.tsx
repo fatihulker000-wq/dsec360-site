@@ -150,11 +150,7 @@ const trainingTypes = [
     desc: "Canlı oturumlar, planlı eğitim yapısı ve katılım takibi ile daha kontrollü süreç yönetimi sunar.",
     href: "/training/sync",
   },
-  {
-    title: "Online Eğitim",
-    desc: "Dijital erişim, eğitim linkleri ve merkezi platform yapısı ile kurumsal online eğitim kurgusu oluşturur.",
-    href: "/training/online",
-  },
+  
 ];
 
 const platformBenefits = [
@@ -815,7 +811,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid-3">
+          <div className="grid-2">
             {trainingTypes.map((item) => (
               <div key={item.title} className="card">
                 <div className="card-icon" />
