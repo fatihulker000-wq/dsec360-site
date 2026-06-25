@@ -2961,3 +2961,20 @@ margin:0;
 color:#6b7280;
 line-height:1.7;
 }
+.premium-trust-list {
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.premium-trust-list span{
+  color:#ffffff;
+  text-shadow:0 2px 10px rgba(0,0,0,.35);
+}
