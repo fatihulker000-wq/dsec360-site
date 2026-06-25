@@ -364,40 +364,36 @@ export default function HomePage() {
 </section>
 
       <section className="section section-soft">
-        <div className="page-container">
-          <div className="grid-3">
-            <div className="card">
-            <p className="card-text" style={{ marginTop: 0 }}>
-  Kurumsal Yapı
-</p>
-<h3 className="card-title">Tek Merkezden Yönetim</h3>
-<p className="card-text">
-  Eğitim, denetim, sağlık ve kayıt süreçlerini ayrı araçlar yerine tek platformdan yönetin.
-</p>
+  <div className="page-container">
+    <div className="section-title-wrap">
+      <h2 className="section-title">
+        Tek Platform, Tüm İSG Süreçleri
+      </h2>
+
+      <p className="section-subtitle">
+        D-SEC360; eğitim, denetim, risk, sağlık, ÇBS ve raporlama süreçlerini
+        ayrı araçlara dağılmadan tek merkezde birleştirir.
+      </p>
+    </div>
+
+    <div className="grid-3">
+      {platformBenefits.map((item) => {
+        const Icon = item.icon;
+
+        return (
+          <div key={item.title} className="card module-card">
+            <div className="module-icon">
+              <Icon size={30} />
             </div>
 
-            <div className="card">
-             <p className="card-text" style={{ marginTop: 0 }}>
-  Operasyonel Kontrol
-</p>
-<h3 className="card-title">Saha ve Ofis Entegrasyonu</h3>
-<p className="card-text">
-  Saha verilerini ofis takibi ve yönetim görünürlüğü ile aynı akışta birleştirir.
-</p>
-            </div>
-
-            <div className="card">
-              <p className="card-text" style={{ marginTop: 0 }}>
-  Yönetim Gücü
-</p>
-<h3 className="card-title">Raporlama ve Analitik</h3>
-<p className="card-text">
-  Yönetim için sadece veri değil, yorumlanabilir ve aksiyon alınabilir çıktılar üretir.
-</p>
-            </div>
+            <h3 className="card-title">{item.title}</h3>
+            <p className="card-text">{item.desc}</p>
           </div>
-        </div>
-      </section>
+        );
+      })}
+    </div>
+  </div>
+</section>
 
       <section className="section section-light">
         <div className="page-container">
@@ -491,113 +487,67 @@ export default function HomePage() {
 <section className="section section-soft">
   <div className="page-container">
     <div className="section-title-wrap">
-      <h2 className="section-title">Gerçek D-SEC360 Ekranları</h2>
+      <h2 className="section-title">
+        D-SEC360 Ekranları
+      </h2>
+
       <p className="section-subtitle">
-  Dashboard, eğitim, denetim, sağlık, çalışan ve raporlama ekranlarıyla
-  D-SEC360’ın kurumsal yönetim gücünü yakından inceleyin.
-</p>
+        Web panel, eğitim, denetim, risk ve mobil uygulama ekranlarıyla
+        D-SEC360’ın kurumsal yönetim gücünü yakından inceleyin.
+      </p>
     </div>
 
-    <div className="product-screen-grid">
-      <div className="product-screen-card large">
-        <div className="screen-top">
-          <span>Dashboard</span>
-          <strong>Yönetim Paneli</strong>
+    <div className="home-screen-showcase">
+      <div className="home-screen-main">
+        <div className="screen-browser-bar">
+          <span />
+          <span />
+          <span />
+          <strong>CEO Dashboard</strong>
         </div>
 
-        <div className="screen-body">
-          <div className="screen-metric-row">
-            <div>
-              <strong>428</strong>
-              <p>Çalışan</p>
+        <div className="screen-image-placeholder">
+          <img
+            src="/dsec-screens/dashboard.png"
+            alt="D-SEC360 Dashboard"
+          />
+        </div>
+      </div>
+
+      <div className="home-screen-side">
+        {[
+          {
+            title: "Eğitim Yönetimi",
+            desc: "Atama, katılım, tamamlama ve raporlama.",
+            img: "/dsec-screens/training.png",
+          },
+          {
+            title: "Dijital Denetim",
+            desc: "Saha kontrolü, uygunsuzluk ve DÖF takibi.",
+            img: "/dsec-screens/inspection.png",
+          },
+          {
+            title: "Risk Yönetimi",
+            desc: "Fine-Kinney, 5x5 matris ve aksiyon takibi.",
+            img: "/dsec-screens/risk.png",
+          },
+          {
+            title: "Mobil Uygulama",
+            desc: "Saha ekipleri için Android erişimi.",
+            img: "/dsec-screens/mobile.png",
+          },
+        ].map((item) => (
+          <div key={item.title} className="home-screen-mini">
+            <div className="mini-screen-thumb">
+              <img src={item.img} alt={item.title} />
             </div>
+
             <div>
-              <strong>36</strong>
-              <p>Eğitim</p>
-            </div>
-            <div>
-              <strong>24</strong>
-              <p>Açık Aksiyon</p>
+              <h3>{item.title}</h3>
+              <p>{item.desc}</p>
             </div>
           </div>
-
-          <div className="screen-bars">
-            <span style={{ height: "72%" }} />
-            <span style={{ height: "46%" }} />
-            <span style={{ height: "84%" }} />
-            <span style={{ height: "58%" }} />
-            <span style={{ height: "76%" }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="product-screen-card">
-        <div className="screen-top">
-          <span>Eğitim</span>
-          <strong>Katılım Takibi</strong>
-        </div>
-
-        <div className="screen-list">
-          <p>
-            <b>Temel İSG Eğitimi</b>
-            <small>%86 tamamlandı</small>
-          </p>
-          <p>
-            <b>Yangın Eğitimi</b>
-            <small>%72 tamamlandı</small>
-          </p>
-          <p>
-            <b>Acil Durum Eğitimi</b>
-            <small>%91 tamamlandı</small>
-          </p>
-        </div>
-      </div>
-
-      <div className="product-screen-card">
-        <div className="screen-top">
-          <span>Denetim</span>
-          <strong>DÖF ve Bulgu Yönetimi</strong>
-        </div>
-
-        <div className="screen-status-list">
-          <div>
-            <span className="dot red" /> Açık Uygunsuzluk
-          </div>
-          <div>
-            <span className="dot orange" /> Devam Eden Aksiyon
-          </div>
-          <div>
-            <span className="dot green" /> Kapatılan Faaliyet
-          </div>
-        </div>
-      </div>
-
-      <div className="product-screen-card">
-        <div className="screen-top">
-          <span>Sağlık</span>
-          <strong>Muayene & EK-2</strong>
-        </div>
-
-        <div className="screen-health-box">
-          <strong>Periyodik Takip</strong>
-          <p>
-            Muayene, sağlık evrakları ve çalışan bazlı takip kayıtları tek panelde.
-          </p>
-        </div>
-      </div>
-
-      <div className="product-screen-card">
-        <div className="screen-top">
-          <span>Raporlama</span>
-          <strong>Kurumsal Çıktılar</strong>
-        </div>
-
-        <div className="screen-report-lines">
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
+        ))}
       </div>
     </div>
   </div>
@@ -639,112 +589,220 @@ export default function HomePage() {
   </div>
 </section>
 
-      <section className="section dsec-value-section">
-  <div className="page-container">
-    <div className="section-title-wrap">
-      <h2 className="section-title">D-SEC360 Size Ne Kazandırır?</h2>
-      <p className="section-subtitle">
-        D-SEC360 sadece kayıt tutmaz; İSG süreçlerinizi ölçülebilir, izlenebilir
-        ve yönetilebilir hale getirir.
-      </p>
-    </div>
-
-    <div className="dsec-value-grid">
-      <div className="dsec-value-card">
-        <span>01</span>
-        <h3>Eğitim Takibinde Kontrol</h3>
-        <p>
-          Senkron ve asenkron eğitimleri çalışan bazlı takip edin; eksik,
-          tamamlanan ve geciken eğitimleri tek ekranda görün.
-        </p>
-      </div>
-
-      <div className="dsec-value-card">
-        <span>02</span>
-        <h3>Denetim ve DÖF Yönetimi</h3>
-        <p>
-          Saha denetimleri, uygunsuzluklar, aksiyonlar ve kapatma süreçleri
-          dijital olarak kayıt altında ilerler.
-        </p>
-      </div>
-
-      <div className="dsec-value-card">
-        <span>03</span>
-        <h3>Sağlık ve EK-2 Takibi</h3>
-        <p>
-          Muayene, sağlık evrakları, periyodik takipler ve çalışan bazlı sağlık
-          kayıtları daha görünür hale gelir.
-        </p>
-      </div>
-
-      <div className="dsec-value-card">
-        <span>04</span>
-        <h3>Yönetim İçin Net Raporlama</h3>
-        <p>
-          Eğitim, denetim, çalışan, sağlık ve ÇBS verileri yönetime uygun
-          özetlerle raporlanır.
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
+      
 
 <section className="section section-soft">
-  <div className="page-container" style={{ textAlign: "center" }}>
+  <div className="page-container">
+
     <div className="section-title-wrap">
       <h2 className="section-title">
-        Her Ölçekteki İşletme İçin Uygun Çözüm
+        D-SEC360 Çözüm Modelleri
       </h2>
 
       <p className="section-subtitle">
-        İhtiyacınıza uygun modüller ve kullanım yapısı ile işletmenize özel
-        D-SEC çözümünü oluşturun.
+        İşletmenizin büyüklüğüne ve operasyon yapısına uygun esnek çözümler sunuyoruz.
       </p>
     </div>
 
     <div className="package-grid">
+
       <div className="card package-card">
-        <h3 className="card-title">Başlangıç</h3>
+        <div className="package-badge">
+          KOBİ
+        </div>
+
+        <h3 className="card-title">
+          Küçük ve Orta Ölçekli İşletmeler
+        </h3>
 
         <p className="card-text">
-          Küçük ve orta ölçekli işletmeler için temel eğitim, denetim ve
-          çalışan yönetim altyapısı.
+          Eğitim, denetim, çalışan yönetimi ve temel İSG süreçlerini hızlı
+          şekilde dijital ortama taşıyın.
         </p>
-
-        <div className="package-badge">Temel Modüller</div>
       </div>
 
       <div className="card package-card package-featured">
-        <div className="package-top-label">EN ÇOK TERCİH EDİLEN</div>
 
-        <h3 className="card-title">Profesyonel</h3>
+        <div className="package-top-label">
+          EN ÇOK TERCİH EDİLEN
+        </div>
+
+        <div className="package-badge featured">
+          KURUMSAL
+        </div>
+
+        <h3 className="card-title">
+          Orta ve Büyük Ölçekli İşletmeler
+        </h3>
 
         <p className="card-text">
-          Birden fazla süreci yöneten işletmeler için gelişmiş raporlama,
-          yetkilendirme ve operasyon yönetimi.
+          Çok lokasyonlu yapı, gelişmiş raporlama, yetkilendirme,
+          yönetici dashboardları ve mobil saha yönetimi.
         </p>
 
-        <div className="package-badge featured">Gelişmiş Yönetim</div>
       </div>
 
       <div className="card package-card">
-        <h3 className="card-title">Kurumsal</h3>
+
+        <div className="package-badge">
+          ENTERPRISE
+        </div>
+
+        <h3 className="card-title">
+          Holding ve Grup Şirketleri
+        </h3>
 
         <p className="card-text">
-          Çok lokasyonlu yapılar, özel entegrasyonlar ve kurumsal ihtiyaçlar
-          için özelleştirilebilir çözüm.
+          Çok firma yönetimi, merkezi kontrol, özel entegrasyonlar,
+          DORA AI destekli analizler ve kurumsal çözümler.
         </p>
 
-        <div className="package-badge">Özel Yapılandırma</div>
       </div>
+
     </div>
 
-    <div style={{ marginTop: 26 }}>
+    <div style={{ marginTop: 34, textAlign: "center" }}>
       <Link href="/contact" className="nav-cta">
-        Demo Talep Et
+        İşletmenize Uygun Çözümü Birlikte Planlayalım
       </Link>
     </div>
+
   </div>
+</section>
+
+{/* D-SEC360 Size Ne Kazandırır */}
+
+<section className="section section-soft">
+  <div className="page-container">
+
+    <div className="section-title-wrap">
+      <h2 className="section-title">
+        D-SEC360 Size Ne Kazandırır?
+      </h2>
+
+      <p className="section-subtitle">
+        Tüm İSG süreçlerini tek platformda birleştirerek işletmenize hız,
+        görünürlük ve yönetim kolaylığı sağlar.
+      </p>
+    </div>
+
+    <div className="timeline-grid">
+
+      <div className="timeline-card">
+        <span>01</span>
+        <h3>Eğitim Yönetimi</h3>
+        <p>Çalışan eğitimlerini planlayın, takip edin ve raporlayın.</p>
+      </div>
+
+      <div className="timeline-card">
+        <span>02</span>
+        <h3>Dijital Denetim</h3>
+        <p>Mobil saha denetimleri ve DÖF süreçlerini yönetin.</p>
+      </div>
+
+      <div className="timeline-card">
+        <span>03</span>
+        <h3>Risk Analizi</h3>
+        <p>Riskleri önceliklendirin ve aksiyonları yönetin.</p>
+      </div>
+
+      <div className="timeline-card">
+        <span>04</span>
+        <h3>Yönetici Dashboard</h3>
+        <p>Gerçek zamanlı verilerle hızlı karar alın.</p>
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
+{/* Platform Akışı */}
+
+<section className="section section-light">
+
+  <div className="page-container">
+
+    <div className="section-title-wrap">
+
+      <h2 className="section-title">
+        D-SEC360 Nasıl Çalışır?
+      </h2>
+
+      <p className="section-subtitle">
+        Kurulumdan sürekli iyileştirmeye kadar tüm süreç tek platformda ilerler.
+      </p>
+
+    </div>
+
+    <div className="flow-grid">
+
+      <div className="flow-card">
+        <strong>① Kurulum</strong>
+        <p>Firma, çalışanlar ve modüller tanımlanır.</p>
+      </div>
+
+      <div className="flow-card">
+        <strong>② Operasyon</strong>
+        <p>Eğitim, denetim, sağlık ve risk süreçleri yürütülür.</p>
+      </div>
+
+      <div className="flow-card">
+        <strong>③ Analiz</strong>
+        <p>Dashboard ve raporlar yönetime sunulur.</p>
+      </div>
+
+      <div className="flow-card">
+        <strong>④ Sürekli İyileştirme</strong>
+        <p>DÖF ve aksiyonlarla süreç sürekli geliştirilir.</p>
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+{/* Son CTA */}
+
+<section className="hero hero-cta-band">
+
+  <div className="hero-inner hero-compact">
+
+    <div className="hero-badge">
+      D-SEC360
+    </div>
+
+    <h2 className="hero-title">
+      İSG Süreçlerinizi Dijitalleştirmenin Tam Zamanı
+    </h2>
+
+    <p className="hero-desc">
+      Eğitim, denetim, sağlık, risk yönetimi ve ÇBS süreçlerini tek platformdan
+      yönetin.
+    </p>
+
+    <div className="hero-actions">
+
+      <Link href="/demo" className="btn-primary">
+        Ücretsiz Demo Planla
+      </Link>
+
+      <Link href="/contact" className="btn-outline-light">
+        Kurumsal Sunum Talep Et
+      </Link>
+
+    </div>
+
+    <div className="premium-trust-list">
+      <span>✓ Web + Mobil</span>
+      <span>✓ Bulut Altyapısı</span>
+      <span>✓ Yapay Zekâ Destekli</span>
+      <span>✓ Sürekli Güncellenen Platform</span>
+    </div>
+
+  </div>
+
 </section>
 
       <section className="section section-soft">
@@ -781,70 +839,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="section section-light">
-        <div className="page-container">
-          <div className="section-title-wrap">
-            <h2 className="section-title">D-SEC Nasıl Çalışır?</h2>
-            <p className="section-subtitle">
-              Kurumsal süreçlerinizi daha yönetilebilir hale getiren akış yapısı
-            </p>
-          </div>
+      
 
-          <div className="grid-2">
-            {processSteps.map((item) => (
-              <div key={item.step} className="card">
-                <div
-                  style={{
-                    width: 54,
-                    height: 54,
-                    borderRadius: 16,
-                    background: "#fee2e2",
-                    color: "#b91c1c",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 800,
-                    fontSize: 18,
-                    marginBottom: 16,
-                  }}
-                >
-                  {item.step}
-                </div>
-
-                <h3 className="card-title">{item.title}</h3>
-                <p className="card-text">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-     <section className="hero hero-cta-band">
-  <div className="hero-inner hero-compact">
-    <div className="hero-badge">Kurumsal Demo ve Teklif Süreci</div>
-
-    <h2 className="hero-title" style={{ fontSize: 42 }}>
-      İSG Süreçlerinizi Daha Güçlü,
-      <br />
-      Daha Görünür ve Daha Yönetilebilir Hale Getirin
-    </h2>
-
-    <p className="hero-desc">
-      D-SEC ile eğitim, denetim, sağlık ve kayıt süreçlerinizi tek yapıda toplayın;
-      yönetime güven veren, sahaya hız kazandıran kurumsal bir sistem kurun.
-    </p>
-
-    <div className="hero-actions">
-      <Link href="/demo" className="btn-primary">
-        Ücretsiz Demo Talep Et
-      </Link>
-
-      <Link href="/contact" className="btn-outline-light">
-        Kurumsal Teklif Al
-      </Link>
-    </div>
-  </div>
-</section>
+     
     </main>
   );
 }
