@@ -8,6 +8,7 @@ import {
   GraduationCap,
   Users,
   ShieldCheck,
+  HeartPulse,
   Building2,
   ClipboardCheck,
   FileBarChart,
@@ -40,6 +41,8 @@ type MenuItem = {
 const ACTIVE_LABELS: Record<string, string> = {
   "/admin/dashboard": "Dashboard",
   "/admin/trainings": "Eğitimler",
+  "/admin/health": "Sağlık Yönetimi",
+  "/admin/health/employees": "Çalışan Sağlık Kartları",
   "/admin/participants": "Eğitim Katılımcıları",
   "/admin/users": "Sistem Kullanıcıları",
   "/admin/reports": "Raporlar",
@@ -158,6 +161,7 @@ export default function AdminLayout({
     const items: MenuItem[] = [
       { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
       { name: "Eğitimler", href: "/admin/trainings", icon: GraduationCap },
+      { name: "Sağlık", href: "/admin/health", icon: HeartPulse },
       { name: "Sistem Kullanıcıları", href: "/admin/users", icon: Users },
       {
         name: "Modül ve Yetki Yönetimi V3",
