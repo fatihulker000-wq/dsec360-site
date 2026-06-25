@@ -4,6 +4,34 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function HealthEmployeesPage() {
+    const [employees, setEmployees] = useState<any[]>([]);
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  async function loadEmployees() {
+    try {
+      const res = await fetch("/api/admin/health-employees", {
+        cache: "no-store",
+        credentials: "include",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setEmployees([]);
+        return;
+      }
+
+      setEmployees(json.employees || []);
+    } catch {
+      setEmployees([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  void loadEmployees();
+}, []);
   return (
     <main
       style={{
@@ -199,31 +227,3 @@ export default function HealthEmployeesPage() {
     </main>
   );
 }
-const [employees, setEmployees] = useState<any[]>([]);
-const [loading, setLoading] = useState(true);
-
-useEffect(() => {
-  async function loadEmployees() {
-    try {
-      const res = await fetch("/api/admin/health-employees", {
-        cache: "no-store",
-        credentials: "include",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok) {
-        setEmployees([]);
-        return;
-      }
-
-      setEmployees(json.employees || []);
-    } catch {
-      setEmployees([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  void loadEmployees();
-}, []);
