@@ -269,59 +269,77 @@ export default function HomePage() {
       </div>
     </div>
 
-    <div className="premium-hero-visual">
-      <div className="premium-dashboard-card">
-        <div className="premium-dashboard-top">
-          <span />
-          <span />
-          <span />
+     <div className="premium-hero-visual">
+  <div className="executive-mockup">
+    <div className="executive-topbar">
+      <div>
+        <span />
+        <span />
+        <span />
+      </div>
+      <strong>D-SEC360 Executive Dashboard</strong>
+      <em>Canlı</em>
+    </div>
+
+    <div className="executive-layout">
+      <aside>
+        <b>D-SEC360</b>
+        <p className="active">Dashboard</p>
+        <p>Eğitimler</p>
+        <p>Denetimler</p>
+        <p>Risk Yönetimi</p>
+        <p>ÇBS</p>
+        <p>Raporlar</p>
+      </aside>
+
+      <div className="executive-content">
+        <div className="executive-head">
+          <div>
+            <small>Yönetim Paneli</small>
+            <h3>Kurumsal İSG Kontrol Merkezi</h3>
+          </div>
+          <div className="health-pill">Sağlıklı</div>
         </div>
 
-        <div className="premium-dashboard-body">
-          <div className="premium-side">
-            <strong>D-SEC360</strong>
-            <p>Dashboard</p>
-            <p>Eğitimler</p>
-            <p>Denetimler</p>
-            <p>Risk</p>
-            <p>ÇBS</p>
-            <p>Raporlar</p>
+        <div className="executive-stats">
+          <div>
+            <strong>428</strong>
+            <span>Çalışan</span>
           </div>
+          <div>
+            <strong>%86</strong>
+            <span>Eğitim Uyumu</span>
+          </div>
+          <div>
+            <strong>24</strong>
+            <span>Açık Aksiyon</span>
+          </div>
+        </div>
 
-          <div className="premium-main">
-            <div className="premium-main-head">
-              <div>
-                <small>Yönetim Paneli</small>
-                <h3>Kurumsal İSG Kontrol Merkezi</h3>
-              </div>
-              <b>Canlı</b>
-            </div>
+        <div className="executive-chart">
+          <span style={{ height: "42%" }} />
+          <span style={{ height: "68%" }} />
+          <span style={{ height: "54%" }} />
+          <span style={{ height: "78%" }} />
+          <span style={{ height: "61%" }} />
+          <span style={{ height: "86%" }} />
+        </div>
 
-            <div className="premium-mini-stats">
-              <div>
-                <strong>428</strong>
-                <p>Çalışan</p>
-              </div>
-              <div>
-                <strong>36</strong>
-                <p>Eğitim</p>
-              </div>
-              <div>
-                <strong>24</strong>
-                <p>Açık Aksiyon</p>
-              </div>
-            </div>
-
-            <div className="premium-lines">
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
+        <div className="executive-bottom">
+          <div>
+            <b>AI Yönetici Özeti</b>
+            <p>Eğitim uyumu güçlü, açık aksiyonlar takipte.</p>
+          </div>
+          <div>
+            <b>Risk Skoru</b>
+            <p>Kontrollü seviye</p>
           </div>
         </div>
       </div>
     </div>
+  </div>
+</div>
+
   </div>
 </section>
 
