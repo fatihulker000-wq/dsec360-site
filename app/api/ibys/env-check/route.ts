@@ -1,29 +1,33 @@
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const client = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const client = getSupabaseAdmin();
 
-    const { error } = await client
+    const { data, error } = await client
       .from("ibys_queue")
-      .select("*")
+      .select("id")
       .limit(1);
+
+    if (error) {
+      return Response.json({
+        success: false,
+        error: error.message,
+      });
+    }
 
     return Response.json({
       success: true,
-      error: error?.message ?? null,
+      data,
     });
   } catch (e: any) {
     return Response.json({
       success: false,
-      message: e.message,
-      cause: String(e.cause),
-      stack: e.stack,
+      error: e?.message ?? String(e),
+      cause: String(e?.cause ?? ""),
     });
   }
 }
