@@ -220,65 +220,166 @@ export default function ServicesPage() {
       </section>
 
       <section className="section section-light">
-        <div className="page-container">
-          <div className="section-title-wrap">
-            <h2 className="section-title">Hizmet Alanlarımız</h2>
-            <p className="section-subtitle">
-              App yapınızla uyumlu modül başlıkları artık web tarafında daha
-              sade, daha premium ve daha kurumsal bir yapıyla sunulur
-            </p>
-          </div>
+  <div className="page-container">
 
-          <div className="services-grid">
-            {services.map((item) => (
-              <div
-                key={item.title}
-                className="service-module-card premium-service-card"
-                style={{ background: item.soft }}
-              >
-                <div className="service-simple-top">
-                  <div
-                    className="service-module-badge service-badge-top"
-                    style={{
-                      color: item.accent,
-                      borderColor: `${item.accent}22`,
-                    }}
-                  >
-                    {item.badge}
-                  </div>
-                </div>
+    <div className="section-title-wrap">
+      <h2 className="section-title">
+        D-SEC360 Platform Modülleri
+      </h2>
 
-                <div className="service-module-body premium-service-body simple-service-body">
-                  <h3 className="card-title">{item.title}</h3>
+      <p className="section-subtitle">
+        Tüm iş sağlığı ve güvenliği süreçlerini tek platform altında yönetin.
+        Modüller birlikte çalışarak işletmenize uçtan uca dijital yönetim sağlar.
+      </p>
+    </div>
 
-                  <p className="service-subtitle">{item.subtitle}</p>
+    <div className="service-category">
 
-                  <p className="card-text">{item.desc}</p>
+      <h3>🛡️ İSG Yönetimi</h3>
 
-                  <div className="service-points">
-                    {item.points.map((point) => (
-                      <div key={point} className="service-point">
-                        <span
-                          className="service-point-dot"
-                          style={{ background: item.accent }}
-                        />
-                        <span>{point}</span>
-                      </div>
-                    ))}
-                  </div>
+      <div className="services-grid">
 
-                  <div
-                    className="service-accent-line"
-                    style={{
-                      background: `linear-gradient(90deg, ${item.accent}, transparent)`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+        {services
+          .filter(s =>
+            ["Denetim","Risk Yönetimi","Kaza ve Olay Yönetimi","Mevzuat"].includes(s.title)
+          )
+          .map(item=>(
+            <div key={item.title} className="premium-service-box">
+
+              <span className="service-badge">
+                {item.badge}
+              </span>
+
+              <h4>{item.title}</h4>
+
+              <p>{item.desc}</p>
+
+              <ul>
+                {item.points.map(point=>(
+                  <li key={point}>✓ {point}</li>
+                ))}
+              </ul>
+
+            </div>
+        ))}
+
+      </div>
+
+    </div>
+
+
+    <div className="service-category">
+
+      <h3>🎓 Eğitim Yönetimi</h3>
+
+      <div className="services-grid">
+
+        {services
+          .filter(s =>
+            ["Eğitim"].includes(s.title)
+          )
+          .map(item=>(
+            <div key={item.title} className="premium-service-box">
+
+              <span className="service-badge">
+                {item.badge}
+              </span>
+
+              <h4>{item.title}</h4>
+
+              <p>{item.desc}</p>
+
+              <ul>
+                {item.points.map(point=>(
+                  <li key={point}>✓ {point}</li>
+                ))}
+              </ul>
+
+            </div>
+        ))}
+
+      </div>
+
+    </div>
+
+
+    <div className="service-category">
+
+      <h3>❤️ Çalışan ve Sağlık</h3>
+
+      <div className="services-grid">
+
+        {services
+          .filter(s =>
+            ["Çalışanlar","Sağlık"].includes(s.title)
+          )
+          .map(item=>(
+            <div key={item.title} className="premium-service-box">
+
+              <span className="service-badge">
+                {item.badge}
+              </span>
+
+              <h4>{item.title}</h4>
+
+              <p>{item.desc}</p>
+
+              <ul>
+                {item.points.map(point=>(
+                  <li key={point}>✓ {point}</li>
+                ))}
+              </ul>
+
+            </div>
+        ))}
+
+      </div>
+
+    </div>
+
+
+    <div className="service-category">
+
+      <h3>📊 Yönetim Platformu</h3>
+
+      <div className="services-grid">
+
+        {services
+          .filter(s =>
+            [
+              "Ajanda",
+              "ÇBS",
+              "Dokümantasyon",
+              "Raporlama",
+              "Profil"
+            ].includes(s.title)
+          )
+          .map(item=>(
+            <div key={item.title} className="premium-service-box">
+
+              <span className="service-badge">
+                {item.badge}
+              </span>
+
+              <h4>{item.title}</h4>
+
+              <p>{item.desc}</p>
+
+              <ul>
+                {item.points.map(point=>(
+                  <li key={point}>✓ {point}</li>
+                ))}
+              </ul>
+
+            </div>
+        ))}
+
+      </div>
+
+    </div>
+
+  </div>
+</section>
 
       <section className="section section-soft">
         <div className="page-container">
