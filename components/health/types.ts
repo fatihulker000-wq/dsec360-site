@@ -49,3 +49,49 @@ export type HealthDashboardResponse = {
   alerts?: HealthAlert[];
   error?: string;
 };
+export type HealthEmployee = {
+  id: string;
+
+  full_name: string;
+
+  email: string;
+
+  company_id: string;
+
+  company_name: string;
+
+  job_title: string;
+
+  start_date: string;
+
+  phone?: string;
+
+  identity_number?: string;
+
+  birth_date?: string;
+
+  gender?: string;
+
+  blood_group?: string;
+
+  photo_url?: string;
+};
+
+export type HealthSummary = {
+  ek2_count: number;
+
+  examination_count: number;
+
+  prescription_count: number;
+
+  laboratory_count: number;
+
+  vaccination_count: number;
+
+  accident_count: number;
+
+  health_score: number;
+
+  risk_level: "LOW" | "MEDIUM" | "HIGH";
+};
+
