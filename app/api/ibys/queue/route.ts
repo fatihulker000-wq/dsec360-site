@@ -70,15 +70,15 @@ export async function POST(request: Request) {
       success: true,
       data,
     });
-  } catch (error) {
-    console.error("IBYS queue POST error:", error);
+  } catch (error: any) {
+  console.error(error);
 
-    return Response.json(
-      {
-        success: false,
-        error: "İBYS kuyruğuna kayıt eklenemedi.",
-      },
-      { status: 500 }
-    );
+  return Response.json(
+    {
+      success: false,
+      error: error?.message ?? String(error),
+    },
+    { status: 500 }
+  );
   }
 }
