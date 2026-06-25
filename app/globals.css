@@ -3263,3 +3263,67 @@ line-height:1.7;
     font-size:24px;
   }
 }
+/* ===============================
+   TRAINING PROBLEM SOLUTION
+================================= */
+
+.training-problem-solution{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+  gap:28px;
+}
+
+.training-problem-card{
+  border-radius:30px;
+  padding:36px;
+  min-height:320px;
+  box-shadow:0 24px 60px rgba(15,23,42,.10);
+}
+
+.training-problem-card span{
+  display:inline-flex;
+  padding:8px 14px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:900;
+  margin-bottom:20px;
+}
+
+.training-problem-card h2{
+  margin:0;
+  font-size:30px;
+  line-height:1.25;
+  color:#111827;
+}
+
+.training-problem-card p{
+  margin-top:18px;
+  color:#64748b;
+  line-height:1.8;
+  font-weight:650;
+}
+
+.training-problem-card.problem{
+  background:linear-gradient(180deg,#ffffff,#fff7f7);
+  border:1px solid rgba(198,40,40,.14);
+}
+
+.training-problem-card.problem span{
+  background:#fff1f1;
+  color:#9f1239;
+}
+
+.training-problem-card.solution{
+  background:linear-gradient(135deg,#4b0d1b,#c62828);
+  color:#fff;
+}
+
+.training-problem-card.solution span{
+  background:rgba(255,255,255,.16);
+  color:#fff;
+}
+
+.training-problem-card.solution h2,
+.training-problem-card.solution p{
+  color:#fff;
+}

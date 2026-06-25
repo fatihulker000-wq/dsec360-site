@@ -86,50 +86,6 @@ const processSteps = [
   },
 ];
 
-const pricingPlans = [
-  {
-    title: "Başlangıç",
-    subtitle: "Küçük işletmeler için",
-    price: null,
-    items: [
-      "Asenkron eğitim yönetimi",
-      "Çalışan bazlı temel takip",
-      "Temel görünürlük ve kayıt yapısı",
-    ],
-    cta: "Teklif Al",
-    href: "/contact",
-    featured: false,
-  },
-  {
-    title: "Profesyonel",
-    subtitle: "Büyüyen işletmeler için",
-    price: null,
-    items: [
-      "Senkron + asenkron yapı",
-      "Eğitim atama ve durum takibi",
-      "Eksik eğitim görünürlüğü",
-      "Yönetim paneline uygun raporlama altyapısı",
-    ],
-    cta: "Demo Talep Et",
-    href: "/contact",
-    featured: true,
-  },
-  {
-    title: "Kurumsal",
-    subtitle: "Özel yapı isteyen kurumlar için",
-    price: null,
-    items: [
-      "Kuruma özel eğitim kurgusu",
-      "Geniş kullanıcı ve firma yapısı",
-      "Raporlama ve entegrasyon uyumu",
-      "Kurumsal büyümeye uygun ölçeklenebilir yapı",
-    ],
-    cta: "İletişime Geç",
-    href: "/contact",
-    featured: false,
-  },
-];
-
 const targetGroups = [
   "İş güvenliği uzmanları",
   "İnsan kaynakları ekipleri",
@@ -290,110 +246,38 @@ export default function TrainingPage() {
       </section>
 
       <section className="section section-light">
-        <div className="page-container">
-          <div className="section-title-wrap">
-            <h2 className="section-title">Problem ve Çözüm</h2>
-            <p className="section-subtitle">
-              Eğitim süreçlerinde en sık karşılaşılan dağınıklığı merkezi yapıya
-              dönüştürür
-            </p>
-          </div>
+  <div className="page-container">
+    <div className="training-problem-solution">
+      <div className="training-problem-card problem">
+        <span>Mevcut Sorun</span>
 
-          <div className="grid-2">
-            <div className="card">
-              <h3 className="card-title">Problem</h3>
-              <p className="card-text">
-                Eğitimler veriliyor ancak kim katıldı, kim tamamladı, kim eksik
-                kaldı çoğu zaman net biçimde izlenemiyor. Belgeler farklı
-                kanallarda kalıyor, yönetim görünürlüğü zayıf oluyor ve denetim
-                dönemlerinde eksikler ortaya çıkabiliyor.
-              </p>
-            </div>
+        <h2>
+          Eğitim süreçleri çoğu işletmede dağınık ve takip edilmesi zor ilerler.
+        </h2>
 
-            <div className="card">
-              <h3 className="card-title">Çözüm</h3>
-              <p className="card-text">
-                D-SEC Eğitim Modülü ile eğitim planlama, çalışan atama, katılım
-                takibi, eksik eğitim görünürlüğü ve gelecekte belge/sertifika
-                akışı tek platform mantığında bir araya gelir. Böylece süreç
-                dağınık değil, yönetilebilir hale gelir.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+        <p>
+          Eğitim kayıtları farklı dosyalarda, katılım listeleri ayrı kanallarda,
+          tamamlanma durumları ise çoğu zaman manuel takip edilir. Bu durum
+          denetim dönemlerinde eksiklerin geç fark edilmesine neden olur.
+        </p>
+      </div>
 
-      <section className="section section-soft">
-        <div className="page-container">
-          <div className="section-title-wrap">
-            <h2 className="section-title">Fiyatlandırma</h2>
-            <p className="section-subtitle">
-              İşletmenizin yapısına uygun esnek paketlerle eğitim süreçlerini
-              dijitalleştirin
-            </p>
-          </div>
+      <div className="training-problem-card solution">
+        <span>D-SEC Çözümü</span>
 
-          <div className="grid-3">
-            {pricingPlans.map((plan) => (
-              <div
-                key={plan.title}
-                className="card"
-                style={
-                  plan.featured
-                    ? {
-                        border: "2px solid #dc2626",
-                        boxShadow: "0 18px 40px rgba(220, 38, 38, 0.12)",
-                      }
-                    : undefined
-                }
-              >
-                <h3 className="card-title">{plan.title}</h3>
-                <p
-                  className="card-text"
-                  style={{ marginTop: 8, fontWeight: 700, color: "#991b1b" }}
-                >
-                  {plan.subtitle}
-                </p>
+        <h2>
+          Eğitim planlama, atama, tamamlama ve raporlama tek merkezde birleşir.
+        </h2>
 
-                {plan.price && (
-                  <div
-                    style={{
-                      marginTop: 16,
-                      fontSize: 28,
-                      fontWeight: 800,
-                      color: "#111827",
-                    }}
-                  >
-                    {plan.price}
-                  </div>
-                )}
-
-                <div style={{ marginTop: 18, display: "grid", gap: 10 }}>
-                  {plan.items.map((item) => (
-                    <div
-                      key={item}
-                      style={{
-                        fontSize: 14,
-                        color: "#374151",
-                        lineHeight: 1.7,
-                        fontWeight: 600,
-                      }}
-                    >
-                      • {item}
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ marginTop: 22 }}>
-                  <Link href={plan.href} className="btn-primary">
-                    {plan.cta}
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+        <p>
+          D-SEC Eğitim Modülü ile çalışan bazlı eğitim görünürlüğü sağlanır.
+          Eksik eğitimler, devam eden süreçler ve tamamlanan kayıtlar yönetici
+          ekranlarında daha net takip edilir.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
 
       <section className="section section-light">
         <div className="page-container">
