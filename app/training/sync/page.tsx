@@ -58,13 +58,13 @@ export default function SyncTrainingPage() {
           <div className="hero-badge">Senkron Eğitim</div>
 
           <h1 className="hero-title">
-            Canlı ve Planlı Eğitim Yönetimini Merkezileştirin
-          </h1>
+  Canlı Eğitim Süreçlerini Planlayın, Yönetin ve Raporlayın
+</h1>
 
-          <p className="hero-desc">
-            D-SEC Senkron Eğitim yapısı ile canlı oturumları planlayın, katılımı
-            izleyin ve eğitim süreçlerini daha kontrollü ve kurumsal hale getirin.
-          </p>
+<p className="hero-desc">
+  D-SEC Senkron Eğitim Modülü ile canlı eğitim planlaması, katılım takibi,
+  yoklama, eğitim sonuçları ve yönetim raporlarını tek platformdan yönetin.
+</p>
 
           <div className="hero-actions">
             <Link href="/contact" className="btn-primary">
@@ -106,35 +106,60 @@ export default function SyncTrainingPage() {
               Eğitimin planlanmasından katılım takibine kadar uçtan uca süreç görünürlüğü
             </p>
           </div>
+<div className="flow-grid">
+  {syncSteps.map((item) => (
+    <div key={item.step} className="flow-card">
+      <strong>
+        {item.step} {item.title}
+      </strong>
 
-          <div className="grid-2">
-            {syncSteps.map((item) => (
-              <div key={item.step} className="card">
-                <div
-                  style={{
-                    width: 54,
-                    height: 54,
-                    borderRadius: 16,
-                    background: "#fee2e2",
-                    color: "#b91c1c",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 800,
-                    fontSize: 18,
-                    marginBottom: 16,
-                  }}
-                >
-                  {item.step}
-                </div>
-
-                <h3 className="card-title">{item.title}</h3>
-                <p className="card-text">{item.desc}</p>
-              </div>
-            ))}
-          </div>
+      <p>{item.desc}</p>
+    </div>
+  ))}
+</div>          
         </div>
       </section>
+
+<section className="section section-light">
+  <div className="page-container">
+
+    <div className="training-problem-solution">
+
+      <div className="training-problem-card problem">
+
+        <span>Mevcut Durum</span>
+
+        <h2>
+          Canlı eğitimlerin planlanması ve katılımının takibi çoğu zaman manuel yürütülür.
+        </h2>
+
+        <p>
+          Davetler, katılım listeleri, yoklamalar ve eğitim kayıtları farklı
+          platformlarda tutulduğu için yönetim açısından süreç zorlaşabilir.
+        </p>
+
+      </div>
+
+      <div className="training-problem-card solution">
+
+        <span>D-SEC Çözümü</span>
+
+        <h2>
+          Eğitim planlama, katılım ve sonuçlar tek platformdan yönetilir.
+        </h2>
+
+        <p>
+          Eğitim takvimi oluşturulur, çalışanlar atanır, katılım kayıt altına
+          alınır ve yönetim ekranlarında raporlanabilir hale gelir.
+        </p>
+
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
 
       <section className="hero">
         <div
