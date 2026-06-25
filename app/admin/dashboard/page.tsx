@@ -2,338 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  Clock3,
-  FileDown,
-  RefreshCw,
-  ShieldCheck,
-  TrendingUp,
-  Users,
-  Sparkles,
-} from "lucide-react";
+
+import type {
+  Training,
+  RiskUser,
+  DashboardSummary,
+  CompanyDistributionItem,
+  TrendItem,
+  DashboardResponse,
+  MeResponse,
+} from "@/components/dashboard/types";
+
+import HeroSection from "@/components/dashboard/HeroSection";
+import ChartsSection from "@/components/dashboard/ChartsSection";
+import CardsSection from "@/components/dashboard/CardsSection";
+import ExecutiveSection from "@/components/dashboard/ExecutiveSection";
+import ListsSection from "@/components/dashboard/ListsSection";
+import AlarmPanel from "../../../components/dashboard/AlarmPanel";
+import { BRAND, formatPercent } from "../../../components/dashboard/styles";
 
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
+  calculateTotals,
+  calculateRates,
+  buildCeoSummary,
+} from "../../../components/dashboard/dashboardHelpers";
 
-type Training = {
-  id: string;
-  title: string;
-  assigned_count: number;
-  not_started_count: number;
-  in_progress_count: number;
-  completed_count: number;
-};
-
-type RiskUser = {
-  assignment_id: string;
-  user_id: string;
-  training_id: string;
-  full_name: string;
-  email: string;
-  company_id: string;
-  training_title: string;
-  status: "not_started" | "in_progress" | "completed";
-};
-
-type DashboardSummary = {
-  total_assignments: number;
-  completed_count: number;
-  in_progress_count: number;
-  not_started_count: number;
-  completion_rate: number;
-  in_progress_rate: number;
-  risk_rate: number;
-  risk_status: "KRITIK" | "ORTA" | "IYI";
-};
-
-type CompanyDistributionItem = {
-  name: string;
-  count: number;
-};
-
-type TrendItem = {
-  label: string;
-  value: number;
-};
-
-type DashboardResponse = {
-  success?: boolean;
-  trainings?: Training[];
-  risky_users?: RiskUser[];
-  in_progress_users?: RiskUser[];
-  completed_users?: RiskUser[];
-  company_distribution?: CompanyDistributionItem[];
-  company_list?: string[];
-  trend?: TrendItem[];
-  summary?: DashboardSummary;
-  error?: string;
-  detail?: string;
-};
-
-type MeResponse = {
-  success?: boolean;
-  user?: {
-    id?: string;
-    full_name?: string;
-    email?: string;
-    role?: string;
-    company_id?: string;
-  };
-  error?: string;
-};
-
-const BRAND = {
-  bg: "#f7f8fb",
-  white: "#ffffff",
-  text: "#1f2937",
-  muted: "#6b7280",
-  border: "#e5e7eb",
-
-  red: "#c62828",
-  redDark: "#5a0f1f",
-  redSoft: "#fff1f1",
-
-  green: "#166534",
-  greenSoft: "#f0fdf4",
-
-  blue: "#1d4ed8",
-  blueSoft: "#eff6ff",
-
-  amber: "#92400e",
-  amberSoft: "#fff7ed",
-
-  slate: "#334155",
-  purple: "#6d28d9",
-  purpleSoft: "#f5f3ff",
-
-  shadow: "0 10px 30px rgba(15,23,42,0.06)",
-};
-
-function cardStyle(isMobile = false): React.CSSProperties {
-  return {
-    background: BRAND.white,
-    border: `1px solid ${BRAND.border}`,
-    borderRadius: isMobile ? 16 : 20,
-    padding: isMobile ? 14 : 20,
-    boxShadow: BRAND.shadow,
-    minWidth: 0,
-  };
-}
-
-function badgeStyle(
-  bg: string,
-  color: string,
-  border?: string
-): React.CSSProperties {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "6px 10px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 800,
-    background: bg,
-    color,
-    border: `1px solid ${border || bg}`,
-    whiteSpace: "nowrap",
-  };
-}
-
-function metricCardStyle(
-  _accent: string,
-  isMobile = false
-): React.CSSProperties {
-  return {
-    ...cardStyle(isMobile),
-    position: "relative",
-    overflow: "hidden",
-    minHeight: isMobile ? 110 : 132,
-    border: `1px solid ${BRAND.border}`,
-    background: BRAND.white,
-    boxShadow: BRAND.shadow,
-  };
-}
-
-function softPanelStyle(bg: string, isMobile = false): React.CSSProperties {
-  return {
-    borderRadius: isMobile ? 14 : 18,
-    padding: isMobile ? 12 : 16,
-    background: bg,
-    border: `1px solid ${BRAND.border}`,
-  };
-}
-
-function formatPercent(value: number) {
-  if (!Number.isFinite(value)) return "0";
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function MiniBarChart({
-  items,
-  color,
-  emptyText = "Veri bulunamadı.",
-}: {
-  items: { label: string; value: number }[];
-  color: string;
-  emptyText?: string;
-}) {
-  if (!items.length) {
-    return <div style={{ color: BRAND.muted }}>{emptyText}</div>;
-  }
-
-  const max = Math.max(...items.map((x) => x.value), 1);
-
-  return (
-    <div style={{ display: "grid", gap: 12 }}>
-      {items.map((item) => {
-        const width = Math.max(6, Math.round((item.value / max) * 100));
-
-        return (
-          <div key={item.label}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                marginBottom: 6,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: BRAND.text,
-                  lineHeight: 1.4,
-                }}
-              >
-                {item.label}
-              </div>
-
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 800,
-                  color,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {item.value}
-              </div>
-            </div>
-
-            <div
-              style={{
-                height: 10,
-                borderRadius: 999,
-                background: "#f3f4f6",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${width}%`,
-                  height: "100%",
-                  background: color,
-                  borderRadius: 999,
-                }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function StatusDonut({
-  label,
-  value,
-  total,
-  color,
-  softBg,
-}: {
-  label: string;
-  value: number;
-  total: number;
-  color: string;
-  softBg: string;
-}) {
-  const percent = total > 0 ? Math.round((value / total) * 100) : 0;
-
-  return (
-    <div
-      style={{
-        ...softPanelStyle(softBg),
-        display: "grid",
-        gap: 10,
-      }}
-    >
-      <div style={{ fontSize: 13, fontWeight: 800, color: BRAND.text }}>
-        {label}
-      </div>
-
-      <div
-        style={{
-          width: 70,
-          height: 70,
-          borderRadius: "50%",
-          background: `conic-gradient(${color} ${percent}%, #e5e7eb ${percent}% 100%)`,
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
-        <div
-          style={{
-            width: 46,
-            height: 46,
-            borderRadius: "50%",
-            background: "#fff",
-            display: "grid",
-            placeItems: "center",
-            fontSize: 12,
-            fontWeight: 900,
-            color: BRAND.text,
-          }}
-        >
-          %{percent}
-        </div>
-      </div>
-
-      <div style={{ fontSize: 24, fontWeight: 900, color }}>{value}</div>
-    </div>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div
-      style={{
-        padding: 18,
-        borderRadius: 16,
-        border: `1px dashed ${BRAND.border}`,
-        color: BRAND.muted,
-        background: "#fafafa",
-      }}
-    >
-      {text}
-    </div>
-  );
-}
 
 export default function AdminDashboardPage() {
   const [adminRole, setAdminRole] = useState<string>("");
@@ -535,43 +228,17 @@ setSummary(null);
     pdf.save("dsec-dashboard.pdf");
   };
 
-  const totals = useMemo(() => {
-    let assigned = 0;
-    let completed = 0;
-    let notStarted = 0;
-    let inProgress = 0;
+  const totals = useMemo(
+  () => calculateTotals(trainings),
+  [trainings]
+);
 
-    trainings.forEach((t) => {
-      assigned += Number(t.assigned_count || 0);
-      completed += Number(t.completed_count || 0);
-      notStarted += Number(t.not_started_count || 0);
-      inProgress += Number(t.in_progress_count || 0);
-    });
-
-    return { assigned, completed, notStarted, inProgress };
-  }, [trainings]);
-
-  const completionRate =
-    summary?.completion_rate ??
-    (totals.assigned
-      ? Number(((totals.completed / totals.assigned) * 100).toFixed(2))
-      : 0);
-
-  const inProgressRate =
-    summary?.in_progress_rate ??
-    (totals.assigned
-      ? Number(((totals.inProgress / totals.assigned) * 100).toFixed(2))
-      : 0);
-
-  const riskRate =
-    summary?.risk_rate ??
-    (totals.assigned
-      ? Number(((totals.notStarted / totals.assigned) * 100).toFixed(2))
-      : 0);
-
-  const riskStatus =
-    summary?.risk_status ??
-    (totals.notStarted > 20 ? "KRITIK" : totals.notStarted > 10 ? "ORTA" : "IYI");
+  const {
+  completionRate,
+  inProgressRate,
+  riskRate,
+  riskStatus,
+} = calculateRates(summary, totals);
 
  const companies = useMemo(() => {
   return [...companyList].sort((a, b) => a.localeCompare(b, "tr"));
@@ -699,56 +366,19 @@ const heroTotalTrainings = trainings.length;
 const heroRiskStatus = riskStatus || "IYI";
 const heroCompletionHeadline =
   completionHeadline || "Operasyon Yükleniyor";
-const heroRiskHeadline =
-  riskHeadline || "Durum Hesaplanıyor";
 
-  const ceoSummary = useMemo(() => {
-    const totalTrainings = trainings.length;
-    const totalAssignments = summary?.total_assignments ?? totals.assigned;
-    const totalCompleted = summary?.completed_count ?? totals.completed;
-    const totalInProgress = summary?.in_progress_count ?? totals.inProgress;
-    const totalNotStarted = summary?.not_started_count ?? totals.notStarted;
 
-    const cbsTotal = cbsSummary?.total || 0;
-    const cbsOpen =
-      (cbsSummary?.new || 0) +
-      (cbsSummary?.processing || 0) +
-      (cbsSummary?.read || 0);
-
-    const cbsClosed = cbsSummary?.closed || 0;
-    const cbsSla = cbsSummary?.slaExceeded || 0;
-
-    const executiveRiskScore = Math.min(
-      100,
-      Math.round(
-        riskRate * 0.45 +
-          (cbsSla > 0 ? 25 : 0) +
-          (cbsOpen > cbsClosed ? 15 : 0) +
-          (totalNotStarted > totalCompleted ? 15 : 0)
-      )
-    );
-
-    const healthLabel =
-      executiveRiskScore >= 70
-        ? "Kritik"
-        : executiveRiskScore >= 40
-        ? "Dikkat"
-        : "Sağlıklı";
-
-    return {
-      totalTrainings,
-      totalAssignments,
-      totalCompleted,
-      totalInProgress,
-      totalNotStarted,
-      cbsTotal,
-      cbsOpen,
-      cbsClosed,
-      cbsSla,
-      executiveRiskScore,
-      healthLabel,
-    };
-  }, [trainings, summary, totals, cbsSummary, riskRate]);
+  const ceoSummary = useMemo(
+  () =>
+    buildCeoSummary({
+      trainings,
+      summary,
+      totals,
+      cbsSummary,
+      riskRate,
+    }),
+  [trainings, summary, totals, cbsSummary, riskRate]
+);
 
 const dashboardTrendData =
   trend.length > 0
@@ -767,8 +397,6 @@ const dashboardPieData = [
   { name: "Devam", value: summary?.in_progress_count ?? totals.inProgress },
   { name: "Başlamadı", value: summary?.not_started_count ?? totals.notStarted },
 ];
-
-const pieColors = ["#16a34a", "#2563eb", "#f59e0b"];
 
   if (error) {
     return (
@@ -796,806 +424,68 @@ const pieColors = ["#16a34a", "#2563eb", "#f59e0b"];
     transition: "opacity 0.2s ease",
   }}
 >
-        <section
-  style={{
-    marginBottom: 24,
-    borderRadius: isMobile ? 22 : 30,
-    padding: isMobile ? 20 : 30,
-    background:
-      "linear-gradient(135deg, #4b0d1b 0%, #8f172c 48%, #f97316 100%)",
-    color: "#fff",
-    boxShadow: "0 28px 70px rgba(90,15,31,0.28)",
-    overflow: "hidden",
+
+<HeroSection
+  loading={loading}
+  isMobile={isMobile}
+  heroCompletionHeadline={heroCompletionHeadline}
+  heroRiskStatus={heroRiskStatus}
+  heroTotalTrainings={heroTotalTrainings}
+  completionRate={completionRate}
+  ceoSummary={ceoSummary}
+  exportPDF={exportPDF}
+  refreshDashboard={() => {
+    void loadDashboard();
+    void loadCbs();
   }}
->
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: isMobile ? "1fr" : "1.4fr 0.6fr",
-      gap: 24,
-      alignItems: "center",
-    }}
-  >
-    <div>
-      <div
-        style={{
-          display: "inline-flex",
-          padding: "8px 14px",
-          borderRadius: 999,
-          background: "rgba(255,255,255,0.14)",
-          border: "1px solid rgba(255,255,255,0.18)",
-          fontWeight: 900,
-          fontSize: 12,
-          marginBottom: 14,
-        }}
-      >
-        D-SEC360 Executive Dashboard
-      </div>
+/>
 
-      <h1
-        style={{
-          margin: 0,
-          fontSize: isMobile ? 30 : 46,
-          lineHeight: 1.08,
-          fontWeight: 950,
-          letterSpacing: "-1px",
-        }}
-      >
-        Canlı HSE Yönetim Merkezi
-      </h1>
+<ChartsSection
+  isMobile={isMobile}
+  dashboardTrendData={dashboardTrendData}
+  dashboardPieData={dashboardPieData}
+/>
+ <CardsSection
+  isMobile={isMobile}
+  adminRole={adminRole}
+  cbsSummary={cbsSummary}
+  totalAssignments={summary?.total_assignments ?? totals.assigned}
+  completionRate={completionRate}
+  inProgressRate={inProgressRate}
+  riskRate={riskRate}
+/>
 
-      <p
-        style={{
-          marginTop: 14,
-          maxWidth: 760,
-          color: "rgba(255,255,255,0.9)",
-          fontSize: isMobile ? 14 : 17,
-          lineHeight: 1.7,
-        }}
-      >
-        Eğitim, ÇBS, firma riski, açık kayıtlar ve yönetim karar desteği tek
-        ekranda izlenir.
-      </p>
+<ExecutiveSection
+  isMobile={isMobile}
+  adminRole={adminRole}
+  adminCompanyId={adminCompanyId}
+  companies={companies}
+  selectedCompany={selectedCompany}
+  setSelectedCompany={setSelectedCompany}
+  filteredRiskUsers={filteredRiskUsers}
+  ceoSummary={ceoSummary}
+  summary={summary}
+  totals={totals}
+/>
 
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 10,
-          marginTop: 18,
-        }}
-      >
-        <span style={badgeStyle("rgba(255,255,255,0.16)", "#fff")}>
-          {loading ? "Veriler hazırlanıyor" : heroCompletionHeadline}
-        </span>
+<ListsSection
+  isMobile={isMobile}
+  aiComment={aiComment}
+  filteredRiskUsers={filteredRiskUsers}
+  filteredInProgressUsers={filteredInProgressUsers}
+  filteredCompletedUsers={filteredCompletedUsers}
+  groupedRiskCompanies={groupedRiskCompanies}
+  groupedRiskTrainings={groupedRiskTrainings}
+  topRiskTrainings={topRiskTrainings}
+  bestTrainings={bestTrainings}
+  topEmployees={topEmployees}
+/>
 
-        <span style={badgeStyle("rgba(255,255,255,0.16)", "#fff")}>
-          Risk: {loading ? "Hesaplanıyor" : heroRiskStatus}
-        </span>
-
-        <span style={badgeStyle("rgba(255,255,255,0.16)", "#fff")}>
-          Eğitim: {loading ? "..." : heroTotalTrainings}
-        </span>
-      </div>
-    </div>
-
-    <div
-      style={{
-        display: "grid",
-        gap: 12,
-      }}
-    >
-      <button
-        onClick={exportPDF}
-        style={{
-          border: "none",
-          borderRadius: 16,
-          padding: "14px 18px",
-          background: "#fff",
-          color: BRAND.red,
-          fontWeight: 950,
-          cursor: "pointer",
-        }}
-      >
-        PDF Rapor İndir
-      </button>
-
-      <button
-        onClick={() => {
-          void loadDashboard();
-          void loadCbs();
-        }}
-        style={{
-          border: "1px solid rgba(255,255,255,0.2)",
-          borderRadius: 16,
-          padding: "14px 18px",
-          background: "rgba(255,255,255,0.12)",
-          color: "#fff",
-          fontWeight: 950,
-          cursor: "pointer",
-        }}
-      >
-        Veriyi Yenile
-      </button>
-    </div>
-  </div>
-</section>
-
-        <section
-  style={{
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))",
-    gap: 16,
-    marginBottom: 22,
-  }}
->
-  {[
-    {
-      title: "Genel Sağlık",
-      value: ceoSummary.healthLabel,
-      desc: "Kurumsal operasyon durumu",
-      icon: ShieldCheck,
-      color:
-        ceoSummary.healthLabel === "Kritik"
-          ? BRAND.red
-          : ceoSummary.healthLabel === "Dikkat"
-          ? BRAND.amber
-          : BRAND.green,
-    },
-    {
-      title: "Risk Skoru",
-      value: ceoSummary.executiveRiskScore,
-      desc: "Executive risk değerlendirmesi",
-      icon: AlertTriangle,
-      color: BRAND.red,
-    },
-    {
-      title: "Eğitim Uyumu",
-      value: `%${formatPercent(completionRate)}`,
-      desc: "Tamamlanan eğitim oranı",
-      icon: CheckCircle2,
-      color: BRAND.green,
-    },
-    {
-      title: "Açık ÇBS",
-      value: ceoSummary.cbsOpen,
-      desc: "Bekleyen şikayet / öneri",
-      icon: Activity,
-      color: BRAND.blue,
-    },
-  ].map((item) => {
-    const Icon = item.icon;
-
-    return (
-      <div
-        key={item.title}
-        style={{
-          position: "relative",
-          overflow: "hidden",
-          borderRadius: 24,
-          padding: 20,
-          background: "#ffffff",
-          border: "1px solid #eceff3",
-          boxShadow: "0 18px 45px rgba(15,23,42,0.08)",
-        }}
-      >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 16,
-            background: `${item.color}18`,
-            color: item.color,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 18,
-          }}
-        >
-          <Icon size={24} />
-        </div>
-
-        <div style={{ fontSize: 13, color: BRAND.muted, fontWeight: 800 }}>
-          {item.title}
-        </div>
-
-        <div
-          style={{
-            marginTop: 6,
-            fontSize: 34,
-            fontWeight: 950,
-            color: BRAND.text,
-            lineHeight: 1,
-          }}
-        >
-          {item.value}
-        </div>
-
-        <div style={{ marginTop: 10, color: BRAND.muted, fontSize: 13 }}>
-          {item.desc}
-        </div>
-      </div>
-    );
-  })}
-</section>
-
-<section
-  style={{
-    display: "grid",
-    gridTemplateColumns: isMobile ? "1fr" : "1.4fr 0.6fr",
-    gap: 18,
-    marginBottom: 22,
-  }}
->
-  <div style={cardStyle(isMobile)}>
-    <h2 style={{ margin: 0, fontSize: 22, fontWeight: 950 }}>
-      Eğitim Performans Trendi
-    </h2>
-
-    <div style={{ height: 280, marginTop: 18 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={dashboardTrendData}>
-          <XAxis dataKey="label" />
-          <YAxis />
-          <Tooltip />
-          <Area
-            type="monotone"
-            dataKey="value"
-            stroke={BRAND.red}
-            fill="#fee2e2"
-            strokeWidth={3}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  </div>
-
-  <div style={cardStyle(isMobile)}>
-    <h2 style={{ margin: 0, fontSize: 22, fontWeight: 950 }}>
-      Eğitim Durum Dağılımı
-    </h2>
-
-    <div style={{ height: 280, marginTop: 18 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={dashboardPieData}
-            dataKey="value"
-            nameKey="name"
-            innerRadius={60}
-            outerRadius={95}
-            paddingAngle={4}
-          >
-            {dashboardPieData.map((_, index) => (
-              <Cell key={index} fill={pieColors[index % pieColors.length]} />
-            ))}
-          </Pie>
-          <Tooltip />
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
-  </div>
-</section>
-          
-
-        {adminRole === "super_admin" ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 16,
-              marginBottom: 20,
-            }}
-          >
-            <div style={cardStyle(isMobile)}>
-              <div style={{ fontSize: 12, color: BRAND.muted }}>Yönetim</div>
-              <div
-                style={{
-                  marginTop: 8,
-                  fontSize: 24,
-                  fontWeight: 900,
-                  color: BRAND.text,
-                }}
-              >
-                Firma Yönetimi
-              </div>
-              <div
-                style={{
-                  marginTop: 8,
-                  fontSize: 13,
-                  color: BRAND.muted,
-                  lineHeight: 1.7,
-                }}
-              >
-                Firma ekleme, düzenleme ve firma atama işlemleri sadece süper admin
-                tarafından yönetilir.
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href = "/admin/companies";
-                }}
-                style={{
-                  marginTop: 16,
-                  border: "none",
-                  borderRadius: 12,
-                  padding: "12px 16px",
-                  background: BRAND.red,
-                  color: "#fff",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                Firma Yönetimine Git
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: 16,
-            marginBottom: 20,
-          }}
-        >
-          <div
-            style={{
-              ...cardStyle(isMobile),
-              border: `1px solid ${BRAND.border}`,
-              background: BRAND.white,
-            }}
-          >
-            <div
-              style={{
-                display: "inline-block",
-                padding: "6px 12px",
-                borderRadius: 999,
-                background: "#eef2ff",
-                color: "#3730a3",
-                fontSize: 12,
-                fontWeight: 800,
-                marginBottom: 12,
-              }}
-            >
-              ÇBS MODÜLÜ
-            </div>
-
-            <h3 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>
-              Şikayet / Öneri Yönetimi
-            </h3>
-
-            <p style={{ marginTop: 10, color: BRAND.muted, lineHeight: 1.7 }}>
-              Dış kullanıcılar tarafından gönderilen talepleri görüntüleyin,
-              yönlendirin ve sonuçlandırın.
-            </p>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
-                gap: 10,
-                marginTop: 14,
-              }}
-            >
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 12,
-                  padding: 10,
-                }}
-              >
-                <div style={{ fontSize: 12, color: BRAND.muted }}>Toplam</div>
-                <div style={{ fontSize: 22, fontWeight: 900, marginTop: 4 }}>
-                  {cbsSummary?.total || 0}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: "#fff1f2",
-                  border: "1px solid #fecdd3",
-                  borderRadius: 12,
-                  padding: 10,
-                }}
-              >
-                <div style={{ fontSize: 12, color: "#9f1239" }}>Yeni</div>
-                <div
-                  style={{
-                    fontSize: 22,
-                    fontWeight: 900,
-                    marginTop: 4,
-                    color: "#be123c",
-                  }}
-                >
-                  {cbsSummary?.new || 0}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: "#fffbeb",
-                  border: "1px solid #fde68a",
-                  borderRadius: 12,
-                  padding: 10,
-                }}
-              >
-                <div style={{ fontSize: 12, color: "#92400e" }}>İşlemde</div>
-                <div
-                  style={{
-                    fontSize: 22,
-                    fontWeight: 900,
-                    marginTop: 4,
-                    color: "#a16207",
-                  }}
-                >
-                  {cbsSummary?.processing || 0}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: "#fef2f2",
-                  border: "1px solid #fca5a5",
-                  borderRadius: 12,
-                  padding: 10,
-                }}
-              >
-                <div style={{ fontSize: 12, color: "#b91c1c" }}>SLA</div>
-                <div
-                  style={{
-                    fontSize: 22,
-                    fontWeight: 900,
-                    marginTop: 4,
-                    color: "#b91c1c",
-                  }}
-                >
-                  {cbsSummary?.slaExceeded || 0}
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                window.location.href = "/admin/cbs";
-              }}
-              style={{
-                marginTop: 18,
-                border: "none",
-                borderRadius: 12,
-                padding: "12px 16px",
-                background: "#1e3a8a",
-                color: "#fff",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              ÇBS Paneline Git
-            </button>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: isMobile ? 12 : 16,
-            marginBottom: 20,
-          }}
-        >
-          <div style={metricCardStyle(BRAND.slate, isMobile)}>
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: 5,
-                height: "100%",
-                background: BRAND.slate,
-              }}
-            />
-            <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Atama</div>
-            <div
-              style={{
-                fontSize: isMobile ? 28 : 34,
-                fontWeight: 900,
-                marginTop: 8,
-              }}
-            >
-              {summary?.total_assignments ?? totals.assigned}
-            </div>
-            <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
-              Toplam eğitim atama yükü
-            </div>
-          </div>
-
-          <div style={metricCardStyle(BRAND.green, isMobile)}>
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: 5,
-                height: "100%",
-                background: BRAND.green,
-              }}
-            />
-            <div style={{ fontSize: 13, color: BRAND.green }}>Tamamlanma</div>
-            <div
-              style={{
-                fontSize: isMobile ? 28 : 34,
-                fontWeight: 900,
-                marginTop: 8,
-              }}
-            >
-              %{formatPercent(completionRate)}
-            </div>
-            <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
-              Tamamlanan eğitim oranı
-            </div>
-          </div>
-
-          <div style={metricCardStyle(BRAND.blue, isMobile)}>
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: 5,
-                height: "100%",
-                background: BRAND.blue,
-              }}
-            />
-            <div style={{ fontSize: 13, color: BRAND.blue }}>Devam Eden</div>
-            <div
-              style={{
-                fontSize: isMobile ? 28 : 34,
-                fontWeight: 900,
-                marginTop: 8,
-              }}
-            >
-              %{formatPercent(inProgressRate)}
-            </div>
-            <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
-              Açık süreçte kalan eğitimler
-            </div>
-          </div>
-
-          <div style={metricCardStyle(BRAND.amber, isMobile)}>
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: 5,
-                height: "100%",
-                background: BRAND.amber,
-              }}
-            />
-            <div style={{ fontSize: 13, color: BRAND.amber }}>Riskli Oran</div>
-            <div
-              style={{
-                fontSize: isMobile ? 28 : 34,
-                fontWeight: 900,
-                marginTop: 8,
-              }}
-            >
-              %{formatPercent(riskRate)}
-            </div>
-            <div style={{ marginTop: 8, color: BRAND.muted, fontSize: 13 }}>
-              Başlamamış eğitim yoğunluğu
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            ...cardStyle(),
-            marginBottom: 20,
-            display: "grid",
-            gridTemplateColumns: isMobile
-              ? "1fr"
-              : "minmax(0, 1.3fr) minmax(280px, 0.7fr)",
-            gap: 16,
-            alignItems: "stretch",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 900, color: BRAND.text }}>
-              CEO Executive Özeti
-            </div>
-
-            <div style={{ marginTop: 8, color: BRAND.muted, lineHeight: 1.8 }}>
-              {ceoSummary.executiveRiskScore >= 70
-                ? "Operasyonel risk yükselmiş görünüyor. Başlamayan eğitimler, açık ÇBS kayıtları ve SLA gecikmeleri üst yönetim takibine alınmalıdır."
-                : ceoSummary.executiveRiskScore >= 40
-                ? "Sistem kontrol altında ancak dikkat gerektiren alanlar var. Eğitim tamamlama performansı ile ÇBS kapanış hızının birlikte izlenmesi önerilir."
-                : "Kurumsal görünüm sağlıklı. Eğitim kapanış oranı ve ÇBS akışı dengeli ilerliyor. Yönetim seviyesinde sürdürülebilir operasyon görünümü mevcut."}
-            </div>
-
-            <div
-              style={{
-                marginTop: 16,
-                display: "grid",
-                gridTemplateColumns: isMobile
-                  ? "1fr"
-                  : "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: 12,
-              }}
-            >
-              <StatusDonut
-                label="Tamamlanan"
-                value={summary?.completed_count ?? totals.completed}
-                total={summary?.total_assignments ?? totals.assigned}
-                color={BRAND.green}
-                softBg={BRAND.greenSoft}
-              />
-
-              <StatusDonut
-                label="Devam Eden"
-                value={summary?.in_progress_count ?? totals.inProgress}
-                total={summary?.total_assignments ?? totals.assigned}
-                color={BRAND.blue}
-                softBg={BRAND.blueSoft}
-              />
-
-              <StatusDonut
-                label="Başlamayan"
-                value={summary?.not_started_count ?? totals.notStarted}
-                total={summary?.total_assignments ?? totals.assigned}
-                color={BRAND.amber}
-                softBg={BRAND.amberSoft}
-              />
-            </div>
-          </div>
-
-          <div
-            style={{
-              ...softPanelStyle("#fafafa"),
-              display: "grid",
-              gap: 12,
-              alignContent: "start",
-              minWidth: 0,
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 900, color: BRAND.text }}>
-              Firma Filtresi
-            </div>
-
-            {adminRole === "company_admin" ? (
-              <div
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  border: `1px solid ${BRAND.border}`,
-                  background: "#fff",
-                  fontWeight: 700,
-                }}
-              >
-                {adminCompanyId || "Bağlı firma"}
-              </div>
-            ) : (
-              <select
-                value={selectedCompany}
-                onChange={(e) => setSelectedCompany(e.target.value)}
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  border: `1px solid ${BRAND.border}`,
-                  background: "#fff",
-                  fontWeight: 700,
-                  minWidth: isMobile ? "100%" : 220,
-                  width: isMobile ? "100%" : "auto",
-                }}
-              >
-                <option value="all">Tüm Firmalar</option>
-                {companies.map((company) => (
-                  <option key={company} value={company}>
-                    {company}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                marginTop: 4,
-              }}
-            >
-              <div style={softPanelStyle(BRAND.redSoft, isMobile)}>
-                <div style={{ fontSize: 12, color: BRAND.muted }}>
-                  Seçili Firmada Riskli
-                </div>
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: 24,
-                    fontWeight: 900,
-                    color: BRAND.red,
-                  }}
-                >
-                  {filteredRiskUsers.length}
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        <section
-          style={{
-            ...cardStyle(isMobile),
-            marginTop: 20,
-            background:
-              ceoSummary.executiveRiskScore >= 70
-                ? "linear-gradient(135deg, #7f1d1d 0%, #b91c1c 100%)"
-                : ceoSummary.executiveRiskScore >= 40
-                ? "linear-gradient(135deg, #92400e 0%, #d97706 100%)"
-                : "linear-gradient(135deg, #166534 0%, #16a34a 100%)",
-            color: "#fff",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 16,
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  opacity: 0.9,
-                  marginBottom: 8,
-                }}
-              >
-                CEO ALARM PANELİ
-              </div>
-
-              <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.2 }}>
-                {ceoSummary.healthLabel === "Kritik"
-                  ? "Üst yönetim müdahalesi önerilir"
-                  : ceoSummary.healthLabel === "Dikkat"
-                  ? "Yakın takip önerilir"
-                  : "Operasyon dengeli görünüyor"}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 10,
-                  lineHeight: 1.7,
-                  color: "rgba(255,255,255,0.92)",
-                }}
-              >
-                Açık ÇBS kayıtları: {ceoSummary.cbsOpen} • SLA alarmı:{" "}
-                {ceoSummary.cbsSla} • Başlamayan eğitim:{" "}
-                {ceoSummary.totalNotStarted} • Tamamlanan eğitim:{" "}
-                {ceoSummary.totalCompleted}
-              </div>
-            </div>
-
-            <div
-              style={{
-                padding: "12px 16px",
-                borderRadius: 16,
-                background: "rgba(255,255,255,0.12)",
-                border: "1px solid rgba(255,255,255,0.18)",
-                fontSize: 24,
-                fontWeight: 900,
-              }}
-            >
-              Skor: {ceoSummary.executiveRiskScore}
-            </div>
-          </div>
-        </section>
+<AlarmPanel
+  isMobile={isMobile}
+  ceoSummary={ceoSummary}
+/>
+      
       </div>
     </main>
   );
