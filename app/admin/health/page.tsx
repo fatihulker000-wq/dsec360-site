@@ -15,6 +15,7 @@ import type {
   RecentPrescription,
   RecentEk2,
   HealthAlert,
+  RecentHealthExam,
 } from "@/components/health/types";
 
 import { emptyHealthSummary } from "@/components/health/healthHelpers";
@@ -33,6 +34,9 @@ export default function HealthDashboardPage() {
 
   const [recentEk2, setRecentEk2] =
     useState<RecentEk2[]>([]);
+
+    const [recentExaminations, setRecentExaminations] =
+  useState<RecentHealthExam[]>([]);
 
   const [alerts, setAlerts] =
     useState<HealthAlert[]>([]);
@@ -53,6 +57,7 @@ export default function HealthDashboardPage() {
         setUpcomingExams(json.upcomingExams || []);
         setRecentPrescriptions(json.recentPrescriptions || []);
         setRecentEk2(json.recentEk2 || []);
+        setRecentExaminations(json.recentExaminations || []);
         setAlerts(json.alerts || []);
       } finally {
         setLoading(false);
@@ -172,12 +177,13 @@ export default function HealthDashboardPage() {
         />
 
         <HealthListsSection
-          isMobile={false}
-          upcomingExams={upcomingExams}
-          recentPrescriptions={recentPrescriptions}
-          recentEk2={recentEk2}
-          alerts={alerts}
-        />
+  isMobile={false}
+  upcomingExams={upcomingExams}
+  recentExaminations={recentExaminations}
+  recentPrescriptions={recentPrescriptions}
+  recentEk2={recentEk2}
+  alerts={alerts}
+/>
       </div>
     </main>
   );

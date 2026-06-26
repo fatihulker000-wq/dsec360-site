@@ -40,6 +40,16 @@ export type HealthAlert = {
   desc: string;
 };
 
+export type RecentHealthExam = {
+  id: string;
+  employeeName: string;
+  companyName: string;
+  examType: string;
+  examDate: string;
+  decision: string;
+  jobTitle?: string;
+};
+
 export type HealthDashboardResponse = {
   success?: boolean;
   summary?: HealthKpiSummary;
@@ -48,6 +58,7 @@ export type HealthDashboardResponse = {
   recentEk2?: RecentEk2[];
   alerts?: HealthAlert[];
   error?: string;
+  recentExaminations?: RecentHealthExam[];
 };
 export type HealthEmployee = {
   id: string;

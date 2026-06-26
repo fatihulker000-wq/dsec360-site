@@ -4,16 +4,18 @@ import { cardStyle, BRAND } from "../dashboard/styles";
 import EmptyState from "../dashboard/EmptyState";
 import {
   UpcomingHealthExam,
-  RecentPrescription,
-  RecentEk2,
-  HealthAlert,
+RecentHealthExam,
+RecentPrescription,
+RecentEk2,
+HealthAlert,
 } from "./types";
 import { formatHealthDate } from "./healthHelpers";
 
 type Props = {
   isMobile: boolean;
   upcomingExams: UpcomingHealthExam[];
-  recentPrescriptions: RecentPrescription[];
+recentExaminations: RecentHealthExam[];
+recentPrescriptions: RecentPrescription[];
   recentEk2: RecentEk2[];
   alerts: HealthAlert[];
 };
@@ -21,7 +23,8 @@ type Props = {
 export default function HealthListsSection({
   isMobile,
   upcomingExams,
-  recentPrescriptions,
+recentExaminations,
+recentPrescriptions,
   recentEk2,
   alerts,
 }: Props) {
@@ -94,55 +97,70 @@ export default function HealthListsSection({
 
         <div style={cardStyle(isMobile)}>
           <h3 style={{ margin: 0, marginBottom: 18 }}>
-            Son Reçeteler
+            Son Muayeneler
           </h3>
 
-          {recentPrescriptions.length === 0 ? (
-            <EmptyState text="Reçete bulunamadı." />
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {recentPrescriptions.slice(0, 5).map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    border: `1px solid ${BRAND.border}`,
-                    borderRadius: 14,
-                    padding: 14,
-                  }}
-                >
-                  <div style={{ fontWeight: 900 }}>
-                    {item.employeeName}
-                  </div>
+          {recentExaminations.length === 0 ? (
+  <EmptyState text="Muayene bulunamadı." />
+) : (
+  <div style={{ display: "grid", gap: 12 }}>
+    {recentExaminations.slice(0, 5).map((item) => (
+      <div
+        key={item.id}
+        style={{
+          border: `1px solid ${BRAND.border}`,
+          borderRadius: 14,
+          padding: 14,
+        }}
+      >
+        <div style={{ fontWeight: 900 }}>
+          {item.employeeName}
+        </div>
 
-                  <div
-                    style={{
-                      color: BRAND.muted,
-                      fontSize: 13,
-                      marginTop: 4,
-                    }}
-                  >
-                    {item.companyName}
-                  </div>
+        <div
+          style={{
+            color: BRAND.muted,
+            fontSize: 13,
+            marginTop: 4,
+          }}
+        >
+          {item.companyName}
+        </div>
 
-                  <div
-                    style={{
-                      marginTop: 8,
-                      display: "flex",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span>
-                      {item.medicineCount} ilaç
-                    </span>
+        <div
+          style={{
+            marginTop: 8,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <span>{item.examType || "Muayene"}</span>
 
-                    <strong>
-                      {formatHealthDate(item.createdAt)}
-                    </strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <strong>
+            {formatHealthDate(item.examDate)}
+          </strong>
+        </div>
+
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 13,
+            fontWeight: 900,
+            color:
+              item.decision === "Uygun Değil"
+                ? "#b91c1c"
+                : item.decision === "Kısıtlı Uygun"
+                ? "#c2410c"
+                : "#15803d",
+          }}
+        >
+          {item.decision || "Uygun"}
+        </div>
+      </div>
+    ))}
+  </div>
+)}
         </div>
       </section>
 

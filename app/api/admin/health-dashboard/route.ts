@@ -43,13 +43,17 @@ export async function GET() {
     }
 
     const today = new Date();
-    const todayStr = toDateOnly(today);
+const todayStr = toDateOnly(today);
 
-    const next30 = new Date();
-    next30.setDate(today.getDate() + 30);
-    const next30Str = toDateOnly(next30);
+const next30 = new Date();
+next30.setDate(today.getDate() + 90);
+const next30Str = toDateOnly(next30);
 
-    const supabase = getSupabase();
+const nextCritical = new Date();
+nextCritical.setDate(today.getDate() + 30);
+const nextCriticalStr = toDateOnly(nextCritical);
+
+const supabase = getSupabase();
 
     let employeesQuery = supabase
       .from("employees")
@@ -137,6 +141,13 @@ export async function GET() {
         e.next_exam_date <= next30Str
     );
 
+const criticalUpcoming = (exams || []).filter(
+  (e) =>
+    e.next_exam_date &&
+    e.next_exam_date >= todayStr &&
+    e.next_exam_date <= nextCriticalStr
+);
+
     const overdueRaw = (exams || []).filter(
       (e) => e.next_exam_date && e.next_exam_date < todayStr
     );
@@ -164,15 +175,44 @@ export async function GET() {
       };
 
       return {
-        id: e.id,
-        employeeName: emp.name,
-        companyName: companyMap[String(e.company_id || emp.companyId)] || "Firma Yok",
-        examType: e.exam_type || "Muayene",
-        dueDate: e.next_exam_date || "",
-        daysLeft: e.next_exam_date ? diffDays(e.next_exam_date) : null,
-      };
+     id: e.id,
+     employeeName: emp.name,
+     companyName: companyMap[String(e.company_id || emp.companyId)] || "Firma Yok",
+     examType: e.exam_type,
+     dueDate: e.next_exam_date,
+     decision: e.decision,
+     jobTitle: emp.jobTitle || "",
+     daysLeft: diffDays(e.next_exam_date),
+};
+
     });
 
+    const recentExaminations = [...(exams || [])]
+  .sort(
+    (a, b) =>
+      new Date(b.exam_date).getTime() -
+      new Date(a.exam_date).getTime()
+  )
+  .slice(0, 10)
+  .map((e) => {
+    const emp = employeeMap[String(e.employee_id)] || {
+      name: "Çalışan",
+      companyId: e.company_id || "",
+      jobTitle: "",
+    };
+
+    return {
+      id: e.id,
+      employeeName: emp.name,
+      companyName:
+        companyMap[String(e.company_id || emp.companyId)] || "Firma Yok",
+      examDate: e.exam_date,
+      decision: e.decision,
+      examType: e.exam_type,
+      jobTitle: emp.jobTitle,
+    };
+  });
+    
     const alerts = [
       ...overdueRaw.slice(0, 5).map((e) => {
         const emp = employeeMap[String(e.employee_id)] || { name: "Çalışan" };
@@ -204,6 +244,7 @@ export async function GET() {
       summary: {
         todayExams,
         upcomingExams: upcomingRaw.length,
+        criticalUpcomingExams: criticalUpcoming.length,
         overdueExams: overdueRaw.length,
         todayPrescriptions: 0,
         openAccidents: 0,
@@ -214,9 +255,11 @@ export async function GET() {
 
       upcomingExams,
 
-      recentPrescriptions: [],
+recentExaminations,
 
-      recentEk2: [],
+recentPrescriptions: [],
+
+recentEk2: [],
 
       alerts:
         alerts.length > 0
