@@ -5,10 +5,13 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import EmployeeHealthTabs from "@/components/health/EmployeeHealthTabs";
 import GeneralTab from "@/components/health/tabs/GeneralTab";
+import PrescriptionTab from "@/components/health/tabs/PrescriptionTab";
 import Ek2Tab from "@/components/health/tabs/Ek2Tab";
+import ExaminationTab from "@/components/health/tabs/ExaminationTab";
 
 type Employee = {
   id: string;
+  company_id: string;
   full_name: string;
   email: string;
   company_name: string;
@@ -133,7 +136,15 @@ export default function HealthEmployeeDetailPage() {
   <Ek2Tab />
 )}
 
-{!["Genel", "EK-2"].includes(activeTab) && (
+{activeTab === "Reçeteler" && (
+  <PrescriptionTab employee={employee} />
+)}
+
+{activeTab === "Muayeneler" && (
+  <ExaminationTab employee={employee as any} />
+)}
+
+{!["Genel", "EK-2", "Reçeteler"].includes(activeTab) && (
   <div
     style={{
       background: "#fff",
