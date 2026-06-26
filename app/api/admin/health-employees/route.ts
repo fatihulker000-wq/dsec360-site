@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
@@ -26,18 +26,55 @@ type CompanyRow = {
   name: string | null;
 };
 
-function normalizeEmployee(u: EmployeeLikeRow, companyMap: Record<string, string>) {
-  const companyId = String(u.company_id || u.firm_id || "").trim();
-
- return {
-  id: String(u.id),
-  full_name: String(u.full_name || "Çalışan").trim(),
-  email: String(u.email || "").trim(),
-  company_id: companyId,
-  company_name: companyMap[companyId] || "Firma Yok",
-  job_title: String(u.job_title || "").trim(),
-  start_date: String(u.start_date || "").trim(),
+type ExaminationRow = {
+  id: string;
+  employee_id: string;
+  company_id: string;
+  exam_date: string | null;
+  next_exam_date: string | null;
+  decision: string | null;
+  is_deleted?: boolean | null;
 };
+
+function normalizeEmployee(
+  u: EmployeeLikeRow,
+  companyMap: Record<string, string>,
+  examMap: Record<
+    string,
+    {
+      examination_count: number;
+      last_examination_date: string;
+      last_examination_decision: string;
+      next_examination_date: string;
+    }
+  >
+) {
+  const companyId = String(u.company_id || u.firm_id || "").trim();
+  const employeeId = String(u.id).trim();
+
+  const examInfo =
+    examMap[employeeId] || {
+      examination_count: 0,
+      last_examination_date: "",
+      last_examination_decision: "",
+      next_examination_date: "",
+    };
+
+  return {
+    id: employeeId,
+    full_name: String(u.full_name || "Çalışan").trim(),
+    email: String(u.email || "").trim(),
+    company_id: companyId,
+    firm_id: companyId,
+    company_name: companyMap[companyId] || "Firma Yok",
+    job_title: String(u.job_title || u.jobTitle || "").trim(),
+    start_date: String(u.start_date || u.startDate || "").trim(),
+
+    examination_count: examInfo.examination_count,
+    last_examination_date: examInfo.last_examination_date,
+    last_examination_decision: examInfo.last_examination_decision,
+    next_examination_date: examInfo.next_examination_date,
+  };
 }
 
 export async function GET() {
@@ -51,13 +88,15 @@ export async function GET() {
     ).trim();
 
     const isAllowedRole =
-  adminRole === "super_admin" ||
-  adminRole === "company_admin" ||
-  !adminRole;
+      adminRole === "super_admin" || adminRole === "company_admin" || !adminRole;
 
-if (adminAuth !== "ok" && adminRole) {
-  return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
-}
+    if (adminAuth !== "ok" && adminRole) {
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
+    }
+
+    if (!isAllowedRole) {
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
+    }
 
     if (adminRole === "company_admin" && !companyIdFromCookie) {
       return NextResponse.json(
@@ -86,13 +125,14 @@ if (adminAuth !== "ok" && adminRole) {
       rows = users;
     } else {
       let employeesQuery = supabase
-  .from("employees")
-  .select("id, full_name, email, firm_id, job_title, start_date")
-  .limit(200);
+        .from("employees")
+        .select("id, full_name, email, firm_id, job_title, start_date")
+        .order("full_name", { ascending: true })
+        .limit(200);
 
-if (adminRole === "company_admin") {
-  employeesQuery = employeesQuery.eq("firm_id", companyIdFromCookie);
-}
+      if (adminRole === "company_admin") {
+        employeesQuery = employeesQuery.eq("firm_id", companyIdFromCookie);
+      }
 
       const { data: employees, error: employeesError } =
         await employeesQuery.returns<EmployeeLikeRow[]>();
@@ -117,6 +157,8 @@ if (adminRole === "company_admin") {
           .filter(Boolean)
       )
     );
+
+    const employeeIds = rows.map((u) => String(u.id).trim()).filter(Boolean);
 
     let companyMap: Record<string, string> = {};
 
@@ -145,21 +187,70 @@ if (adminRole === "company_admin") {
       );
     }
 
-    const employees = rows.map((u) => normalizeEmployee(u, companyMap));
+    let examMap: Record<
+      string,
+      {
+        examination_count: number;
+        last_examination_date: string;
+        last_examination_decision: string;
+        next_examination_date: string;
+      }
+    > = {};
+
+    if (employeeIds.length > 0) {
+      const { data: examinations, error: examinationsError } = await supabase
+        .from("health_examinations")
+        .select(
+          "id, employee_id, company_id, exam_date, next_exam_date, decision, is_deleted"
+        )
+        .in("employee_id", employeeIds)
+        .eq("is_deleted", false)
+        .order("exam_date", { ascending: false })
+        .returns<ExaminationRow[]>();
+
+      if (examinationsError) {
+        return NextResponse.json(
+          {
+            error: "Muayene özetleri alınamadı.",
+            detail: examinationsError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      for (const exam of examinations || []) {
+        const employeeId = String(exam.employee_id || "").trim();
+        if (!employeeId) continue;
+
+        if (!examMap[employeeId]) {
+          examMap[employeeId] = {
+            examination_count: 0,
+            last_examination_date: "",
+            last_examination_decision: "",
+            next_examination_date: "",
+          };
+        }
+
+        examMap[employeeId].examination_count += 1;
+
+        if (!examMap[employeeId].last_examination_date && exam.exam_date) {
+          examMap[employeeId].last_examination_date = exam.exam_date;
+          examMap[employeeId].last_examination_decision = exam.decision || "";
+        }
+
+        if (!examMap[employeeId].next_examination_date && exam.next_exam_date) {
+          examMap[employeeId].next_examination_date = exam.next_exam_date;
+        }
+      }
+    }
+
+    const employees = rows.map((u) => normalizeEmployee(u, companyMap, examMap));
 
     return NextResponse.json({
-  success: true,
-  employees,
-  source: users && users.length > 0 ? "users" : "employees",
-  debug: {
-    adminRole,
-    companyIdFromCookie,
-    rowsCount: rows.length,
-    usersCount: users?.length ?? 0,
-    employeesCount: employees.length,
-    firstRow: rows[0] ?? null,
-  },
-});
+      success: true,
+      employees,
+      source: users && users.length > 0 ? "users" : "employees",
+    });
   } catch (e: any) {
     return NextResponse.json(
       {
