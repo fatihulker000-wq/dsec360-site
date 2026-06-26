@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { HealthEmployee } from "@/components/health/types";
+import ExaminationHistory from "./ExaminationHistory";
 
 type Props = {
   employee: HealthEmployee;
@@ -27,6 +28,9 @@ export default function ExaminationWorkspace({ employee }: Props) {
   const [restrictionNote, setRestrictionNote] = useState("");
   const [doctorNote, setDoctorNote] = useState("");
   const [saving, setSaving] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0);
+const [selectedExaminationId, setSelectedExaminationId] = useState<string | null>(null);
+const isEditMode = selectedExaminationId !== null;
 
   const bmi = useMemo(() => {
     const h = Number(height) / 100;
@@ -57,12 +61,18 @@ export default function ExaminationWorkspace({ employee }: Props) {
     return list;
   }, [bmi, systolic, diastolic, pulse, spo2, temperature]);
 
+
+  
 async function saveExamination() {
   try {
     setSaving(true);
 
-    const res = await fetch("/api/admin/health-examinations", {
-      method: "POST",
+    const endpoint = isEditMode
+  ? `/api/admin/health-examinations/${selectedExaminationId}`
+  : "/api/admin/health-examinations";
+
+  const res = await fetch(endpoint, {
+  method: isEditMode ? "PUT" : "POST",
       headers: {
         "Content-Type": "application/json",
       },
@@ -95,17 +105,81 @@ async function saveExamination() {
     const json = await res.json();
 
     if (!res.ok) {
-      alert(json.error || "Muayene kaydedilemedi.");
+      alert(isEditMode ? "Muayene başarıyla güncellendi." : "Muayene başarıyla kaydedildi.");
       return;
     }
 
     alert("Muayene başarıyla kaydedildi.");
+    setReloadKey((v) => v + 1);
+    setExamDate("");
+setNextExamDate("");
+
+setHeight("");
+setWeight("");
+
+setSystolic("");
+setDiastolic("");
+
+setPulse("");
+setTemperature("");
+setSpo2("");
+
+setFindings("");
+setDecision("Uygun");
+setRestrictionNote("");
+setDoctorNote("");
+setSelectedExaminationId(null);
   } catch {
     alert("Sunucu bağlantı hatası.");
   } finally {
     setSaving(false);
   }
 }
+
+useEffect(() => {
+  async function loadSelectedExamination() {
+    if (!selectedExaminationId) return;
+
+    try {
+      const res = await fetch(
+        `/api/admin/health-examinations/${selectedExaminationId}`,
+        {
+          cache: "no-store",
+          credentials: "include",
+        }
+      );
+
+      const json = await res.json();
+
+      if (!res.ok) return;
+
+      const exam = json.examination;
+
+      setExamType(exam.exam_type || "Periyodik Muayene");
+      setExamDate(exam.exam_date || "");
+      setNextExamDate(exam.next_exam_date || "");
+
+      setHeight(exam.height?.toString() || "");
+      setWeight(exam.weight?.toString() || "");
+
+      setSystolic(exam.blood_pressure_sys?.toString() || "");
+      setDiastolic(exam.blood_pressure_dia?.toString() || "");
+
+      setPulse(exam.pulse?.toString() || "");
+      setTemperature(exam.temperature?.toString() || "");
+      setSpo2(exam.spo2?.toString() || "");
+
+      setFindings(exam.findings || "");
+      setDecision((exam.decision || "Uygun") as Suitability);
+      setRestrictionNote(exam.restriction_note || "");
+      setDoctorNote(exam.doctor_note || "");
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  void loadSelectedExamination();
+}, [selectedExaminationId]);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -289,6 +363,13 @@ async function saveExamination() {
       </section>
 
       <section style={actionCardStyle}>
+        <ExaminationHistory
+  employeeId={employee.id}
+  reloadKey={reloadKey}
+  onSelect={(id) => {
+    setSelectedExaminationId(id);
+  }}
+/>
         <div>
           <strong>Muayene kaydı</strong>
           <p style={{ ...mutedStyle, marginTop: 6 }}>
@@ -306,7 +387,11 @@ async function saveExamination() {
     cursor: saving ? "wait" : "pointer",
   }}
 >
-  {saving ? "Kaydediliyor..." : "Muayeneyi Kaydet"}
+  {saving
+  ? "Kaydediliyor..."
+  : isEditMode
+  ? "Muayeneyi Güncelle"
+  : "Muayeneyi Kaydet"}
 </button>
       </section>
     </div>

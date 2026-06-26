@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
@@ -25,13 +25,8 @@ async function getAdminContext() {
     adminRole === "company_admin" ||
     !adminRole;
 
-  if (adminAuth !== "ok" && adminRole) {
-    return null;
-  }
-
-  if (!isAllowedRole) {
-    return null;
-  }
+  if (adminAuth !== "ok" && adminRole) return null;
+  if (!isAllowedRole) return null;
 
   return {
     adminRole: String(adminRole || "super_admin"),
@@ -39,7 +34,10 @@ async function getAdminContext() {
   };
 }
 
-export async function GET(req: Request) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const admin = await getAdminContext();
 
@@ -47,29 +45,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
-    const { searchParams } = new URL(req.url);
-    const employeeId = searchParams.get("employeeId");
-    const limit = Math.min(Number(searchParams.get("limit") || 20), 100);
-    const offset = Math.max(Number(searchParams.get("offset") || 0), 0);
-
+    const { id } = await params;
     const supabase = getSupabase();
 
     let query = supabase
       .from("health_examinations")
       .select("*")
-      .eq("is_deleted", false)
-      .order("exam_date", { ascending: false })
-      .range(offset, offset + limit - 1);
+      .eq("id", id)
+      .eq("is_deleted", false);
 
     if (admin.adminRole === "company_admin") {
       query = query.eq("company_id", admin.companyIdFromCookie);
     }
 
-    if (employeeId) {
-      query = query.eq("employee_id", employeeId);
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await query.single();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -77,17 +66,20 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      examinations: data || [],
+      examination: data,
     });
   } catch (e: any) {
     return NextResponse.json(
-      { error: e?.message || "Muayeneler alınamadı." },
+      { error: e?.message || "Muayene alınamadı." },
       { status: 500 }
     );
   }
 }
 
-export async function POST(req: Request) {
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const admin = await getAdminContext();
 
@@ -95,45 +87,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await req.json();
-
-    const companyId = String(body.companyId || admin.companyIdFromCookie).trim();
-    const employeeId = String(body.employeeId || "").trim();
-
-    if (!companyId || !employeeId) {
-      return NextResponse.json(
-        { error: "Firma ve çalışan bilgisi zorunludur." },
-        { status: 400 }
-      );
-    }
-
-    if (
-      admin.adminRole === "company_admin" &&
-      companyId !== admin.companyIdFromCookie
-    ) {
-      return NextResponse.json(
-        { error: "Bu firma için işlem yetkiniz yok." },
-        { status: 403 }
-      );
-    }
-
-    if (!body.examDate) {
-      return NextResponse.json(
-        { error: "Muayene tarihi zorunludur." },
-        { status: 400 }
-      );
-    }
-
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("health_examinations")
-      .insert({
-        company_id: companyId,
-        employee_id: employeeId,
-
+      .update({
         exam_type: body.examType || "Periyodik Muayene",
-        exam_date: body.examDate,
+        exam_date: body.examDate || null,
         next_exam_date: body.nextExamDate || null,
 
         height: body.height ? Number(body.height) : null,
@@ -152,13 +114,17 @@ export async function POST(req: Request) {
         restriction_note: body.restrictionNote || null,
         doctor_note: body.doctorNote || null,
 
-        attachments: [],
-        created_by: body.createdBy || null,
-        updated_by: body.createdBy || null,
-        is_deleted: false,
+        updated_by: body.updatedBy || null,
+        updated_at: new Date().toISOString(),
       })
-      .select("*")
-      .single();
+      .eq("id", id)
+      .eq("is_deleted", false);
+
+    if (admin.adminRole === "company_admin") {
+      query = query.eq("company_id", admin.companyIdFromCookie);
+    }
+
+    const { data, error } = await query.select("*").single();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -170,7 +136,51 @@ export async function POST(req: Request) {
     });
   } catch (e: any) {
     return NextResponse.json(
-      { error: e?.message || "Muayene kaydedilemedi." },
+      { error: e?.message || "Muayene güncellenemedi." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const admin = await getAdminContext();
+
+    if (!admin) {
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const supabase = getSupabase();
+
+    let query = supabase
+      .from("health_examinations")
+      .update({
+        is_deleted: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("is_deleted", false);
+
+    if (admin.adminRole === "company_admin") {
+      query = query.eq("company_id", admin.companyIdFromCookie);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: e?.message || "Muayene silinemedi." },
       { status: 500 }
     );
   }
