@@ -161,8 +161,22 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+  return NextResponse.json(
+    {
+      error: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      payload: {
+        company_id: companyId,
+        employee_id: employeeId,
+        exam_type: body.examType || "Periyodik Muayene",
+        exam_date: body.examDate,
+      },
+    },
+    { status: 500 }
+  );
+}
 
     return NextResponse.json({
       success: true,
