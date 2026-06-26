@@ -17,15 +17,18 @@ type Props = {
   employeeId: string;
   reloadKey?: number;
   onSelect?: (id: string) => void;
+  onDeleted?: () => void;
 };
 
 export default function ExaminationHistory({
   employeeId,
   reloadKey = 0,
   onSelect,
+  onDeleted,
 }: Props) {
   const [items, setItems] = useState<ExaminationRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadHistory() {
@@ -58,6 +61,39 @@ export default function ExaminationHistory({
     if (employeeId) void loadHistory();
   }, [employeeId, reloadKey]);
 
+  async function deleteExamination(id: string) {
+    const ok = window.confirm("Bu muayene kaydı silinsin mi?");
+    if (!ok) return;
+
+    try {
+      setDeletingId(id);
+
+      const res = await fetch(`/api/admin/health-examinations/${id}`, {
+        method: "DELETE",
+        cache: "no-store",
+        credentials: "include",
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json.error || "Muayene silinemedi.");
+        return;
+      }
+
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      onDeleted?.();
+    } catch {
+      alert("Sunucu bağlantı hatası.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function printExamination(id: string) {
+    window.open(`/api/admin/health-examinations/${id}/pdf`, "_blank");
+  }
+
   return (
     <section
       style={{
@@ -89,18 +125,13 @@ export default function ExaminationHistory({
       ) : (
         <div style={{ display: "grid", gap: 12 }}>
           {items.map((item) => (
-            <button
+            <div
               key={item.id}
-              type="button"
-              onClick={() => onSelect?.(item.id)}
               style={{
-                width: "100%",
-                textAlign: "left",
                 border: "1px solid #e5e7eb",
                 background: "#f8fafc",
                 borderRadius: 16,
                 padding: 16,
-                cursor: "pointer",
               }}
             >
               <div
@@ -156,9 +187,49 @@ export default function ExaminationHistory({
                 }}
               >
                 BMI: {item.bmi || "-"} • Tansiyon:{" "}
-                {item.blood_pressure_sys || "-"}/{item.blood_pressure_dia || "-"}
+                {item.blood_pressure_sys || "-"}/
+                {item.blood_pressure_dia || "-"}
               </div>
-            </button>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                  marginTop: 14,
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelect?.(item.id)}
+                  style={actionButton}
+                >
+                  Düzenle
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => printExamination(item.id)}
+                  style={secondaryButton}
+                >
+                  PDF
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => deleteExamination(item.id)}
+                  disabled={deletingId === item.id}
+                  style={{
+                    ...deleteButton,
+                    opacity: deletingId === item.id ? 0.7 : 1,
+                    cursor: deletingId === item.id ? "wait" : "pointer",
+                  }}
+                >
+                  {deletingId === item.id ? "Siliniyor..." : "Sil"}
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -175,3 +246,32 @@ function formatDate(value?: string | null) {
 
   return date.toLocaleDateString("tr-TR");
 }
+
+const actionButton: React.CSSProperties = {
+  border: "none",
+  background: "#7f1d1d",
+  color: "#fff",
+  borderRadius: 10,
+  padding: "8px 14px",
+  cursor: "pointer",
+  fontWeight: 800,
+};
+
+const secondaryButton: React.CSSProperties = {
+  border: "1px solid #d1d5db",
+  background: "#fff",
+  borderRadius: 10,
+  padding: "8px 14px",
+  cursor: "pointer",
+  fontWeight: 800,
+};
+
+const deleteButton: React.CSSProperties = {
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#b91c1c",
+  borderRadius: 10,
+  padding: "8px 14px",
+  cursor: "pointer",
+  fontWeight: 800,
+};

@@ -61,7 +61,28 @@ const isEditMode = selectedExaminationId !== null;
     return list;
   }, [bmi, systolic, diastolic, pulse, spo2, temperature]);
 
+function resetExaminationForm() {
+  setSelectedExaminationId(null);
 
+  setExamType("Periyodik Muayene");
+  setExamDate("");
+  setNextExamDate("");
+
+  setHeight("");
+  setWeight("");
+
+  setSystolic("");
+  setDiastolic("");
+
+  setPulse("");
+  setTemperature("");
+  setSpo2("");
+
+  setFindings("");
+  setDecision("Uygun");
+  setRestrictionNote("");
+  setDoctorNote("");
+}
   
 async function saveExamination() {
   try {
@@ -184,7 +205,33 @@ useEffect(() => {
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <section style={cardStyle}>
-        <h2 style={{ marginTop: 0 }}>Muayene Workspace</h2>
+        <div
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 8,
+  }}
+>
+  <h2 style={{ margin: 0 }}>Muayene Workspace</h2>
+
+  <button
+    type="button"
+    onClick={resetExaminationForm}
+    style={{
+      border: "1px solid #fecaca",
+      background: "#fff1f2",
+      color: "#991b1b",
+      borderRadius: 12,
+      padding: "9px 13px",
+      fontWeight: 900,
+      cursor: "pointer",
+    }}
+  >
+    + Yeni Muayene
+  </button>
+</div>
         <p style={mutedStyle}>
           Çalışanın muayene bilgileri, vital bulguları, sistem muayenesi ve işe
           uygunluk kararı bu ekrandan yönetilir.
@@ -202,6 +249,57 @@ useEffect(() => {
         </div>
       </section>
 
+{isEditMode && (
+  <section
+    style={{
+      background: "#fef3c7",
+      border: "1px solid #fcd34d",
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 18,
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 12,
+      }}
+    >
+      <div>
+        <div style={{ fontWeight: 900 }}>
+          Düzenleme Modu
+        </div>
+
+        <div
+          style={{
+            color: "#78350f",
+            marginTop: 4,
+          }}
+        >
+          Geçmişteki bir muayene kaydını düzenliyorsunuz.
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={resetExaminationForm}
+        style={{
+          background: "#fff",
+          border: "1px solid #d1d5db",
+          borderRadius: 10,
+          padding: "8px 14px",
+          cursor: "pointer",
+          fontWeight: 700,
+        }}
+      >
+        Düzenlemeyi İptal Et
+      </button>
+    </div>
+  </section>
+)}
       <section style={cardStyle}>
         <h3 style={sectionTitleStyle}>Muayene Bilgileri</h3>
 
