@@ -9,19 +9,37 @@ function getSupabase() {
   );
 }
 
-type UserRow = {
+type EmployeeLikeRow = {
   id: string;
-  full_name: string | null;
-  email: string | null;
-  company_id: string | null;
+  full_name?: string | null;
+  name?: string | null;
+  email?: string | null;
+  company_id?: string | null;
+  firm_id?: string | null;
   job_title?: string | null;
+  jobTitle?: string | null;
   start_date?: string | null;
+  startDate?: string | null;
 };
 
 type CompanyRow = {
   id: string;
   name: string | null;
 };
+
+function normalizeEmployee(u: EmployeeLikeRow, companyMap: Record<string, string>) {
+  const companyId = String(u.company_id || u.firm_id || "").trim();
+
+  return {
+    id: String(u.id),
+    full_name: String(u.full_name || u.name || "Çalışan").trim(),
+    email: String(u.email || "").trim(),
+    company_id: companyId,
+    company_name: companyMap[companyId] || "Firma Yok",
+    job_title: String(u.job_title || u.jobTitle || "").trim(),
+    start_date: String(u.start_date || u.startDate || "").trim(),
+  };
+}
 
 export async function GET() {
   try {
@@ -37,10 +55,7 @@ export async function GET() {
       adminRole === "super_admin" || adminRole === "company_admin";
 
     if (adminAuth !== "ok" || !isAllowedRole) {
-      return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
     if (adminRole === "company_admin" && !companyIdFromCookie) {
@@ -52,6 +67,8 @@ export async function GET() {
 
     const supabase = getSupabase();
 
+    let rows: EmployeeLikeRow[] = [];
+
     let usersQuery = supabase
       .from("users")
       .select("id, full_name, email, company_id, job_title, start_date")
@@ -62,23 +79,42 @@ export async function GET() {
       usersQuery = usersQuery.eq("company_id", companyIdFromCookie);
     }
 
-    const { data: users, error: usersError } =
-      await usersQuery.returns<UserRow[]>();
+    const { data: users } = await usersQuery.returns<EmployeeLikeRow[]>();
 
-    if (usersError) {
-      return NextResponse.json(
-        {
-          error: "Çalışanlar alınamadı.",
-          detail: usersError.message,
-        },
-        { status: 500 }
-      );
+    if (users && users.length > 0) {
+      rows = users;
+    } else {
+      let employeesQuery = supabase
+        .from("employees")
+        .select("id, full_name, name, email, company_id, firm_id, job_title, start_date")
+        .limit(200);
+
+      if (adminRole === "company_admin") {
+        employeesQuery = employeesQuery.or(
+          `company_id.eq.${companyIdFromCookie},firm_id.eq.${companyIdFromCookie}`
+        );
+      }
+
+      const { data: employees, error: employeesError } =
+        await employeesQuery.returns<EmployeeLikeRow[]>();
+
+      if (employeesError) {
+        return NextResponse.json(
+          {
+            error: "Çalışanlar alınamadı.",
+            detail: employeesError.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      rows = employees || [];
     }
 
     const companyIds = Array.from(
       new Set(
-        (users || [])
-          .map((u) => String(u.company_id || "").trim())
+        rows
+          .map((u) => String(u.company_id || u.firm_id || "").trim())
           .filter(Boolean)
       )
     );
@@ -110,23 +146,12 @@ export async function GET() {
       );
     }
 
-    const employees = (users || []).map((u) => {
-      const companyId = String(u.company_id || "").trim();
-
-      return {
-        id: u.id,
-        full_name: u.full_name || "Çalışan",
-        email: u.email || "",
-        company_id: companyId,
-        company_name: companyMap[companyId] || "Firma Yok",
-        job_title: u.job_title || "",
-        start_date: u.start_date || "",
-      };
-    });
+    const employees = rows.map((u) => normalizeEmployee(u, companyMap));
 
     return NextResponse.json({
       success: true,
       employees,
+      source: users && users.length > 0 ? "users" : "employees",
     });
   } catch (e: any) {
     return NextResponse.json(
