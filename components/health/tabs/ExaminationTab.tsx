@@ -1,6 +1,6 @@
 "use client";
 
-import ExaminationWorkspace from "../examination/ExaminationWorkspace";
+import ExaminationWorkspace from "../examination/TempWorkspace";
 import type { HealthEmployee } from "../types";
 
 type Props = {

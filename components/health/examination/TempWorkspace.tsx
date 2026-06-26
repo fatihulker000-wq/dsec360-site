@@ -26,6 +26,7 @@ export default function ExaminationWorkspace({ employee }: Props) {
   const [decision, setDecision] = useState<Suitability>("Uygun");
   const [restrictionNote, setRestrictionNote] = useState("");
   const [doctorNote, setDoctorNote] = useState("");
+  const [saving, setSaving] = useState(false)
 
   const bmi = useMemo(() => {
     const h = Number(height) / 100;
@@ -55,6 +56,56 @@ export default function ExaminationWorkspace({ employee }: Props) {
 
     return list;
   }, [bmi, systolic, diastolic, pulse, spo2, temperature]);
+
+async function saveExamination() {
+  try {
+    setSaving(true);
+
+    const res = await fetch("/api/admin/health-examinations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        companyId: employee.company_id,
+        employeeId: employee.id,
+
+        examType,
+        examDate,
+        nextExamDate,
+
+        height,
+        weight,
+        bmi,
+
+        systolic,
+        diastolic,
+        pulse,
+        temperature,
+        spo2,
+
+        findings,
+        decision,
+        restrictionNote,
+        doctorNote,
+      }),
+    });
+
+    const json = await res.json();
+
+    if (!res.ok) {
+      alert(json.error || "Muayene kaydedilemedi.");
+      return;
+    }
+
+    alert("Muayene başarıyla kaydedildi.");
+  } catch {
+    alert("Sunucu bağlantı hatası.");
+  } finally {
+    setSaving(false);
+  }
+}
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -245,9 +296,18 @@ export default function ExaminationWorkspace({ employee }: Props) {
           </p>
         </div>
 
-        <button type="button" style={primaryButtonStyle}>
-          Muayeneyi Kaydet
-        </button>
+        <button
+  type="button"
+  onClick={saveExamination}
+  disabled={saving}
+  style={{
+    ...primaryButtonStyle,
+    opacity: saving ? 0.7 : 1,
+    cursor: saving ? "wait" : "pointer",
+  }}
+>
+  {saving ? "Kaydediliyor..." : "Muayeneyi Kaydet"}
+</button>
       </section>
     </div>
   );
