@@ -76,13 +76,13 @@ const supabase = getSupabase();
     const employeeIds = (employees || []).map((e) => String(e.id));
 
     let examsQuery = supabase
-      .from("health_examinations")
-      .select(
-        "id, employee_id, company_id, exam_type, exam_date, next_exam_date, decision, bmi, systolic, diastolic, spo2, created_at"
-      )
-      .eq("is_deleted", false)
-      .order("created_at", { ascending: false })
-      .limit(1000);
+  .from("health_examinations")
+  .select(
+    "id, employee_id, company_id, exam_type, exam_date, next_exam_date, decision, bmi, systolic, diastolic, spo2, created_at, is_deleted"
+  )
+  .or("is_deleted.eq.false,is_deleted.is.null")
+  .order("created_at", { ascending: false })
+  .limit(1000);
 
     if (adminRole === "company_admin" && companyIdFromCookie) {
       examsQuery = examsQuery.eq("company_id", companyIdFromCookie);
