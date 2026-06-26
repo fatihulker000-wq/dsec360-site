@@ -99,7 +99,7 @@ async function saveExamination() {
       },
       credentials: "include",
       body: JSON.stringify({
-        companyId: employee.company_id,
+        companyId: employee.company_id || employee.firm_id,
         employeeId: employee.id,
 
         examType,

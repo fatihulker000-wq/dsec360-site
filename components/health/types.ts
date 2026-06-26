@@ -54,6 +54,8 @@ export type HealthEmployee = {
 
   full_name: string;
 
+  firm_id?: string;
+
   email: string;
 
   company_id: string;
