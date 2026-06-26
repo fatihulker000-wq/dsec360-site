@@ -94,28 +94,7 @@ const supabase = getSupabase();
       return NextResponse.json({ error: examsError.message }, { status: 500 });
     }
 
-   let prescriptionsQuery = supabase
-  .from("health_prescriptions")
-  .select("id, employee_id, company_id, created_at")
-  .eq("is_active", true)
-  .order("created_at", { ascending: false })
-  .limit(100);
-
-if (adminRole === "company_admin" && companyIdFromCookie) {
-  prescriptionsQuery = prescriptionsQuery.eq("company_id", companyIdFromCookie);
-}
-
-const {
-  data: prescriptions,
-  error: prescriptionsError,
-} = await prescriptionsQuery;
-
-if (prescriptionsError) {
-  return NextResponse.json(
-    { error: prescriptionsError.message },
-    { status: 500 }
-  );
-}
+   const prescriptions: any[] = [];
 
     const employeeMap = Object.fromEntries(
       (employees || []).map((e) => [
