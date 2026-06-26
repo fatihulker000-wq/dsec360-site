@@ -94,15 +94,9 @@ const supabase = getSupabase();
       return NextResponse.json({ error: examsError.message }, { status: 500 });
     }
 
-    let prescriptionsQuery = supabase
+   let prescriptionsQuery = supabase
   .from("health_prescriptions")
-  .select(`
-    id,
-    employee_id,
-    company_id,
-    created_at,
-    health_prescription_items(id)
-  `)
+  .select("id, employee_id, company_id, created_at")
   .eq("is_active", true)
   .order("created_at", { ascending: false })
   .limit(100);
@@ -255,7 +249,7 @@ const recentPrescriptions = (prescriptions || [])
       employeeName: emp.name,
       companyName:
         companyMap[String(p.company_id || emp.companyId)] || "Firma Yok",
-      medicineCount: p.health_prescription_items?.length || 0,
+      medicineCount: 0,
       createdAt: p.created_at,
     };
   });
