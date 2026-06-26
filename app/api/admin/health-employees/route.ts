@@ -149,10 +149,18 @@ export async function GET() {
     const employees = rows.map((u) => normalizeEmployee(u, companyMap));
 
     return NextResponse.json({
-      success: true,
-      employees,
-      source: users && users.length > 0 ? "users" : "employees",
-    });
+  success: true,
+  employees,
+  source: users && users.length > 0 ? "users" : "employees",
+  debug: {
+    adminRole,
+    companyIdFromCookie,
+    rowsCount: rows.length,
+    usersCount: users?.length ?? 0,
+    employeesCount: employees.length,
+    firstRow: rows[0] ?? null,
+  },
+});
   } catch (e: any) {
     return NextResponse.json(
       {
