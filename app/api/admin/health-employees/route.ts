@@ -12,7 +12,6 @@ function getSupabase() {
 type EmployeeLikeRow = {
   id: string;
   full_name?: string | null;
-  name?: string | null;
   email?: string | null;
   company_id?: string | null;
   firm_id?: string | null;
@@ -30,15 +29,15 @@ type CompanyRow = {
 function normalizeEmployee(u: EmployeeLikeRow, companyMap: Record<string, string>) {
   const companyId = String(u.company_id || u.firm_id || "").trim();
 
-  return {
-    id: String(u.id),
-    full_name: String(u.full_name || u.name || "Çalışan").trim(),
-    email: String(u.email || "").trim(),
-    company_id: companyId,
-    company_name: companyMap[companyId] || "Firma Yok",
-    job_title: String(u.job_title || u.jobTitle || "").trim(),
-    start_date: String(u.start_date || u.startDate || "").trim(),
-  };
+ return {
+  id: String(u.id),
+  full_name: String(u.full_name || "Çalışan").trim(),
+  email: String(u.email || "").trim(),
+  company_id: companyId,
+  company_name: companyMap[companyId] || "Firma Yok",
+  job_title: String(u.job_title || "").trim(),
+  start_date: String(u.start_date || "").trim(),
+};
 }
 
 export async function GET() {
@@ -85,15 +84,13 @@ export async function GET() {
       rows = users;
     } else {
       let employeesQuery = supabase
-        .from("employees")
-        .select("id, full_name, name, email, company_id, firm_id, job_title, start_date")
-        .limit(200);
+  .from("employees")
+  .select("id, full_name, email, firm_id, job_title, start_date")
+  .limit(200);
 
-      if (adminRole === "company_admin") {
-        employeesQuery = employeesQuery.or(
-          `company_id.eq.${companyIdFromCookie},firm_id.eq.${companyIdFromCookie}`
-        );
-      }
+if (adminRole === "company_admin") {
+  employeesQuery = employeesQuery.eq("firm_id", companyIdFromCookie);
+}
 
       const { data: employees, error: employeesError } =
         await employeesQuery.returns<EmployeeLikeRow[]>();
