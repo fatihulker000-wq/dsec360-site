@@ -144,7 +144,7 @@ export default function HealthEmployeeDetailPage() {
   <ExaminationTab employee={employee as any} />
 )}
 
-{!["Genel", "EK-2", "Reçeteler"].includes(activeTab) && (
+{!["Genel", "EK-2", "Reçeteler", "Muayeneler"].includes(activeTab) && (
   <div
     style={{
       background: "#fff",
