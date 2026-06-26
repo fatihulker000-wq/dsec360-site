@@ -96,14 +96,7 @@ export default function DenetimPage() {
           Süreç web panelde DÖF, takip ve raporlama yapısına dönüşür.
         </p>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 18,
-            marginTop: 30,
-          }}
-        >
+        <div className="denetim-flow-grid">
           {flowItems.map((item) => (
             <div key={item.title} style={cardStyle}>
               <h3 style={{ fontSize: 20, fontWeight: 1000, margin: 0, color: "#111827" }}>
@@ -121,14 +114,7 @@ export default function DenetimPage() {
         <div style={{ maxWidth: 1120, margin: "0 auto" }}>
           <h2 style={sectionTitle}>Modülün Sağladığı Kurumsal Avantajlar</h2>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: 16,
-              marginTop: 28,
-            }}
-          >
+          <div className="denetim-advantages-grid">
             {advantages.map((item) => (
               <div key={item} style={advantageCard}>
                 <span style={{ color: "#7a1224", fontWeight: 1000 }}>✓</span>
@@ -185,6 +171,9 @@ const cardStyle = {
   padding: 24,
   border: "1px solid #e5e7eb",
   boxShadow: "0 18px 54px rgba(15,23,42,0.06)",
+  minWidth: 0,
+  wordBreak: "normal" as const,
+  overflowWrap: "break-word" as const,
 };
 
 const advantageCard = {
@@ -197,6 +186,9 @@ const advantageCard = {
   border: "1px solid #e5e7eb",
   fontWeight: 900,
   color: "#111827",
+  minWidth: 0,
+  wordBreak: "normal" as const,
+  overflowWrap: "break-word" as const,
 };
 
 const primaryButton = {

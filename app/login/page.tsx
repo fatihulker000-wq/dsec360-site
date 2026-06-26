@@ -166,6 +166,19 @@ if (nextRole === "training_user") {
             <div className="cbs-security">
               🔒 Email, TC veya Sicil ile güvenli giriş yapabilirsiniz.
             </div>
+            <div style={{ marginTop: "16px", textAlign: "center" }}>
+  <Link
+    href="/admin/login"
+    style={{
+      color: "#b91c1c",
+      fontWeight: 800,
+      textDecoration: "none",
+      fontSize: "14px",
+    }}
+  >
+    Admin girişi için tıklayın
+  </Link>
+</div>
           </div>
         </div>
       </section>

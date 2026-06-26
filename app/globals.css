@@ -3327,3 +3327,64 @@ line-height:1.7;
 .training-problem-card.solution p{
   color:#fff;
 }
+.contact-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+  gap: 26px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .contact-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-side-card {
+    position: relative !important;
+    top: auto !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .contact-side-card {
+    display: none;
+  }
+
+  .contact-main-card {
+    border-radius: 22px !important;
+    padding: 22px !important;
+  }
+
+  .cbs-input,
+  .cbs-textarea {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+.denetim-flow-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 30px;
+}
+
+.denetim-advantages-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 28px;
+}
+
+@media (max-width: 1024px) {
+  .denetim-flow-grid,
+  .denetim-advantages-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .denetim-flow-grid,
+  .denetim-advantages-grid {
+    grid-template-columns: 1fr;
+  }
+}

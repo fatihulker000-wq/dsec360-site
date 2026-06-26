@@ -648,6 +648,32 @@ export default function HomePage() {
 
 </section>
 
+<section className="section section-light">
+  <div className="page-container">
+    <div className="section-title-wrap">
+      <h2 className="section-title">Platforma Giriş Alanları</h2>
+      <p className="section-subtitle">
+        Kullanıcı, admin ve demo erişimlerini buradan başlatabilirsiniz.
+      </p>
+    </div>
+
+    <div className="grid-3">
+      {entryPoints.map((item) => (
+        <div key={item.title} className="card module-card">
+          <h3 className="card-title">{item.title}</h3>
+          <p className="card-text">{item.desc}</p>
+
+          <div style={{ marginTop: 18 }}>
+            <Link href={item.href} className="nav-cta">
+              {item.cta}
+            </Link>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
 {/* Son CTA */}
 
 <section className="hero hero-cta-band">

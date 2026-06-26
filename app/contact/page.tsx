@@ -174,19 +174,12 @@ export default function ContactPage() {
 
       <section className="section section-soft">
         <div className="page-container">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(0,0.9fr) minmax(360px,1.1fr)",
-              gap: 26,
-              alignItems: "start",
-            }}
-          >
+          <div className="contact-form-grid">
             <div
-              className="card"
-              style={{
-                position: "sticky",
-                top: 90,
+  className="card contact-side-card"
+  style={{
+    position: "sticky",
+    top: 90,
                 background:
                   "linear-gradient(180deg,#ffffff 0%,#fff7f7 100%)",
                 border: "1px solid rgba(198,40,40,0.12)",
@@ -266,9 +259,9 @@ export default function ContactPage() {
             </div>
 
             <div
-              className="card"
-              style={{
-                borderRadius: 30,
+  className="card contact-main-card"
+  style={{
+    borderRadius: 30,
                 boxShadow: "0 30px 70px rgba(15,23,42,0.12)",
                 border: "1px solid rgba(17,24,39,0.08)",
               }}

@@ -55,6 +55,10 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+  setError("Email ve şifre alanı zorunludur.");
+  return;
+}
     try {
       setLoading(true);
       setError("");

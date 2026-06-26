@@ -100,7 +100,7 @@ export default function DemoPage() {
                   boxShadow: item.highlight
                     ? "0 28px 60px rgba(198,40,40,0.16)"
                     : "0 18px 46px rgba(15,23,42,0.08)",
-                  transform: item.highlight ? "translateY(-8px)" : "none",
+                 transform: item.highlight ? "translateY(0)" : "none",
                   background:
                     "linear-gradient(180deg,#ffffff 0%,#fffafa 100%)",
                 }}
