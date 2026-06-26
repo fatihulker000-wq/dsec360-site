@@ -11,6 +11,11 @@ type HealthEmployee = {
   company_name: string;
   job_title: string;
   start_date: string;
+
+  examination_count: number;
+  last_examination_date: string;
+  last_examination_decision: string;
+  next_examination_date: string;
 };
 
 export default function HealthEmployeesPage() {
@@ -132,7 +137,12 @@ export default function HealthEmployeesPage() {
             </div>
 
             <MiniStat title="Çalışan" value={totalEmployees} />
-            <MiniStat title="Yaklaşan Muayene" value={0} />
+           <MiniStat
+  title="Yaklaşan Muayene"
+  value={
+    employees.filter((e) => !!e.next_examination_date).length
+  }
+/>
             <MiniStat title="EK-2 Bekleyen" value={0} />
             <MiniStat title="Aşı Bekleyen" value={0} />
             <MiniStat title="Kritik" value={0} />
@@ -262,10 +272,25 @@ export default function HealthEmployeesPage() {
                   {employee.job_title || "-"}
                 </div>
 
-                <Badge text="-" tone="neutral" />
-                <Badge text="-" tone="neutral" />
-                <Badge text="-" tone="neutral" />
-                <Badge text="Normal" tone="good" />
+                <Badge
+  text={employee.last_examination_date || "-"}
+  tone="neutral"
+/>
+
+<Badge text="-" tone="neutral" />
+
+<Badge text="-" tone="neutral" />
+
+<Badge
+  text={employee.last_examination_decision || "Normal"}
+  tone={
+    employee.last_examination_decision === "Uygun Değil"
+      ? "bad"
+      : employee.last_examination_decision === "Kısıtlı Uygun"
+      ? "warning"
+      : "good"
+  }
+/>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Link

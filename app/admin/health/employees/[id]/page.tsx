@@ -17,6 +17,11 @@ type Employee = {
   company_name: string;
   job_title: string;
   start_date: string;
+
+  examination_count?: number;
+  last_examination_date?: string;
+  last_examination_decision?: string;
+  next_examination_date?: string;
 };
 
 export default function HealthEmployeeDetailPage() {
@@ -176,11 +181,28 @@ export default function HealthEmployeeDetailPage() {
                 <div style={{ display: "grid", gap: 12 }}>
                   <SummaryRow label="E-posta" value={employee.email || "-"} />
                   <SummaryRow label="İşe Giriş" value={employee.start_date || "-"} />
-                  <SummaryRow label="Son Muayene" value="-" />
-                  <SummaryRow label="Son EK-2" value="-" />
-                  <SummaryRow label="Son Reçete" value="-" />
-                  <SummaryRow label="Risk" value="Normal" />
-                </div>
+                  <SummaryRow
+  label="Muayene Sayısı"
+  value={String(employee.examination_count || 0)}
+/>
+
+<SummaryRow
+  label="Son Muayene"
+  value={employee.last_examination_date || "-"}
+/>
+
+<SummaryRow
+  label="Sonraki Muayene"
+  value={employee.next_examination_date || "-"}
+/>
+
+<SummaryRow label="Son EK-2" value="-" />
+<SummaryRow label="Son Reçete" value="-" />
+
+<SummaryRow
+  label="Risk"
+  value={employee.last_examination_decision || "Normal"}
+/>                </div>
               </aside>
             </section>
           </>
