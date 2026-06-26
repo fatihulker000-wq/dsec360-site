@@ -296,9 +296,14 @@ recentEk2: [],
             ],
     });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "Health dashboard could not be loaded." },
-      { status: 500 }
-    );
-  }
+  console.error("HEALTH DASHBOARD ERROR:", e);
+
+  return NextResponse.json(
+    {
+      error: e?.message,
+      stack: e?.stack,
+    },
+    { status: 500 }
+  );
+}
 }
