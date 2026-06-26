@@ -94,6 +94,35 @@ const supabase = getSupabase();
       return NextResponse.json({ error: examsError.message }, { status: 500 });
     }
 
+    let prescriptionsQuery = supabase
+  .from("health_prescriptions")
+  .select(`
+    id,
+    employee_id,
+    company_id,
+    created_at,
+    health_prescription_items(id)
+  `)
+  .eq("is_active", true)
+  .order("created_at", { ascending: false })
+  .limit(100);
+
+if (adminRole === "company_admin" && companyIdFromCookie) {
+  prescriptionsQuery = prescriptionsQuery.eq("company_id", companyIdFromCookie);
+}
+
+const {
+  data: prescriptions,
+  error: prescriptionsError,
+} = await prescriptionsQuery;
+
+if (prescriptionsError) {
+  return NextResponse.json(
+    { error: prescriptionsError.message },
+    { status: 500 }
+  );
+}
+
     const employeeMap = Object.fromEntries(
       (employees || []).map((e) => [
         String(e.id),
@@ -213,6 +242,24 @@ const criticalUpcoming = (exams || []).filter(
     };
   });
     
+const recentPrescriptions = (prescriptions || [])
+  .slice(0, 10)
+  .map((p: any) => {
+    const emp = employeeMap[String(p.employee_id)] || {
+      name: "Çalışan",
+      companyId: p.company_id || "",
+    };
+
+    return {
+      id: p.id,
+      employeeName: emp.name,
+      companyName:
+        companyMap[String(p.company_id || emp.companyId)] || "Firma Yok",
+      medicineCount: p.health_prescription_items?.length || 0,
+      createdAt: p.created_at,
+    };
+  });
+
     const alerts = [
       ...overdueRaw.slice(0, 5).map((e) => {
         const emp = employeeMap[String(e.employee_id)] || { name: "Çalışan" };
@@ -246,7 +293,9 @@ const criticalUpcoming = (exams || []).filter(
         upcomingExams: upcomingRaw.length,
         criticalUpcomingExams: criticalUpcoming.length,
         overdueExams: overdueRaw.length,
-        todayPrescriptions: 0,
+        todayPrescriptions: (prescriptions || []).filter(
+  (p: any) => p.created_at?.slice(0, 10) === todayStr
+).length,
         openAccidents: 0,
         upcomingVaccines: 0,
         criticalAlerts: alerts.length,
@@ -257,7 +306,7 @@ const criticalUpcoming = (exams || []).filter(
 
 recentExaminations,
 
-recentPrescriptions: [],
+recentPrescriptions,
 
 recentEk2: [],
 

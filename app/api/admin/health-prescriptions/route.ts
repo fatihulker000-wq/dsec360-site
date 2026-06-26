@@ -46,7 +46,10 @@ export async function GET(req: Request) {
 
     let query = supabase
       .from("health_prescriptions")
-      .select("*")
+      .select(`
+  *,
+  health_prescription_items(id)
+`)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -65,10 +68,20 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({
-      success: true,
-      prescriptions: data || [],
-    });
+    const prescriptions = (data || []).map((p: any) => ({
+  id: p.id,
+  employeeId: p.employee_id,
+  companyId: p.company_id,
+  diagnosisName: p.diagnosis_name,
+  status: p.status,
+  createdAt: p.created_at,
+  medicineCount: p.health_prescription_items?.length || 0,
+}));
+
+return NextResponse.json({
+  success: true,
+  prescriptions,
+});
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message || "Prescriptions could not be loaded." },
