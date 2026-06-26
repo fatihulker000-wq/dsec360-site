@@ -16,6 +16,8 @@ useEffect(() => {
       });
 
       const json = await res.json();
+      console.log("API RESPONSE:", json);
+console.log("EMPLOYEES:", json.employees);
 
       if (!res.ok) {
         setEmployees([]);
@@ -32,6 +34,7 @@ useEffect(() => {
 
   void loadEmployees();
 }, []);
+
   return (
     <main
       style={{
