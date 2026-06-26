@@ -102,8 +102,8 @@ export async function PUT(
         weight: body.weight ? Number(body.weight) : null,
         bmi: body.bmi ? Number(body.bmi) : null,
 
-        blood_pressure_sys: body.systolic ? Number(body.systolic) : null,
-        blood_pressure_dia: body.diastolic ? Number(body.diastolic) : null,
+        systolic: body.systolic ? Number(body.systolic) : null,
+        diastolic: body.diastolic ? Number(body.diastolic) : null,
 
         pulse: body.pulse ? Number(body.pulse) : null,
         temperature: body.temperature ? Number(body.temperature) : null,

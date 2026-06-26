@@ -9,8 +9,8 @@ type ExaminationRow = {
   next_exam_date?: string | null;
   decision?: string | null;
   bmi?: number | null;
-  blood_pressure_sys?: number | null;
-  blood_pressure_dia?: number | null;
+  systolic?: number | null;
+  diastolic?: number | null;
 };
 
 type Props = {
@@ -187,8 +187,7 @@ export default function ExaminationHistory({
                 }}
               >
                 BMI: {item.bmi || "-"} • Tansiyon:{" "}
-                {item.blood_pressure_sys || "-"}/
-                {item.blood_pressure_dia || "-"}
+                {item.systolic || "-"}/{item.diastolic || "-"}
               </div>
 
               <div
