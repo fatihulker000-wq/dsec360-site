@@ -138,7 +138,7 @@ export default function HealthEmployeeDetailPage() {
 )}
 
 {activeTab === "EK-2" && (
-  <Ek2Tab />
+  <Ek2Tab employee={employee as any} />
 )}
 
 {activeTab === "Reçeteler" && (

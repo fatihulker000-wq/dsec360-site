@@ -2,125 +2,270 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 
-type Ek2FormType = "İşe Giriş" | "Periyodik";
-type Ek2Status = "Taslak" | "Tamamlandı" | "İmzalandı";
-type Decision = "Uygun" | "Kısıtlı Uygun" | "Uygun Değil";
+type FormType = "İşe Giriş" | "Periyodik";
+type FormStatus = "Taslak" | "Tamamlandı" | "İmzalandı";
+type Decision = "Çalışabilir" | "Şartlı Çalışabilir" | "Çalışamaz";
 
-const tabs = [
-  "Genel Bilgiler",
-  "Mesleki Anamnez",
-  "Özgeçmiş",
-  "Soygeçmiş",
-  "Fizik Muayene",
-  "Vital Bulgular",
-  "Sistem Muayenesi",
-  "Laboratuvar",
-  "Odyometri",
-  "SFT",
-  "Görme",
-  "Aşılar",
-  "Mesleki Riskler",
-  "Kanaat",
-  "PDF / İmza",
+type TabKey =
+  | "genel"
+  | "anamnez"
+  | "ozgecmis"
+  | "soygecmis"
+  | "fizik"
+  | "tetkikler"
+  | "riskler"
+  | "kanaat"
+  | "pdf";
+
+type Ek2Form = {
+  formType: FormType;
+  status: FormStatus;
+  fileNo: string;
+  revisionNo: string;
+  examDate: string;
+  nextExamDate: string;
+  doctorName: string;
+
+  employeeName: string;
+  identityNumber: string;
+  birthDate: string;
+  gender: string;
+  bloodGroup: string;
+  phone: string;
+
+  companyName: string;
+  workplaceAddress: string;
+  jobTitle: string;
+  department: string;
+  startDate: string;
+  dangerClass: string;
+  naceCode: string;
+
+  previousJobs: string;
+  currentJobDescription: string;
+  exposures: string;
+  ppeUsage: string;
+  previousAccidents: string;
+  occupationalDiseaseHistory: string;
+
+  chronicDiseases: string;
+  surgeries: string;
+  medicines: string;
+  allergies: string;
+  habits: string;
+  familyHistory: string;
+
+  height: string;
+  weight: string;
+  systolic: string;
+  diastolic: string;
+  pulse: string;
+  temperature: string;
+  spo2: string;
+
+  headNeck: string;
+  eye: string;
+  earNoseThroat: string;
+  respiratory: string;
+  cardiovascular: string;
+  digestive: string;
+  genitourinary: string;
+  musculoskeletal: string;
+  neurological: string;
+  skin: string;
+  psychological: string;
+
+  hemogram: string;
+  biochemistry: string;
+  urine: string;
+  radiology: string;
+  audiometry: string;
+  sft: string;
+  vision: string;
+  ekg: string;
+  vaccines: string;
+  otherTests: string;
+
+  riskEvaluation: string;
+  restrictions: string;
+  recommendations: string;
+  decision: Decision;
+  doctorOpinion: string;
+  signatureNote: string;
+};
+
+const initialForm: Ek2Form = {
+  formType: "İşe Giriş",
+  status: "Taslak",
+  fileNo: "",
+  revisionNo: "0",
+  examDate: "",
+  nextExamDate: "",
+  doctorName: "",
+
+  employeeName: "",
+  identityNumber: "",
+  birthDate: "",
+  gender: "",
+  bloodGroup: "",
+  phone: "",
+
+  companyName: "",
+  workplaceAddress: "",
+  jobTitle: "",
+  department: "",
+  startDate: "",
+  dangerClass: "",
+  naceCode: "",
+
+  previousJobs: "",
+  currentJobDescription: "",
+  exposures: "",
+  ppeUsage: "",
+  previousAccidents: "",
+  occupationalDiseaseHistory: "",
+
+  chronicDiseases: "",
+  surgeries: "",
+  medicines: "",
+  allergies: "",
+  habits: "",
+  familyHistory: "",
+
+  height: "",
+  weight: "",
+  systolic: "",
+  diastolic: "",
+  pulse: "",
+  temperature: "",
+  spo2: "",
+
+  headNeck: "",
+  eye: "",
+  earNoseThroat: "",
+  respiratory: "",
+  cardiovascular: "",
+  digestive: "",
+  genitourinary: "",
+  musculoskeletal: "",
+  neurological: "",
+  skin: "",
+  psychological: "",
+
+  hemogram: "",
+  biochemistry: "",
+  urine: "",
+  radiology: "",
+  audiometry: "",
+  sft: "",
+  vision: "",
+  ekg: "",
+  vaccines: "",
+  otherTests: "",
+
+  riskEvaluation: "",
+  restrictions: "",
+  recommendations: "",
+  decision: "Çalışabilir",
+  doctorOpinion: "",
+  signatureNote: "",
+};
+
+const tabs: { key: TabKey; label: string }[] = [
+  { key: "genel", label: "Genel Bilgiler" },
+  { key: "anamnez", label: "Mesleki Anamnez" },
+  { key: "ozgecmis", label: "Özgeçmiş" },
+  { key: "soygecmis", label: "Soygeçmiş" },
+  { key: "fizik", label: "Fizik Muayene" },
+  { key: "tetkikler", label: "Tetkikler" },
+  { key: "riskler", label: "Mesleki Riskler" },
+  { key: "kanaat", label: "Kanaat" },
+  { key: "pdf", label: "PDF / İmza" },
 ];
 
-export default function Ek2Tab() {
-  const [activeTab, setActiveTab] = useState("Genel Bilgiler");
+type Ek2TabProps = {
+  employee?: {
+    id: string;
+    full_name?: string;
+    email?: string;
+    company_id?: string;
+    company_name?: string;
+    job_title?: string;
+    start_date?: string;
+    identity_number?: string;
+    birth_date?: string;
+    gender?: string;
+    blood_group?: string;
+    phone?: string;
+  };
+};
 
-  const [formType, setFormType] = useState<Ek2FormType>("İşe Giriş");
-  const [status, setStatus] = useState<Ek2Status>("Taslak");
-  const [decision, setDecision] = useState<Decision>("Uygun");
-
-  const [examDate, setExamDate] = useState("");
-  const [nextExamDate, setNextExamDate] = useState("");
-  const [doctorName, setDoctorName] = useState("");
-  const [fileNo, setFileNo] = useState("");
-  const [revisionNo, setRevisionNo] = useState("0");
-
-  const [workHistory, setWorkHistory] = useState("");
-  const [exposures, setExposures] = useState("");
-  const [previousAccidents, setPreviousAccidents] = useState("");
-  const [occupationalDisease, setOccupationalDisease] = useState("");
-
-  const [personalHistory, setPersonalHistory] = useState("");
-  const [surgeries, setSurgeries] = useState("");
-  const [medicines, setMedicines] = useState("");
-  const [allergies, setAllergies] = useState("");
-  const [habits, setHabits] = useState("");
-
-  const [familyHistory, setFamilyHistory] = useState("");
-
-  const [physicalExam, setPhysicalExam] = useState("");
-  const [height, setHeight] = useState("");
-  const [weight, setWeight] = useState("");
-  const [systolic, setSystolic] = useState("");
-  const [diastolic, setDiastolic] = useState("");
-  const [pulse, setPulse] = useState("");
-  const [temperature, setTemperature] = useState("");
-  const [spo2, setSpo2] = useState("");
-
-  const [labNote, setLabNote] = useState("");
-  const [audiometryNote, setAudiometryNote] = useState("");
-  const [sftNote, setSftNote] = useState("");
-  const [visionNote, setVisionNote] = useState("");
-  const [vaccineNote, setVaccineNote] = useState("");
-
-  const [riskNote, setRiskNote] = useState("");
-  const [restrictionNote, setRestrictionNote] = useState("");
-  const [doctorOpinion, setDoctorOpinion] = useState("");
-  const [signatureNote, setSignatureNote] = useState("");
+export default function Ek2Tab({ employee }: Ek2TabProps) {
+  const [activeTab, setActiveTab] = useState<TabKey>("genel");
+  const [form, setForm] = useState<Ek2Form>({
+  ...initialForm,
+  employeeName: employee?.full_name || "",
+  identityNumber: employee?.identity_number || "",
+  birthDate: employee?.birth_date || "",
+  gender: employee?.gender || "",
+  bloodGroup: employee?.blood_group || "",
+  phone: employee?.phone || "",
+  companyName: employee?.company_name || "",
+  jobTitle: employee?.job_title || "",
+  startDate: employee?.start_date || "",
+});
 
   const bmi = useMemo(() => {
-    const h = Number(height) / 100;
-    const w = Number(weight);
+    const h = Number(form.height) / 100;
+    const w = Number(form.weight);
     if (!h || !w) return "";
     return (w / (h * h)).toFixed(1);
-  }, [height, weight]);
+  }, [form.height, form.weight]);
 
-  const alerts = useMemo(() => {
+  const warnings = useMemo(() => {
     const list: string[] = [];
 
     if (Number(bmi) >= 30) list.push("BMI obezite aralığında.");
-    if (Number(systolic) >= 140 || Number(diastolic) >= 90) {
+    if (Number(form.systolic) >= 140 || Number(form.diastolic) >= 90) {
       list.push("Tansiyon yüksek görünüyor.");
     }
-    if (Number(spo2) > 0 && Number(spo2) < 92) {
+    if (Number(form.spo2) > 0 && Number(form.spo2) < 92) {
       list.push("SpO₂ düşük görünüyor.");
     }
-    if (decision === "Uygun Değil") {
-      list.push("İşe uygunluk kararı kritik.");
+    if (form.decision === "Çalışamaz") {
+      list.push("Çalışamaz kararı kritik takip gerektirir.");
     }
 
     return list;
-  }, [bmi, systolic, diastolic, spo2, decision]);
+  }, [bmi, form.systolic, form.diastolic, form.spo2, form.decision]);
 
-  function newEntryForm() {
-    setFormType("İşe Giriş");
-    setStatus("Taslak");
-    setDecision("Uygun");
-    setActiveTab("Genel Bilgiler");
+  function update<K extends keyof Ek2Form>(key: K, value: Ek2Form[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function newPeriodicForm() {
-    setFormType("Periyodik");
-    setStatus("Taslak");
-    setDecision("Uygun");
-    setActiveTab("Genel Bilgiler");
+  function newEntry() {
+    setForm({ ...initialForm, formType: "İşe Giriş" });
+    setActiveTab("genel");
+  }
+
+  function newPeriodic() {
+    setForm({ ...initialForm, formType: "Periyodik" });
+    setActiveTab("genel");
   }
 
   function saveDraft() {
-    setStatus("Taslak");
+    update("status", "Taslak");
     alert("EK-2 taslak olarak hazırlandı. API bağlantısı sonraki adımda eklenecek.");
   }
 
   function completeForm() {
-    setStatus("Tamamlandı");
-    alert("EK-2 formu tamamlandı olarak işaretlendi.");
+    update("status", "Tamamlandı");
+    alert("EK-2 tamamlandı olarak işaretlendi.");
   }
 
   function signForm() {
-    setStatus("İmzalandı");
-    alert("EK-2 imza akışı sonraki adımda aktif edilecek.");
+    update("status", "İmzalandı");
+    alert("EK-2 imza akışı sonraki adımda bağlanacak.");
   }
 
   function printForm() {
@@ -128,508 +273,712 @@ export default function Ek2Tab() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 20 }}>
-      <section style={heroStyle}>
+    <div style={pageStyle}>
+      <section style={headerStyle}>
         <div>
-          <div style={heroLabelStyle}>D-SEC EK-2 ÇALIŞMA ALANI</div>
-
-          <h2 style={{ margin: "8px 0 8px", fontSize: 28 }}>
-            İşe Giriş / Periyodik Muayene Formu
+          <div style={headerLabelStyle}>D-SEC SAĞLIK MODÜLÜ</div>
+          <h2 style={headerTitleStyle}>
+            EK-2 İşe Giriş / Periyodik Muayene Formu
           </h2>
-
-          <p style={{ margin: 0, opacity: 0.9, lineHeight: 1.6 }}>
-            İşyeri hekiminin EK-2 formunu dijital olarak hazırladığı,
-            değerlendirdiği, yazdırdığı ve imzaladığı profesyonel çalışma alanı.
+          <p style={headerTextStyle}>
+            Resmi EK-2 form akışına uygun dijital işyeri hekimi çalışma alanı.
           </p>
         </div>
 
-        <div style={statusBoxStyle}>
-          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 800 }}>
-            FORM DURUMU
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 950 }}>{status}</div>
-          <div style={{ marginTop: 6, fontSize: 13, opacity: 0.85 }}>
-            {formType} Muayenesi
-          </div>
+        <div style={headerStatusStyle}>
+          <span>{form.status}</span>
+          <strong>{form.formType}</strong>
         </div>
       </section>
 
       <section style={toolbarStyle}>
-        <button type="button" onClick={newEntryForm} style={primaryButtonStyle}>
+        <button type="button" onClick={newEntry} style={primaryButtonStyle}>
           + Yeni İşe Giriş
         </button>
-
-        <button type="button" onClick={newPeriodicForm} style={secondaryButtonStyle}>
+        <button type="button" onClick={newPeriodic} style={secondaryButtonStyle}>
           + Yeni Periyodik
         </button>
-
         <button type="button" onClick={saveDraft} style={secondaryButtonStyle}>
           Taslak Kaydet
         </button>
-
         <button type="button" onClick={completeForm} style={successButtonStyle}>
           Tamamla
         </button>
-
         <button type="button" onClick={printForm} style={secondaryButtonStyle}>
           Yazdır
         </button>
-
         <button type="button" onClick={signForm} style={darkButtonStyle}>
           İmzala
         </button>
       </section>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "260px minmax(0,1fr) 280px",
-          gap: 18,
-          alignItems: "start",
-        }}
-      >
-        <aside style={sideCardStyle}>
-          <h3 style={sideTitleStyle}>EK-2 Bölümleri</h3>
+      <section style={officialFormStyle}>
+        <div style={officialTitleStyle}>
+          İŞE GİRİŞ / PERİYODİK MUAYENE FORMU
+        </div>
 
-          <div style={{ display: "grid", gap: 8 }}>
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  ...tabButtonStyle,
-                  background: activeTab === tab ? "#7f1d1d" : "#fff",
-                  color: activeTab === tab ? "#fff" : "#334155",
-                  borderColor: activeTab === tab ? "#7f1d1d" : "#e5e7eb",
-                }}
-              >
-                {tab}
-              </button>
-            ))}
+        <div style={topSummaryGridStyle}>
+          <SummaryBox label="Form Türü" value={form.formType} />
+          <SummaryBox label="Durum" value={form.status} />
+          <SummaryBox label="Muayene Tarihi" value={form.examDate || "-"} />
+          <SummaryBox label="Sonraki Muayene" value={form.nextExamDate || "-"} />
+          <SummaryBox label="Karar" value={form.decision} />
+          <SummaryBox label="BMI" value={bmi || "-"} />
+        </div>
+
+        {warnings.length > 0 && (
+          <div style={warningStyle}>
+            <strong>DORA Ön Uyarıları:</strong>{" "}
+            {warnings.map((item, index) => (
+  <div key={index}>⚠️ {item}</div>
+))}
           </div>
-        </aside>
+        )}
 
-        <main style={contentCardStyle}>
-          {activeTab === "Genel Bilgiler" && (
-            <Section title="Genel Bilgiler">
-              <div style={gridStyle}>
-                <Field label="Form Türü">
-                  <select
-                    value={formType}
-                    onChange={(e) => setFormType(e.target.value as Ek2FormType)}
-                    style={inputStyle}
-                  >
-                    <option>İşe Giriş</option>
-                    <option>Periyodik</option>
-                  </select>
-                </Field>
+        <div style={tabBarStyle}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                ...tabStyle,
+                background: activeTab === tab.key ? "#7f1d1d" : "#fff",
+                color: activeTab === tab.key ? "#fff" : "#334155",
+                borderColor: activeTab === tab.key ? "#7f1d1d" : "#e5e7eb",
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-                <Field label="Durum">
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as Ek2Status)}
-                    style={inputStyle}
-                  >
-                    <option>Taslak</option>
-                    <option>Tamamlandı</option>
-                    <option>İmzalandı</option>
-                  </select>
-                </Field>
+        {activeTab === "genel" && (
+          <Section title="1. Genel Bilgiler">
+            <SubTitle>Form Bilgileri</SubTitle>
 
-                <Field label="Muayene Tarihi">
-                  <input
-                    type="date"
-                    value={examDate}
-                    onChange={(e) => setExamDate(e.target.value)}
-                    style={inputStyle}
-                  />
-                </Field>
+            <div style={gridStyle}>
+              <Field label="Form Türü">
+                <select
+                  value={form.formType}
+                  onChange={(e) => update("formType", e.target.value as FormType)}
+                  style={inputStyle}
+                >
+                  <option>İşe Giriş</option>
+                  <option>Periyodik</option>
+                </select>
+              </Field>
 
-                <Field label="Sonraki Muayene Tarihi">
-                  <input
-                    type="date"
-                    value={nextExamDate}
-                    onChange={(e) => setNextExamDate(e.target.value)}
-                    style={inputStyle}
-                  />
-                </Field>
+              <Field label="Durum">
+                <select
+                  value={form.status}
+                  onChange={(e) => update("status", e.target.value as FormStatus)}
+                  style={inputStyle}
+                >
+                  <option>Taslak</option>
+                  <option>Tamamlandı</option>
+                  <option>İmzalandı</option>
+                </select>
+              </Field>
 
-                <Field label="İşyeri Hekimi">
-                  <input
-                    value={doctorName}
-                    onChange={(e) => setDoctorName(e.target.value)}
-                    placeholder="Hekim adı soyadı"
-                    style={inputStyle}
-                  />
-                </Field>
+              <Field label="Muayene Tarihi">
+                <input
+                  type="date"
+                  value={form.examDate}
+                  onChange={(e) => update("examDate", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
 
-                <Field label="Dosya No">
-                  <input
-                    value={fileNo}
-                    onChange={(e) => setFileNo(e.target.value)}
-                    placeholder="EK2-2026-0001"
-                    style={inputStyle}
-                  />
-                </Field>
+              <Field label="Sonraki Muayene Tarihi">
+                <input
+                  type="date"
+                  value={form.nextExamDate}
+                  onChange={(e) => update("nextExamDate", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
 
-                <Field label="Revizyon No">
-                  <input
-                    value={revisionNo}
-                    onChange={(e) => setRevisionNo(e.target.value)}
-                    style={inputStyle}
-                  />
-                </Field>
-              </div>
+              <Field label="İşyeri Hekimi">
+                <input
+                  value={form.doctorName}
+                  onChange={(e) => update("doctorName", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
 
-              <InfoBlock
-                title="Çalışan bilgileri"
-                text="Ad soyad, firma, görev, işe giriş tarihi ve iletişim bilgileri çalışan sağlık kartından otomatik alınacaktır."
+              <Field label="Dosya No">
+                <input
+                  value={form.fileNo}
+                  onChange={(e) => update("fileNo", e.target.value)}
+                  placeholder="EK2-2026-0001"
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Revizyon No">
+                <input
+                  value={form.revisionNo}
+                  onChange={(e) => update("revisionNo", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+            </div>
+
+            <SubTitle>Çalışan Bilgileri</SubTitle>
+
+            <div style={gridStyle}>
+              <Field label="Adı Soyadı">
+  <input
+    value={form.employeeName}
+    readOnly
+    style={{
+      ...inputStyle,
+      background: "#f8fafc",
+      color: "#475569",
+      cursor: "not-allowed",
+    }}
+  />
+</Field>
+
+              <Field label="T.C. Kimlik No">
+  <input
+    value={form.identityNumber}
+    readOnly
+    style={readonlyInputStyle}
+  />
+</Field>
+
+             <Field label="Doğum Tarihi">
+  <input
+    type="date"
+    value={form.birthDate}
+    readOnly
+    style={readonlyInputStyle}
+  />
+</Field>
+
+              <Field label="Cinsiyet">
+  <input
+    value={form.gender}
+    readOnly
+    style={readonlyInputStyle}
+  />
+</Field>
+
+              <Field label="Kan Grubu">
+  <input
+    value={form.bloodGroup}
+    readOnly
+    style={readonlyInputStyle}
+  />
+</Field>
+
+              <Field label="Telefon">
+  <input
+    value={form.phone}
+    readOnly
+    style={readonlyInputStyle}
+  />
+</Field>
+            </div>
+
+            <SubTitle>İşyeri Bilgileri</SubTitle>
+
+            <div style={gridStyle}>
+              <Field label="İşyeri / Firma">
+                <input
+                  value={form.companyName}
+                  onChange={(e) => update("companyName", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="İşyeri / Firma">
+  <input
+    value={form.companyName}
+    readOnly
+    style={readonlyInputStyle}
+  />
+</Field>
+
+              <Field label="Görevi / Mesleği">
+  <input
+    value={form.jobTitle}
+    readOnly
+    style={readonlyInputStyle}
+  />
+</Field>
+
+              <Field label="İşe Giriş Tarihi">
+  <input
+    type="date"
+    value={form.startDate}
+    readOnly
+    style={readonlyInputStyle}
+  />
+</Field>
+
+              <Field label="İşe Giriş Tarihi">
+                <input
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => update("startDate", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Tehlike Sınıfı">
+                <select
+                  value={form.dangerClass}
+                  onChange={(e) => update("dangerClass", e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Seçiniz</option>
+                  <option>Az Tehlikeli</option>
+                  <option>Tehlikeli</option>
+                  <option>Çok Tehlikeli</option>
+                </select>
+              </Field>
+
+              <Field label="NACE Kodu">
+                <input
+                  value={form.naceCode}
+                  onChange={(e) => update("naceCode", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+            </div>
+          </Section>
+        )}
+
+        {activeTab === "anamnez" && (
+          <Section title="2. Mesleki Anamnez">
+            <Field label="Önceki İşler / Çalışma Öyküsü">
+              <textarea
+                value={form.previousJobs}
+                onChange={(e) => update("previousJobs", e.target.value)}
+                style={textareaStyle}
               />
-            </Section>
-          )}
+            </Field>
 
-          {activeTab === "Mesleki Anamnez" && (
-            <Section title="Mesleki Anamnez">
-              <Field label="Önceki İşler / Çalışma Öyküsü">
-                <textarea
-                  value={workHistory}
-                  onChange={(e) => setWorkHistory(e.target.value)}
-                  style={textareaStyle}
-                  placeholder="Çalışanın daha önce yaptığı işler, çalışma süreleri ve maruziyetleri..."
-                />
-              </Field>
-
-              <Field label="Mesleki Maruziyetler">
-                <textarea
-                  value={exposures}
-                  onChange={(e) => setExposures(e.target.value)}
-                  style={textareaStyle}
-                  placeholder="Gürültü, toz, kimyasal, ergonomik riskler, biyolojik etkenler..."
-                />
-              </Field>
-
-              <Field label="Geçirilmiş İş Kazaları">
-                <textarea
-                  value={previousAccidents}
-                  onChange={(e) => setPreviousAccidents(e.target.value)}
-                  style={textareaStyle}
-                />
-              </Field>
-
-              <Field label="Meslek Hastalığı Şüphesi / Öyküsü">
-                <textarea
-                  value={occupationalDisease}
-                  onChange={(e) => setOccupationalDisease(e.target.value)}
-                  style={textareaStyle}
-                />
-              </Field>
-            </Section>
-          )}
-
-          {activeTab === "Özgeçmiş" && (
-            <Section title="Özgeçmiş">
-              <Field label="Hastalık Öyküsü">
-                <textarea
-                  value={personalHistory}
-                  onChange={(e) => setPersonalHistory(e.target.value)}
-                  style={textareaStyle}
-                />
-              </Field>
-
-              <Field label="Geçirilmiş Ameliyatlar">
-                <textarea
-                  value={surgeries}
-                  onChange={(e) => setSurgeries(e.target.value)}
-                  style={textareaStyle}
-                />
-              </Field>
-
-              <Field label="Sürekli Kullanılan İlaçlar">
-                <textarea
-                  value={medicines}
-                  onChange={(e) => setMedicines(e.target.value)}
-                  style={textareaStyle}
-                />
-              </Field>
-
-              <Field label="Alerjiler">
-                <textarea
-                  value={allergies}
-                  onChange={(e) => setAllergies(e.target.value)}
-                  style={textareaStyle}
-                />
-              </Field>
-
-              <Field label="Alışkanlıklar">
-                <textarea
-                  value={habits}
-                  onChange={(e) => setHabits(e.target.value)}
-                  style={textareaStyle}
-                  placeholder="Sigara, alkol, madde kullanımı, uyku, beslenme..."
-                />
-              </Field>
-            </Section>
-          )}
-
-          {activeTab === "Soygeçmiş" && (
-            <Section title="Soygeçmiş">
-              <Field label="Aile Hastalık Öyküsü">
-                <textarea
-                  value={familyHistory}
-                  onChange={(e) => setFamilyHistory(e.target.value)}
-                  style={textareaStyle}
-                  placeholder="Ailede kalp hastalığı, hipertansiyon, diyabet, kanser vb."
-                />
-              </Field>
-            </Section>
-          )}
-
-          {activeTab === "Fizik Muayene" && (
-            <Section title="Fizik Muayene">
-              <Field label="Genel Fizik Muayene Bulguları">
-                <textarea
-                  value={physicalExam}
-                  onChange={(e) => setPhysicalExam(e.target.value)}
-                  style={textareaStyle}
-                  placeholder="Genel görünüm, baş-boyun, toraks, abdomen, ekstremite, nörolojik gözlem..."
-                />
-              </Field>
-            </Section>
-          )}
-
-          {activeTab === "Vital Bulgular" && (
-            <Section title="Vital Bulgular">
-              <div style={gridStyle}>
-                <Field label="Boy (cm)">
-                  <input value={height} onChange={(e) => setHeight(e.target.value)} style={inputStyle} />
-                </Field>
-
-                <Field label="Kilo (kg)">
-                  <input value={weight} onChange={(e) => setWeight(e.target.value)} style={inputStyle} />
-                </Field>
-
-                <Info label="BMI" value={bmi || "-"} />
-
-                <Field label="Tansiyon Sistolik">
-                  <input value={systolic} onChange={(e) => setSystolic(e.target.value)} style={inputStyle} />
-                </Field>
-
-                <Field label="Tansiyon Diyastolik">
-                  <input value={diastolic} onChange={(e) => setDiastolic(e.target.value)} style={inputStyle} />
-                </Field>
-
-                <Field label="Nabız">
-                  <input value={pulse} onChange={(e) => setPulse(e.target.value)} style={inputStyle} />
-                </Field>
-
-                <Field label="Ateş">
-                  <input value={temperature} onChange={(e) => setTemperature(e.target.value)} style={inputStyle} />
-                </Field>
-
-                <Field label="SpO₂">
-                  <input value={spo2} onChange={(e) => setSpo2(e.target.value)} style={inputStyle} />
-                </Field>
-              </div>
-            </Section>
-          )}
-
-          {activeTab === "Sistem Muayenesi" && (
-            <Section title="Sistem Muayenesi">
-              <div style={checkGridStyle}>
-                {[
-                  "Göz",
-                  "Kulak Burun Boğaz",
-                  "Solunum Sistemi",
-                  "Kardiyovasküler Sistem",
-                  "Gastrointestinal Sistem",
-                  "Ürogenital Sistem",
-                  "Nörolojik Sistem",
-                  "Kas İskelet Sistemi",
-                  "Deri",
-                  "Psikolojik Değerlendirme",
-                ].map((item) => (
-                  <label key={item} style={checkStyle}>
-                    <input type="checkbox" />
-                    {item}
-                  </label>
-                ))}
-              </div>
-
-              <InfoBlock
-                title="Not"
-                text="İşaretlenen sistemlere ilişkin detaylı açıklamalar sonraki fazda ayrı yorum alanlarıyla genişletilecektir."
+            <Field label="Mevcut İşin Tanımı">
+              <textarea
+                value={form.currentJobDescription}
+                onChange={(e) => update("currentJobDescription", e.target.value)}
+                style={textareaStyle}
               />
-            </Section>
-          )}
+            </Field>
 
-          {activeTab === "Laboratuvar" && (
-            <Section title="Laboratuvar">
-              <Field label="Laboratuvar / Tetkik Notları">
-                <textarea
-                  value={labNote}
-                  onChange={(e) => setLabNote(e.target.value)}
-                  style={textareaStyle}
-                  placeholder="Hemogram, biyokimya, idrar, radyoloji veya ek tetkikler..."
+            <Field label="Mesleki Maruziyetler">
+              <textarea
+                value={form.exposures}
+                onChange={(e) => update("exposures", e.target.value)}
+                placeholder="Gürültü, toz, kimyasal, biyolojik, ergonomik, titreşim, radyasyon vb."
+                style={textareaStyle}
+              />
+            </Field>
+
+            <Field label="Kişisel Koruyucu Donanım Kullanımı">
+              <textarea
+                value={form.ppeUsage}
+                onChange={(e) => update("ppeUsage", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+
+            <Field label="Geçirilmiş İş Kazaları">
+              <textarea
+                value={form.previousAccidents}
+                onChange={(e) => update("previousAccidents", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+
+            <Field label="Meslek Hastalığı Öyküsü / Şüphesi">
+              <textarea
+                value={form.occupationalDiseaseHistory}
+                onChange={(e) =>
+                  update("occupationalDiseaseHistory", e.target.value)
+                }
+                style={textareaStyle}
+              />
+            </Field>
+          </Section>
+        )}
+
+        {activeTab === "ozgecmis" && (
+          <Section title="3. Özgeçmiş">
+            <Field label="Kronik / Sistemik Hastalıklar">
+              <textarea
+                value={form.chronicDiseases}
+                onChange={(e) => update("chronicDiseases", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+
+            <Field label="Geçirilmiş Ameliyatlar">
+              <textarea
+                value={form.surgeries}
+                onChange={(e) => update("surgeries", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+
+            <Field label="Sürekli Kullanılan İlaçlar">
+              <textarea
+                value={form.medicines}
+                onChange={(e) => update("medicines", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+
+            <Field label="Alerjiler">
+              <textarea
+                value={form.allergies}
+                onChange={(e) => update("allergies", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+
+            <Field label="Alışkanlıklar">
+              <textarea
+                value={form.habits}
+                onChange={(e) => update("habits", e.target.value)}
+                placeholder="Sigara, alkol, madde kullanımı, uyku, beslenme vb."
+                style={textareaStyle}
+              />
+            </Field>
+          </Section>
+        )}
+
+        {activeTab === "soygecmis" && (
+          <Section title="4. Soygeçmiş">
+            <Field label="Aile Hastalık Öyküsü">
+              <textarea
+                value={form.familyHistory}
+                onChange={(e) => update("familyHistory", e.target.value)}
+                placeholder="Anne, baba, kardeşlerde kalp hastalığı, diyabet, hipertansiyon, kanser, genetik hastalıklar vb."
+                style={textareaStyle}
+              />
+            </Field>
+          </Section>
+        )}
+
+        {activeTab === "fizik" && (
+          <Section title="5. Fizik Muayene">
+            <SubTitle>Vital Bulgular</SubTitle>
+
+            <div style={gridStyle}>
+              <Field label="Boy (cm)">
+                <input
+                  value={form.height}
+                  onChange={(e) => update("height", e.target.value)}
+                  style={inputStyle}
                 />
               </Field>
-            </Section>
-          )}
 
-          {activeTab === "Odyometri" && (
-            <Section title="Odyometri">
-              <Field label="Odyometri Değerlendirmesi">
+              <Field label="Kilo (kg)">
+                <input
+                  value={form.weight}
+                  onChange={(e) => update("weight", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+
+              <ReadOnly label="BMI" value={bmi || "-"} />
+
+              <Field label="Tansiyon Sistolik">
+                <input
+                  value={form.systolic}
+                  onChange={(e) => update("systolic", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Tansiyon Diyastolik">
+                <input
+                  value={form.diastolic}
+                  onChange={(e) => update("diastolic", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Nabız">
+                <input
+                  value={form.pulse}
+                  onChange={(e) => update("pulse", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="Ateş">
+                <input
+                  value={form.temperature}
+                  onChange={(e) => update("temperature", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+
+              <Field label="SpO₂">
+                <input
+                  value={form.spo2}
+                  onChange={(e) => update("spo2", e.target.value)}
+                  style={inputStyle}
+                />
+              </Field>
+            </div>
+
+           <SubTitle>Sistem Muayenesi</SubTitle>
+
+<div style={systemTableStyle}>
+
+  <div style={systemHeaderStyle}>
+    <div>Sistem</div>
+    <div>Normal</div>
+    <div>Patolojik</div>
+    <div>Açıklama</div>
+  </div>
+
+  {[
+    "Baş - Boyun",
+    "Göz",
+    "Kulak Burun Boğaz",
+    "Solunum Sistemi",
+    "Kardiyovasküler Sistem",
+    "Sindirim Sistemi",
+    "Ürogenital Sistem",
+    "Kas İskelet Sistemi",
+    "Nörolojik Sistem",
+    "Deri",
+    "Psikiyatrik Değerlendirme",
+  ].map((item) => (
+    <div key={item} style={systemRowStyle}>
+
+      <strong>{item}</strong>
+
+      <input
+        type="radio"
+        name={item}
+        defaultChecked
+      />
+
+      <input
+        type="radio"
+        name={item}
+      />
+
+      <input
+        placeholder="Açıklama..."
+        style={inputStyle}
+      />
+
+    </div>
+  ))}
+
+</div>
+
+          </Section>
+        )}
+
+        {activeTab === "tetkikler" && (
+          <Section title="6. Laboratuvar ve Tetkikler">
+            <div style={gridStyle}>
+              <Field label="Hemogram">
                 <textarea
-                  value={audiometryNote}
-                  onChange={(e) => setAudiometryNote(e.target.value)}
+                  value={form.hemogram}
+                  onChange={(e) => update("hemogram", e.target.value)}
                   style={textareaStyle}
                 />
               </Field>
-            </Section>
-          )}
 
-          {activeTab === "SFT" && (
-            <Section title="Solunum Fonksiyon Testi">
-              <Field label="SFT Değerlendirmesi">
+              <Field label="Biyokimya">
                 <textarea
-                  value={sftNote}
-                  onChange={(e) => setSftNote(e.target.value)}
+                  value={form.biochemistry}
+                  onChange={(e) => update("biochemistry", e.target.value)}
                   style={textareaStyle}
                 />
               </Field>
-            </Section>
-          )}
 
-          {activeTab === "Görme" && (
-            <Section title="Görme">
-              <Field label="Görme Testi Değerlendirmesi">
+              <Field label="İdrar Tetkiki">
                 <textarea
-                  value={visionNote}
-                  onChange={(e) => setVisionNote(e.target.value)}
+                  value={form.urine}
+                  onChange={(e) => update("urine", e.target.value)}
                   style={textareaStyle}
                 />
               </Field>
-            </Section>
-          )}
 
-          {activeTab === "Aşılar" && (
-            <Section title="Aşılar">
-              <Field label="Aşı Durumu / Öneriler">
+              <Field label="Radyoloji / Akciğer Grafisi">
                 <textarea
-                  value={vaccineNote}
-                  onChange={(e) => setVaccineNote(e.target.value)}
+                  value={form.radiology}
+                  onChange={(e) => update("radiology", e.target.value)}
                   style={textareaStyle}
-                  placeholder="Tetanoz, Hepatit, Grip, COVID vb."
                 />
               </Field>
-            </Section>
-          )}
 
-          {activeTab === "Mesleki Riskler" && (
-            <Section title="Mesleki Riskler">
-              <Field label="Risk Değerlendirme Notu">
+              <Field label="Odyometri">
                 <textarea
-                  value={riskNote}
-                  onChange={(e) => setRiskNote(e.target.value)}
+                  value={form.audiometry}
+                  onChange={(e) => update("audiometry", e.target.value)}
                   style={textareaStyle}
-                  placeholder="Çalışanın görevi, maruziyetleri ve sağlık bulgularına göre risk değerlendirmesi..."
                 />
               </Field>
-            </Section>
-          )}
 
-          {activeTab === "Kanaat" && (
-            <Section title="İşe Uygunluk Kanaati">
-              <div style={checkGridStyle}>
-                {(["Uygun", "Kısıtlı Uygun", "Uygun Değil"] as Decision[]).map((item) => (
-                  <label key={item} style={checkStyle}>
+              <Field label="Solunum Fonksiyon Testi">
+                <textarea
+                  value={form.sft}
+                  onChange={(e) => update("sft", e.target.value)}
+                  style={textareaStyle}
+                />
+              </Field>
+
+              <Field label="Görme Testi">
+                <textarea
+                  value={form.vision}
+                  onChange={(e) => update("vision", e.target.value)}
+                  style={textareaStyle}
+                />
+              </Field>
+
+              <Field label="EKG">
+                <textarea
+                  value={form.ekg}
+                  onChange={(e) => update("ekg", e.target.value)}
+                  style={textareaStyle}
+                />
+              </Field>
+
+              <Field label="Aşı Durumu">
+                <textarea
+                  value={form.vaccines}
+                  onChange={(e) => update("vaccines", e.target.value)}
+                  style={textareaStyle}
+                />
+              </Field>
+
+              <Field label="Diğer Tetkikler">
+                <textarea
+                  value={form.otherTests}
+                  onChange={(e) => update("otherTests", e.target.value)}
+                  style={textareaStyle}
+                />
+              </Field>
+            </div>
+          </Section>
+        )}
+
+        {activeTab === "riskler" && (
+          <Section title="7. Mesleki Riskler">
+            <Field label="Görev ve Maruziyetlere Göre Risk Değerlendirmesi">
+              <textarea
+                value={form.riskEvaluation}
+                onChange={(e) => update("riskEvaluation", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+
+            <Field label="Çalışma Kısıtları">
+              <textarea
+                value={form.restrictions}
+                onChange={(e) => update("restrictions", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+
+            <Field label="Öneriler">
+              <textarea
+                value={form.recommendations}
+                onChange={(e) => update("recommendations", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+          </Section>
+        )}
+
+        {activeTab === "kanaat" && (
+          <Section title="8. Kanaat ve Sonuç">
+            <SubTitle>İşe Uygunluk Kararı</SubTitle>
+
+            <div style={decisionGridStyle}>
+              {(["Çalışabilir", "Şartlı Çalışabilir", "Çalışamaz"] as Decision[]).map(
+                (item) => (
+                  <label
+                    key={item}
+                    style={{
+                      ...decisionBoxStyle,
+                      borderColor: form.decision === item ? "#7f1d1d" : "#e5e7eb",
+                      background: form.decision === item ? "#fff1f2" : "#fff",
+                    }}
+                  >
                     <input
                       type="radio"
                       name="decision"
-                      checked={decision === item}
-                      onChange={() => setDecision(item)}
+                      checked={form.decision === item}
+                      onChange={() => update("decision", item)}
                     />
-                    {item}
+                    <strong>{item}</strong>
                   </label>
-                ))}
-              </div>
+                )
+              )}
+            </div>
 
-              <Field label="Kısıt / Açıklama">
-                <textarea
-                  value={restrictionNote}
-                  onChange={(e) => setRestrictionNote(e.target.value)}
-                  style={textareaStyle}
-                />
-              </Field>
-
-              <Field label="Hekim Kanaati">
-                <textarea
-                  value={doctorOpinion}
-                  onChange={(e) => setDoctorOpinion(e.target.value)}
-                  style={textareaStyle}
-                />
-              </Field>
-            </Section>
-          )}
-
-          {activeTab === "PDF / İmza" && (
-            <Section title="PDF / İmza">
-              <InfoBlock
-                title="PDF çıktısı"
-                text="Sonraki adımda bu form resmi EK-2 çıktısına yakın PDF formatında oluşturulacaktır."
+            <Field label="Hekim Kanaati">
+              <textarea
+                value={form.doctorOpinion}
+                onChange={(e) => update("doctorOpinion", e.target.value)}
+                style={textareaStyle}
               />
+            </Field>
 
-              <Field label="İmza Notu">
-                <textarea
-                  value={signatureNote}
-                  onChange={(e) => setSignatureNote(e.target.value)}
-                  style={textareaStyle}
-                />
-              </Field>
+            <Field label="Kontrol / Sonraki Muayene Açıklaması">
+              <textarea
+                value={form.recommendations}
+                onChange={(e) => update("recommendations", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+          </Section>
+        )}
 
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button type="button" style={primaryButtonStyle}>
-                  PDF Önizle
-                </button>
-                <button type="button" onClick={printForm} style={secondaryButtonStyle}>
-                  Yazdır
-                </button>
-                <button type="button" onClick={signForm} style={darkButtonStyle}>
-                  İmzala
-                </button>
-              </div>
-            </Section>
-          )}
-        </main>
+        {activeTab === "pdf" && (
+          <Section title="9. PDF / Yazdırma / İmza">
+            <div style={pdfBoxStyle}>
+              <h3 style={{ marginTop: 0 }}>EK-2 PDF Önizleme</h3>
+              <p style={{ color: "#64748b", lineHeight: 1.6 }}>
+                Bu alandaki verilerden sonraki adımda resmi EK-2 formatına yakın
+                PDF çıktısı oluşturulacak. Yazdırma işlemi mevcut ekranı baskıya
+                gönderir.
+              </p>
 
-        <aside style={sideCardStyle}>
-          <h3 style={sideTitleStyle}>Canlı Özet</h3>
-
-          <div style={{ display: "grid", gap: 12 }}>
-            <SummaryRow label="Form Türü" value={formType} />
-            <SummaryRow label="Durum" value={status} />
-            <SummaryRow label="Muayene" value={examDate || "-"} />
-            <SummaryRow label="Sonraki" value={nextExamDate || "-"} />
-            <SummaryRow label="Karar" value={decision} />
-            <SummaryRow label="BMI" value={bmi || "-"} />
-          </div>
-
-          {alerts.length > 0 && (
-            <div style={warningBoxStyle}>
-              <strong>DORA Ön Uyarıları</strong>
-              <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-                {alerts.map((item) => (
-                  <div key={item}>⚠️ {item}</div>
-                ))}
+              <div style={gridStyle}>
+                <SummaryBox label="Form Türü" value={form.formType} />
+                <SummaryBox label="Muayene Tarihi" value={form.examDate || "-"} />
+                <SummaryBox label="Karar" value={form.decision} />
+                <SummaryBox label="Hekim" value={form.doctorName || "-"} />
               </div>
             </div>
-          )}
 
-          <div style={autoSaveStyle}>
-            <strong>Otomatik kayıt</strong>
-            <span>✓ Hazır</span>
-          </div>
-        </aside>
+            <Field label="İmza / Kaşe Notu">
+              <textarea
+                value={form.signatureNote}
+                onChange={(e) => update("signatureNote", e.target.value)}
+                style={textareaStyle}
+              />
+            </Field>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" style={primaryButtonStyle}>
+                PDF Önizle
+              </button>
+              <button type="button" onClick={printForm} style={secondaryButtonStyle}>
+                Yazdır
+              </button>
+              <button type="button" onClick={signForm} style={darkButtonStyle}>
+                İmzala
+              </button>
+            </div>
+          </Section>
+        )}
       </section>
     </div>
   );
@@ -637,74 +986,89 @@ export default function Ek2Tab() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <h3 style={{ margin: 0, fontSize: 22 }}>{title}</h3>
+    <div style={sectionStyle}>
+      <h3 style={sectionTitleStyle}>{title}</h3>
       {children}
     </div>
   );
 }
 
+function SubTitle({ children }: { children: React.ReactNode }) {
+  return <h4 style={subTitleStyle}>{children}</h4>;
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: "grid", gap: 6 }}>
+    <label style={fieldStyle}>
       <span style={labelStyle}>{label}</span>
       {children}
     </label>
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function ReadOnly({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div style={labelStyle}>{label}</div>
-      <div style={infoBoxStyle}>{value}</div>
+      <div style={readOnlyStyle}>{value}</div>
     </div>
   );
 }
 
-function InfoBlock({ title, text }: { title: string; text: string }) {
+function SummaryBox({ label, value }: { label: string; value: string }) {
   return (
-    <div style={infoBlockStyle}>
-      <strong>{title}</strong>
-      <p style={{ margin: "6px 0 0", color: "#64748b", lineHeight: 1.6 }}>
-        {text}
-      </p>
+    <div style={summaryBoxStyle}>
+      <div style={{ color: "#64748b", fontSize: 12, fontWeight: 900 }}>
+        {label}
+      </div>
+      <div style={{ marginTop: 6, fontWeight: 950 }}>{value}</div>
     </div>
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={summaryRowStyle}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
+const pageStyle: CSSProperties = {
+  display: "grid",
+  gap: 18,
+};
 
-const heroStyle: CSSProperties = {
+const headerStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: 18,
   alignItems: "center",
   background: "linear-gradient(135deg,#7f1d1d,#b91c1c)",
   color: "#fff",
-  borderRadius: 22,
-  padding: 26,
+  borderRadius: 24,
+  padding: 28,
 };
 
-const heroLabelStyle: CSSProperties = {
+const headerLabelStyle: CSSProperties = {
   fontSize: 13,
-  fontWeight: 900,
+  fontWeight: 950,
   opacity: 0.85,
 };
 
-const statusBoxStyle: CSSProperties = {
-  minWidth: 180,
-  background: "rgba(255,255,255,.15)",
-  border: "1px solid rgba(255,255,255,.25)",
+const headerTitleStyle: CSSProperties = {
+  margin: "8px 0 8px",
+  fontSize: 30,
+  fontWeight: 950,
+};
+
+const headerTextStyle: CSSProperties = {
+  margin: 0,
+  opacity: 0.9,
+  lineHeight: 1.6,
+};
+
+const headerStatusStyle: CSSProperties = {
+  minWidth: 190,
   borderRadius: 18,
   padding: 16,
+  background: "rgba(255,255,255,.16)",
+  border: "1px solid rgba(255,255,255,.25)",
+  display: "grid",
+  gap: 5,
+  fontWeight: 900,
 };
 
 const toolbarStyle: CSSProperties = {
@@ -717,40 +1081,95 @@ const toolbarStyle: CSSProperties = {
   padding: 14,
 };
 
-const sideCardStyle: CSSProperties = {
+const officialFormStyle: CSSProperties = {
   background: "#fff",
   border: "1px solid #e5e7eb",
-  borderRadius: 18,
-  padding: 18,
-};
-
-const contentCardStyle: CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e5e7eb",
-  borderRadius: 18,
+  borderRadius: 20,
   padding: 24,
-  minHeight: 620,
+  display: "grid",
+  gap: 18,
 };
 
-const sideTitleStyle: CSSProperties = {
-  marginTop: 0,
-  marginBottom: 14,
+const officialTitleStyle: CSSProperties = {
+  textAlign: "center",
+  border: "2px solid #111827",
+  padding: 14,
+  fontWeight: 950,
+  fontSize: 18,
+  letterSpacing: 0.4,
 };
 
-const tabButtonStyle: CSSProperties = {
-  width: "100%",
-  textAlign: "left",
+const topSummaryGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
+  gap: 12,
+};
+
+const summaryBoxStyle: CSSProperties = {
+  background: "#f8fafc",
   border: "1px solid #e5e7eb",
-  borderRadius: 12,
-  padding: "10px 12px",
-  fontWeight: 850,
+  borderRadius: 14,
+  padding: 14,
+};
+
+const warningStyle: CSSProperties = {
+  border: "1px solid #fed7aa",
+  background: "#fff7ed",
+  color: "#9a3412",
+  borderRadius: 14,
+  padding: 14,
+  fontWeight: 800,
+  fontSize: 13,
+};
+
+const tabBarStyle: CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  borderBottom: "1px solid #e5e7eb",
+  paddingBottom: 12,
+};
+
+const tabStyle: CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 999,
+  padding: "9px 13px",
+  fontWeight: 900,
   cursor: "pointer",
+};
+
+const sectionStyle: CSSProperties = {
+  display: "grid",
+  gap: 18,
+};
+
+const sectionTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 24,
+  fontWeight: 950,
+};
+
+const subTitleStyle: CSSProperties = {
+  margin: "10px 0 0",
+  fontSize: 16,
+  color: "#7f1d1d",
 };
 
 const gridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))",
   gap: 16,
+};
+
+const fieldStyle: CSSProperties = {
+  display: "grid",
+  gap: 6,
+};
+
+const labelStyle: CSSProperties = {
+  color: "#64748b",
+  fontSize: 13,
+  fontWeight: 900,
 };
 
 const inputStyle: CSSProperties = {
@@ -760,84 +1179,56 @@ const inputStyle: CSSProperties = {
   borderRadius: 12,
   padding: "0 12px",
   outline: "none",
+  fontWeight: 700,
+};
+
+const readonlyInputStyle: CSSProperties = {
+  ...inputStyle,
+  background: "#f8fafc",
+  color: "#475569",
+  cursor: "not-allowed",
 };
 
 const textareaStyle: CSSProperties = {
   width: "100%",
-  minHeight: 110,
+  minHeight: 115,
   border: "1px solid #d1d5db",
   borderRadius: 12,
   padding: 12,
   outline: "none",
   resize: "vertical",
+  fontWeight: 650,
 };
 
-const labelStyle: CSSProperties = {
-  color: "#64748b",
-  fontSize: 13,
-  fontWeight: 850,
-};
-
-const infoBoxStyle: CSSProperties = {
+const readOnlyStyle: CSSProperties = {
   minHeight: 44,
-  borderRadius: 12,
   border: "1px solid #e5e7eb",
+  borderRadius: 12,
   background: "#f8fafc",
   padding: "12px 14px",
-  fontWeight: 900,
+  fontWeight: 950,
 };
 
-const checkGridStyle: CSSProperties = {
+const decisionGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
   gap: 12,
 };
 
-const checkStyle: CSSProperties = {
+const decisionBoxStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 8,
-  fontWeight: 850,
-  color: "#334155",
-};
-
-const infoBlockStyle: CSSProperties = {
-  background: "#f8fafc",
+  gap: 10,
   border: "1px solid #e5e7eb",
   borderRadius: 14,
-  padding: 16,
-};
-
-const warningBoxStyle: CSSProperties = {
-  marginTop: 18,
-  border: "1px solid #fed7aa",
-  background: "#fff7ed",
-  color: "#9a3412",
-  borderRadius: 14,
   padding: 14,
-  fontSize: 13,
-  fontWeight: 800,
 };
 
-const autoSaveStyle: CSSProperties = {
-  marginTop: 18,
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  background: "#f0fdf4",
-  color: "#15803d",
-  borderRadius: 14,
-  padding: 14,
-  fontWeight: 900,
-};
-
-const summaryRowStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 10,
-  paddingBottom: 10,
-  borderBottom: "1px solid #e5e7eb",
-  color: "#334155",
+const pdfBoxStyle: CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 18,
+  background: "#f8fafc",
 };
 
 const primaryButtonStyle: CSSProperties = {
@@ -846,7 +1237,7 @@ const primaryButtonStyle: CSSProperties = {
   padding: "10px 14px",
   background: "#7f1d1d",
   color: "#fff",
-  fontWeight: 900,
+  fontWeight: 950,
   cursor: "pointer",
 };
 
@@ -856,7 +1247,7 @@ const secondaryButtonStyle: CSSProperties = {
   padding: "10px 14px",
   background: "#fff",
   color: "#334155",
-  fontWeight: 900,
+  fontWeight: 950,
   cursor: "pointer",
 };
 
@@ -866,7 +1257,7 @@ const successButtonStyle: CSSProperties = {
   padding: "10px 14px",
   background: "#16a34a",
   color: "#fff",
-  fontWeight: 900,
+  fontWeight: 950,
   cursor: "pointer",
 };
 
@@ -876,6 +1267,43 @@ const darkButtonStyle: CSSProperties = {
   padding: "10px 14px",
   background: "#111827",
   color: "#fff",
-  fontWeight: 900,
+  fontWeight: 950,
   cursor: "pointer",
 };
+const systemTableStyle: CSSProperties = {
+  display: "grid",
+  gap: 10,
+};
+
+const systemRowStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1.4fr 120px 130px 2fr",
+  gap: 10,
+  alignItems: "center",
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  padding: 12,
+  background: "#fff",
+};
+
+const radioLabelStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  fontWeight: 800,
+  color: "#334155",
+};
+
+
+const systemHeaderStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "220px 90px 110px 1fr",
+  gap: 10,
+  padding: "12px 14px",
+  background: "#7f1d1d",
+  color: "#fff",
+  borderRadius: 12,
+  fontWeight: 900,
+  alignItems: "center",
+};
+
