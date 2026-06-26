@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { BRAND } from "@/components/dashboard/styles";
@@ -44,21 +45,14 @@ export default function HealthDashboardPage() {
           credentials: "include",
         });
 
-        const json: HealthDashboardResponse =
-          await res.json();
+        const json: HealthDashboardResponse = await res.json();
 
         if (!res.ok) return;
 
         setSummary(json.summary || emptyHealthSummary());
-
         setUpcomingExams(json.upcomingExams || []);
-
-        setRecentPrescriptions(
-          json.recentPrescriptions || []
-        );
-
+        setRecentPrescriptions(json.recentPrescriptions || []);
         setRecentEk2(json.recentEk2 || []);
-
         setAlerts(json.alerts || []);
       } finally {
         setLoading(false);
@@ -106,6 +100,71 @@ export default function HealthDashboardPage() {
             İşyeri hekimi yönetim ekranı
           </div>
         </div>
+
+        {/* Çalışan Sağlık Kartları */}
+        <Link
+          href="/admin/health/employees"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 20,
+            marginBottom: 28,
+            padding: 28,
+            borderRadius: 22,
+            background: "linear-gradient(135deg,#7f1d1d,#b91c1c)",
+            color: "#fff",
+            textDecoration: "none",
+            boxShadow: "0 18px 40px rgba(127,29,29,.20)",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 900,
+                opacity: .85,
+              }}
+            >
+              HEKİM ÇALIŞMA ALANI
+            </div>
+
+            <div
+              style={{
+                fontSize: 28,
+                fontWeight: 900,
+                marginTop: 8,
+              }}
+            >
+              Çalışan Sağlık Kartları
+            </div>
+
+            <div
+              style={{
+                marginTop: 10,
+                opacity: .9,
+                fontSize: 15,
+              }}
+            >
+              Muayene, EK-2, reçete, laboratuvar, odyometri,
+              SFT, aşı ve tüm sağlık geçmişini tek ekrandan yönetin.
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "14px 22px",
+              borderRadius: 14,
+              background: "rgba(255,255,255,.18)",
+              border: "1px solid rgba(255,255,255,.25)",
+              fontWeight: 900,
+              whiteSpace: "nowrap",
+              fontSize: 18,
+            }}
+          >
+            Aç →
+          </div>
+        </Link>
 
         <HealthKpiCards
           summary={summary}
