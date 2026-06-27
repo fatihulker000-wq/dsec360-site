@@ -68,46 +68,98 @@ export default function IbysSettingsPage() {
     void loadSettings();
   }, []);
 
-  const saveSettings = async () => {
-    setSaving(true);
-    setMessage("");
+const saveSettings = async () => {
+  setSaving(true);
+  setMessage("");
 
-    try {
-      const res = await fetch("/api/ibys/settings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          environment,
-          apiUrl,
-          tokenUrl,
-          clientId,
-          clientSecret,
-          autoSendEnabled: autoSend,
-          debugMode,
-          retryCount,
-          retryDelaySeconds,
-          queueLimit,
-        }),
-      });
+  try {
+    const res = await fetch("/api/ibys/settings", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        environment,
+        apiUrl,
+        tokenUrl,
+        clientId,
+        clientSecret,
+        autoSendEnabled: autoSend,
+        debugMode,
+        retryCount,
+        retryDelaySeconds,
+        queueLimit,
+      }),
+    });
 
-      const json = await res.json();
+    const json = await res.json();
 
-      if (!json.success) {
-        setMessage(json.error || "Ayarlar kaydedilemedi.");
-        return;
-      }
-
-      setMessage("İBYS ayarları başarıyla kaydedildi.");
-    } catch {
-      setMessage("Ayarlar kaydedilirken hata oluştu.");
-    } finally {
-      setSaving(false);
+    if (!json.success) {
+      setMessage(json.error || "Ayarlar kaydedilemedi.");
+      return;
     }
-  };
 
-  return (
+    setMessage("İBYS ayarları başarıyla kaydedildi.");
+  } catch {
+    setMessage("Ayarlar kaydedilirken hata oluştu.");
+  } finally {
+    setSaving(false);
+  }
+};
+
+const testApiConnection = async () => {
+  setSaving(true);
+  setMessage("");
+
+  try {
+    const res = await fetch("/api/ibys/test-connection", {
+      method: "POST",
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      setMessage(json.error || "API bağlantı testi başarısız.");
+      return;
+    }
+
+    setMessage(
+      `✅ ${json.message} | Durum: ${json.status} | Süre: ${json.durationMs} ms`
+    );
+  } catch {
+    setMessage("API bağlantı testi sırasında hata oluştu.");
+  } finally {
+    setSaving(false);
+  }
+};
+
+const createToken = async () => {
+  setSaving(true);
+  setMessage("");
+
+  try {
+    const res = await fetch("/api/ibys/token", {
+      method: "POST",
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      setMessage(json.error || "Token alınamadı.");
+      return;
+    }
+
+    setMessage(`✅ Token oluşturuldu. Süre: ${json.durationMs} ms`);
+  } catch {
+    setMessage("Token oluşturulurken hata oluştu.");
+  } finally {
+    setSaving(false);
+  }
+};
+
+return (
     <main className="min-h-screen bg-[#fafafa] p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl bg-gradient-to-r from-[#4a0d1a] to-[#7f1d1d] p-8 text-white">
@@ -253,15 +305,25 @@ export default function IbysSettingsPage() {
               </h2>
 
               <div className="grid gap-4 md:grid-cols-3">
-                <button className="flex items-center justify-center gap-2 rounded-2xl bg-[#5a0f1f] p-4 font-black text-white">
-                  <Globe size={18} />
-                  API Testi
-                </button>
+                <button
+  type="button"
+  onClick={testApiConnection}
+  disabled={saving}
+  className="flex items-center justify-center gap-2 rounded-2xl bg-[#5a0f1f] p-4 font-black text-white disabled:opacity-60"
+>
+  <Globe size={18} />
+  API Testi
+</button>
 
-                <button className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 p-4 font-black text-white">
-                  <KeyRound size={18} />
-                  Token Oluştur
-                </button>
+                <button
+  type="button"
+  onClick={createToken}
+  disabled={saving}
+  className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 p-4 font-black text-white disabled:opacity-60"
+>
+  <KeyRound size={18} />
+  Token Oluştur
+</button>
 
                 <button className="flex items-center justify-center gap-2 rounded-2xl bg-green-600 p-4 font-black text-white">
                   <RefreshCcw size={18} />
