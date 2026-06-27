@@ -204,7 +204,7 @@ export default function HealthEmployeesPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "2.2fr 1.3fr 1.1fr 1fr 1fr 1fr 1fr 170px",
+              gridTemplateColumns: "2fr 1.2fr 1.1fr 1fr 1fr 1fr 1fr 190px",
               gap: 10,
               padding: 16,
               background: "#f1f5f9",
@@ -234,7 +234,7 @@ export default function HealthEmployeesPage() {
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "2.2fr 1.3fr 1.1fr 1fr 1fr 1fr 1fr 170px",
+  "2fr 1.2fr 1.1fr 1fr 1fr 1fr 1fr 190px",
                   gap: 10,
                   padding: 16,
                   borderTop: "1px solid #e5e7eb",
@@ -299,7 +299,15 @@ export default function HealthEmployeesPage() {
   }
 />
 
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div
+  style={{
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    alignItems: "center",
+  }}
+>
                   <Link
                     href={`/admin/health/employees/${employee.id}`}
                     style={buttonStyle}
