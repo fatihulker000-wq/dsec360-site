@@ -5,6 +5,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 type FormType = "İşe Giriş" | "Periyodik";
 type FormStatus = "Taslak" | "Tamamlandı" | "İmzalandı";
 type Decision = "Çalışabilir" | "Şartlı Çalışabilir" | "Çalışamaz";
+import { calculateBmi } from "../ek2/Ek2Helpers";
 
 type TabKey =
   | "genel"
@@ -258,10 +259,35 @@ export default function Ek2Tab({ employee }: Ek2TabProps) {
     alert("EK-2 taslak olarak hazırlandı. API bağlantısı sonraki adımda eklenecek.");
   }
 
-  function completeForm() {
-    update("status", "Tamamlandı");
-    alert("EK-2 tamamlandı olarak işaretlendi.");
+  async function completeForm() {
+  const payload: Ek2Form = {
+  ...form,
+  status: "Tamamlandı" as FormStatus,
+
+};
+
+  const res = await fetch("/api/admin/ek2", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const json = await res.json();
+console.log("EK2 API RESPONSE:", json);
+alert(JSON.stringify(json, null, 2));
+
+  if (!res.ok || !json.success) {
+    alert(json.error || "EK-2 kaydedilemedi.");
+    return;
   }
+
+  setForm(payload);
+
+  alert("EK-2 tamamlandı ve kaydedildi.");
+}
 
   function signForm() {
     update("status", "İmzalandı");
