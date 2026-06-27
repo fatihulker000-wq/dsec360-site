@@ -40,26 +40,34 @@ type ExaminationRow = {
 function normalizeEmployee(
   u: EmployeeLikeRow,
   companyMap: Record<string, string>,
-  examMap: Record<
-    string,
-    {
-      examination_count: number;
-      last_examination_date: string;
-      last_examination_decision: string;
-      next_examination_date: string;
-    }
-  >
+ examMap: Record<
+  string,
+  {
+    examination_count: number;
+    last_examination_date: string;
+    last_examination_decision: string;
+    next_examination_date: string;
+
+    ek2_count: number;
+    last_ek2_date: string;
+    last_ek2_status: string;
+  }
+>
 ) {
   const companyId = String(u.company_id || u.firm_id || "").trim();
   const employeeId = String(u.id).trim();
 
   const examInfo =
-    examMap[employeeId] || {
-      examination_count: 0,
-      last_examination_date: "",
-      last_examination_decision: "",
-      next_examination_date: "",
-    };
+  examMap[employeeId] || {
+    examination_count: 0,
+    last_examination_date: "",
+    last_examination_decision: "",
+    next_examination_date: "",
+
+    ek2_count: 0,
+    last_ek2_date: "",
+    last_ek2_status: "",
+  };
 
   return {
     id: employeeId,
@@ -75,10 +83,10 @@ function normalizeEmployee(
     last_examination_date: examInfo.last_examination_date,
     last_examination_decision: examInfo.last_examination_decision,
     next_examination_date: examInfo.next_examination_date,
-    ek2_count: examInfo.examination_count,
-last_ek2_date: examInfo.last_examination_date,
-last_ek2_status: examInfo.last_examination_decision,
-last_ek2: examInfo.last_examination_date || "-",
+    ek2_count: examInfo.ek2_count,
+last_ek2_date: examInfo.last_ek2_date,
+last_ek2_status: examInfo.last_ek2_status,
+last_ek2: examInfo.last_ek2_date || "-",
   };
 }
 
@@ -228,49 +236,51 @@ export async function GET() {
       }
 
       for (const exam of examinations || []) {
-        const employeeId = String(exam.employee_id || "").trim();
-        if (!employeeId) continue;
+  const employeeId = String(exam.employee_id || "").trim();
+  if (!employeeId) continue;
 
-        if (!examMap[employeeId]) {
-          examMap[employeeId] = {
-  examination_count: 0,
-  last_examination_date: "",
-  last_examination_decision: "",
-  next_examination_date: "",
+  if (!examMap[employeeId]) {
+    examMap[employeeId] = {
+      examination_count: 0,
+      last_examination_date: "",
+      last_examination_decision: "",
+      next_examination_date: "",
 
-  ek2_count: 0,
-  last_ek2_date: "",
-  last_ek2_status: "",
-};
-        }
-
-        examMap[employeeId].examination_count += 1;
-        const examType = String(exam.exam_type || "").toLowerCase();
-
-if (
-  examType.includes("işe giriş") ||
-  examType.includes("periyodik") ||
-  examType.includes("ek")
-) {
-  examMap[employeeId].ek2_count += 1;
-
-  if (!examMap[employeeId].last_ek2_date && exam.exam_date) {
-    examMap[employeeId].last_ek2_date = exam.exam_date;
-    examMap[employeeId].last_ek2_status = exam.decision || "";
+      ek2_count: 0,
+      last_ek2_date: "",
+      last_ek2_status: "",
+    };
   }
-}
 
-        if (!examMap[employeeId].last_examination_date && exam.exam_date) {
-          examMap[employeeId].last_examination_date = exam.exam_date;
-          examMap[employeeId].last_examination_decision = exam.decision || "";
-        }
+  const examType = String(exam.exam_type || "").toUpperCase();
 
-        if (!examMap[employeeId].next_examination_date && exam.next_exam_date) {
-          examMap[employeeId].next_examination_date = exam.next_exam_date;
-        }
-      }
+  const isEk2 =
+    examType === "EK2_ISE_GIRIS" ||
+    examType === "EK2_PERIYODIK";
+
+  if (isEk2) {
+    examMap[employeeId].ek2_count += 1;
+
+    if (!examMap[employeeId].last_ek2_date && exam.exam_date) {
+      examMap[employeeId].last_ek2_date = exam.exam_date;
+      examMap[employeeId].last_ek2_status = exam.decision || "";
     }
 
+    continue;
+  }
+
+  examMap[employeeId].examination_count += 1;
+
+  if (!examMap[employeeId].last_examination_date && exam.exam_date) {
+    examMap[employeeId].last_examination_date = exam.exam_date;
+    examMap[employeeId].last_examination_decision = exam.decision || "";
+  }
+
+  if (!examMap[employeeId].next_examination_date && exam.next_exam_date) {
+    examMap[employeeId].next_examination_date = exam.next_exam_date;
+  }
+}
+    }
     const employees = rows.map((u) => normalizeEmployee(u, companyMap, examMap));
 
     return NextResponse.json({
