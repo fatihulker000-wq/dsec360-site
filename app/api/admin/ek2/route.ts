@@ -31,7 +31,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     const supabase = getSupabase();
 
-    const employeeId = String(body.employeeId || "").trim();
+    const employeeId = String(body.employeeId || body.employee_id || "").trim();
+
     const companyId = String(
       adminRole === "company_admin"
         ? companyIdFromCookie
@@ -55,13 +56,13 @@ export async function POST(req: Request) {
     const examPayload = {
       employee_id: employeeId,
       company_id: companyId,
-      exam_date: body.examDate || null,
-      next_exam_date: body.nextExamDate || null,
+      exam_date: body.examDate || body.exam_date || null,
+      next_exam_date: body.nextExamDate || body.next_exam_date || null,
       decision: body.decision || null,
-      exam_type: body.formType || "İşe Giriş",
+      exam_type: body.formType || body.form_type || "İşe Giriş",
       status: body.status || "Tamamlandı",
-      doctor_name: body.doctorName || null,
-      notes: body.doctorOpinion || null,
+      doctor_name: body.doctorName || body.doctor_name || null,
+      notes: body.doctorOpinion || body.doctor_opinion || null,
       is_deleted: false,
       created_at: new Date().toISOString(),
     };
@@ -79,9 +80,64 @@ export async function POST(req: Request) {
       );
     }
 
+    let ek2Form: any = null;
+    let ek2Warning: string | null = null;
+
+    const ek2Payload = {
+      employee_id: employeeId,
+      company_id: companyId,
+      examination_id: exam?.id || null,
+
+      form_type: body.formType || body.form_type || "İşe Giriş",
+      status: body.status || "Tamamlandı",
+      file_no: body.fileNo || body.file_no || null,
+      revision_no: body.revisionNo || body.revision_no || "0",
+
+      exam_date: body.examDate || body.exam_date || null,
+      next_exam_date: body.nextExamDate || body.next_exam_date || null,
+      doctor_name: body.doctorName || body.doctor_name || null,
+
+      employee_name: body.employeeName || body.employee_name || null,
+      identity_number: body.identityNumber || body.identity_number || null,
+      birth_date: body.birthDate || body.birth_date || null,
+      gender: body.gender || null,
+      blood_group: body.bloodGroup || body.blood_group || null,
+      phone: body.phone || null,
+
+      company_name: body.companyName || body.company_name || null,
+      workplace_address: body.workplaceAddress || body.workplace_address || null,
+      job_title: body.jobTitle || body.job_title || null,
+      department: body.department || null,
+      start_date: body.startDate || body.start_date || null,
+      danger_class: body.dangerClass || body.danger_class || null,
+      nace_code: body.naceCode || body.nace_code || null,
+
+      decision: body.decision || null,
+      doctor_opinion: body.doctorOpinion || body.doctor_opinion || null,
+      signature_note: body.signatureNote || body.signature_note || null,
+
+      raw_json: body,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    };
+
+    const { data: insertedEk2, error: ek2Error } = await supabase
+      .from("health_ek2_forms")
+      .insert(ek2Payload)
+      .select()
+      .single();
+
+    if (ek2Error) {
+      ek2Warning = ek2Error.message;
+    } else {
+      ek2Form = insertedEk2;
+    }
+
     return NextResponse.json({
       success: true,
       examination: exam,
+      ek2: ek2Form,
+      ek2Warning,
     });
   } catch (e: any) {
     return NextResponse.json(
