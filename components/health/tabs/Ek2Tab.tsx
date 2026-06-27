@@ -266,6 +266,9 @@ export default function Ek2Tab({ employee }: Ek2TabProps) {
 
 };
 
+console.log(payload);
+alert(JSON.stringify(payload, null, 2));
+
   const res = await fetch("/api/admin/ek2", {
     method: "POST",
     headers: {
