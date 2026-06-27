@@ -3388,3 +3388,37 @@ line-height:1.7;
     grid-template-columns: 1fr;
   }
 }
+@media screen {
+  .ek2-print-only {
+    display: none;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .ek2-print-only,
+  .ek2-print-only * {
+    visibility: visible !important;
+  }
+
+  .ek2-print-only {
+    display: block !important;
+    position: absolute !important;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}

@@ -27,16 +27,12 @@ export default function IbysSettingsPage() {
   const [queueLimit, setQueueLimit] = useState(100);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const res = await fetch("/api/ibys/settings", {
-          cache: "no-store",
-        });
-
+        const res = await fetch("/api/ibys/settings", { cache: "no-store" });
         const json = await res.json();
 
         if (!json.success) {
@@ -45,7 +41,6 @@ export default function IbysSettingsPage() {
         }
 
         const data = json.data;
-
         if (!data) return;
 
         setEnvironment(data.environment || "TEST");
@@ -99,7 +94,7 @@ export default function IbysSettingsPage() {
         return;
       }
 
-      setMessage("İBYS ayarları başarıyla kaydedildi.");
+      setMessage("✅ İBYS ayarları başarıyla kaydedildi.");
     } catch {
       setMessage("Ayarlar kaydedilirken hata oluştu.");
     } finally {
@@ -107,33 +102,57 @@ export default function IbysSettingsPage() {
     }
   };
 
-const testApiConnection = async () => {
-  setSaving(true);
-  setMessage("");
+  const testApiConnection = async () => {
+    setSaving(true);
+    setMessage("");
 
-  try {
-    const res = await fetch("/api/ibys/test-connection", {
-      method: "POST",
-      cache: "no-store",
-    });
+    try {
+      const res = await fetch("/api/ibys/test-connection", {
+        method: "POST",
+        cache: "no-store",
+      });
 
-    const json = await res.json();
+      const json = await res.json();
 
-    if (!json.success) {
-      setMessage(json.error || "API bağlantı testi başarısız.");
-      return;
+      if (!json.success) {
+        setMessage(json.error || "API bağlantı testi başarısız.");
+        return;
+      }
+
+      setMessage(
+        `✅ ${json.message} | Durum: ${json.status} | Süre: ${json.durationMs} ms`
+      );
+    } catch {
+      setMessage("API bağlantı testi sırasında hata oluştu.");
+    } finally {
+      setSaving(false);
     }
+  };
 
-    setMessage(
-  `✅ ${json.message} | Durum: ${json.status} | Süre: ${json.durationMs} ms`
-);
+  const createToken = async () => {
+    setSaving(true);
+    setMessage("");
 
-  } catch {
-    setMessage("API bağlantı testi sırasında hata oluştu.");
-  } finally {
-    setSaving(false);
-  }
-};
+    try {
+      const res = await fetch("/api/ibys/token", {
+        method: "POST",
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!json.success) {
+        setMessage(json.error || "Token alınamadı.");
+        return;
+      }
+
+      setMessage(`✅ Token oluşturuldu. Süre: ${json.durationMs} ms`);
+    } catch {
+      setMessage("Token oluşturulurken hata oluştu.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#fafafa] p-6">
@@ -282,34 +301,45 @@ const testApiConnection = async () => {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <button
-  type="button"
-  onClick={testApiConnection}
-  disabled={saving}
-  className="flex items-center justify-center gap-2 rounded-2xl bg-[#5a0f1f] p-4 font-black text-white disabled:opacity-60"
->
+                  type="button"
+                  onClick={testApiConnection}
+                  disabled={saving}
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-[#5a0f1f] p-4 font-black text-white disabled:opacity-60"
+                >
                   <Globe size={18} />
                   API Testi
                 </button>
 
                 <button
-  type="button"
-  className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 p-4 font-black text-white"
->
+                  type="button"
+                  onClick={createToken}
+                  disabled={saving}
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 p-4 font-black text-white disabled:opacity-60"
+                >
                   <KeyRound size={18} />
                   Token Oluştur
                 </button>
 
-                <button className="flex items-center justify-center gap-2 rounded-2xl bg-green-600 p-4 font-black text-white">
+                <button
+                  type="button"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-green-600 p-4 font-black text-white"
+                >
                   <RefreshCcw size={18} />
                   Heartbeat
                 </button>
 
-                <button className="flex items-center justify-center gap-2 rounded-2xl bg-orange-500 p-4 font-black text-white">
+                <button
+                  type="button"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-orange-500 p-4 font-black text-white"
+                >
                   <Send size={18} />
                   Test Gönderimi
                 </button>
 
-                <button className="flex items-center justify-center gap-2 rounded-2xl bg-purple-600 p-4 font-black text-white">
+                <button
+                  type="button"
+                  className="flex items-center justify-center gap-2 rounded-2xl bg-purple-600 p-4 font-black text-white"
+                >
                   <TestTube2 size={18} />
                   Retry Testi
                 </button>
@@ -321,7 +351,7 @@ const testApiConnection = async () => {
                   className="flex items-center justify-center gap-2 rounded-2xl bg-slate-800 p-4 font-black text-white disabled:opacity-60"
                 >
                   <Save size={18} />
-                  {saving ? "Kaydediliyor..." : "Ayarları Kaydet"}
+                  {saving ? "İşlem yapılıyor..." : "Ayarları Kaydet"}
                 </button>
               </div>
             </section>

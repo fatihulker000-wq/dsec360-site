@@ -211,19 +211,40 @@ export default function Ek2Tab({
     alert("Taslak kaydedildi.");
   }
 
-  function completeForm() {
-    const errors = validateForm(form);
+  async function completeForm() {
+  const errors = validateForm(form);
 
-    if (errors.length) {
-      alert(errors.join("\n"));
-      return;
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      status: "Tamamlandı",
-    }));
+  if (errors.length) {
+    alert(errors.join("\n"));
+    return;
   }
+
+  const payload: Ek2Form = {
+    ...form,
+    status: "Tamamlandı",
+    bmi: calculateBmi(form.height, form.weight),
+  };
+
+  const res = await fetch("/api/admin/ek2", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  const json = await res.json();
+
+  if (!res.ok || !json.success) {
+    alert(json.error || "EK-2 kaydedilemedi.");
+    return;
+  }
+
+  setForm(payload);
+
+  alert("EK-2 tamamlandı ve kaydedildi.");
+}
 
   function signForm() {
     setForm((prev) => ({
@@ -298,6 +319,7 @@ export default function Ek2Tab({
       )}
 
       <section
+      className="no-print"
         style={{
           display: "flex",
           gap: 10,
@@ -415,15 +437,14 @@ export default function Ek2Tab({
           onPrint={() => window.print()}
         />
 
-        <OfficialEk2Print
-          form={{
-            ...form,
-            bmi: calculateBmi(
-              form.height,
-              form.weight
-            ),
-          }}
-        />
+        <div className="ek2-print-only">
+  <OfficialEk2Print
+    form={{
+      ...form,
+      bmi: calculateBmi(form.height, form.weight),
+    }}
+  />
+</div>
       </section>
     </main>
   );
