@@ -252,11 +252,14 @@ export async function GET() {
     };
   }
 
-  const examType = String(exam.exam_type || "").toUpperCase();
+  const examTypeRaw = String(exam.exam_type || "").trim();
+const examType = examTypeRaw.toUpperCase();
 
-  const isEk2 =
-    examType === "EK2_ISE_GIRIS" ||
-    examType === "EK2_PERIYODIK";
+const isEk2 =
+  examType === "EK2_ISE_GIRIS" ||
+  examType === "EK2_PERIYODIK" ||
+  examTypeRaw === "İşe Giriş" ||
+  examTypeRaw === "Periyodik";
 
   if (isEk2) {
     examMap[employeeId].ek2_count += 1;
