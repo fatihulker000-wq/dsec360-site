@@ -196,7 +196,10 @@ export default function HealthEmployeeDetailPage() {
   value={employee.next_examination_date || "-"}
 />
 
-<SummaryRow label="Son EK-2" value="-" />
+<SummaryRow
+  label="Son EK-2"
+  value={(employee as any).last_ek2 || "-"}
+/>
 <SummaryRow label="Son Reçete" value="-" />
 
 <SummaryRow
