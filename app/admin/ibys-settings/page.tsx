@@ -125,8 +125,9 @@ const testApiConnection = async () => {
     }
 
     setMessage(
-      `${json.message} | Durum: ${json.status} | Süre: ${json.durationMs} ms`
-    );
+  `✅ ${json.message} | Durum: ${json.status} | Süre: ${json.durationMs} ms`
+);
+
   } catch {
     setMessage("API bağlantı testi sırasında hata oluştu.");
   } finally {
@@ -290,7 +291,10 @@ const testApiConnection = async () => {
                   API Testi
                 </button>
 
-                <button className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 p-4 font-black text-white">
+                <button
+  type="button"
+  className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 p-4 font-black text-white"
+>
                   <KeyRound size={18} />
                   Token Oluştur
                 </button>
