@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Activity,
   AlertTriangle,
@@ -63,10 +64,10 @@ export default function IbysPage() {
         </div>
 
         <div className="ibys-hero-actions">
-          <button type="button" className="ibys-btn light">
-            <Settings size={17} />
-            İBYS Ayarları
-          </button>
+          <Link href="/admin/ibys-settings" className="ibys-btn light">
+  <Settings size={17} />
+  İBYS Ayarları
+</Link>
 
           <button type="button" className="ibys-btn green">
             <Send size={17} />
@@ -304,10 +305,11 @@ export default function IbysPage() {
         }
 
         .ibys-btn {
-          border-radius: 16px;
-          padding: 13px 16px;
-          font-size: 14px;
-        }
+  border-radius: 16px;
+  padding: 13px 16px;
+  font-size: 14px;
+  text-decoration: none;
+}
 
         .ibys-btn.light {
           background: white;
