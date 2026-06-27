@@ -74,6 +74,10 @@ function normalizeEmployee(
     last_examination_date: examInfo.last_examination_date,
     last_examination_decision: examInfo.last_examination_decision,
     next_examination_date: examInfo.next_examination_date,
+    ek2_count: examInfo.examination_count,
+last_ek2_date: examInfo.last_examination_date,
+last_ek2_status: examInfo.last_examination_decision,
+last_ek2: examInfo.last_examination_date || "-",
   };
 }
 
