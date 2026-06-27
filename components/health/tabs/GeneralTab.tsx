@@ -71,12 +71,35 @@ export default function GeneralTab({
             gap: 16,
           }}
         >
-          <Kpi title="EK-2" value="0" />
-          <Kpi title="Muayene" value="0" />
-          <Kpi title="Reçete" value="0" />
-          <Kpi title="Tetkik" value="0" />
-          <Kpi title="Aşı" value="0" />
-          <Kpi title="İş Kazası" value="0" />
+          <Kpi
+  title="EK-2"
+  value={String(employee?.ek2_count ?? 0)}
+/>
+
+<Kpi
+  title="Muayene"
+  value={String(employee?.examination_count ?? 0)}
+/>
+
+<Kpi
+  title="Reçete"
+  value={String(employee?.prescription_count ?? 0)}
+/>
+
+<Kpi
+  title="Tetkik"
+  value={String(employee?.lab_count ?? 0)}
+/>
+
+<Kpi
+  title="Aşı"
+  value={String(employee?.vaccine_count ?? 0)}
+/>
+
+<Kpi
+  title="İş Kazası"
+  value={String(employee?.accident_count ?? 0)}
+/>
         </div>
       </div>
     </div>

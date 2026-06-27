@@ -198,7 +198,7 @@ export default function HealthEmployeeDetailPage() {
 
 <SummaryRow
   label="Son EK-2"
-  value={(employee as any).last_ek2 || "-"}
+  value={(employee as any).last_ek2 || (employee as any).last_ek2_date || "-"}
 />
 <SummaryRow label="Son Reçete" value="-" />
 
