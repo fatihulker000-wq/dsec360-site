@@ -31,6 +31,7 @@ type ExaminationRow = {
   employee_id: string;
   company_id: string;
   exam_date: string | null;
+  exam_type?: string | null;
   next_exam_date: string | null;
   decision: string | null;
   is_deleted?: boolean | null;
@@ -192,20 +193,24 @@ export async function GET() {
     }
 
     let examMap: Record<
-      string,
-      {
-        examination_count: number;
-        last_examination_date: string;
-        last_examination_decision: string;
-        next_examination_date: string;
-      }
-    > = {};
+  string,
+  {
+    examination_count: number;
+    last_examination_date: string;
+    last_examination_decision: string;
+    next_examination_date: string;
+
+    ek2_count: number;
+    last_ek2_date: string;
+    last_ek2_status: string;
+  }
+> = {};
 
     if (employeeIds.length > 0) {
       const { data: examinations, error: examinationsError } = await supabase
         .from("health_examinations")
         .select(
-          "id, employee_id, company_id, exam_date, next_exam_date, decision, is_deleted"
+          "id, employee_id, company_id, exam_date, next_exam_date, decision, exam_type, is_deleted"
         )
         .in("employee_id", employeeIds)
         .eq("is_deleted", false)
@@ -228,14 +233,32 @@ export async function GET() {
 
         if (!examMap[employeeId]) {
           examMap[employeeId] = {
-            examination_count: 0,
-            last_examination_date: "",
-            last_examination_decision: "",
-            next_examination_date: "",
-          };
+  examination_count: 0,
+  last_examination_date: "",
+  last_examination_decision: "",
+  next_examination_date: "",
+
+  ek2_count: 0,
+  last_ek2_date: "",
+  last_ek2_status: "",
+};
         }
 
         examMap[employeeId].examination_count += 1;
+        const examType = String(exam.exam_type || "").toLowerCase();
+
+if (
+  examType.includes("işe giriş") ||
+  examType.includes("periyodik") ||
+  examType.includes("ek")
+) {
+  examMap[employeeId].ek2_count += 1;
+
+  if (!examMap[employeeId].last_ek2_date && exam.exam_date) {
+    examMap[employeeId].last_ek2_date = exam.exam_date;
+    examMap[employeeId].last_ek2_status = exam.decision || "";
+  }
+}
 
         if (!examMap[employeeId].last_examination_date && exam.exam_date) {
           examMap[employeeId].last_examination_date = exam.exam_date;
