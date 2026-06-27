@@ -107,6 +107,33 @@ export default function IbysSettingsPage() {
     }
   };
 
+const testApiConnection = async () => {
+  setSaving(true);
+  setMessage("");
+
+  try {
+    const res = await fetch("/api/ibys/test-connection", {
+      method: "POST",
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      setMessage(json.error || "API bağlantı testi başarısız.");
+      return;
+    }
+
+    setMessage(
+      `${json.message} | Durum: ${json.status} | Süre: ${json.durationMs} ms`
+    );
+  } catch {
+    setMessage("API bağlantı testi sırasında hata oluştu.");
+  } finally {
+    setSaving(false);
+  }
+};
+
   return (
     <main className="min-h-screen bg-[#fafafa] p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -253,7 +280,12 @@ export default function IbysSettingsPage() {
               </h2>
 
               <div className="grid gap-4 md:grid-cols-3">
-                <button className="flex items-center justify-center gap-2 rounded-2xl bg-[#5a0f1f] p-4 font-black text-white">
+                <button
+  type="button"
+  onClick={testApiConnection}
+  disabled={saving}
+  className="flex items-center justify-center gap-2 rounded-2xl bg-[#5a0f1f] p-4 font-black text-white disabled:opacity-60"
+>
                   <Globe size={18} />
                   API Testi
                 </button>
