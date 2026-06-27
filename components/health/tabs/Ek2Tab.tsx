@@ -6,6 +6,7 @@ type FormType = "İşe Giriş" | "Periyodik";
 type FormStatus = "Taslak" | "Tamamlandı" | "İmzalandı";
 type Decision = "Çalışabilir" | "Şartlı Çalışabilir" | "Çalışamaz";
 import { calculateBmi } from "../ek2/Ek2Helpers";
+import { strict } from "assert";
 
 type TabKey =
   | "genel"
@@ -23,6 +24,8 @@ type Ek2Form = {
   status: FormStatus;
   fileNo: string;
   revisionNo: string;
+  employeeId: string;
+  companyId: string;
   examDate: string;
   nextExamDate: string;
   doctorName: string;
@@ -103,6 +106,8 @@ const initialForm: Ek2Form = {
   examDate: "",
   nextExamDate: "",
   doctorName: "",
+  employeeId: "",
+  companyId: "",
 
   employeeName: "",
   identityNumber: "",
@@ -205,6 +210,9 @@ export default function Ek2Tab({ employee }: Ek2TabProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("genel");
   const [form, setForm] = useState<Ek2Form>({
   ...initialForm,
+
+  employeeId: employee?.id || "",
+  companyId: employee?.company_id || "",
   employeeName: employee?.full_name || "",
   identityNumber: employee?.identity_number || "",
   birthDate: employee?.birth_date || "",
@@ -244,15 +252,37 @@ export default function Ek2Tab({ employee }: Ek2TabProps) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function newEntry() {
-    setForm({ ...initialForm, formType: "İşe Giriş" });
-    setActiveTab("genel");
-  }
+  function buildEmployeeForm(type: FormType): Ek2Form {
+  return {
+    ...initialForm,
 
-  function newPeriodic() {
-    setForm({ ...initialForm, formType: "Periyodik" });
-    setActiveTab("genel");
-  }
+    employeeId: employee?.id || "",
+    companyId: employee?.company_id || "",
+
+    employeeName: employee?.full_name || "",
+    identityNumber: employee?.identity_number || "",
+    birthDate: employee?.birth_date || "",
+    gender: employee?.gender || "",
+    bloodGroup: employee?.blood_group || "",
+    phone: employee?.phone || "",
+
+    companyName: employee?.company_name || "",
+    jobTitle: employee?.job_title || "",
+    startDate: employee?.start_date || "",
+
+    formType: type,
+  };
+}
+
+function newEntry() {
+  setForm(buildEmployeeForm("İşe Giriş"));
+  setActiveTab("genel");
+}
+
+function newPeriodic() {
+  setForm(buildEmployeeForm("Periyodik"));
+  setActiveTab("genel");
+}
 
   function saveDraft() {
     update("status", "Taslak");
