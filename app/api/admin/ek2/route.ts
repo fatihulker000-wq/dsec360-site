@@ -53,12 +53,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const examPayload = {
+   const examPayload = {
   employee_id: employeeId,
   company_id: companyId,
   exam_date: body.examDate || body.exam_date || null,
   next_exam_date: body.nextExamDate || body.next_exam_date || null,
   decision: body.decision || null,
+  exam_type: body.formType || body.form_type || "İşe Giriş",
   is_deleted: false,
 };
 
