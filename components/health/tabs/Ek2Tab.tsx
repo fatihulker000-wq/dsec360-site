@@ -296,8 +296,7 @@ function newPeriodic() {
 
 };
 
-console.log(payload);
-alert(JSON.stringify(payload, null, 2));
+
 
   const res = await fetch("/api/admin/ek2", {
     method: "POST",
@@ -309,8 +308,6 @@ alert(JSON.stringify(payload, null, 2));
   });
 
   const json = await res.json();
-console.log("EK2 API RESPONSE:", json);
-alert(JSON.stringify(json, null, 2));
 
   if (!res.ok || !json.success) {
     alert(json.error || "EK-2 kaydedilemedi.");
