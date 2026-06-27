@@ -54,18 +54,13 @@ export async function POST(req: Request) {
     }
 
     const examPayload = {
-      employee_id: employeeId,
-      company_id: companyId,
-      exam_date: body.examDate || body.exam_date || null,
-      next_exam_date: body.nextExamDate || body.next_exam_date || null,
-      decision: body.decision || null,
-      exam_type: body.formType || body.form_type || "İşe Giriş",
-      status: body.status || "Tamamlandı",
-      doctor_name: body.doctorName || body.doctor_name || null,
-      notes: body.doctorOpinion || body.doctor_opinion || null,
-      is_deleted: false,
-      created_at: new Date().toISOString(),
-    };
+  employee_id: employeeId,
+  company_id: companyId,
+  exam_date: body.examDate || body.exam_date || null,
+  next_exam_date: body.nextExamDate || body.next_exam_date || null,
+  decision: body.decision || null,
+  is_deleted: false,
+};
 
     const { data: exam, error: examError } = await supabase
       .from("health_examinations")
