@@ -1,3 +1,5 @@
+import { validateIbysQueuePayload } from "@/lib/ibys/ibysValidationEngine";
+import { buildIbysPayload } from "@/lib/ibys/ibysPayloadBuilder";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export type IbysQueueStatus =
@@ -31,7 +33,14 @@ export async function createIbysQueueItem(input: CreateIbysQueueInput) {
       record_type: input.recordType,
       record_id: input.recordId ?? null,
       record_title: input.recordTitle ?? null,
-      payload: input.payload ?? {},
+      payload: buildIbysPayload({
+  recordType: input.recordType,
+  firmId: input.firmId,
+  firmName: input.firmName,
+  recordId: input.recordId,
+  recordTitle: input.recordTitle,
+  sourceData: input.payload ?? {},
+}),
       status: "PENDING",
       created_by: input.createdBy ?? null,
     })
@@ -167,6 +176,67 @@ export async function listIbysLogs() {
 
   return data ?? [];
 }
+const MAX_RETRY_COUNT = 3;
+const SEND_TIMEOUT_MS = 15000;
+
+type IbysQueueRow = {
+  id: string;
+  firm_id?: string | null;
+  firm_name?: string | null;
+  module_name?: string | null;
+  record_type?: string | null;
+  record_id?: string | null;
+  record_title?: string | null;
+  payload?: Record<string, unknown> | null;
+  status?: IbysQueueStatus | null;
+  retry_count?: number | null;
+  next_retry_at?: string | null;
+  updated_at?: string | null;
+};
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function calculateNextRetryAt(retryCount: number) {
+  const delaySeconds = Math.min(60 * Math.pow(2, retryCount), 15 * 60);
+  return new Date(Date.now() + delaySeconds * 1000).toISOString();
+}
+
+function isSendableStatus(status?: string | null) {
+  return status === "PENDING" || status === "FAILED" || status === "RETRY";
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout>;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error("İBYS gönderim zaman aşımına uğradı."));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeout!);
+  }
+}
+
+async function simulateIbysSend(queue: IbysQueueRow) {
+  return {
+    success: true,
+    message:
+      "Test gönderim motoru çalıştı. Gerçek İBYS endpoint bağlantısı sonraki aşamada yapılacak.",
+    queueId: queue.id,
+    moduleName: queue.module_name,
+    recordType: queue.record_type,
+    recordId: queue.record_id,
+    sentAt: new Date().toISOString(),
+  };
+}
+
 export async function sendIbysQueueItem(queueId: string) {
   const supabaseAdmin = getSupabaseAdmin();
 
@@ -180,7 +250,109 @@ export async function sendIbysQueueItem(queueId: string) {
     throw new Error(error?.message || "İBYS kuyruk kaydı bulunamadı.");
   }
 
+  const item = queue as IbysQueueRow;
   const startedAt = Date.now();
+  
+  const retryCount = Number(item.retry_count || 0);
+
+  if (item.status === "SENT") {
+    await createIbysLog({
+      queueId,
+      firmId: item.firm_id,
+      firmName: item.firm_name,
+      moduleName: item.module_name,
+      action: "SEND_QUEUE_ITEM_SKIPPED",
+      status: "SKIPPED",
+      requestPayload: item.payload ?? {},
+      responsePayload: {
+        reason: "Bu kayıt daha önce başarıyla gönderilmiş.",
+      },
+      responseCode: "ALREADY_SENT",
+      durationMs: Date.now() - startedAt,
+      createdBy: null,
+    });
+
+    return {
+      success: true,
+      message: "Bu kayıt daha önce gönderilmiş. Tekrar gönderilmedi.",
+      durationMs: Date.now() - startedAt,
+      data: item,
+    };
+  }
+
+const validation = validateIbysQueuePayload(
+  (item.payload as Record<string, unknown>) ?? {}
+);
+
+if (!validation.valid) {
+  const errorMessage = validation.issues
+    .map((i) => `${i.field}: ${i.message}`)
+    .join(" | ");
+
+  await updateIbysQueueStatus({
+    queueId,
+    status: "MISSING_INFO",
+    lastError: errorMessage,
+  });
+
+  await createIbysLog({
+    queueId,
+    firmId: item.firm_id,
+    firmName: item.firm_name,
+    moduleName: item.module_name,
+    action: "VALIDATION",
+    status: "FAILED",
+    requestPayload: item.payload ?? {},
+    responsePayload: validation,
+    responseCode: "VALIDATION_FAILED",
+    durationMs: 0,
+    errorMessage,
+    createdBy: null,
+  });
+
+  return {
+    success: false,
+    error: errorMessage,
+    validation,
+  };
+}
+
+  if (!isSendableStatus(item.status)) {
+    return {
+      success: false,
+      error: `Bu kayıt gönderime uygun durumda değil. Durum: ${item.status || "-"}`,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  if (retryCount >= MAX_RETRY_COUNT) {
+    await updateIbysQueueStatus({
+      queueId,
+      status: "FAILED",
+      lastError: "Maksimum retry sayısına ulaşıldı.",
+      retryCount,
+    });
+
+    return {
+      success: false,
+      error: "Maksimum retry sayısına ulaşıldı.",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  if (
+    item.status === "RETRY" &&
+    item.next_retry_at &&
+    new Date(item.next_retry_at).getTime() > Date.now()
+  ) {
+    return {
+      success: false,
+      error: `Retry zamanı henüz gelmedi. Planlanan zaman: ${new Date(
+        item.next_retry_at
+      ).toLocaleString("tr-TR")}`,
+      durationMs: Date.now() - startedAt,
+    };
+  }
 
   try {
     await updateIbysQueueStatus({
@@ -189,13 +361,10 @@ export async function sendIbysQueueItem(queueId: string) {
       lastError: null,
     });
 
-    const simulatedResponse = {
-      success: true,
-      message: "Test gönderim motoru çalıştı. Gerçek İBYS endpoint bağlantısı sonraki aşamada yapılacak.",
-      queueId,
-      moduleName: queue.module_name,
-      recordType: queue.record_type,
-    };
+    const responsePayload = await withTimeout(
+      simulateIbysSend(item),
+      SEND_TIMEOUT_MS
+    );
 
     const durationMs = Date.now() - startedAt;
 
@@ -204,17 +373,19 @@ export async function sendIbysQueueItem(queueId: string) {
       status: "SENT",
       sentAt: new Date().toISOString(),
       lastError: null,
+      nextRetryAt: null,
+      retryCount,
     });
 
     await createIbysLog({
       queueId,
-      firmId: queue.firm_id,
-      firmName: queue.firm_name,
-      moduleName: queue.module_name,
+      firmId: item.firm_id,
+      firmName: item.firm_name,
+      moduleName: item.module_name,
       action: "SEND_QUEUE_ITEM",
       status: "SUCCESS",
-      requestPayload: queue.payload,
-      responsePayload: simulatedResponse,
+      requestPayload: item.payload ?? {},
+      responsePayload,
       responseCode: "SIMULATED_SENT",
       durationMs,
       createdBy: null,
@@ -224,32 +395,32 @@ export async function sendIbysQueueItem(queueId: string) {
       success: true,
       message: "Kuyruk kaydı başarıyla gönderildi.",
       durationMs,
-      data: simulatedResponse,
+      data: responsePayload,
     };
   } catch (error) {
     const durationMs = Date.now() - startedAt;
-    const errorMessage = error instanceof Error ? error.message : String(error);
-
-    const nextRetryAt = new Date(Date.now() + 60 * 1000).toISOString();
+    const errorMessage = getErrorMessage(error);
+    const nextRetryCount = retryCount + 1;
+    const shouldRetry = nextRetryCount < MAX_RETRY_COUNT;
 
     await updateIbysQueueStatus({
       queueId,
-      status: "RETRY",
+      status: shouldRetry ? "RETRY" : "FAILED",
       lastError: errorMessage,
-      nextRetryAt,
-      retryCount: Number(queue.retry_count || 0) + 1,
+      nextRetryAt: shouldRetry ? calculateNextRetryAt(nextRetryCount) : null,
+      retryCount: nextRetryCount,
     });
 
     await createIbysLog({
       queueId,
-      firmId: queue.firm_id,
-      firmName: queue.firm_name,
-      moduleName: queue.module_name,
+      firmId: item.firm_id,
+      firmName: item.firm_name,
+      moduleName: item.module_name,
       action: "SEND_QUEUE_ITEM",
       status: "FAILED",
-      requestPayload: queue.payload,
+      requestPayload: item.payload ?? {},
       responsePayload: null,
-      responseCode: "ERROR",
+      responseCode: shouldRetry ? "RETRY_SCHEDULED" : "FAILED_MAX_RETRY",
       durationMs,
       errorMessage,
       createdBy: null,
