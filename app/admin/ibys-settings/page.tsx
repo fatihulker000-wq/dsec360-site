@@ -154,6 +154,33 @@ export default function IbysSettingsPage() {
     }
   };
 
+const heartbeat = async () => {
+  setSaving(true);
+  setMessage("");
+
+  try {
+    const res = await fetch("/api/ibys/heartbeat", {
+      method: "POST",
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      setMessage(json.error || "Heartbeat başarısız.");
+      return;
+    }
+
+    setMessage(
+      `💓 ${json.message} | HTTP: ${json.httpStatus} | Süre: ${json.durationMs} ms`
+    );
+  } catch {
+    setMessage("Heartbeat sırasında hata oluştu.");
+  } finally {
+    setSaving(false);
+  }
+};
+
   return (
     <main className="min-h-screen bg-[#fafafa] p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -321,12 +348,14 @@ export default function IbysSettingsPage() {
                 </button>
 
                 <button
-                  type="button"
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-green-600 p-4 font-black text-white"
-                >
-                  <RefreshCcw size={18} />
-                  Heartbeat
-                </button>
+  type="button"
+  onClick={heartbeat}
+  disabled={saving}
+  className="flex items-center justify-center gap-2 rounded-2xl bg-green-600 p-4 font-black text-white disabled:opacity-60"
+>
+  <RefreshCcw size={18} />
+  Heartbeat
+</button>
 
                 <button
                   type="button"
