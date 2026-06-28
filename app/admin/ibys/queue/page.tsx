@@ -265,7 +265,13 @@ export default function IbysQueuePage() {
                                   : "status-badge blue"
                           }
                         >
-                          {row.status || "-"}
+                          {row.status === "PENDING" && "Bekliyor"}
+{row.status === "READY" && "Hazır"}
+{row.status === "SENT" && "Gönderildi"}
+{row.status === "FAILED" && "Hatalı"}
+{row.status === "RETRY" && "Retry"}
+{row.status === "MISSING_INFO" && "Eksik Bilgi"}
+{!row.status && "-"}
                         </span>
                       </td>
                       <td>
@@ -285,12 +291,16 @@ export default function IbysQueuePage() {
                         <div className="row-actions">
                           <button type="button">Detay</button>
                           <button
-                            type="button"
-                            onClick={() => sendQueueItem(row.id)}
-                            disabled={sendingId === row.id || row.status === "SENT"}
-                          >
-                            {sendingId === row.id ? "Gönderiliyor..." : "Gönder"}
-                          </button>
+  type="button"
+  onClick={() => sendQueueItem(row.id)}
+  disabled={sendingId === row.id || row.status === "SENT"}
+>
+  {sendingId === row.id
+    ? "Gönderiliyor..."
+    : row.status === "SENT"
+      ? "Gönderildi"
+      : "Retry"}
+</button>
                         </div>
                       </td>
                     </tr>
