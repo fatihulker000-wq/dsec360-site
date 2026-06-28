@@ -70,6 +70,7 @@ type QueueRow = {
 export default function IbysPage() {
   const [rows, setRows] = useState<QueueRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
   const loadQueue = async () => {
     setLoading(true);
@@ -111,6 +112,32 @@ export default function IbysPage() {
       { title: "Başarı Oranı", value: `%${successRate}`, desc: "Genel oran", icon: Activity, tone: "dark" },
     ];
   }, [rows]);
+
+const sendQueueItem = async (queueId: string) => {
+  setSendingId(queueId);
+
+  try {
+    const res = await fetch("/api/ibys/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queueId }),
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      alert(json.error || "Kayıt gönderilemedi.");
+      return;
+    }
+
+    alert(json.message || "Kayıt başarıyla gönderildi.");
+    await loadQueue();
+  } catch {
+    alert("Gönderim sırasında hata oluştu.");
+  } finally {
+    setSendingId(null);
+  }
+};
 
   const createTestQueue = async () => {
   try {
@@ -303,10 +330,15 @@ export default function IbysPage() {
       Detay
     </Link>
 
-    <Link href="/admin/ibys/queue" className="ibys-row-btn">
-      <RotateCcw size={14} />
-      Retry
-    </Link>
+    <button
+  type="button"
+  className="ibys-row-btn"
+  onClick={() => sendQueueItem(row.id)}
+  disabled={sendingId === row.id || row.status === "SENT"}
+>
+  <RotateCcw size={14} />
+  {sendingId === row.id ? "Gönderiliyor" : "Retry"}
+</button>
 
     <Link href="/admin/ibys/logs" className="ibys-row-btn">
       <FileText size={14} />
@@ -697,6 +729,7 @@ export default function IbysPage() {
 :global(.ibys-row-btn) {
   display: inline-flex;
   align-items: center;
+  cursor: pointer;
   gap: 5px;
   border: 1px solid #ead7db;
   border-radius: 12px;
@@ -706,6 +739,11 @@ export default function IbysPage() {
   font-size: 12px;
   font-weight: 950;
   text-decoration: none;
+}
+
+:global(.ibys-row-btn:disabled) {
+  opacity: .55;
+  cursor: not-allowed;
 }
 
 :global(.ibys-row-btn:hover) {
