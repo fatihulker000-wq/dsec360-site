@@ -69,6 +69,12 @@ export async function GET(req: Request) {
       query = query.eq("employee_id", employeeId);
     }
 
+query = query.not(
+  "exam_type",
+  "in",
+  "(EK2_ISE_GIRIS,EK2_PERIYODIK)"
+);
+
     const { data, error } = await query;
 
     if (error) {
@@ -132,7 +138,7 @@ export async function POST(req: Request) {
         company_id: companyId,
         employee_id: employeeId,
 
-        exam_type: body.examType || "Periyodik Muayene",
+        exam_type: body.examType || "PERIYODIK_MUAYENE",
         exam_date: body.examDate,
         next_exam_date: body.nextExamDate || null,
 
