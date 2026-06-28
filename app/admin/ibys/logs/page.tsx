@@ -63,6 +63,10 @@ type IbysLogRow = {
   action?: string | null;
   status?: string | null;
   response_code?: string | null;
+  request_payload?: any;
+  response_payload?: any;
+  http_status?: number | null;
+  retry_count?: number | null;
   duration_ms?: number | null;
   error_message?: string | null;
   created_at?: string | null;
@@ -72,6 +76,8 @@ export default function IbysLogsPage() {
   const [rows, setRows] = useState<IbysLogRow[]>([]);
 const [loading, setLoading] = useState(true);
 const [message, setMessage] = useState("");
+const [selectedLog, setSelectedLog] = useState<IbysLogRow | null>(null);
+const [showDetail, setShowDetail] = useState(false);
 
 const loadLogs = async () => {
   setLoading(true);
@@ -275,10 +281,17 @@ const dynamicStats = useMemo(() => {
         </td>
         <td>{Number(log.duration_ms || 0)} ms</td>
         <td>
-          <button type="button" className="detail-btn">
-            <Eye size={15} />
-            Gör
-          </button>
+          <button
+  type="button"
+  className="detail-btn"
+  onClick={() => {
+    setSelectedLog(log);
+    setShowDetail(true);
+  }}
+>
+  <Eye size={15} />
+  Gör
+</button>
         </td>
       </tr>
     ))
@@ -368,6 +381,35 @@ const dynamicStats = useMemo(() => {
           padding: 24px;
           color: #111827;
         }
+
+.modal-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.45);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:9999;
+}
+
+.modal-card{
+  width:900px;
+  max-width:95%;
+  max-height:90vh;
+  overflow:auto;
+  background:white;
+  border-radius:20px;
+  padding:24px;
+}
+
+.modal-card pre{
+  background:#111827;
+  color:#fff;
+  padding:12px;
+  border-radius:12px;
+  overflow:auto;
+  font-size:12px;
+}
 
         .logs-hero {
           display: flex;
@@ -845,6 +887,38 @@ const dynamicStats = useMemo(() => {
           }
         }
       `}</style>
+      {showDetail && selectedLog && (
+  <div className="modal-overlay">
+    <div className="modal-card">
+      <h2>İBYS İşlem Detayı</h2>
+
+      <p><b>Firma:</b> {selectedLog.firm_name}</p>
+      <p><b>Modül:</b> {selectedLog.module_name}</p>
+      <p><b>İşlem:</b> {selectedLog.action}</p>
+      <p><b>Durum:</b> {selectedLog.status}</p>
+      <p><b>HTTP:</b> {selectedLog.http_status ?? "-"}</p>
+      <p><b>Süre:</b> {selectedLog.duration_ms ?? 0} ms</p>
+      <p><b>Retry:</b> {selectedLog.retry_count ?? 0}</p>
+
+      <h3>Request</h3>
+      <pre>
+        {JSON.stringify(selectedLog.request_payload, null, 2)}
+      </pre>
+
+      <h3>Response</h3>
+      <pre>
+        {JSON.stringify(selectedLog.response_payload, null, 2)}
+      </pre>
+
+      <button
+        className="hero-btn dark"
+        onClick={() => setShowDetail(false)}
+      >
+        Kapat
+      </button>
+    </div>
+  </div>
+)}
     </main>
   );
 }
