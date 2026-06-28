@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+
 import {
   Activity,
   AlertTriangle,
@@ -15,33 +17,6 @@ import {
   XCircle,
 } from "lucide-react";
 
-const stats = [
-  { title: "Bekleyen", value: "0", desc: "Kuyrukta bekleyen", icon: Clock, tone: "blue" },
-  { title: "Gönderilen", value: "0", desc: "Başarılı kayıt", icon: CheckCircle2, tone: "green" },
-  { title: "Hatalı", value: "0", desc: "İşlem gerekli", icon: XCircle, tone: "red" },
-  { title: "Retry", value: "0", desc: "Tekrar denenecek", icon: RotateCcw, tone: "amber" },
-  { title: "Başarı", value: "%0", desc: "Genel başarı oranı", icon: Activity, tone: "purple" },
-];
-
-const queueRows = [
-  {
-    type: "Eğitim",
-    company: "Demo Lojistik A.Ş.",
-    record: "Temel İSG Eğitimi",
-    status: "Bekliyor",
-    date: "Hazırlanacak",
-    warning: "Firma eşleştirmesi eksik",
-  },
-  {
-    type: "Sağlık",
-    company: "Demo Üretim Ltd.",
-    record: "Periyodik Muayene",
-    status: "Eksik Bilgi",
-    date: "Hazırlanacak",
-    warning: "Hekim bilgisi eksik",
-  },
-];
-
 const recentErrors = [
   "SGK sicil no eksik",
   "TC kimlik no eksik",
@@ -49,7 +24,92 @@ const recentErrors = [
   "Servis bağlantısı henüz aktif değil",
 ];
 
+type QueueRow = {
+  id: string;
+  firm_name?: string | null;
+  module_name?: string | null;
+  record_type?: string | null;
+  record_title?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  sent_at?: string | null;
+  last_error?: string | null;
+};
+
 export default function IbysQueuePage() {
+  const [rows, setRows] = useState<QueueRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
+  const loadQueue = async () => {
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/ibys/queue", { cache: "no-store" });
+      const json = await res.json();
+
+      if (!json.success) {
+        setMessage(json.error || "Kuyruk listesi alınamadı.");
+        return;
+      }
+
+      setRows(json.data || []);
+    } catch {
+      setMessage("Kuyruk listesi alınırken hata oluştu.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadQueue();
+  }, []);
+
+  const sendQueueItem = async (queueId: string) => {
+    setSendingId(queueId);
+    setMessage("");
+
+    try {
+      const res = await fetch("/api/ibys/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ queueId }),
+      });
+
+      const json = await res.json();
+
+      if (!json.success) {
+        setMessage(json.error || "Kayıt gönderilemedi.");
+        return;
+      }
+
+      setMessage(`✅ ${json.message}`);
+      await loadQueue();
+    } catch {
+      setMessage("Gönderim sırasında hata oluştu.");
+    } finally {
+      setSendingId(null);
+    }
+  };
+
+  const dynamicStats = useMemo(() => {
+    const total = rows.length;
+    const pending = rows.filter((r) => r.status === "PENDING").length;
+    const sent = rows.filter((r) => r.status === "SENT").length;
+    const failed = rows.filter((r) => r.status === "FAILED").length;
+    const retry = rows.filter((r) => r.status === "RETRY").length;
+    const successRate = total > 0 ? Math.round((sent / total) * 100) : 0;
+
+    return [
+      { title: "Bekleyen", value: String(pending), desc: "Kuyrukta bekleyen", icon: Clock, tone: "blue" },
+      { title: "Gönderilen", value: String(sent), desc: "Başarılı kayıt", icon: CheckCircle2, tone: "green" },
+      { title: "Hatalı", value: String(failed), desc: "İşlem gerekli", icon: XCircle, tone: "red" },
+      { title: "Retry", value: String(retry), desc: "Tekrar denenecek", icon: RotateCcw, tone: "amber" },
+      { title: "Başarı", value: `%${successRate}`, desc: "Genel başarı oranı", icon: Activity, tone: "purple" },
+    ];
+  }, [rows]);
+
   return (
     <main className="ibys-queue-page">
       <section className="queue-hero">
@@ -69,7 +129,7 @@ export default function IbysQueuePage() {
         </div>
 
         <div className="hero-actions">
-          <button type="button" className="hero-btn light">
+          <button type="button" onClick={loadQueue} className="hero-btn light">
             <RefreshCcw size={17} />
             Yenile
           </button>
@@ -81,8 +141,10 @@ export default function IbysQueuePage() {
         </div>
       </section>
 
+      {message && <section className="message-box">{message}</section>}
+
       <section className="stat-grid">
-        {stats.map((item) => {
+        {dynamicStats.map((item) => {
           const Icon = item.icon;
 
           return (
@@ -163,39 +225,67 @@ export default function IbysQueuePage() {
               </thead>
 
               <tbody>
-                {queueRows.map((row) => (
-                  <tr key={`${row.company}-${row.type}`}>
-                    <td>
-                      <span className="type-badge">{row.type}</span>
-                    </td>
-                    <td>{row.company}</td>
-                    <td>{row.record}</td>
-                    <td>
-                      <span
-                        className={
-                          row.status === "Eksik Bilgi"
-                            ? "status-badge amber"
-                            : "status-badge blue"
-                        }
-                      >
-                        {row.status}
-                      </span>
-                    </td>
-                    <td>{row.date}</td>
-                    <td>
-                      <div className="warning-cell">
-                        <AlertTriangle size={15} />
-                        {row.warning}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        <button type="button">Detay</button>
-                        <button type="button">Tekrar Dene</button>
-                      </div>
-                    </td>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7}>Kuyruk yükleniyor...</td>
                   </tr>
-                ))}
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>Henüz kuyruk kaydı yok.</td>
+                  </tr>
+                ) : (
+                  rows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <span className="type-badge">
+                          {row.module_name || row.record_type || "-"}
+                        </span>
+                      </td>
+                      <td>{row.firm_name || "-"}</td>
+                      <td>{row.record_title || row.record_type || "-"}</td>
+                      <td>
+                        <span
+                          className={
+                            row.status === "SENT"
+                              ? "status-badge green"
+                              : row.status === "RETRY" || row.status === "MISSING_INFO"
+                                ? "status-badge amber"
+                                : row.status === "FAILED"
+                                  ? "status-badge red"
+                                  : "status-badge blue"
+                          }
+                        >
+                          {row.status || "-"}
+                        </span>
+                      </td>
+                      <td>
+                        {row.sent_at
+                          ? new Date(row.sent_at).toLocaleString("tr-TR")
+                          : row.created_at
+                            ? new Date(row.created_at).toLocaleString("tr-TR")
+                            : "-"}
+                      </td>
+                      <td>
+                        <div className="warning-cell">
+                          <AlertTriangle size={15} />
+                          {row.last_error || "Uyarı yok"}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          <button type="button">Detay</button>
+                          <button
+                            type="button"
+                            onClick={() => sendQueueItem(row.id)}
+                            disabled={sendingId === row.id || row.status === "SENT"}
+                          >
+                            {sendingId === row.id ? "Gönderiliyor..." : "Gönder"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -211,18 +301,18 @@ export default function IbysQueuePage() {
             <p>Backend queue bağlandığında anlık işlem durumu burada gösterilecek.</p>
 
             <div className="live-box">
-              <strong>0</strong>
+              <strong>{rows.filter((r) => r.status === "READY").length}</strong>
               <span>Aktif işlem</span>
             </div>
 
             <div className="live-metrics">
               <div>
-                <strong>0/sn</strong>
-                <span>Gönderim hızı</span>
+                <strong>{rows.filter((r) => r.status === "SENT").length}</strong>
+                <span>Gönderilen</span>
               </div>
               <div>
-                <strong>0 ms</strong>
-                <span>Ortalama cevap</span>
+                <strong>{rows.filter((r) => r.status === "RETRY").length}</strong>
+                <span>Retry</span>
               </div>
             </div>
           </div>
@@ -318,6 +408,16 @@ export default function IbysQueuePage() {
         .hero-btn.green {
           background: #10b981;
           color: white;
+        }
+
+        .message-box {
+          margin-top: 18px;
+          padding: 14px 16px;
+          border-radius: 18px;
+          border: 1px solid #ead7db;
+          background: white;
+          color: #5a0f1f;
+          font-weight: 900;
         }
 
         .stat-grid {
@@ -560,6 +660,16 @@ export default function IbysQueuePage() {
           color: #92400e;
         }
 
+        .status-badge.green {
+          background: #ecfdf5;
+          color: #047857;
+        }
+
+        .status-badge.red {
+          background: #fef2f2;
+          color: #b91c1c;
+        }
+
         .warning-cell {
           display: flex;
           gap: 8px;
@@ -583,6 +693,11 @@ export default function IbysQueuePage() {
           font-size: 12px;
           font-weight: 950;
           cursor: pointer;
+        }
+
+        .row-actions button:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
         }
 
         .side {
