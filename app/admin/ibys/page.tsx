@@ -211,7 +211,9 @@ export default function IbysPage() {
           </div>
 
           <div className="ibys-panel">
-          <div className="ibys-action-list">
+  <h2>Hızlı İşlemler</h2>
+
+  <div className="ibys-action-list">
   <Link href="/admin/ibys/queue">
     <ListOrdered size={18} />
     <span>Gönderim Kuyruğu</span>
@@ -574,12 +576,11 @@ export default function IbysPage() {
           align-content: start;
         }
 
-        .ibys-check-list,
-        .ibys-action-list {
-          display: grid;
-          gap: 10px;
-          margin-top: 16px;
-        }
+        .ibys-check-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
 
         .ibys-check-item {
           display: flex;
