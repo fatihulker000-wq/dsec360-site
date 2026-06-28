@@ -14,6 +14,7 @@ import {
   Search,
   Send,
   TimerReset,
+  Eye,
   XCircle,
 } from "lucide-react";
 
@@ -41,6 +42,8 @@ export default function IbysQueuePage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [selectedRow, setSelectedRow] = useState<QueueRow | null>(null);
+const [bulkSending, setBulkSending] = useState(false);
 
   const loadQueue = async () => {
   setLoading(true);
@@ -71,7 +74,15 @@ export default function IbysQueuePage() {
     void loadQueue();
   }, []);
 
-  const sendQueueItem = async (queueId: string) => {
+useEffect(() => {
+  const interval = window.setInterval(() => {
+    void loadQueue();
+  }, 10000);
+
+  return () => window.clearInterval(interval);
+}, []);
+
+   const sendQueueItem = async (queueId: string) => {
     setSendingId(queueId);
     setMessage("");
 
@@ -96,9 +107,40 @@ export default function IbysQueuePage() {
     } finally {
       setSendingId(null);
     }
-  };
+   };
 
-  const dynamicStats = useMemo(() => {
+const sendPendingQueue = async () => {
+  const sendableRows = rows.filter(
+    (r) => r.status === "PENDING" || r.status === "FAILED" || r.status === "RETRY"
+  );
+
+  if (sendableRows.length === 0) {
+    setMessage("Gönderilecek uygun kayıt yok.");
+    return;
+  }
+
+  setBulkSending(true);
+  setMessage("⏳ Toplu gönderim başlatıldı...");
+
+  try {
+    for (const row of sendableRows) {
+      await fetch("/api/ibys/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ queueId: row.id }),
+      });
+    }
+
+    setMessage("✅ Toplu gönderim tamamlandı.");
+    await loadQueue();
+  } catch {
+    setMessage("❌ Toplu gönderim sırasında hata oluştu.");
+  } finally {
+    setBulkSending(false);
+  }
+};
+
+    const dynamicStats = useMemo(() => {
     const total = rows.length;
     const pending = rows.filter((r) => r.status === "PENDING").length;
     const sent = rows.filter((r) => r.status === "SENT").length;
@@ -139,10 +181,15 @@ export default function IbysQueuePage() {
             Yenile
           </button>
 
-          <button type="button" className="hero-btn green">
-            <PlayCircle size={17} />
-            Kuyruğu Başlat
-          </button>
+          <button
+  type="button"
+  onClick={sendPendingQueue}
+  disabled={bulkSending}
+  className="hero-btn green"
+>
+  <PlayCircle size={17} />
+  {bulkSending ? "Gönderiliyor..." : "Kuyruğu Başlat"}
+</button>
         </div>
       </section>
 
@@ -289,11 +336,18 @@ export default function IbysQueuePage() {
                       </td>
                       <td>
                         <div className="row-actions">
-                          <button type="button">Detay</button>
+                          <button type="button" onClick={() => setSelectedRow(row)}>
+  <Eye size={14} />
+  Detay
+</button>
                           <button
   type="button"
   onClick={() => sendQueueItem(row.id)}
-  disabled={sendingId === row.id || row.status === "SENT"}
+  disabled={
+  sendingId === row.id ||
+  row.status === "SENT" ||
+  !(row.status === "PENDING" || row.status === "FAILED" || row.status === "RETRY")
+}
 >
   {sendingId === row.id
     ? "Gönderiliyor..."
@@ -352,6 +406,21 @@ export default function IbysQueuePage() {
           </div>
         </aside>
       </section>
+
+{selectedRow && (
+  <div className="detail-modal">
+    <div className="detail-card">
+      <div className="detail-head">
+        <h2>İBYS Kayıt Detayı</h2>
+        <button type="button" onClick={() => setSelectedRow(null)}>
+          Kapat
+        </button>
+      </div>
+
+      <pre>{JSON.stringify(selectedRow, null, 2)}</pre>
+    </div>
+  </div>
+)}
 
       <style jsx>{`
         .ibys-queue-page {
@@ -810,6 +879,56 @@ export default function IbysQueuePage() {
           font-size: 13px;
           font-weight: 900;
         }
+
+.detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(17, 24, 39, 0.58);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.detail-card {
+  width: min(760px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  background: white;
+  border-radius: 22px;
+  padding: 20px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.25);
+}
+
+.detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.detail-head button {
+  border: 1px solid #ead7db;
+  background: #5a0f1f;
+  color: white;
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.detail-card pre {
+  margin: 0;
+  padding: 16px;
+  border-radius: 16px;
+  background: #111827;
+  color: #f9fafb;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.55;
+}
 
         @media (max-width: 1200px) {
           .stat-grid {
