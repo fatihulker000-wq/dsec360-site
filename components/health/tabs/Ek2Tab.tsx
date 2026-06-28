@@ -6,7 +6,7 @@ type FormType = "İşe Giriş" | "Periyodik";
 type FormStatus = "Taslak" | "Tamamlandı" | "İmzalandı";
 type Decision = "Çalışabilir" | "Şartlı Çalışabilir" | "Çalışamaz";
 import { calculateBmi } from "../ek2/Ek2Helpers";
-import { strict } from "assert";
+
 
 type TabKey =
   | "genel"
@@ -330,6 +330,42 @@ function newPeriodic() {
 
   return (
     <div style={pageStyle}>
+      <style jsx global>{`
+  @media screen {
+    .ek2-print-area {
+      display: none;
+    }
+  }
+
+  @media print {
+    body * {
+      visibility: hidden !important;
+    }
+
+    .ek2-print-area,
+    .ek2-print-area * {
+      visibility: visible !important;
+    }
+
+    .ek2-print-area {
+      display: block !important;
+      position: absolute !important;
+      left: 0;
+      top: 0;
+      width: 100%;
+      background: white;
+    }
+
+    .no-print {
+      display: none !important;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 10mm;
+    }
+  }
+`}</style>
       <section style={headerStyle}>
         <div>
           <div style={headerLabelStyle}>D-SEC SAĞLIK MODÜLÜ</div>
@@ -347,7 +383,7 @@ function newPeriodic() {
         </div>
       </section>
 
-      <section style={toolbarStyle}>
+      <section className="no-print" style={toolbarStyle}>
         <button type="button" onClick={newEntry} style={primaryButtonStyle}>
           + Yeni İşe Giriş
         </button>
@@ -1022,10 +1058,10 @@ function newPeriodic() {
               />
             </Field>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button type="button" style={primaryButtonStyle}>
-                PDF Önizle
-              </button>
+            <div className="no-print" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" onClick={printForm} style={primaryButtonStyle}>
+  PDF Önizle
+</button>
               <button type="button" onClick={printForm} style={secondaryButtonStyle}>
                 Yazdır
               </button>
@@ -1035,7 +1071,11 @@ function newPeriodic() {
             </div>
           </Section>
         )}
-      </section>
+     </section>
+
+      <div className="ek2-print-area">
+        <Ek2OfficialPrint form={form} bmi={bmi} />
+      </div>
     </div>
   );
 }
@@ -1079,6 +1119,151 @@ function SummaryBox({ label, value }: { label: string; value: string }) {
       </div>
       <div style={{ marginTop: 6, fontWeight: 950 }}>{value}</div>
     </div>
+  );
+}
+
+function Ek2OfficialPrint({
+  form,
+  bmi,
+}: {
+  form: Ek2Form;
+  bmi: string;
+}) {
+  return (
+    <div style={printPageStyle}>
+      <div style={printHeaderStyle}>
+        <div style={printLogoStyle}>D-SEC</div>
+
+        <div style={printTitleStyle}>
+          İŞE GİRİŞ / PERİYODİK MUAYENE FORMU
+          <br />
+          EK-2
+        </div>
+
+        <div style={printInfoStyle}>
+          Form No: {form.fileNo || "-"}
+          <br />
+          Revizyon: {form.revisionNo || "0"}
+          <br />
+          Tarih: {form.examDate || "-"}
+        </div>
+      </div>
+
+      <PrintSection title="1. ÇALIŞAN BİLGİLERİ">
+        <PrintRow label="Adı Soyadı" value={form.employeeName} />
+        <PrintRow label="T.C. Kimlik No" value={form.identityNumber} />
+        <PrintRow label="Doğum Tarihi" value={form.birthDate} />
+        <PrintRow label="Cinsiyet" value={form.gender} />
+        <PrintRow label="Kan Grubu" value={form.bloodGroup} />
+        <PrintRow label="Telefon" value={form.phone} />
+      </PrintSection>
+
+      <PrintSection title="2. İŞYERİ BİLGİLERİ">
+        <PrintRow label="İşyeri / Firma" value={form.companyName} />
+        <PrintRow label="İşyeri Adresi" value={form.workplaceAddress} />
+        <PrintRow label="Görevi / Mesleği" value={form.jobTitle} />
+        <PrintRow label="İşe Giriş Tarihi" value={form.startDate} />
+        <PrintRow label="Tehlike Sınıfı" value={form.dangerClass} />
+        <PrintRow label="NACE Kodu" value={form.naceCode} />
+      </PrintSection>
+
+      <PrintSection title="3. MESLEKİ ANAMNEZ">
+        <PrintBigRow label="Önceki İşler" value={form.previousJobs} />
+        <PrintBigRow label="Mevcut İşin Tanımı" value={form.currentJobDescription} />
+        <PrintBigRow label="Maruziyetler" value={form.exposures} />
+        <PrintBigRow label="KKD Kullanımı" value={form.ppeUsage} />
+        <PrintBigRow label="İş Kazaları" value={form.previousAccidents} />
+        <PrintBigRow label="Meslek Hastalığı" value={form.occupationalDiseaseHistory} />
+      </PrintSection>
+
+      <PrintSection title="4. ÖZGEÇMİŞ / SOYGEÇMİŞ">
+        <PrintBigRow label="Kronik Hastalıklar" value={form.chronicDiseases} />
+        <PrintBigRow label="Ameliyatlar" value={form.surgeries} />
+        <PrintBigRow label="İlaçlar" value={form.medicines} />
+        <PrintBigRow label="Alerjiler" value={form.allergies} />
+        <PrintBigRow label="Alışkanlıklar" value={form.habits} />
+        <PrintBigRow label="Soygeçmiş" value={form.familyHistory} />
+      </PrintSection>
+
+      <PrintSection title="5. FİZİK MUAYENE / VİTAL BULGULAR">
+        <PrintRow label="Boy" value={form.height} />
+        <PrintRow label="Kilo" value={form.weight} />
+        <PrintRow label="BMI" value={bmi} />
+        <PrintRow label="Tansiyon" value={`${form.systolic || "-"}/${form.diastolic || "-"}`} />
+        <PrintRow label="Nabız" value={form.pulse} />
+        <PrintRow label="Ateş" value={form.temperature} />
+        <PrintRow label="SpO₂" value={form.spo2} />
+      </PrintSection>
+
+      <PrintSection title="6. TETKİKLER">
+        <PrintBigRow label="Hemogram" value={form.hemogram} />
+        <PrintBigRow label="Biyokimya" value={form.biochemistry} />
+        <PrintBigRow label="İdrar" value={form.urine} />
+        <PrintBigRow label="Radyoloji" value={form.radiology} />
+        <PrintBigRow label="Odyometri" value={form.audiometry} />
+        <PrintBigRow label="SFT" value={form.sft} />
+        <PrintBigRow label="Görme" value={form.vision} />
+        <PrintBigRow label="EKG" value={form.ekg} />
+        <PrintBigRow label="Aşı" value={form.vaccines} />
+        <PrintBigRow label="Diğer" value={form.otherTests} />
+      </PrintSection>
+
+      <PrintSection title="7. İŞE UYGUNLUK KANAATİ">
+        <PrintRow label="Karar" value={form.decision} />
+        <PrintBigRow label="Kısıtlamalar" value={form.restrictions} />
+        <PrintBigRow label="Öneriler" value={form.recommendations} />
+        <PrintBigRow label="Hekim Kanaati" value={form.doctorOpinion} />
+      </PrintSection>
+
+      <div style={printSignatureAreaStyle}>
+        <div style={printSignatureBoxStyle}>
+          Çalışanın İmzası
+        </div>
+
+        <div style={printSignatureBoxStyle}>
+          İşyeri Hekimi
+          <br />
+          {form.doctorName || "-"}
+          <br /><br />
+          Kaşe / İmza
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrintSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <div style={printSectionTitleStyle}>{title}</div>
+      <table style={printTableStyle}>
+        <tbody>{children}</tbody>
+      </table>
+    </>
+  );
+}
+
+function PrintRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <tr>
+      <td style={printLeftStyle}>{label}</td>
+      <td style={printRightStyle}>{value || "-"}</td>
+    </tr>
+  );
+}
+
+function PrintBigRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <tr>
+      <td style={printLeftBigStyle}>{label}</td>
+      <td style={printRightBigStyle}>{value || "-"}</td>
+    </tr>
   );
 }
 
@@ -1363,3 +1548,96 @@ const systemHeaderStyle: CSSProperties = {
   alignItems: "center",
 };
 
+const printPageStyle: CSSProperties = {
+  width: "210mm",
+  minHeight: "297mm",
+  margin: "0 auto",
+  background: "#fff",
+  color: "#000",
+  padding: "10mm",
+  boxSizing: "border-box",
+  fontFamily: "Arial, Helvetica, sans-serif",
+};
+
+const printHeaderStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "110px 1fr 180px",
+  border: "1px solid #000",
+};
+
+const printLogoStyle: CSSProperties = {
+  borderRight: "1px solid #000",
+  display: "grid",
+  placeItems: "center",
+  fontWeight: 900,
+  fontSize: 20,
+};
+
+const printTitleStyle: CSSProperties = {
+  textAlign: "center",
+  fontWeight: 900,
+  padding: 10,
+  borderRight: "1px solid #000",
+};
+
+const printInfoStyle: CSSProperties = {
+  padding: 8,
+  fontSize: 11,
+};
+
+const printSectionTitleStyle: CSSProperties = {
+  marginTop: 10,
+  background: "#e5e7eb",
+  border: "1px solid #000",
+  padding: 6,
+  fontWeight: 900,
+  fontSize: 12,
+};
+
+const printTableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const printLeftStyle: CSSProperties = {
+  width: 210,
+  border: "1px solid #000",
+  padding: 5,
+  fontSize: 11,
+  fontWeight: 700,
+};
+
+const printRightStyle: CSSProperties = {
+  border: "1px solid #000",
+  padding: 5,
+  fontSize: 11,
+  whiteSpace: "pre-wrap",
+};
+
+const printLeftBigStyle: CSSProperties = {
+  ...printLeftStyle,
+  height: 42,
+  verticalAlign: "top",
+};
+
+const printRightBigStyle: CSSProperties = {
+  ...printRightStyle,
+  height: 42,
+  verticalAlign: "top",
+};
+
+const printSignatureAreaStyle: CSSProperties = {
+  marginTop: 24,
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 30,
+};
+
+const printSignatureBoxStyle: CSSProperties = {
+  border: "1px solid #000",
+  height: 110,
+  textAlign: "center",
+  padding: 12,
+  fontSize: 12,
+  fontWeight: 700,
+};
