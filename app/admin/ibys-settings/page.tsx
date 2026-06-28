@@ -181,6 +181,33 @@ const heartbeat = async () => {
   }
 };
 
+const testSend = async () => {
+  setSaving(true);
+  setMessage("");
+
+  try {
+    const res = await fetch("/api/ibys/test-send", {
+      method: "POST",
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      setMessage(json.error || "Test gönderimi başarısız.");
+      return;
+    }
+
+    setMessage(
+      `✅ ${json.message} | Queue ID: ${json.data?.queueId} | Süre: ${json.durationMs} ms`
+    );
+  } catch {
+    setMessage("Test gönderimi sırasında hata oluştu.");
+  } finally {
+    setSaving(false);
+  }
+};
+
   return (
     <main className="min-h-screen bg-[#fafafa] p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -358,12 +385,14 @@ const heartbeat = async () => {
 </button>
 
                 <button
-                  type="button"
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-orange-500 p-4 font-black text-white"
-                >
-                  <Send size={18} />
-                  Test Gönderimi
-                </button>
+  type="button"
+  onClick={testSend}
+  disabled={saving}
+  className="flex items-center justify-center gap-2 rounded-2xl bg-orange-500 p-4 font-black text-white disabled:opacity-60"
+>
+  <Send size={18} />
+  Test Gönderimi
+</button>
 
                 <button
                   type="button"

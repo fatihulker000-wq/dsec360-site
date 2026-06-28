@@ -59,7 +59,10 @@ export async function POST(req: Request) {
   exam_date: body.examDate || body.exam_date || null,
   next_exam_date: body.nextExamDate || body.next_exam_date || null,
   decision: body.decision || null,
-  exam_type: body.formType || body.form_type || "İşe Giriş",
+  exam_type:
+  body.formType === "Periyodik"
+    ? "EK2_PERIYODIK"
+    : "EK2_ISE_GIRIS",
   is_deleted: false,
 };
 
