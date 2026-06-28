@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+
 import {
   Activity,
   AlertTriangle,
@@ -54,7 +56,74 @@ const errors = [
   "Yetkilendirme bilgisi tanımlanmadı",
 ];
 
+type IbysLogRow = {
+  id: string;
+  firm_name?: string | null;
+  module_name?: string | null;
+  action?: string | null;
+  status?: string | null;
+  response_code?: string | null;
+  duration_ms?: number | null;
+  error_message?: string | null;
+  created_at?: string | null;
+};
+
 export default function IbysLogsPage() {
+  const [rows, setRows] = useState<IbysLogRow[]>([]);
+const [loading, setLoading] = useState(true);
+const [message, setMessage] = useState("");
+
+const loadLogs = async () => {
+  setLoading(true);
+  setMessage("");
+
+  try {
+    const res = await fetch(`/api/ibys/logs?t=${Date.now()}`, {
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      setMessage(json.error || "Log listesi alınamadı.");
+      return;
+    }
+
+    setRows(json.data || []);
+  } catch {
+    setMessage("Log listesi alınırken hata oluştu.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+useEffect(() => {
+  void loadLogs();
+}, []);
+
+const dynamicStats = useMemo(() => {
+  const total = rows.length;
+  const success = rows.filter((r) => r.status === "SUCCESS").length;
+  const failed = rows.filter((r) => r.status === "FAILED").length;
+  const avg =
+    total > 0
+      ? Math.round(
+          rows.reduce((sum, r) => sum + Number(r.duration_ms || 0), 0) / total
+        )
+      : 0;
+
+  const lastSync = rows[0]?.created_at
+    ? new Date(rows[0].created_at).toLocaleString("tr-TR")
+    : "Yok";
+
+  return [
+    { title: "Toplam Log", value: String(total), desc: "Kayıtlı işlem", icon: FileText, tone: "blue" },
+    { title: "Başarılı", value: String(success), desc: "Sorunsuz işlem", icon: CheckCircle2, tone: "green" },
+    { title: "Hatalı", value: String(failed), desc: "İncelenecek", icon: XCircle, tone: "red" },
+    { title: "Ortalama Süre", value: `${avg} ms`, desc: "Servis cevabı", icon: Timer, tone: "amber" },
+    { title: "Son Sync", value: lastSync, desc: "Son işlem", icon: Clock3, tone: "purple" },
+  ];
+}, [rows]);
   return (
     <main className="ibys-logs-page">
       <section className="logs-hero">
@@ -74,7 +143,7 @@ export default function IbysLogsPage() {
         </div>
 
         <div className="hero-actions">
-          <button type="button" className="hero-btn light">
+          <button type="button" onClick={loadLogs} className="hero-btn light">
             <RefreshCcw size={17} />
             Yenile
           </button>
@@ -87,7 +156,7 @@ export default function IbysLogsPage() {
       </section>
 
       <section className="stat-grid">
-        {stats.map((item) => {
+        {dynamicStats.map((item) => {
           const Icon = item.icon;
 
           return (
@@ -168,35 +237,53 @@ export default function IbysLogsPage() {
               </thead>
 
               <tbody>
-                {logs.map((log) => (
-                  <tr key={`${log.company}-${log.module}`}>
-                    <td>{log.date}</td>
-                    <td>{log.company}</td>
-                    <td>
-                      <span className="module-badge">{log.module}</span>
-                    </td>
-                    <td>{log.action}</td>
-                    <td>
-                      <span
-                        className={
-                          log.status === "Eksik Bilgi"
-                            ? "status-badge amber"
-                            : "status-badge blue"
-                        }
-                      >
-                        {log.status}
-                      </span>
-                    </td>
-                    <td>{log.duration}</td>
-                    <td>
-                      <button type="button" className="detail-btn">
-                        <Eye size={15} />
-                        Gör
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+  {loading ? (
+    <tr>
+      <td colSpan={7}>Loglar yükleniyor...</td>
+    </tr>
+  ) : rows.length === 0 ? (
+    <tr>
+      <td colSpan={7}>Henüz log kaydı yok.</td>
+    </tr>
+  ) : (
+    rows.map((log) => (
+      <tr key={log.id}>
+        <td>
+          {log.created_at
+            ? new Date(log.created_at).toLocaleString("tr-TR")
+            : "-"}
+        </td>
+        <td>{log.firm_name || "-"}</td>
+        <td>
+          <span className="module-badge">
+            {log.module_name || "-"}
+          </span>
+        </td>
+        <td>{log.action || "-"}</td>
+        <td>
+          <span
+            className={
+              log.status === "SUCCESS"
+                ? "status-badge green"
+                : log.status === "FAILED"
+                  ? "status-badge red"
+                  : "status-badge amber"
+            }
+          >
+            {log.status || "-"}
+          </span>
+        </td>
+        <td>{Number(log.duration_ms || 0)} ms</td>
+        <td>
+          <button type="button" className="detail-btn">
+            <Eye size={15} />
+            Gör
+          </button>
+        </td>
+      </tr>
+    ))
+  )}
+</tbody>
             </table>
           </div>
 
@@ -304,6 +391,16 @@ export default function IbysLogsPage() {
           font-weight: 950;
           margin-bottom: 14px;
         }
+
+.status-badge.green {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.status-badge.red {
+  background: #fef2f2;
+  color: #b91c1c;
+}
 
         .logs-hero h1 {
           margin: 0;
