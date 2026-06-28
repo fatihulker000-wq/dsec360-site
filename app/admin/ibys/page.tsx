@@ -45,6 +45,26 @@ const missingChecks = [
 ];
 
 export default function IbysPage() {
+  const createTestQueue = async () => {
+  try {
+    const res = await fetch("/api/ibys/test-send", {
+      method: "POST",
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+
+    if (!json.success) {
+      alert(json.error || "Test gönderimi oluşturulamadı.");
+      return;
+    }
+
+    alert("Test gönderimi başarıyla kuyruğa eklendi.");
+    window.location.href = "/admin/ibys/queue";
+  } catch {
+    alert("Test gönderimi sırasında hata oluştu.");
+  }
+};
   return (
     <main className="ibys-page">
       <section className="ibys-hero">
@@ -64,12 +84,12 @@ export default function IbysPage() {
         </div>
 
         <div className="ibys-hero-actions">
-          <Link href="/admin/ibys-settings" className="ibys-btn light">
+          <Link href="/admin/ibys/settings" className="ibys-btn light">
   <Settings size={17} />
   İBYS Ayarları
-</Link>
+ </Link>
 
-          <button type="button" className="ibys-btn green">
+          <button type="button" onClick={createTestQueue} className="ibys-btn green">
             <Send size={17} />
             Test Gönderimi
           </button>
@@ -187,11 +207,11 @@ export default function IbysPage() {
             <h2>Hızlı İşlemler</h2>
 
             <div className="ibys-action-list">
-              <button type="button">Bekleyenleri Gönder</button>
-              <button type="button">Hatalıları Tekrar Gönder</button>
-              <button type="button">Entegrasyon Logları</button>
-              <button type="button">Firma Eşleştirme</button>
-            </div>
+  <Link href="/admin/ibys/queue">Gönderim Kuyruğu</Link>
+  <Link href="/admin/ibys/logs">Entegrasyon Logları</Link>
+  <Link href="/admin/ibys/services">Servis Sağlığı</Link>
+  <Link href="/admin/ibys/companies">Firma Eşleştirme</Link>
+</div>
           </div>
         </aside>
       </section>
@@ -554,7 +574,8 @@ export default function IbysPage() {
           font-weight: 850;
         }
 
-        .ibys-action-list button {
+        .ibys-action-list button,
+.ibys-action-list a {
           border: 1px solid #ead7db;
           background: white;
           color: #5a0f1f;
@@ -562,9 +583,12 @@ export default function IbysPage() {
           padding: 13px;
           font-weight: 950;
           cursor: pointer;
+          text-decoration: none;
+text-align: center;
         }
 
-        .ibys-action-list button:first-child {
+        .ibys-action-list button:first-child,
+.ibys-action-list a:first-child {
           background: #5a0f1f;
           color: white;
         }
