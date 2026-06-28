@@ -264,7 +264,28 @@ export default function IbysPage() {
         <td>{row.module_name || row.record_type || "-"}</td>
         <td>{row.firm_name || "-"}</td>
         <td>{row.record_title || row.record_type || "-"}</td>
-        <td>{row.status || "-"}</td>
+        <td>
+  <span
+    className={`ibys-status-badge ${
+      row.status === "SENT"
+        ? "success"
+        : row.status === "FAILED"
+        ? "danger"
+        : row.status === "RETRY"
+        ? "warning"
+        : row.status === "MISSING_INFO"
+        ? "missing"
+        : "pending"
+    }`}
+  >
+    {row.status === "PENDING" && "Bekliyor"}
+    {row.status === "READY" && "Hazır"}
+    {row.status === "SENT" && "Gönderildi"}
+    {row.status === "FAILED" && "Hatalı"}
+    {row.status === "RETRY" && "Retry"}
+    {row.status === "MISSING_INFO" && "Eksik Bilgi"}
+  </span>
+</td>
         <td>
           {row.sent_at
             ? new Date(row.sent_at).toLocaleString("tr-TR")
@@ -437,11 +458,11 @@ export default function IbysPage() {
         }
 
         .ibys-btn {
-  border-radius: 16px;
-  padding: 13px 16px;
-  font-size: 14px;
-  text-decoration: none;
-}
+         border-radius: 16px;
+         padding: 13px 16px;
+         font-size: 14px;
+         text-decoration: none;
+           }
 
         .ibys-btn.light {
           background: white;
@@ -637,19 +658,19 @@ export default function IbysPage() {
           border-top: 1px solid #ead7db;
         }
 
-:global(.ibys-table-link) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #ead7db;
-  border-radius: 12px;
-  padding: 8px 10px;
-  background: white;
-  color: #5a0f1f;
-  font-size: 12px;
-  font-weight: 950;
-  text-decoration: none;
-}
+        :global(.ibys-table-link) {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #ead7db;
+        border-radius: 12px;
+        padding: 8px 10px;
+        background: white;
+        color: #5a0f1f;
+        font-size: 12px;
+        font-weight: 950;
+        text-decoration: none;
+         }
 
         .ibys-empty {
           min-height: 160px;
@@ -681,10 +702,10 @@ export default function IbysPage() {
         }
 
         .ibys-check-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 16px;
-}
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+         }
 
         .ibys-check-item {
           display: flex;
@@ -700,29 +721,29 @@ export default function IbysPage() {
         }
 
        .ibys-action-list {
-  display: grid;
-  gap: 12px;
-  margin-top: 16px;
-}
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+         }
 
-:global(.ibys-action-card) {
-  display: flex !important;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid #ead7db;
-  border-radius: 16px;
-  background: white;
-  color: #5a0f1f;
-  font-weight: 950;
-  text-decoration: none;
-  transition: all .2s ease;
-}
+        :global(.ibys-action-card) {
+         display: flex !important;
+        align-items: center;
+       gap: 12px;
+       width: 100%;
+        padding: 14px 16px;
+       border: 1px solid #ead7db;
+       border-radius: 16px;
+       background: white;
+       color: #5a0f1f;
+       font-weight: 950;
+       text-decoration: none;
+       transition: all .2s ease;
+       }
 
-:global(.ibys-action-card svg) {
-  flex-shrink: 0;
-}
+       :global(.ibys-action-card svg) {
+       flex-shrink: 0;
+       }
 
 :global(.ibys-action-card:hover) {
   background: #5a0f1f;
@@ -733,10 +754,10 @@ export default function IbysPage() {
 
 :global(.ibys-action-card:first-child) {
   background: #5a0f1f;
-  color: white;
-}
+          color: white;
+          }
 
-        .ibys-bottom-grid {
+         .ibys-bottom-grid {
           display: grid;
           grid-template-columns: minmax(0, 2fr) minmax(320px, 0.9fr);
           gap: 18px;
@@ -817,6 +838,40 @@ export default function IbysPage() {
           font-weight: 900;
         }
 
+:global(.ibys-status-badge){
+display:inline-flex;
+align-items:center;
+padding:6px 12px;
+border-radius:999px;
+font-size:12px;
+font-weight:900;
+}
+
+:global(.pending){
+background:#dbeafe;
+color:#1d4ed8;
+}
+
+:global(.success){
+background:#dcfce7;
+color:#15803d;
+}
+
+:global(.danger){
+background:#fee2e2;
+color:#b91c1c;
+}
+
+:global(.warning){
+background:#fef3c7;
+color:#b45309;
+}
+
+:global(.missing){
+background:#fde68a;
+color:#92400e;
+}
+
         @media (max-width: 1200px) {
           .ibys-status-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -856,8 +911,9 @@ export default function IbysPage() {
           .ibys-panel-head {
             flex-direction: column;
           }
+
         }
-      `}</style>
-    </main>
+       `}</style>
+       </main>
   );
 }
