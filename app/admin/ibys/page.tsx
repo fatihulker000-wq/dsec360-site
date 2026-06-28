@@ -214,22 +214,22 @@ export default function IbysPage() {
   <h2>Hızlı İşlemler</h2>
 
   <div className="ibys-action-list">
-  <Link href="/admin/ibys/queue">
+  <Link href="/admin/ibys/queue" className="ibys-action-card">
     <ListOrdered size={18} />
     <span>Gönderim Kuyruğu</span>
   </Link>
 
-  <Link href="/admin/ibys/logs">
+  <Link href="/admin/ibys/logs" className="ibys-action-card">
     <ClipboardList size={18} />
     <span>Entegrasyon Logları</span>
   </Link>
 
-  <Link href="/admin/ibys/services">
+  <Link href="/admin/ibys/services" className="ibys-action-card">
     <HeartPulse size={18} />
     <span>Servis Sağlığı</span>
   </Link>
 
-  <Link href="/admin/ibys/companies">
+  <Link href="/admin/ibys/companies" className="ibys-action-card">
     <Building2 size={18} />
     <span>Firma Eşleştirme</span>
   </Link>
@@ -601,7 +601,13 @@ export default function IbysPage() {
   margin-top: 16px;
 }
 
-.ibys-action-list a {
+.ibys-action-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ibys-action-card {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -616,18 +622,18 @@ export default function IbysPage() {
   transition: all .2s ease;
 }
 
-.ibys-action-list a svg {
+.ibys-action-card svg {
   flex-shrink: 0;
 }
 
-.ibys-action-list a:hover {
+.ibys-action-card:hover {
   background: #5a0f1f;
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 10px 24px rgba(90,15,31,.18);
 }
 
-.ibys-action-list a:first-child {
+.ibys-action-card:first-child {
   background: #5a0f1f;
   color: white;
 }
