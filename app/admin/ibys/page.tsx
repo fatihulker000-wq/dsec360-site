@@ -601,14 +601,8 @@ export default function IbysPage() {
   margin-top: 16px;
 }
 
-.ibys-action-list {
-  display: grid;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.ibys-action-card {
-  display: flex;
+:global(.ibys-action-card) {
+  display: flex !important;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -622,18 +616,18 @@ export default function IbysPage() {
   transition: all .2s ease;
 }
 
-.ibys-action-card svg {
+:global(.ibys-action-card svg) {
   flex-shrink: 0;
 }
 
-.ibys-action-card:hover {
+:global(.ibys-action-card:hover) {
   background: #5a0f1f;
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 10px 24px rgba(90,15,31,.18);
 }
 
-.ibys-action-card:first-child {
+:global(.ibys-action-card:first-child) {
   background: #5a0f1f;
   color: white;
 }
