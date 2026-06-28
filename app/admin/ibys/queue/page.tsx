@@ -204,6 +204,11 @@ export default function IbysQueuePage() {
       <section className="content-grid">
         <div className="panel large">
           <div className="panel-head">
+            {message && (
+  <div className="table-message">
+    {message}
+  </div>
+)}
             <div>
               <h2>Kuyruk Kayıtları</h2>
               <p>İBYS’e gönderilecek tüm kayıtlar burada takip edilir.</p>
@@ -414,6 +419,15 @@ export default function IbysQueuePage() {
           background: #10b981;
           color: white;
         }
+
+        .table-message {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff1f2;
+  color: #5a0f1f;
+  font-weight: 900;
+}
 
         .message-box {
           margin-top: 18px;
