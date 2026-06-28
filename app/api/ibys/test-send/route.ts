@@ -33,7 +33,7 @@ export async function POST() {
       recordType: "TEST_EMPLOYEE",
       recordTitle: "Test Çalışan - Temel İSG Eğitimi",
       payload: testPayload,
-      createdBy: "system",
+      createdBy: null,
     });
 
     const durationMs = Date.now() - startedAt;
@@ -51,7 +51,7 @@ export async function POST() {
       },
       responseCode: "QUEUED",
       durationMs,
-      createdBy: "system",
+      createdBy: null,
     });
 
     return Response.json({
