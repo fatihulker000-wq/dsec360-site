@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ListOrdered,
@@ -24,6 +25,7 @@ import {
   Sparkles,
   XCircle,
 } from "lucide-react";
+
 
 const stats = [
   { title: "Bekleyen", value: "0", desc: "Kuyrukta", icon: Clock, tone: "blue" },
@@ -51,7 +53,62 @@ const missingChecks = [
   "Firma İBYS eşleştirme kontrolü",
 ];
 
+type QueueRow = {
+  id: string;
+  firm_name?: string | null;
+  module_name?: string | null;
+  record_type?: string | null;
+  record_title?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  sent_at?: string | null;
+};
+
 export default function IbysPage() {
+  const [rows, setRows] = useState<QueueRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadQueue = async () => {
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/ibys/queue?t=${Date.now()}`, {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        setRows(json.data || []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadQueue();
+  }, []);
+
+  const dynamicStats = useMemo(() => {
+    const total = rows.length;
+    const pending = rows.filter((r) => r.status === "PENDING").length;
+    const sent = rows.filter((r) => r.status === "SENT").length;
+    const failed = rows.filter((r) => r.status === "FAILED").length;
+    const missing = rows.filter((r) => r.status === "MISSING_INFO").length;
+    const retry = rows.filter((r) => r.status === "RETRY").length;
+    const successRate = total > 0 ? Math.round((sent / total) * 100) : 0;
+
+    return [
+      { title: "Bekleyen", value: String(pending), desc: "Kuyrukta", icon: Clock, tone: "blue" },
+      { title: "Başarılı", value: String(sent), desc: "Gönderildi", icon: CheckCircle2, tone: "green" },
+      { title: "Hatalı", value: String(failed), desc: "Kontrol gerekli", icon: XCircle, tone: "red" },
+      { title: "Eksik Bilgi", value: String(missing), desc: "Tamamlanmalı", icon: AlertTriangle, tone: "amber" },
+      { title: "Retry", value: String(retry), desc: "Tekrar denenecek", icon: RefreshCcw, tone: "purple" },
+      { title: "Başarı Oranı", value: `%${successRate}`, desc: "Genel oran", icon: Activity, tone: "dark" },
+    ];
+  }, [rows]);
+
   const createTestQueue = async () => {
   try {
     const res = await fetch("/api/ibys/test-send", {
@@ -134,7 +191,7 @@ export default function IbysPage() {
       </section>
 
       <section className="ibys-stat-grid">
-        {stats.map((item) => {
+        {dynamicStats.map((item) => {
           const Icon = item.icon;
 
           return (
@@ -161,7 +218,7 @@ export default function IbysPage() {
               <p>Gönderilecek, gönderilen ve hatalı kayıtlar burada listelenecek.</p>
             </div>
 
-            <button type="button" className="ibys-small-btn">
+           <button type="button" onClick={loadQueue} className="ibys-small-btn">
               <RefreshCcw size={16} />
               Yenile
             </button>
@@ -181,16 +238,49 @@ export default function IbysPage() {
               </thead>
 
               <tbody>
-                <tr>
-                  <td colSpan={6}>
-                    <div className="ibys-empty">
-                      <Clock size={36} />
-                      <strong>Henüz gönderim kaydı yok</strong>
-                      <span>Backend queue bağlandığında kayıtlar burada görünecek.</span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
+  {loading ? (
+    <tr>
+      <td colSpan={6}>
+        <div className="ibys-empty">
+          <RefreshCcw size={36} />
+          <strong>Kuyruk yükleniyor...</strong>
+          <span>İBYS gönderim kayıtları alınıyor.</span>
+        </div>
+      </td>
+    </tr>
+  ) : rows.length === 0 ? (
+    <tr>
+      <td colSpan={6}>
+        <div className="ibys-empty">
+          <Clock size={36} />
+          <strong>Henüz gönderim kaydı yok</strong>
+          <span>Test gönderimi oluşturduğunda kayıtlar burada görünecek.</span>
+        </div>
+      </td>
+    </tr>
+  ) : (
+    rows.slice(0, 5).map((row) => (
+      <tr key={row.id}>
+        <td>{row.module_name || row.record_type || "-"}</td>
+        <td>{row.firm_name || "-"}</td>
+        <td>{row.record_title || row.record_type || "-"}</td>
+        <td>{row.status || "-"}</td>
+        <td>
+          {row.sent_at
+            ? new Date(row.sent_at).toLocaleString("tr-TR")
+            : row.created_at
+              ? new Date(row.created_at).toLocaleString("tr-TR")
+              : "-"}
+        </td>
+        <td>
+          <Link href="/admin/ibys/queue" className="ibys-table-link">
+            Detay
+          </Link>
+        </td>
+      </tr>
+    ))
+  )}
+</tbody>
             </table>
           </div>
         </div>
@@ -546,6 +636,20 @@ export default function IbysPage() {
           padding: 24px;
           border-top: 1px solid #ead7db;
         }
+
+:global(.ibys-table-link) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ead7db;
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: white;
+  color: #5a0f1f;
+  font-size: 12px;
+  font-weight: 950;
+  text-decoration: none;
+}
 
         .ibys-empty {
           min-height: 160px;
