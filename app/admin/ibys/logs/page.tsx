@@ -78,6 +78,9 @@ const [loading, setLoading] = useState(true);
 const [message, setMessage] = useState("");
 const [selectedLog, setSelectedLog] = useState<IbysLogRow | null>(null);
 const [showDetail, setShowDetail] = useState(false);
+const [searchText, setSearchText] = useState("");
+const [moduleFilter, setModuleFilter] = useState("");
+const [statusFilter, setStatusFilter] = useState("");
 
 const loadLogs = async () => {
   setLoading(true);
@@ -129,7 +132,73 @@ const dynamicStats = useMemo(() => {
     { title: "Ortalama Süre", value: `${avg} ms`, desc: "Servis cevabı", icon: Timer, tone: "amber" },
     { title: "Son Sync", value: lastSync, desc: "Son işlem", icon: Clock3, tone: "purple" },
   ];
-}, [rows]);
+ }, [rows]);
+
+ const filteredRows = useMemo(() => {
+  return rows.filter((row) => {
+    const search = searchText.trim().toLowerCase();
+
+    const matchesSearch =
+      !search ||
+      String(row.firm_name || "").toLowerCase().includes(search) ||
+      String(row.module_name || "").toLowerCase().includes(search) ||
+      String(row.action || "").toLowerCase().includes(search) ||
+      String(row.error_message || "").toLowerCase().includes(search) ||
+      String(row.response_code || "").toLowerCase().includes(search);
+
+    const matchesModule =
+      !moduleFilter || row.module_name === moduleFilter;
+
+    const matchesStatus =
+      !statusFilter || row.status === statusFilter;
+
+    return matchesSearch && matchesModule && matchesStatus;
+  });
+}, [rows, searchText, moduleFilter, statusFilter]);
+
+const exportCsv = () => {
+  const headers = [
+    "Tarih",
+    "Firma",
+    "Modül",
+    "İşlem",
+    "Durum",
+    "Response Code",
+    "Süre",
+    "Hata",
+  ];
+
+  const lines = filteredRows.map((row) => [
+    row.created_at ? new Date(row.created_at).toLocaleString("tr-TR") : "",
+    row.firm_name || "",
+    row.module_name || "",
+    row.action || "",
+    row.status || "",
+    row.response_code || "",
+    String(row.duration_ms || 0),
+    row.error_message || "",
+  ]);
+
+  const csv = [headers, ...lines]
+    .map((line) =>
+      line
+        .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
+        .join(";")
+    )
+    .join("\n");
+
+  const blob = new Blob(["\ufeff" + csv], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "ibys-loglari.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
   return (
     <main className="ibys-logs-page">
       <section className="logs-hero">
@@ -190,27 +259,46 @@ const dynamicStats = useMemo(() => {
         <div className="filter-grid">
           <div className="search-box">
             <Search size={16} />
-            <input placeholder="Firma, modül, işlem veya hata ara..." />
+            <input
+  value={searchText}
+  onChange={(e) => setSearchText(e.target.value)}
+  placeholder="Firma, modül, işlem veya hata ara..."
+/>
           </div>
 
-          <select defaultValue="">
-            <option value="">Tüm Modüller</option>
-            <option>Eğitim</option>
-            <option>Sağlık</option>
-            <option>Risk</option>
-            <option>İş Kazası</option>
-            <option>Çalışan</option>
-          </select>
+          <select
+  value={moduleFilter}
+  onChange={(e) => setModuleFilter(e.target.value)}
+>
+  <option value="">Tüm Modüller</option>
+  <option value="Eğitim">Eğitim</option>
+  <option value="Sağlık">Sağlık</option>
+  <option value="Risk">Risk</option>
+  <option value="İş Kazası">İş Kazası</option>
+  <option value="Çalışan">Çalışan</option>
+  <option value="IBYS_TEST">IBYS_TEST</option>
+</select>
 
-          <select defaultValue="">
-            <option value="">Tüm Durumlar</option>
-            <option>Başarılı</option>
-            <option>Bekliyor</option>
-            <option>Hatalı</option>
-            <option>Eksik Bilgi</option>
-          </select>
+          <select
+  value={statusFilter}
+  onChange={(e) => setStatusFilter(e.target.value)}
+>
+  <option value="">Tüm Durumlar</option>
+  <option value="SUCCESS">Başarılı</option>
+  <option value="FAILED">Hatalı</option>
+  <option value="SKIPPED">Atlandı</option>
+</select>
 
-          <button type="button">Filtrele</button>
+          <button
+  type="button"
+  onClick={() => {
+    setSearchText("");
+    setModuleFilter("");
+    setStatusFilter("");
+  }}
+>
+  Temizle
+</button>
         </div>
       </section>
 
@@ -222,10 +310,10 @@ const dynamicStats = useMemo(() => {
               <p>İBYS servis çağrıları ve gönderim kayıtları burada listelenir.</p>
             </div>
 
-            <button type="button" className="small-btn">
-              <Activity size={16} />
-              Performans
-            </button>
+            <button type="button" onClick={exportCsv} className="small-btn">
+  <FileText size={16} />
+  Excel / CSV
+</button>
           </div>
 
           <div className="table-wrap">
@@ -247,12 +335,12 @@ const dynamicStats = useMemo(() => {
     <tr>
       <td colSpan={7}>Loglar yükleniyor...</td>
     </tr>
-  ) : rows.length === 0 ? (
+  ) : filteredRows.length === 0 ? (
     <tr>
       <td colSpan={7}>Henüz log kaydı yok.</td>
     </tr>
   ) : (
-    rows.map((log) => (
+    filteredRows.map((log) => (
       <tr key={log.id}>
         <td>
           {log.created_at
@@ -918,7 +1006,9 @@ const dynamicStats = useMemo(() => {
       </button>
     </div>
   </div>
-)}
+ )}
+
     </main>
   );
 }
+
