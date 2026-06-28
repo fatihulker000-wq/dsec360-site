@@ -25,6 +25,7 @@ export default function IbysSettingsPage() {
   const [retryCount, setRetryCount] = useState(3);
   const [retryDelaySeconds, setRetryDelaySeconds] = useState(60);
   const [queueLimit, setQueueLimit] = useState(100);
+  const [token, setToken] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -151,7 +152,11 @@ const createToken = async () => {
       return;
     }
 
-    setMessage(`✅ Token oluşturuldu. Süre: ${json.durationMs} ms`);
+setToken(json.token || "");
+
+    setMessage(
+  `✅ Token alındı. Bitiş: ${json.expiresAt} | Süre: ${json.durationMs} ms`
+);
   } catch {
     setMessage("Token oluşturulurken hata oluştu.");
   } finally {
@@ -382,6 +387,18 @@ return (
                   {saving ? "Kaydediliyor..." : "Ayarları Kaydet"}
                 </button>
               </div>
+
+              {token && (
+  <div className="mt-6 rounded-2xl border bg-slate-900 p-4">
+    <div className="text-xs font-bold text-slate-400">
+      Güncel Access Token
+    </div>
+
+    <div className="mt-2 break-all font-mono text-sm text-green-400">
+      {token}
+    </div>
+  </div>
+)}
             </section>
           </>
         )}

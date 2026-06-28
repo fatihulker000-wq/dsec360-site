@@ -37,13 +37,14 @@ export async function POST() {
     const token = await createNewIbysToken();
 
     return Response.json({
-      success: true,
-      message: "Token başarıyla oluşturuldu.",
-      reused: token.reused,
-      tokenType: token.tokenType,
-      expiresAt: token.expiresAt,
-      durationMs: token.durationMs,
-    });
+  success: true,
+  message: "Token başarıyla oluşturuldu.",
+  reused: token.reused,
+  tokenType: token.tokenType,
+  expiresAt: token.expiresAt,
+  durationMs: token.durationMs,
+  token: token.accessToken ?? null,
+});
   } catch (error) {
     return Response.json(
       {
