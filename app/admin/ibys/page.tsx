@@ -1,6 +1,13 @@
 "use client";
 
 import Link from "next/link";
+
+import {
+  ListOrdered,
+  ClipboardList,
+  HeartPulse,
+} from "lucide-react";
+
 import {
   Activity,
   AlertTriangle,
@@ -204,13 +211,26 @@ export default function IbysPage() {
           </div>
 
           <div className="ibys-panel">
-            <h2>Hızlı İşlemler</h2>
+          <div className="ibys-action-list">
+  <Link href="/admin/ibys/queue">
+    <ListOrdered size={18} />
+    <span>Gönderim Kuyruğu</span>
+  </Link>
 
-            <div className="ibys-action-list">
-  <Link href="/admin/ibys/queue">Gönderim Kuyruğu</Link>
-  <Link href="/admin/ibys/logs">Entegrasyon Logları</Link>
-  <Link href="/admin/ibys/services">Servis Sağlığı</Link>
-  <Link href="/admin/ibys/companies">Firma Eşleştirme</Link>
+  <Link href="/admin/ibys/logs">
+    <ClipboardList size={18} />
+    <span>Entegrasyon Logları</span>
+  </Link>
+
+  <Link href="/admin/ibys/services">
+    <HeartPulse size={18} />
+    <span>Servis Sağlığı</span>
+  </Link>
+
+  <Link href="/admin/ibys/companies">
+    <Building2 size={18} />
+    <span>Firma Eşleştirme</span>
+  </Link>
 </div>
           </div>
         </aside>
@@ -574,24 +594,42 @@ export default function IbysPage() {
           font-weight: 850;
         }
 
-        .ibys-action-list button,
-.ibys-action-list a {
-          border: 1px solid #ead7db;
-          background: white;
-          color: #5a0f1f;
-          border-radius: 16px;
-          padding: 13px;
-          font-weight: 950;
-          cursor: pointer;
-          text-decoration: none;
-text-align: center;
-        }
+       .ibys-action-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
 
-        .ibys-action-list button:first-child,
+.ibys-action-list a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid #ead7db;
+  border-radius: 16px;
+  background: white;
+  color: #5a0f1f;
+  font-weight: 950;
+  text-decoration: none;
+  transition: all .2s ease;
+}
+
+.ibys-action-list a svg {
+  flex-shrink: 0;
+}
+
+.ibys-action-list a:hover {
+  background: #5a0f1f;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(90,15,31,.18);
+}
+
 .ibys-action-list a:first-child {
-          background: #5a0f1f;
-          color: white;
-        }
+  background: #5a0f1f;
+  color: white;
+}
 
         .ibys-bottom-grid {
           display: grid;
