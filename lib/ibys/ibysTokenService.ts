@@ -63,47 +63,63 @@ export async function createNewIbysToken() {
   const environment = settings.environment || "TEST";
   const startedAt = Date.now();
 
-  const body = new URLSearchParams();
-  body.set("grant_type", "client_credentials");
-  body.set("client_id", settings.client_id);
-  body.set("client_secret", settings.client_secret_encrypted);
-
-  const response = await fetch(settings.token_url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-    cache: "no-store",
-  });
-
-  const durationMs = Date.now() - startedAt;
-  const rawText = await response.text();
-
   let tokenJson: any = {};
-  try {
-    tokenJson = rawText ? JSON.parse(rawText) : {};
-  } catch {
-    tokenJson = { raw: rawText };
+
+  const isMockTest =
+    environment === "TEST" &&
+    String(settings.token_url).includes("httpbin.org");
+
+  if (isMockTest) {
+    tokenJson = {
+      access_token: `DSEC_TEST_TOKEN_${Date.now()}`,
+      token_type: "Bearer",
+      expires_in: 3600,
+      scope: "ibys.test",
+      mock: true,
+    };
+  } else {
+    const body = new URLSearchParams();
+    body.set("grant_type", "client_credentials");
+    body.set("client_id", settings.client_id);
+    body.set("client_secret", settings.client_secret_encrypted);
+
+    const response = await fetch(settings.token_url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+      cache: "no-store",
+    });
+
+    const rawText = await response.text();
+
+    try {
+      tokenJson = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      tokenJson = { raw: rawText };
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Token servisi hata döndürdü. Durum: ${response.status} | ${JSON.stringify(
+          tokenJson
+        )}`
+      );
+    }
   }
 
-  if (!response.ok) {
+  const durationMs = Date.now() - startedAt;
+  const accessToken = tokenJson.access_token ?? "";
+  const expiresIn = Number(tokenJson.expires_in ?? 3600);
+  const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+  if (!accessToken) {
     throw new Error(
-      `Token servisi hata döndürdü. Durum: ${response.status} | ${getErrorMessage(
+      `Token cevabında access_token bulunamadı. Cevap: ${JSON.stringify(
         tokenJson
       )}`
     );
-  }
-
-  const accessToken = tokenJson.access_token ?? "";
-  const expiresIn = Number(tokenJson.expires_in ?? 0);
-  const expiresAt =
-    expiresIn > 0
-      ? new Date(Date.now() + expiresIn * 1000).toISOString()
-      : null;
-
-  if (!accessToken) {
-    throw new Error("Token cevabında access_token bulunamadı.");
   }
 
   await supabase
@@ -118,7 +134,7 @@ export async function createNewIbysToken() {
       environment,
       access_token: accessToken,
       token_type: tokenJson.token_type ?? "Bearer",
-      expires_in: expiresIn || null,
+      expires_in: expiresIn,
       expires_at: expiresAt,
       scope: tokenJson.scope ?? null,
       raw_response: tokenJson,
