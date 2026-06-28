@@ -12,6 +12,9 @@ import {
 import {
   Activity,
   AlertTriangle,
+  Eye,
+  RotateCcw,
+  FileText,
   Building2,
   CheckCircle2,
   Clock,
@@ -294,10 +297,23 @@ export default function IbysPage() {
               : "-"}
         </td>
         <td>
-          <Link href="/admin/ibys/queue" className="ibys-table-link">
-            Detay
-          </Link>
-        </td>
+  <div className="ibys-row-actions">
+    <Link href="/admin/ibys/queue" className="ibys-row-btn">
+      <Eye size={14} />
+      Detay
+    </Link>
+
+    <Link href="/admin/ibys/queue" className="ibys-row-btn">
+      <RotateCcw size={14} />
+      Retry
+    </Link>
+
+    <Link href="/admin/ibys/logs" className="ibys-row-btn">
+      <FileText size={14} />
+      Log
+    </Link>
+  </div>
+</td>
       </tr>
     ))
   )}
@@ -671,6 +687,31 @@ export default function IbysPage() {
         font-weight: 950;
         text-decoration: none;
          }
+
+:global(.ibys-row-actions) {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+:global(.ibys-row-btn) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #ead7db;
+  border-radius: 12px;
+  padding: 7px 9px;
+  background: white;
+  color: #5a0f1f;
+  font-size: 12px;
+  font-weight: 950;
+  text-decoration: none;
+}
+
+:global(.ibys-row-btn:hover) {
+  background: #5a0f1f;
+  color: white;
+}
 
         .ibys-empty {
           min-height: 160px;
