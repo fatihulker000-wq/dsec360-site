@@ -43,24 +43,29 @@ export default function IbysQueuePage() {
   const [sendingId, setSendingId] = useState<string | null>(null);
 
   const loadQueue = async () => {
-    setLoading(true);
+  setLoading(true);
+  setMessage("⏳ Kuyruk yenileniyor...");
 
-    try {
-      const res = await fetch("/api/ibys/queue", { cache: "no-store" });
-      const json = await res.json();
+  try {
+    const res = await fetch(`/api/ibys/queue?t=${Date.now()}`, {
+      cache: "no-store",
+    });
 
-      if (!json.success) {
-        setMessage(json.error || "Kuyruk listesi alınamadı.");
-        return;
-      }
+    const json = await res.json();
 
-      setRows(json.data || []);
-    } catch {
-      setMessage("Kuyruk listesi alınırken hata oluştu.");
-    } finally {
-      setLoading(false);
+    if (!json.success) {
+      setMessage(json.error || "Kuyruk listesi alınamadı.");
+      return;
     }
-  };
+
+    setRows(json.data || []);
+    setMessage("✅ Kuyruk başarıyla yenilendi.");
+  } catch {
+    setMessage("❌ Kuyruk listesi alınırken hata oluştu.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     void loadQueue();
