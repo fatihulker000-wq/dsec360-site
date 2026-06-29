@@ -11,6 +11,70 @@ function getSupabase() {
   );
 }
 
+export async function GET(req: Request) {
+  try {
+    const cookieStore = await cookies();
+
+    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+    const adminRole = cookieStore.get("dsec_admin_role")?.value;
+    const companyIdFromCookie = String(
+      cookieStore.get("dsec_company_id")?.value || ""
+    ).trim();
+
+    if (adminAuth !== "ok" && adminRole) {
+      return NextResponse.json(
+        { success: false, error: "Yetkisiz erişim." },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+    const employeeId = String(searchParams.get("employeeId") || "").trim();
+
+    if (!employeeId) {
+      return NextResponse.json(
+        { success: false, error: "Çalışan bilgisi eksik." },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getSupabase();
+
+    let query = supabase
+      .from("health_ek2_forms")
+      .select("*")
+      .eq("employee_id", employeeId)
+      .order("exam_date", { ascending: false })
+      .limit(50);
+
+    if (adminRole === "company_admin") {
+      query = query.eq("company_id", companyIdFromCookie);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      forms: data || [],
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: e?.message || "EK-2 kayıtları alınamadı.",
+      },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const cookieStore = await cookies();

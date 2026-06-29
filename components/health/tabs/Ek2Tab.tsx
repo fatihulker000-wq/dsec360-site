@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 type FormType = "İşe Giriş" | "Periyodik";
 type FormStatus = "Taslak" | "Tamamlandı" | "İmzalandı";
@@ -206,8 +206,23 @@ type Ek2TabProps = {
   };
 };
 
+type Ek2HistoryRow = {
+  id: string;
+  form_type?: string | null;
+  status?: string | null;
+  file_no?: string | null;
+  revision_no?: string | null;
+  exam_date?: string | null;
+  next_exam_date?: string | null;
+  doctor_name?: string | null;
+  decision?: string | null;
+  created_at?: string | null;
+};
+
 export default function Ek2Tab({ employee }: Ek2TabProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("genel");
+  const [history, setHistory] = useState<Ek2HistoryRow[]>([]);
+const [historyLoading, setHistoryLoading] = useState(false);
   const [form, setForm] = useState<Ek2Form>({
   ...initialForm,
 
@@ -284,6 +299,35 @@ function newPeriodic() {
   setActiveTab("genel");
 }
 
+async function loadEk2History() {
+  if (!employee?.id) return;
+
+  setHistoryLoading(true);
+
+  try {
+    const res = await fetch(
+      `/api/admin/ek2?employeeId=${employee.id}`,
+      {
+        credentials: "include",
+      }
+    );
+
+    const json = await res.json();
+
+    if (json.success) {
+      setHistory(json.records || []);
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setHistoryLoading(false);
+  }
+}
+
+useEffect(() => {
+  loadEk2History();
+}, [employee?.id]);
+
   function saveDraft() {
     update("status", "Taslak");
     alert("EK-2 taslak olarak hazırlandı. API bağlantısı sonraki adımda eklenecek.");
@@ -316,7 +360,9 @@ function newPeriodic() {
 
   setForm(payload);
 
-  alert("EK-2 tamamlandı ve kaydedildi.");
+await loadEk2History();
+
+alert("EK-2 tamamlandı ve kaydedildi.");
 }
 
   function signForm() {
@@ -1058,6 +1104,37 @@ function newPeriodic() {
               />
             </Field>
 
+<div style={historyBoxStyle}>
+  <h3 style={{ marginTop: 0 }}>EK-2 Geçmişi</h3>
+
+  {historyLoading ? (
+    <div style={{ color: "#64748b", fontWeight: 800 }}>
+      EK-2 kayıtları yükleniyor...
+    </div>
+  ) : history.length === 0 ? (
+    <div style={{ color: "#64748b", fontWeight: 800 }}>
+      Bu çalışan için kayıtlı EK-2 bulunamadı.
+    </div>
+  ) : (
+    <div style={{ display: "grid", gap: 10 }}>
+      {history.map((item) => (
+        <div key={item.id} style={historyRowStyle}>
+          <div>
+            <strong>{item.form_type || "EK-2"}</strong>
+            <div style={{ color: "#64748b", fontSize: 13 }}>
+              Tarih: {item.exam_date || "-"} • Karar: {item.decision || "-"}
+            </div>
+          </div>
+
+          <div style={{ fontWeight: 900 }}>
+            {item.status || "-"}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
             <div className="no-print" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button type="button" onClick={printForm} style={primaryButtonStyle}>
   PDF Önizle
@@ -1640,4 +1717,21 @@ const printSignatureBoxStyle: CSSProperties = {
   padding: 12,
   fontSize: 12,
   fontWeight: 700,
+};
+const historyBoxStyle: CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 18,
+  background: "#fff",
+};
+
+const historyRowStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "center",
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  padding: 14,
+  background: "#f8fafc",
 };
