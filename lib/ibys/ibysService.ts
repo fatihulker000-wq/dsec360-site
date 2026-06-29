@@ -1,6 +1,7 @@
 import { validateIbysQueuePayload } from "@/lib/ibys/ibysValidationEngine";
 import { buildIbysPayload } from "@/lib/ibys/ibysPayloadBuilder";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { sendToCsgbIbys } from "@/lib/ibys/ibysCsgbClient";
 
 export type IbysQueueStatus =
   | "PENDING"
@@ -224,17 +225,11 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
-async function simulateIbysSend(queue: IbysQueueRow) {
-  return {
-    success: true,
-    message:
-      "Test gönderim motoru çalıştı. Gerçek İBYS endpoint bağlantısı sonraki aşamada yapılacak.",
-    queueId: queue.id,
-    moduleName: queue.module_name,
+async function sendRealIbys(queue: IbysQueueRow) {
+  return await sendToCsgbIbys({
     recordType: queue.record_type,
-    recordId: queue.record_id,
-    sentAt: new Date().toISOString(),
-  };
+    payload: (queue.payload as Record<string, unknown>) ?? {},
+  });
 }
 
 export async function sendIbysQueueItem(queueId: string) {
@@ -361,12 +356,18 @@ if (!validation.valid) {
       lastError: null,
     });
 
-    const responsePayload = await withTimeout(
-      simulateIbysSend(item),
-      SEND_TIMEOUT_MS
-    );
+   const responsePayload = await withTimeout(
+  sendRealIbys(item),
+  SEND_TIMEOUT_MS
+);
 
     const durationMs = Date.now() - startedAt;
+    if (!responsePayload.ok || responsePayload.response?.sonuc !== "1") {
+  throw new Error(
+    responsePayload.response?.aciklama ||
+      `İBYS gönderimi başarısız. HTTP: ${responsePayload.httpStatus}`
+  );
+}
 
     await updateIbysQueueStatus({
       queueId,
@@ -386,7 +387,7 @@ if (!validation.valid) {
       status: "SUCCESS",
       requestPayload: item.payload ?? {},
       responsePayload,
-      responseCode: "SIMULATED_SENT",
+     responseCode: String(responsePayload.response?.sonuc || responsePayload.httpStatus),
       durationMs,
       createdBy: null,
     });

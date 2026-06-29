@@ -9,6 +9,27 @@ type Props = {
 };
 
 type Suitability = "Uygun" | "Kısıtlı Uygun" | "Uygun Değil";
+function normalizeExamType(value: string) {
+  if (value === "İşe Giriş Muayenesi") return "ISE_GIRIS_MUAYENESI";
+  if (value === "Periyodik Muayene") return "PERIYODIK_MUAYENE";
+  if (value === "İş Değişikliği Muayenesi") return "IS_DEGISIKLIGI";
+  if (value === "İş Kazası Sonrası Muayene") return "IS_KAZASI_SONRASI";
+  if (value === "İşe Dönüş Muayenesi") return "ISE_DONUS";
+  if (value === "Kontrol Muayenesi") return "KONTROL_MUAYENESI";
+
+  return value;
+}
+
+function displayExamType(value: string) {
+  if (value === "ISE_GIRIS_MUAYENESI") return "İşe Giriş Muayenesi";
+  if (value === "PERIYODIK_MUAYENE") return "Periyodik Muayene";
+  if (value === "IS_DEGISIKLIGI") return "İş Değişikliği Muayenesi";
+  if (value === "IS_KAZASI_SONRASI") return "İş Kazası Sonrası Muayene";
+  if (value === "ISE_DONUS") return "İşe Dönüş Muayenesi";
+  if (value === "KONTROL_MUAYENESI") return "Kontrol Muayenesi";
+
+  return value || "Periyodik Muayene";
+}
 
 export default function ExaminationWorkspace({ employee }: Props) {
   const [examType, setExamType] = useState("Periyodik Muayene");
@@ -102,7 +123,7 @@ async function saveExamination() {
         companyId: employee.company_id || employee.firm_id,
         employeeId: employee.id,
 
-        examType,
+        examType: normalizeExamType(examType),
         examDate,
         nextExamDate,
 
@@ -176,7 +197,7 @@ useEffect(() => {
 
       const exam = json.examination;
 
-      setExamType(exam.exam_type || "Periyodik Muayene");
+      setExamType(displayExamType(exam.exam_type || "Periyodik Muayene"));
       setExamDate(exam.exam_date || "");
       setNextExamDate(exam.next_exam_date || "");
 

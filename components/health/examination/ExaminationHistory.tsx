@@ -142,7 +142,7 @@ export default function ExaminationHistory({
                   alignItems: "center",
                 }}
               >
-                <strong>{item.exam_type || "Muayene"}</strong>
+                <strong>{formatExamType(item.exam_type)}</strong>
 
                 <span
                   style={{
@@ -234,6 +234,31 @@ export default function ExaminationHistory({
       )}
     </section>
   );
+}
+
+function formatExamType(value?: string | null) {
+  switch (value) {
+    case "ISE_GIRIS_MUAYENESI":
+      return "İşe Giriş Muayenesi";
+
+    case "PERIYODIK_MUAYENE":
+      return "Periyodik Muayene";
+
+    case "IS_DEGISIKLIGI":
+      return "İş Değişikliği Muayenesi";
+
+    case "IS_KAZASI_SONRASI":
+      return "İş Kazası Sonrası Muayene";
+
+    case "ISE_DONUS":
+      return "İşe Dönüş Muayenesi";
+
+    case "KONTROL_MUAYENESI":
+      return "Kontrol Muayenesi";
+
+    default:
+      return value || "Muayene";
+  }
 }
 
 function formatDate(value?: string | null) {
