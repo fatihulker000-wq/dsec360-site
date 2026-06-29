@@ -101,3 +101,83 @@ on public.health_examinations
 for each row
 
 execute function public.set_updated_at();
+
+-- ===========================================================
+-- D-SEC HEALTH MODULE V1
+-- EK-2 FORMS
+-- ===========================================================
+
+create table if not exists public.health_ek2_forms (
+
+    id uuid primary key default gen_random_uuid(),
+
+    company_id uuid not null
+        references public.firms(id)
+        on delete cascade,
+
+    employee_id uuid not null
+        references public.employees(id)
+        on delete cascade,
+
+    examination_id uuid
+        references public.health_examinations(id)
+        on delete set null,
+
+    form_type text not null default 'İşe Giriş',
+    status text not null default 'Taslak',
+
+    file_no text,
+    revision_no text default '0',
+
+    exam_date date,
+    next_exam_date date,
+    doctor_name text,
+
+    employee_name text,
+    identity_number text,
+    birth_date date,
+    gender text,
+    blood_group text,
+    phone text,
+
+    company_name text,
+    workplace_address text,
+    job_title text,
+    department text,
+    start_date date,
+    danger_class text,
+    nace_code text,
+
+    decision text,
+    doctor_opinion text,
+    signature_note text,
+
+    raw_json jsonb,
+
+    is_active boolean default true,
+    is_deleted boolean default false,
+
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
+);
+
+create index if not exists idx_health_ek2_employee
+on public.health_ek2_forms(employee_id);
+
+create index if not exists idx_health_ek2_company
+on public.health_ek2_forms(company_id);
+
+create index if not exists idx_health_ek2_exam_date
+on public.health_ek2_forms(exam_date);
+
+create index if not exists idx_health_ek2_examination
+on public.health_ek2_forms(examination_id);
+
+drop trigger if exists trg_health_ek2_updated
+on public.health_ek2_forms;
+
+create trigger trg_health_ek2_updated
+before update
+on public.health_ek2_forms
+for each row
+execute function public.set_updated_at();
