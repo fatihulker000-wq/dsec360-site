@@ -47,6 +47,23 @@ export default function DocumentsTab({ employee }: Props) {
     if (employee?.id) void loadEk2Files();
   }, [employee?.id]);
 
+  function viewEk2(id: string) {
+  window.open(`/api/admin/ek2/${id}`, "_blank");
+}
+
+function openPdf(id: string) {
+  window.open(`/api/admin/ek2/${id}/pdf`, "_blank");
+}
+
+function printEk2(id: string) {
+  const win = window.open(`/api/admin/ek2/${id}/pdf`, "_blank");
+  if (win) {
+    setTimeout(() => {
+      win.print();
+    }, 1000);
+  }
+}
+
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <section style={cardStyle}>
@@ -83,17 +100,29 @@ export default function DocumentsTab({ employee }: Props) {
                 </div>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button type="button" style={primaryButtonStyle}>
-                    Görüntüle
-                  </button>
+                 <button
+  type="button"
+  onClick={() => viewEk2(item.id)}
+  style={primaryButtonStyle}
+>
+  Görüntüle
+</button>
 
-                  <button type="button" style={secondaryButtonStyle}>
-                    PDF
-                  </button>
+<button
+  type="button"
+  onClick={() => openPdf(item.id)}
+  style={secondaryButtonStyle}
+>
+  PDF
+</button>
 
-                  <button type="button" style={secondaryButtonStyle}>
-                    Yazdır
-                  </button>
+<button
+  type="button"
+  onClick={() => printEk2(item.id)}
+  style={secondaryButtonStyle}
+>
+  Yazdır
+</button>
                 </div>
               </div>
             ))}

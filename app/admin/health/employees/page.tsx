@@ -288,12 +288,24 @@ export default function HealthEmployeesPage() {
 />
 
 
+<Badge text="-" tone="neutral" />
+
 <Badge
-  text={employee.last_examination_decision || "Normal"}
+  text={
+    (employee as any).last_ek2_status ||
+    employee.last_examination_decision ||
+    "-"
+  }
   tone={
-    employee.last_examination_decision === "Uygun Değil"
+    ((employee as any).last_ek2_status || employee.last_examination_decision) ===
+      "Çalışamaz" ||
+    ((employee as any).last_ek2_status || employee.last_examination_decision) ===
+      "Uygun Değil"
       ? "bad"
-      : employee.last_examination_decision === "Kısıtlı Uygun"
+      : ((employee as any).last_ek2_status || employee.last_examination_decision) ===
+          "Şartlı Çalışabilir" ||
+        ((employee as any).last_ek2_status || employee.last_examination_decision) ===
+          "Kısıtlı Uygun"
       ? "warning"
       : "good"
   }
