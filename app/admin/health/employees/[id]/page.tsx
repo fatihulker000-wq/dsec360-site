@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import DocumentsTab from "@/components/health/tabs/DocumentsTab";
 import EmployeeHealthTabs from "@/components/health/EmployeeHealthTabs";
 import GeneralTab from "@/components/health/tabs/GeneralTab";
 import PrescriptionTab from "@/components/health/tabs/PrescriptionTab";
@@ -149,7 +150,11 @@ export default function HealthEmployeeDetailPage() {
   <ExaminationTab employee={employee as any} />
 )}
 
-{!["Genel", "EK-2", "Reçeteler", "Muayeneler"].includes(activeTab) && (
+{activeTab === "Dosyalar" && (
+  <DocumentsTab employee={employee as any} />
+)}
+
+{!["Genel", "EK-2", "Reçeteler", "Muayeneler", "Dosyalar"].includes(activeTab) && (
   <div
     style={{
       background: "#fff",
@@ -169,44 +174,52 @@ export default function HealthEmployeeDetailPage() {
               </div>
 
               <aside
-                style={{
-                  background: "#fff",
-                  borderRadius: 20,
-                  border: "1px solid #e5e7eb",
-                  padding: 22,
-                }}
-              >
-                <h3 style={{ marginTop: 0 }}>Sağlık Özeti</h3>
+  style={{
+    background: "#fff",
+    borderRadius: 20,
+    border: "1px solid #e5e7eb",
+    padding: 22,
+  }}
+>
+  <h3 style={{ marginTop: 0 }}>Sağlık Özeti</h3>
 
-                <div style={{ display: "grid", gap: 12 }}>
-                  <SummaryRow label="E-posta" value={employee.email || "-"} />
-                  <SummaryRow label="İşe Giriş" value={employee.start_date || "-"} />
-                  <SummaryRow
-  label="Muayene Sayısı"
-  value={String(employee.examination_count || 0)}
-/>
+  <div style={{ display: "grid", gap: 12 }}>
+    <SummaryRow label="E-posta" value={employee.email || "-"} />
 
-<SummaryRow
-  label="Son Muayene"
-  value={employee.last_examination_date || "-"}
-/>
+    <SummaryRow label="İşe Giriş" value={employee.start_date || "-"} />
 
-<SummaryRow
-  label="Sonraki Muayene"
-  value={employee.next_examination_date || "-"}
-/>
+    <SummaryRow
+      label="Muayene Sayısı"
+      value={String(employee.examination_count || 0)}
+    />
 
-<SummaryRow
-  label="Son EK-2"
-  value={(employee as any).last_ek2 || (employee as any).last_ek2_date || "-"}
-/>
-<SummaryRow label="Son Reçete" value="-" />
+    <SummaryRow
+      label="Son Muayene"
+      value={employee.last_examination_date || "-"}
+    />
 
-<SummaryRow
-  label="Risk"
-  value={employee.last_examination_decision || "Normal"}
-/>                </div>
-              </aside>
+    <SummaryRow
+      label="Sonraki Muayene"
+      value={employee.next_examination_date || "-"}
+    />
+
+    <SummaryRow
+      label="Son EK-2"
+      value={(employee as any).last_ek2 || (employee as any).last_ek2_date || "-"}
+    />
+
+    <SummaryRow label="Son Reçete" value="-" />
+
+    <SummaryRow
+      label="Risk"
+      value={
+        (employee as any).last_ek2_status ||
+        employee.last_examination_decision ||
+        "-"
+      }
+    />
+  </div>
+</aside>
             </section>
           </>
         )}

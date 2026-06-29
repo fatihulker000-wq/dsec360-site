@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-
+import Ek2OfficialPrint from "../ek2/Ek2OfficialPrint"
 import OfficialEk2Print from "./OfficialEk2Print";
 import AudiometrySection from "./AudiometrySection";
 import SftSection from "./SftSection";
