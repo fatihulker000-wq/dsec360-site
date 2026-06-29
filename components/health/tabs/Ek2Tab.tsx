@@ -354,9 +354,13 @@ useEffect(() => {
   const json = await res.json();
 
   if (!res.ok || !json.success) {
-    alert(json.error || "EK-2 kaydedilemedi.");
-    return;
-  }
+  alert(
+    `${json.error || "EK-2 kaydedilemedi."}\n\nDetay: ${
+      json.detail || json.code || json.hint || "Detay yok"
+    }`
+  );
+  return;
+}
 
   setForm(payload);
 
