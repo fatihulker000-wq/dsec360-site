@@ -315,7 +315,7 @@ async function loadEk2History() {
     const json = await res.json();
 
     if (json.success) {
-      setHistory(json.records || []);
+      setHistory(json.forms || []);
     }
   } catch (err) {
     console.error(err);
