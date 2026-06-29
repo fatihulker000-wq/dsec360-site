@@ -191,10 +191,17 @@ export async function POST(req: Request) {
       .single();
 
     if (ek2Error) {
-      ek2Warning = ek2Error.message;
-    } else {
-      ek2Form = insertedEk2;
-    }
+  return NextResponse.json(
+    {
+      success: false,
+      error: "EK-2 form kaydı oluşturulamadı.",
+      detail: ek2Error.message,
+    },
+    { status: 500 }
+  );
+}
+
+ek2Form = insertedEk2;
 
     return NextResponse.json({
       success: true,
