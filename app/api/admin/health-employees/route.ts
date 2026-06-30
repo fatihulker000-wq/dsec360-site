@@ -79,12 +79,12 @@ function normalizeEmployee(
     id: employeeId,
     full_name: String(u.full_name || "Çalışan").trim(),
     email: String(u.email || "").trim(),
-    phone: String(u.phone || "").trim(),
-identity_number: String(u.identity_number || "").trim(),
-birth_date: String(u.birth_date || "").trim(),
-gender: String(u.gender || "").trim(),
-blood_group: String(u.blood_group || "").trim(),
-department: String(u.department || "").trim(),
+    phone: String((u as any).phone || (u as any).gsm || "").trim(),
+    identity_number: String((u as any).identity_number || (u as any).tc_no || (u as any).tckn || "").trim(),
+    birth_date: String((u as any).birth_date || (u as any).date_of_birth || "").trim(),
+    gender: String((u as any).gender || (u as any).cinsiyet || "").trim(),
+    blood_group: String((u as any).blood_group || (u as any).bloodGroup || "").trim(),
+    department: String((u as any).department || (u as any).department_name || "").trim(),
     company_id: companyId,
     firm_id: companyId,
     company_name: companyMap[companyId] || "Firma Yok",
@@ -136,7 +136,7 @@ export async function GET() {
 
     let usersQuery = supabase
       .from("users")
-      .select("id, full_name, email, company_id, job_title, start_date")
+      .select("*")
       .order("full_name", { ascending: true })
       .limit(200);
 
@@ -151,7 +151,7 @@ export async function GET() {
     } else {
       let employeesQuery = supabase
         .from("employees")
-       .select("id, full_name, email, firm_id, job_title, start_date")
+       .select("*")
         .order("full_name", { ascending: true })
         .limit(200);
 
