@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import QRCode from "qrcode";
+
+export const runtime = "nodejs";
 
 function getSupabase() {
   return createClient(
@@ -45,10 +46,7 @@ export async function GET(
 
   const verificationCode = `DSEC-EK2-${String(data.id).slice(0, 8).toUpperCase()}`;
    const verifyUrl = `https://dsec360.com/verify/ek2/${data.id}`;
-   const qrCode = await QRCode.toDataURL(verifyUrl, {
-  width: 180,
-  margin: 1,
-});
+  
 
   const html = `
 <!DOCTYPE html>
