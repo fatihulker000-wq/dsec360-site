@@ -48,11 +48,11 @@ export default function DocumentsTab({ employee }: Props) {
   }, [employee?.id]);
 
   function viewEk2(id: string) {
-  window.open(`/api/admin/ek2/${id}`, "_blank");
+  window.open(`/api/admin/ek2/${id}/pdf`, "_blank");
 }
 
 function openPdf(id: string) {
-  window.open(`/api/admin/ek2/${id}/pdf`, "_blank");
+  window.open(`/api/admin/ek2/${id}/download`, "_blank");
 }
 
 function printEk2(id: string) {
