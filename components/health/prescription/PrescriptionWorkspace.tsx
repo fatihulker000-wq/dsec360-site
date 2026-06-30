@@ -56,6 +56,8 @@ const [medulaResponse, setMedulaResponse] = useState("");
   const [items, setItems] = useState<PrescriptionItem[]>([{ ...emptyItem }]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [icdResults, setIcdResults] = useState<any[]>([]);
+const [showIcdList, setShowIcdList] = useState(false);
 
   const updateItem = <K extends keyof PrescriptionItem>(
     index: number,
@@ -117,6 +119,29 @@ async function loadPrescription(id: string) {
     }
   } catch {
     alert("Reçete yüklenemedi.");
+  }
+}
+
+async function searchIcd(value: string) {
+  setDiagnosisCode(value);
+
+  if (value.length < 2) {
+    setIcdResults([]);
+    setShowIcdList(false);
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `/api/admin/icd10/search?q=${encodeURIComponent(value)}`
+    );
+
+    const json = await res.json();
+
+    setIcdResults(json.items || []);
+    setShowIcdList(true);
+  } catch {
+    setIcdResults([]);
   }
 }
 
@@ -191,12 +216,45 @@ items,
         <div style={formGridStyle}>
           <Field label="ICD-10 Kodu">
             <input
-              value={diagnosisCode}
-              onChange={(e) => setDiagnosisCode(e.target.value)}
+  value={diagnosisCode}
+  onChange={(e) => searchIcd(e.target.value)}
               placeholder="Örn: M54.5"
               style={inputStyle}
             />
           </Field>
+
+{showIcdList && icdResults.length > 0 && (
+  <div
+    style={{
+      border: "1px solid #ddd",
+      borderRadius: 8,
+      maxHeight: 220,
+      overflow: "auto",
+      background: "#fff",
+      marginTop: 6,
+    }}
+  >
+    {icdResults.map((item: any) => (
+      <div
+        key={item.code}
+        onClick={() => {
+          setDiagnosisCode(item.code);
+          setDiagnosisName(item.name);
+          setShowIcdList(false);
+        }}
+        style={{
+          padding: 10,
+          cursor: "pointer",
+          borderBottom: "1px solid #eee",
+        }}
+      >
+        <strong>{item.code}</strong>
+        <br />
+        {item.name}
+      </div>
+    ))}
+  </div>
+)}
 
           <Field label="Tanı Adı">
             <input
