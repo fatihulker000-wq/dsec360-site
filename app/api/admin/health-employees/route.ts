@@ -136,7 +136,7 @@ export async function GET() {
 
     let usersQuery = supabase
       .from("users")
-      .select("id, full_name, email, phone, identity_number, birth_date, gender, blood_group, company_id, job_title, department, start_date")
+      .select("id, full_name, email, company_id, job_title, start_date")
       .order("full_name", { ascending: true })
       .limit(200);
 
@@ -151,7 +151,7 @@ export async function GET() {
     } else {
       let employeesQuery = supabase
         .from("employees")
-        .select("id, full_name, email, phone, identity_number, birth_date, gender, blood_group, firm_id, job_title, department, start_date")
+       .select("id, full_name, email, firm_id, job_title, start_date")
         .order("full_name", { ascending: true })
         .limit(200);
 
