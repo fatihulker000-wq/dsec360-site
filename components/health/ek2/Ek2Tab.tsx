@@ -171,7 +171,7 @@ export default function Ek2Tab({
     jobTitle: employee?.job_title ?? "",
     startDate: employee?.start_date ?? "",
   });
-
+const [savedEk2Id, setSavedEk2Id] = useState<string>("");
   const warnings = useMemo(() => {
 
     const bmi = calculateBmi(
@@ -241,9 +241,13 @@ export default function Ek2Tab({
     return;
   }
 
-  setForm(payload);
+setForm(payload);
 
-  alert("EK-2 tamamlandı ve kaydedildi.");
+if (json.ek2?.id) {
+  setSavedEk2Id(json.ek2.id);
+}
+
+alert("EK-2 tamamlandı ve kaydedildi.");
 }
 
   function signForm() {
@@ -252,6 +256,15 @@ export default function Ek2Tab({
       status: "İmzalandı",
     }));
   }
+
+function openOfficialPdf() {
+  if (!savedEk2Id) {
+    alert("Önce EK-2 formunu Tamamla butonu ile kaydedin.");
+    return;
+  }
+
+  window.open(`/api/admin/ek2/${savedEk2Id}/download`, "_blank");
+}
 
   return (
     <main
@@ -344,13 +357,9 @@ export default function Ek2Tab({
           İmzala
         </button>
 
-        <button
-          onClick={() =>
-            window.print()
-          }
-        >
-          Yazdır
-        </button>
+        <button onClick={openOfficialPdf}>
+  Yazdır / PDF
+</button>
       </section>
         <section
         style={{
@@ -426,16 +435,16 @@ export default function Ek2Tab({
         />
 
         <PdfPreviewSection
-          employeeName={form.employeeName}
-          companyName={form.companyName}
-          doctorName={form.doctorName}
-          examDate={form.examDate}
-          decision={form.decision}
-          formType={form.formType}
-          onPreview={() => {}}
-          onPdf={() => {}}
-          onPrint={() => window.print()}
-        />
+  employeeName={form.employeeName}
+  companyName={form.companyName}
+  doctorName={form.doctorName}
+  examDate={form.examDate}
+  decision={form.decision}
+  formType={form.formType}
+  onPreview={openOfficialPdf}
+  onPdf={openOfficialPdf}
+  onPrint={openOfficialPdf}
+/>
 
         <div className="ek2-print-only">
   <OfficialEk2Print
