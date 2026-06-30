@@ -155,22 +155,98 @@ export default function Ek2Tab({
 }: Props) {
 
   const [form, setForm] = useState<Ek2Form>({
-    ...initialForm,
+  ...initialForm,
 
-    employeeId: employee?.id ?? "",
-    employeeName: employee?.full_name ?? "",
-    identityNumber: employee?.identity_number ?? "",
-    birthDate: employee?.birth_date ?? "",
-    gender: employee?.gender ?? "",
-    bloodGroup: employee?.blood_group ?? "",
-    phone: employee?.phone ?? "",
+  employeeId: employee?.id ?? employee?.employee_id ?? "",
 
-    companyId: employee?.company_id ?? "",
-    companyName: employee?.company_name ?? "",
+  employeeName:
+    employee?.full_name ??
+    employee?.name ??
+    employee?.employee_name ??
+    "",
 
-    jobTitle: employee?.job_title ?? "",
-    startDate: employee?.start_date ?? "",
-  });
+  identityNumber:
+    employee?.identity_number ??
+    employee?.tc_no ??
+    employee?.national_id ??
+    employee?.tckn ??
+    "",
+
+  birthDate:
+    employee?.birth_date ??
+    employee?.date_of_birth ??
+    "",
+
+  gender:
+    employee?.gender ??
+    employee?.cinsiyet ??
+    "",
+
+  bloodGroup:
+    employee?.blood_group ??
+    employee?.bloodGroup ??
+    employee?.kan_grubu ??
+    "",
+
+  phone:
+    employee?.phone ??
+    employee?.phone_number ??
+    employee?.gsm ??
+    employee?.mobile_phone ??
+    "",
+
+  companyId:
+    employee?.company_id ??
+    employee?.firm_id ??
+    "",
+
+  companyName:
+    employee?.company_name ??
+    employee?.firm_name ??
+    employee?.firma_adi ??
+    "",
+
+  workplaceAddress:
+    employee?.workplace_address ??
+    employee?.company_address ??
+    employee?.firm_address ??
+    "",
+
+  department:
+    employee?.department ??
+    employee?.department_name ??
+    employee?.birim ??
+    "",
+
+  jobTitle:
+    employee?.job_title ??
+    employee?.title ??
+    employee?.position ??
+    employee?.occupation ??
+    employee?.gorev ??
+    employee?.meslek ??
+    "",
+
+  startDate:
+    employee?.start_date ??
+    employee?.employment_start_date ??
+    employee?.work_start_date ??
+    employee?.ise_giris_tarihi ??
+    "",
+
+  dangerClass:
+    employee?.danger_class ??
+    employee?.company_danger_class ??
+    employee?.tehlike_sinifi ??
+    "",
+
+  naceCode:
+    employee?.nace_code ??
+    employee?.company_nace_code ??
+    employee?.nace ??
+    "",
+});
+
 const [savedEk2Id, setSavedEk2Id] = useState<string>("");
   const warnings = useMemo(() => {
 

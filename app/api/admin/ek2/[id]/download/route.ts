@@ -17,8 +17,19 @@ function v(x: any) {
 }
 
 function d(x: any) {
-  if (!x) return "-";
-  try { return new Date(x).toLocaleDateString("tr-TR"); } catch { return String(x); }
+  if (!x || x === "-") return "-";
+
+  const s = String(x).trim();
+
+  if (!s || s === "gg.aa.yyyy") return "-";
+
+  const date = new Date(s);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return date.toLocaleDateString("tr-TR");
 }
 
 function pick(...arr: any[]) {
