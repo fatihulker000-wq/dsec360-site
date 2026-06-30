@@ -117,11 +117,25 @@ export async function POST(req: Request) {
       );
     }
 
+const today = new Date().toISOString().slice(0, 10);
+
+const examDate = String(
+  body.examDate || body.exam_date || today
+).trim();
+
+const nextExamDate = String(
+  body.nextExamDate || body.next_exam_date || ""
+).trim();
+
    const examPayload = {
   employee_id: employeeId,
   company_id: companyId,
-  exam_date: body.examDate || body.exam_date || null,
-  next_exam_date: body.nextExamDate || body.next_exam_date || null,
+  employee_name: body.employeeName || body.employee_name || null,
+doctor_name: body.doctorName || body.doctor_name || null,
+created_at: new Date().toISOString(),
+updated_at: new Date().toISOString(),
+  exam_date: examDate,
+next_exam_date: nextExamDate || null,
   decision: body.decision || null,
   exam_type:
   body.formType === "Periyodik"
@@ -156,8 +170,8 @@ export async function POST(req: Request) {
       file_no: body.fileNo || body.file_no || null,
       revision_no: body.revisionNo || body.revision_no || "0",
 
-      exam_date: body.examDate || body.exam_date || null,
-      next_exam_date: body.nextExamDate || body.next_exam_date || null,
+     exam_date: examDate,
+next_exam_date: nextExamDate || null,
       doctor_name: body.doctorName || body.doctor_name || null,
 
       employee_name: body.employeeName || body.employee_name || null,
