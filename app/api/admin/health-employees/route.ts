@@ -13,10 +13,16 @@ type EmployeeLikeRow = {
   id: string;
   full_name?: string | null;
   email?: string | null;
+  phone?: string | null;
+  identity_number?: string | null;
+  birth_date?: string | null;
+  gender?: string | null;
+  blood_group?: string | null;
   company_id?: string | null;
   firm_id?: string | null;
   job_title?: string | null;
   jobTitle?: string | null;
+  department?: string | null;
   start_date?: string | null;
   startDate?: string | null;
 };
@@ -73,6 +79,12 @@ function normalizeEmployee(
     id: employeeId,
     full_name: String(u.full_name || "Çalışan").trim(),
     email: String(u.email || "").trim(),
+    phone: String(u.phone || "").trim(),
+identity_number: String(u.identity_number || "").trim(),
+birth_date: String(u.birth_date || "").trim(),
+gender: String(u.gender || "").trim(),
+blood_group: String(u.blood_group || "").trim(),
+department: String(u.department || "").trim(),
     company_id: companyId,
     firm_id: companyId,
     company_name: companyMap[companyId] || "Firma Yok",
@@ -124,7 +136,7 @@ export async function GET() {
 
     let usersQuery = supabase
       .from("users")
-      .select("id, full_name, email, company_id, job_title, start_date")
+      .select("id, full_name, email, phone, identity_number, birth_date, gender, blood_group, company_id, job_title, department, start_date")
       .order("full_name", { ascending: true })
       .limit(200);
 
@@ -139,7 +151,7 @@ export async function GET() {
     } else {
       let employeesQuery = supabase
         .from("employees")
-        .select("id, full_name, email, firm_id, job_title, start_date")
+        .select("id, full_name, email, phone, identity_number, birth_date, gender, blood_group, firm_id, job_title, department, start_date")
         .order("full_name", { ascending: true })
         .limit(200);
 
