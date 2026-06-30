@@ -47,6 +47,12 @@ export default function PrescriptionWorkspace({ employee }: Props) {
   const [diagnosisCode, setDiagnosisCode] = useState("");
   const [diagnosisName, setDiagnosisName] = useState("");
   const [notes, setNotes] = useState("");
+  const [ePrescriptionStatus, setEPrescriptionStatus] = useState("NOT_SENT");
+const [ePrescriptionNo, setEPrescriptionNo] = useState("");
+const [medulaTrackingNo, setMedulaTrackingNo] = useState("");
+const [doctorIdentityNumber, setDoctorIdentityNumber] = useState("");
+const [doctorDiplomaNo, setDoctorDiplomaNo] = useState("");
+const [medulaResponse, setMedulaResponse] = useState("");
   const [items, setItems] = useState<PrescriptionItem[]>([{ ...emptyItem }]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -133,7 +139,13 @@ async function loadPrescription(id: string) {
           diagnosisName,
           notes,
           status: "draft",
-          items,
+ePrescriptionStatus,
+ePrescriptionNo,
+medulaTrackingNo,
+doctorIdentityNumber,
+doctorDiplomaNo,
+medulaResponse,
+items,
         }),
       });
 
@@ -196,6 +208,50 @@ async function loadPrescription(id: string) {
           </Field>
         </div>
       </section>
+
+<section style={cardStyle}>
+  <h3 style={sectionTitleStyle}>e-Reçete / MEDULA Bilgileri</h3>
+
+  <div style={formGridStyle}>
+    <Field label="e-Reçete Durumu">
+      <select
+        value={ePrescriptionStatus}
+        onChange={(e) => setEPrescriptionStatus(e.target.value)}
+        style={inputStyle}
+      >
+        <option value="NOT_SENT">Gönderilmedi</option>
+        <option value="READY">e-Reçeteye Hazır</option>
+        <option value="SENT">e-Reçete Gönderildi</option>
+        <option value="ERROR">e-Reçete Hatalı</option>
+        <option value="CANCELLED">İptal</option>
+      </select>
+    </Field>
+
+    <Field label="e-Reçete No">
+      <input value={ePrescriptionNo} onChange={(e) => setEPrescriptionNo(e.target.value)} style={inputStyle} />
+    </Field>
+
+    <Field label="MEDULA Takip No">
+      <input value={medulaTrackingNo} onChange={(e) => setMedulaTrackingNo(e.target.value)} style={inputStyle} />
+    </Field>
+
+    <Field label="Hekim T.C.">
+      <input value={doctorIdentityNumber} onChange={(e) => setDoctorIdentityNumber(e.target.value)} style={inputStyle} />
+    </Field>
+
+    <Field label="Hekim Diploma No">
+      <input value={doctorDiplomaNo} onChange={(e) => setDoctorDiplomaNo(e.target.value)} style={inputStyle} />
+    </Field>
+  </div>
+
+  <Field label="MEDULA Yanıt / Gönderim Notu">
+    <textarea
+      value={medulaResponse}
+      onChange={(e) => setMedulaResponse(e.target.value)}
+      style={textareaStyle}
+    />
+  </Field>
+</section>
 
       <section style={cardStyle}>
         <div style={headerRowStyle}>
