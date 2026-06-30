@@ -47,8 +47,8 @@ export default function DocumentsTab({ employee }: Props) {
     if (employee?.id) void loadEk2Files();
   }, [employee?.id]);
 
-  function viewEk2(id: string) {
-  window.open(`/api/admin/ek2/${id}/pdf`, "_blank");
+ function viewEk2(id: string) {
+  window.open(`/api/admin/ek2/${id}/download`, "_blank");
 }
 
 function openPdf(id: string) {

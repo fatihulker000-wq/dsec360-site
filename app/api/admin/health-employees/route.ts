@@ -134,46 +134,31 @@ export async function GET() {
 
     let rows: EmployeeLikeRow[] = [];
 
-    let usersQuery = supabase
-      .from("users")
-      .select("*")
-      .order("full_name", { ascending: true })
-      .limit(200);
+    let employeesQuery = supabase
+  .from("employees")
+  .select("*")
+  .order("full_name", { ascending: true })
+  .limit(200);
 
-    if (adminRole === "company_admin") {
-      usersQuery = usersQuery.eq("company_id", companyIdFromCookie);
-    }
+if (adminRole === "company_admin") {
+  employeesQuery = employeesQuery.eq("firm_id", companyIdFromCookie);
+}
 
-    const { data: users } = await usersQuery.returns<EmployeeLikeRow[]>();
+const { data: employees, error: employeesError } =
+  await employeesQuery.returns<EmployeeLikeRow[]>();
 
-    if (users && users.length > 0) {
-      rows = users;
-    } else {
-      let employeesQuery = supabase
-        .from("employees")
-       .select("*")
-        .order("full_name", { ascending: true })
-        .limit(200);
+if (employeesError) {
+  return NextResponse.json(
+    {
+      error: "Çalışanlar alınamadı.",
+      detail: employeesError.message,
+    },
+    { status: 500 }
+  );
+}
 
-      if (adminRole === "company_admin") {
-        employeesQuery = employeesQuery.eq("firm_id", companyIdFromCookie);
-      }
-
-      const { data: employees, error: employeesError } =
-        await employeesQuery.returns<EmployeeLikeRow[]>();
-
-      if (employeesError) {
-        return NextResponse.json(
-          {
-            error: "Çalışanlar alınamadı.",
-            detail: employeesError.message,
-          },
-          { status: 500 }
-        );
-      }
 
       rows = employees || [];
-    }
 
     const companyIds = Array.from(
       new Set(
@@ -296,12 +281,14 @@ const isEk2 =
   }
 }
     }
-    const employees = rows.map((u) => normalizeEmployee(u, companyMap, examMap));
+    const normalizedEmployees = rows.map((u) =>
+  normalizeEmployee(u, companyMap, examMap)
+);
 
     return NextResponse.json({
       success: true,
-      employees,
-      source: users && users.length > 0 ? "users" : "employees",
+      employees: normalizedEmployees,
+      source: "employees",
     });
   } catch (e: any) {
     return NextResponse.json(
