@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
+import QRCode from "qrcode";
 import { NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
 
 function getSupabase() {
   return createClient(
@@ -57,16 +61,31 @@ export async function GET(
     return new NextResponse("EK-2 bulunamadı.", { status: 404 });
   }
 
-  const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([595.28, 841.89]); // A4
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+const verificationCode = `DSEC-EK2-${String(data.id).slice(0, 8).toUpperCase()}`; 
+const verifyUrl = `https://dsec360.com/verify/ek2/${data.id}`; 
+const pdfDoc = await PDFDocument.create(); pdfDoc.registerFontkit(fontkit); 
+const qrData = await QRCode.toDataURL(verifyUrl); 
+const qrImage = await pdfDoc.embedPng(qrData);
+
+
+const regularFontBytes = await fs.readFile(
+  path.join(process.cwd(), "public", "fonts", "NotoSans-Regular.ttf")
+);
+
+const boldFontBytes = await fs.readFile(
+  path.join(process.cwd(), "public", "fonts", "NotoSans-Bold.ttf")
+);
+
+const font = await pdfDoc.embedFont(regularFontBytes);
+const bold = await pdfDoc.embedFont(boldFontBytes);
+
+const page = pdfDoc.addPage([595.28, 841.89]);
 
   const width = page.getWidth();
   let y = 800;
 
   function text(t: string, x: number, size = 10, isBold = false) {
-  page.drawText(safePdfText(t), {
+  page.drawText(t, {
       x,
       y,
       size,
@@ -100,8 +119,21 @@ export async function GET(
   });
 
   text("D-SEC360", 50, 18, true);
-  y -= 22;
-  text("EK-2 İŞE GİRİŞ / PERİYODİK MUAYENE FORMU", 150, 14, true);
+y -= 22;
+
+text("EK-2 İŞE GİRİŞ / PERİYODİK MUAYENE FORMU", 150, 14, true);
+
+  page.drawImage(qrImage, {
+  x: 470,
+  y: 730,
+  width: 70,
+  height: 70,
+});
+
+text("Belge No: " + verificationCode, 330, 16);
+y -= 18;
+text("Doğrulama: " + verifyUrl, 330, 8);
+y += 18;
   y -= 35;
 
   line(y);
@@ -166,9 +198,9 @@ export async function GET(
   });
 
   y -= 15;
-  page.drawText(safePdfText("Çalışan İmzası"), { x: 90, y, size: 9, font });
-page.drawText(safePdfText("İşveren / Yetkili"), { x: 260, y, size: 9, font });
-page.drawText(safePdfText("İşyeri Hekimi"), { x: 435, y, size: 9, font });
+ page.drawText("Çalışan İmzası", { x: 90, y, size: 9, font });
+page.drawText("İşveren / Yetkili", { x: 260, y, size: 9, font });
+page.drawText("İşyeri Hekimi", { x: 435, y, size: 9, font });
 
   const pdfBytes = await pdfDoc.save();
 const pdfBuffer = Buffer.from(pdfBytes);
