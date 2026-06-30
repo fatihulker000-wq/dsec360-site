@@ -56,7 +56,7 @@ function openPdf(id: string) {
 }
 
 function printEk2(id: string) {
-  const win = window.open(`/api/admin/ek2/${id}/pdf`, "_blank");
+  const win = window.open(`/api/admin/ek2/${id}/download`, "_blank");
   if (win) {
     setTimeout(() => {
       win.print();
