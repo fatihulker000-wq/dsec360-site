@@ -22,6 +22,23 @@ function d(value: any) {
   }
 }
 
+function safePdfText(value: any) {
+  return String(value ?? "-")
+    .replace(/İ/g, "I")
+    .replace(/İ/g, "I")
+    .replace(/ı/g, "i")
+    .replace(/Ş/g, "S")
+    .replace(/ş/g, "s")
+    .replace(/Ğ/g, "G")
+    .replace(/ğ/g, "g")
+    .replace(/Ü/g, "U")
+    .replace(/ü/g, "u")
+    .replace(/Ö/g, "O")
+    .replace(/ö/g, "o")
+    .replace(/Ç/g, "C")
+    .replace(/ç/g, "c");
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -49,7 +66,7 @@ export async function GET(
   let y = 800;
 
   function text(t: string, x: number, size = 10, isBold = false) {
-    page.drawText(t, {
+  page.drawText(safePdfText(t), {
       x,
       y,
       size,
@@ -149,9 +166,9 @@ export async function GET(
   });
 
   y -= 15;
-  page.drawText("Çalışan İmzası", { x: 90, y, size: 9, font });
-  page.drawText("İşveren / Yetkili", { x: 260, y, size: 9, font });
-  page.drawText("İşyeri Hekimi", { x: 435, y, size: 9, font });
+  page.drawText(safePdfText("Çalışan İmzası"), { x: 90, y, size: 9, font });
+page.drawText(safePdfText("İşveren / Yetkili"), { x: 260, y, size: 9, font });
+page.drawText(safePdfText("İşyeri Hekimi"), { x: 435, y, size: 9, font });
 
   const pdfBytes = await pdfDoc.save();
 const pdfBuffer = Buffer.from(pdfBytes);
