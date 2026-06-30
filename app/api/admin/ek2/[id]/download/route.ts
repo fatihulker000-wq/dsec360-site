@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import QRCode from "qrcode";
 import { NextResponse } from "next/server";
@@ -8,166 +8,29 @@ import path from "path";
 
 export const runtime = "nodejs";
 
-const PAGE_W = 596;
-const PAGE_H = 842;
-
 function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-function v(value: any) {
-  return value === null || value === undefined || value === "" ? "" : String(value);
+function v(x: any) {
+  return x === null || x === undefined || x === "" ? "-" : String(x);
 }
 
-function d(value: any) {
-  if (!value) return "";
-  try {
-    return new Date(value).toLocaleDateString("tr-TR");
-  } catch {
-    return String(value);
-  }
+function d(x: any) {
+  if (!x) return "-";
+  try { return new Date(x).toLocaleDateString("tr-TR"); } catch { return String(x); }
 }
 
-function firstNonEmpty(...values: any[]) {
-  for (const item of values) {
-    if (item !== null && item !== undefined && String(item).trim() !== "") {
-      return String(item).trim();
-    }
-  }
-  return "";
+function pick(...arr: any[]) {
+  for (const x of arr) if (x !== null && x !== undefined && String(x).trim() !== "") return String(x);
+  return "-";
 }
 
-function boolValue(value: any) {
-  const s = String(value ?? "").toLowerCase().trim();
-  return ["true", "1", "evet", "yes", "var", "uygun"].includes(s);
+async function fontFile(name: string) {
+  return fs.readFile(path.join(process.cwd(), "public", "fonts", name));
 }
 
-function wrapText(font: PDFFont, text: any, maxWidth: number, size: number) {
-  const clean = String(text ?? "").replace(/\s+/g, " ").trim();
-  if (!clean) return [];
-
-  const words = clean.split(" ");
-  const lines: string[] = [];
-  let current = "";
-
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word;
-    if (font.widthOfTextAtSize(test, size) <= maxWidth) {
-      current = test;
-    } else {
-      if (current) lines.push(current);
-      current = word;
-    }
-  }
-
-  if (current) lines.push(current);
-  return lines;
-}
-
-function drawText(
-  page: PDFPage,
-  text: any,
-  x: number,
-  y: number,
-  font: PDFFont,
-  size = 7.2,
-  maxWidth?: number,
-  maxLines = 1
-) {
-  const value = v(text);
-  if (!value) return;
-
-  if (!maxWidth) {
-    page.drawText(value, {
-      x,
-      y,
-      size,
-      font,
-      color: rgb(0, 0, 0),
-    });
-    return;
-  }
-
-  const lines = wrapText(font, value, maxWidth, size).slice(0, maxLines);
-  let yy = y;
-
-  for (const line of lines) {
-    page.drawText(line, {
-      x,
-      y: yy,
-      size,
-      font,
-      color: rgb(0, 0, 0),
-    });
-    yy -= size + 2;
-  }
-}
-
-function drawCheck(page: PDFPage, checked: boolean, x: number, y: number, bold: PDFFont) {
-  if (!checked) return;
-
-  page.drawText("X", {
-    x,
-    y,
-    size: 8,
-    font: bold,
-    color: rgb(0, 0, 0),
-  });
-}
-
-function drawDigitalNote(page: PDFPage, font: PDFFont, bold: PDFFont, code: string, url: string) {
-  page.drawRectangle({
-    x: 46,
-    y: 10,
-    width: 505,
-    height: 13,
-    color: rgb(1, 1, 1),
-    opacity: 0.93,
-  });
-
-  drawText(page, `D-SEC360 doğrulama: ${url}`, 50, 14, font, 5.2, 345, 1);
-  drawText(page, code, 424, 14, bold, 5.2, 125, 1);
-}
-
-function decisionText(data: any) {
-  const decision = String(data.decision || "").toLowerCase();
-  const job = firstNonEmpty(data.job_title, data.raw_json?.jobTitle, data.raw_json?.job_title, "................");
-
-  if (decision.includes("şart") || decision.includes("sart") || decision.includes("kısıt") || decision.includes("kisit")) {
-    return {
-      first: "",
-      second: `${job} şartı ile çalışmaya elverişlidir.`,
-    };
-  }
-
-  if (decision.includes("çalışamaz") || decision.includes("calisamaz") || decision.includes("uygun değil") || decision.includes("uygun degil")) {
-    return {
-      first: `${job} işinde bedenen ve ruhen çalışmaya elverişli değildir.`,
-      second: "",
-    };
-  }
-
-  return {
-    first: `${job} işinde bedenen ve ruhen çalışmaya elverişlidir.`,
-    second: "",
-  };
-}
-
-async function loadRequiredFile(filePath: string, label: string) {
-  try {
-    return await fs.readFile(filePath);
-  } catch (error: any) {
-    throw new Error(`${label} bulunamadı: ${filePath}`);
-  }
-}
-
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const supabase = getSupabase();
@@ -178,232 +41,146 @@ export async function GET(
       .eq("id", id)
       .single();
 
-    if (error || !data) {
-      return new NextResponse("EK-2 bulunamadı.", { status: 404 });
-    }
+    if (error || !data) return new NextResponse("EK-2 bulunamadı.", { status: 404 });
 
-    const templateBytes = await loadRequiredFile(
-      path.join(process.cwd(), "public", "templates", "ek2-template.pdf"),
-      "EK-2 şablonu"
-    );
-
-    const regularFontBytes = await loadRequiredFile(
-      path.join(process.cwd(), "public", "fonts", "NotoSans-Regular.ttf"),
-      "NotoSans-Regular.ttf"
-    );
-
-    const boldFontBytes = await loadRequiredFile(
-      path.join(process.cwd(), "public", "fonts", "NotoSans-Bold.ttf"),
-      "NotoSans-Bold.ttf"
-    );
-
+    const r = data.raw_json || {};
     const pdfDoc = await PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
 
-    const font = await pdfDoc.embedFont(regularFontBytes);
-    const bold = await pdfDoc.embedFont(boldFontBytes);
+    const font = await pdfDoc.embedFont(await fontFile("NotoSans-Regular.ttf"));
+    const bold = await pdfDoc.embedFont(await fontFile("NotoSans-Bold.ttf"));
 
-    const templatePages = await pdfDoc.embedPdf(templateBytes, [0, 1, 2]);
+    const code = `DSEC-EK2-${String(data.id).slice(0, 8).toUpperCase()}`;
+    const url = `https://dsec360.com/verify/ek2/${data.id}`;
+    const qr = await pdfDoc.embedPng(await QRCode.toDataURL(url, { width: 160, margin: 1 }));
 
-    const page1 = pdfDoc.addPage([PAGE_W, PAGE_H]);
-    const page2 = pdfDoc.addPage([PAGE_W, PAGE_H]);
-    const page3 = pdfDoc.addPage([PAGE_W, PAGE_H]);
+    function text(page: any, t: any, x: number, y: number, size = 8, b = false) {
+      page.drawText(v(t), { x, y, size, font: b ? bold : font, color: rgb(0, 0, 0) });
+    }
 
-    page1.drawPage(templatePages[0], { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
-    page2.drawPage(templatePages[1], { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
-    page3.drawPage(templatePages[2], { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
+    function box(page: any, x: number, y: number, w: number, h: number, fill = false) {
+      page.drawRectangle({
+        x, y, width: w, height: h,
+        borderColor: rgb(0.25, 0.25, 0.25),
+        borderWidth: 0.6,
+        color: fill ? rgb(0.94, 0.94, 0.94) : undefined,
+      });
+    }
 
-    const verificationCode = `DSEC-EK2-${String(data.id).slice(0, 8).toUpperCase()}`;
-    const verifyUrl = `https://dsec360.com/verify/ek2/${data.id}`;
+    function drawSection(page: any, title: string, y: number) {
+      box(page, 40, y, 515, 18, true);
+      text(page, title, 48, y + 5, 8.5, true);
+    }
 
-    const qrData = await QRCode.toDataURL(verifyUrl, { width: 180, margin: 1 });
-    const qrImage = await pdfDoc.embedPng(qrData);
+    function row(page: any, y: number, a: string, bval: any, c: string, dval: any) {
+      box(page, 40, y, 125, 21, true); box(page, 165, y, 150, 21);
+      box(page, 315, y, 125, 21, true); box(page, 440, y, 115, 21);
+      text(page, a, 46, y + 7, 7, true); text(page, bval, 171, y + 7, 7);
+      text(page, c, 321, y + 7, 7, true); text(page, dval, 446, y + 7, 7);
+    }
 
-    const r = data.raw_json || {};
+    function longRow(page: any, y: number, label: string, val: any) {
+      box(page, 40, y, 125, 28, true); box(page, 165, y, 390, 28);
+      text(page, label, 46, y + 15, 7, true);
+      const s = v(val).slice(0, 160);
+      text(page, s, 171, y + 15, 7);
+    }
 
-    const employeeName = firstNonEmpty(data.employee_name, r.employeeName, r.employee_name);
-    const identityNumber = firstNonEmpty(data.identity_number, r.identityNumber, r.identity_number);
-    const companyName = firstNonEmpty(data.company_name, r.companyName, r.company_name);
-    const workplaceAddress = firstNonEmpty(data.workplace_address, r.workplaceAddress, r.workplace_address);
-    const jobTitle = firstNonEmpty(data.job_title, r.jobTitle, r.job_title);
-    const department = firstNonEmpty(data.department, r.department);
-    const phoneOrEmail = firstNonEmpty(data.phone, r.phone, data.email, r.email);
+    const page1 = pdfDoc.addPage([595.28, 841.89]);
 
-    // =========================================================
-    // SAYFA 1 - Resmi EK-2 şablonu alanları
-    // =========================================================
+    box(page1, 35, 744, 525, 72);
+    text(page1, "D-SEC360", 50, 790, 18, true);
+    text(page1, "Sağlık • Emniyet • Çevre Yönetim Platformu", 50, 774, 8);
+    text(page1, "EK-2 İŞE GİRİŞ / PERİYODİK MUAYENE FORMU", 140, 755, 12, true);
+    text(page1, `Belge No: ${pick(data.file_no, code)}`, 365, 792, 7);
+    text(page1, `Tarih: ${d(data.exam_date)}`, 365, 778, 7);
+    page1.drawImage(qr, { x: 507, y: 762, width: 40, height: 40 });
 
-    // İşyerinin
-    drawText(page1, companyName, 166, 726, font, 7.4, 295, 1);
-    drawText(page1, firstNonEmpty(r.sgkSicilNo, r.sgkNo), 166, 707, font, 7.4, 295, 1);
-    drawText(page1, workplaceAddress, 166, 689, font, 7.4, 295, 2);
-    drawText(page1, firstNonEmpty(r.workplacePhone, r.companyPhone, r.phone), 166, 671, font, 7.4, 295, 1);
-    drawText(page1, firstNonEmpty(r.companyEmail, r.workplaceEmail, r.email), 166, 653, font, 7.4, 295, 1);
+    let y = 700;
+    drawSection(page1, "1. ÇALIŞAN BİLGİLERİ", y); y -= 25;
+    row(page1, y, "Adı Soyadı", pick(data.employee_name, r.employeeName), "T.C. Kimlik No", pick(data.identity_number, r.identityNumber)); y -= 21;
+    row(page1, y, "Doğum Tarihi", d(pick(data.birth_date, r.birthDate)), "Cinsiyet", pick(data.gender, r.gender)); y -= 21;
+    row(page1, y, "Kan Grubu", pick(data.blood_group, r.bloodGroup), "Telefon", pick(data.phone, r.phone)); y -= 42;
 
-    // Beyan
-    drawText(page1, employeeName, 66, 585, font, 7.2, 150, 1);
+    drawSection(page1, "2. İŞYERİ BİLGİLERİ", y); y -= 25;
+    row(page1, y, "Firma", pick(data.company_name, r.companyName), "Görev", pick(data.job_title, r.jobTitle)); y -= 21;
+    row(page1, y, "Departman", pick(data.department, r.department), "İşe Giriş Tarihi", d(pick(data.start_date, r.startDate))); y -= 21;
+    row(page1, y, "Tehlike Sınıfı", pick(data.danger_class, r.dangerClass), "NACE Kodu", pick(data.nace_code, r.naceCode)); y -= 21;
+    row(page1, y, "Muayene Türü", pick(data.form_type, r.formType), "Muayene Tarihi", d(pick(data.exam_date, r.examDate))); y -= 42;
 
-    // Fotoğraf kutusuna fotoğraf yoksa küçük doğrulama QR kodu
-    page1.drawImage(qrImage, { x: 492, y: 523, width: 42, height: 42 });
-    drawText(page1, verificationCode, 452, 511, font, 4.8, 116, 1);
+    drawSection(page1, "3. MESLEKİ ANAMNEZ", y); y -= 35;
+    longRow(page1, y, "Önceki İşler", r.previousJobs); y -= 28;
+    longRow(page1, y, "Mevcut İş Tanımı", pick(r.currentJobDescription, data.job_title)); y -= 28;
+    longRow(page1, y, "Maruziyetler", r.exposures); y -= 28;
+    longRow(page1, y, "KKD Kullanımı", r.ppeUsage); y -= 28;
+    longRow(page1, y, "İş Kazaları", r.previousAccidents); y -= 28;
+    longRow(page1, y, "Meslek Hastalığı", r.occupationalDiseaseHistory); y -= 42;
 
-    // Çalışanın
-    drawText(page1, employeeName, 168, 510, font, 7.4, 360, 1);
-    drawText(page1, identityNumber, 168, 492, font, 7.4, 360, 1);
-    drawText(
-      page1,
-      firstNonEmpty(
-        r.birthPlaceAndDate,
-        `${v(r.birthPlace)} ${d(data.birth_date)}`.trim(),
-        d(data.birth_date)
-      ),
-      168,
-      474,
-      font,
-      7.4,
-      360,
-      1
-    );
-    drawText(page1, firstNonEmpty(data.gender, r.gender), 168, 456, font, 7.4, 360, 1);
-    drawText(page1, firstNonEmpty(r.educationStatus, r.education), 168, 438, font, 7.4, 190, 1);
-    drawText(page1, firstNonEmpty(r.maritalStatus), 168, 420, font, 7.4, 85, 1);
-    drawText(page1, firstNonEmpty(r.childCount), 362, 420, font, 7.4, 60, 1);
-    drawText(page1, firstNonEmpty(r.homeAddress, r.address), 168, 402, font, 7.0, 360, 2);
-    drawText(page1, phoneOrEmail, 168, 384, font, 7.4, 360, 1);
-    drawText(page1, jobTitle, 168, 366, font, 7.4, 360, 1);
-    drawText(page1, firstNonEmpty(r.currentJobDescription, r.current_job_description, jobTitle), 168, 348, font, 7.0, 360, 2);
-    drawText(page1, department, 168, 330, font, 7.4, 360, 1);
+    drawSection(page1, "4. ÖZGEÇMİŞ / SOYGEÇMİŞ", y); y -= 35;
+    longRow(page1, y, "Kronik Hastalıklar", r.chronicDiseases); y -= 28;
+    longRow(page1, y, "Ameliyatlar", r.surgeries); y -= 28;
+    longRow(page1, y, "İlaçlar", r.medicines); y -= 28;
+    longRow(page1, y, "Alerjiler", r.allergies); y -= 28;
+    longRow(page1, y, "Alışkanlıklar", r.habits); y -= 28;
+    longRow(page1, y, "Soygeçmiş", r.familyHistory);
 
-    // Daha önce çalıştığı yerler
-    drawText(page1, firstNonEmpty(r.prevWork1Industry), 229, 293, font, 6.8, 78, 1);
-    drawText(page1, firstNonEmpty(r.prevWork1Job), 327, 293, font, 6.8, 138, 1);
-    drawText(page1, firstNonEmpty(r.prevWork1Dates), 482, 293, font, 6.8, 70, 1);
+    const page2 = pdfDoc.addPage([595.28, 841.89]);
+    box(page2, 35, 780, 525, 38);
+    text(page2, "EK-2 İŞE GİRİŞ / PERİYODİK MUAYENE FORMU - DEVAM", 50, 798, 12, true);
+    text(page2, `Belge No: ${pick(data.file_no, code)}`, 380, 800, 7);
 
-    drawText(page1, firstNonEmpty(r.prevWork2Industry), 229, 275, font, 6.8, 78, 1);
-    drawText(page1, firstNonEmpty(r.prevWork2Job), 327, 275, font, 6.8, 138, 1);
-    drawText(page1, firstNonEmpty(r.prevWork2Dates), 482, 275, font, 6.8, 70, 1);
+    y = 740;
+    drawSection(page2, "5. FİZİK MUAYENE / VİTAL BULGULAR", y); y -= 25;
+    row(page2, y, "Boy", `${pick(r.height)} cm`, "Kilo", `${pick(r.weight)} kg`); y -= 21;
+    row(page2, y, "BMI", pick(r.bmi), "SpO₂", pick(r.spo2)); y -= 21;
+    row(page2, y, "Tansiyon", `${pick(r.systolic)} / ${pick(r.diastolic)}`, "Nabız", pick(r.pulse)); y -= 42;
 
-    drawText(page1, firstNonEmpty(r.prevWork3Industry), 229, 257, font, 6.8, 78, 1);
-    drawText(page1, firstNonEmpty(r.prevWork3Job), 327, 257, font, 6.8, 138, 1);
-    drawText(page1, firstNonEmpty(r.prevWork3Dates), 482, 257, font, 6.8, 70, 1);
+    drawSection(page2, "6. SİSTEM MUAYENESİ", y); y -= 35;
+    for (const [label, key] of [
+      ["Baş - Boyun", "headNeck"], ["Göz", "eye"], ["KBB", "earNoseThroat"],
+      ["Solunum", "respiratory"], ["Kardiyovasküler", "cardiovascular"],
+      ["Sindirim", "digestive"], ["Ürogenital", "genitourinary"],
+      ["Kas İskelet", "musculoskeletal"], ["Nörolojik", "neurological"],
+      ["Deri", "skin"], ["Psikiyatrik", "psychological"],
+    ]) { longRow(page2, y, label, r[key]); y -= 24; }
 
-    // Özgeçmiş
-    drawText(page1, firstNonEmpty(data.blood_group, r.bloodGroup, r.blood_group), 168, 224, font, 7.4, 360, 1);
-    drawText(page1, firstNonEmpty(r.chronicDiseases, r.chronic_diseases), 168, 206, font, 7.0, 360, 2);
-    drawText(page1, firstNonEmpty(r.tetanusVaccine, r.tetanus, r.vaccines), 168, 170, font, 7.0, 360, 1);
-    drawText(page1, firstNonEmpty(r.hepatitisVaccine, r.hepatitis, r.vaccines), 168, 152, font, 7.0, 360, 1);
-    drawText(page1, firstNonEmpty(r.otherVaccines, r.other_vaccines, r.vaccines), 168, 134, font, 7.0, 360, 1);
+    y -= 20;
+    drawSection(page2, "7. LABORATUVAR VE TETKİKLER", y); y -= 35;
+    for (const [label, key] of [
+      ["Hemogram", "hemogram"], ["Biyokimya", "biochemistry"], ["İdrar", "urine"],
+      ["Akciğer Grafisi", "radiology"], ["EKG", "ekg"], ["Diğer", "otherTests"],
+    ]) { longRow(page2, y, label, r[key]); y -= 24; }
 
-    // Soygeçmiş
-    drawText(page1, firstNonEmpty(r.familyMother, r.motherHistory), 152, 99, font, 6.7, 80, 1);
-    drawText(page1, firstNonEmpty(r.familyFather, r.fatherHistory), 282, 99, font, 6.7, 90, 1);
-    drawText(page1, firstNonEmpty(r.familySibling, r.siblingHistory), 410, 99, font, 6.7, 90, 1);
-    drawText(page1, firstNonEmpty(r.familyChild, r.childHistory), 520, 99, font, 6.7, 40, 1);
+    y -= 20;
+    drawSection(page2, "8. İŞE UYGUNLUK KANAATİ", y); y -= 35;
+    longRow(page2, y, "Karar", data.decision); y -= 28;
+    longRow(page2, y, "Kısıtlar", r.restrictions); y -= 28;
+    longRow(page2, y, "Öneriler", r.recommendations); y -= 28;
+    longRow(page2, y, "Hekim Kanaati", pick(data.doctor_opinion, r.doctorOpinion)); y -= 70;
 
-    // Tıbbi anamnez ilk sayfa notları / işaretleri
-    drawCheck(page1, boolValue(r.cough), 495, 55, bold);
-    drawCheck(page1, boolValue(r.dyspnea), 495, 38, bold);
-    drawCheck(page1, boolValue(r.chestPain), 495, 21, bold);
+    page2.drawLine({ start: { x: 60, y }, end: { x: 200, y }, thickness: 1 });
+    page2.drawLine({ start: { x: 230, y }, end: { x: 370, y }, thickness: 1 });
+    page2.drawLine({ start: { x: 400, y }, end: { x: 540, y }, thickness: 1 });
+    text(page2, "Çalışan İmzası", 92, y - 14, 8);
+    text(page2, "İşveren / Yetkili", 260, y - 14, 8);
+    text(page2, `İşyeri Hekimi: ${pick(data.doctor_name, r.doctorName)}`, 402, y - 14, 8);
 
-    drawDigitalNote(page1, font, bold, verificationCode, verifyUrl);
-
-    // =========================================================
-    // SAYFA 2 - Resmi EK-2 şablonu alanları
-    // =========================================================
-
-    // Devam eden tıbbi anamnez notları
-    drawText(page2, firstNonEmpty(r.ulcerNote), 432, 747, font, 6.8, 120, 1);
-    drawText(page2, firstNonEmpty(r.hearingLossNote), 432, 729, font, 6.8, 120, 1);
-    drawText(page2, firstNonEmpty(r.visionLossNote), 432, 711, font, 6.8, 120, 1);
-    drawText(page2, firstNonEmpty(r.neurologicalDiseaseNote), 432, 693, font, 6.8, 120, 1);
-    drawText(page2, firstNonEmpty(r.skinDiseaseNote), 432, 675, font, 6.8, 120, 1);
-    drawText(page2, firstNonEmpty(r.foodPoisoningNote), 432, 641, font, 6.8, 120, 1);
-
-    drawText(page2, firstNonEmpty(r.hospitalizationNote), 430, 608, font, 6.8, 120, 2);
-    drawText(page2, firstNonEmpty(r.surgeries), 430, 575, font, 6.8, 120, 2);
-    drawText(page2, firstNonEmpty(r.previousAccidents), 430, 543, font, 6.8, 120, 2);
-    drawText(page2, firstNonEmpty(r.occupationalDiseaseHistory), 430, 509, font, 6.8, 120, 2);
-    drawText(page2, firstNonEmpty(r.disabilityNote), 430, 474, font, 6.8, 120, 2);
-    drawText(page2, firstNonEmpty(r.medicines), 430, 438, font, 6.8, 120, 2);
-
-    // Sigara / alkol
-    drawText(page2, firstNonEmpty(r.smokingStatus, r.smoking, r.habits), 168, 412, font, 6.8, 90, 1);
-    drawText(page2, firstNonEmpty(r.smokingQuitBefore), 315, 394, font, 6.8, 60, 1);
-    drawText(page2, firstNonEmpty(r.smokingDuration), 405, 394, font, 6.8, 60, 1);
-    drawText(page2, firstNonEmpty(r.smokingAmount), 500, 394, font, 6.8, 60, 1);
-
-    drawText(page2, firstNonEmpty(r.alcoholStatus, r.alcohol, r.habits), 168, 345, font, 6.8, 90, 1);
-    drawText(page2, firstNonEmpty(r.alcoholQuitBefore), 315, 327, font, 6.8, 60, 1);
-    drawText(page2, firstNonEmpty(r.alcoholDuration), 405, 327, font, 6.8, 60, 1);
-    drawText(page2, firstNonEmpty(r.alcoholFrequency), 500, 327, font, 6.8, 60, 1);
-
-    // Fizik muayene sonuçları
-    drawText(page2, firstNonEmpty(r.eye), 198, 275, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.earNoseThroat), 198, 258, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.skin), 198, 241, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.cardiovascular), 198, 224, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.respiratory), 198, 207, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.digestive), 198, 190, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.genitourinary), 198, 173, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.musculoskeletal), 198, 156, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.neurological), 198, 139, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.psychological), 198, 122, font, 6.8, 350, 1);
-    drawText(page2, firstNonEmpty(r.otherPhysical), 198, 105, font, 6.8, 350, 1);
-
-    drawText(page2, firstNonEmpty(r.systolic), 110, 87, font, 7.0, 35, 1);
-    drawText(page2, firstNonEmpty(r.diastolic), 172, 87, font, 7.0, 35, 1);
-    drawText(page2, firstNonEmpty(r.pulse), 110, 70, font, 7.0, 35, 1);
-    drawText(page2, firstNonEmpty(r.height), 105, 53, font, 7.0, 35, 1);
-    drawText(page2, firstNonEmpty(r.weight), 246, 53, font, 7.0, 35, 1);
-    drawText(page2, firstNonEmpty(r.bmi), 425, 53, font, 7.0, 45, 1);
-
-    drawDigitalNote(page2, font, bold, verificationCode, verifyUrl);
-
-    // =========================================================
-    // SAYFA 3 - Laboratuvar + Kanaat + Hekim bilgisi devamı
-    // Şablon 3. sayfada hekim diploma bilgisi devam ettiği için
-    // kanaat ve hekim kimlik alanlarını burada güvenli biçimde tamamlıyoruz.
-    // =========================================================
-
-    const result = decisionText(data);
-
-    drawText(page3, firstNonEmpty(r.hemogram, r.biochemistry), 205, 785, font, 6.8, 340, 2);
-    drawText(page3, firstNonEmpty(r.urine), 205, 765, font, 6.8, 340, 2);
-    drawText(page3, firstNonEmpty(r.radiology), 205, 745, font, 6.8, 340, 2);
-    drawText(page3, firstNonEmpty(r.audiometry), 205, 725, font, 6.8, 340, 2);
-    drawText(page3, firstNonEmpty(r.sft), 205, 705, font, 6.8, 340, 2);
-    drawText(page3, firstNonEmpty(r.psychologicalTests), 205, 685, font, 6.8, 340, 2);
-    drawText(page3, firstNonEmpty(r.otherTests), 205, 665, font, 6.8, 340, 2);
-
-    drawText(page3, result.first, 72, 615, bold, 8.2, 445, 2);
-    drawText(page3, result.second, 72, 585, bold, 8.2, 445, 2);
-
-    drawCheck(page3, boolValue(r.nightWorkSuitable), 150, 548, bold);
-    drawCheck(page3, boolValue(r.nightWorkNotSuitable), 340, 548, bold);
-
-    drawText(page3, d(data.exam_date), 435, 510, font, 8, 100, 1);
-    drawText(page3, firstNonEmpty(data.doctor_name, r.doctorName, r.doctor_name), 105, 470, font, 8, 240, 1);
-    drawText(page3, firstNonEmpty(r.doctorDiplomaNo), 170, 452, font, 7, 250, 1);
-    drawText(page3, firstNonEmpty(r.doctorRegistryNo), 190, 434, font, 7, 250, 1);
-    drawText(page3, firstNonEmpty(r.doctorCertificateNo), 235, 416, font, 7, 250, 1);
-
-    page3.drawImage(qrImage, { x: 505, y: 40, width: 40, height: 40 });
-    drawDigitalNote(page3, font, bold, verificationCode, verifyUrl);
+    for (const [i, p] of pdfDoc.getPages().entries()) {
+      text(p, `D-SEC360 doğrulama: ${url}`, 35, 18, 5.5);
+      text(p, `${i + 1}/${pdfDoc.getPageCount()}`, 535, 18, 5.5);
+    }
 
     const pdfBytes = await pdfDoc.save();
 
     return new NextResponse(Buffer.from(pdfBytes), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="EK2-${data.id}.pdf"`,
+        "Content-Disposition": `inline; filename="EK2-${data.id}.pdf"`,
       },
     });
   } catch (e: any) {
     return NextResponse.json(
-      {
-        success: false,
-        error: e?.message || "EK-2 PDF oluşturulamadı.",
-      },
+      { success: false, error: e?.message || "EK-2 PDF oluşturulamadı." },
       { status: 500 }
     );
   }
