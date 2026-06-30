@@ -130,8 +130,7 @@ const nextExamDate = String(
    const examPayload = {
   employee_id: employeeId,
   company_id: companyId,
-  employee_name: body.employeeName || body.employee_name || null,
-doctor_name: body.doctorName || body.doctor_name || null,
+  
 created_at: new Date().toISOString(),
 updated_at: new Date().toISOString(),
   exam_date: examDate,
