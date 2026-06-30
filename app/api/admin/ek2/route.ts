@@ -11,6 +11,23 @@ function getSupabase() {
   );
 }
 
+function normalizeDate(value: any) {
+  const raw = String(value || "").trim();
+
+  if (!raw) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(raw)) {
+    const [day, month, year] = raw.split(".");
+    return `${year}-${month}-${day}`;
+  }
+
+  return null;
+}
+
 export async function GET(req: Request) {
   try {
     const cookieStore = await cookies();
@@ -119,13 +136,11 @@ export async function POST(req: Request) {
 
 const today = new Date().toISOString().slice(0, 10);
 
-const examDate = String(
-  body.examDate || body.exam_date || today
-).trim();
+const examDate =
+  normalizeDate(body.examDate || body.exam_date) || today;
 
-const nextExamDate = String(
-  body.nextExamDate || body.next_exam_date || ""
-).trim();
+const nextExamDate =
+  normalizeDate(body.nextExamDate || body.next_exam_date);
 
    const examPayload = {
   employee_id: employeeId,
@@ -175,7 +190,7 @@ next_exam_date: nextExamDate || null,
 
       employee_name: body.employeeName || body.employee_name || null,
       identity_number: body.identityNumber || body.identity_number || null,
-      birth_date: body.birthDate || body.birth_date || null,
+      birth_date: normalizeDate(body.birthDate || body.birth_date),
       gender: body.gender || null,
       blood_group: body.bloodGroup || body.blood_group || null,
       phone: body.phone || null,
@@ -184,7 +199,7 @@ next_exam_date: nextExamDate || null,
       workplace_address: body.workplaceAddress || body.workplace_address || null,
       job_title: body.jobTitle || body.job_title || null,
       department: body.department || null,
-      start_date: body.startDate || body.start_date || null,
+      start_date: normalizeDate(body.startDate || body.start_date),
       danger_class: body.dangerClass || body.danger_class || null,
       nace_code: body.naceCode || body.nace_code || null,
 
