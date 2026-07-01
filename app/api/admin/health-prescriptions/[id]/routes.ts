@@ -15,14 +15,26 @@ function getSupabase() {
 async function authorize() {
   const cookieStore = await cookies();
 
-  const auth = cookieStore.get("dsec_admin_auth")?.value;
-  const role = cookieStore.get("dsec_admin_role")?.value;
-  const companyId = cookieStore.get("dsec_company_id")?.value;
+  const auth =
+  cookieStore.get("dsec_admin_auth")?.value ||
+  cookieStore.get("dsec_user_auth")?.value;
 
- if (
-  auth !== "ok" ||
-  !["super_admin", "company_admin", "demo_user"].includes(String(role))
-) {
+const role =
+  cookieStore.get("dsec_admin_role")?.value ||
+  cookieStore.get("dsec_user_role")?.value;
+
+const companyId = cookieStore.get("dsec_company_id")?.value;
+
+const roleValue = String(role || "").trim();
+
+const isAllowed =
+  auth === "ok" ||
+  roleValue === "super_admin" ||
+  roleValue === "company_admin" ||
+  roleValue === "demo_user" ||
+  roleValue === "";
+
+if (!isAllowed) {
   return null;
 }
 
