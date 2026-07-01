@@ -23,6 +23,14 @@ export async function GET() {
     const companyIdFromCookie = String(cookieStore.get("dsec_company_id")?.value || "").trim();
     const isDemoCookie = String(cookieStore.get("dsec_is_demo")?.value || "").trim() === "true";
 
+console.log({
+  adminAuth,
+  adminRole,
+  userId,
+  companyIdFromCookie,
+  isDemoCookie,
+});
+
     if (
       adminAuth !== "ok" ||
       !userId ||
