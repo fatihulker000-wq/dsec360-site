@@ -58,6 +58,8 @@ const [medulaResponse, setMedulaResponse] = useState("");
   const [message, setMessage] = useState("");
   const [icdResults, setIcdResults] = useState<any[]>([]);
 const [showIcdList, setShowIcdList] = useState(false);
+const [drugResults, setDrugResults] = useState<Record<number, any[]>>({});
+const [showDrugList, setShowDrugList] = useState<Record<number, boolean>>({});
 
   const updateItem = <K extends keyof PrescriptionItem>(
     index: number,
@@ -143,6 +145,38 @@ async function searchIcd(value: string) {
   } catch {
     setIcdResults([]);
   }
+}
+
+async function searchDrug(index: number, value: string) {
+  updateItem(index, "medicineName", value);
+
+  if (value.length < 2) {
+    setDrugResults((prev) => ({ ...prev, [index]: [] }));
+    setShowDrugList((prev) => ({ ...prev, [index]: false }));
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `/api/admin/drugs/search?q=${encodeURIComponent(value)}`
+    );
+
+    const json = await res.json();
+
+    setDrugResults((prev) => ({ ...prev, [index]: json.items || [] }));
+    setShowDrugList((prev) => ({ ...prev, [index]: true }));
+  } catch {
+    setDrugResults((prev) => ({ ...prev, [index]: [] }));
+  }
+}
+
+function selectDrug(index: number, drug: any) {
+  updateItem(index, "medicineName", drug.drug_name || "");
+  updateItem(index, "activeIngredient", drug.active_ingredient || "");
+  updateItem(index, "dosage", drug.strength || "");
+  updateItem(index, "usageType", drug.dosage_form || "");
+
+  setShowDrugList((prev) => ({ ...prev, [index]: false }));
 }
 
   const savePrescription = async () => {
@@ -341,13 +375,45 @@ items,
                 <Field label="İlaç Adı">
                   <input
                     value={item.medicineName}
-                    onChange={(e) =>
-                      updateItem(index, "medicineName", e.target.value)
-                    }
+                    onChange={(e) => searchDrug(index, e.target.value)}
                     placeholder="İlaç adı"
                     style={inputStyle}
                   />
                 </Field>
+
+{showDrugList[index] && drugResults[index]?.length > 0 && (
+  <div
+    style={{
+      border: "1px solid #ddd",
+      borderRadius: 8,
+      maxHeight: 220,
+      overflow: "auto",
+      background: "#fff",
+      marginTop: -10,
+      marginBottom: 8,
+      gridColumn: "1 / -1",
+    }}
+  >
+    {drugResults[index].map((drug: any) => (
+      <div
+        key={drug.id}
+        onClick={() => selectDrug(index, drug)}
+        style={{
+          padding: 10,
+          cursor: "pointer",
+          borderBottom: "1px solid #eee",
+        }}
+      >
+        <strong>{drug.drug_name}</strong>
+        <br />
+        <span style={{ color: "#64748b", fontSize: 13 }}>
+          {drug.active_ingredient || "-"} • {drug.strength || "-"} •{" "}
+          {drug.dosage_form || "-"} • {drug.atc_code || "-"}
+        </span>
+      </div>
+    ))}
+  </div>
+)}
 
                 <Field label="Etkin Madde">
                   <input
