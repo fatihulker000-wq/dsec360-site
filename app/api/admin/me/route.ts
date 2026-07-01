@@ -17,8 +17,17 @@ export async function GET() {
   try {
     const cookieStore = await cookies();
 
-    const adminAuth = String(cookieStore.get("dsec_admin_auth")?.value || "").trim();
-    const adminRole = String(cookieStore.get("dsec_admin_role")?.value || "").trim();
+    const adminAuth = String(
+  cookieStore.get("dsec_admin_auth")?.value ||
+  cookieStore.get("dsec_user_auth")?.value ||
+  ""
+).trim();
+
+const adminRole = String(
+  cookieStore.get("dsec_admin_role")?.value ||
+  cookieStore.get("dsec_user_role")?.value ||
+  ""
+).trim();
     const userId = String(cookieStore.get("dsec_user_id")?.value || "").trim();
     const companyIdFromCookie = String(cookieStore.get("dsec_company_id")?.value || "").trim();
     const isDemoCookie = String(cookieStore.get("dsec_is_demo")?.value || "").trim() === "true";
