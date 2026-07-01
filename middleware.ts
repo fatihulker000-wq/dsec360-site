@@ -6,6 +6,9 @@ const DEMO_ALLOWED_PATHS = [
   "/api/admin/login",
   "/api/admin/logout",
   "/api/admin/me",
+  "/api/admin/health-prescriptions",
+  "/api/admin/drugs/search",
+  "/api/admin/icd10/search",
 ];
 
 export function middleware(req: NextRequest) {
