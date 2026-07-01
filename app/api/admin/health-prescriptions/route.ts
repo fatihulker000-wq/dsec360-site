@@ -62,7 +62,7 @@ if (!isAllowed) {
       .from("health_prescriptions")
       .select(`
   *,
-  health_prescription_items(id)
+  health_prescription_items(*)
 `)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -82,14 +82,21 @@ if (!isAllowed) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const prescriptions = (data || []).map((p: any) => ({
+const prescriptions = (data || []).map((p: any) => ({
   id: p.id,
-  employeeId: p.employee_id,
-  companyId: p.company_id,
-  diagnosisName: p.diagnosis_name,
+  employee_id: p.employee_id,
+  company_id: p.company_id,
+
+  diagnosis_code: p.diagnosis_code,
+  diagnosis_name: p.diagnosis_name,
+
+  notes: p.notes,
   status: p.status,
-  createdAt: p.created_at,
-  medicineCount: p.health_prescription_items?.length || 0,
+
+  created_at: p.created_at,
+
+  health_prescription_items:
+    p.health_prescription_items || [],
 }));
 
 return NextResponse.json({
