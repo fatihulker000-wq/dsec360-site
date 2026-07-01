@@ -33,7 +33,7 @@ export async function GET(req: Request) {
     const adminRole = cookieStore.get("dsec_admin_role")?.value;
     const companyId = String(cookieStore.get("dsec_company_id")?.value || "").trim();
 
-    if (adminAuth !== "ok" || !["super_admin", "company_admin"].includes(String(adminRole))) {
+    if (adminAuth !== "ok" || !["super_admin", "company_admin", "demo_user"].includes(String(adminRole))) {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
@@ -102,7 +102,13 @@ export async function POST(req: Request) {
       cookieStore.get("dsec_company_id")?.value || ""
     ).trim();
 
-    if (adminAuth !== "ok" || !["super_admin", "company_admin"].includes(String(adminRole))) {
+    console.log({
+  adminAuth,
+  adminRole,
+  companyIdFromCookie,
+});
+
+    if (adminAuth !== "ok" || !["super_admin", "company_admin", "demo_user"].includes(String(adminRole))) {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
