@@ -57,6 +57,9 @@ function normalizeEmployee(
     ek2_count: number;
     last_ek2_date: string;
     last_ek2_status: string;
+    prescription_count: number;
+last_prescription_date: string;
+last_prescription_status: string;
   }
 >
 ) {
@@ -73,6 +76,9 @@ function normalizeEmployee(
     ek2_count: 0,
     last_ek2_date: "",
     last_ek2_status: "",
+    prescription_count: 0,
+last_prescription_date: "",
+last_prescription_status: "",
   };
 
   return {
@@ -99,6 +105,10 @@ function normalizeEmployee(
 last_ek2_date: examInfo.last_ek2_date,
 last_ek2_status: examInfo.last_ek2_status,
 last_ek2: examInfo.last_ek2_date || "-",
+prescription_count: examInfo.prescription_count,
+last_prescription_date: examInfo.last_prescription_date,
+last_prescription_status: examInfo.last_prescription_status,
+last_prescription: examInfo.last_prescription_date || "-",
   };
 }
 
@@ -208,6 +218,9 @@ if (employeesError) {
     ek2_count: number;
     last_ek2_date: string;
     last_ek2_status: string;
+    prescription_count: number;
+last_prescription_date: string;
+last_prescription_status: string;
   }
 > = {};
 
@@ -246,6 +259,9 @@ if (employeesError) {
       ek2_count: 0,
       last_ek2_date: "",
       last_ek2_status: "",
+      prescription_count: 0,
+last_prescription_date: "",
+last_prescription_status: "",
     };
   }
 
@@ -281,6 +297,56 @@ const isEk2 =
   }
 }
     }
+
+const { data: prescriptions, error: prescriptionError } = await supabase
+  .from("health_prescriptions")
+  .select("employee_id, created_at, status")
+  .in("employee_id", employeeIds)
+  .eq("is_active", true)
+  .order("created_at", { ascending: false });
+
+if (prescriptionError) {
+  return NextResponse.json(
+    {
+      error: "Reçete özetleri alınamadı.",
+      detail: prescriptionError.message,
+    },
+    { status: 500 }
+  );
+}
+
+for (const prescription of prescriptions || []) {
+  const employeeId = String(prescription.employee_id || "").trim();
+  if (!employeeId) continue;
+
+  if (!examMap[employeeId]) {
+    examMap[employeeId] = {
+      examination_count: 0,
+      last_examination_date: "",
+      last_examination_decision: "",
+      next_examination_date: "",
+
+      ek2_count: 0,
+      last_ek2_date: "",
+      last_ek2_status: "",
+
+      prescription_count: 0,
+      last_prescription_date: "",
+      last_prescription_status: "",
+    };
+  }
+
+  examMap[employeeId].prescription_count++;
+
+  if (!examMap[employeeId].last_prescription_date) {
+    examMap[employeeId].last_prescription_date =
+      prescription.created_at || "";
+
+    examMap[employeeId].last_prescription_status =
+      prescription.status || "";
+  }
+}
+
     const normalizedEmployees = rows.map((u) =>
   normalizeEmployee(u, companyMap, examMap)
 );
