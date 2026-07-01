@@ -31,10 +31,7 @@ export async function GET(req: NextRequest) {
         strength,
         atc_code
       `)
-      .or(`
-        drug_name.ilike.*${q}*,
-        active_ingredient.ilike.*${q}*
-      `)
+      .or(`drug_name.ilike.%${q}%,active_ingredient.ilike.%${q}%`)
       .order("drug_name")
       .limit(20);
 
