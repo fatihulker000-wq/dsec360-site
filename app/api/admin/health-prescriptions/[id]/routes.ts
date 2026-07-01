@@ -19,12 +19,12 @@ async function authorize() {
   const role = cookieStore.get("dsec_admin_role")?.value;
   const companyId = cookieStore.get("dsec_company_id")?.value;
 
-  if (
-    auth !== "ok" ||
-    !["super_admin", "company_admin"].includes(String(role))
-  ) {
-    return null;
-  }
+ if (
+  auth !== "ok" ||
+  !["super_admin", "company_admin", "demo_user"].includes(String(role))
+) {
+  return null;
+}
 
   return {
     role: String(role),
