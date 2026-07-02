@@ -294,16 +294,8 @@ export default function HealthEmployeesPage() {
 
 
 <Badge
-  text={
-    employee.last_prescription ||
-    employee.last_prescription_date ||
-    "-"
-  }
-  tone={
-    employee.last_prescription_date
-      ? "good"
-      : "neutral"
-  }
+  text={formatDate(employee.last_prescription_date)}
+  tone={employee.last_prescription_date ? "good" : "neutral"}
 />
 
 <Badge
@@ -482,3 +474,11 @@ const lightButtonStyle: React.CSSProperties = {
   fontWeight: 900,
   fontSize: 13,
 };
+function formatDate(value?: string) {
+  if (!value || value === "-") return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("tr-TR");
+}
