@@ -9,6 +9,23 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+function safeText(value: any) {
+  return String(value || "-")
+    .replace(/Ç/g, "C")
+    .replace(/ç/g, "c")
+    .replace(/Ğ/g, "G")
+    .replace(/ğ/g, "g")
+    .replace(/İ/g, "I")
+    .replace(/ı/g, "i")
+    .replace(/Ö/g, "O")
+    .replace(/ö/g, "o")
+    .replace(/Ş/g, "S")
+    .replace(/ş/g, "s")
+    .replace(/Ü/g, "U")
+    .replace(/ü/g, "u")
+    .replace(/•/g, "-");
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -40,7 +57,7 @@ export async function GET(
 
     let y = 800;
 
-    page.drawText("D-SEC E-REÇETE", {
+    page.drawText(safeText("D-SEC E-REÇETE"), {
       x: 50,
       y,
       size: 20,
@@ -51,18 +68,13 @@ export async function GET(
     y -= 40;
 
     page.drawText(
-      `Tanı: ${data.diagnosis_code || "-"} ${data.diagnosis_name || ""}`,
-      {
-        x: 50,
-        y,
-        size: 11,
-        font,
-      }
+      safeText(`Tanı: ${data.diagnosis_code || "-"} ${data.diagnosis_name || ""}`),
+      { x: 50, y, size: 11, font }
     );
 
     y -= 25;
 
-    page.drawText(`Durum: ${data.status || "-"}`, {
+    page.drawText(safeText(`Durum: ${data.status || "-"}`), {
       x: 50,
       y,
       size: 11,
@@ -71,7 +83,7 @@ export async function GET(
 
     y -= 35;
 
-    page.drawText("İlaçlar", {
+    page.drawText(safeText("İlaçlar"), {
       x: 50,
       y,
       size: 14,
@@ -82,25 +94,15 @@ export async function GET(
 
     for (const item of data.health_prescription_items || []) {
       page.drawText(
-        `• ${item.medicine_name}   ${item.dosage || ""}`,
-        {
-          x: 60,
-          y,
-          size: 11,
-          font,
-        }
+        safeText(`- ${item.medicine_name || "-"}   ${item.dosage || ""}`),
+        { x: 60, y, size: 11, font }
       );
 
       y -= 18;
 
       page.drawText(
-        `${item.active_ingredient || ""}   ${item.duration || ""}`,
-        {
-          x: 75,
-          y,
-          size: 9,
-          font,
-        }
+        safeText(`${item.active_ingredient || ""}   ${item.duration || ""}`),
+        { x: 75, y, size: 9, font }
       );
 
       y -= 25;
@@ -118,10 +120,9 @@ export async function GET(
     return NextResponse.json(
       {
         success: false,
-        error: e.message,
+        error: e.message || "PDF oluşturulamadı.",
       },
       { status: 500 }
     );
   }
 }
-export {};
