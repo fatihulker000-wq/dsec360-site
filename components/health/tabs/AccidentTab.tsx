@@ -36,12 +36,12 @@ export default function AccidentTab({ employee }: Props) {
         setLoading(true);
 
         const res = await fetch(
-          `/api/admin/accidents?employeeId=${employee.id}`,
-          {
-            cache: "no-store",
-            credentials: "include",
-          }
-        );
+  `/api/admin/accidents?employeeId=${employee.id}&employeeName=${encodeURIComponent(employee.full_name || "")}`,
+  {
+    cache: "no-store",
+    credentials: "include",
+  }
+);
 
         const json = await res.json().catch(() => ({}));
 

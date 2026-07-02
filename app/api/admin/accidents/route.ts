@@ -20,6 +20,9 @@ export async function GET(req: NextRequest) {
       const employeeIdParam =
   req.nextUrl.searchParams.get("employeeId");
 
+  const employeeNameParam =
+  req.nextUrl.searchParams.get("employeeName");
+
     if (!adminAuth) {
       return NextResponse.json(
         {
@@ -102,14 +105,29 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const selectedEmployeeName =
+  employeeNameParam && employeeNameParam.trim() !== ""
+    ? employeeNameParam.trim()
+    : null;
 
 const selectedEmployeeId =
   employeeIdParam && employeeIdParam.trim() !== ""
     ? employeeIdParam.trim()
     : null;
 
+const filters: string[] = [];
+
 if (selectedEmployeeId) {
-  query = query.eq("employee_id", selectedEmployeeId);
+  filters.push(`employee_id.eq.${selectedEmployeeId}`);
+  filters.push(`app_record_id.eq.${selectedEmployeeId}`);
+}
+
+if (selectedEmployeeName) {
+  filters.push(`employee_name.ilike.%${selectedEmployeeName}%`);
+}
+
+if (filters.length > 0) {
+  query = query.or(filters.join(","));
 }
 
     const { data, error } =
