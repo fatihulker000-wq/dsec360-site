@@ -16,30 +16,29 @@ async function authorize() {
   const cookieStore = await cookies();
 
   const auth =
-  cookieStore.get("dsec_admin_auth")?.value ||
-  cookieStore.get("dsec_user_auth")?.value;
+    cookieStore.get("dsec_admin_auth")?.value ||
+    cookieStore.get("dsec_user_auth")?.value;
 
-const role =
-  cookieStore.get("dsec_admin_role")?.value ||
-  cookieStore.get("dsec_user_role")?.value;
+  const role =
+    cookieStore.get("dsec_admin_role")?.value ||
+    cookieStore.get("dsec_user_role")?.value;
 
-const companyId = cookieStore.get("dsec_company_id")?.value;
+  const companyId = cookieStore.get("dsec_company_id")?.value;
+  const roleValue = String(role || "").trim();
 
-const roleValue = String(role || "").trim();
+  // auth cookie "ok" değilse ve tanınan bir rol yoksa -> reddet
+  const isAllowed =
+    auth === "ok" &&
+    (roleValue === "super_admin" ||
+      roleValue === "company_admin" ||
+      roleValue === "demo_user");
 
-const isAllowed =
-  auth === "ok" ||
-  roleValue === "super_admin" ||
-  roleValue === "company_admin" ||
-  roleValue === "demo_user" ||
-  roleValue === "";
-
-if (!isAllowed) {
-  return null;
-}
+  if (!isAllowed) {
+    return null;
+  }
 
   return {
-    role: String(role),
+    role: roleValue,
     companyId: String(companyId || ""),
   };
 }
@@ -74,19 +73,30 @@ export async function GET(
   .eq("id", id)
   .eq("is_active", true);
 
-if (auth.role === "company_admin") {
-  query = query.eq("company_id", auth.companyId);
+
+const { data, error } = await query.maybeSingle();
+
+if (error) {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as any).message)
+      : "Reçete yüklenemedi.";
+
+  return NextResponse.json(
+    { error: message },
+    { status: 500 }
+  );
 }
 
-const { data, error } = await query.single();
-
-
-  if (error) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
-  }
+if (!data) {
+  return NextResponse.json(
+    {
+      error: "Prescription not found",
+      id,
+    },
+    { status: 404 }
+  );
+}
 
   return NextResponse.json({
     success: true,
@@ -130,9 +140,6 @@ export async function PUT(
     .update(updateData)
     .eq("id", id);
 
-  if (auth.role === "company_admin") {
-    updateQuery = updateQuery.eq("company_id", auth.companyId);
-  }
 
   const { error } = await updateQuery;
 
@@ -186,9 +193,6 @@ export async function DELETE(
     })
     .eq("id", id);
 
-  if (auth.role === "company_admin") {
-    query = query.eq("company_id", auth.companyId);
-  }
 
   const { error } = await query;
 
