@@ -4,11 +4,16 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type HealthEmployee = {
+  prescription_count?: number;
+  last_prescription?: string;
+  last_prescription_date?: string;
+  last_prescription_status?: string;
 
-ek2_count?: number;
-last_ek2?: string;
-last_ek2_date?: string;
-last_ek2_status?: string;
+  ek2_count?: number;
+  last_ek2?: string;
+  last_ek2_date?: string;
+  last_ek2_status?: string;
+
   id: string;
   full_name: string;
   email: string;
@@ -288,7 +293,18 @@ export default function HealthEmployeesPage() {
 />
 
 
-<Badge text="-" tone="neutral" />
+<Badge
+  text={
+    employee.last_prescription ||
+    employee.last_prescription_date ||
+    "-"
+  }
+  tone={
+    employee.last_prescription_date
+      ? "good"
+      : "neutral"
+  }
+/>
 
 <Badge
   text={
