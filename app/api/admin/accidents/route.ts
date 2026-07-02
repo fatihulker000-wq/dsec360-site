@@ -17,6 +17,9 @@ export async function GET(req: NextRequest) {
     const firmIdParam =
       req.nextUrl.searchParams.get("firmId");
 
+      const employeeIdParam =
+  req.nextUrl.searchParams.get("employeeId");
+
     if (!adminAuth) {
       return NextResponse.json(
         {
@@ -98,6 +101,16 @@ export async function GET(req: NextRequest) {
         );
       }
     }
+
+
+const selectedEmployeeId =
+  employeeIdParam && employeeIdParam.trim() !== ""
+    ? employeeIdParam.trim()
+    : null;
+
+if (selectedEmployeeId) {
+  query = query.eq("employee_id", selectedEmployeeId);
+}
 
     const { data, error } =
       await query.order(
