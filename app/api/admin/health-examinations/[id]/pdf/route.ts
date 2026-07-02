@@ -99,7 +99,7 @@ button{margin-top:30px;padding:12px 18px;border:0;border-radius:10px;background:
     ${row("Boy", exam.height ? `${exam.height} cm` : "-")}
     ${row("Kilo", exam.weight ? `${exam.weight} kg` : "-")}
     ${row("BMI", exam.bmi)}
-    ${row("Tansiyon", `${exam.blood_pressure_sys || "-"}/${exam.blood_pressure_dia || "-"}`)}
+    ${row("Tansiyon", `${exam.systolic || "-"}/${exam.diastolic || "-"}`)}
     ${row("Nabız", exam.pulse)}
     ${row("Ateş", exam.temperature)}
     ${row("SpO₂", exam.spo2)}
