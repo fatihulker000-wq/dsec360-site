@@ -23,6 +23,20 @@ type Employee = {
   last_examination_date?: string;
   last_examination_decision?: string;
   next_examination_date?: string;
+
+  ek2_count?: number;
+  last_ek2?: string;
+  last_ek2_date?: string;
+  last_ek2_status?: string;
+
+  prescription_count?: number;
+  last_prescription?: string;
+  last_prescription_date?: string;
+  last_prescription_status?: string;
+
+  lab_count?: number;
+  vaccine_count?: number;
+  accident_count?: number;
 };
 
 export default function HealthEmployeeDetailPage() {
@@ -208,7 +222,14 @@ export default function HealthEmployeeDetailPage() {
       value={(employee as any).last_ek2 || (employee as any).last_ek2_date || "-"}
     />
 
-    <SummaryRow label="Son Reçete" value="-" />
+  <SummaryRow
+  label="Son Reçete"
+  value={
+    employee.last_prescription_date
+      ? new Date(employee.last_prescription_date).toLocaleDateString("tr-TR")
+      : "-"
+  }
+/>
 
     <SummaryRow
       label="Risk"
