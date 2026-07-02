@@ -526,7 +526,6 @@ items,
       )}
     <PrescriptionHistory
   employeeId={employee.id}
-  onSelect={loadPrescription}
 />
     </div>
   );
