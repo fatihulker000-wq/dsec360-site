@@ -35,13 +35,10 @@ export default function AccidentTab({ employee }: Props) {
       try {
         setLoading(true);
 
-       const res = await fetch(
-  `/api/admin/accidents?employeeName=${encodeURIComponent(employee.full_name || "")}`,
-  {
-    cache: "no-store",
-    credentials: "include",
-  }
-);
+       const res = await fetch(`/api/admin/accidents`, {
+  cache: "no-store",
+  credentials: "include",
+});
 
         const json = await res.json().catch(() => ({}));
 
@@ -50,7 +47,14 @@ export default function AccidentTab({ employee }: Props) {
           return;
         }
 
-        setItems(json.rows || []);
+        const employeeName = normalizeText(employee.full_name || "");
+
+const filteredRows = (json.rows || []).filter((row: AccidentRow) => {
+  const rowName = normalizeText(row.employeeName || "");
+  return rowName === employeeName || rowName.includes(employeeName);
+});
+
+setItems(filteredRows);
       } catch {
         setItems([]);
       } finally {
@@ -189,3 +193,9 @@ const sourceBadgeStyle: CSSProperties = {
   fontWeight: 900,
   fontSize: 12,
 };
+function normalizeText(value: string) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\s+/g, " ");
+}
