@@ -123,7 +123,7 @@ if (selectedEmployeeId) {
 }
 
 if (selectedEmployeeName) {
-  filters.push(`employee_name.ilike.%${selectedEmployeeName}%`);
+  query = query.ilike("employee_name", `%${selectedEmployeeName}%`);
 }
 
 if (filters.length > 0) {
