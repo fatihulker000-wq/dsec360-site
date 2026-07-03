@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
-type Props = {
-  employee: any;
-};
+type Props = { employee: any };
+
+type TimelineType = "EK2" | "MUAYENE" | "RECETE" | "KAZA";
 
 type TimelineItem = {
   id: string;
-  type: "EK2" | "MUAYENE" | "RECETE" | "KAZA";
+  type: TimelineType;
   date: string | null;
   title: string;
   subtitle: string;
@@ -79,7 +79,9 @@ export default function HealthTimelineTab({ employee }: Props) {
           type: "RECETE",
           date: x.createdAt || x.created_at || null,
           title: "E-Reçete",
-          subtitle: `${x.diagnosisCode || x.diagnosis_code || "-"} ${x.diagnosisName || x.diagnosis_name || "Tanı girilmemiş"}`,
+          subtitle: `${x.diagnosisCode || x.diagnosis_code || "-"} ${
+            x.diagnosisName || x.diagnosis_name || "Tanı girilmemiş"
+          }`,
           detail: `${x.medicineCount || 0} ilaç`,
           url: `/api/admin/health-prescriptions/${x.id}/pdf`,
         }));
@@ -101,18 +103,13 @@ export default function HealthTimelineTab({ employee }: Props) {
             detail: `${x.eventType || "-"} • ${x.location || "-"}`,
           }));
 
-        const allItems = [
-          ...ek2Items,
-          ...examItems,
-          ...prescriptionItems,
-          ...accidentItems,
-        ].sort((a, b) => {
-          const da = a.date ? new Date(a.date).getTime() : 0;
-          const db = b.date ? new Date(b.date).getTime() : 0;
-          return db - da;
-        });
-
-        setItems(allItems);
+        setItems(
+          [...ek2Items, ...examItems, ...prescriptionItems, ...accidentItems].sort(
+            (a, b) =>
+              (b.date ? new Date(b.date).getTime() : 0) -
+              (a.date ? new Date(a.date).getTime() : 0)
+          )
+        );
       } catch {
         setItems([]);
       } finally {
@@ -138,13 +135,41 @@ export default function HealthTimelineTab({ employee }: Props) {
     });
   }, [items, filter, search]);
 
+  const groupedItems = useMemo(() => {
+    const groups: Record<string, TimelineItem[]> = {};
+
+    filteredItems.forEach((item) => {
+      const key = formatDate(item.date);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    });
+
+    return Object.entries(groups);
+  }, [filteredItems]);
+
+  const counts = {
+    toplam: items.length,
+    ek2: items.filter((x) => x.type === "EK2").length,
+    muayene: items.filter((x) => x.type === "MUAYENE").length,
+    recete: items.filter((x) => x.type === "RECETE").length,
+    kaza: items.filter((x) => x.type === "KAZA").length,
+  };
+
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>Sağlık Geçmişi</h2>
         <p style={{ color: "#64748b", marginBottom: 0 }}>
-          Çalışanın EK-2, muayene, reçete ve iş kazası geçmişi kronolojik olarak listelenir.
+          Çalışanın EK-2, muayene, reçete ve iş kazası geçmişi tek zaman çizelgesinde gösterilir.
         </p>
+      </section>
+
+      <section style={statGridStyle}>
+        <Stat title="Toplam" value={counts.toplam} />
+        <Stat title="EK-2" value={counts.ek2} />
+        <Stat title="Muayene" value={counts.muayene} />
+        <Stat title="Reçete" value={counts.recete} />
+        <Stat title="İş Kazası" value={counts.kaza} />
       </section>
 
       <section style={cardStyle}>
@@ -172,41 +197,50 @@ export default function HealthTimelineTab({ employee }: Props) {
 
         {loading ? (
           <Empty text="Sağlık geçmişi yükleniyor..." />
-        ) : filteredItems.length === 0 ? (
+        ) : groupedItems.length === 0 ? (
           <Empty text="Bu çalışan için sağlık geçmişi kaydı bulunamadı." />
         ) : (
-          <div style={{ display: "grid", gap: 14 }}>
-            {filteredItems.map((item) => (
-              <div key={item.id} style={timelineCardStyle}>
-                <div style={{ display: "flex", gap: 14 }}>
-                  <div style={iconStyle(item.type)}>{iconType(item.type)}</div>
+          <div style={{ display: "grid", gap: 24 }}>
+            {groupedItems.map(([date, dayItems]) => (
+              <div key={date}>
+                <div style={dateHeaderStyle}>📅 {date}</div>
 
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: "#64748b", fontWeight: 800 }}>
-                      {formatDate(item.date)}
+                <div style={timelineWrapStyle}>
+                  {dayItems.map((item) => (
+                    <div key={item.id} style={timelineRowStyle}>
+                      <div style={lineStyle} />
+                      <div style={iconStyle(item.type)}>{iconType(item.type)}</div>
+
+                      <div style={timelineCardStyle(item.type)}>
+                        <div>
+                          <div style={{ fontSize: 13, color: "#64748b", fontWeight: 900 }}>
+                            {labelType(item.type)}
+                          </div>
+
+                          <h3 style={{ margin: "5px 0", fontSize: 18 }}>
+                            {item.title}
+                          </h3>
+
+                          <div style={{ fontWeight: 900 }}>{item.subtitle}</div>
+
+                          <div style={{ color: "#64748b", marginTop: 6, fontWeight: 700 }}>
+                            {item.detail}
+                          </div>
+                        </div>
+
+                        {item.url && (
+                          <button
+                            type="button"
+                            onClick={() => window.open(item.url, "_blank")}
+                            style={primaryButtonStyle}
+                          >
+                            Görüntüle / PDF
+                          </button>
+                        )}
+                      </div>
                     </div>
-
-                    <h3 style={{ margin: "6px 0", fontSize: 18 }}>
-                      {item.title}
-                    </h3>
-
-                    <div style={{ fontWeight: 900 }}>{item.subtitle}</div>
-
-                    <div style={{ color: "#64748b", marginTop: 6, fontWeight: 700 }}>
-                      {item.detail}
-                    </div>
-                  </div>
+                  ))}
                 </div>
-
-                {item.url && (
-                  <button
-                    type="button"
-                    onClick={() => window.open(item.url, "_blank")}
-                    style={primaryButtonStyle}
-                  >
-                    Görüntüle / PDF
-                  </button>
-                )}
               </div>
             ))}
           </div>
@@ -216,9 +250,18 @@ export default function HealthTimelineTab({ employee }: Props) {
   );
 }
 
+function Stat({ title, value }: { title: string; value: number }) {
+  return (
+    <div style={statStyle}>
+      <div style={{ color: "#64748b", fontSize: 13, fontWeight: 900 }}>{title}</div>
+      <div style={{ fontSize: 28, fontWeight: 950, marginTop: 6 }}>{value}</div>
+    </div>
+  );
+}
+
 function labelType(type: string) {
   return {
-    "TÜMÜ": "Tümü",
+    TÜMÜ: "Tümü",
     EK2: "EK-2",
     MUAYENE: "Muayene",
     RECETE: "Reçete",
@@ -226,33 +269,13 @@ function labelType(type: string) {
   }[type] || type;
 }
 
-function iconType(type: TimelineItem["type"]) {
+function iconType(type: TimelineType) {
   return {
     EK2: "📄",
     MUAYENE: "🩺",
     RECETE: "💊",
     KAZA: "⚠️",
   }[type];
-}
-
-function iconStyle(type: TimelineItem["type"]): CSSProperties {
-  const bg = {
-    EK2: "#eff6ff",
-    MUAYENE: "#f0fdf4",
-    RECETE: "#faf5ff",
-    KAZA: "#fef2f2",
-  }[type];
-
-  return {
-    width: 44,
-    height: 44,
-    borderRadius: "50%",
-    display: "grid",
-    placeItems: "center",
-    background: bg,
-    fontSize: 22,
-    flexShrink: 0,
-  };
 }
 
 function Empty({ text }: { text: string }) {
@@ -267,10 +290,50 @@ function formatDate(value?: string | null) {
 }
 
 function normalizeText(value: string) {
-  return String(value || "")
-    .trim()
-    .toLocaleLowerCase("tr-TR")
-    .replace(/\s+/g, " ");
+  return String(value || "").trim().toLocaleLowerCase("tr-TR").replace(/\s+/g, " ");
+}
+
+function iconStyle(type: TimelineType): CSSProperties {
+  return {
+    width: 44,
+    height: 44,
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    background:
+      type === "EK2"
+        ? "#eff6ff"
+        : type === "MUAYENE"
+        ? "#f0fdf4"
+        : type === "RECETE"
+        ? "#faf5ff"
+        : "#fef2f2",
+    fontSize: 22,
+    flexShrink: 0,
+    zIndex: 2,
+  };
+}
+
+function timelineCardStyle(type: TimelineType): CSSProperties {
+  return {
+    flex: 1,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "center",
+    border: "1px solid #e5e7eb",
+    borderLeft:
+      type === "EK2"
+        ? "6px solid #2563eb"
+        : type === "MUAYENE"
+        ? "6px solid #16a34a"
+        : type === "RECETE"
+        ? "6px solid #7e22ce"
+        : "6px solid #b91c1c",
+    borderRadius: 18,
+    padding: 18,
+    background: "#f8fafc",
+  };
 }
 
 const cardStyle: CSSProperties = {
@@ -280,10 +343,24 @@ const cardStyle: CSSProperties = {
   padding: 22,
 };
 
+const statGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))",
+  gap: 12,
+};
+
+const statStyle: CSSProperties = {
+  background: "#fff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 16,
+  textAlign: "center",
+};
+
 const toolbarStyle: CSSProperties = {
   display: "grid",
   gap: 12,
-  marginBottom: 18,
+  marginBottom: 22,
 };
 
 const inputStyle: CSSProperties = {
@@ -312,15 +389,32 @@ const activeFilterStyle: CSSProperties = {
   color: "#fff",
 };
 
-const timelineCardStyle: CSSProperties = {
+const dateHeaderStyle: CSSProperties = {
+  fontWeight: 950,
+  color: "#7f1d1d",
+  marginBottom: 12,
+  fontSize: 16,
+};
+
+const timelineWrapStyle: CSSProperties = {
+  display: "grid",
+  gap: 14,
+};
+
+const timelineRowStyle: CSSProperties = {
+  position: "relative",
   display: "flex",
-  justifyContent: "space-between",
-  gap: 16,
+  gap: 14,
   alignItems: "center",
-  border: "1px solid #e5e7eb",
-  borderRadius: 18,
-  padding: 18,
-  background: "#f8fafc",
+};
+
+const lineStyle: CSSProperties = {
+  position: "absolute",
+  left: 21,
+  top: 0,
+  bottom: 0,
+  width: 2,
+  background: "#e5e7eb",
 };
 
 const emptyStyle: CSSProperties = {
