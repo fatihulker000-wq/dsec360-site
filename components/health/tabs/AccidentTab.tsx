@@ -50,10 +50,13 @@ export default function AccidentTab({ employee }: Props) {
         const employeeName = normalizeText(employee.full_name || "");
 
 const filteredRows = (json.rows || []).filter((row: AccidentRow) => {
+  const rowName = normalizeText(row.employeeName || "");
+  const rowSource = normalizeText(row.source || "");
 
-  if (!row.employeeName?.trim()) return false;
+  if (!rowName || rowName === "-") return false;
+  if (rowSource === "demo") return false;
 
-  return normalizeText(row.employeeName) === normalizeText(employee.full_name);
+  return rowName === employeeName;
 });
 
 setItems(filteredRows);
