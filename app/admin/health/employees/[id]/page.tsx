@@ -10,6 +10,7 @@ import PrescriptionTab from "@/components/health/tabs/PrescriptionTab";
 import Ek2Tab from "@/components/health/tabs/Ek2Tab";
 import ExaminationTab from "@/components/health/tabs/ExaminationTab";
 import AccidentTab from "@/components/health/tabs/AccidentTab";
+import HealthTimelineTab from "@/components/health/tabs/HealthTimelineTab";
 
 type Employee = {
   id: string;
@@ -169,11 +170,23 @@ export default function HealthEmployeeDetailPage() {
   <AccidentTab employee={employee as any} />
 )}
 
+{activeTab === "Geçmiş" && (
+  <HealthTimelineTab employee={employee as any} />
+)}
+
 {activeTab === "Dosyalar" && (
   <DocumentsTab employee={employee as any} />
 )}
 
-{!["Genel", "EK-2", "Reçeteler", "Muayeneler", "Dosyalar", "İş Kazaları"].includes(activeTab) && (
+{![
+  "Genel",
+  "EK-2",
+  "Reçeteler",
+  "Muayeneler",
+  "Dosyalar",
+  "İş Kazaları",
+  "Geçmiş",
+].includes(activeTab) && (
   <div
     style={{
       background: "#fff",
