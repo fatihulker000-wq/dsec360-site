@@ -1,56 +1,69 @@
-import type { ReactNode } from "react";
-import { Sparkles } from "lucide-react";
+"use client";
+
 import styles from "./PageHeader.module.css";
+import { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 
-export type PageHeaderMeta = {
+interface BreadcrumbItem {
   label: string;
-  icon?: ReactNode;
-};
+  href?: string;
+}
 
-type PageHeaderProps = {
+interface PageHeaderProps {
   title: string;
-  description?: string;
-  eyebrow?: string;
+  subtitle?: string;
+
+  breadcrumbs?: BreadcrumbItem[];
+
   actions?: ReactNode;
-  meta?: PageHeaderMeta[];
-};
+
+  children?: ReactNode;
+}
 
 export default function PageHeader({
   title,
-  description,
-  eyebrow = "D-SEC Enterprise",
+  subtitle,
+  breadcrumbs = [],
   actions,
-  meta = [],
+  children,
 }: PageHeaderProps) {
   return (
-    <header className={styles.header}>
-      <div className={styles.inner}>
-        <div className={styles.content}>
-          <p className={styles.eyebrow}>
-            <Sparkles size={15} strokeWidth={2.3} aria-hidden="true" />
-            {eyebrow}
-          </p>
+    <header className={styles.wrapper}>
+      {breadcrumbs.length > 0 && (
+        <nav className={styles.breadcrumbs}>
+          {breadcrumbs.map((item, index) => (
+            <div key={index} className={styles.crumb}>
+              <span>{item.label}</span>
 
-          <h1 className={styles.title}>{title}</h1>
-
-          {description ? (
-            <p className={styles.description}>{description}</p>
-          ) : null}
-
-          {meta.length > 0 ? (
-            <div className={styles.meta} aria-label="Sayfa bilgileri">
-              {meta.map((item, index) => (
-                <span className={styles.metaItem} key={`${item.label}-${index}`}>
-                  {item.icon}
-                  {item.label}
-                </span>
-              ))}
+              {index < breadcrumbs.length - 1 && (
+                <ChevronRight size={14} />
+              )}
             </div>
-          ) : null}
+          ))}
+        </nav>
+      )}
+
+      <div className={styles.topRow}>
+        <div>
+          <h1>{title}</h1>
+
+          {subtitle && (
+            <p>{subtitle}</p>
+          )}
         </div>
 
-        {actions ? <div className={styles.actions}>{actions}</div> : null}
+        {actions && (
+          <div className={styles.actions}>
+            {actions}
+          </div>
+        )}
       </div>
+
+      {children && (
+        <div className={styles.extra}>
+          {children}
+        </div>
+      )}
     </header>
   );
 }

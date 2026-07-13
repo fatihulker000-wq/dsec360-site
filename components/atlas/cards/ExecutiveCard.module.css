@@ -1,0 +1,107 @@
+.card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  padding: 32px;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, rgba(127, 29, 29, 0.98), rgba(220, 38, 38, 0.96)),
+    #b91c1c;
+  box-shadow: 0 24px 60px rgba(127, 29, 29, 0.24);
+}
+
+.content {
+  position: relative;
+  z-index: 2;
+}
+
+.glowOne,
+.glowTwo {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  filter: blur(4px);
+}
+
+.glowOne {
+  width: 260px;
+  height: 260px;
+  top: -130px;
+  right: -60px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.glowTwo {
+  width: 180px;
+  height: 180px;
+  bottom: -100px;
+  left: 24%;
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.mainRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.textArea {
+  max-width: 800px;
+}
+
+.textArea h2 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.08;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+}
+
+.textArea p {
+  margin: 14px 0 0;
+  max-width: 720px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.extra {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+@media (max-width: 768px) {
+  .card {
+    padding: 24px;
+    border-radius: 22px;
+  }
+
+  .mainRow {
+    flex-direction: column;
+  }
+
+  .actions {
+    width: 100%;
+  }
+}
