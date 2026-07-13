@@ -14,7 +14,7 @@ import {
   UserRoundPlus,
 } from "lucide-react";
 
-import { DashboardV3 } from "@/components/dashboard-v3";
+import { DashboardV3 } from "../../../components/dashboard-v3";
 
 
 import type {
@@ -528,20 +528,13 @@ const dashboardPieData = [
     Number(inspectionSummary?.total ?? inspectionSummary?.total_count ?? 0) ||
     upcomingInspections.length;
 
-  const openDofCount = Number(
-    dofSummary?.open ??
-      dofSummary?.open_count ??
-      dofSummary?.total_open ??
-      0
-  );
+  const openDofCount = Number(dofSummary?.open ?? 0);
 
-  const criticalRiskCount =
-    Number(
-      riskSummary?.critical ??
-        riskSummary?.critical_count ??
-        riskSummary?.high ??
-        0
-    ) || filteredRiskUsers.length;
+const criticalRiskCount =
+  Number(
+    (riskSummary?.veryHigh ?? 0) +
+      (riskSummary?.high ?? 0)
+  ) || filteredRiskUsers.length;
 
   const doraInsights = [
     aiComment,
