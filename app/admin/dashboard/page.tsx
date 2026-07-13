@@ -540,6 +540,12 @@ const dashboardPieData = [
   isMobile={isMobile}
   dashboardTrendData={dashboardTrendData}
   dashboardPieData={dashboardPieData}
+  groupedRiskCompanies={groupedRiskCompanies}
+  completionRate={completionRate}
+  inProgressRate={inProgressRate}
+  riskRate={riskRate}
+  cbsSummary={cbsSummary}
+  inspectionSummary={inspectionSummary}
 />
  <CardsSection
   isMobile={isMobile}

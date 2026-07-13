@@ -11,7 +11,7 @@ const DEMO_ALLOWED_PATHS = [
   "/api/admin/icd10/search",
 ];
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   const method = req.method.toUpperCase();
 
@@ -25,7 +25,9 @@ export function middleware(req: NextRequest) {
 
   const isApi = pathname.startsWith("/api/");
   const isWrite = WRITE_METHODS.includes(method);
-  const isAllowedPath = DEMO_ALLOWED_PATHS.some((p) => pathname.startsWith(p));
+  const isAllowedPath = DEMO_ALLOWED_PATHS.some((p) =>
+    pathname.startsWith(p)
+  );
 
   if (isDemo && isApi && isWrite && !isAllowedPath) {
     return NextResponse.json(
