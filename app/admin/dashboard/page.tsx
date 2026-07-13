@@ -5,23 +5,16 @@ import {
   Activity,
   Building2,
   ClipboardCheck,
+  FileCheck2,
   GraduationCap,
   HeartPulse,
-  RefreshCw,
   ShieldAlert,
   Siren,
   Stethoscope,
-  UploadCloud,
+  UserRoundPlus,
 } from "lucide-react";
 
-import {
-  AIInsightCard,
-  AlertCard,
-  DashboardGrid,
-  ExecutiveCard,
-  MetricCard,
-  PageHeader,
-} from "@/components/atlas";
+import { DashboardV3 } from "@/components/dashboard-v3";
 
 
 import type {
@@ -535,9 +528,20 @@ const dashboardPieData = [
     Number(inspectionSummary?.total ?? inspectionSummary?.total_count ?? 0) ||
     upcomingInspections.length;
 
-  const openDofCount = Number(dofSummary?.open ?? 0);
+  const openDofCount = Number(
+    dofSummary?.open ??
+      dofSummary?.open_count ??
+      dofSummary?.total_open ??
+      0
+  );
 
-const criticalRiskCount = filteredRiskUsers.length;
+  const criticalRiskCount =
+    Number(
+      riskSummary?.critical ??
+        riskSummary?.critical_count ??
+        riskSummary?.high ??
+        0
+    ) || filteredRiskUsers.length;
 
   const doraInsights = [
     aiComment,
@@ -552,18 +556,152 @@ const criticalRiskCount = filteredRiskUsers.length;
       : "ÇBS süreçlerinde SLA aşımı görünmüyor.",
   ];
 
-  if (error) {
-    return (
-      <main style={{ minHeight: "100vh", padding: 24, background: BRAND.bg }}>
-        <AlertCard
-          title="Dashboard verileri yüklenemedi"
-          value="!"
-          description={error}
-          variant="critical"
-        />
-      </main>
-    );
-  }
+  const metrics = [
+    {
+      title: "Eğitim Uyumu",
+      value: `%${Math.round(completionRate)}`,
+      icon: GraduationCap,
+      trend: completionRate >= 70 ? ("up" as const) : ("down" as const),
+      change: Math.round(Math.abs(completionRate - 70)),
+      color: "blue" as const,
+      description: "Tamamlanan eğitim atamalarının toplam atamalara oranı.",
+      href: "/admin/trainings",
+    },
+    {
+      title: "Kritik Risk",
+      value: criticalRiskCount,
+      icon: ShieldAlert,
+      trend: riskRate <= 30 ? ("down" as const) : ("up" as const),
+      change: Math.round(riskRate),
+      color: "red" as const,
+      description: "Öncelikli müdahale gerektiren riskli kullanıcı ve süreçler.",
+      href: "/admin/risk",
+    },
+    {
+      title: "Sağlık Uyumu",
+      value: `%${healthCompliance}`,
+      icon: HeartPulse,
+      trend: healthCompliance >= 80 ? ("up" as const) : ("down" as const),
+      change: Math.abs(healthCompliance - 80),
+      color: "green" as const,
+      description: "Yaklaşan sağlık ve periyodik kontrol yüküne göre uyum görünümü.",
+      href: "/admin/health",
+    },
+    {
+      title: "Denetimler",
+      value: inspectionCount,
+      icon: ClipboardCheck,
+      trend: "neutral" as const,
+      color: "purple" as const,
+      description: "Sistemde izlenen toplam ve yaklaşan denetim kayıtları.",
+      href: "/admin/inspections",
+    },
+    {
+      title: "Toplam Firma",
+      value: companies.length,
+      icon: Building2,
+      trend: "neutral" as const,
+      color: "blue" as const,
+      description: "Dashboard kapsamında izlenen aktif firma sayısı.",
+      href: "/admin/companies",
+    },
+    {
+      title: "Açık DÖF",
+      value: openDofCount,
+      icon: Siren,
+      trend: openDofCount > 0 ? ("up" as const) : ("neutral" as const),
+      color: "orange" as const,
+      description: "Kapatılmayı bekleyen düzeltici ve önleyici faaliyetler.",
+      href: "/admin/reports",
+    },
+    {
+      title: "Yaklaşan Muayene",
+      value: upcomingHealths.length + upcomingPeriodicControls.length,
+      icon: Stethoscope,
+      trend:
+        upcomingHealths.length + upcomingPeriodicControls.length > 0
+          ? ("up" as const)
+          : ("neutral" as const),
+      color: "green" as const,
+      description: "Sağlık muayenesi veya periyodik kontrol zamanı yaklaşan kayıtlar.",
+      href: "/admin/health",
+    },
+    {
+      title: "Operasyon Aktivitesi",
+      value: activities.length,
+      icon: Activity,
+      trend: "neutral" as const,
+      color: "purple" as const,
+      description: "Dashboard üzerinde izlenen güncel işlem ve aktivite sayısı.",
+    },
+  ];
+
+  const alerts = [
+    {
+      title: "Kritik risk kaydı",
+      value: criticalRiskCount,
+      description:
+        "Riskli kullanıcılar ve kritik risk kayıtları için öncelikli aksiyon alın.",
+      variant: criticalRiskCount > 0 ? ("critical" as const) : ("success" as const),
+      href: "/admin/risk",
+    },
+    {
+      title: "Yaklaşan eğitim",
+      value: upcomingTrainings.length,
+      description:
+        "Yaklaşan eğitim planlarının katılımcı ve tarih kontrollerini tamamlayın.",
+      variant:
+        upcomingTrainings.length > 0 ? ("warning" as const) : ("success" as const),
+      href: "/admin/trainings",
+    },
+    {
+      title: "Yaklaşan denetim",
+      value: upcomingInspections.length,
+      description:
+        "Denetim kapsamı, ekip ve saha hazırlıklarını gözden geçirin.",
+      variant:
+        upcomingInspections.length > 0 ? ("info" as const) : ("success" as const),
+      href: "/admin/inspections",
+    },
+    {
+      title: "ÇBS SLA aşımı",
+      value: cbsSummary?.slaExceeded ?? 0,
+      description:
+        "SLA süresini aşan bildirimlerin sahiplerini ve aksiyonlarını kontrol edin.",
+      variant:
+        (cbsSummary?.slaExceeded ?? 0) > 0
+          ? ("critical" as const)
+          : ("success" as const),
+      href: "/admin/cbs",
+    },
+  ];
+
+  const quickActions = [
+    {
+      title: "Yeni çalışan",
+      description: "Firma çalışan kayıtlarına yeni çalışan ekleyin.",
+      href: "/admin/employees",
+      icon: UserRoundPlus,
+    },
+    {
+      title: "Eğitim planla",
+      description: "Yeni eğitim oluşturun veya yaklaşan eğitimi yönetin.",
+      href: "/admin/trainings",
+      icon: GraduationCap,
+    },
+    {
+      title: "Denetim başlat",
+      description: "Saha veya firma denetimi sürecini başlatın.",
+      href: "/admin/inspections",
+      icon: FileCheck2,
+    },
+    {
+      title: "Riskleri incele",
+      description: "Kritik riskleri ve açık aksiyonları görüntüleyin.",
+      href: "/admin/risk",
+      icon: ShieldAlert,
+    },
+  ];
 
   return (
     <main
@@ -574,293 +712,76 @@ const criticalRiskCount = filteredRiskUsers.length;
       }}
     >
       <div
-        id="admin-dashboard-pdf"
         style={{
           maxWidth: 1440,
           margin: "0 auto",
           width: "100%",
-          opacity: loading ? 0.96 : 1,
-          transition: "opacity 0.2s ease",
         }}
       >
-        <PageHeader
+        <DashboardV3
+          loading={loading}
+          error={error}
+          isMobile={isMobile}
           title="Executive Command Center"
           subtitle="İş sağlığı, güvenliği, sağlık, eğitim, denetim ve operasyon süreçlerinin canlı yönetim ekranı."
-          breadcrumbs={[{ label: "D-SEC" }, { label: "Dashboard" }]}
-          actions={
-            <>
-              <button
-                type="button"
-                onClick={refreshAllDashboardData}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  minHeight: 42,
-                  padding: "0 16px",
-                  borderRadius: 12,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  color: "#111827",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                <RefreshCw size={17} />
-                Yenile
-              </button>
-
-              <button
-                type="button"
-                onClick={exportPDF}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  minHeight: 42,
-                  padding: "0 16px",
-                  borderRadius: 12,
-                  border: "1px solid #b91c1c",
-                  background: "#b91c1c",
-                  color: "#ffffff",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                <UploadCloud size={17} />
-                PDF Rapor
-              </button>
-            </>
-          }
-        />
-
-        <ExecutiveCard
-          eyebrow="D-SEC Enterprise Intelligence"
-          title={heroCompletionHeadline}
-          description={`${heroTotalTrainings} eğitim, ${filteredRiskUsers.length} riskli kullanıcı ve ${inspectionCount} denetim kaydı tek ekranda izleniyor.`}
-        >
-          <DashboardGrid columns={4}>
-            <div>
-              <div style={{ opacity: 0.72, fontSize: 13 }}>Eğitim uyumu</div>
-              <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
-                %{Math.round(completionRate)}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ opacity: 0.72, fontSize: 13 }}>Risk durumu</div>
-              <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
-                {heroRiskStatus}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ opacity: 0.72, fontSize: 13 }}>Açık DÖF</div>
-              <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
-                {openDofCount}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ opacity: 0.72, fontSize: 13 }}>ÇBS SLA aşımı</div>
-              <div style={{ marginTop: 6, fontSize: 30, fontWeight: 900 }}>
-                {cbsSummary?.slaExceeded ?? 0}
-              </div>
-            </div>
-          </DashboardGrid>
-        </ExecutiveCard>
-
-        <div style={{ height: 22 }} />
-
-        <DashboardGrid columns={4}>
-          <MetricCard
-            title="Eğitim Uyumu"
-            value={`%${Math.round(completionRate)}`}
-            icon={GraduationCap}
-            trend={completionRate >= 70 ? "up" : "down"}
-            change={Math.round(Math.abs(completionRate - 70))}
-            color="blue"
-            description="Tamamlanan eğitim atamalarının toplam atamalara oranı."
-            href="/admin/trainings"
-          />
-
-          <MetricCard
-            title="Kritik Risk"
-            value={criticalRiskCount}
-            icon={ShieldAlert}
-            trend={riskRate <= 30 ? "down" : "up"}
-            change={Math.round(riskRate)}
-            color="red"
-            description="Öncelikli müdahale gerektiren riskli kullanıcı ve süreçler."
-            href="/admin/risk"
-          />
-
-          <MetricCard
-            title="Sağlık Uyumu"
-            value={`%${healthCompliance}`}
-            icon={HeartPulse}
-            trend={healthCompliance >= 80 ? "up" : "down"}
-            change={Math.abs(healthCompliance - 80)}
-            color="green"
-            description="Yaklaşan sağlık ve periyodik kontrol yüküne göre uyum görünümü."
-            href="/admin/health"
-          />
-
-          <MetricCard
-            title="Denetimler"
-            value={inspectionCount}
-            icon={ClipboardCheck}
-            trend="neutral"
-            color="purple"
-            description="Sistemde izlenen toplam ve yaklaşan denetim kayıtları."
-            href="/admin/inspections"
-          />
-
-          <MetricCard
-            title="Toplam Firma"
-            value={companies.length}
-            icon={Building2}
-            trend="neutral"
-            color="blue"
-            description="Dashboard kapsamında izlenen aktif firma sayısı."
-            href="/admin/companies"
-          />
-
-          <MetricCard
-            title="Açık DÖF"
-            value={openDofCount}
-            icon={Siren}
-            trend={openDofCount > 0 ? "up" : "neutral"}
-            color="orange"
-            description="Kapatılmayı bekleyen düzeltici ve önleyici faaliyetler."
-            href="/admin/reports"
-          />
-
-          <MetricCard
-            title="Yaklaşan Muayene"
-            value={upcomingHealths.length + upcomingPeriodicControls.length}
-            icon={Stethoscope}
-            trend={
-              upcomingHealths.length + upcomingPeriodicControls.length > 0
-                ? "up"
-                : "neutral"
-            }
-            color="green"
-            description="Sağlık muayenesi veya periyodik kontrol zamanı yaklaşan kayıtlar."
-            href="/admin/health"
-          />
-
-          <MetricCard
-            title="Operasyon Aktivitesi"
-            value={activities.length}
-            icon={Activity}
-            trend="neutral"
-            color="purple"
-            description="Dashboard üzerinde izlenen güncel işlem ve aktivite sayısı."
-          />
-        </DashboardGrid>
-
-        <div style={{ height: 22 }} />
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile
-              ? "minmax(0, 1fr)"
-              : "minmax(0, 2fr) minmax(320px, 1fr)",
-            gap: 20,
-            alignItems: "stretch",
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <ChartsSection
+          heroTitle={heroCompletionHeadline}
+          heroDescription={`${heroTotalTrainings} eğitim, ${filteredRiskUsers.length} riskli kullanıcı ve ${inspectionCount} denetim kaydı tek ekranda izleniyor.`}
+          heroStats={[
+            {
+              label: "Eğitim uyumu",
+              value: `%${Math.round(completionRate)}`,
+            },
+            { label: "Risk durumu", value: heroRiskStatus },
+            { label: "Açık DÖF", value: openDofCount },
+            {
+              label: "ÇBS SLA aşımı",
+              value: cbsSummary?.slaExceeded ?? 0,
+            },
+          ]}
+          metrics={metrics}
+          alerts={alerts}
+          doraInsights={doraInsights}
+          onRefresh={refreshAllDashboardData}
+          onExportPDF={exportPDF}
+          trendData={dashboardTrendData}
+          pieData={dashboardPieData}
+          riskCompanies={groupedRiskCompanies}
+          completionRate={completionRate}
+          inProgressRate={inProgressRate}
+          riskRate={riskRate}
+          cbsSummary={cbsSummary}
+          inspectionSummary={inspectionSummary}
+          quickActions={quickActions}
+          legacyExecutive={
+            <ExecutiveSection
               isMobile={isMobile}
-              dashboardTrendData={dashboardTrendData}
-              dashboardPieData={dashboardPieData}
-              groupedRiskCompanies={groupedRiskCompanies}
-              completionRate={completionRate}
-              inProgressRate={inProgressRate}
-              riskRate={riskRate}
-              cbsSummary={cbsSummary}
-              inspectionSummary={inspectionSummary}
+              adminRole={adminRole}
+              adminCompanyId={adminCompanyId}
+              companies={companies}
+              selectedCompany={selectedCompany}
+              setSelectedCompany={setSelectedCompany}
+              filteredRiskUsers={filteredRiskUsers}
+              ceoSummary={ceoSummary}
+              summary={summary}
+              totals={totals}
             />
-          </div>
-
-          <AIInsightCard
-            title="DORA Executive Intelligence"
-            subtitle="Canlı verilerden oluşturulan yönetici özeti"
-            insights={doraInsights}
-            href="/admin/dora"
-            actionLabel="DORA analiz merkezini aç"
-          />
-        </div>
-
-        <div style={{ height: 22 }} />
-
-        <DashboardGrid columns={4}>
-          <AlertCard
-            title="Kritik risk kaydı"
-            value={criticalRiskCount}
-            description="Riskli kullanıcılar ve kritik risk kayıtları için öncelikli aksiyon alın."
-            variant={criticalRiskCount > 0 ? "critical" : "success"}
-            href="/admin/risk"
-          />
-
-          <AlertCard
-            title="Yaklaşan eğitim"
-            value={upcomingTrainings.length}
-            description="Yaklaşan eğitim planlarının katılımcı ve tarih kontrollerini tamamlayın."
-            variant={upcomingTrainings.length > 0 ? "warning" : "success"}
-            href="/admin/trainings"
-          />
-
-          <AlertCard
-            title="Yaklaşan denetim"
-            value={upcomingInspections.length}
-            description="Denetim kapsamı, ekip ve saha hazırlıklarını gözden geçirin."
-            variant={upcomingInspections.length > 0 ? "info" : "success"}
-            href="/admin/inspections"
-          />
-
-          <AlertCard
-            title="ÇBS SLA aşımı"
-            value={cbsSummary?.slaExceeded ?? 0}
-            description="SLA süresini aşan bildirimlerin sahiplerini ve aksiyonlarını kontrol edin."
-            variant={
-              (cbsSummary?.slaExceeded ?? 0) > 0 ? "critical" : "success"
-            }
-            href="/admin/cbs"
-          />
-        </DashboardGrid>
-
-        <div style={{ height: 22 }} />
-
-        <ExecutiveSection
-          isMobile={isMobile}
-          adminRole={adminRole}
-          adminCompanyId={adminCompanyId}
-          companies={companies}
-          selectedCompany={selectedCompany}
-          setSelectedCompany={setSelectedCompany}
-          filteredRiskUsers={filteredRiskUsers}
-          ceoSummary={ceoSummary}
-          summary={summary}
-          totals={totals}
-        />
-
-        <ListsSection
-          isMobile={isMobile}
-          aiComment={aiComment}
-          filteredRiskUsers={filteredRiskUsers}
-          filteredInProgressUsers={filteredInProgressUsers}
-          filteredCompletedUsers={filteredCompletedUsers}
-          groupedRiskCompanies={groupedRiskCompanies}
-          groupedRiskTrainings={groupedRiskTrainings}
-          topRiskTrainings={topRiskTrainings}
-          bestTrainings={bestTrainings}
-          topEmployees={topEmployees}
-          upcomingTrainings={upcomingTrainings}
-          upcomingInspections={upcomingInspections}
+          }
+          legacyLists={
+            <ListsSection
+              isMobile={isMobile}
+              aiComment={aiComment}
+              filteredRiskUsers={filteredRiskUsers}
+              filteredInProgressUsers={filteredInProgressUsers}
+              filteredCompletedUsers={filteredCompletedUsers}
+              groupedRiskCompanies={groupedRiskCompanies}
+              groupedRiskTrainings={groupedRiskTrainings}
+              topRiskTrainings={topRiskTrainings}
+              bestTrainings={bestTrainings}
+              topEmployees={topEmployees}
+              upcomingTrainings={upcomingTrainings}
+              upcomingInspections={upcomingInspections}
+            />
+          }
         />
       </div>
     </main>
