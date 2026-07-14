@@ -9,7 +9,7 @@ type InspectionKpiTone =
   | "red"
   | "purple";
 
-type InspectionKpiItem = {
+export type InspectionKpiItem = {
   title: string;
   value: number | string;
   description: string;
@@ -22,9 +22,7 @@ type KPISectionProps = {
   items: InspectionKpiItem[];
 };
 
-export default function KPISection({
-  items,
-}: KPISectionProps) {
+export default function KPISection({ items }: KPISectionProps) {
   return (
     <section className={styles.kpiGrid}>
       {items.map((item) => (
@@ -36,24 +34,14 @@ export default function KPISection({
           }`}
         >
           <div className={styles.kpiTop}>
-            <span className={styles.kpiTitle}>
-              {item.title}
-            </span>
-
+            <span className={styles.kpiTitle}>{item.title}</span>
             {item.badge && (
-              <span className={styles.kpiBadge}>
-                {item.badge}
-              </span>
+              <span className={styles.kpiBadge}>{item.badge}</span>
             )}
           </div>
 
-          <div className={styles.kpiValue}>
-            {item.value}
-          </div>
-
-          <div className={styles.kpiDescription}>
-            {item.description}
-          </div>
+          <div className={styles.kpiValue}>{item.value}</div>
+          <div className={styles.kpiDescription}>{item.description}</div>
 
           <div className={styles.kpiLine}>
             <span />

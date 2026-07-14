@@ -4,30 +4,14 @@ import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import type { CSSProperties, ReactNode } from "react";
 import ExecutiveHero from "@/components/inspection-v2/ExecutiveHero";
-import FilterToolbar from "@/components/inspection-v2/FilterToolbar";
-import KPISection from "@/components/inspection-v2/KPISection";
-
-type InspectionKpiTone =
-  | "slate"
-  | "blue"
-  | "green"
-  | "amber"
-  | "red"
-  | "purple";
-
-type InspectionKpiItem = {
-  title: string;
-  value: number | string;
-  description: string;
-  href: string;
-  tone?: InspectionKpiTone;
-  badge?: string;
-};
-
-type InspectionFirmOption = {
-  id: string;
-  name: string;
-};
+import FilterToolbar, {
+  type InspectionFirmOption,
+} from "@/components/inspection-v2/FilterToolbar";
+import KPISection, {
+  type InspectionKpiItem,
+} from "@/components/inspection-v2/KPISection";
+import AnalyticsSection from "../../../components/inspection-v2/AnalyticsSection";
+import DoraExecutive from "../../../components/inspection-v2/DoraExecutive";
 
 function getSupabase() {
   return createClient(
@@ -555,6 +539,73 @@ const topFirmStats = scopedFirmStatsSource
   const conformityRate =
     totalAnswers > 0 ? Math.round((uygunCount / totalAnswers) * 100) : 100;
 
+
+  const typeDistribution = [
+    {
+      label: "Klasik",
+      value: klasikCount,
+      tone: "slate" as const,
+    },
+    {
+      label: "Fotoğraflı",
+      value: fotografliCount,
+      tone: "blue" as const,
+    },
+    {
+      label: "Puanlamalı",
+      value: puanCount,
+      tone: "amber" as const,
+    },
+    {
+      label: "ELMERI",
+      value: elmeriCount,
+      tone: "green" as const,
+    },
+  ];
+
+  const companyAnalytics = topFirmStats.map((company) => {
+    const matchingRuns = filteredRuns.filter(
+      (run: any) =>
+        normalizeFirmKey(getRunFirmName(run)) ===
+          normalizeFirmKey(company.firm) ||
+        normalizeFirmKey(getRunFirmId(run)) ===
+          normalizeFirmKey(company.firmId)
+    );
+
+    const matchingRunIds = new Set(
+      matchingRuns.map((run: any) => Number(run.id))
+    );
+
+    const matchingAnswers = scopedAnswers.filter((answer: any) =>
+      matchingRunIds.has(Number(answer.run_remote_id))
+    );
+
+    const matchingSuitable = matchingAnswers.filter(
+      (answer: any) => normalizeText(answer.result) === "UYGUN"
+    ).length;
+
+    return {
+      name: company.firm,
+      inspections: company.count,
+      answers: company.answers,
+      conformity:
+        matchingAnswers.length > 0
+          ? Math.round(
+              (matchingSuitable / matchingAnswers.length) * 100
+            )
+          : 100,
+    };
+  });
+
+  const topDoraCompany =
+    companyAnalytics.length > 0
+      ? [...companyAnalytics].sort(
+          (a, b) =>
+            b.conformity - a.conformity ||
+            b.inspections - a.inspections
+        )[0]
+      : null;
+
   return (
     <main
       style={{
@@ -619,21 +670,44 @@ const topFirmStats = scopedFirmStatsSource
         />
       </section>
 
-     <FilterToolbar
-  activeFirm={activeFirm}
-  activeFirmName={activeFirmName}
-  activeType={activeType}
-  firms={firmOptions}
-  makeFirmHref={(firm: string) =>
-    makeQuery(activeType, firm)
-  }
-  isActiveFirm={(firm: InspectionFirmOption) =>
-    normalizeFirmKey(activeFirm) ===
-      normalizeFirmKey(firm.id) ||
-    normalizeFirmKey(activeFirm) ===
-      normalizeFirmKey(firm.name)
-  }
-/>
+      <FilterToolbar
+        activeFirm={activeFirm}
+        activeFirmName={activeFirmName}
+        activeType={activeType}
+        firms={firmOptions}
+        makeFirmHref={(firm: string) => makeQuery(activeType, firm)}
+        isActiveFirm={(firm: InspectionFirmOption) =>
+          normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.id) ||
+          normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.name)
+        }
+      />
+
+      <AnalyticsSection
+        totalInspections={filteredRuns.length}
+        totalAnswers={totalAnswers}
+        suitable={uygunCount}
+        partial={kismenCount}
+        unsuitable={uygunsuzCount}
+        openDof={openDofItems.length}
+        closedDof={closedDofItems.length}
+        closureRate={dofClosureRate}
+        typeDistribution={typeDistribution}
+        companyPerformance={companyAnalytics}
+      />
+
+      <DoraExecutive
+        activeFirmName={activeFirmName}
+        totalInspections={filteredRuns.length}
+        totalAnswers={totalAnswers}
+        suitable={uygunCount}
+        partial={kismenCount}
+        unsuitable={uygunsuzCount}
+        openDof={openDofItems.length}
+        closedDof={closedDofItems.length}
+        emptyRunCount={emptyRunCount}
+        topCompany={topDoraCompany}
+        dofHref={makeDofQuery(activeType, activeFirm, "open")}
+      />
 
       <section
         style={{
