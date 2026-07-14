@@ -47,6 +47,13 @@ function cleanFirmName(name?: string | null) {
   return v;
 }
 
+function normalizeFirmKey(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\s+/g, " ");
+}
+
 function makeQuery(type: string, firm: string) {
   const params = new URLSearchParams();
 
@@ -340,7 +347,11 @@ const firmOptions = Array.from(firmMap.values()).sort((a, b) =>
 const activeFirmName =
   activeFirm === "ALL"
     ? "Tüm Firmalar"
-    : firmOptions.find((f) => f.id === activeFirm)?.name || "Firma";
+    : firmOptions.find(
+        (firm) =>
+          normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm) ||
+          normalizeFirmKey(firm.name) === normalizeFirmKey(activeFirm)
+      )?.name || activeFirm;
 
 const filteredRuns = safeRuns.filter((r: any) => {
   const label = modeLabel(r.eval_mode).toUpperCase();
@@ -357,8 +368,8 @@ const filteredRuns = safeRuns.filter((r: any) => {
 
 const firmOk =
   activeFirm === "ALL" ||
-  firmId === activeFirm ||
-  firmName === activeFirm;
+  normalizeFirmKey(firmId) === normalizeFirmKey(activeFirm) ||
+  normalizeFirmKey(firmName) === normalizeFirmKey(activeFirm);
 
   return typeOk && firmOk;
 });
@@ -461,14 +472,33 @@ const avgAnswerPerRun =
 const dofClosureRate =
   dofItems.length > 0 ? Math.round((closedDofItems.length / dofItems.length) * 100) : 0;
 
-const topFirmStats = firmOptions
+const scopedFirmStatsSource =
+  activeFirm === "ALL"
+    ? firmOptions
+    : firmOptions.filter(
+        (firm) =>
+          normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm) ||
+          normalizeFirmKey(firm.name) === normalizeFirmKey(activeFirm)
+      );
+
+const topFirmStats = scopedFirmStatsSource
   .map((firm) => {
-    const firmRuns = safeRuns.filter((r: any) => getRunFirmId(r) === firm.id);
+    const firmRuns = filteredRuns.filter((run: any) => {
+      const runFirmId = getRunFirmId(run);
+      const runFirmName = getRunFirmName(run);
 
-    const firmRunIds = new Set(firmRuns.map((r: any) => Number(r.id)));
+      return (
+        normalizeFirmKey(runFirmId) === normalizeFirmKey(firm.id) ||
+        normalizeFirmKey(runFirmName) === normalizeFirmKey(firm.name)
+      );
+    });
 
-    const firmAnswers = answerList.filter((a: any) =>
-      firmRunIds.has(Number(a.run_remote_id))
+    const firmRunIds = new Set(
+      firmRuns.map((run: any) => Number(run.id))
+    );
+
+    const firmAnswers = scopedAnswers.filter((answer: any) =>
+      firmRunIds.has(Number(answer.run_remote_id))
     ).length;
 
     return {
@@ -478,6 +508,7 @@ const topFirmStats = firmOptions
       answers: firmAnswers,
     };
   })
+  .filter((item) => item.count > 0)
   .sort((a, b) => b.count - a.count)
   .slice(0, 5);
 
@@ -567,7 +598,12 @@ const topFirmStats = firmOptions
           marginBottom: 24,
         }}
       >
-        <Kpi title="Toplam Denetim" value={safeRuns.length} desc="Tüm kayıtlar" href={makeQuery("ALL", activeFirm)} />
+        <Kpi
+          title="Toplam Denetim"
+          value={filteredRuns.length}
+          desc={activeFirm === "ALL" ? "Tüm kayıtlar" : `${activeFirmName} kayıtları`}
+          href={makeQuery("ALL", activeFirm)}
+        />
         <Kpi title="Klasik" value={klasikCount} desc="Standart kontrol" href={makeQuery("KLASIK", activeFirm)} />
         <Kpi title="Fotoğraflı" value={fotografliCount} desc="Görsel kanıtlı" href={makeQuery("FOTO", activeFirm)} />
         <Kpi title="Puanlamalı" value={puanCount} desc="Skor bazlı denetim" href={makeQuery("PUAN", activeFirm)} />
@@ -658,7 +694,10 @@ const topFirmStats = firmOptions
   <FilterPill
     key={firm.id}
     href={makeQuery(activeType, firm.id)}
-    active={activeFirm === firm.id}
+    active={
+      normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.id) ||
+      normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.name)
+    }
     label={firm.name}
   />
 ))}
@@ -674,10 +713,10 @@ const topFirmStats = firmOptions
         }}
       >
         <MiniPanel title="Tür Dağılımı">
-          <MiniRow label="Klasik" value={klasikCount} total={safeRuns.length} color="#334155" />
-          <MiniRow label="Fotoğraflı" value={fotografliCount} total={safeRuns.length} color="#1d4ed8" />
-          <MiniRow label="Puanlamalı" value={puanCount} total={safeRuns.length} color="#c2410c" />
-          <MiniRow label="ELMERI" value={elmeriCount} total={safeRuns.length} color="#15803d" />
+          <MiniRow label="Klasik" value={klasikCount} total={filteredRuns.length} color="#334155" />
+          <MiniRow label="Fotoğraflı" value={fotografliCount} total={filteredRuns.length} color="#1d4ed8" />
+          <MiniRow label="Puanlamalı" value={puanCount} total={filteredRuns.length} color="#c2410c" />
+          <MiniRow label="ELMERI" value={elmeriCount} total={filteredRuns.length} color="#15803d" />
         </MiniPanel>
 
         <MiniPanel title="Firma Bazlı İlk 5">
@@ -691,7 +730,7 @@ const topFirmStats = firmOptions
                 key={f.firm}
                 label={f.firm}
                 value={f.count}
-                total={safeRuns.length}
+                total={filteredRuns.length}
                 color="#5a0f1f"
                 desc={`${f.answers} madde`}
               />
