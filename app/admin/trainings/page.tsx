@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  TrainingExecutiveHero,
-  TrainingKpiGrid,
-} from "../../../components/training-v2";
+import TrainingExecutiveHero from "../../../components/training-v2/TrainingExecutiveHero";
+import TrainingKpiGrid from "../../../components/training-v2/TrainingKpiGrid";
+import TrainingAnalytics from "../../../components/training-v2/TrainingAnalytics";
+import DoraTraining from "../../../components/training-v2/DoraTraining";
+import TrainingContentReadiness from "../../../components/training-v2/TrainingContentReadiness";
 
 type UserApiRow = {
   id: string;
@@ -1168,6 +1169,66 @@ const deleteTrainingUser = async (user: UserRow) => {
   }
 };
 
+
+  const trainingTypeDistribution = useMemo(() => {
+    const map = new Map<string, number>();
+
+    trainings.forEach((training) => {
+      const label = normalizeTrainingTypeText(training.type);
+      map.set(label, (map.get(label) || 0) + 1);
+    });
+
+    return Array.from(map.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [trainings]);
+
+  const contentReadiness = useMemo(() => {
+    const asyncTrainings = trainings.filter(
+      (training) => normalizeTrainingTypeText(training.type) === "Asenkron"
+    );
+
+    const withVideo = asyncTrainings.filter(
+      (training) => training.video_count > 0
+    ).length;
+
+    const withPreExam = asyncTrainings.filter(
+      (training) => training.pre_exam_count > 0
+    ).length;
+
+    const withFinalExam = asyncTrainings.filter(
+      (training) => training.final_exam_count > 0
+    ).length;
+
+    return {
+      asyncCount: asyncTrainings.length,
+      withVideo,
+      withPreExam,
+      withFinalExam,
+      missingVideo: Math.max(0, asyncTrainings.length - withVideo),
+      missingFinalExam: Math.max(0, asyncTrainings.length - withFinalExam),
+    };
+  }, [trainings]);
+
+  const trainingOverviewItems = useMemo(() => {
+    return [...trainings]
+      .sort((a, b) => b.assigned_count - a.assigned_count)
+      .slice(0, 6)
+      .map((training) => ({
+        id: training.id,
+        title: training.title,
+        type: normalizeTrainingTypeText(training.type),
+        duration: getTrainingDurationText(training.duration_minutes),
+        assigned: training.assigned_count,
+        completed: training.completed_count,
+        inProgress: training.in_progress_count,
+        notStarted: training.not_started_count,
+        videoCount: training.video_count,
+        preExamCount: training.pre_exam_count,
+        finalExamCount: training.final_exam_count,
+      }));
+  }, [trainings]);
+
   return (
     <main
       style={{
@@ -1207,6 +1268,35 @@ const deleteTrainingUser = async (user: UserRow) => {
           completed={trainingTotals.totalCompleted}
           inProgress={trainingTotals.totalInProgress}
           notStarted={trainingTotals.totalNotStarted}
+        />
+
+        <TrainingAnalytics
+          totalAssigned={trainingTotals.totalAssigned}
+          completed={trainingTotals.totalCompleted}
+          inProgress={trainingTotals.totalInProgress}
+          notStarted={trainingTotals.totalNotStarted}
+          typeDistribution={trainingTypeDistribution}
+          totalTrainings={trainings.length}
+        />
+
+        <DoraTraining
+          totalEmployees={totalEmployeeCount}
+          totalTrainings={trainings.length}
+          totalAssigned={trainingTotals.totalAssigned}
+          completed={trainingTotals.totalCompleted}
+          inProgress={trainingTotals.totalInProgress}
+          notStarted={trainingTotals.totalNotStarted}
+          missingVideo={contentReadiness.missingVideo}
+          missingFinalExam={contentReadiness.missingFinalExam}
+          selectedTrainingTitle={selectedTrainingInfo?.title || ""}
+        />
+
+        <TrainingContentReadiness
+          asyncCount={contentReadiness.asyncCount}
+          withVideo={contentReadiness.withVideo}
+          withPreExam={contentReadiness.withPreExam}
+          withFinalExam={contentReadiness.withFinalExam}
+          trainings={trainingOverviewItems}
         />
 
         <div
