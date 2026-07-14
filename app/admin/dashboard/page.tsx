@@ -53,6 +53,25 @@ function normalizeCompanyKey(value?: string | null) {
     .replace(/\s+/g, " ");
 }
 
+function withFirmParam(
+  path: string,
+  firm?: string | null
+) {
+  const normalizedFirm = normalizeCompanyKey(firm);
+
+  if (!firm || normalizedFirm === "all") {
+    return path;
+  }
+
+  const [basePath, hash = ""] = path.split("#");
+  const separator = basePath.includes("?") ? "&" : "?";
+  const href = `${basePath}${separator}firm=${encodeURIComponent(
+    String(firm).trim()
+  )}`;
+
+  return hash ? `${href}#${hash}` : href;
+}
+
 
 export default function AdminDashboardPage() {
   const [adminRole, setAdminRole] = useState<string>("");
@@ -268,20 +287,9 @@ const loadUpcomingInspections = async () => {
     }
   };
 
-const loadInspectionDashboard = async (firm = "all") => {
+const loadInspectionDashboard = async () => {
   try {
-    const params = new URLSearchParams();
-
-    if (firm && normalizeCompanyKey(firm) !== "all") {
-      params.set("firm", firm);
-    }
-
-    const query = params.toString();
-    const url = query
-      ? `/api/admin/inspection-dashboard?${query}`
-      : "/api/admin/inspection-dashboard";
-
-    const res = await fetch(url, {
+    const res = await fetch("/api/admin/inspection-dashboard", {
       method: "GET",
       cache: "no-store",
       credentials: "include",
@@ -304,7 +312,7 @@ const loadInspectionDashboard = async (firm = "all") => {
   useEffect(() => {
   void loadDashboard();
   void loadCbs();
-  void loadInspectionDashboard("all");
+  void loadInspectionDashboard();
   void loadUpcomingTrainings();
   void loadUpcomingInspections();
 }, []);
@@ -325,7 +333,7 @@ const loadInspectionDashboard = async (firm = "all") => {
   const refreshAllDashboardData = () => {
     void loadDashboard();
     void loadCbs();
-    void loadInspectionDashboard(effectiveSelectedCompany);
+    void loadInspectionDashboard();
     void loadUpcomingTrainings();
     void loadUpcomingInspections();
   };
@@ -431,7 +439,6 @@ const loadInspectionDashboard = async (firm = "all") => {
         ) || adminCompanyId;
 
       setSelectedCompany(matched);
-      void loadInspectionDashboard(matched);
     }
   }, [adminRole, adminCompanyId, companies]);
 
@@ -706,12 +713,9 @@ const dashboardPieData = [
     )
   );
 
-  const inspectionCount = Number(
-    inspectionSummary?.total ??
-      inspectionSummary?.total_count ??
-      inspectionSummary?.totalInspections ??
-      0
-  );
+  const inspectionCount =
+    Number(inspectionSummary?.total ?? inspectionSummary?.total_count ?? 0) ||
+    upcomingInspections.length;
 
   const openDofCount = Number(dofSummary?.open ?? 0);
 
@@ -849,7 +853,7 @@ const dashboardPieData = [
       change: Math.round(Math.abs(scopedCompletionRate - 70)),
       color: "blue" as const,
       description: "Tamamlanan eğitim atamalarının toplam atamalara oranı.",
-      href: "/admin/trainings",
+      href: withFirmParam("/admin/trainings", effectiveSelectedCompany),
       sparkline: trainingSparkline,
       statusLabel: scopedCompletionRate >= 80 ? "Hedefte" : "Takip gerekli",
     },
@@ -861,7 +865,7 @@ const dashboardPieData = [
       change: Math.round(scopedRiskRate),
       color: "red" as const,
       description: "Öncelikli müdahale gerektiren riskli kullanıcı ve süreçler.",
-      href: "/admin/denetimler?tab=dof&status=open#dof",
+      href: withFirmParam("/admin/denetimler?tab=dof&status=open#dof", effectiveSelectedCompany),
       sparkline: flatSparkline(criticalRiskCount),
       statusLabel: criticalRiskCount > 0 ? "Aksiyon" : "Kontrollü",
     },
@@ -873,7 +877,7 @@ const dashboardPieData = [
       change: Math.abs(healthCompliance - 80),
       color: "green" as const,
       description: "Yaklaşan sağlık ve periyodik kontrol yüküne göre uyum görünümü.",
-      href: "/admin/health",
+      href: withFirmParam("/admin/health", effectiveSelectedCompany),
       sparkline: flatSparkline(healthCompliance),
       statusLabel: healthCompliance >= 80 ? "Uygun" : "İzlenmeli",
     },
@@ -884,7 +888,7 @@ const dashboardPieData = [
       trend: "neutral" as const,
       color: "purple" as const,
       description: "Sistemde izlenen toplam ve yaklaşan denetim kayıtları.",
-      href: "/admin/denetimler",
+      href: withFirmParam("/admin/denetimler", effectiveSelectedCompany),
       sparkline: flatSparkline(inspectionCount),
       statusLabel: upcomingInspections.length > 0 ? "Planlı" : "Güncel",
     },
@@ -895,7 +899,7 @@ const dashboardPieData = [
       trend: "neutral" as const,
       color: "blue" as const,
       description: "Dashboard kapsamında izlenen aktif firma sayısı.",
-      href: "/admin/companies",
+      href: withFirmParam("/admin/companies", effectiveSelectedCompany),
       sparkline: flatSparkline(companies.length),
       statusLabel: "Aktif",
     },
@@ -906,7 +910,7 @@ const dashboardPieData = [
       trend: openDofCount > 0 ? ("up" as const) : ("neutral" as const),
       color: "orange" as const,
       description: "Kapatılmayı bekleyen düzeltici ve önleyici faaliyetler.",
-      href: "/admin/denetimler?tab=dof&status=open#dof",
+      href: withFirmParam("/admin/denetimler?tab=dof&status=open#dof", effectiveSelectedCompany),
       sparkline: flatSparkline(openDofCount),
       statusLabel: openDofCount > 0 ? "Açık" : "Kapalı",
     },
@@ -920,7 +924,7 @@ const dashboardPieData = [
           : ("neutral" as const),
       color: "green" as const,
       description: "Sağlık muayenesi veya periyodik kontrol zamanı yaklaşan kayıtlar.",
-      href: "/admin/health",
+      href: withFirmParam("/admin/health", effectiveSelectedCompany),
       sparkline: flatSparkline(upcomingHealths.length + upcomingPeriodicControls.length),
       statusLabel: upcomingHealths.length + upcomingPeriodicControls.length > 0 ? "Yaklaşıyor" : "Güncel",
     },
@@ -943,7 +947,7 @@ const dashboardPieData = [
       description:
         "Riskli kullanıcılar ve kritik risk kayıtları için öncelikli aksiyon alın.",
       variant: criticalRiskCount > 0 ? ("critical" as const) : ("success" as const),
-      href: "/admin/denetimler?tab=dof&status=open#dof",
+      href: withFirmParam("/admin/denetimler?tab=dof&status=open#dof", effectiveSelectedCompany),
     },
     {
       title: "Yaklaşan eğitim",
@@ -952,7 +956,7 @@ const dashboardPieData = [
         "Yaklaşan eğitim planlarının katılımcı ve tarih kontrollerini tamamlayın.",
       variant:
         upcomingTrainings.length > 0 ? ("warning" as const) : ("success" as const),
-      href: "/admin/trainings",
+      href: withFirmParam("/admin/trainings", effectiveSelectedCompany),
     },
     {
       title: "Yaklaşan denetim",
@@ -961,7 +965,7 @@ const dashboardPieData = [
         "Denetim kapsamı, ekip ve saha hazırlıklarını gözden geçirin.",
       variant:
         upcomingInspections.length > 0 ? ("info" as const) : ("success" as const),
-      href: "/admin/denetimler",
+      href: withFirmParam("/admin/denetimler", effectiveSelectedCompany),
     },
     {
       title: "ÇBS SLA aşımı",
@@ -972,7 +976,7 @@ const dashboardPieData = [
         (cbsSummary?.slaExceeded ?? 0) > 0
           ? ("critical" as const)
           : ("success" as const),
-      href: "/admin/cbs",
+      href: withFirmParam("/admin/cbs", effectiveSelectedCompany),
     },
   ];
 
@@ -980,25 +984,25 @@ const dashboardPieData = [
     {
       title: "Yeni çalışan",
       description: "Firma çalışan kayıtlarına yeni çalışan ekleyin.",
-      href: "/admin/employees",
+      href: withFirmParam("/admin/employees", effectiveSelectedCompany),
       icon: UserRoundPlus,
     },
     {
       title: "Eğitim planla",
       description: "Yeni eğitim oluşturun veya yaklaşan eğitimi yönetin.",
-      href: "/admin/trainings",
+      href: withFirmParam("/admin/trainings", effectiveSelectedCompany),
       icon: GraduationCap,
     },
     {
       title: "Denetim başlat",
       description: "Saha veya firma denetimi sürecini başlatın.",
-      href: "/admin/denetimler",
+      href: withFirmParam("/admin/denetimler", effectiveSelectedCompany),
       icon: FileCheck2,
     },
     {
       title: "Riskleri incele",
       description: "Kritik riskleri ve açık aksiyonları görüntüleyin.",
-      href: "/admin/denetimler?tab=dof&status=open#dof",
+      href: withFirmParam("/admin/denetimler?tab=dof&status=open#dof", effectiveSelectedCompany),
       icon: ShieldAlert,
     },
   ];
@@ -1058,10 +1062,7 @@ const dashboardPieData = [
           companyPerformance={visibleCompanyPerformance}
           companies={companies}
           selectedCompany={effectiveSelectedCompany}
-          onCompanyChange={(value) => {
-            setSelectedCompany(value);
-            void loadInspectionDashboard(value);
-          }}
+          onCompanyChange={setSelectedCompany}
           searchValue={dashboardSearch}
           onSearchChange={setDashboardSearch}
           companyLocked={adminRole === "company_admin"}
