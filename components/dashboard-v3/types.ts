@@ -23,6 +23,8 @@ export type DashboardMetric = {
   color?: DashboardMetricColor;
   description?: string;
   href?: string;
+  sparkline?: number[];
+  statusLabel?: string;
 };
 
 export type DashboardAlert = {
@@ -104,6 +106,23 @@ export type DashboardV3Props = {
 
   companyPerformance: CompanyPerformanceItem[];
 
+  companies: string[];
+
+  selectedCompany: string;
+
+  onCompanyChange: (value: string) => void;
+
+  searchValue: string;
+
+  onSearchChange: (value: string) => void;
+
+  companyLocked?: boolean;
+
+  criticalCount: number;
+
+  executiveRecommendation?: string;
+
   legacyExecutive?: ReactNode;
+
   legacyLists?: ReactNode;
 };

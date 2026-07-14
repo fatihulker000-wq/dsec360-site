@@ -1,30 +1,19 @@
 "use client";
 
-import { DashboardGrid, MetricCard } from "@/components/atlas";
 import type { DashboardMetric } from "./types";
+import KPICardV2 from "./kpi-card-v2";
+import styles from "./DashboardV3.module.css";
 
 type ExecutiveKPIStripProps = {
   metrics: DashboardMetric[];
 };
 
-export default function ExecutiveKPIStrip({
-  metrics,
-}: ExecutiveKPIStripProps) {
+export default function ExecutiveKPIStrip({ metrics }: ExecutiveKPIStripProps) {
   return (
-    <DashboardGrid columns={4}>
+    <div className={styles.kpiGridV2}>
       {metrics.map((metric) => (
-        <MetricCard
-          key={metric.title}
-          title={metric.title}
-          value={metric.value}
-          icon={metric.icon}
-          trend={metric.trend}
-          change={metric.change}
-          color={metric.color}
-          description={metric.description}
-          href={metric.href}
-        />
+        <KPICardV2 key={metric.title} {...metric} />
       ))}
-    </DashboardGrid>
+    </div>
   );
 }

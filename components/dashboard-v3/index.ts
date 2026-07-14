@@ -24,6 +24,18 @@ export { default as DashboardSkeleton } from "./DashboardSkeleton";
 
 export { default as EmptyState } from "./EmptyState";
 
+export { default as Sparkline } from "./Sparkline";
+
+export { default as KPICardV2 } from "./kpi-card-v2";
+
+export { default as FilterBar } from "./filter-bar";
+
+export { default as DashboardToolbar } from "./DashboardToolbar";
+
+export { default as ExecutiveSummary } from "./executive-summary";
+
+export { default as SectionTitle } from "./SectionTitle";
+
 export type {
   CompanyPerformanceItem,
   DashboardAlert,

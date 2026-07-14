@@ -1,6 +1,5 @@
 "use client";
 
-import { RefreshCw, UploadCloud } from "lucide-react";
 import { AlertCard, PageHeader } from "@/components/atlas";
 import type { DashboardV3Props } from "./types";
 import ExecutiveHero from "./ExecutiveHero";
@@ -8,6 +7,9 @@ import ExecutiveKPIStrip from "./ExecutiveKPIStrip";
 import AnalyticsSection from "./AnalyticsSection";
 import AlarmCenter from "./AlarmCenter";
 import QuickActions from "./QuickActions";
+import DashboardToolbar from "./DashboardToolbar";
+import FilterBar from "./filter-bar";
+import ExecutiveSummary from "./executive-summary";
 import OperationalInsights from "./OperationalInsights";
 import DashboardSkeleton from "./DashboardSkeleton";
 import styles from "./DashboardV3.module.css";
@@ -38,6 +40,14 @@ export default function DashboardV3({
   activities,
   riskMatrix,
   companyPerformance,
+  companies,
+  selectedCompany,
+  onCompanyChange,
+  searchValue,
+  onSearchChange,
+  companyLocked = false,
+  criticalCount,
+  executiveRecommendation,
   legacyExecutive,
   legacyLists,
 }: DashboardV3Props) {
@@ -72,32 +82,32 @@ export default function DashboardV3({
         subtitle={subtitle}
         breadcrumbs={[{ label: "D-SEC" }, { label: "Dashboard" }]}
         actions={
-          <>
-            <button
-              className={styles.toolbarButton}
-              type="button"
-              onClick={onRefresh}
-            >
-              <RefreshCw size={17} />
-              Yenile
-            </button>
-
-            <button
-              className={styles.primaryButton}
-              type="button"
-              onClick={onExportPDF}
-            >
-              <UploadCloud size={17} />
-              PDF Rapor
-            </button>
-          </>
+          <DashboardToolbar
+            onRefresh={onRefresh}
+            onExportPDF={onExportPDF}
+          />
         }
+      />
+
+      <FilterBar
+        companies={companies}
+        selectedCompany={selectedCompany}
+        onCompanyChange={onCompanyChange}
+        searchValue={searchValue}
+        onSearchChange={onSearchChange}
+        companyLocked={companyLocked}
       />
 
       <ExecutiveHero
         title={heroTitle}
         description={heroDescription}
         stats={heroStats}
+      />
+
+      <ExecutiveSummary
+        insights={doraInsights}
+        criticalCount={criticalCount}
+        recommendation={executiveRecommendation}
       />
 
       <ExecutiveKPIStrip metrics={metrics} />

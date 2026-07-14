@@ -83,6 +83,7 @@ const [doraSummary, setDoraSummary] = useState<DoraSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("all");
+  const [dashboardSearch, setDashboardSearch] = useState("");
   const [isMobile, setIsMobile] = useState(false);
 
   const [cbsSummary, setCbsSummary] = useState<{
@@ -623,6 +624,30 @@ const dashboardPieData = [
     ];
   }, [riskSummary]);
 
+  const normalizedDashboardSearch = dashboardSearch.trim().toLocaleLowerCase("tr-TR");
+
+  const visibleCompanyPerformance = useMemo(() => {
+    if (!normalizedDashboardSearch) return companyPerformance;
+
+    return companyPerformance.filter((company) =>
+      company.name.toLocaleLowerCase("tr-TR").includes(normalizedDashboardSearch)
+    );
+  }, [companyPerformance, normalizedDashboardSearch]);
+
+  const visibleActivities = useMemo(() => {
+    if (!normalizedDashboardSearch) return activities;
+
+    return activities.filter((activity) => {
+      const searchable = `${activity.title} ${activity.company || ""} ${activity.type}`
+        .toLocaleLowerCase("tr-TR");
+
+      return searchable.includes(normalizedDashboardSearch);
+    });
+  }, [activities, normalizedDashboardSearch]);
+
+  const trainingSparkline = dashboardTrendData.map((item) => Number(item.value) || 0);
+  const flatSparkline = (value: number) => Array.from({ length: 6 }, () => value);
+
   const doraInsights = [
     doraSummary?.message || aiComment,
     `${Math.round(completionRate)}% eğitim tamamlama oranı ile ${riskHeadline.toLocaleLowerCase(
@@ -646,6 +671,8 @@ const dashboardPieData = [
       color: "blue" as const,
       description: "Tamamlanan eğitim atamalarının toplam atamalara oranı.",
       href: "/admin/trainings",
+      sparkline: trainingSparkline,
+      statusLabel: completionRate >= 80 ? "Hedefte" : "Takip gerekli",
     },
     {
       title: "Kritik Risk",
@@ -656,6 +683,8 @@ const dashboardPieData = [
       color: "red" as const,
       description: "Öncelikli müdahale gerektiren riskli kullanıcı ve süreçler.",
       href: "/admin/risk",
+      sparkline: flatSparkline(criticalRiskCount),
+      statusLabel: criticalRiskCount > 0 ? "Aksiyon" : "Kontrollü",
     },
     {
       title: "Sağlık Uyumu",
@@ -666,6 +695,8 @@ const dashboardPieData = [
       color: "green" as const,
       description: "Yaklaşan sağlık ve periyodik kontrol yüküne göre uyum görünümü.",
       href: "/admin/health",
+      sparkline: flatSparkline(healthCompliance),
+      statusLabel: healthCompliance >= 80 ? "Uygun" : "İzlenmeli",
     },
     {
       title: "Denetimler",
@@ -675,6 +706,8 @@ const dashboardPieData = [
       color: "purple" as const,
       description: "Sistemde izlenen toplam ve yaklaşan denetim kayıtları.",
       href: "/admin/inspections",
+      sparkline: flatSparkline(inspectionCount),
+      statusLabel: upcomingInspections.length > 0 ? "Planlı" : "Güncel",
     },
     {
       title: "Toplam Firma",
@@ -684,6 +717,8 @@ const dashboardPieData = [
       color: "blue" as const,
       description: "Dashboard kapsamında izlenen aktif firma sayısı.",
       href: "/admin/companies",
+      sparkline: flatSparkline(companies.length),
+      statusLabel: "Aktif",
     },
     {
       title: "Açık DÖF",
@@ -693,6 +728,8 @@ const dashboardPieData = [
       color: "orange" as const,
       description: "Kapatılmayı bekleyen düzeltici ve önleyici faaliyetler.",
       href: "/admin/reports",
+      sparkline: flatSparkline(openDofCount),
+      statusLabel: openDofCount > 0 ? "Açık" : "Kapalı",
     },
     {
       title: "Yaklaşan Muayene",
@@ -705,6 +742,8 @@ const dashboardPieData = [
       color: "green" as const,
       description: "Sağlık muayenesi veya periyodik kontrol zamanı yaklaşan kayıtlar.",
       href: "/admin/health",
+      sparkline: flatSparkline(upcomingHealths.length + upcomingPeriodicControls.length),
+      statusLabel: upcomingHealths.length + upcomingPeriodicControls.length > 0 ? "Yaklaşıyor" : "Güncel",
     },
     {
       title: "Operasyon Aktivitesi",
@@ -713,6 +752,8 @@ const dashboardPieData = [
       trend: "neutral" as const,
       color: "purple" as const,
       description: "Dashboard üzerinde izlenen güncel işlem ve aktivite sayısı.",
+      sparkline: flatSparkline(activities.length),
+      statusLabel: "Canlı",
     },
   ];
 
@@ -832,9 +873,23 @@ const dashboardPieData = [
           cbsSummary={cbsSummary}
           inspectionSummary={inspectionSummary}
           quickActions={quickActions}
-          activities={activities}
+          activities={visibleActivities}
           riskMatrix={riskMatrix}
-          companyPerformance={companyPerformance}
+          companyPerformance={visibleCompanyPerformance}
+          companies={companies}
+          selectedCompany={effectiveSelectedCompany}
+          onCompanyChange={setSelectedCompany}
+          searchValue={dashboardSearch}
+          onSearchChange={setDashboardSearch}
+          companyLocked={adminRole === "company_admin"}
+          criticalCount={criticalRiskCount}
+          executiveRecommendation={
+            criticalRiskCount > 0
+              ? "Kritik risk kayıtlarını önceliklendirerek ilgili firma ve sorumlulara aksiyon atayın."
+              : upcomingTrainings.length > 0
+              ? "Yaklaşan eğitimlerin katılımcı ve tarih kontrollerini tamamlayın."
+              : "Mevcut performansı koruyun ve yaklaşan operasyonları izlemeye devam edin."
+          }
           legacyExecutive={
             <ExecutiveSection
               isMobile={isMobile}
