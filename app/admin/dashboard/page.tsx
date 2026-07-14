@@ -268,9 +268,20 @@ const loadUpcomingInspections = async () => {
     }
   };
 
-const loadInspectionDashboard = async () => {
+const loadInspectionDashboard = async (firm = "all") => {
   try {
-    const res = await fetch("/api/admin/inspection-dashboard", {
+    const params = new URLSearchParams();
+
+    if (firm && normalizeCompanyKey(firm) !== "all") {
+      params.set("firm", firm);
+    }
+
+    const query = params.toString();
+    const url = query
+      ? `/api/admin/inspection-dashboard?${query}`
+      : "/api/admin/inspection-dashboard";
+
+    const res = await fetch(url, {
       method: "GET",
       cache: "no-store",
       credentials: "include",
@@ -293,7 +304,7 @@ const loadInspectionDashboard = async () => {
   useEffect(() => {
   void loadDashboard();
   void loadCbs();
-  void loadInspectionDashboard();
+  void loadInspectionDashboard("all");
   void loadUpcomingTrainings();
   void loadUpcomingInspections();
 }, []);
@@ -314,7 +325,7 @@ const loadInspectionDashboard = async () => {
   const refreshAllDashboardData = () => {
     void loadDashboard();
     void loadCbs();
-    void loadInspectionDashboard();
+    void loadInspectionDashboard(effectiveSelectedCompany);
     void loadUpcomingTrainings();
     void loadUpcomingInspections();
   };
@@ -420,6 +431,7 @@ const loadInspectionDashboard = async () => {
         ) || adminCompanyId;
 
       setSelectedCompany(matched);
+      void loadInspectionDashboard(matched);
     }
   }, [adminRole, adminCompanyId, companies]);
 
@@ -694,9 +706,12 @@ const dashboardPieData = [
     )
   );
 
-  const inspectionCount =
-    Number(inspectionSummary?.total ?? inspectionSummary?.total_count ?? 0) ||
-    upcomingInspections.length;
+  const inspectionCount = Number(
+    inspectionSummary?.total ??
+      inspectionSummary?.total_count ??
+      inspectionSummary?.totalInspections ??
+      0
+  );
 
   const openDofCount = Number(dofSummary?.open ?? 0);
 
@@ -1043,7 +1058,10 @@ const dashboardPieData = [
           companyPerformance={visibleCompanyPerformance}
           companies={companies}
           selectedCompany={effectiveSelectedCompany}
-          onCompanyChange={setSelectedCompany}
+          onCompanyChange={(value) => {
+            setSelectedCompany(value);
+            void loadInspectionDashboard(value);
+          }}
           searchValue={dashboardSearch}
           onSearchChange={setDashboardSearch}
           companyLocked={adminRole === "company_admin"}
