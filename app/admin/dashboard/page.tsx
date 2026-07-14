@@ -38,7 +38,7 @@ import type {
 import ChartsSection from "@/components/dashboard/ChartsSection";
 import ExecutiveSection from "@/components/dashboard/ExecutiveSection";
 import ListsSection from "@/components/dashboard/ListsSection";
-import { BRAND, formatPercent } from "../../../components/dashboard/styles";
+import { BRAND } from "../../../components/dashboard/styles";
 
 import {
   calculateTotals,
@@ -330,11 +330,17 @@ const loadInspectionDashboard = async () => {
     const element = document.getElementById("admin-dashboard-pdf");
     if (!element) return;
 
+    element.classList.add("dashboardPdfMode");
+
     const canvas = await html2canvas(element, {
-      scale: 1.2,
-      backgroundColor: "#ffffff",
+      scale: 1.65,
+      backgroundColor: "#f5f7fa",
       useCORS: true,
+      logging: false,
+      windowWidth: element.scrollWidth,
     });
+
+    element.classList.remove("dashboardPdfMode");
 
     const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF("p", "mm", "a4");
@@ -357,7 +363,15 @@ const loadInspectionDashboard = async () => {
       heightLeft -= pageHeight;
     }
 
-    pdf.save("dsec-dashboard.pdf");
+    const reportDate = new Intl.DateTimeFormat("tr-TR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .format(new Date())
+      .replaceAll(".", "-");
+
+    pdf.save(`dsec-executive-dashboard-${reportDate}.pdf`);
   };
 
   const totals = useMemo(
@@ -381,35 +395,112 @@ const loadInspectionDashboard = async () => {
       ? adminCompanyId
       : selectedCompany;
 
-  const filteredRiskUsers = useMemo(() => {
-    if (effectiveSelectedCompany === "all") return riskyUsers;
+  const normalizedDashboardSearch = dashboardSearch
+    .trim()
+    .toLocaleLowerCase("tr-TR");
 
-    return riskyUsers.filter(
-      (u) =>
-        ((u.company_id || "Firma Yok").trim() || "Firma Yok") ===
-        effectiveSelectedCompany
+  const matchesDashboardSearch = (user: RiskUser) => {
+    if (!normalizedDashboardSearch) return true;
+
+    const searchable = [
+      user.full_name,
+      user.email,
+      user.company_id,
+      user.training_title,
+      user.status,
+    ]
+      .join(" ")
+      .toLocaleLowerCase("tr-TR");
+
+    return searchable.includes(normalizedDashboardSearch);
+  };
+
+  const matchesSelectedCompany = (user: RiskUser) => {
+    if (effectiveSelectedCompany === "all") return true;
+
+    return (
+      ((user.company_id || "Firma Yok").trim() || "Firma Yok") ===
+      effectiveSelectedCompany
     );
-  }, [effectiveSelectedCompany, riskyUsers]);
+  };
 
-  const filteredInProgressUsers = useMemo(() => {
-    if (effectiveSelectedCompany === "all") return inProgressUsers;
+  const filteredRiskUsers = useMemo(
+    () =>
+      riskyUsers.filter(
+        (user) =>
+          matchesSelectedCompany(user) && matchesDashboardSearch(user)
+      ),
+    [
+      riskyUsers,
+      effectiveSelectedCompany,
+      normalizedDashboardSearch,
+    ]
+  );
 
-    return inProgressUsers.filter(
-      (u) =>
-        ((u.company_id || "Firma Yok").trim() || "Firma Yok") ===
-        effectiveSelectedCompany
-    );
-  }, [effectiveSelectedCompany, inProgressUsers]);
+  const filteredInProgressUsers = useMemo(
+    () =>
+      inProgressUsers.filter(
+        (user) =>
+          matchesSelectedCompany(user) && matchesDashboardSearch(user)
+      ),
+    [
+      inProgressUsers,
+      effectiveSelectedCompany,
+      normalizedDashboardSearch,
+    ]
+  );
 
-  const filteredCompletedUsers = useMemo(() => {
-    if (effectiveSelectedCompany === "all") return completedUsers;
+  const filteredCompletedUsers = useMemo(
+    () =>
+      completedUsers.filter(
+        (user) =>
+          matchesSelectedCompany(user) && matchesDashboardSearch(user)
+      ),
+    [
+      completedUsers,
+      effectiveSelectedCompany,
+      normalizedDashboardSearch,
+    ]
+  );
 
-    return completedUsers.filter(
-      (u) =>
-        ((u.company_id || "Firma Yok").trim() || "Firma Yok") ===
-        effectiveSelectedCompany
-    );
-  }, [effectiveSelectedCompany, completedUsers]);
+  const hasActiveDashboardFilter =
+    effectiveSelectedCompany !== "all" ||
+    normalizedDashboardSearch.length > 0;
+
+  const scopedTotals = useMemo(() => {
+    if (!hasActiveDashboardFilter) {
+      return totals;
+    }
+
+    const completed = filteredCompletedUsers.length;
+    const inProgress = filteredInProgressUsers.length;
+    const notStarted = filteredRiskUsers.length;
+
+    return {
+      assigned: completed + inProgress + notStarted,
+      completed,
+      inProgress,
+      notStarted,
+    };
+  }, [
+    hasActiveDashboardFilter,
+    totals,
+    filteredCompletedUsers,
+    filteredInProgressUsers,
+    filteredRiskUsers,
+  ]);
+
+  const scopedCompletionRate = scopedTotals.assigned
+    ? (scopedTotals.completed / scopedTotals.assigned) * 100
+    : 0;
+
+  const scopedInProgressRate = scopedTotals.assigned
+    ? (scopedTotals.inProgress / scopedTotals.assigned) * 100
+    : 0;
+
+  const scopedRiskRate = scopedTotals.assigned
+    ? (scopedTotals.notStarted / scopedTotals.assigned) * 100
+    : 0;
 
   const topRiskTrainings = useMemo(() => {
     return [...trainings]
@@ -464,7 +555,7 @@ const loadInspectionDashboard = async () => {
       { full_name: string; email: string; count: number }
     >();
 
-    riskyUsers.forEach((u) => {
+    filteredRiskUsers.forEach((u) => {
       const key = u.user_id;
       const current = map.get(key) || {
         full_name: u.full_name,
@@ -478,24 +569,37 @@ const loadInspectionDashboard = async () => {
     return Array.from(map.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
-  }, [riskyUsers]);
+  }, [filteredRiskUsers]);
 
   const completionHeadline =
-    completionRate >= 80
+    scopedCompletionRate >= 80
       ? "Güçlü Tamamlama"
-      : completionRate >= 50
+      : scopedCompletionRate >= 50
       ? "Orta Performans"
       : "İyileştirme Gerekli";
 
+  const scopedRiskStatus =
+    scopedRiskRate >= 60
+      ? "KRITIK"
+      : scopedRiskRate >= 30
+      ? "ORTA"
+      : "IYI";
+
   const riskHeadline =
-    riskStatus === "KRITIK"
+    scopedRiskStatus === "KRITIK"
       ? "Kritik Müdahale Alanı"
-      : riskStatus === "ORTA"
+      : scopedRiskStatus === "ORTA"
       ? "Kontrollü Risk Alanı"
       : "Sağlıklı Görünüm";
 
-const heroTotalTrainings = trainings.length;
-const heroRiskStatus = riskStatus || "IYI";
+const heroTotalTrainings = hasActiveDashboardFilter
+  ? new Set([
+      ...filteredRiskUsers.map((user) => user.training_id),
+      ...filteredInProgressUsers.map((user) => user.training_id),
+      ...filteredCompletedUsers.map((user) => user.training_id),
+    ]).size
+  : trainings.length;
+const heroRiskStatus = scopedRiskStatus;
 const heroCompletionHeadline =
   completionHeadline || "Operasyon Yükleniyor";
 
@@ -521,13 +625,13 @@ const dashboardTrendData =
         { label: "Mar", value: 42 },
         { label: "Nis", value: 58 },
         { label: "May", value: 74 },
-        { label: "Haz", value: Math.round(completionRate) },
+        { label: "Haz", value: Math.round(scopedCompletionRate) },
       ];
 
 const dashboardPieData = [
-  { name: "Tamamlandı", value: summary?.completed_count ?? totals.completed },
-  { name: "Devam", value: summary?.in_progress_count ?? totals.inProgress },
-  { name: "Başlamadı", value: summary?.not_started_count ?? totals.notStarted },
+  { name: "Tamamlandı", value: scopedTotals.completed },
+  { name: "Devam", value: scopedTotals.inProgress },
+  { name: "Başlamadı", value: scopedTotals.notStarted },
 ];
 
   const healthCompliance = Math.max(
@@ -537,7 +641,7 @@ const dashboardPieData = [
       Math.round(
         100 -
           ((upcomingHealths.length + upcomingPeriodicControls.length) /
-            Math.max(1, totals.assigned)) *
+            Math.max(1, scopedTotals.assigned)) *
             100
       )
     )
@@ -549,9 +653,13 @@ const dashboardPieData = [
 
   const openDofCount = Number(dofSummary?.open ?? 0);
 
-  const criticalRiskCount = Number(
-    riskSummary?.veryHigh ?? riskSummary?.high ?? filteredRiskUsers.length
-  );
+  const criticalRiskCount = hasActiveDashboardFilter
+    ? filteredRiskUsers.length
+    : Number(
+        riskSummary?.veryHigh ??
+          riskSummary?.high ??
+          filteredRiskUsers.length
+      );
 
 
   const companyPerformance = useMemo(() => {
@@ -579,9 +687,9 @@ const dashboardPieData = [
       });
     };
 
-    collect(completedUsers, true);
-    collect(inProgressUsers, false);
-    collect(riskyUsers, false);
+    collect(filteredCompletedUsers, true);
+    collect(filteredInProgressUsers, false);
+    collect(filteredRiskUsers, false);
 
     return Array.from(map.values())
       .map((company) => ({
@@ -592,7 +700,7 @@ const dashboardPieData = [
       }))
       .sort((a, b) => b.score - a.score || b.total - a.total)
       .slice(0, 8);
-  }, [completedUsers, inProgressUsers, riskyUsers]);
+  }, [filteredCompletedUsers, filteredInProgressUsers, filteredRiskUsers]);
 
   const riskMatrix = useMemo(() => {
     const low = Math.max(0, Number(riskSummary?.low || 0));
@@ -624,8 +732,6 @@ const dashboardPieData = [
     ];
   }, [riskSummary]);
 
-  const normalizedDashboardSearch = dashboardSearch.trim().toLocaleLowerCase("tr-TR");
-
   const visibleCompanyPerformance = useMemo(() => {
     if (!normalizedDashboardSearch) return companyPerformance;
 
@@ -635,22 +741,32 @@ const dashboardPieData = [
   }, [companyPerformance, normalizedDashboardSearch]);
 
   const visibleActivities = useMemo(() => {
-    if (!normalizedDashboardSearch) return activities;
-
     return activities.filter((activity) => {
+      const companyMatches =
+        effectiveSelectedCompany === "all" ||
+        (activity.company || "").trim() === effectiveSelectedCompany;
+
       const searchable = `${activity.title} ${activity.company || ""} ${activity.type}`
         .toLocaleLowerCase("tr-TR");
 
-      return searchable.includes(normalizedDashboardSearch);
+      const searchMatches =
+        !normalizedDashboardSearch ||
+        searchable.includes(normalizedDashboardSearch);
+
+      return companyMatches && searchMatches;
     });
-  }, [activities, normalizedDashboardSearch]);
+  }, [
+    activities,
+    effectiveSelectedCompany,
+    normalizedDashboardSearch,
+  ]);
 
   const trainingSparkline = dashboardTrendData.map((item) => Number(item.value) || 0);
   const flatSparkline = (value: number) => Array.from({ length: 6 }, () => value);
 
   const doraInsights = [
     doraSummary?.message || aiComment,
-    `${Math.round(completionRate)}% eğitim tamamlama oranı ile ${riskHeadline.toLocaleLowerCase(
+    `${Math.round(scopedCompletionRate)}% eğitim tamamlama oranı ile ${riskHeadline.toLocaleLowerCase(
       "tr-TR"
     )} izleniyor.`,
     upcomingTrainings.length > 0
@@ -664,22 +780,22 @@ const dashboardPieData = [
   const metrics = [
     {
       title: "Eğitim Uyumu",
-      value: `%${Math.round(completionRate)}`,
+      value: `%${Math.round(scopedCompletionRate)}`,
       icon: GraduationCap,
-      trend: completionRate >= 70 ? ("up" as const) : ("down" as const),
-      change: Math.round(Math.abs(completionRate - 70)),
+      trend: scopedCompletionRate >= 70 ? ("up" as const) : ("down" as const),
+      change: Math.round(Math.abs(scopedCompletionRate - 70)),
       color: "blue" as const,
       description: "Tamamlanan eğitim atamalarının toplam atamalara oranı.",
       href: "/admin/trainings",
       sparkline: trainingSparkline,
-      statusLabel: completionRate >= 80 ? "Hedefte" : "Takip gerekli",
+      statusLabel: scopedCompletionRate >= 80 ? "Hedefte" : "Takip gerekli",
     },
     {
       title: "Kritik Risk",
       value: criticalRiskCount,
       icon: ShieldAlert,
-      trend: riskRate <= 30 ? ("down" as const) : ("up" as const),
-      change: Math.round(riskRate),
+      trend: scopedRiskRate <= 30 ? ("down" as const) : ("up" as const),
+      change: Math.round(scopedRiskRate),
       color: "red" as const,
       description: "Öncelikli müdahale gerektiren riskli kullanıcı ve süreçler.",
       href: "/admin/risk",
@@ -833,6 +949,7 @@ const dashboardPieData = [
       }}
     >
       <div
+        className="dashboardCompleteRoot"
         style={{
           maxWidth: 1440,
           margin: "0 auto",
@@ -850,7 +967,7 @@ const dashboardPieData = [
           heroStats={[
             {
               label: "Eğitim uyumu",
-              value: `%${Math.round(completionRate)}`,
+              value: `%${Math.round(scopedCompletionRate)}`,
             },
             { label: "Risk durumu", value: heroRiskStatus },
             { label: "Açık DÖF", value: openDofCount },
@@ -867,9 +984,9 @@ const dashboardPieData = [
           trendData={dashboardTrendData}
           pieData={dashboardPieData}
           riskCompanies={groupedRiskCompanies}
-          completionRate={completionRate}
-          inProgressRate={inProgressRate}
-          riskRate={riskRate}
+          completionRate={scopedCompletionRate}
+          inProgressRate={scopedInProgressRate}
+          riskRate={scopedRiskRate}
           cbsSummary={cbsSummary}
           inspectionSummary={inspectionSummary}
           quickActions={quickActions}
@@ -884,7 +1001,13 @@ const dashboardPieData = [
           companyLocked={adminRole === "company_admin"}
           criticalCount={criticalRiskCount}
           executiveRecommendation={
-            criticalRiskCount > 0
+            hasActiveDashboardFilter
+              ? `${effectiveSelectedCompany === "all" ? "Arama sonucu" : effectiveSelectedCompany} kapsamında ${scopedTotals.assigned} atama inceleniyor. ${
+                  criticalRiskCount > 0
+                    ? "Riskli kayıtları önceliklendirerek sorumlulara aksiyon atayın."
+                    : "Filtrelenen görünümde kritik bir eğitim riski bulunmuyor."
+                }`
+              : criticalRiskCount > 0
               ? "Kritik risk kayıtlarını önceliklendirerek ilgili firma ve sorumlulara aksiyon atayın."
               : upcomingTrainings.length > 0
               ? "Yaklaşan eğitimlerin katılımcı ve tarih kontrollerini tamamlayın."
@@ -901,7 +1024,7 @@ const dashboardPieData = [
               filteredRiskUsers={filteredRiskUsers}
               ceoSummary={ceoSummary}
               summary={summary}
-              totals={totals}
+              totals={scopedTotals}
             />
           }
           legacyLists={

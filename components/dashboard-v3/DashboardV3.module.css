@@ -1115,3 +1115,83 @@
   .dashboardToolbar button { flex: 1; }
   .sectionTitleV2 { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* Dashboard COMPLETE — motion, accessibility and print */
+
+.shell > * {
+  animation: dashboardEnter 420ms cubic-bezier(.2,.75,.25,1) both;
+}
+
+.shell > *:nth-child(2) { animation-delay: 35ms; }
+.shell > *:nth-child(3) { animation-delay: 70ms; }
+.shell > *:nth-child(4) { animation-delay: 105ms; }
+.shell > *:nth-child(5) { animation-delay: 140ms; }
+.shell > *:nth-child(6) { animation-delay: 175ms; }
+
+.kpiCardV2,
+.insightPanel,
+.quickAction {
+  will-change: transform;
+}
+
+.kpiCardV2:focus-within,
+.quickAction:focus-visible,
+.toolbarButton:focus-visible,
+.primaryButton:focus-visible,
+.panelLink:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.25);
+  outline-offset: 3px;
+}
+
+@keyframes dashboardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell > *,
+  .kpiCardV2,
+  .insightPanel,
+  .quickAction,
+  .skeletonBlock::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+:global(.dashboardPdfMode) {
+  width: 1400px !important;
+  max-width: 1400px !important;
+  padding: 12px !important;
+}
+
+:global(.dashboardPdfMode) button,
+:global(.dashboardPdfMode) input,
+:global(.dashboardPdfMode) select {
+  display: none !important;
+}
+
+@media print {
+  .toolbarButton,
+  .primaryButton {
+    display: none !important;
+  }
+
+  .shell {
+    gap: 14px;
+  }
+
+  .kpiCardV2,
+  .insightPanel,
+  .quickAction {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}

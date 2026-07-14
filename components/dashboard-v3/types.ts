@@ -18,11 +18,15 @@ export type DashboardMetric = {
   title: string;
   value: string | number;
   icon: LucideIcon;
+
   trend?: "up" | "down" | "neutral";
   change?: number;
+
   color?: DashboardMetricColor;
+
   description?: string;
   href?: string;
+
   sparkline?: number[];
   statusLabel?: string;
 };
@@ -31,7 +35,9 @@ export type DashboardAlert = {
   title: string;
   value: string | number;
   description?: string;
+
   variant?: "critical" | "warning" | "info" | "success";
+
   href?: string;
 };
 
