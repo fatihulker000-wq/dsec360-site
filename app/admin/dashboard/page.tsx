@@ -1,1117 +1,1578 @@
-"use client";
+import Link from "next/link";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+import type { CSSProperties, ReactNode } from "react";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  Activity,
-  Building2,
-  ClipboardCheck,
-  FileCheck2,
-  GraduationCap,
-  HeartPulse,
-  ShieldAlert,
-  Siren,
-  Stethoscope,
-  UserRoundPlus,
-} from "lucide-react";
+function getSupabase() {
+  return createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
-import { DashboardV3 } from "@/components/dashboard-v3";
+function modeLabel(mode?: string | null) {
+  const m = String(mode || "").toUpperCase();
 
+  if (m.includes("FOTO") || m.includes("PHOTO")) return "Fotoğraflı";
+  if (m.includes("PUAN") || m.includes("SCOR") || m.includes("SKOR")) return "Puanlamalı";
+  if (m.includes("ELMERI")) return "ELMERI";
+  return "Klasik";
+}
 
-import type {
-  Training,
-  RiskUser,
-  DashboardSummary,
-  CompanyDistributionItem,
-  TrendItem,
-  DashboardResponse,
-  MeResponse,
-  DashboardActivity,
-  UpcomingTraining,
-  UpcomingHealth,
-  UpcomingInspection,
-  UpcomingPeriodicControl,
-  DofSummary,
-  RiskSummary,
-  DoraSummary,
-} from "@/components/dashboard/types";
+function modeColor(mode?: string | null) {
+  const label = modeLabel(mode);
 
-import ChartsSection from "@/components/dashboard/ChartsSection";
-import ExecutiveSection from "@/components/dashboard/ExecutiveSection";
-import ListsSection from "@/components/dashboard/ListsSection";
-import { BRAND } from "../../../components/dashboard/styles";
+  if (label === "Fotoğraflı") return { bg: "#eff6ff", color: "#1d4ed8" };
+  if (label === "Puanlamalı") return { bg: "#fff7ed", color: "#c2410c" };
+  if (label === "ELMERI") return { bg: "#f0fdf4", color: "#15803d" };
 
-import {
-  calculateTotals,
-  calculateRates,
-  buildCeoSummary,
-} from "../../../components/dashboard/dashboardHelpers";
+  return { bg: "#f1f5f9", color: "#334155" };
+}
 
-function normalizeCompanyKey(value?: string | null) {
+function formatDate(value?: number | string | null) {
+  if (!value) return "-";
+
+  const numeric = Number(value);
+  const date = Number.isFinite(numeric) ? new Date(numeric) : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("tr-TR");
+}
+
+function cleanFirmName(name?: string | null) {
+  const v = String(name || "").trim();
+  if (!v) return "Firma Ünvanı Yok";
+  if (v.toLowerCase() === "firma") return "Firma Ünvanı Yok";
+  return v;
+}
+
+function normalizeFirmKey(value?: string | null) {
   return String(value || "")
     .trim()
     .toLocaleLowerCase("tr-TR")
     .replace(/\s+/g, " ");
 }
 
-function withFirmParam(
-  path: string,
-  firm?: string | null
-) {
-  const normalizedFirm = normalizeCompanyKey(firm);
+function makeQuery(type: string, firm: string) {
+  const params = new URLSearchParams();
 
-  if (!firm || normalizedFirm === "all") {
-    return path;
-  }
+  if (type && type !== "ALL") params.set("type", type);
+  if (firm && firm !== "ALL") params.set("firm", firm);
 
-  const [basePath, hash = ""] = path.split("#");
-  const separator = basePath.includes("?") ? "&" : "?";
-  const href = `${basePath}${separator}firm=${encodeURIComponent(
-    String(firm).trim()
-  )}`;
-
-  return hash ? `${href}#${hash}` : href;
+  const q = params.toString();
+  return q ? `/admin/denetimler?${q}` : "/admin/denetimler";
 }
 
+function makePagedQuery(
+  type: string,
+  firm: string,
+  dofPage: number,
+  runPage: number,
+  tab = "",
+  status = "",
+  priority = ""
+) {
+  const params = new URLSearchParams();
 
-export default function AdminDashboardPage() {
-  const [adminRole, setAdminRole] = useState<string>("");
-  const [adminCompanyId, setAdminCompanyId] = useState<string>("");
-  const [inspectionSummary, setInspectionSummary] = useState<any>(null);
+  if (type && type !== "ALL") params.set("type", type);
+  if (firm && firm !== "ALL") params.set("firm", firm);
+  if (dofPage > 1) params.set("dofPage", String(dofPage));
+  if (runPage > 1) params.set("runPage", String(runPage));
+  if (tab) params.set("tab", tab);
+  if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
 
-  const [trainings, setTrainings] = useState<Training[]>([]);
-  const [riskyUsers, setRiskyUsers] = useState<RiskUser[]>([]);
-  const [inProgressUsers, setInProgressUsers] = useState<RiskUser[]>([]);
-  const [completedUsers, setCompletedUsers] = useState<RiskUser[]>([]);
-  const [companyDistribution, setCompanyDistribution] = useState<
-  CompanyDistributionItem[]
->([]);
-const [companyList, setCompanyList] = useState<string[]>([]);
-const [trend, setTrend] = useState<TrendItem[]>([]);
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [upcomingTrainings, setUpcomingTrainings] = useState<
-  {
-    id: string;
-    title: string;
-    company: string;
-    date: string;
-  }[]
->([]);
-  const [activities, setActivities] = useState<DashboardActivity[]>([]);
+  const q = params.toString();
+  const hash = tab === "dof" ? "#dof" : "";
 
-const [upcomingHealths, setUpcomingHealths] = useState<UpcomingHealth[]>([]);
-const [upcomingInspections, setUpcomingInspections] = useState<UpcomingInspection[]>([]);
-const [upcomingPeriodicControls, setUpcomingPeriodicControls] = useState<UpcomingPeriodicControl[]>([]);
+  return q
+    ? `/admin/denetimler?${q}${hash}`
+    : `/admin/denetimler${hash}`;
+}
 
-const [dofSummary, setDofSummary] = useState<DofSummary | null>(null);
-const [riskSummary, setRiskSummary] = useState<RiskSummary | null>(null);
-const [doraSummary, setDoraSummary] = useState<DoraSummary | null>(null);
+function makeDofQuery(
+  type: string,
+  firm: string,
+  status = "",
+  priority = ""
+) {
+  const params = new URLSearchParams();
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedCompany, setSelectedCompany] = useState("all");
-  const [dashboardSearch, setDashboardSearch] = useState("");
-  const [isMobile, setIsMobile] = useState(false);
+  if (type && type !== "ALL") params.set("type", type);
+  if (firm && firm !== "ALL") params.set("firm", firm);
 
-  const [cbsSummary, setCbsSummary] = useState<{
-    total: number;
-    new: number;
-    processing: number;
-    read: number;
-    closed: number;
-    slaExceeded: number;
-  } | null>(null);
+  params.set("tab", "dof");
 
+  if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
 
-  
-  useEffect(() => {
-    const loadAdminContext = async () => {
-      try {
-        const res = await fetch("/api/admin/me", {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store",
-        });
+  return `/admin/denetimler?${params.toString()}#dof`;
+}
 
-        if (!res.ok) {
-          setAdminRole("");
-          setAdminCompanyId("");
-          return;
-        }
+async function deleteDenetimAction(formData: FormData) {
+  "use server";
 
-        const json: MeResponse = await res.json().catch(() => ({}));
+  const remoteId = Number(formData.get("remoteId") || 0);
+  if (!remoteId) return;
 
-        setAdminRole(String(json?.user?.role || "").trim());
-        setAdminCompanyId(String(json?.user?.company_id || "").trim());
-      } catch (loadError) {
-        console.error("admin me load error:", loadError);
-        setAdminRole("");
-        setAdminCompanyId("");
-      }
-    };
+  const supabase = getSupabase();
 
-    void loadAdminContext();
-  }, []);
+  await supabase.from("denetim_answers").delete().eq("run_remote_id", remoteId);
+  await supabase.from("denetim_runs").delete().eq("id", remoteId);
 
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      setError("");
+  revalidatePath("/admin/denetimler");
+  redirect("/admin/denetimler");
+}
 
-      const res = await fetch("/api/admin/training-dashboard", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "include",
-      });
+async function closeDofAction(formData: FormData) {
+  "use server";
 
-      if (res.status === 401) {
-        window.location.href = "/admin/login";
-        return;
-      }
+  const answerId = Number(formData.get("answerId") || 0);
+  const runRemoteId = Number(formData.get("runRemoteId") || 0);
+  const itemTitle = String(formData.get("itemTitle") || "").trim();
 
-      const json: DashboardResponse = await res.json();
+  const supabase = getSupabase();
 
-      if (!res.ok) {
-        setError(json?.error || "Veri alınamadı.");
-       setTrainings([]);
-setRiskyUsers([]);
-setInProgressUsers([]);
-setCompletedUsers([]);
-setCompanyDistribution([]);
-setCompanyList([]);
-setTrend([]);
-setSummary(null);
-setActivities([]);
-setUpcomingHealths([]);
-setUpcomingPeriodicControls([]);
-setDofSummary(null);
-setRiskSummary(null);
-setDoraSummary(null);
-        return;
-      }
-
-     setTrainings(json.trainings || []);
-setRiskyUsers(json.risky_users || []);
-setInProgressUsers(json.in_progress_users || []);
-setCompletedUsers(json.completed_users || []);
-setCompanyDistribution(json.company_distribution || []);
-setCompanyList(json.company_list || []);
-setTrend(json.trend || []);
-setSummary(json.summary || null);
-setActivities(json.activities || []);
-setUpcomingHealths(json.upcoming_healths || []);
-setUpcomingPeriodicControls(json.upcoming_periodic_controls || []);
-setDofSummary(json.dof_summary || null);
-setRiskSummary(json.risk_summary || null);
-setDoraSummary(json.dora_summary || null);
-    } catch (loadError) {
-      console.error(loadError);
-      setError("Veri alınamadı.");
-setTrainings([]);
-setRiskyUsers([]);
-setInProgressUsers([]);
-setCompletedUsers([]);
-setCompanyDistribution([]);
-setCompanyList([]);
-setTrend([]);
-setSummary(null);
-setActivities([]);
-setUpcomingHealths([]);
-setUpcomingPeriodicControls([]);
-setDofSummary(null);
-setRiskSummary(null);
-setDoraSummary(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-const loadUpcomingTrainings = async () => {
-  try {
-    const res = await fetch("/api/admin/upcoming-trainings", {
-      cache: "no-store",
-      credentials: "include",
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      setUpcomingTrainings([]);
-      return;
-    }
-
-    setUpcomingTrainings(json.upcoming_trainings || []);
-  } catch {
-    setUpcomingTrainings([]);
+  if (answerId > 0) {
+    await supabase
+      .from("denetim_answers")
+      .update({
+        dof_status: "CLOSED",
+        dof_closed_at: Date.now(),
+      })
+      .eq("id", answerId);
+  } else if (runRemoteId > 0 && itemTitle) {
+    await supabase
+      .from("denetim_answers")
+      .update({
+        dof_status: "CLOSED",
+        dof_closed_at: Date.now(),
+      })
+      .eq("run_remote_id", runRemoteId)
+      .eq("item_title", itemTitle);
   }
-};
 
-const loadUpcomingInspections = async () => {
-  try {
-    const res = await fetch("/api/admin/upcoming-inspections", {
-      cache: "no-store",
-      credentials: "include",
-    });
+  revalidatePath("/admin/denetimler");
+  redirect("/admin/denetimler");
+}
 
-    const json = await res.json();
+export default async function AdminDenetimlerPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    type?: string;
+    firm?: string;
+    dofPage?: string;
+    runPage?: string;
+    tab?: string;
+    status?: string;
+    priority?: string;
+  }>;
+}) {
+  const sp = await searchParams;
+  const isMobile = false;
+  const activeType = String(sp?.type || "ALL").toUpperCase();
+  const activeFirm = String(sp?.firm || "ALL");
+  const activeTab = String(sp?.tab || "").trim().toLowerCase();
+  const activeDofStatus = String(sp?.status || "").trim().toUpperCase();
+  const activeDofPriority = String(sp?.priority || "").trim().toUpperCase();
 
-    if (!res.ok) {
-      setUpcomingInspections([]);
-      return;
-    }
+  const activeDofPage = Math.max(1, Number(sp?.dofPage || 1));
+  const activeRunPage = Math.max(1, Number(sp?.runPage || 1));
 
-    setUpcomingInspections(json.recent_inspections || []);
-  } catch {
-    setUpcomingInspections([]);
+  const dofPageSize = 5;
+  const runPageSize = 10;
+
+  const supabase = getSupabase();
+
+  const { data: runs, error } = await supabase
+    .from("denetim_runs")
+    .select("*")
+    .order("inserted_at", { ascending: false });
+
+  const safeRuns = runs || [];
+  const runIds = safeRuns.map((r: any) => r.id);
+
+  const { data: answers } = runIds.length
+    ? await supabase
+        .from("denetim_answers")
+        .select("*")
+        .in("run_remote_id", runIds)
+    : { data: [] as any[] };
+
+  const answerList = answers || [];
+
+  const { data: companies } = await supabase
+  .from("companies")
+  .select("id, name")
+  .order("name", { ascending: true });
+
+const companyList = companies || [];
+
+const companyNameById = new Map<string, string>();
+companyList.forEach((c: any) => {
+  const id = String(c.id || "").trim();
+  const name = cleanFirmName(c.name);
+  if (id) companyNameById.set(id, name);
+});
+
+function getRunFirmId(run: any) {
+  return String(run.firm_id || "").trim();
+}
+
+function getRunFirmName(run: any) {
+  const firmId = getRunFirmId(run);
+  return cleanFirmName(companyNameById.get(firmId) || run.firm_name);
+}
+
+function normalizeText(value?: string | null) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function resultRequiresDof(result?: string | null) {
+  const r = normalizeText(result);
+
+  if (!r) return false;
+
+  if (
+    r === "UYGUNSUZ" ||
+    r === "KISMEN" ||
+    r.includes("UYGUNSUZ") ||
+    r.includes("KISMEN") ||
+    r.includes("YETERSIZ") ||
+    r.includes("YETERSİZ") ||
+    r.includes("EKSIK") ||
+    r.includes("EKSİK")
+  ) {
+    return true;
   }
-};
 
-  const loadCbs = async () => {
-    try {
-      const res = await fetch("/api/admin/cbs-dashboard", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "include",
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setCbsSummary(null);
-        return;
-      }
-
-      setCbsSummary(json.summary || null);
-    } catch (loadError) {
-      console.error("CBS load error:", loadError);
-      setCbsSummary(null);
-    }
-  };
-
-const loadInspectionDashboard = async () => {
-  try {
-    const res = await fetch("/api/admin/inspection-dashboard", {
-      method: "GET",
-      cache: "no-store",
-      credentials: "include",
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      setInspectionSummary(null);
-      return;
-    }
-
-    setInspectionSummary(json.summary || null);
-  } catch (e) {
-    console.error("Inspection dashboard:", e);
-    setInspectionSummary(null);
+  if (r.startsWith("SCORE:")) {
+    const score = Number(r.replace("SCORE:", ""));
+    return Number.isFinite(score) && score < 100;
   }
-};
 
-  useEffect(() => {
-  void loadDashboard();
-  void loadCbs();
-  void loadInspectionDashboard();
-  void loadUpcomingTrainings();
-  void loadUpcomingInspections();
-}, []);
+  if (r.startsWith("ELMERI:")) {
+    const parts = r.split(":");
+    const wrong = Number(parts[2] || 0);
+    return Number.isFinite(wrong) && wrong > 0;
+  }
 
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 900);
-    };
+  return false;
+}
 
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
+function normalizeDofStatusFromAnswer(a: any) {
+  const status = normalizeText(a.dof_status || a.dofStatus);
 
-    return () => {
-      window.removeEventListener("resize", checkMobile);
-    };
-  }, []);
+  if (status === "CLOSED" || status === "KAPALI") return "CLOSED";
+  if (status === "OPEN" || status === "IN_PROGRESS" || status === "AÇIK") return "OPEN";
 
-  const refreshAllDashboardData = () => {
-    void loadDashboard();
-    void loadCbs();
-    void loadInspectionDashboard();
-    void loadUpcomingTrainings();
-    void loadUpcomingInspections();
-  };
+  if (resultRequiresDof(a.result)) return "OPEN";
 
-  const exportPDF = async () => {
-    const { default: jsPDF } = await import("jspdf");
-    const { default: html2canvas } = await import("html2canvas");
+  return "NONE";
+}
 
-    const element = document.getElementById("admin-dashboard-pdf");
-    if (!element) return;
+function isCriticalDof(a: any) {
+  const result = normalizeText(a.result);
+  const priority = normalizeText(
+    a.dof_priority ||
+      a.priority ||
+      a.risk_level ||
+      a.riskLevel
+  );
 
-    element.classList.add("dashboardPdfMode");
+  if (
+    priority === "CRITICAL" ||
+    priority === "KRITIK" ||
+    priority === "KRİTİK" ||
+    priority === "VERY_HIGH" ||
+    priority === "ÇOK YÜKSEK"
+  ) {
+    return true;
+  }
 
-    const canvas = await html2canvas(element, {
-      scale: 1.65,
-      backgroundColor: "#f5f7fa",
-      useCORS: true,
-      logging: false,
-      windowWidth: element.scrollWidth,
+  if (
+    result === "UYGUNSUZ" ||
+    result.includes("YETERSIZ") ||
+    result.includes("YETERSİZ") ||
+    result.includes("EKSIK") ||
+    result.includes("EKSİK")
+  ) {
+    return true;
+  }
+
+  if (result.startsWith("SCORE:")) {
+    const score = Number(result.replace("SCORE:", ""));
+    return Number.isFinite(score) && score < 70;
+  }
+
+  if (result.startsWith("ELMERI:")) {
+    const parts = result.split(":");
+    const wrong = Number(parts[2] || 0);
+    return Number.isFinite(wrong) && wrong > 0;
+  }
+
+  return false;
+}
+
+const firmMap = new Map<string, { id: string; name: string }>();
+
+safeRuns.forEach((r: any) => {
+  const firmId = String(r.firm_id || "").trim();
+
+  let firmName =
+    cleanFirmName(
+      companyNameById.get(firmId) ||
+      r.firm_name ||
+      r.firma_adi
+    );
+
+  if (!firmName || firmName === "Firma Ünvanı Yok") return;
+
+  const key = firmId || firmName;
+
+  if (!firmMap.has(key)) {
+    firmMap.set(key, {
+      id: key,
+      name: firmName,
     });
+  }
+});
 
-    element.classList.remove("dashboardPdfMode");
-
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
-
-    const pageWidth = 210;
-    const pageHeight = 297;
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-    }
-
-    const reportDate = new Intl.DateTimeFormat("tr-TR", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .format(new Date())
-      .replaceAll(".", "-");
-
-    pdf.save(`dsec-executive-dashboard-${reportDate}.pdf`);
-  };
-
-  const totals = useMemo(
-  () => calculateTotals(trainings),
-  [trainings]
+const firmOptions = Array.from(firmMap.values()).sort((a, b) =>
+  a.name.localeCompare(b.name, "tr")
 );
 
-  const {
-  completionRate,
-  inProgressRate,
-  riskRate,
-  riskStatus,
-} = calculateRates(summary, totals);
+const activeFirmName =
+  activeFirm === "ALL"
+    ? "Tüm Firmalar"
+    : firmOptions.find(
+        (firm) =>
+          normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm) ||
+          normalizeFirmKey(firm.name) === normalizeFirmKey(activeFirm)
+      )?.name || activeFirm;
 
- const companies = useMemo(() => {
-  const companyMap = new Map<string, string>();
+const filteredRuns = safeRuns.filter((r: any) => {
+  const label = modeLabel(r.eval_mode).toUpperCase();
+  const firmId = getRunFirmId(r);
 
-  const collect = (value?: string | null) => {
-    const displayValue = String(value || "").trim();
-    const key = normalizeCompanyKey(displayValue);
+  const typeOk =
+    activeType === "ALL" ||
+    (activeType === "KLASIK" && label === "KLASIK") ||
+    (activeType === "FOTO" && label === "FOTOĞRAFLI") ||
+    (activeType === "PUAN" && label === "PUANLAMALI") ||
+    (activeType === "ELMERI" && label === "ELMERI");
 
-    if (!key || key === "firma yok") return;
-    if (!companyMap.has(key)) {
-      companyMap.set(key, displayValue);
-    }
-  };
+  const firmName = getRunFirmName(r);
 
-  companyList.forEach(collect);
-  riskyUsers.forEach((user) => collect(user.company_id));
-  inProgressUsers.forEach((user) => collect(user.company_id));
-  completedUsers.forEach((user) => collect(user.company_id));
+const firmOk =
+  activeFirm === "ALL" ||
+  normalizeFirmKey(firmId) === normalizeFirmKey(activeFirm) ||
+  normalizeFirmKey(firmName) === normalizeFirmKey(activeFirm);
 
-  return Array.from(companyMap.values()).sort((a, b) =>
-    a.localeCompare(b, "tr")
-  );
-}, [
-  companyList,
-  riskyUsers,
-  inProgressUsers,
-  completedUsers,
-]);
+  return typeOk && firmOk;
+});
 
-  useEffect(() => {
-    if (adminRole === "company_admin" && adminCompanyId) {
-      const adminKey = normalizeCompanyKey(adminCompanyId);
+const scopedRunIds = new Set(
+  filteredRuns.map((r: any) => Number(r.id))
+);
 
-      const matched =
-        companies.find(
-          (company) => normalizeCompanyKey(company) === adminKey
-        ) || adminCompanyId;
+const scopedAnswers = answerList.filter((a: any) =>
+  scopedRunIds.has(Number(a.run_remote_id))
+);
 
-      setSelectedCompany(matched);
-    }
-  }, [adminRole, adminCompanyId, companies]);
+const dofItems = scopedAnswers.filter((a: any) => {
+  const status = normalizeDofStatusFromAnswer(a);
+  return status !== "NONE";
+});
 
-  const resolvedAdminCompany = useMemo(() => {
-    if (!adminCompanyId) return "";
+const openDofItems = dofItems.filter(
+  (a: any) => normalizeDofStatusFromAnswer(a) === "OPEN"
+);
 
-    const adminKey = normalizeCompanyKey(adminCompanyId);
+const closedDofItems = dofItems.filter(
+  (a: any) => normalizeDofStatusFromAnswer(a) === "CLOSED"
+);
 
-    return (
-      companies.find(
-        (company) => normalizeCompanyKey(company) === adminKey
-      ) || adminCompanyId
+const filteredDofItems = dofItems.filter((a: any) => {
+  const status = normalizeDofStatusFromAnswer(a);
+
+  const statusOk =
+    !activeDofStatus ||
+    activeDofStatus === "ALL" ||
+    (activeDofStatus === "OPEN" && status === "OPEN") ||
+    (activeDofStatus === "CLOSED" && status === "CLOSED");
+
+  const priorityOk =
+    !activeDofPriority ||
+    activeDofPriority === "ALL" ||
+    (activeDofPriority === "CRITICAL" && isCriticalDof(a));
+
+  return statusOk && priorityOk;
+});
+
+const dofCountByRun = new Map<number, number>();
+dofItems.forEach((a: any) => {
+  const key = Number(a.run_remote_id);
+  dofCountByRun.set(key, (dofCountByRun.get(key) || 0) + 1);
+});
+
+const dofTotalPages = Math.max(
+  1,
+  Math.ceil(filteredDofItems.length / dofPageSize)
+);
+const safeDofPage = Math.min(activeDofPage, dofTotalPages);
+const pagedDofItems = filteredDofItems.slice(
+  (safeDofPage - 1) * dofPageSize,
+  safeDofPage * dofPageSize
+);
+
+const countByRun = new Map<number, number>();
+scopedAnswers.forEach((a: any) => {
+  const key = Number(a.run_remote_id);
+  countByRun.set(key, (countByRun.get(key) || 0) + 1);
+});
+
+const runTotalPages = Math.max(1, Math.ceil(filteredRuns.length / runPageSize));
+const safeRunPage = Math.min(activeRunPage, runTotalPages);
+const pagedRuns = filteredRuns.slice(
+  (safeRunPage - 1) * runPageSize,
+  safeRunPage * runPageSize
+);
+
+const klasikCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "Klasik").length;
+const fotografliCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "Fotoğraflı").length;
+const puanCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "Puanlamalı").length;
+const elmeriCount = filteredRuns.filter((r: any) => modeLabel(r.eval_mode) === "ELMERI").length;
+
+const totalAnswers = scopedAnswers.length;
+
+const uygunCount = scopedAnswers.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "UYGUN"
+).length;
+
+const kismenCount = scopedAnswers.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "KISMEN"
+).length;
+
+const uygunsuzCount = scopedAnswers.filter(
+  (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
+).length;
+
+const emptyRunCount = filteredRuns.filter((r: any) => {
+  return (countByRun.get(Number(r.id)) || 0) === 0;
+}).length;
+
+const firmCount = activeFirm === "ALL" ? firmOptions.length : 1;
+
+const avgAnswerPerRun =
+  filteredRuns.length > 0 ? Math.round(totalAnswers / filteredRuns.length) : 0;
+
+const dofClosureRate =
+  dofItems.length > 0 ? Math.round((closedDofItems.length / dofItems.length) * 100) : 0;
+
+const scopedFirmStatsSource =
+  activeFirm === "ALL"
+    ? firmOptions
+    : firmOptions.filter(
+        (firm) =>
+          normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm) ||
+          normalizeFirmKey(firm.name) === normalizeFirmKey(activeFirm)
+      );
+
+const topFirmStats = scopedFirmStatsSource
+  .map((firm) => {
+    const firmRuns = filteredRuns.filter((run: any) => {
+      const runFirmId = getRunFirmId(run);
+      const runFirmName = getRunFirmName(run);
+
+      return (
+        normalizeFirmKey(runFirmId) === normalizeFirmKey(firm.id) ||
+        normalizeFirmKey(runFirmName) === normalizeFirmKey(firm.name)
+      );
+    });
+
+    const firmRunIds = new Set(
+      firmRuns.map((run: any) => Number(run.id))
     );
-  }, [adminCompanyId, companies]);
 
-  const effectiveSelectedCompany =
-    adminRole === "company_admin" && resolvedAdminCompany
-      ? resolvedAdminCompany
-      : selectedCompany;
-
-  const normalizedDashboardSearch = dashboardSearch
-    .trim()
-    .toLocaleLowerCase("tr-TR");
-
-  const matchesDashboardSearch = (user: RiskUser) => {
-    if (!normalizedDashboardSearch) return true;
-
-    const searchable = [
-      user.full_name,
-      user.email,
-      user.company_id,
-      user.training_title,
-      user.status,
-    ]
-      .join(" ")
-      .toLocaleLowerCase("tr-TR");
-
-    return searchable.includes(normalizedDashboardSearch);
-  };
-
-  const matchesSelectedCompany = (user: RiskUser) => {
-    if (normalizeCompanyKey(effectiveSelectedCompany) === "all") {
-      return true;
-    }
-
-    return (
-      normalizeCompanyKey(user.company_id || "Firma Yok") ===
-      normalizeCompanyKey(effectiveSelectedCompany)
-    );
-  };
-
-  const filteredRiskUsers = useMemo(
-    () =>
-      riskyUsers.filter(
-        (user) =>
-          matchesSelectedCompany(user) && matchesDashboardSearch(user)
-      ),
-    [
-      riskyUsers,
-      effectiveSelectedCompany,
-      normalizedDashboardSearch,
-    ]
-  );
-
-  const filteredInProgressUsers = useMemo(
-    () =>
-      inProgressUsers.filter(
-        (user) =>
-          matchesSelectedCompany(user) && matchesDashboardSearch(user)
-      ),
-    [
-      inProgressUsers,
-      effectiveSelectedCompany,
-      normalizedDashboardSearch,
-    ]
-  );
-
-  const filteredCompletedUsers = useMemo(
-    () =>
-      completedUsers.filter(
-        (user) =>
-          matchesSelectedCompany(user) && matchesDashboardSearch(user)
-      ),
-    [
-      completedUsers,
-      effectiveSelectedCompany,
-      normalizedDashboardSearch,
-    ]
-  );
-
-  const hasActiveDashboardFilter =
-    normalizeCompanyKey(effectiveSelectedCompany) !== "all" ||
-    normalizedDashboardSearch.length > 0;
-
-  const scopedTotals = useMemo(() => {
-    if (!hasActiveDashboardFilter) {
-      return totals;
-    }
-
-    const completed = filteredCompletedUsers.length;
-    const inProgress = filteredInProgressUsers.length;
-    const notStarted = filteredRiskUsers.length;
+    const firmAnswers = scopedAnswers.filter((answer: any) =>
+      firmRunIds.has(Number(answer.run_remote_id))
+    ).length;
 
     return {
-      assigned: completed + inProgress + notStarted,
-      completed,
-      inProgress,
-      notStarted,
+      firm: firm.name,
+      firmId: firm.id,
+      count: firmRuns.length,
+      answers: firmAnswers,
     };
-  }, [
-    hasActiveDashboardFilter,
-    totals,
-    filteredCompletedUsers,
-    filteredInProgressUsers,
-    filteredRiskUsers,
-  ]);
-
-  const scopedCompletionRate = scopedTotals.assigned
-    ? (scopedTotals.completed / scopedTotals.assigned) * 100
-    : 0;
-
-  const scopedInProgressRate = scopedTotals.assigned
-    ? (scopedTotals.inProgress / scopedTotals.assigned) * 100
-    : 0;
-
-  const scopedRiskRate = scopedTotals.assigned
-    ? (scopedTotals.notStarted / scopedTotals.assigned) * 100
-    : 0;
-
-  const topRiskTrainings = useMemo(() => {
-    return [...trainings]
-      .sort((a, b) => b.not_started_count - a.not_started_count)
-      .slice(0, 6);
-  }, [trainings]);
-
-  const bestTrainings = useMemo(() => {
-    return [...trainings]
-      .sort((a, b) => b.completed_count - a.completed_count)
-      .slice(0, 6);
-  }, [trainings]);
-
-  const groupedRiskCompanies = useMemo(() => {
-    const map = new Map<string, number>();
-
-    filteredRiskUsers.forEach((u) => {
-      const key = (u.company_id || "Firma Yok").trim() || "Firma Yok";
-      map.set(key, (map.get(key) || 0) + 1);
-    });
-
-    return Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-  }, [filteredRiskUsers]);
-
-  const groupedRiskTrainings = useMemo(() => {
-    const map = new Map<string, number>();
-
-    filteredRiskUsers.forEach((u) => {
-      const key = u.training_title || "Eğitim";
-      map.set(key, (map.get(key) || 0) + 1);
-    });
-
-    return Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  }, [filteredRiskUsers]);
-
-  const aiComment =
-    riskRate >= 60
-      ? "Risk yüksek. Başlamayan eğitimler için hızlı aksiyon, otomatik hatırlatma ve firma bazlı takip önerilir."
-      : riskRate >= 30
-      ? "Risk orta seviyede. Devam eden ve başlamayan kullanıcı kümeleri yakından izlenmeli."
-      : "Genel görünüm kontrollü. Tamamlanma oranı korunarak sürdürülebilir bir eğitim performansı sağlanıyor.";
-
-  const topEmployees = useMemo(() => {
-    const map = new Map<
-      string,
-      { full_name: string; email: string; count: number }
-    >();
-
-    filteredRiskUsers.forEach((u) => {
-      const key = u.user_id;
-      const current = map.get(key) || {
-        full_name: u.full_name,
-        email: u.email,
-        count: 0,
-      };
-      current.count += 1;
-      map.set(key, current);
-    });
-
-    return Array.from(map.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-  }, [filteredRiskUsers]);
-
-  const completionHeadline =
-    scopedCompletionRate >= 80
-      ? "Güçlü Tamamlama"
-      : scopedCompletionRate >= 50
-      ? "Orta Performans"
-      : "İyileştirme Gerekli";
-
-  const scopedRiskStatus =
-    scopedRiskRate >= 60
-      ? "KRITIK"
-      : scopedRiskRate >= 30
-      ? "ORTA"
-      : "IYI";
-
-  const riskHeadline =
-    scopedRiskStatus === "KRITIK"
-      ? "Kritik Müdahale Alanı"
-      : scopedRiskStatus === "ORTA"
-      ? "Kontrollü Risk Alanı"
-      : "Sağlıklı Görünüm";
-
-const heroTotalTrainings = hasActiveDashboardFilter
-  ? new Set([
-      ...filteredRiskUsers.map((user) => user.training_id),
-      ...filteredInProgressUsers.map((user) => user.training_id),
-      ...filteredCompletedUsers.map((user) => user.training_id),
-    ]).size
-  : trainings.length;
-const heroRiskStatus = scopedRiskStatus;
-const heroCompletionHeadline =
-  completionHeadline || "Operasyon Yükleniyor";
-
-
-  const ceoSummary = useMemo(
-  () =>
-    buildCeoSummary({
-      trainings,
-      summary,
-      totals,
-      cbsSummary,
-      riskRate,
-    }),
-  [trainings, summary, totals, cbsSummary, riskRate]
-);
-
-const dashboardTrendData =
-  trend.length > 0
-    ? trend
-    : [
-        { label: "Oca", value: 20 },
-        { label: "Şub", value: 35 },
-        { label: "Mar", value: 42 },
-        { label: "Nis", value: 58 },
-        { label: "May", value: 74 },
-        { label: "Haz", value: Math.round(scopedCompletionRate) },
-      ];
-
-const dashboardPieData = [
-  { name: "Tamamlandı", value: scopedTotals.completed },
-  { name: "Devam", value: scopedTotals.inProgress },
-  { name: "Başlamadı", value: scopedTotals.notStarted },
-];
-
-  const healthCompliance = Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(
-        100 -
-          ((upcomingHealths.length + upcomingPeriodicControls.length) /
-            Math.max(1, scopedTotals.assigned)) *
-            100
-      )
-    )
-  );
-
-  const inspectionCount =
-    Number(inspectionSummary?.total ?? inspectionSummary?.total_count ?? 0) ||
-    upcomingInspections.length;
-
-  const openDofCount = Number(dofSummary?.open ?? 0);
-
-  const criticalRiskCount = hasActiveDashboardFilter
-    ? filteredRiskUsers.length
-    : Number(
-        riskSummary?.veryHigh ??
-          riskSummary?.high ??
-          filteredRiskUsers.length
-      );
-
-
-  const companyPerformance = useMemo(() => {
-    const map = new Map<
-      string,
-      { name: string; completed: number; total: number }
-    >();
-
-    const collect = (users: RiskUser[], completed: boolean) => {
-      users.forEach((user) => {
-        const name = (user.company_id || "Firma Yok").trim() || "Firma Yok";
-        const current = map.get(name) || {
-          name,
-          completed: 0,
-          total: 0,
-        };
-
-        current.total += 1;
-
-        if (completed) {
-          current.completed += 1;
-        }
-
-        map.set(name, current);
-      });
-    };
-
-    collect(filteredCompletedUsers, true);
-    collect(filteredInProgressUsers, false);
-    collect(filteredRiskUsers, false);
-
-    return Array.from(map.values())
-      .map((company) => ({
-        ...company,
-        score: company.total
-          ? Math.round((company.completed / company.total) * 100)
-          : 0,
-      }))
-      .sort((a, b) => b.score - a.score || b.total - a.total)
-      .slice(0, 8);
-  }, [filteredCompletedUsers, filteredInProgressUsers, filteredRiskUsers]);
-
-  const riskMatrix = useMemo(() => {
-    const low = Math.max(0, Number(riskSummary?.low || 0));
-    const medium = Math.max(0, Number(riskSummary?.medium || 0));
-    const high = Math.max(0, Number(riskSummary?.high || 0));
-    const veryHigh = Math.max(0, Number(riskSummary?.veryHigh || 0));
-
-    const distribute = (total: number, slots: number) => {
-      const base = Math.floor(total / slots);
-      const remainder = total % slots;
-
-      return Array.from(
-        { length: slots },
-        (_, index) => base + (index < remainder ? 1 : 0)
-      );
-    };
-
-    const lowParts = distribute(low, 7);
-    const mediumParts = distribute(medium, 7);
-    const highParts = distribute(high, 6);
-    const criticalParts = distribute(veryHigh, 5);
-
-    return [
-      [lowParts[0], lowParts[1], lowParts[2], mediumParts[0], mediumParts[1]],
-      [lowParts[3], lowParts[4], mediumParts[2], mediumParts[3], highParts[0]],
-      [lowParts[5], mediumParts[4], mediumParts[5], highParts[1], highParts[2]],
-      [mediumParts[6], highParts[3], highParts[4], criticalParts[0], criticalParts[1]],
-      [lowParts[6], highParts[5], criticalParts[2], criticalParts[3], criticalParts[4]],
-    ];
-  }, [riskSummary]);
-
-  const visibleCompanyPerformance = useMemo(() => {
-    if (!normalizedDashboardSearch) return companyPerformance;
-
-    return companyPerformance.filter((company) =>
-      company.name.toLocaleLowerCase("tr-TR").includes(normalizedDashboardSearch)
-    );
-  }, [companyPerformance, normalizedDashboardSearch]);
-
-  const visibleActivities = useMemo(() => {
-    return activities.filter((activity) => {
-      const companyMatches =
-        normalizeCompanyKey(effectiveSelectedCompany) === "all" ||
-        normalizeCompanyKey(activity.company) ===
-          normalizeCompanyKey(effectiveSelectedCompany);
-
-      const searchable = `${activity.title} ${activity.company || ""} ${activity.type}`
-        .toLocaleLowerCase("tr-TR");
-
-      const searchMatches =
-        !normalizedDashboardSearch ||
-        searchable.includes(normalizedDashboardSearch);
-
-      return companyMatches && searchMatches;
-    });
-  }, [
-    activities,
-    effectiveSelectedCompany,
-    normalizedDashboardSearch,
-  ]);
-
-  const trainingSparkline = dashboardTrendData.map((item) => Number(item.value) || 0);
-  const flatSparkline = (value: number) => Array.from({ length: 6 }, () => value);
-
-  const doraInsights = [
-    doraSummary?.message || aiComment,
-    `${Math.round(scopedCompletionRate)}% eğitim tamamlama oranı ile ${riskHeadline.toLocaleLowerCase(
-      "tr-TR"
-    )} izleniyor.`,
-    upcomingTrainings.length > 0
-      ? `${upcomingTrainings.length} yaklaşan eğitim için planlama kontrolü önerilir.`
-      : "Yaklaşan eğitim takviminde kritik bir yoğunluk görünmüyor.",
-    cbsSummary?.slaExceeded
-      ? `${cbsSummary.slaExceeded} ÇBS kaydı SLA süresini aşmış durumda.`
-      : "ÇBS süreçlerinde SLA aşımı görünmüyor.",
-  ];
-
-  const metrics = [
-    {
-      title: "Eğitim Uyumu",
-      value: `%${Math.round(scopedCompletionRate)}`,
-      icon: GraduationCap,
-      trend: scopedCompletionRate >= 70 ? ("up" as const) : ("down" as const),
-      change: Math.round(Math.abs(scopedCompletionRate - 70)),
-      color: "blue" as const,
-      description: "Tamamlanan eğitim atamalarının toplam atamalara oranı.",
-      href: withFirmParam("/admin/trainings", effectiveSelectedCompany),
-      sparkline: trainingSparkline,
-      statusLabel: scopedCompletionRate >= 80 ? "Hedefte" : "Takip gerekli",
-    },
-    {
-      title: "Kritik Risk",
-      value: criticalRiskCount,
-      icon: ShieldAlert,
-      trend: scopedRiskRate <= 30 ? ("down" as const) : ("up" as const),
-      change: Math.round(scopedRiskRate),
-      color: "red" as const,
-      description: "Öncelikli müdahale gerektiren riskli kullanıcı ve süreçler.",
-      href: withFirmParam("/admin/denetimler?tab=dof&status=open#dof", effectiveSelectedCompany),
-      sparkline: flatSparkline(criticalRiskCount),
-      statusLabel: criticalRiskCount > 0 ? "Aksiyon" : "Kontrollü",
-    },
-    {
-      title: "Sağlık Uyumu",
-      value: `%${healthCompliance}`,
-      icon: HeartPulse,
-      trend: healthCompliance >= 80 ? ("up" as const) : ("down" as const),
-      change: Math.abs(healthCompliance - 80),
-      color: "green" as const,
-      description: "Yaklaşan sağlık ve periyodik kontrol yüküne göre uyum görünümü.",
-      href: withFirmParam("/admin/health", effectiveSelectedCompany),
-      sparkline: flatSparkline(healthCompliance),
-      statusLabel: healthCompliance >= 80 ? "Uygun" : "İzlenmeli",
-    },
-    {
-      title: "Denetimler",
-      value: inspectionCount,
-      icon: ClipboardCheck,
-      trend: "neutral" as const,
-      color: "purple" as const,
-      description: "Sistemde izlenen toplam ve yaklaşan denetim kayıtları.",
-      href: withFirmParam("/admin/denetimler", effectiveSelectedCompany),
-      sparkline: flatSparkline(inspectionCount),
-      statusLabel: upcomingInspections.length > 0 ? "Planlı" : "Güncel",
-    },
-    {
-      title: "Toplam Firma",
-      value: companies.length,
-      icon: Building2,
-      trend: "neutral" as const,
-      color: "blue" as const,
-      description: "Dashboard kapsamında izlenen aktif firma sayısı.",
-      href: withFirmParam("/admin/companies", effectiveSelectedCompany),
-      sparkline: flatSparkline(companies.length),
-      statusLabel: "Aktif",
-    },
-    {
-      title: "Açık DÖF",
-      value: openDofCount,
-      icon: Siren,
-      trend: openDofCount > 0 ? ("up" as const) : ("neutral" as const),
-      color: "orange" as const,
-      description: "Kapatılmayı bekleyen düzeltici ve önleyici faaliyetler.",
-      href: withFirmParam("/admin/denetimler?tab=dof&status=open#dof", effectiveSelectedCompany),
-      sparkline: flatSparkline(openDofCount),
-      statusLabel: openDofCount > 0 ? "Açık" : "Kapalı",
-    },
-    {
-      title: "Yaklaşan Muayene",
-      value: upcomingHealths.length + upcomingPeriodicControls.length,
-      icon: Stethoscope,
-      trend:
-        upcomingHealths.length + upcomingPeriodicControls.length > 0
-          ? ("up" as const)
-          : ("neutral" as const),
-      color: "green" as const,
-      description: "Sağlık muayenesi veya periyodik kontrol zamanı yaklaşan kayıtlar.",
-      href: withFirmParam("/admin/health", effectiveSelectedCompany),
-      sparkline: flatSparkline(upcomingHealths.length + upcomingPeriodicControls.length),
-      statusLabel: upcomingHealths.length + upcomingPeriodicControls.length > 0 ? "Yaklaşıyor" : "Güncel",
-    },
-    {
-      title: "Operasyon Aktivitesi",
-      value: activities.length,
-      icon: Activity,
-      trend: "neutral" as const,
-      color: "purple" as const,
-      description: "Dashboard üzerinde izlenen güncel işlem ve aktivite sayısı.",
-      sparkline: flatSparkline(activities.length),
-      statusLabel: "Canlı",
-    },
-  ];
-
-  const alerts = [
-    {
-      title: "Kritik risk kaydı",
-      value: criticalRiskCount,
-      description:
-        "Riskli kullanıcılar ve kritik risk kayıtları için öncelikli aksiyon alın.",
-      variant: criticalRiskCount > 0 ? ("critical" as const) : ("success" as const),
-      href: withFirmParam("/admin/denetimler?tab=dof&status=open#dof", effectiveSelectedCompany),
-    },
-    {
-      title: "Yaklaşan eğitim",
-      value: upcomingTrainings.length,
-      description:
-        "Yaklaşan eğitim planlarının katılımcı ve tarih kontrollerini tamamlayın.",
-      variant:
-        upcomingTrainings.length > 0 ? ("warning" as const) : ("success" as const),
-      href: withFirmParam("/admin/trainings", effectiveSelectedCompany),
-    },
-    {
-      title: "Yaklaşan denetim",
-      value: upcomingInspections.length,
-      description:
-        "Denetim kapsamı, ekip ve saha hazırlıklarını gözden geçirin.",
-      variant:
-        upcomingInspections.length > 0 ? ("info" as const) : ("success" as const),
-      href: withFirmParam("/admin/denetimler", effectiveSelectedCompany),
-    },
-    {
-      title: "ÇBS SLA aşımı",
-      value: cbsSummary?.slaExceeded ?? 0,
-      description:
-        "SLA süresini aşan bildirimlerin sahiplerini ve aksiyonlarını kontrol edin.",
-      variant:
-        (cbsSummary?.slaExceeded ?? 0) > 0
-          ? ("critical" as const)
-          : ("success" as const),
-      href: withFirmParam("/admin/cbs", effectiveSelectedCompany),
-    },
-  ];
-
-  const quickActions = [
-    {
-      title: "Yeni çalışan",
-      description: "Firma çalışan kayıtlarına yeni çalışan ekleyin.",
-      href: withFirmParam("/admin/employees", effectiveSelectedCompany),
-      icon: UserRoundPlus,
-    },
-    {
-      title: "Eğitim planla",
-      description: "Yeni eğitim oluşturun veya yaklaşan eğitimi yönetin.",
-      href: withFirmParam("/admin/trainings", effectiveSelectedCompany),
-      icon: GraduationCap,
-    },
-    {
-      title: "Denetim başlat",
-      description: "Saha veya firma denetimi sürecini başlatın.",
-      href: withFirmParam("/admin/denetimler", effectiveSelectedCompany),
-      icon: FileCheck2,
-    },
-    {
-      title: "Riskleri incele",
-      description: "Kritik riskleri ve açık aksiyonları görüntüleyin.",
-      href: withFirmParam("/admin/denetimler?tab=dof&status=open#dof", effectiveSelectedCompany),
-      icon: ShieldAlert,
-    },
-  ];
+  })
+  .filter((item) => item.count > 0)
+  .sort((a, b) => b.count - a.count)
+  .slice(0, 5);
 
   return (
     <main
       style={{
-        minHeight: "100%",
-        background: BRAND.bg,
-        padding: isMobile ? 12 : 24,
+        padding: 32,
+        background:
+          "radial-gradient(circle at top right, rgba(198,40,40,0.08), transparent 34%), #fafafa",
+        minHeight: "100vh",
       }}
     >
-      <div
-        className="dashboardCompleteRoot"
+      <section
         style={{
-          maxWidth: 1440,
-          margin: "0 auto",
-          width: "100%",
+          borderRadius: 32,
+          padding: 34,
+          background:
+            "linear-gradient(135deg, #4a0d1a 0%, #7a1224 45%, #c62828 100%)",
+          color: "#fff",
+          marginBottom: 24,
+          boxShadow: "0 22px 70px rgba(90,15,31,0.24)",
         }}
       >
-        <DashboardV3
-          loading={loading}
-          error={error}
-          isMobile={isMobile}
-          title="Executive Command Center"
-          subtitle="İş sağlığı, güvenliği, sağlık, eğitim, denetim ve operasyon süreçlerinin canlı yönetim ekranı."
-          heroTitle={heroCompletionHeadline}
-          heroDescription={`${heroTotalTrainings} eğitim, ${filteredRiskUsers.length} riskli kullanıcı ve ${inspectionCount} denetim kaydı tek ekranda izleniyor.`}
-          heroStats={[
-            {
-              label: "Eğitim uyumu",
-              value: `%${Math.round(scopedCompletionRate)}`,
-            },
-            { label: "Risk durumu", value: heroRiskStatus },
-            { label: "Açık DÖF", value: openDofCount },
-            {
-              label: "ÇBS SLA aşımı",
-              value: cbsSummary?.slaExceeded ?? 0,
-            },
-          ]}
-          metrics={metrics}
-          alerts={alerts}
-          doraInsights={doraInsights}
-          onRefresh={refreshAllDashboardData}
-          onExportPDF={exportPDF}
-          trendData={dashboardTrendData}
-          pieData={dashboardPieData}
-          riskCompanies={groupedRiskCompanies}
-          completionRate={scopedCompletionRate}
-          inProgressRate={scopedInProgressRate}
-          riskRate={scopedRiskRate}
-          cbsSummary={cbsSummary}
-          inspectionSummary={inspectionSummary}
-          quickActions={quickActions}
-          activities={visibleActivities}
-          riskMatrix={riskMatrix}
-          companyPerformance={visibleCompanyPerformance}
-          companies={companies}
-          selectedCompany={effectiveSelectedCompany}
-          onCompanyChange={setSelectedCompany}
-          searchValue={dashboardSearch}
-          onSearchChange={setDashboardSearch}
-          companyLocked={adminRole === "company_admin"}
-          criticalCount={criticalRiskCount}
-          executiveRecommendation={
-            hasActiveDashboardFilter
-              ? `${effectiveSelectedCompany === "all" ? "Arama sonucu" : effectiveSelectedCompany} kapsamında ${scopedTotals.assigned} atama inceleniyor. ${
-                  criticalRiskCount > 0
-                    ? "Riskli kayıtları önceliklendirerek sorumlulara aksiyon atayın."
-                    : "Filtrelenen görünümde kritik bir eğitim riski bulunmuyor."
-                }`
-              : criticalRiskCount > 0
-              ? "Kritik risk kayıtlarını önceliklendirerek ilgili firma ve sorumlulara aksiyon atayın."
-              : upcomingTrainings.length > 0
-              ? "Yaklaşan eğitimlerin katılımcı ve tarih kontrollerini tamamlayın."
-              : "Mevcut performansı koruyun ve yaklaşan operasyonları izlemeye devam edin."
-          }
-          legacyExecutive={
-            <ExecutiveSection
-              isMobile={isMobile}
-              adminRole={adminRole}
-              adminCompanyId={adminCompanyId}
-              companies={companies}
-              selectedCompany={selectedCompany}
-              setSelectedCompany={setSelectedCompany}
-              filteredRiskUsers={filteredRiskUsers}
-              ceoSummary={ceoSummary}
-              summary={summary}
-              totals={scopedTotals}
-            />
-          }
-          legacyLists={
-            <ListsSection
-              isMobile={isMobile}
-              aiComment={aiComment}
-              filteredRiskUsers={filteredRiskUsers}
-              filteredInProgressUsers={filteredInProgressUsers}
-              filteredCompletedUsers={filteredCompletedUsers}
-              groupedRiskCompanies={groupedRiskCompanies}
-              groupedRiskTrainings={groupedRiskTrainings}
-              topRiskTrainings={topRiskTrainings}
-              bestTrainings={bestTrainings}
-              topEmployees={topEmployees}
-              upcomingTrainings={upcomingTrainings}
-              upcomingInspections={upcomingInspections}
-            />
-          }
+        <div
+          style={{
+            display: "inline-flex",
+            padding: "7px 12px",
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.14)",
+            border: "1px solid rgba(255,255,255,0.18)",
+            fontSize: 12,
+            fontWeight: 900,
+            marginBottom: 14,
+          }}
+        >
+          D-SEC Denetim Merkezi
+        </div>
+
+        <h1
+          style={{
+            fontSize: 42,
+            margin: "0 0 10px",
+            fontWeight: 1000,
+            letterSpacing: "-0.8px",
+          }}
+        >
+          App Denetimleri
+        </h1>
+
+        <p
+          style={{
+            margin: 0,
+            opacity: 0.9,
+            fontSize: 15,
+            maxWidth: 860,
+            lineHeight: 1.6,
+            fontWeight: 600,
+          }}
+        >
+          Android app üzerinden gelen denetimler firma bazlı, tür bazlı ve tüm kayıtlar olarak izlenir.
+          Bu ekran yalnızca kayıt izleme, hızlı kontrol, düzeltme ve silme amacıyla kullanılır.
+          Gelişmiş rapor süreçleri Raporlama Modülü içinde yönetilecektir.
+        </p>
+      </section>
+
+      {error && (
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 18,
+            background: "#fee2e2",
+            color: "#991b1b",
+            marginBottom: 20,
+            fontWeight: 900,
+            border: "1px solid #fecaca",
+          }}
+        >
+          Denetimler alınamadı: {error.message}
+        </div>
+      )}
+
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 16,
+          marginBottom: 24,
+        }}
+      >
+        <Kpi
+          title="Toplam Denetim"
+          value={filteredRuns.length}
+          desc={activeFirm === "ALL" ? "Tüm kayıtlar" : `${activeFirmName} kayıtları`}
+          href={makeQuery("ALL", activeFirm)}
+        />
+        <Kpi title="Klasik" value={klasikCount} desc="Standart kontrol" href={makeQuery("KLASIK", activeFirm)} />
+        <Kpi title="Fotoğraflı" value={fotografliCount} desc="Görsel kanıtlı" href={makeQuery("FOTO", activeFirm)} />
+        <Kpi title="Puanlamalı" value={puanCount} desc="Skor bazlı denetim" href={makeQuery("PUAN", activeFirm)} />
+        <Kpi title="ELMERI" value={elmeriCount} desc="Gözlemsel analiz" href={makeQuery("ELMERI", activeFirm)} />
+        <Kpi title="Toplam Madde" value={totalAnswers} desc="Aktarılan bulgu" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Uygun" value={uygunCount} desc="Pozitif bulgu" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Kısmen" value={kismenCount} desc="Geliştirilmeli" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Uygunsuz" value={uygunsuzCount} desc="Kritik bulgu" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Açık DÖF" value={openDofItems.length} desc="Takip bekliyor" href={makeQuery(activeType, activeFirm)} />
+        <Kpi title="Kapalı DÖF" value={closedDofItems.length} desc="Tamamlanan faaliyet" href={makeQuery(activeType, activeFirm)} />
+      </section>
+
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: 16,
+          marginBottom: 22,
+        }}
+      >
+        <AnalysisCard
+          title="Kayıt Sağlığı"
+          value={emptyRunCount === 0 ? "Temiz" : `${emptyRunCount} uyarı`}
+          desc={emptyRunCount === 0 ? "Bulgu boş kayıt görünmüyor" : "Bulgu sayısı 0 olan kayıt var"}
+          tone={emptyRunCount === 0 ? "good" : "bad"}
+        />
+        <AnalysisCard
+          title="Firma Kapsamı"
+          value={`${firmCount} firma`}
+          desc={activeFirm === "ALL" ? "Tüm firmalar izleniyor" : `${activeFirmName} filtresi aktif`}
+          tone="neutral"
+        />
+        <AnalysisCard
+          title="Ortalama Madde"
+          value={`${avgAnswerPerRun}`}
+          desc="Denetim başına ortalama bulgu/madde"
+          tone="neutral"
+        />
+      </section>
+
+      <section
+        style={{
+          background: "#fff",
+          borderRadius: 24,
+          padding: 18,
+          border: "1px solid #e5e7eb",
+          marginBottom: 22,
+          boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            marginBottom: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 1000, color: "#111827" }}>
+              Firma Filtresi
+            </div>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700, marginTop: 4 }}>
+              Firma bazlı denetim kayıtlarını hızlı süz.
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "#f8fafc",
+              border: "1px solid #e5e7eb",
+              color: "#334155",
+              fontSize: 12,
+              fontWeight: 900,
+            }}
+          >
+            Aktif: {activeFirmName}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <FilterPill href={makeQuery(activeType, "ALL")} active={activeFirm === "ALL"} label="Tüm Firmalar" />
+
+          {firmOptions.map((firm) => (
+  <FilterPill
+    key={firm.id}
+    href={makeQuery(activeType, firm.id)}
+    active={
+      normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.id) ||
+      normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.name)
+    }
+    label={firm.name}
+  />
+))}
+        </div>
+      </section>
+
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gap: 16,
+          marginBottom: 22,
+        }}
+      >
+        <MiniPanel title="Tür Dağılımı">
+          <MiniRow label="Klasik" value={klasikCount} total={filteredRuns.length} color="#334155" />
+          <MiniRow label="Fotoğraflı" value={fotografliCount} total={filteredRuns.length} color="#1d4ed8" />
+          <MiniRow label="Puanlamalı" value={puanCount} total={filteredRuns.length} color="#c2410c" />
+          <MiniRow label="ELMERI" value={elmeriCount} total={filteredRuns.length} color="#15803d" />
+        </MiniPanel>
+
+        <MiniPanel title="Firma Bazlı İlk 5">
+          {topFirmStats.length === 0 ? (
+            <div style={{ color: "#64748b", fontWeight: 700, fontSize: 13 }}>
+              Firma kaydı yok.
+            </div>
+          ) : (
+            topFirmStats.map((f) => (
+              <MiniRow
+                key={f.firm}
+                label={f.firm}
+                value={f.count}
+                total={filteredRuns.length}
+                color="#5a0f1f"
+                desc={`${f.answers} madde`}
+              />
+            ))
+          )}
+        </MiniPanel>
+      </section>
+
+      <section
+        id="dof"
+        style={{
+          scrollMarginTop: 20,
+          background: "#fff",
+          borderRadius: 26,
+          border: "1px solid #e5e7eb",
+          overflow: "hidden",
+          boxShadow: "0 18px 54px rgba(15,23,42,0.06)",
+          marginBottom: 22,
+        }}
+      >
+        <div
+          style={{
+            padding: "20px 22px",
+            borderBottom: "1px solid #eef2f7",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 21, fontWeight: 1000, color: "#111827" }}>
+              DÖF Takip Merkezi
+            </div>
+            <div style={{ marginTop: 4, fontSize: 13, color: "#64748b", fontWeight: 650 }}>
+              Denetimlerde tespit edilen uygunsuzluk ve kısmen uygun maddelerden oluşan düzeltici/önleyici faaliyet kayıtları.
+            </div>
+
+            {(activeDofStatus || activeDofPriority) && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  marginTop: 9,
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  fontSize: 11,
+                  fontWeight: 1000,
+                }}
+              >
+                Aktif filtre:
+                {activeDofPriority === "CRITICAL"
+                  ? " Kritik DÖF"
+                  : activeDofStatus === "OPEN"
+                  ? " Açık DÖF"
+                  : activeDofStatus === "CLOSED"
+                  ? " Kapalı DÖF"
+                  : " DÖF"}
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: openDofItems.length > 0 ? "#fff7ed" : "#f0fdf4",
+              border: openDofItems.length > 0 ? "1px solid #fed7aa" : "1px solid #bbf7d0",
+              color: openDofItems.length > 0 ? "#c2410c" : "#15803d",
+              fontSize: 12,
+              fontWeight: 1000,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Açık: {openDofItems.length} • Kapalı: {closedDofItems.length}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            padding: "14px 18px",
+            borderBottom: "1px solid #eef2f7",
+            background: "#ffffff",
+          }}
+        >
+          <FilterPill
+            href={makeDofQuery(activeType, activeFirm)}
+            active={!activeDofStatus && !activeDofPriority}
+            label="Tüm DÖF"
+          />
+          <FilterPill
+            href={makeDofQuery(activeType, activeFirm, "open")}
+            active={activeDofStatus === "OPEN" && !activeDofPriority}
+            label="Açık DÖF"
+          />
+          <FilterPill
+            href={makeDofQuery(activeType, activeFirm, "closed")}
+            active={activeDofStatus === "CLOSED"}
+            label="Kapalı DÖF"
+          />
+          <FilterPill
+            href={makeDofQuery(activeType, activeFirm, "", "critical")}
+            active={activeDofPriority === "CRITICAL"}
+            label="Kritik DÖF"
+          />
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 12,
+            padding: 18,
+            borderBottom: "1px solid #eef2f7",
+            background: "#fbfbfd",
+          }}
+        >
+          <DofDashCard title="Toplam DÖF" value={dofItems.length} desc="Tüm faaliyetler" tone="neutral" />
+          <DofDashCard title="Açık DÖF" value={openDofItems.length} desc="Kapanış bekliyor" tone="warning" />
+          <DofDashCard title="Kapalı DÖF" value={closedDofItems.length} desc="Tamamlanan" tone="good" />
+          <DofDashCard title="Kapanma Oranı" value={`%${dofClosureRate}`} desc="Kapalı / toplam" tone="neutral" />
+        </div>
+
+        {filteredDofItems.length === 0 ? (
+          <div style={{ padding: 28, color: "#64748b", fontWeight: 800, textAlign: "center" }}>
+            {dofItems.length === 0
+              ? "Henüz DÖF kaydı yok."
+              : "Seçilen DÖF filtresine uygun kayıt bulunamadı."}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 10, padding: 18 }}>
+            {pagedDofItems.map((a: any, index: number) => {
+              const status = normalizeDofStatusFromAnswer(a);
+              const isClosed = status === "CLOSED";
+
+              const relatedRun = safeRuns.find(
+                (r: any) => Number(r.id) === Number(a.run_remote_id)
+              );
+
+              return (
+                <div
+                  key={`${a.run_remote_id}-${a.item_title || a.itemTitle}-${index}`}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+  "repeat(auto-fit, minmax(260px, 1fr))",
+                    gap: 12,
+                    alignItems: "center",
+                    padding: 14,
+                    borderRadius: 18,
+                    border: "1px solid #e5e7eb",
+                    background: isClosed ? "#f8fafc" : "#fff7ed",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 1000, color: "#111827" }}>
+                      {relatedRun ? getRunFirmName(relatedRun) : "Firma Ünvanı Yok"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800, marginTop: 4 }}>
+                      Run: {a.run_remote_id} • {modeLabel(relatedRun?.eval_mode)}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontWeight: 900, color: "#334155" }}>
+                      {a.item_title || a.itemTitle || "-"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700, marginTop: 4 }}>
+                      {a.dof_note || a.dofNote || a.note || "DÖF notu girilmemiş"}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      justifyContent: "center",
+                      padding: "7px 10px",
+                      borderRadius: 999,
+                      background: isClosed ? "#dcfce7" : "#fed7aa",
+                      color: isClosed ? "#15803d" : "#c2410c",
+                      fontSize: 12,
+                      fontWeight: 1000,
+                    }}
+                  >
+                    {isClosed ? "Kapalı" : "Açık"}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <Link
+                      href={`/admin/denetimler/${a.run_remote_id}`}
+                      style={buttonStyle("primary")}
+                    >
+                      Denetime Git
+                    </Link>
+
+                    {!isClosed && (
+                      <form action={closeDofAction}>
+                        <input type="hidden" name="answerId" value={a.id || ""} />
+                        <input type="hidden" name="runRemoteId" value={a.run_remote_id || ""} />
+                        <input type="hidden" name="itemTitle" value={a.item_title || a.itemTitle || ""} />
+
+                        <button
+                          type="submit"
+                          style={{
+                            padding: "9px 12px",
+                            borderRadius: 12,
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            border: "1px solid #bbf7d0",
+                            fontWeight: 1000,
+                            fontSize: 13,
+                            cursor: "pointer",
+                          }}
+                        >
+                          DÖF Kapat
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {filteredDofItems.length > dofPageSize && (
+          <Pagination
+            currentPage={safeDofPage}
+            totalPages={dofTotalPages}
+            makeHref={(page) =>
+              makePagedQuery(
+                activeType,
+                activeFirm,
+                page,
+                safeRunPage,
+                activeTab || "dof",
+                activeDofStatus,
+                activeDofPriority
+              )
+            }
+          />
+        )}
+      </section>
+
+      <section
+        style={{
+          background: "#fff",
+          borderRadius: 26,
+          border: "1px solid #e5e7eb",
+          overflow: "hidden",
+          boxShadow: "0 18px 54px rgba(15,23,42,0.06)",
+        }}
+      >
+        <div
+          style={{
+            padding: "20px 22px",
+            borderBottom: "1px solid #eef2f7",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 21, fontWeight: 1000, color: "#111827" }}>
+              Denetim Kayıtları
+            </div>
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 13,
+                color: "#64748b",
+                fontWeight: 650,
+              }}
+            >
+              Firma, tür, şablon, denetçi, tarih, bulgu sayısı ve işlem alanı
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "#f8fafc",
+              border: "1px solid #e5e7eb",
+              color: "#334155",
+              fontSize: 12,
+              fontWeight: 900,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {filteredRuns.length} kayıt
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+"repeat(7,minmax(140px,1fr))",
+overflowX: "auto",
+            padding: "14px 22px",
+            background: "#f8fafc",
+            fontWeight: 1000,
+            fontSize: 12,
+            color: "#334155",
+            letterSpacing: "0.2px",
+          }}
+        >
+          <div>Firma</div>
+          <div>Tür</div>
+          <div>Şablon</div>
+          <div>Denetçi</div>
+          <div>Tarih</div>
+          <div>Madde</div>
+          <div>İşlem</div>
+        </div>
+
+        {filteredRuns.length === 0 ? (
+          <div
+            style={{
+              padding: 34,
+              color: "#64748b",
+              fontWeight: 700,
+              textAlign: "center",
+            }}
+          >
+            Seçilen filtreye uygun denetim kaydı yok.
+          </div>
+        ) : (
+          pagedRuns.map((r: any, index: number) => {
+            const mode = modeLabel(r.eval_mode);
+            const colors = modeColor(r.eval_mode);
+            const detailId = r.id;
+            const answerCount = countByRun.get(Number(r.id)) || 0;
+            const firmName = getRunFirmName(r);
+            const dofCount = dofCountByRun.get(Number(r.id)) || 0;
+
+            return (
+              <div
+                key={r.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+"repeat(7,minmax(140px,1fr))",
+overflowX: "auto",
+                  padding: "17px 22px",
+                  borderTop: "1px solid #eef2f7",
+                  alignItems: "center",
+                  fontSize: 14,
+                  gap: 10,
+                  background: index % 2 === 0 ? "#ffffff" : "#fbfbfd",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontWeight: 1000,
+                      color: "#111827",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {firmName}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: answerCount === 0 ? "#dc2626" : "#64748b",
+                      fontWeight: 800,
+                    }}
+                  >
+                    App Run ID: {r.app_run_id || "-"} • Remote ID: {r.id}
+                    {answerCount === 0 ? " • Bulgu yok" : ""}
+                  </div>
+                </div>
+
+                <div>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      padding: "7px 10px",
+                      borderRadius: 999,
+                      background: colors.bg,
+                      color: colors.color,
+                      fontWeight: 1000,
+                      fontSize: 12,
+                    }}
+                  >
+                    {mode}
+                  </span>
+                </div>
+
+                <div style={{ fontWeight: 850, color: "#334155" }}>
+                  {r.template_type || "-"}
+                </div>
+
+                <div style={{ color: "#334155", fontWeight: 750 }}>
+                  {r.inspector_name || "-"}
+                </div>
+
+                <div style={{ color: "#334155", fontWeight: 750 }}>
+                  {formatDate(r.audit_date_millis || r.created_at_millis)}
+                </div>
+
+                <div
+                  style={{
+                    fontWeight: 1000,
+                    color: answerCount === 0 ? "#dc2626" : "#5a0f1f",
+                    fontSize: 16,
+                  }}
+                >
+                  <div>{answerCount}</div>
+                  {dofCount > 0 && (
+                    <div style={{ fontSize: 11, color: "#c2410c", fontWeight: 1000, marginTop: 4 }}>
+                      DÖF: {dofCount}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Link href={`/admin/denetimler/${detailId}`} style={buttonStyle("primary")}>
+                    Detay
+                  </Link>
+
+                  <Link
+                    href={`/admin/denetimler/${detailId}/print`}
+                    target="_blank"
+                    style={buttonStyle("dark")}
+                  >
+                    App Raporu
+                  </Link>
+
+                  <Link href={`/admin/denetimler/${r.id}/edit`} style={buttonStyle("warning")}>
+                    Düzenle
+                  </Link>
+
+                  <form action={deleteDenetimAction}>
+                    <input type="hidden" name="remoteId" value={r.id} />
+                    <button
+                      type="submit"
+                      style={{
+                        padding: "9px 12px",
+                        borderRadius: 12,
+                        background: "#fee2e2",
+                        color: "#991b1b",
+                        border: "1px solid #fecaca",
+                        fontWeight: 1000,
+                        fontSize: 13,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Sil
+                    </button>
+                  </form>
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {filteredRuns.length > runPageSize && (
+          <Pagination
+            currentPage={safeRunPage}
+            totalPages={runTotalPages}
+            makeHref={(page) =>
+              makePagedQuery(
+                activeType,
+                activeFirm,
+                safeDofPage,
+                page,
+                activeTab,
+                activeDofStatus,
+                activeDofPriority
+              )
+            }
+          />
+        )}
+      </section>
+      {activeTab === "dof" && (
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.requestAnimationFrame(function () {
+                var target = document.getElementById("dof");
+                if (target) {
+                  target.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                  });
+                }
+              });
+            `,
+          }}
+        />
+      )}
+
+      <style>{`
+@media (max-width:900px){
+
+main{
+padding:12px !important;
+}
+
+section{
+max-width:100%;
+overflow-x:auto;
+}
+
+}
+`}</style>
+    </main>
+  );
+}
+
+function buttonStyle(type: "primary" | "dark" | "warning"): CSSProperties {
+  if (type === "dark") {
+    return {
+      padding: "9px 12px",
+      borderRadius: 12,
+      background: "#111827",
+      color: "#fff",
+      textDecoration: "none",
+      fontWeight: 1000,
+      textAlign: "center",
+      fontSize: 13,
+    };
+  }
+
+  if (type === "warning") {
+    return {
+      padding: "9px 12px",
+      borderRadius: 12,
+      background: "#fff7ed",
+      color: "#9a3412",
+      border: "1px solid #fed7aa",
+      fontWeight: 1000,
+      fontSize: 13,
+      textDecoration: "none",
+    };
+  }
+
+  return {
+    padding: "9px 12px",
+    borderRadius: 12,
+    background: "linear-gradient(135deg, #5a0f1f, #c62828)",
+    color: "#fff",
+    textDecoration: "none",
+    fontWeight: 1000,
+    textAlign: "center",
+    fontSize: 13,
+  };
+}
+
+function Kpi({
+  title,
+  value,
+  desc,
+  href,
+}: {
+  title: string;
+  value: number;
+  desc: string;
+  href: string;
+}) {
+  return (
+    <Link href={href} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: 22,
+          padding: 20,
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
+        }}
+      >
+        <div style={{ color: "#64748b", fontSize: 13, fontWeight: 900 }}>
+          {title}
+        </div>
+        <div
+          style={{
+            fontSize: 34,
+            fontWeight: 1000,
+            marginTop: 8,
+            color: "#111827",
+            lineHeight: 1,
+          }}
+        >
+          {value}
+        </div>
+        <div
+          style={{
+            marginTop: 8,
+            color: "#94a3b8",
+            fontSize: 12,
+            fontWeight: 750,
+          }}
+        >
+          {desc}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function AnalysisCard({
+  title,
+  value,
+  desc,
+  tone,
+}: {
+  title: string;
+  value: string;
+  desc: string;
+  tone: "good" | "bad" | "neutral";
+}) {
+  const color = tone === "good" ? "#15803d" : tone === "bad" ? "#b91c1c" : "#5a0f1f";
+  const bg = tone === "good" ? "#f0fdf4" : tone === "bad" ? "#fee2e2" : "#fff7f7";
+
+  return (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 22,
+        padding: 20,
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <div style={{ color: "#64748b", fontSize: 13, fontWeight: 900 }}>{title}</div>
+          <div style={{ color, fontSize: 24, fontWeight: 1000, marginTop: 6 }}>{value}</div>
+          <div style={{ color: "#94a3b8", fontSize: 12, fontWeight: 750, marginTop: 6 }}>{desc}</div>
+        </div>
+        <div
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: 16,
+            background: bg,
+            color,
+            display: "grid",
+            placeItems: "center",
+            fontWeight: 1000,
+          }}
+        >
+          ●
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DofDashCard({
+  title,
+  value,
+  desc,
+  tone,
+}: {
+  title: string;
+  value: number | string;
+  desc: string;
+  tone: "good" | "warning" | "neutral";
+}) {
+  const color = tone === "good" ? "#15803d" : tone === "warning" ? "#c2410c" : "#5a0f1f";
+  const bg = tone === "good" ? "#f0fdf4" : tone === "warning" ? "#fff7ed" : "#fff7f7";
+
+  return (
+    <div
+      style={{
+        borderRadius: 20,
+        padding: 16,
+        background: bg,
+        border: "1px solid #e5e7eb",
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b" }}>
+        {title}
+      </div>
+      <div style={{ marginTop: 8, fontSize: 30, fontWeight: 1000, color }}>
+        {value}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 12, fontWeight: 750, color: "#64748b" }}>
+        {desc}
+      </div>
+    </div>
+  );
+}
+
+function MiniPanel({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section
+      style={{
+        background: "#fff",
+        borderRadius: 24,
+        padding: 18,
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
+      }}
+    >
+      <div style={{ fontSize: 15, fontWeight: 1000, color: "#111827", marginBottom: 14 }}>
+        {title}
+      </div>
+      <div style={{ display: "grid", gap: 12 }}>{children}</div>
+    </section>
+  );
+}
+
+function MiniRow({
+  label,
+  value,
+  total,
+  color,
+  desc,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  color: string;
+  desc?: string;
+}) {
+  const percent = total > 0 ? Math.round((value / total) * 100) : 0;
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 10,
+          fontSize: 13,
+          fontWeight: 900,
+        }}
+      >
+        <span style={{ color: "#334155" }}>{label}</span>
+        <span style={{ color }}>
+          {value} kayıt {desc ? `• ${desc}` : ""}
+        </span>
+      </div>
+      <div
+        style={{
+          height: 8,
+          background: "#f1f5f9",
+          borderRadius: 999,
+          overflow: "hidden",
+          marginTop: 7,
+        }}
+      >
+        <div
+          style={{
+            width: `${percent}%`,
+            height: "100%",
+            background: color,
+            borderRadius: 999,
+          }}
         />
       </div>
-    </main>
+    </div>
+  );
+}
+
+function Pagination({
+  currentPage,
+  totalPages,
+  makeHref,
+}: {
+  currentPage: number;
+  totalPages: number;
+  makeHref: (page: number) => string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        justifyContent: "center",
+        flexWrap: "wrap",
+        padding: "16px 18px 20px",
+        borderTop: "1px solid #eef2f7",
+      }}
+    >
+      {Array.from({ length: totalPages }).map((_, i) => {
+        const page = i + 1;
+        const active = page === currentPage;
+
+        return (
+          <Link
+            key={page}
+            href={makeHref(page)}
+            style={{
+              minWidth: 38,
+              height: 38,
+              display: "grid",
+              placeItems: "center",
+              borderRadius: 12,
+              textDecoration: "none",
+              fontSize: 13,
+              fontWeight: 1000,
+              background: active ? "linear-gradient(135deg, #5a0f1f, #c62828)" : "#fff",
+              color: active ? "#fff" : "#5a0f1f",
+              border: active ? "1px solid rgba(90,15,31,0.2)" : "1px solid #ead5d5",
+            }}
+          >
+            {page}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function FilterPill({
+  href,
+  active,
+  label,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      style={{
+        textDecoration: "none",
+        padding: "10px 14px",
+        borderRadius: 999,
+        fontSize: 13,
+        fontWeight: 1000,
+        background: active ? "linear-gradient(135deg, #5a0f1f, #c62828)" : "#fff",
+        color: active ? "#fff" : "#5a0f1f",
+        border: active ? "1px solid rgba(90,15,31,0.2)" : "1px solid #ead5d5",
+        boxShadow: active ? "0 10px 24px rgba(90,15,31,0.18)" : "none",
+      }}
+    >
+      {label}
+    </Link>
+    
   );
 }
