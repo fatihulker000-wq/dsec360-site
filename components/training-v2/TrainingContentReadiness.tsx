@@ -1,6 +1,6 @@
 "use client";
 
-import styles from "./Training.module.css";
+import styles from "./training.module.css";
 
 type TrainingItem = {
   id: string;

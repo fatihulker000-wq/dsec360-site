@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import styles from "./Training.module.css";
+import styles from "./training.module.css";
 
 type DistributionItem = { label: string; value: number };
 
