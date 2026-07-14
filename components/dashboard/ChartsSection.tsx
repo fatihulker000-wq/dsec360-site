@@ -22,7 +22,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Activity, BarChart3, Building2, Target } from "lucide-react";
+import { Activity, BarChart3, Building2, Target, TrendingDown, TrendingUp, ShieldCheck, AlertTriangle } from "lucide-react";
 
 import { BRAND, cardStyle } from "./styles";
 import type { CbsSummary, TrendItem } from "./types";
@@ -87,6 +87,63 @@ function PanelTitle({
   );
 }
 
+
+function SummaryMetric({
+  label,
+  value,
+  tone = "neutral",
+  icon,
+}: {
+  label: string;
+  value: string;
+  tone?: "success" | "warning" | "danger" | "info" | "neutral";
+  icon?: React.ReactNode;
+}) {
+  const palette = {
+    success: { background: "#f0fdf4", color: "#166534", border: "#bbf7d0" },
+    warning: { background: "#fffbeb", color: "#92400e", border: "#fde68a" },
+    danger: { background: "#fff1f2", color: "#b91c1c", border: "#fecdd3" },
+    info: { background: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
+    neutral: { background: "#f8fafc", color: BRAND.text, border: "#e2e8f0" },
+  }[tone];
+
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        padding: "12px 14px",
+        borderRadius: 14,
+        border: `1px solid ${palette.border}`,
+        background: palette.background,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          color: palette.color,
+          fontSize: 11,
+          fontWeight: 800,
+        }}
+      >
+        {icon}
+        {label}
+      </div>
+      <div
+        style={{
+          marginTop: 6,
+          color: palette.color,
+          fontSize: 18,
+          fontWeight: 900,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
 export default function ChartsSection({
   isMobile,
   dashboardTrendData,
@@ -116,6 +173,16 @@ export default function ChartsSection({
     { subject: "Denetim", score: clamp(inspectionScore) },
     { subject: "ÇBS", score: clamp(cbsScore) },
   ];
+
+  const firstTrendValue = dashboardTrendData[0]?.value || 0;
+  const lastTrendValue =
+    dashboardTrendData[dashboardTrendData.length - 1]?.value || completionRate;
+  const trendDifference = Math.round(lastTrendValue - firstTrendValue);
+
+  const strongestRadar = [...radarData].sort((a, b) => b.score - a.score)[0];
+  const weakestRadar = [...radarData].sort((a, b) => a.score - b.score)[0];
+
+  const topRiskCompany = groupedRiskCompanies[0];
 
   return (
     <section style={{ display: "grid", gap: 18, marginBottom: 22 }}>
@@ -178,6 +245,42 @@ export default function ChartsSection({
               </AreaChart>
             </ResponsiveContainer>
           </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile
+                ? "repeat(2,minmax(0,1fr))"
+                : "repeat(4,minmax(0,1fr))",
+              gap: 10,
+              marginTop: 14,
+            }}
+          >
+            <SummaryMetric
+              label="Dönem değişimi"
+              value={`${trendDifference >= 0 ? "+" : ""}${trendDifference} puan`}
+              tone={trendDifference >= 0 ? "success" : "danger"}
+              icon={trendDifference >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            />
+            <SummaryMetric
+              label="Tamamlanma"
+              value={`%${Math.round(completionRate)}`}
+              tone={completionRate >= 80 ? "success" : "warning"}
+              icon={<ShieldCheck size={14} />}
+            />
+            <SummaryMetric
+              label="Devam eden"
+              value={`%${Math.round(inProgressRate)}`}
+              tone="info"
+              icon={<Activity size={14} />}
+            />
+            <SummaryMetric
+              label="Risk oranı"
+              value={`%${Math.round(riskRate)}`}
+              tone={riskRate >= 30 ? "danger" : "success"}
+              icon={<AlertTriangle size={14} />}
+            />
+          </div>
         </div>
 
         <div style={cardStyle(isMobile)}>
@@ -221,6 +324,41 @@ export default function ChartsSection({
                 </div>
               </div>
             ))}
+          </div>
+
+          <div
+            style={{
+              marginTop: 12,
+              padding: "12px 14px",
+              borderRadius: 14,
+              background: "linear-gradient(135deg,#f8fafc,#ffffff)",
+              border: "1px solid #e5e7eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <div>
+              <div style={{ color: BRAND.muted, fontSize: 11, fontWeight: 700 }}>
+                Toplam atama
+              </div>
+              <div style={{ marginTop: 4, color: BRAND.text, fontSize: 20, fontWeight: 900 }}>
+                {pieTotal.toLocaleString("tr-TR")}
+              </div>
+            </div>
+            <div
+              style={{
+                padding: "7px 10px",
+                borderRadius: 999,
+                background: completionRate >= 80 ? BRAND.greenSoft : BRAND.amberSoft,
+                color: completionRate >= 80 ? BRAND.green : BRAND.amber,
+                fontSize: 11,
+                fontWeight: 900,
+              }}
+            >
+              {completionRate >= 80 ? "Hedefte" : "İyileştirme gerekli"}
+            </div>
           </div>
         </div>
       </div>
@@ -266,6 +404,36 @@ export default function ChartsSection({
               </div>
             )}
           </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              padding: "13px 14px",
+              borderRadius: 14,
+              background: topRiskCompany ? "#fff7ed" : "#f8fafc",
+              border: `1px solid ${topRiskCompany ? "#fed7aa" : "#e5e7eb"}`,
+            }}
+          >
+            <div style={{ color: BRAND.muted, fontSize: 11, fontWeight: 700 }}>
+              En yüksek risk yoğunluğu
+            </div>
+            <div
+              style={{
+                marginTop: 5,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <strong style={{ color: BRAND.text, fontSize: 14 }}>
+                {topRiskCompany?.name || "Riskli firma bulunmuyor"}
+              </strong>
+              <span style={{ color: BRAND.red, fontWeight: 900, fontSize: 14 }}>
+                {topRiskCompany ? `${topRiskCompany.count} kayıt` : "0"}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div style={{ ...cardStyle(isMobile), background: "linear-gradient(145deg,#ffffff,#f8fafc)" }}>
@@ -285,6 +453,28 @@ export default function ChartsSection({
                 <Tooltip formatter={(value) => [`%${Math.round(Number(value))}`, "Skor"]} />
               </RadarChart>
             </ResponsiveContainer>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+              gap: 10,
+              marginTop: 10,
+            }}
+          >
+            <SummaryMetric
+              label="En güçlü alan"
+              value={`${strongestRadar.subject} %${Math.round(strongestRadar.score)}`}
+              tone="success"
+              icon={<TrendingUp size={14} />}
+            />
+            <SummaryMetric
+              label="Gelişim alanı"
+              value={`${weakestRadar.subject} %${Math.round(weakestRadar.score)}`}
+              tone={weakestRadar.score < 70 ? "warning" : "info"}
+              icon={<Target size={14} />}
+            />
           </div>
         </div>
       </div>
