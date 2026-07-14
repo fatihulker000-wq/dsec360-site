@@ -57,16 +57,50 @@ function makeQuery(type: string, firm: string) {
   return q ? `/admin/denetimler?${q}` : "/admin/denetimler";
 }
 
-function makePagedQuery(type: string, firm: string, dofPage: number, runPage: number) {
+function makePagedQuery(
+  type: string,
+  firm: string,
+  dofPage: number,
+  runPage: number,
+  tab = "",
+  status = "",
+  priority = ""
+) {
   const params = new URLSearchParams();
 
   if (type && type !== "ALL") params.set("type", type);
   if (firm && firm !== "ALL") params.set("firm", firm);
   if (dofPage > 1) params.set("dofPage", String(dofPage));
   if (runPage > 1) params.set("runPage", String(runPage));
+  if (tab) params.set("tab", tab);
+  if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
 
   const q = params.toString();
-  return q ? `/admin/denetimler?${q}` : "/admin/denetimler";
+  const hash = tab === "dof" ? "#dof" : "";
+
+  return q
+    ? `/admin/denetimler?${q}${hash}`
+    : `/admin/denetimler${hash}`;
+}
+
+function makeDofQuery(
+  type: string,
+  firm: string,
+  status = "",
+  priority = ""
+) {
+  const params = new URLSearchParams();
+
+  if (type && type !== "ALL") params.set("type", type);
+  if (firm && firm !== "ALL") params.set("firm", firm);
+
+  params.set("tab", "dof");
+
+  if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
+
+  return `/admin/denetimler?${params.toString()}#dof`;
 }
 
 async function deleteDenetimAction(formData: FormData) {
@@ -119,12 +153,23 @@ async function closeDofAction(formData: FormData) {
 export default async function AdminDenetimlerPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ type?: string; firm?: string; dofPage?: string; runPage?: string }>;
+  searchParams?: Promise<{
+    type?: string;
+    firm?: string;
+    dofPage?: string;
+    runPage?: string;
+    tab?: string;
+    status?: string;
+    priority?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const isMobile = false;
   const activeType = String(sp?.type || "ALL").toUpperCase();
   const activeFirm = String(sp?.firm || "ALL");
+  const activeTab = String(sp?.tab || "").trim().toLowerCase();
+  const activeDofStatus = String(sp?.status || "").trim().toUpperCase();
+  const activeDofPriority = String(sp?.priority || "").trim().toUpperCase();
 
   const activeDofPage = Math.max(1, Number(sp?.dofPage || 1));
   const activeRunPage = Math.max(1, Number(sp?.runPage || 1));
@@ -221,6 +266,49 @@ function normalizeDofStatusFromAnswer(a: any) {
   return "NONE";
 }
 
+function isCriticalDof(a: any) {
+  const result = normalizeText(a.result);
+  const priority = normalizeText(
+    a.dof_priority ||
+      a.priority ||
+      a.risk_level ||
+      a.riskLevel
+  );
+
+  if (
+    priority === "CRITICAL" ||
+    priority === "KRITIK" ||
+    priority === "KRİTİK" ||
+    priority === "VERY_HIGH" ||
+    priority === "ÇOK YÜKSEK"
+  ) {
+    return true;
+  }
+
+  if (
+    result === "UYGUNSUZ" ||
+    result.includes("YETERSIZ") ||
+    result.includes("YETERSİZ") ||
+    result.includes("EKSIK") ||
+    result.includes("EKSİK")
+  ) {
+    return true;
+  }
+
+  if (result.startsWith("SCORE:")) {
+    const score = Number(result.replace("SCORE:", ""));
+    return Number.isFinite(score) && score < 70;
+  }
+
+  if (result.startsWith("ELMERI:")) {
+    const parts = result.split(":");
+    const wrong = Number(parts[2] || 0);
+    return Number.isFinite(wrong) && wrong > 0;
+  }
+
+  return false;
+}
+
 const firmMap = new Map<string, { id: string; name: string }>();
 
 safeRuns.forEach((r: any) => {
@@ -296,15 +384,35 @@ const closedDofItems = dofItems.filter(
   (a: any) => normalizeDofStatusFromAnswer(a) === "CLOSED"
 );
 
+const filteredDofItems = dofItems.filter((a: any) => {
+  const status = normalizeDofStatusFromAnswer(a);
+
+  const statusOk =
+    !activeDofStatus ||
+    activeDofStatus === "ALL" ||
+    (activeDofStatus === "OPEN" && status === "OPEN") ||
+    (activeDofStatus === "CLOSED" && status === "CLOSED");
+
+  const priorityOk =
+    !activeDofPriority ||
+    activeDofPriority === "ALL" ||
+    (activeDofPriority === "CRITICAL" && isCriticalDof(a));
+
+  return statusOk && priorityOk;
+});
+
 const dofCountByRun = new Map<number, number>();
 dofItems.forEach((a: any) => {
   const key = Number(a.run_remote_id);
   dofCountByRun.set(key, (dofCountByRun.get(key) || 0) + 1);
 });
 
-const dofTotalPages = Math.max(1, Math.ceil(dofItems.length / dofPageSize));
+const dofTotalPages = Math.max(
+  1,
+  Math.ceil(filteredDofItems.length / dofPageSize)
+);
 const safeDofPage = Math.min(activeDofPage, dofTotalPages);
-const pagedDofItems = dofItems.slice(
+const pagedDofItems = filteredDofItems.slice(
   (safeDofPage - 1) * dofPageSize,
   safeDofPage * dofPageSize
 );
@@ -593,7 +701,9 @@ const topFirmStats = firmOptions
       </section>
 
       <section
+        id="dof"
         style={{
+          scrollMarginTop: 20,
           background: "#fff",
           borderRadius: 26,
           border: "1px solid #e5e7eb",
@@ -619,6 +729,31 @@ const topFirmStats = firmOptions
             <div style={{ marginTop: 4, fontSize: 13, color: "#64748b", fontWeight: 650 }}>
               Denetimlerde tespit edilen uygunsuzluk ve kısmen uygun maddelerden oluşan düzeltici/önleyici faaliyet kayıtları.
             </div>
+
+            {(activeDofStatus || activeDofPriority) && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  marginTop: 9,
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  fontSize: 11,
+                  fontWeight: 1000,
+                }}
+              >
+                Aktif filtre:
+                {activeDofPriority === "CRITICAL"
+                  ? " Kritik DÖF"
+                  : activeDofStatus === "OPEN"
+                  ? " Açık DÖF"
+                  : activeDofStatus === "CLOSED"
+                  ? " Kapalı DÖF"
+                  : " DÖF"}
+              </div>
+            )}
           </div>
 
           <div
@@ -639,6 +774,38 @@ const topFirmStats = firmOptions
 
         <div
           style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            padding: "14px 18px",
+            borderBottom: "1px solid #eef2f7",
+            background: "#ffffff",
+          }}
+        >
+          <FilterPill
+            href={makeDofQuery(activeType, activeFirm)}
+            active={!activeDofStatus && !activeDofPriority}
+            label="Tüm DÖF"
+          />
+          <FilterPill
+            href={makeDofQuery(activeType, activeFirm, "open")}
+            active={activeDofStatus === "OPEN" && !activeDofPriority}
+            label="Açık DÖF"
+          />
+          <FilterPill
+            href={makeDofQuery(activeType, activeFirm, "closed")}
+            active={activeDofStatus === "CLOSED"}
+            label="Kapalı DÖF"
+          />
+          <FilterPill
+            href={makeDofQuery(activeType, activeFirm, "", "critical")}
+            active={activeDofPriority === "CRITICAL"}
+            label="Kritik DÖF"
+          />
+        </div>
+
+        <div
+          style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 12,
@@ -653,9 +820,11 @@ const topFirmStats = firmOptions
           <DofDashCard title="Kapanma Oranı" value={`%${dofClosureRate}`} desc="Kapalı / toplam" tone="neutral" />
         </div>
 
-        {dofItems.length === 0 ? (
+        {filteredDofItems.length === 0 ? (
           <div style={{ padding: 28, color: "#64748b", fontWeight: 800, textAlign: "center" }}>
-            Henüz DÖF kaydı yok.
+            {dofItems.length === 0
+              ? "Henüz DÖF kaydı yok."
+              : "Seçilen DÖF filtresine uygun kayıt bulunamadı."}
           </div>
         ) : (
           <div style={{ display: "grid", gap: 10, padding: 18 }}>
@@ -753,12 +922,20 @@ const topFirmStats = firmOptions
           </div>
         )}
 
-        {dofItems.length > dofPageSize && (
+        {filteredDofItems.length > dofPageSize && (
           <Pagination
             currentPage={safeDofPage}
             totalPages={dofTotalPages}
             makeHref={(page) =>
-              makePagedQuery(activeType, activeFirm, page, safeRunPage)
+              makePagedQuery(
+                activeType,
+                activeFirm,
+                page,
+                safeRunPage,
+                activeTab || "dof",
+                activeDofStatus,
+                activeDofPriority
+              )
             }
           />
         )}
@@ -985,11 +1162,37 @@ overflowX: "auto",
             currentPage={safeRunPage}
             totalPages={runTotalPages}
             makeHref={(page) =>
-              makePagedQuery(activeType, activeFirm, safeDofPage, page)
+              makePagedQuery(
+                activeType,
+                activeFirm,
+                safeDofPage,
+                page,
+                activeTab,
+                activeDofStatus,
+                activeDofPriority
+              )
             }
           />
         )}
       </section>
+      {activeTab === "dof" && (
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.requestAnimationFrame(function () {
+                var target = document.getElementById("dof");
+                if (target) {
+                  target.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                  });
+                }
+              });
+            `,
+          }}
+        />
+      )}
+
       <style>{`
 @media (max-width:900px){
 
