@@ -1,0 +1,401 @@
+.panel {
+  margin-bottom: 20px;
+  padding: 22px;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, .07), transparent 30%),
+    linear-gradient(180deg, #ffffff, #fbfcfe);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, .065);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  color: #7c3aed;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 5px 0 0;
+  color: #111827;
+  font-size: 23px;
+  font-weight: 950;
+  letter-spacing: -.025em;
+}
+
+.header p {
+  margin: 7px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.counter {
+  min-width: 105px;
+  padding: 11px 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 15px;
+  background: #eff6ff;
+  text-align: center;
+}
+
+.counter span {
+  display: block;
+  color: #2563eb;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.counter strong {
+  display: block;
+  margin-top: 4px;
+  color: #1d4ed8;
+  font-size: 24px;
+  font-weight: 950;
+}
+
+.createPanel,
+.editPanel {
+  padding: 17px;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.editPanel {
+  margin-top: 14px;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.formGrid label,
+.descriptionField {
+  display: grid;
+  gap: 7px;
+}
+
+.formGrid span,
+.descriptionField span {
+  color: #475569;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.formGrid input,
+.descriptionField textarea {
+  width: 100%;
+  border: 1px solid #dbe2ea;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  outline: none;
+}
+
+.formGrid input:focus,
+.descriptionField textarea:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, .16);
+}
+
+.descriptionField {
+  margin-top: 12px;
+}
+
+.descriptionField textarea {
+  resize: vertical;
+}
+
+.primaryButton,
+.successButton,
+.secondaryButton,
+.openButton,
+.editButton,
+.deleteButton,
+.editHeader button {
+  border: 0;
+  border-radius: 11px;
+  padding: 10px 13px;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+}
+
+.primaryButton {
+  margin-top: 12px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+}
+
+.successButton {
+  background: #16a34a;
+  color: #fff;
+}
+
+.secondaryButton,
+.editHeader button {
+  background: #111827;
+  color: #fff;
+}
+
+.openButton {
+  background: #111827;
+  color: #fff;
+}
+
+.editButton {
+  background: #2563eb;
+  color: #fff;
+}
+
+.deleteButton {
+  background: #dc2626;
+  color: #fff;
+}
+
+.primaryButton:disabled,
+.successButton:disabled,
+.deleteButton:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+.editHeader,
+.editActions,
+.videoTitleRow,
+.videoMeta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.editHeader {
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+
+.editHeader span,
+.editHeader strong {
+  display: block;
+}
+
+.editHeader span {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.editHeader strong {
+  margin-top: 3px;
+  color: #111827;
+  font-size: 13px;
+}
+
+.editActions {
+  margin-top: 13px;
+  flex-wrap: wrap;
+}
+
+.videoGrid {
+  display: grid;
+  gap: 11px;
+  margin-top: 17px;
+}
+
+.videoCard {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) 105px;
+  gap: 13px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .04);
+}
+
+.orderBadge {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #fee2e2, #fff1f2);
+  color: #991b1b;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.videoMain {
+  min-width: 0;
+}
+
+.videoTitleRow {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.videoTitleRow h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.videoTitleRow p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.activeBadge,
+.passiveBadge {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 950;
+}
+
+.activeBadge {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.passiveBadge {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.videoMeta {
+  margin-top: 9px;
+  flex-wrap: wrap;
+}
+
+.videoMeta span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 8px;
+  font-weight: 850;
+}
+
+.urlText {
+  margin-top: 8px;
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardActions {
+  display: grid;
+  gap: 7px;
+}
+
+.emptyState {
+  margin-top: 17px;
+  padding: 30px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  color: #64748b;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.errorMessage,
+.successMessage {
+  margin-bottom: 13px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.errorMessage {
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  background: #fee2e2;
+}
+
+.successMessage {
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  background: #dcfce7;
+}
+
+@media (max-width: 980px) {
+  .formGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .videoCard {
+    grid-template-columns: 50px minmax(0, 1fr);
+  }
+
+  .cardActions {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .panel {
+    padding: 16px;
+    border-radius: 19px;
+  }
+
+  .header {
+    flex-direction: column;
+  }
+
+  .counter {
+    width: 100%;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .videoCard {
+    grid-template-columns: 1fr;
+  }
+
+  .orderBadge {
+    width: 100%;
+    height: 34px;
+  }
+
+  .videoTitleRow {
+    flex-direction: column;
+  }
+
+  .cardActions {
+    grid-template-columns: 1fr;
+  }
+}

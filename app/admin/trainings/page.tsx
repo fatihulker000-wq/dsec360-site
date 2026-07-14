@@ -6,6 +6,7 @@ import TrainingKpiGrid from "../../../components/training-v2/TrainingKpiGrid";
 import TrainingAnalytics from "../../../components/training-v2/TrainingAnalytics";
 import DoraTraining from "../../../components/training-v2/DoraTraining";
 import TrainingContentReadiness from "../../../components/training-v2/TrainingContentReadiness";
+import TrainingVideoManager from "../../../components/training-v2/videos/TrainingVideoManager";
 
 type UserApiRow = {
   id: string;
@@ -83,18 +84,6 @@ type TrainingRow = {
   video_count: number;
   pre_exam_count: number;
   final_exam_count: number;
-};
-
-type TrainingVideoRow = {
-  id: string;
-  training_id: string;
-  title: string;
-  description: string | null;
-  video_url: string;
-  duration_seconds: number | null;
-  sort_order: number | null;
-  is_required: boolean | null;
-  is_active: boolean | null;
 };
 
 type AssignResponse = {
@@ -264,20 +253,6 @@ export default function AdminTrainingPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "passive">("all");
   const [selectedTrainingInfo, setSelectedTrainingInfo] =
     useState<TrainingRow | null>(null);
-    const [trainingVideos, setTrainingVideos] = useState<TrainingVideoRow[]>([]);
-const [videosLoading, setVideosLoading] = useState(false);
-const [videoTitle, setVideoTitle] = useState("");
-const [videoDescription, setVideoDescription] = useState("");
-const [videoUrl, setVideoUrl] = useState("");
-const [videoDurationSeconds, setVideoDurationSeconds] = useState("");
-const [videoSortOrder, setVideoSortOrder] = useState("1");
-const [savingVideo, setSavingVideo] = useState(false);
-const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
-const [editingVideoTitle, setEditingVideoTitle] = useState("");
-const [editingVideoDescription, setEditingVideoDescription] = useState("");
-const [editingVideoUrl, setEditingVideoUrl] = useState("");
-const [editingVideoDuration, setEditingVideoDuration] = useState("");
-const [editingVideoSortOrder, setEditingVideoSortOrder] = useState("");
   const [assignSummary, setAssignSummary] = useState<AssignResponse | null>(null);
   const [bulkErrors, setBulkErrors] = useState<string[]>([]);
   const [previewRows, setPreviewRows] = useState<any[]>([]);
@@ -490,215 +465,17 @@ if (employeeIds.length > 0) {
 };
 
 
-const loadTrainingVideos = async (selectedTrainingId: string) => {
-  if (!selectedTrainingId) {
-    setTrainingVideos([]);
-    return;
-  }
-
-  try {
-    setVideosLoading(true);
-
-    const res = await fetch(
-      `/api/admin/training-videos?trainingId=${encodeURIComponent(
-        selectedTrainingId
-      )}`,
-      {
-        cache: "no-store",
-        credentials: "include",
-      }
-    );
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      alert(json?.error || "Videolar alınamadı.");
-      setTrainingVideos([]);
-      return;
-    }
-
-    setTrainingVideos(Array.isArray(json?.data) ? json.data : []);
-  } finally {
-    setVideosLoading(false);
-  }
-};
-
-const saveTrainingVideo = async () => {
-  if (!trainingId) {
-    alert("Önce eğitim seç.");
-    return;
-  }
-
-  if (!videoTitle.trim()) {
-    alert("Video başlığı zorunlu.");
-    return;
-  }
-
-  if (!videoUrl.trim()) {
-    alert("Video URL zorunlu.");
-    return;
-  }
-
-  try {
-    setSavingVideo(true);
-
-    const res = await fetch("/api/admin/training-videos", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        trainingId,
-        title: videoTitle.trim(),
-        description: videoDescription.trim(),
-        videoUrl: videoUrl.trim(),
-        durationSeconds: Number(videoDurationSeconds || 0),
-        sortOrder: Number(videoSortOrder || 1),
-      }),
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      alert(json?.error || "Video eklenemedi.");
-      return;
-    }
-
-    setVideoTitle("");
-    setVideoDescription("");
-    setVideoUrl("");
-    setVideoDurationSeconds("");
-    setVideoSortOrder(String(trainingVideos.length + 2));
-
-    await loadTrainingVideos(trainingId);
-    await loadAll();
-
-    alert("Video eklendi ✅");
-  } catch (err) {
-    console.error(err);
-    alert("Video eklenirken hata oluştu.");
-  } finally {
-    setSavingVideo(false);
-  }
-};
-
-const deleteTrainingVideo = async (video: TrainingVideoRow) => {
-  const ok = window.confirm(
-    `"${video.title}" videosunu silmek istediğine emin misin?`
-  );
-
-  if (!ok) return;
-
-  try {
-    const res = await fetch(`/api/admin/training-videos/${video.id}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      alert(json?.error || "Video silinemedi.");
-      return;
-    }
-
-    await loadAll();
-
-    if (trainingId) {
-      await loadTrainingVideos(trainingId);
-    }
-
-    alert("Video silindi ✅");
-  } catch (err) {
-    console.error(err);
-    alert("Video silinirken hata oluştu.");
-  }
-};
-
-const updateTrainingVideo = async () => {
-  if (!editingVideoId) return;
-
-  if (!editingVideoTitle.trim()) {
-    alert("Video başlığı zorunlu.");
-    return;
-  }
-
-  if (!editingVideoUrl.trim()) {
-    alert("Video URL zorunlu.");
-    return;
-  }
-
-  try {
-    const res = await fetch(`/api/admin/training-videos/${editingVideoId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        title: editingVideoTitle.trim(),
-        description: editingVideoDescription.trim(),
-        videoUrl: editingVideoUrl.trim(),
-        durationSeconds: Number(editingVideoDuration || 0),
-        sortOrder: Number(editingVideoSortOrder || 1),
-      }),
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      alert(json?.error || "Video güncellenemedi.");
-      return;
-    }
-
-    setEditingVideoId(null);
-    setEditingVideoTitle("");
-    setEditingVideoDescription("");
-    setEditingVideoUrl("");
-    setEditingVideoDuration("");
-    setEditingVideoSortOrder("");
-
-    await loadAll();
-
-    if (trainingId) {
-      await loadTrainingVideos(trainingId);
-    }
-
-    alert("Video güncellendi ✅");
-  } catch (err) {
-    console.error(err);
-    alert("Video güncellenirken hata oluştu.");
-  }
-};
-
-const startEditVideo = (video: TrainingVideoRow) => {
-  setEditingVideoId(video.id);
-  setEditingVideoTitle(video.title || "");
-  setEditingVideoDescription(video.description || "");
-  setEditingVideoUrl(video.video_url || "");
-  setEditingVideoDuration(
-    video.duration_seconds ? String(video.duration_seconds) : ""
-  );
-  setEditingVideoSortOrder(
-    video.sort_order ? String(video.sort_order) : "1"
-  );
-};
 
   useEffect(() => {
     void loadAll();
   }, []);
 
   useEffect(() => {
-  const found = trainings.find((t) => t.id === trainingId) || null;
-  setSelectedTrainingInfo(found);
-
-  if (trainingId) {
-    void loadTrainingVideos(trainingId);
-  } else {
-    setTrainingVideos([]);
-  }
-}, [trainingId, trainings]);
+    const found =
+      trainings.find((training) => training.id === trainingId) ||
+      null;
+    setSelectedTrainingInfo(found);
+  }, [trainingId, trainings]);
 
  const filteredUsers = useMemo(() => {
   return users.filter((u) => {
@@ -1239,14 +1016,31 @@ const deleteTrainingUser = async (user: UserRow) => {
     >
       <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
         <TrainingExecutiveHero
-          totalEmployees={totalEmployeeCount}
-          totalTrainings={trainings.length}
-          totalAssigned={trainingTotals.totalAssigned}
-          completed={trainingTotals.totalCompleted}
-          inProgress={trainingTotals.totalInProgress}
-          notStarted={trainingTotals.totalNotStarted}
-          selectedCount={selectedCount}
-        />
+  title="D-SEC Eğitim Yönetim Merkezi"
+  companyName={
+    companyFilter === "all"
+      ? "Tüm Firmalar"
+      : companies.find((company) => company.id === companyFilter)?.name ||
+        "Seçili Firma"
+  }
+  totalTrainings={trainings.length}
+  activeTrainings={trainingTotals.totalInProgress}
+  completedTrainings={trainingTotals.totalCompleted}
+  pendingTrainings={trainingTotals.totalNotStarted}
+  certificatesWaiting={0}
+  complianceScore={
+    trainingTotals.totalAssigned > 0
+      ? Math.round(
+          (trainingTotals.totalCompleted /
+            trainingTotals.totalAssigned) *
+            100
+        )
+      : 0
+  }
+  participantCount={totalEmployeeCount}
+  lastSync={new Date().toLocaleString("tr-TR")}
+  aiEnabled={true}
+/>
 
         {error ? (
           <div
@@ -1405,372 +1199,15 @@ const deleteTrainingUser = async (user: UserRow) => {
           </div>
         </div>
 
-{selectedTrainingInfo ? (
-  <div style={{ ...cardStyle(), marginBottom: 20 }}>
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 12,
-        alignItems: "center",
-        flexWrap: "wrap",
-        marginBottom: 16,
-      }}
-    >
-      <div>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>
-          Video Yönetimi
-        </h2>
-        <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
-          Seçilen eğitime bağlı videoları sıraya göre ekle ve yönet.
-        </div>
-      </div>
 
-      <span style={badgeStyle("#f0fdf4", "#86efac", "#166534")}>
-        Toplam Video: {trainingVideos.length}
-      </span>
-    </div>
+        {selectedTrainingInfo ? (
+          <TrainingVideoManager
+            trainingId={trainingId}
+            trainingTitle={selectedTrainingInfo.title}
+            onChanged={loadAll}
+          />
+        ) : null}
 
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-        gap: 12,
-        marginBottom: 16,
-      }}
-    >
-      <input
-        value={videoTitle}
-        onChange={(e) => setVideoTitle(e.target.value)}
-        placeholder="Video başlığı"
-        style={{
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: `1px solid ${BRAND.border}`,
-        }}
-      />
-
-      <input
-        value={videoUrl}
-        onChange={(e) => setVideoUrl(e.target.value)}
-        placeholder="Video URL (.mp4)"
-        style={{
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: `1px solid ${BRAND.border}`,
-        }}
-      />
-
-      <input
-        value={videoDurationSeconds}
-        onChange={(e) => setVideoDurationSeconds(e.target.value)}
-        placeholder="Süre saniye"
-        type="number"
-        style={{
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: `1px solid ${BRAND.border}`,
-        }}
-      />
-
-      <input
-        value={videoSortOrder}
-        onChange={(e) => setVideoSortOrder(e.target.value)}
-        placeholder="Sıra"
-        type="number"
-        style={{
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: `1px solid ${BRAND.border}`,
-        }}
-      />
-    </div>
-
-    <textarea
-      value={videoDescription}
-      onChange={(e) => setVideoDescription(e.target.value)}
-      placeholder="Video açıklaması"
-      rows={3}
-      style={{
-        width: "100%",
-        padding: "12px 14px",
-        borderRadius: 12,
-        border: `1px solid ${BRAND.border}`,
-        resize: "vertical",
-        marginBottom: 12,
-      }}
-    />
-
-    <button
-      type="button"
-      onClick={saveTrainingVideo}
-      disabled={savingVideo}
-      style={{
-        border: "none",
-        borderRadius: 12,
-        padding: "12px 16px",
-        background: savingVideo ? "#9ca3af" : "#2563eb",
-        color: "#fff",
-        fontWeight: 900,
-        cursor: savingVideo ? "not-allowed" : "pointer",
-        marginBottom: 18,
-      }}
-    >
-      {savingVideo ? "Kaydediliyor..." : "Video Ekle"}
-    </button>
-
-{editingVideoId ? (
-  <div
-    style={{
-      marginTop: 14,
-      marginBottom: 18,
-      padding: 16,
-      borderRadius: 16,
-      background: "#eff6ff",
-      border: "1px solid #bfdbfe",
-    }}
-  >
-    <div style={{ fontWeight: 900, marginBottom: 12 }}>
-      Video Düzenle
-    </div>
-
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-        gap: 12,
-        marginBottom: 12,
-      }}
-    >
-      <input
-        value={editingVideoTitle}
-        onChange={(e) => setEditingVideoTitle(e.target.value)}
-        placeholder="Video başlığı"
-        style={{
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: `1px solid ${BRAND.border}`,
-        }}
-      />
-
-      <input
-        value={editingVideoUrl}
-        onChange={(e) => setEditingVideoUrl(e.target.value)}
-        placeholder="Video URL"
-        style={{
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: `1px solid ${BRAND.border}`,
-        }}
-      />
-
-      <input
-        value={editingVideoDuration}
-        onChange={(e) => setEditingVideoDuration(e.target.value)}
-        placeholder="Süre saniye"
-        type="number"
-        style={{
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: `1px solid ${BRAND.border}`,
-        }}
-      />
-
-      <input
-        value={editingVideoSortOrder}
-        onChange={(e) => setEditingVideoSortOrder(e.target.value)}
-        placeholder="Sıra"
-        type="number"
-        style={{
-          padding: "12px 14px",
-          borderRadius: 12,
-          border: `1px solid ${BRAND.border}`,
-        }}
-      />
-    </div>
-
-    <textarea
-      value={editingVideoDescription}
-      onChange={(e) => setEditingVideoDescription(e.target.value)}
-      placeholder="Video açıklaması"
-      rows={3}
-      style={{
-        width: "100%",
-        padding: "12px 14px",
-        borderRadius: 12,
-        border: `1px solid ${BRAND.border}`,
-        resize: "vertical",
-        marginBottom: 12,
-      }}
-    />
-
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      <button
-        type="button"
-        onClick={updateTrainingVideo}
-        style={{
-          border: "none",
-          borderRadius: 12,
-          padding: "12px 16px",
-          background: "#16a34a",
-          color: "#fff",
-          fontWeight: 900,
-          cursor: "pointer",
-        }}
-      >
-        Değişiklikleri Kaydet
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setEditingVideoId(null)}
-        style={{
-          border: "none",
-          borderRadius: 12,
-          padding: "12px 16px",
-          background: "#111827",
-          color: "#fff",
-          fontWeight: 900,
-          cursor: "pointer",
-        }}
-      >
-        Vazgeç
-      </button>
-    </div>
-  </div>
-) : null}
-
-    {videosLoading ? (
-      <div style={{ color: BRAND.muted }}>Videolar yükleniyor...</div>
-    ) : trainingVideos.length === 0 ? (
-      <div style={{ color: BRAND.muted }}>
-        Bu eğitime henüz video eklenmemiş.
-      </div>
-    ) : (
-      <div style={{ display: "grid", gap: 10 }}>
-        {trainingVideos.map((video) => (
-          <div
-            key={video.id}
-            style={{
-              padding: 14,
-              borderRadius: 14,
-              border: `1px solid ${BRAND.border}`,
-              background: "#f9fafb",
-              display: "grid",
-              gridTemplateColumns: "60px 1fr auto",
-              gap: 12,
-              alignItems: "center",
-            }}
-          >
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                background: "#fee2e2",
-                color: "#991b1b",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 900,
-              }}
-            >
-              {video.sort_order || "-"}
-            </div>
-
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 900 }}>{video.title}</div>
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 12,
-                  color: BRAND.muted,
-                  wordBreak: "break-all",
-                }}
-              >
-                {video.video_url}
-              </div>
-              <div style={{ marginTop: 6, display: "flex", gap: 8 }}>
-                <span style={badgeStyle("#fff", "#e5e7eb", "#374151")}>
-                  Süre: {video.duration_seconds || 0} sn
-                </span>
-                <span
-                  style={
-                    video.is_active
-                      ? badgeStyle("#dcfce7", "#86efac", "#166534")
-                      : badgeStyle("#fee2e2", "#fca5a5", "#b91c1c")
-                  }
-                >
-                  {video.is_active ? "Aktif" : "Pasif"}
-                </span>
-              </div>
-            </div>
-
-            <div
-  style={{
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  }}
->
-  <a
-    href={video.video_url}
-    target="_blank"
-    rel="noreferrer"
-    style={{
-      padding: "8px 10px",
-      borderRadius: 10,
-      background: "#111827",
-      color: "#fff",
-      textDecoration: "none",
-      fontSize: 12,
-      fontWeight: 800,
-      textAlign: "center",
-    }}
-  >
-    Aç
-  </a>
-
-<button
-  type="button"
-  onClick={() => startEditVideo(video)}
-  style={{
-    padding: "8px 10px",
-    borderRadius: 10,
-    background: "#2563eb",
-    color: "#fff",
-    border: "none",
-    fontSize: 12,
-    fontWeight: 800,
-    cursor: "pointer",
-  }}
->
-  Düzenle
-</button>
-
-  <button
-    type="button"
-    onClick={() => deleteTrainingVideo(video)}
-    style={{
-      padding: "8px 10px",
-      borderRadius: 10,
-      background: "#dc2626",
-      color: "#fff",
-      border: "none",
-      fontSize: 12,
-      fontWeight: 800,
-      cursor: "pointer",
-    }}
-  >
-    Sil
-  </button>
-</div>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-) : null}
        
 {/* FİLTRELER */}
 <div
