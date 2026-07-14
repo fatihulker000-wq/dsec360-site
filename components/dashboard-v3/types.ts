@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import type { CbsSummary, TrendItem } from "@/components/dashboard/types";
+
+import type {
+  CbsSummary,
+  DashboardActivity,
+  TrendItem,
+} from "@/components/dashboard/types";
 
 export type DashboardMetricColor =
   | "red"
@@ -40,6 +45,13 @@ export type QuickActionItem = {
   icon: LucideIcon;
 };
 
+export type CompanyPerformanceItem = {
+  name: string;
+  score: number;
+  completed: number;
+  total: number;
+};
+
 export type DashboardV3Props = {
   loading: boolean;
   isMobile: boolean;
@@ -54,13 +66,13 @@ export type DashboardV3Props = {
 
   metrics: DashboardMetric[];
   alerts: DashboardAlert[];
-
   doraInsights: string[];
 
   onRefresh: () => void;
   onExportPDF: () => void;
 
   trendData: TrendItem[];
+
   pieData: {
     name: string;
     value: number;
@@ -85,6 +97,12 @@ export type DashboardV3Props = {
   } | null;
 
   quickActions?: QuickActionItem[];
+
+  activities: DashboardActivity[];
+
+  riskMatrix: number[][];
+
+  companyPerformance: CompanyPerformanceItem[];
 
   legacyExecutive?: ReactNode;
   legacyLists?: ReactNode;

@@ -14,7 +14,7 @@ import {
   UserRoundPlus,
 } from "lucide-react";
 
-import { DashboardV3 } from "../../../components/dashboard-v3";
+import { DashboardV3 } from "@/components/dashboard-v3";
 
 
 import type {
@@ -153,6 +153,12 @@ setCompanyDistribution([]);
 setCompanyList([]);
 setTrend([]);
 setSummary(null);
+setActivities([]);
+setUpcomingHealths([]);
+setUpcomingPeriodicControls([]);
+setDofSummary(null);
+setRiskSummary(null);
+setDoraSummary(null);
         return;
       }
 
@@ -164,6 +170,12 @@ setCompanyDistribution(json.company_distribution || []);
 setCompanyList(json.company_list || []);
 setTrend(json.trend || []);
 setSummary(json.summary || null);
+setActivities(json.activities || []);
+setUpcomingHealths(json.upcoming_healths || []);
+setUpcomingPeriodicControls(json.upcoming_periodic_controls || []);
+setDofSummary(json.dof_summary || null);
+setRiskSummary(json.risk_summary || null);
+setDoraSummary(json.dora_summary || null);
     } catch (loadError) {
       console.error(loadError);
       setError("Veri alınamadı.");
@@ -175,6 +187,12 @@ setCompanyDistribution([]);
 setCompanyList([]);
 setTrend([]);
 setSummary(null);
+setActivities([]);
+setUpcomingHealths([]);
+setUpcomingPeriodicControls([]);
+setDofSummary(null);
+setRiskSummary(null);
+setDoraSummary(null);
     } finally {
       setLoading(false);
     }
@@ -530,14 +548,83 @@ const dashboardPieData = [
 
   const openDofCount = Number(dofSummary?.open ?? 0);
 
-const criticalRiskCount =
-  Number(
-    (riskSummary?.veryHigh ?? 0) +
-      (riskSummary?.high ?? 0)
-  ) || filteredRiskUsers.length;
+  const criticalRiskCount = Number(
+    riskSummary?.veryHigh ?? riskSummary?.high ?? filteredRiskUsers.length
+  );
+
+
+  const companyPerformance = useMemo(() => {
+    const map = new Map<
+      string,
+      { name: string; completed: number; total: number }
+    >();
+
+    const collect = (users: RiskUser[], completed: boolean) => {
+      users.forEach((user) => {
+        const name = (user.company_id || "Firma Yok").trim() || "Firma Yok";
+        const current = map.get(name) || {
+          name,
+          completed: 0,
+          total: 0,
+        };
+
+        current.total += 1;
+
+        if (completed) {
+          current.completed += 1;
+        }
+
+        map.set(name, current);
+      });
+    };
+
+    collect(completedUsers, true);
+    collect(inProgressUsers, false);
+    collect(riskyUsers, false);
+
+    return Array.from(map.values())
+      .map((company) => ({
+        ...company,
+        score: company.total
+          ? Math.round((company.completed / company.total) * 100)
+          : 0,
+      }))
+      .sort((a, b) => b.score - a.score || b.total - a.total)
+      .slice(0, 8);
+  }, [completedUsers, inProgressUsers, riskyUsers]);
+
+  const riskMatrix = useMemo(() => {
+    const low = Math.max(0, Number(riskSummary?.low || 0));
+    const medium = Math.max(0, Number(riskSummary?.medium || 0));
+    const high = Math.max(0, Number(riskSummary?.high || 0));
+    const veryHigh = Math.max(0, Number(riskSummary?.veryHigh || 0));
+
+    const distribute = (total: number, slots: number) => {
+      const base = Math.floor(total / slots);
+      const remainder = total % slots;
+
+      return Array.from(
+        { length: slots },
+        (_, index) => base + (index < remainder ? 1 : 0)
+      );
+    };
+
+    const lowParts = distribute(low, 7);
+    const mediumParts = distribute(medium, 7);
+    const highParts = distribute(high, 6);
+    const criticalParts = distribute(veryHigh, 5);
+
+    return [
+      [lowParts[0], lowParts[1], lowParts[2], mediumParts[0], mediumParts[1]],
+      [lowParts[3], lowParts[4], mediumParts[2], mediumParts[3], highParts[0]],
+      [lowParts[5], mediumParts[4], mediumParts[5], highParts[1], highParts[2]],
+      [mediumParts[6], highParts[3], highParts[4], criticalParts[0], criticalParts[1]],
+      [lowParts[6], highParts[5], criticalParts[2], criticalParts[3], criticalParts[4]],
+    ];
+  }, [riskSummary]);
 
   const doraInsights = [
-    aiComment,
+    doraSummary?.message || aiComment,
     `${Math.round(completionRate)}% eğitim tamamlama oranı ile ${riskHeadline.toLocaleLowerCase(
       "tr-TR"
     )} izleniyor.`,
@@ -745,6 +832,9 @@ const criticalRiskCount =
           cbsSummary={cbsSummary}
           inspectionSummary={inspectionSummary}
           quickActions={quickActions}
+          activities={activities}
+          riskMatrix={riskMatrix}
+          companyPerformance={companyPerformance}
           legacyExecutive={
             <ExecutiveSection
               isMobile={isMobile}
