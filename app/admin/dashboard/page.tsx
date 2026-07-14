@@ -798,7 +798,7 @@ const dashboardPieData = [
       change: Math.round(scopedRiskRate),
       color: "red" as const,
       description: "Öncelikli müdahale gerektiren riskli kullanıcı ve süreçler.",
-      href: "/admin/risk",
+      href: "/admin/denetimler?tab=dof&priority=critical",
       sparkline: flatSparkline(criticalRiskCount),
       statusLabel: criticalRiskCount > 0 ? "Aksiyon" : "Kontrollü",
     },
@@ -821,7 +821,7 @@ const dashboardPieData = [
       trend: "neutral" as const,
       color: "purple" as const,
       description: "Sistemde izlenen toplam ve yaklaşan denetim kayıtları.",
-      href: "/admin/inspections",
+      href: "/admin/denetimler",
       sparkline: flatSparkline(inspectionCount),
       statusLabel: upcomingInspections.length > 0 ? "Planlı" : "Güncel",
     },
@@ -843,7 +843,7 @@ const dashboardPieData = [
       trend: openDofCount > 0 ? ("up" as const) : ("neutral" as const),
       color: "orange" as const,
       description: "Kapatılmayı bekleyen düzeltici ve önleyici faaliyetler.",
-      href: "/admin/reports",
+      href: "/admin/denetimler?tab=dof&status=open",
       sparkline: flatSparkline(openDofCount),
       statusLabel: openDofCount > 0 ? "Açık" : "Kapalı",
     },
@@ -880,7 +880,7 @@ const dashboardPieData = [
       description:
         "Riskli kullanıcılar ve kritik risk kayıtları için öncelikli aksiyon alın.",
       variant: criticalRiskCount > 0 ? ("critical" as const) : ("success" as const),
-      href: "/admin/risk",
+      href: "/admin/denetimler?tab=dof&priority=critical",
     },
     {
       title: "Yaklaşan eğitim",
@@ -898,7 +898,7 @@ const dashboardPieData = [
         "Denetim kapsamı, ekip ve saha hazırlıklarını gözden geçirin.",
       variant:
         upcomingInspections.length > 0 ? ("info" as const) : ("success" as const),
-      href: "/admin/inspections",
+      href: "/admin/denetimler",
     },
     {
       title: "ÇBS SLA aşımı",
@@ -929,13 +929,13 @@ const dashboardPieData = [
     {
       title: "Denetim başlat",
       description: "Saha veya firma denetimi sürecini başlatın.",
-      href: "/admin/inspections",
+      href: "/admin/denetimler",
       icon: FileCheck2,
     },
     {
       title: "Riskleri incele",
       description: "Kritik riskleri ve açık aksiyonları görüntüleyin.",
-      href: "/admin/risk",
+      href: "/admin/denetimler?tab=dof&priority=critical",
       icon: ShieldAlert,
     },
   ];
