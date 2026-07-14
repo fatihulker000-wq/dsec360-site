@@ -3,6 +3,31 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import type { CSSProperties, ReactNode } from "react";
+import ExecutiveHero from "@/components/inspection-v2/ExecutiveHero";
+import FilterToolbar from "@/components/inspection-v2/FilterToolbar";
+import KPISection from "@/components/inspection-v2/KPISection";
+
+type InspectionKpiTone =
+  | "slate"
+  | "blue"
+  | "green"
+  | "amber"
+  | "red"
+  | "purple";
+
+type InspectionKpiItem = {
+  title: string;
+  value: number | string;
+  description: string;
+  href: string;
+  tone?: InspectionKpiTone;
+  badge?: string;
+};
+
+type InspectionFirmOption = {
+  id: string;
+  name: string;
+};
 
 function getSupabase() {
   return createClient(
@@ -512,6 +537,24 @@ const topFirmStats = scopedFirmStatsSource
   .sort((a, b) => b.count - a.count)
   .slice(0, 5);
 
+
+  const premiumKpis: InspectionKpiItem[] = [
+    { title: "Toplam Denetim", value: filteredRuns.length, description: activeFirm === "ALL" ? "Tüm kayıtlar" : `${activeFirmName} kayıtları`, href: makeQuery("ALL", activeFirm), tone: "slate", badge: "Canlı" },
+    { title: "Klasik", value: klasikCount, description: "Standart kontrol", href: makeQuery("KLASIK", activeFirm), tone: "slate" },
+    { title: "Fotoğraflı", value: fotografliCount, description: "Görsel kanıtlı", href: makeQuery("FOTO", activeFirm), tone: "blue" },
+    { title: "Puanlamalı", value: puanCount, description: "Skor bazlı denetim", href: makeQuery("PUAN", activeFirm), tone: "amber" },
+    { title: "ELMERI", value: elmeriCount, description: "Gözlemsel analiz", href: makeQuery("ELMERI", activeFirm), tone: "green" },
+    { title: "Toplam Madde", value: totalAnswers, description: "Aktarılan bulgu", href: makeQuery(activeType, activeFirm), tone: "purple" },
+    { title: "Uygun", value: uygunCount, description: "Pozitif bulgu", href: makeQuery(activeType, activeFirm), tone: "green" },
+    { title: "Kısmen", value: kismenCount, description: "Geliştirilmeli", href: makeQuery(activeType, activeFirm), tone: "amber" },
+    { title: "Uygunsuz", value: uygunsuzCount, description: "Kritik bulgu", href: makeQuery(activeType, activeFirm), tone: "red" },
+    { title: "Açık DÖF", value: openDofItems.length, description: "Takip bekliyor", href: makeDofQuery(activeType, activeFirm, "open"), tone: "red", badge: openDofItems.length > 0 ? "Aksiyon" : "Kontrollü" },
+    { title: "Kapalı DÖF", value: closedDofItems.length, description: "Tamamlanan faaliyet", href: makeDofQuery(activeType, activeFirm, "closed"), tone: "green" },
+  ];
+
+  const conformityRate =
+    totalAnswers > 0 ? Math.round((uygunCount / totalAnswers) * 100) : 100;
+
   return (
     <main
       style={{
@@ -521,58 +564,14 @@ const topFirmStats = scopedFirmStatsSource
         minHeight: "100vh",
       }}
     >
-      <section
-        style={{
-          borderRadius: 32,
-          padding: 34,
-          background:
-            "linear-gradient(135deg, #4a0d1a 0%, #7a1224 45%, #c62828 100%)",
-          color: "#fff",
-          marginBottom: 24,
-          boxShadow: "0 22px 70px rgba(90,15,31,0.24)",
-        }}
-      >
-        <div
-          style={{
-            display: "inline-flex",
-            padding: "7px 12px",
-            borderRadius: 999,
-            background: "rgba(255,255,255,0.14)",
-            border: "1px solid rgba(255,255,255,0.18)",
-            fontSize: 12,
-            fontWeight: 900,
-            marginBottom: 14,
-          }}
-        >
-          D-SEC Denetim Merkezi
-        </div>
-
-        <h1
-          style={{
-            fontSize: 42,
-            margin: "0 0 10px",
-            fontWeight: 1000,
-            letterSpacing: "-0.8px",
-          }}
-        >
-          App Denetimleri
-        </h1>
-
-        <p
-          style={{
-            margin: 0,
-            opacity: 0.9,
-            fontSize: 15,
-            maxWidth: 860,
-            lineHeight: 1.6,
-            fontWeight: 600,
-          }}
-        >
-          Android app üzerinden gelen denetimler firma bazlı, tür bazlı ve tüm kayıtlar olarak izlenir.
-          Bu ekran yalnızca kayıt izleme, hızlı kontrol, düzeltme ve silme amacıyla kullanılır.
-          Gelişmiş rapor süreçleri Raporlama Modülü içinde yönetilecektir.
-        </p>
-      </section>
+      <ExecutiveHero
+        activeFirmName={activeFirmName}
+        totalInspections={filteredRuns.length}
+        openDof={openDofItems.length}
+        closedDof={closedDofItems.length}
+        conformityRate={conformityRate}
+        criticalFindings={uygunsuzCount}
+      />
 
       {error && (
         <div
@@ -590,31 +589,7 @@ const topFirmStats = scopedFirmStatsSource
         </div>
       )}
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
-        <Kpi
-          title="Toplam Denetim"
-          value={filteredRuns.length}
-          desc={activeFirm === "ALL" ? "Tüm kayıtlar" : `${activeFirmName} kayıtları`}
-          href={makeQuery("ALL", activeFirm)}
-        />
-        <Kpi title="Klasik" value={klasikCount} desc="Standart kontrol" href={makeQuery("KLASIK", activeFirm)} />
-        <Kpi title="Fotoğraflı" value={fotografliCount} desc="Görsel kanıtlı" href={makeQuery("FOTO", activeFirm)} />
-        <Kpi title="Puanlamalı" value={puanCount} desc="Skor bazlı denetim" href={makeQuery("PUAN", activeFirm)} />
-        <Kpi title="ELMERI" value={elmeriCount} desc="Gözlemsel analiz" href={makeQuery("ELMERI", activeFirm)} />
-        <Kpi title="Toplam Madde" value={totalAnswers} desc="Aktarılan bulgu" href={makeQuery(activeType, activeFirm)} />
-        <Kpi title="Uygun" value={uygunCount} desc="Pozitif bulgu" href={makeQuery(activeType, activeFirm)} />
-        <Kpi title="Kısmen" value={kismenCount} desc="Geliştirilmeli" href={makeQuery(activeType, activeFirm)} />
-        <Kpi title="Uygunsuz" value={uygunsuzCount} desc="Kritik bulgu" href={makeQuery(activeType, activeFirm)} />
-        <Kpi title="Açık DÖF" value={openDofItems.length} desc="Takip bekliyor" href={makeQuery(activeType, activeFirm)} />
-        <Kpi title="Kapalı DÖF" value={closedDofItems.length} desc="Tamamlanan faaliyet" href={makeQuery(activeType, activeFirm)} />
-      </section>
+      <KPISection items={premiumKpis} />
 
       <section
         style={{
@@ -644,65 +619,21 @@ const topFirmStats = scopedFirmStatsSource
         />
       </section>
 
-      <section
-        style={{
-          background: "#fff",
-          borderRadius: 24,
-          padding: 18,
-          border: "1px solid #e5e7eb",
-          marginBottom: 22,
-          boxShadow: "0 14px 38px rgba(15,23,42,0.05)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 14,
-            marginBottom: 12,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 1000, color: "#111827" }}>
-              Firma Filtresi
-            </div>
-            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700, marginTop: 4 }}>
-              Firma bazlı denetim kayıtlarını hızlı süz.
-            </div>
-          </div>
-
-          <div
-            style={{
-              padding: "8px 12px",
-              borderRadius: 999,
-              background: "#f8fafc",
-              border: "1px solid #e5e7eb",
-              color: "#334155",
-              fontSize: 12,
-              fontWeight: 900,
-            }}
-          >
-            Aktif: {activeFirmName}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <FilterPill href={makeQuery(activeType, "ALL")} active={activeFirm === "ALL"} label="Tüm Firmalar" />
-
-          {firmOptions.map((firm) => (
-  <FilterPill
-    key={firm.id}
-    href={makeQuery(activeType, firm.id)}
-    active={
-      normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.id) ||
-      normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.name)
-    }
-    label={firm.name}
-  />
-))}
-        </div>
-      </section>
+     <FilterToolbar
+  activeFirm={activeFirm}
+  activeFirmName={activeFirmName}
+  activeType={activeType}
+  firms={firmOptions}
+  makeFirmHref={(firm: string) =>
+    makeQuery(activeType, firm)
+  }
+  isActiveFirm={(firm: InspectionFirmOption) =>
+    normalizeFirmKey(activeFirm) ===
+      normalizeFirmKey(firm.id) ||
+    normalizeFirmKey(activeFirm) ===
+      normalizeFirmKey(firm.name)
+  }
+/>
 
       <section
         style={{
