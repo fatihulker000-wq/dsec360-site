@@ -46,6 +46,13 @@ import {
   buildCeoSummary,
 } from "../../../components/dashboard/dashboardHelpers";
 
+function normalizeCompanyKey(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .replace(/\s+/g, " ");
+}
+
 
 export default function AdminDashboardPage() {
   const [adminRole, setAdminRole] = useState<string>("");
@@ -304,17 +311,6 @@ const loadInspectionDashboard = async () => {
     };
   }, []);
 
-  useEffect(() => {
-    if (adminRole === "company_admin" && adminCompanyId) {
-      const matched =
-        riskyUsers
-          .map((u) => (u.company_id || "").trim())
-          .find((x) => x && x === adminCompanyId) || adminCompanyId;
-
-      setSelectedCompany(matched);
-    }
-  }, [adminRole, adminCompanyId, riskyUsers]);
-
   const refreshAllDashboardData = () => {
     void loadDashboard();
     void loadCbs();
@@ -387,12 +383,61 @@ const loadInspectionDashboard = async () => {
 } = calculateRates(summary, totals);
 
  const companies = useMemo(() => {
-  return [...companyList].sort((a, b) => a.localeCompare(b, "tr"));
-}, [companyList]);
+  const companyMap = new Map<string, string>();
+
+  const collect = (value?: string | null) => {
+    const displayValue = String(value || "").trim();
+    const key = normalizeCompanyKey(displayValue);
+
+    if (!key || key === "firma yok") return;
+    if (!companyMap.has(key)) {
+      companyMap.set(key, displayValue);
+    }
+  };
+
+  companyList.forEach(collect);
+  riskyUsers.forEach((user) => collect(user.company_id));
+  inProgressUsers.forEach((user) => collect(user.company_id));
+  completedUsers.forEach((user) => collect(user.company_id));
+
+  return Array.from(companyMap.values()).sort((a, b) =>
+    a.localeCompare(b, "tr")
+  );
+}, [
+  companyList,
+  riskyUsers,
+  inProgressUsers,
+  completedUsers,
+]);
+
+  useEffect(() => {
+    if (adminRole === "company_admin" && adminCompanyId) {
+      const adminKey = normalizeCompanyKey(adminCompanyId);
+
+      const matched =
+        companies.find(
+          (company) => normalizeCompanyKey(company) === adminKey
+        ) || adminCompanyId;
+
+      setSelectedCompany(matched);
+    }
+  }, [adminRole, adminCompanyId, companies]);
+
+  const resolvedAdminCompany = useMemo(() => {
+    if (!adminCompanyId) return "";
+
+    const adminKey = normalizeCompanyKey(adminCompanyId);
+
+    return (
+      companies.find(
+        (company) => normalizeCompanyKey(company) === adminKey
+      ) || adminCompanyId
+    );
+  }, [adminCompanyId, companies]);
 
   const effectiveSelectedCompany =
-    adminRole === "company_admin" && adminCompanyId
-      ? adminCompanyId
+    adminRole === "company_admin" && resolvedAdminCompany
+      ? resolvedAdminCompany
       : selectedCompany;
 
   const normalizedDashboardSearch = dashboardSearch
@@ -416,11 +461,13 @@ const loadInspectionDashboard = async () => {
   };
 
   const matchesSelectedCompany = (user: RiskUser) => {
-    if (effectiveSelectedCompany === "all") return true;
+    if (normalizeCompanyKey(effectiveSelectedCompany) === "all") {
+      return true;
+    }
 
     return (
-      ((user.company_id || "Firma Yok").trim() || "Firma Yok") ===
-      effectiveSelectedCompany
+      normalizeCompanyKey(user.company_id || "Firma Yok") ===
+      normalizeCompanyKey(effectiveSelectedCompany)
     );
   };
 
@@ -464,7 +511,7 @@ const loadInspectionDashboard = async () => {
   );
 
   const hasActiveDashboardFilter =
-    effectiveSelectedCompany !== "all" ||
+    normalizeCompanyKey(effectiveSelectedCompany) !== "all" ||
     normalizedDashboardSearch.length > 0;
 
   const scopedTotals = useMemo(() => {
@@ -743,8 +790,9 @@ const dashboardPieData = [
   const visibleActivities = useMemo(() => {
     return activities.filter((activity) => {
       const companyMatches =
-        effectiveSelectedCompany === "all" ||
-        (activity.company || "").trim() === effectiveSelectedCompany;
+        normalizeCompanyKey(effectiveSelectedCompany) === "all" ||
+        normalizeCompanyKey(activity.company) ===
+          normalizeCompanyKey(effectiveSelectedCompany);
 
       const searchable = `${activity.title} ${activity.company || ""} ${activity.type}`
         .toLocaleLowerCase("tr-TR");
@@ -798,7 +846,7 @@ const dashboardPieData = [
       change: Math.round(scopedRiskRate),
       color: "red" as const,
       description: "Öncelikli müdahale gerektiren riskli kullanıcı ve süreçler.",
-      href: "/admin/denetimler?tab=dof&priority=critical",
+      href: "/admin/denetimler?tab=dof&status=open#dof",
       sparkline: flatSparkline(criticalRiskCount),
       statusLabel: criticalRiskCount > 0 ? "Aksiyon" : "Kontrollü",
     },
@@ -843,7 +891,7 @@ const dashboardPieData = [
       trend: openDofCount > 0 ? ("up" as const) : ("neutral" as const),
       color: "orange" as const,
       description: "Kapatılmayı bekleyen düzeltici ve önleyici faaliyetler.",
-      href: "/admin/denetimler?tab=dof&status=open",
+      href: "/admin/denetimler?tab=dof&status=open#dof",
       sparkline: flatSparkline(openDofCount),
       statusLabel: openDofCount > 0 ? "Açık" : "Kapalı",
     },
@@ -880,7 +928,7 @@ const dashboardPieData = [
       description:
         "Riskli kullanıcılar ve kritik risk kayıtları için öncelikli aksiyon alın.",
       variant: criticalRiskCount > 0 ? ("critical" as const) : ("success" as const),
-      href: "/admin/denetimler?tab=dof&priority=critical",
+      href: "/admin/denetimler?tab=dof&status=open#dof",
     },
     {
       title: "Yaklaşan eğitim",
@@ -935,7 +983,7 @@ const dashboardPieData = [
     {
       title: "Riskleri incele",
       description: "Kritik riskleri ve açık aksiyonları görüntüleyin.",
-      href: "/admin/denetimler?tab=dof&priority=critical",
+      href: "/admin/denetimler?tab=dof&status=open#dof",
       icon: ShieldAlert,
     },
   ];
