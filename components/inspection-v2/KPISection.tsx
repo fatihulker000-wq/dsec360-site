@@ -1,53 +1,61 @@
 import Link from "next/link";
 import styles from "./Inspection.module.css";
 
-type InspectionKpiTone =
-  | "slate"
-  | "blue"
-  | "green"
-  | "amber"
-  | "red"
-  | "purple";
+type Tone = "slate" | "blue" | "green" | "amber" | "red" | "purple";
 
 export type InspectionKpiItem = {
   title: string;
   value: number | string;
   description: string;
   href: string;
-  tone?: InspectionKpiTone;
+  tone?: Tone;
   badge?: string;
 };
 
-type KPISectionProps = {
-  items: InspectionKpiItem[];
+const toneIcon: Record<Tone, string> = {
+  slate: "◫",
+  blue: "◎",
+  green: "✓",
+  amber: "△",
+  red: "!",
+  purple: "✦",
 };
 
-export default function KPISection({ items }: KPISectionProps) {
+export default function KPISection({ items }: { items: InspectionKpiItem[] }) {
   return (
-    <section className={styles.kpiGrid}>
-      {items.map((item) => (
-        <Link
-          key={`${item.title}-${item.href}`}
-          href={item.href}
-          className={`${styles.kpiCard} ${
-            styles[`tone_${item.tone || "slate"}`]
-          }`}
-        >
-          <div className={styles.kpiTop}>
-            <span className={styles.kpiTitle}>{item.title}</span>
-            {item.badge && (
-              <span className={styles.kpiBadge}>{item.badge}</span>
-            )}
-          </div>
+    <section className={styles.kpiGridV2} aria-label="Denetim performans göstergeleri">
+      {items.map((item, index) => {
+        const tone = item.tone || "slate";
 
-          <div className={styles.kpiValue}>{item.value}</div>
-          <div className={styles.kpiDescription}>{item.description}</div>
+        return (
+          <Link
+            key={`${item.title}-${item.href}`}
+            href={item.href}
+            className={`${styles.kpiCardV2} ${styles[`kpiTone_${tone}`]}`}
+          >
+            <div className={styles.kpiCardV2Top}>
+              <span className={styles.kpiCardV2Icon}>{toneIcon[tone]}</span>
 
-          <div className={styles.kpiLine}>
-            <span />
-          </div>
-        </Link>
-      ))}
+              <div className={styles.kpiCardV2Status}>
+                {item.badge || (index === 0 ? "Canlı" : "İzleniyor")}
+              </div>
+            </div>
+
+            <div className={styles.kpiCardV2Body}>
+              <span>{item.title}</span>
+              <strong>{item.value}</strong>
+              <p>{item.description}</p>
+            </div>
+
+            <div className={styles.kpiCardV2Footer}>
+              <span>Detayı görüntüle</span>
+              <strong>→</strong>
+            </div>
+
+            <div className={styles.kpiCardV2Accent} />
+          </Link>
+        );
+      })}
     </section>
   );
 }
