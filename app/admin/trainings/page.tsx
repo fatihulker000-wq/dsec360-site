@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  TrainingExecutiveHero,
+  TrainingKpiGrid,
+} from "../../../components/training-v2";
 
 type UserApiRow = {
   id: string;
@@ -1173,100 +1177,16 @@ const deleteTrainingUser = async (user: UserRow) => {
       }}
     >
       <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
-        <div
-          style={{
-            ...cardStyle(),
-            background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
-            color: "#fff",
-            marginBottom: 20,
-            padding: "clamp(16px, 2.8vw, 28px)",
-            borderRadius: 24,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 16,
-              alignItems: "flex-start",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ maxWidth: 620 }}>
-              <div
-                style={{
-                  display: "inline-flex",
-                  padding: "8px 12px",
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.14)",
-                  border: "1px solid rgba(255,255,255,0.22)",
-                  fontSize: 12,
-                  fontWeight: 900,
-                  marginBottom: 12,
-                }}
-              >
-                D-SEC Eğitim Yönetimi
-              </div>
+        <TrainingExecutiveHero
+          totalEmployees={totalEmployeeCount}
+          totalTrainings={trainings.length}
+          totalAssigned={trainingTotals.totalAssigned}
+          completed={trainingTotals.totalCompleted}
+          inProgress={trainingTotals.totalInProgress}
+          notStarted={trainingTotals.totalNotStarted}
+          selectedCount={selectedCount}
+        />
 
-              <h1
-                style={{
-                  marginTop: 0,
-                  marginBottom: 10,
-                  fontSize: "clamp(24px, 5vw, 38px)",
-                  fontWeight: 900,
-                  lineHeight: 1.15,
-                }}
-              >
-                Eğitim Yönetim Paneli
-              </h1>
-
-              <p
-                style={{
-                  margin: 0,
-                  color: "rgba(255,255,255,0.92)",
-                  lineHeight: 1.7,
-                  fontSize: "clamp(14px, 2.5vw, 16px)",
-                }}
-              >
-                Online eğitim atamalarını, app üzerinden gelen örgün/özel eğitim kayıtlarını
-                ve çalışan bazlı eğitim durumlarını tek merkezden yönet.
-              </p>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                minWidth: 160,
-              }}
-            >
-              <div
-                style={{
-                  background: "rgba(255,255,255,0.12)",
-                  padding: 14,
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,255,255,0.18)",
-                }}
-              >
-                <div style={{ fontSize: 12, opacity: 0.9 }}>Seçili Çalışan</div>
-                <div style={{ fontSize: 24, fontWeight: 900 }}>{selectedCount}</div>
-              </div>
-
-              <div
-                style={{
-                  background: "rgba(255,255,255,0.12)",
-                  padding: 14,
-                  borderRadius: 14,
-                  border: "1px solid rgba(255,255,255,0.18)",
-                }}
-              >
-                <div style={{ fontSize: 12, opacity: 0.9 }}>Toplam Eğitim</div>
-                <div style={{ fontSize: 24, fontWeight: 900 }}>{trainings.length}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      
         {error ? (
           <div
             style={{
@@ -1280,84 +1200,14 @@ const deleteTrainingUser = async (user: UserRow) => {
           </div>
         ) : null}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 16,
-            marginBottom: 20,
-          }}
-        >
-
-        <div style={{ ...cardStyle(), marginBottom: 20 }}>
-
-  <div style={{ fontWeight: 900, marginBottom: 12 }}>
-    Eğitim Performans Analizi
-  </div>
-
-  <div style={{ fontSize: 28, fontWeight: 900 }}>
-    %{Math.round(
-      (trainingTotals.totalCompleted /
-        (trainingTotals.totalAssigned || 1)) *
-        100
-    )}
-  </div>
-
-  <div
-    style={{
-      height: 10,
-      background: "#eee",
-      borderRadius: 10,
-      marginTop: 10,
-    }}
-  >
-    <div
-      style={{
-        width: `${
-          (trainingTotals.totalCompleted /
-            (trainingTotals.totalAssigned || 1)) *
-          100
-        }%`,
-        background: "#16a34a",
-        height: "100%",
-        borderRadius: 10,
-      }}
-    />
-  </div>
-
-  <div style={{ marginTop: 10, fontSize: 13 }}>
-    Tamamlanan: {trainingTotals.totalCompleted}  
-    Devam: {trainingTotals.totalInProgress}  
-    Başlamayan: {trainingTotals.totalNotStarted}
-  </div>
-
-</div>
-
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Çalışan</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
-              {totalEmployeeCount}
-            </div>
-          </div>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Eğitim</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
-              {trainings.length}
-            </div>
-          </div>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 13, color: BRAND.muted }}>Toplam Atama</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
-              {trainingTotals.totalAssigned}
-            </div>
-          </div>
-          <div style={cardStyle()}>
-            <div style={{ fontSize: 13, color: BRAND.muted }}>Seçili Çalışan</div>
-            <div style={{ fontSize: 30, fontWeight: 900, marginTop: 8 }}>
-              {selectedCount}
-            </div>
-          </div>
-        </div>
+        <TrainingKpiGrid
+          totalEmployees={totalEmployeeCount}
+          totalTrainings={trainings.length}
+          totalAssigned={trainingTotals.totalAssigned}
+          completed={trainingTotals.totalCompleted}
+          inProgress={trainingTotals.totalInProgress}
+          notStarted={trainingTotals.totalNotStarted}
+        />
 
         <div
           style={{
