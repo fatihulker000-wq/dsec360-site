@@ -11,7 +11,8 @@ import AssignmentCenter, {
   type EmployeeRow,
   type AssignResponse,
 } from "../../../components/training-v2/assignments/AssignmentCenter";
-import ParticipantImportCenter from "../../../components/training-v2/participants";
+import ParticipantImportCenter from "../../../components/training-v2/participants/ParticipantImportCenter";
+import TrainingCatalog from "../../../components/training-v2/catalog";
 
 type UserApiRow = {
   id: string;
@@ -738,111 +739,12 @@ if (companyFilter !== "all") {
           trainings={trainingOverviewItems}
         />
 
-        <div
-          style={{
-            ...cardStyle(),
-            marginBottom: 20,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-            gap: 16,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-              Eğitim
-            </div>
-            <select
-              value={trainingId}
-              onChange={(e) => setTrainingId(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                borderRadius: 12,
-                border: `1px solid ${BRAND.border}`,
-                background: "#fff",
-                fontSize: 14,
-              }}
-            >
-              <option value="">Eğitim seç</option>
-              {trainings.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
-          </div>
 
-          <div
-            style={{
-              border: `1px solid ${BRAND.border}`,
-              borderRadius: 16,
-              padding: 14,
-              background: "#fafafa",
-            }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-              Seçilen Eğitim Özeti
-            </div>
-
-            {selectedTrainingInfo ? (
-              <>
-                <div
-                  style={{
-                    fontSize: 17,
-                    fontWeight: 900,
-                    lineHeight: 1.35,
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {selectedTrainingInfo.title}
-                </div>
-                <div
-                  style={{
-                    marginTop: 8,
-                    fontSize: 13,
-                    color: BRAND.muted,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {selectedTrainingInfo.description}
-                </div>
-                <div
-                  style={{
-                    marginTop: 10,
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 8,
-                  }}
-                >
-                  <span style={badgeStyle("#f3f4f6", "#d1d5db", "#374151")}>
-                    Tür: {selectedTrainingInfo.type}
-                  </span>
-                  <span style={badgeStyle("#eff6ff", "#bfdbfe", "#1d4ed8")}>
-                    Süre:{" "}
-                    {typeof selectedTrainingInfo.duration_minutes === "number"
-                      ? `${selectedTrainingInfo.duration_minutes} dk`
-                      : "Tanımlı değil"}
-                  </span>
-                  <span style={badgeStyle("#f0fdf4", "#86efac", "#166534")}>
-  Video: {selectedTrainingInfo.video_count}
-</span>
-
-<span style={badgeStyle("#eff6ff", "#bfdbfe", "#1d4ed8")}>
-  Ön Sınav: {selectedTrainingInfo.pre_exam_count}
-</span>
-
-<span style={badgeStyle("#f5f3ff", "#c4b5fd", "#5b21b6")}>
-  Final: {selectedTrainingInfo.final_exam_count}
-</span>
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: 13, color: BRAND.muted }}>
-                Henüz eğitim seçilmedi.
-              </div>
-            )}
-          </div>
-        </div>
+        <TrainingCatalog
+          trainings={trainings}
+          selectedTrainingId={trainingId}
+          onSelectTraining={setTrainingId}
+        />
 
 
         {selectedTrainingInfo ? (
