@@ -12,7 +12,8 @@ import AssignmentCenter, {
   type AssignResponse,
 } from "../../../components/training-v2/assignments/AssignmentCenter";
 import ParticipantImportCenter from "../../../components/training-v2/participants/ParticipantImportCenter";
-import TrainingCatalog from "../../../components/training-v2/catalog";
+import TrainingCatalog from "../../../components/training-v2/catalog/TrainingCatalog";
+import TrainingExamCenter from "../../../components/training-v2/exams";
 
 type UserApiRow = {
   id: string;
@@ -741,6 +742,12 @@ if (companyFilter !== "all") {
 
 
         <TrainingCatalog
+          trainings={trainings}
+          selectedTrainingId={trainingId}
+          onSelectTraining={setTrainingId}
+        />
+
+        <TrainingExamCenter
           trainings={trainings}
           selectedTrainingId={trainingId}
           onSelectTraining={setTrainingId}
