@@ -6,11 +6,12 @@ import TrainingKpiGrid from "../../../components/training-v2/TrainingKpiGrid";
 import TrainingAnalytics from "../../../components/training-v2/TrainingAnalytics";
 import DoraTraining from "../../../components/training-v2/DoraTraining";
 import TrainingContentReadiness from "../../../components/training-v2/TrainingContentReadiness";
-import { TrainingVideoManager } from "../../../components/training-v2/videos";
+import TrainingVideoManager from "../../../components/training-v2/videos/TrainingVideoManager";
 import AssignmentCenter, {
   type EmployeeRow,
   type AssignResponse,
 } from "../../../components/training-v2/assignments/AssignmentCenter";
+import ParticipantImportCenter from "../../../components/training-v2/participants";
 
 type UserApiRow = {
   id: string;
@@ -229,23 +230,6 @@ export default function AdminTrainingPage() {
   const [selectedTrainingInfo, setSelectedTrainingInfo] =
     useState<TrainingRow | null>(null);
   const [assignSummary, setAssignSummary] = useState<AssignResponse | null>(null);
-  const [bulkErrors, setBulkErrors] = useState<string[]>([]);
-  const [previewRows, setPreviewRows] = useState<any[]>([]);
-const [previewErrors, setPreviewErrors] = useState<Record<number, string[]>>({});
-const [previewReady, setPreviewReady] = useState(false);
-const [previewLoading, setPreviewLoading] = useState(false);
-
-  const [bulkFile, setBulkFile] = useState<File | null>(null);
-  const [bulkUploading, setBulkUploading] = useState(false);
-  const [bulkResult, setBulkResult] = useState<string>("");
-  const [showUserModal, setShowUserModal] = useState(false);
-const [editingUser, setEditingUser] = useState<UserRow | null>(null);
-const [formFullName, setFormFullName] = useState("");
-const [formEmail, setFormEmail] = useState("");
-const [formPassword, setFormPassword] = useState("");
-const [formCompanyId, setFormCompanyId] = useState("");
-const [formIsActive, setFormIsActive] = useState(true);
-const [savingUser, setSavingUser] = useState(false);
 
   const loadAll = async () => {
     try {
@@ -604,314 +588,7 @@ if (companyFilter !== "all") {
       setAssigning(false);
     }
   };
-  
-  const downloadTemplate = () => {
-  const csv =
-    "full_name,email,password,company_id,is_active\n" +
-    "Ali Veli,ali.veli@mail.com,123456,FIRMA_ID,true\n";
 
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "dsec-egitim-katilimci-sablon.csv";
-  a.click();
-
-  URL.revokeObjectURL(url);
-};
-
-const parseFileForPreview = async (file: File) => {
-  setPreviewLoading(true);
-  setPreviewRows([]);
-  setPreviewErrors({});
-  setPreviewReady(false);
-
-  try {
-    let rows: any[] = [];
-
-    if (file.name.endsWith(".csv")) {
-      const text = await file.text();
-      const lines = text.replace(/\r/g, "").split("\n").filter(Boolean);
-      const headers = lines[0].split(",");
-
-      rows = lines.slice(1).map((line) => {
-        const values = line.split(",");
-        const obj: any = {};
-        headers.forEach((h, i) => {
-          obj[h.trim()] = values[i]?.trim() || "";
-        });
-        return obj;
-      });
-    } else if (file.name.endsWith(".xlsx")) {
-      const XLSX = await import("xlsx");
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json(sheet);
-    }
-
-    // 🔥 VALIDATION
-    const errors: Record<number, string[]> = {};
-
-    rows.forEach((row, index) => {
-      const rowErrors: string[] = [];
-
-      if (!row.full_name) rowErrors.push("Ad soyad eksik");
-      if (!row.email) rowErrors.push("Email eksik");
-      if (!row.password) rowErrors.push("Şifre eksik");
-      if (!row.company_id) rowErrors.push("Firma eksik");
-
-      if (rowErrors.length) {
-        errors[index] = rowErrors;
-      }
-    });
-
-    setPreviewRows(rows);
-    setPreviewErrors(errors);
-    setPreviewReady(true);
-
-  } catch (err) {
-    console.error(err);
-    alert("Dosya okunamadı");
-  } finally {
-    setPreviewLoading(false);
-  }
-};
-
-const uploadBulkParticipants = async () => {
-  if (!bulkFile) {
-    alert("Önce CSV veya Excel dosyası seç.");
-    return;
-  }
-
-  const allowedTypes = [
-    "text/csv",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  ];
-
-  const isAllowedByName =
-    bulkFile.name.endsWith(".csv") || bulkFile.name.endsWith(".xlsx");
-
-  if (!allowedTypes.includes(bulkFile.type) && !isAllowedByName) {
-    alert("Sadece CSV veya Excel (.xlsx) dosyası yükleyebilirsin.");
-    return;
-  }
-
-  if (!previewReady) {
-    alert("Önce dosyayı seç ve önizlemenin oluşmasını bekle.");
-    return;
-  }
-
-  if (Object.keys(previewErrors).length > 0) {
-    const ok = window.confirm(
-      "Dosyada hatalı satırlar var. Yine de yüklemeye devam etmek istiyor musun?"
-    );
-
-    if (!ok) return;
-  }
-
-  try {
-    setBulkUploading(true);
-    setBulkResult("");
-
-    const formData = new FormData();
-    formData.append("file", bulkFile);
-
-    const res = await fetch("/api/admin/training-users/bulk-upload", {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      alert(json?.error || "Toplu yükleme başarısız.");
-      setBulkResult(json?.error || "Toplu yükleme başarısız.");
-setBulkErrors(json.errors || []);
-return;
-    }
-
-    setBulkResult(
-      `Yükleme tamamlandı. Eklenen: ${json.insertedCount || 0}, Atlanan: ${
-        json.skippedCount || 0
-      }`
-    );
-
-    setBulkFile(null);
-    await loadAll();
-  } catch (err) {
-    console.error(err);
-    alert("Toplu yükleme sırasında hata oluştu.");
-  } finally {
-    setBulkUploading(false);
-  }
-};
-
-const resetUserForm = () => {
-  setEditingUser(null);
-  setFormFullName("");
-  setFormEmail("");
-  setFormPassword("");
-  setFormCompanyId("");
-  setFormIsActive(true);
-};
-
-const openCreateUserModal = () => {
-  resetUserForm();
-  setShowUserModal(true);
-};
-
-const openEditUserModal = (user: UserRow) => {
-  setEditingUser(user);
-  setFormFullName(user.full_name);
-  setFormEmail(user.email === "-" ? "" : user.email);
-  setFormPassword("");
-  setFormCompanyId(user.company_id || "");
-  setFormIsActive(user.is_active);
-  setShowUserModal(true);
-};
-
-const saveTrainingUser = async () => {
-  if (!formFullName.trim()) {
-    alert("Ad soyad zorunlu.");
-    return;
-  }
-
-  if (!formEmail.trim()) {
-    alert("Email zorunlu.");
-    return;
-  }
-
-  if (!editingUser && !formPassword.trim()) {
-    alert("Yeni kullanıcı için şifre zorunlu.");
-    return;
-  }
-
-  if (!formCompanyId.trim()) {
-    alert("Firma seçimi zorunlu.");
-    return;
-  }
-
-  try {
-    setSavingUser(true);
-
-    const endpoint = editingUser
-      ? "/api/admin/users/update"
-      : "/api/admin/users/create";
-
-    const body = editingUser
-      ? {
-          userId: editingUser.id,
-          full_name: formFullName.trim(),
-          email: formEmail.trim().toLowerCase(),
-          password: formPassword.trim() || null,
-          role: "training_user",
-          company_id: formCompanyId,
-          is_active: formIsActive,
-        }
-      : {
-          full_name: formFullName.trim(),
-          email: formEmail.trim().toLowerCase(),
-          password: formPassword.trim(),
-          role: "training_user",
-          company_id: formCompanyId,
-          is_active: formIsActive,
-        };
-
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify(body),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      alert(json?.error || "Kullanıcı kaydedilemedi.");
-      return;
-    }
-
-    setShowUserModal(false);
-    resetUserForm();
-    await loadAll();
-  } catch (err) {
-    console.error(err);
-    alert("Kullanıcı kaydedilirken hata oluştu.");
-  } finally {
-    setSavingUser(false);
-  }
-};
-
-const toggleUserActive = async (user: UserRow) => {
-  try {
-    const res = await fetch("/api/admin/users/update", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        userId: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        password: null,
-        role: "training_user",
-        company_id: user.company_id,
-        is_active: !user.is_active,
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      alert(json?.error || "Durum güncellenemedi.");
-      return;
-    }
-
-    await loadAll();
-  } catch (err) {
-    console.error(err);
-    alert("Durum güncellenirken hata oluştu.");
-  }
-};
-
-const deleteTrainingUser = async (user: UserRow) => {
-  const ok = window.confirm(
-    `${user.full_name} isimli katılımcıyı silmek istediğine emin misin?`
-  );
-
-  if (!ok) return;
-
-  try {
-    const res = await fetch("/api/admin/users/delete", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        userId: user.id,
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      alert(json?.error || "Kullanıcı silinemedi.");
-      return;
-    }
-
-    await loadAll();
-  } catch (err) {
-    console.error(err);
-    alert("Kullanıcı silinirken hata oluştu.");
-  }
-};
 
 
   const trainingTypeDistribution = useMemo(() => {
@@ -983,32 +660,32 @@ const deleteTrainingUser = async (user: UserRow) => {
     >
       <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
         <TrainingExecutiveHero
-  title="D-SEC Eğitim Yönetim Merkezi"
-  companyName={
-    companyFilter === "all"
-      ? "Tüm Firmalar"
-      : companies.find(
-          (company) => company.id === companyFilter
-        )?.name || "Seçili Firma"
-  }
-  totalTrainings={trainings.length}
-  activeTrainings={trainingTotals.totalInProgress}
-  completedTrainings={trainingTotals.totalCompleted}
-  pendingTrainings={trainingTotals.totalNotStarted}
-  certificatesWaiting={0}
-  complianceScore={
-    trainingTotals.totalAssigned > 0
-      ? Math.round(
-          (trainingTotals.totalCompleted /
-            trainingTotals.totalAssigned) *
-            100
-        )
-      : 0
-  }
-  participantCount={totalEmployeeCount}
-  lastSync={new Date().toLocaleString("tr-TR")}
-  aiEnabled={true}
-/>
+          title="D-SEC Eğitim Yönetim Merkezi"
+          companyName={
+            companyFilter === "all"
+              ? "Tüm Firmalar"
+              : companies.find(
+                  (company) => company.id === companyFilter
+                )?.name || "Seçili Firma"
+          }
+          totalTrainings={trainings.length}
+          activeTrainings={trainingTotals.totalInProgress}
+          completedTrainings={trainingTotals.totalCompleted}
+          pendingTrainings={trainingTotals.totalNotStarted}
+          certificatesWaiting={0}
+          complianceScore={
+            trainingTotals.totalAssigned > 0
+              ? Math.round(
+                  (trainingTotals.totalCompleted /
+                    trainingTotals.totalAssigned) *
+                    100
+                )
+              : 0
+          }
+          participantCount={totalEmployeeCount}
+          lastSync={new Date().toLocaleString("tr-TR")}
+          aiEnabled={true}
+        />
 
         {error ? (
           <div
@@ -1259,167 +936,8 @@ const deleteTrainingUser = async (user: UserRow) => {
   </div>
 </div>
 
-{/* TOPLU YÜKLEME */}
-<div style={{ ...cardStyle(), marginBottom: 20 }}>
-  <div
-    style={{
-      display: "flex",
-      justifyContent: "space-between",
-      gap: 12,
-      alignItems: "center",
-      flexWrap: "wrap",
-      marginBottom: 14,
-    }}
-  >
-    <div>
-      <div style={{ fontWeight: 900, fontSize: 18 }}>
-        Toplu Katılımcı Yükleme
-      </div>
-      <div style={{ marginTop: 6, fontSize: 13, color: BRAND.muted }}>
-        CSV veya Excel dosyası yükleyerek eğitim katılımcılarını toplu oluştur.
-      </div>
-    </div>
 
-    <button
-      type="button"
-      onClick={downloadTemplate}
-      style={{
-        border: "none",
-        borderRadius: 10,
-        padding: "10px 14px",
-        background: "#111827",
-        color: "#fff",
-        fontWeight: 800,
-        cursor: "pointer",
-      }}
-    >
-      Şablon İndir
-    </button>
-  </div>
-
-  <div
-    onDragOver={(e) => e.preventDefault()}
-    onDrop={(e) => {
-      e.preventDefault();
-      const file = e.dataTransfer.files?.[0];
-
-      if (file) {
-        setBulkFile(file);
-        void parseFileForPreview(file);
-      }
-    }}
-    style={{
-      border: "2px dashed #cbd5e1",
-      padding: 20,
-      borderRadius: 12,
-      textAlign: "center",
-      background: "#f8fafc",
-      cursor: "pointer",
-    }}
-  >
-    <div style={{ fontWeight: 800 }}>
-      Dosyayı buraya sürükle bırak
-    </div>
-
-    <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
-      veya dosya seç — CSV / XLSX
-    </div>
-
-    <input
-      type="file"
-      accept=".csv,.xlsx"
-      onChange={(e) => {
-        const file = e.target.files?.[0];
-
-        if (file) {
-          setBulkFile(file);
-          void parseFileForPreview(file);
-        }
-      }}
-      style={{ marginTop: 10 }}
-    />
-  </div>
-
-  <button
-    type="button"
-    onClick={uploadBulkParticipants}
-    disabled={!bulkFile || bulkUploading || previewLoading}
-    style={{
-      marginTop: 12,
-      border: "none",
-      borderRadius: 10,
-      padding: "10px 14px",
-      background:
-        !bulkFile || bulkUploading || previewLoading ? "#9ca3af" : "#16a34a",
-      color: "#fff",
-      fontWeight: 800,
-      cursor:
-        !bulkFile || bulkUploading || previewLoading ? "not-allowed" : "pointer",
-    }}
-  >
-    {previewLoading
-      ? "Önizleme hazırlanıyor..."
-      : bulkUploading
-      ? "Yükleniyor..."
-      : "Toplu Yükle"}
-  </button>
-
-  <div style={{ marginTop: 10, fontSize: 12, color: BRAND.muted }}>
-    Format: full_name, email, password, company_id, is_active
-  </div>
-
-  {bulkResult ? (
-    <div
-      style={{
-        marginTop: 10,
-        fontSize: 13,
-        fontWeight: 800,
-        color: bulkErrors.length > 0 ? "#b91c1c" : "#166534",
-      }}
-    >
-      {bulkResult}
-    </div>
-  ) : null}
-</div>
-
-{previewReady && (
-  <div style={{ ...cardStyle(), marginBottom: 20 }}>
-    <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 10 }}>
-      Yükleme Önizleme
-    </div>
-
-    <div style={{ maxHeight: 300, overflow: "auto", fontSize: 13 }}>
-      {previewRows.map((row, i) => {
-        const hasError = previewErrors[i];
-
-        return (
-          <div
-            key={i}
-            style={{
-              padding: 10,
-              borderBottom: "1px solid #eee",
-              background: hasError ? "#fee2e2" : "#f0fdf4",
-            }}
-          >
-            <div>
-              <b>{row.full_name}</b> - {row.email}
-            </div>
-
-            {hasError && (
-              <div style={{ color: "#b91c1c", marginTop: 4 }}>
-                {hasError.join(", ")}
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-
-    <div style={{ marginTop: 10, fontSize: 12 }}>
-      Toplam: {previewRows.length} | Hatalı: {Object.keys(previewErrors).length}
-    </div>
-  </div>
-)}
+        <ParticipantImportCenter onCompleted={loadAll} />
 
 
         <AssignmentCenter
