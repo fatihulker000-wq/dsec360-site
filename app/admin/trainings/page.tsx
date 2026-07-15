@@ -11,10 +11,11 @@ import AssignmentCenter, {
   type EmployeeRow,
   type AssignResponse,
 } from "../../../components/training-v2/assignments/AssignmentCenter";
-import ParticipantImportCenter from "../../../components/training-v2/participants/ParticipantImportCenter";
-import TrainingCatalog from "../../../components/training-v2/catalog/TrainingCatalog";
-import TrainingExamCenter from "../../../components/training-v2/exams/TrainingExamCenter";
+import ParticipantImportCenter from "../../../components/training-v2/participants";
+import TrainingCatalog from "../../../components/training-v2/catalog";
+import TrainingExamCenter from "../../../components/training-v2/exams";
 import TrainingCertificateCenter from "../../../components/training-v2/certificates";
+import TrainingAuditCenter from "../../../components/training-v2/audit/TrainingAuditCenter";
 
 type UserApiRow = {
   id: string;
@@ -758,6 +759,10 @@ if (companyFilter !== "all") {
           trainings={trainings}
           selectedTrainingId={trainingId}
           onSelectTraining={setTrainingId}
+        />
+
+        <TrainingAuditCenter
+          selectedTrainingId={trainingId}
         />
 
 
