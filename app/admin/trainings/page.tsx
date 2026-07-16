@@ -15,7 +15,8 @@ import ParticipantImportCenter from "../../../components/training-v2/participant
 import TrainingCatalog from "../../../components/training-v2/catalog";
 import TrainingExamCenter from "../../../components/training-v2/exams";
 import TrainingCertificateCenter from "../../../components/training-v2/certificates";
-import TrainingAuditCenter from "../../../components/training-v2/audit/TrainingAuditCenter";
+import TrainingAuditCenter from "../../../components/training-v2/audit";
+import TrainingExecutiveDashboard from "../../../components/training-v2/executive";
 
 type UserApiRow = {
   id: string;
@@ -711,6 +712,18 @@ if (companyFilter !== "all") {
           completed={trainingTotals.totalCompleted}
           inProgress={trainingTotals.totalInProgress}
           notStarted={trainingTotals.totalNotStarted}
+        />
+
+        <TrainingExecutiveDashboard
+          trainings={trainings}
+          totalEmployees={totalEmployeeCount}
+          selectedCompanyName={
+            companyFilter === "all"
+              ? "Tüm Firmalar"
+              : companies.find(
+                  (company) => company.id === companyFilter
+                )?.name || "Seçili Firma"
+          }
         />
 
         <TrainingAnalytics
