@@ -7,13 +7,11 @@ import { IncidentAnalyticsCenter } from "@/components/incident-v2/analytics";
 
 import type { IncidentAnalyticsRecord } from "@/components/incident-v2/analytics";
 
-import { InvestigationCenter } from "@/components/incident-v2/investigation";
 import { WorkflowCenter } from "@/components/incident-v2/workflow";
 import { SgkCenter } from "@/components/incident-v2/sgk";
 import { IbysCenter } from "@/components/incident-v2/ibys";
 import { IncidentAuditCenter } from "@/components/incident-v2/audit";
 
-const InvestigationCenterView = InvestigationCenter as ComponentType<any>;
 const WorkflowCenterView = WorkflowCenter as ComponentType<any>;
 const SgkCenterView = SgkCenter as ComponentType<any>;
 const IbysCenterView = IbysCenter as ComponentType<any>;
@@ -436,44 +434,45 @@ export default function AdminAccidentsPage() {
       )[0]?.[0] || "-";
 
     return {
-      total: rows.length,
+  total: rows.length,
 
-      accident: rows.filter(
-        (item) =>
-          normalizeIncidentType(
-            item.eventType
-          ) === "WORK_ACCIDENT"
-      ).length,
+  accident: rows.filter(
+    (item) =>
+      normalizeIncidentType(item.eventType) ===
+      "WORK_ACCIDENT"
+  ).length,
 
-      nearMiss: rows.filter(
-        (item) =>
-          normalizeIncidentType(
-            item.eventType
-          ) === "NEAR_MISS"
-      ).length,
+  nearMiss: rows.filter(
+    (item) =>
+      normalizeIncidentType(item.eventType) ===
+      "NEAR_MISS"
+  ).length,
 
-      danger: rows.filter(
-        (item) =>
-          normalizeIncidentType(
-            item.eventType
-          ) ===
-          "UNSAFE_CONDITION"
-      ).length,
+  danger: rows.filter(
+    (item) =>
+      normalizeIncidentType(item.eventType) ===
+      "UNSAFE_CONDITION"
+  ).length,
 
-      totalLostDays,
+  eventNotice: rows.filter(
+    (item) =>
+      normalizeIncidentType(item.eventType) ===
+      "EVENT_NOTIFICATION"
+  ).length,
 
-      last30Count: rows.filter(
-        (item) =>
-          normalizeTimestamp(
-            item.eventDate ||
-              item.createdAt
-          ) >= last30
-      ).length,
+  totalLostDays,
 
-      topDepartment,
+  last30Count: rows.filter(
+    (item) =>
+      normalizeTimestamp(
+        item.eventDate || item.createdAt
+      ) >= last30
+  ).length,
 
-      topRoot,
-    };
+  topDepartment,
+
+  topRoot,
+};
   }, [rows]);
 
   const departmentRows =
@@ -1146,7 +1145,7 @@ export default function AdminAccidentsPage() {
             onChange={setSelectedIncidentId}
           />
 
-          <InvestigationCenterView
+          <InvestigationWorkspace
             reports={investigationReports}
             selectedIncidentId={selectedIncidentId}
           />
@@ -1222,24 +1221,44 @@ export default function AdminAccidentsPage() {
               gap: 16,
             }}
           >
-            <StatCard
+            <PremiumStatCard
               title="Toplam Kayıt"
               value={stats.total}
+              subtitle="Tüm kaza ve olay kayıtları"
+              accent="#111827"
+              icon="Σ"
             />
 
-            <StatCard
+            <PremiumStatCard
               title="İş Kazası"
               value={stats.accident}
+              subtitle="Kayıp günlü ve kayıpsız kazalar"
+              accent={BRAND.redBright}
+              icon="!"
             />
 
-            <StatCard
+            <PremiumStatCard
               title="Ramak Kala"
               value={stats.nearMiss}
+              subtitle="Kazaya dönüşmeden bildirilen olaylar"
+              accent={BRAND.amber}
+              icon="↗"
             />
 
-            <StatCard
+            <PremiumStatCard
               title="Tehlikeli Durum"
               value={stats.danger}
+              subtitle="Sahada tespit edilen riskli durumlar"
+              accent={BRAND.blue}
+              icon="⚠"
+            />
+
+            <PremiumStatCard
+              title="Olay Bildirimi"
+              value={stats.eventNotice}
+              subtitle="Genel olay ve uygunsuzluk bildirimleri"
+              accent="#7c3aed"
+              icon="i"
             />
 
             <StatCard
@@ -2085,15 +2104,16 @@ function IncidentOverview({
 }: {
   rows: AccidentRow[];
   stats: {
-    total: number;
-    accident: number;
-    nearMiss: number;
-    danger: number;
-    totalLostDays: number;
-    last30Count: number;
-    topDepartment: string;
-    topRoot: string;
-  };
+  total: number;
+  accident: number;
+  nearMiss: number;
+  danger: number;
+  eventNotice: number;
+  totalLostDays: number;
+  last30Count: number;
+  topDepartment: string;
+  topRoot: string;
+};
   onOpenRecords(): void;
   onOpenAnalytics(): void;
   onOpenInvestigation(): void;
@@ -2112,6 +2132,7 @@ function IncidentOverview({
         <StatCard title="İş Kazası" value={stats.accident} color={BRAND.redBright} />
         <StatCard title="Ramak Kala" value={stats.nearMiss} color={BRAND.amber} />
         <StatCard title="Tehlikeli Durum" value={stats.danger} color={BRAND.blue} />
+       <StatCard  title="Olay Bildirimi"  value={stats.eventNotice} color="#7c3aed" />
         <StatCard title="Toplam Kayıp Gün" value={stats.totalLostDays} color={BRAND.redBright} />
         <StatCard title="Son 30 Gün" value={stats.last30Count} color={BRAND.blue} />
         <StatCard title="Riskli Departman" valueText={stats.topDepartment} color={BRAND.amber} />
@@ -2202,6 +2223,155 @@ function QuickAction({
         {button}
       </button>
     </article>
+  );
+}
+
+
+function InvestigationWorkspace({
+  reports,
+  selectedIncidentId,
+}: {
+  reports: any[];
+  selectedIncidentId: string;
+}) {
+  const selected =
+    reports.find((item) => String(item.incidentId) === selectedIncidentId) ||
+    reports[0] ||
+    null;
+
+  if (!selected) {
+    return <EmptyModule text="Soruşturma başlatmak için önce bir olay kaydı seçin." />;
+  }
+
+  const stages = [
+    {
+      title: "Olayın İlk Değerlendirmesi",
+      text: "Olayın türü, şiddeti, lokasyonu ve ilk bildirim bilgileri gözden geçirilir.",
+      status: "HAZIR",
+    },
+    {
+      title: "Delil ve Doküman Yönetimi",
+      text: "Fotoğraf, video, belge, ekipman kaydı ve saha kanıtları soruşturma dosyasına eklenir.",
+      status: "BEKLİYOR",
+    },
+    {
+      title: "Tanık ve Görüşme Süreci",
+      text: "Tanık ifadeleri alınır, görüşmeler kaydedilir ve çelişkili beyanlar işaretlenir.",
+      status: "BEKLİYOR",
+    },
+    {
+      title: "Kök Neden Analizi",
+      text: "5 Neden, balık kılçığı ve temel neden analizi ile olayın gerçek nedenleri belirlenir.",
+      status: selected.rootCause ? "TAMAMLANDI" : "BEKLİYOR",
+    },
+    {
+      title: "DÖF ve Aksiyon Planı",
+      text: "Düzeltici faaliyetler, sorumlular, termin tarihleri ve kapanış kanıtları tanımlanır.",
+      status: "BEKLİYOR",
+    },
+  ];
+
+  return (
+    <div style={{ display: "grid", gap: 18 }}>
+      <section
+        style={{
+          padding: 22,
+          borderRadius: 22,
+          background: "linear-gradient(135deg,#111827,#4a0d1a,#b91c1c)",
+          color: "#fff",
+          boxShadow: "0 18px 45px rgba(74,13,26,.18)",
+        }}
+      >
+        <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 1, opacity: .82 }}>
+          SEÇİLİ SORUŞTURMA DOSYASI
+        </div>
+        <h3 style={{ margin: "8px 0 0", fontSize: 28, fontWeight: 950 }}>
+          {selected.incidentNo} · {selected.title}
+        </h3>
+        <p style={{ margin: "12px 0 0", maxWidth: 900, lineHeight: 1.7, opacity: .9 }}>
+          Bu merkezde olayın ilk değerlendirmesinden delil ve tanık yönetimine, kök neden analizinden DÖF kapanışına kadar tüm soruşturma adımları tek dosya altında izlenir.
+        </p>
+      </section>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+          gap: 14,
+        }}
+      >
+        <Detail label="Durum" value={selected.status || "OPEN"} />
+        <Detail label="Öncelik" value={selected.priority || "MEDIUM"} />
+        <Detail label="Araştırmacı" value={selected.investigatorName || "Atanmadı"} />
+        <Detail label="Departman" value={selected.department || "Belirtilmemiş"} />
+        <Detail label="Lokasyon" value={selected.location || "Belirtilmemiş"} />
+      </div>
+
+      <section
+        style={{
+          padding: 22,
+          borderRadius: 20,
+          background: "#fff",
+          border: `1px solid ${BRAND.border}`,
+        }}
+      >
+        <div style={{ fontSize: 22, fontWeight: 950 }}>Soruşturma Yol Haritası</div>
+        <div style={{ marginTop: 8, color: BRAND.muted, lineHeight: 1.6 }}>
+          Aşağıdaki adımlar olay dosyasının eksiksiz ve denetlenebilir şekilde kapatılması için takip edilmelidir.
+        </div>
+
+        <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+          {stages.map((stage, index) => (
+            <article
+              key={stage.title}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "54px minmax(0,1fr) auto",
+                gap: 16,
+                alignItems: "center",
+                padding: 16,
+                borderRadius: 16,
+                background: "#f8fafc",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 14,
+                  display: "grid",
+                  placeItems: "center",
+                  background: BRAND.redBright,
+                  color: "#fff",
+                  fontWeight: 950,
+                }}
+              >
+                {index + 1}
+              </div>
+              <div>
+                <div style={{ fontWeight: 950, fontSize: 16 }}>{stage.title}</div>
+                <div style={{ marginTop: 5, color: BRAND.muted, lineHeight: 1.55, fontSize: 13 }}>
+                  {stage.text}
+                </div>
+              </div>
+              <span
+                style={{
+                  padding: "7px 11px",
+                  borderRadius: 999,
+                  background: stage.status === "TAMAMLANDI" ? "#dcfce7" : stage.status === "HAZIR" ? "#dbeafe" : "#fef3c7",
+                  color: stage.status === "TAMAMLANDI" ? "#166534" : stage.status === "HAZIR" ? "#1d4ed8" : "#92400e",
+                  fontSize: 11,
+                  fontWeight: 900,
+                }}
+              >
+                {stage.status}
+              </span>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -2627,15 +2797,14 @@ function reportButtonStyle(
 }
 
 function normalizeIncidentType(
-  value?: string | null
+  value?: string |null
 ) {
-  const type = String(
-    value || ""
-  )
+  const type = String(value || "")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, "_");
 
+  // İş Kazası
   if (
     type === "KAZA" ||
     type === "İŞ_KAZASI" ||
@@ -2645,6 +2814,7 @@ function normalizeIncidentType(
     return "WORK_ACCIDENT";
   }
 
+  // Ramak Kala
   if (
     type === "RAMAK_KALA" ||
     type === "NEAR_MISS"
@@ -2652,24 +2822,32 @@ function normalizeIncidentType(
     return "NEAR_MISS";
   }
 
+  // Tehlikeli Durum
   if (
-    type ===
-      "TEHLIKELI_DURUM" ||
-    type ===
-      "TEHLİKELİ_DURUM" ||
-    type ===
-      "UNSAFE_CONDITION"
+    type === "TEHLIKELI_DURUM" ||
+    type === "TEHLİKELİ_DURUM" ||
+    type === "UNSAFE_CONDITION"
   ) {
     return "UNSAFE_CONDITION";
   }
 
+  // Olay Bildirimi
   if (
-    type ===
-      "MESLEK_HASTALIGI" ||
-    type ===
-      "MESLEK_HASTALIĞI" ||
-    type ===
-      "OCCUPATIONAL_DISEASE"
+    type === "OLAY_BILDIRIMI" ||
+    type === "OLAY_BİLDİRİMİ" ||
+    type === "OLAY_BILDIRIM" ||
+    type === "OLAY_BİLDİRİM" ||
+    type === "EVENT_NOTICE" ||
+    type === "EVENT_NOTIFICATION"
+  ) {
+    return "EVENT_NOTIFICATION";
+  }
+
+  // Meslek Hastalığı
+  if (
+    type === "MESLEK_HASTALIGI" ||
+    type === "MESLEK_HASTALIĞI" ||
+    type === "OCCUPATIONAL_DISEASE"
   ) {
     return "OCCUPATIONAL_DISEASE";
   }
@@ -2785,6 +2963,66 @@ function PageTabButton({
     >
       {title}
     </button>
+  );
+}
+
+function PremiumStatCard({
+  title,
+  value,
+  subtitle,
+  accent,
+  icon,
+}: {
+  title: string;
+  value: number;
+  subtitle: string;
+  accent: string;
+  icon: string;
+}) {
+  return (
+    <article
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        minHeight: 150,
+        padding: 20,
+        borderRadius: 22,
+        background: `linear-gradient(145deg,#ffffff 0%,${accent}10 100%)`,
+        border: `1px solid ${accent}33`,
+        boxShadow: "0 14px 34px rgba(15,23,42,.07)",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          width: 44,
+          height: 44,
+          borderRadius: 14,
+          display: "grid",
+          placeItems: "center",
+          background: accent,
+          color: "#fff",
+          fontSize: 20,
+          fontWeight: 950,
+        }}
+      >
+        {icon}
+      </div>
+
+      <div style={{ color: BRAND.muted, fontSize: 13, fontWeight: 900 }}>
+        {title}
+      </div>
+
+      <div style={{ marginTop: 12, color: accent, fontSize: 38, fontWeight: 950 }}>
+        {value}
+      </div>
+
+      <div style={{ marginTop: 8, maxWidth: 190, color: BRAND.muted, lineHeight: 1.45, fontSize: 12 }}>
+        {subtitle}
+      </div>
+    </article>
   );
 }
 
