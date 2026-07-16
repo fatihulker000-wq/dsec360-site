@@ -1,10 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ComponentType } from "react";
 
 import { IncidentAnalyticsCenter } from "@/components/incident-v2/analytics";
 
 import type { IncidentAnalyticsRecord } from "@/components/incident-v2/analytics";
+
+import { InvestigationCenter } from "@/components/incident-v2/investigation";
+import { WorkflowCenter } from "@/components/incident-v2/workflow";
+import { SgkCenter } from "@/components/incident-v2/sgk";
+import { IbysCenter } from "@/components/incident-v2/ibys";
+import { IncidentAuditCenter } from "@/components/incident-v2/audit";
+
+const InvestigationCenterView = InvestigationCenter as ComponentType<any>;
+const WorkflowCenterView = WorkflowCenter as ComponentType<any>;
+const SgkCenterView = SgkCenter as ComponentType<any>;
+const IbysCenterView = IbysCenter as ComponentType<any>;
+const IncidentAuditCenterView = IncidentAuditCenter as ComponentType<any>;
 
 type AccidentRow = {
   id: number;
@@ -40,8 +53,15 @@ type CompanyRow = {
 };
 
 type AccidentPageTab =
+  | "OVERVIEW"
   | "RECORDS"
-  | "ANALYTICS";
+  | "ANALYTICS"
+  | "INVESTIGATION"
+  | "WORKFLOW"
+  | "SGK"
+  | "IBYS"
+  | "AUDIT"
+  | "REPORTS";
 
 const BRAND = {
   redDark: "#4a0d1a",
@@ -92,8 +112,20 @@ export default function AdminAccidentsPage() {
 
   const [activeTab, setActiveTab] =
     useState<AccidentPageTab>(
-      "RECORDS"
+      "OVERVIEW"
     );
+
+  const [selectedIncidentId, setSelectedIncidentId] =
+    useState<string>("");
+
+  const [sgkItems, setSgkItems] =
+    useState<any[]>([]);
+
+  const [ibysItems, setIbysItems] =
+    useState<any[]>([]);
+
+  const [auditLogs, setAuditLogs] =
+    useState<any[]>([]);
 
   const loadData = async () => {
     try {
@@ -550,6 +582,299 @@ export default function AdminAccidentsPage() {
       });
     }, [rows]);
 
+
+
+  const activeIncident =
+    useMemo(() => {
+      const selected = rows.find(
+        (row) =>
+          String(row.id) === selectedIncidentId
+      );
+
+      return selected || rows[0] || null;
+    }, [rows, selectedIncidentId]);
+
+  const investigationReports =
+    useMemo(() => {
+      return rows.map((row) => ({
+        id: String(row.id),
+        incidentId: String(row.id),
+        incidentNo: `INC-${row.id}`,
+        title: row.title || `Kaza/Olay #${row.id}`,
+        status: "OPEN",
+        priority:
+          Number(row.severity || 0) >= 4
+            ? "CRITICAL"
+            : Number(row.severity || 0) >= 3
+            ? "HIGH"
+            : "MEDIUM",
+        investigatorName: "Atanmadı",
+        department:
+          row.department || "Belirtilmemiş",
+        location:
+          row.location || "Belirtilmemiş",
+        occurredAt: new Date(
+          normalizeTimestamp(
+            row.eventDate ||
+              row.createdAt ||
+              Date.now()
+          )
+        ).toISOString(),
+        createdAt: new Date(
+          normalizeTimestamp(
+            row.createdAt ||
+              row.eventDate ||
+              Date.now()
+          )
+        ).toISOString(),
+        description: row.description || "",
+        rootCause:
+          row.rootCauseCategory || "",
+        findings: [],
+        evidence: [],
+        witnesses: [],
+        interviews: [],
+        actions: [],
+        timeline: [],
+      }));
+    }, [rows]);
+
+  const workflowContext =
+    useMemo(() => {
+      if (!activeIncident) {
+        return null;
+      }
+
+      return {
+        incidentId:
+          String(activeIncident.id),
+        incidentNo:
+          `INC-${activeIncident.id}`,
+        companyId:
+          selectedFirmId === "all"
+            ? String(
+                activeIncident.firmId || "ALL"
+              )
+            : selectedFirmId,
+        companyName:
+          selectedFirmId === "all"
+            ? "Tüm Firmalar"
+            : companies.find((firm) => {
+                const key =
+                  firm.local_firm_id ||
+                  firm.localId ||
+                  firm.firm_id ||
+                  firm.id;
+
+                return String(key) ===
+                  selectedFirmId;
+              })?.name || "Seçili Firma",
+        title:
+          activeIncident.title ||
+          `Kaza/Olay #${activeIncident.id}`,
+        description:
+          activeIncident.description || "",
+        incidentType:
+          normalizeIncidentType(
+            activeIncident.eventType
+          ),
+        severity:
+          Number(activeIncident.severity || 0),
+        department:
+          activeIncident.department ||
+          "Belirtilmemiş",
+        location:
+          activeIncident.location ||
+          "Belirtilmemiş",
+        employeeName:
+          activeIncident.employeeName || "",
+        occurredAt:
+          new Date(
+            normalizeTimestamp(
+              activeIncident.eventDate ||
+                activeIncident.createdAt ||
+                Date.now()
+            )
+          ).toISOString(),
+        createdBy: "SYSTEM",
+        lostWorkDays:
+          Number(
+            activeIncident.lostWorkDays || 0
+          ),
+        isFatal:
+          Number(activeIncident.severity || 0) >= 5,
+        isLostTime:
+          Number(
+            activeIncident.lostWorkDays || 0
+          ) > 0,
+        rootCauseCategory:
+          activeIncident.rootCauseCategory || "",
+      };
+    }, [
+      activeIncident,
+      companies,
+      selectedFirmId,
+    ]);
+
+  useEffect(() => {
+    if (
+      !selectedIncidentId &&
+      rows.length > 0
+    ) {
+      setSelectedIncidentId(
+        String(rows[0].id)
+      );
+    }
+
+    const nextSgkItems = rows.map((row) => {
+      const incidentDate = new Date(
+        normalizeTimestamp(
+          row.eventDate ||
+            row.createdAt ||
+            Date.now()
+        )
+      );
+
+      const deadline = new Date(
+        incidentDate
+      );
+
+      deadline.setDate(
+        deadline.getDate() + 3
+      );
+
+      return {
+        incidentId: String(row.id),
+        employeeName:
+          row.employeeName || "",
+        tcNo: "",
+        companyName:
+          selectedFirmId === "all"
+            ? "Firma bilgisi bekleniyor"
+            : "Seçili Firma",
+        incidentDate:
+          incidentDate.toISOString(),
+        notificationDeadline:
+          deadline.toISOString(),
+        lostDay:
+          Number(row.lostWorkDays || 0),
+        fatal:
+          Number(row.severity || 0) >= 5,
+        occupationalDisease:
+          normalizeIncidentType(
+            row.eventType
+          ) === "OCCUPATIONAL_DISEASE",
+        hospitalReport: false,
+        status: "MISSING_INFORMATION",
+        missingFields: [
+          "T.C.",
+          "Firma",
+        ],
+      };
+    });
+
+    setSgkItems(nextSgkItems);
+
+    const nextIbysItems = rows.map((row) => {
+      const date = new Date(
+        normalizeTimestamp(
+          row.eventDate ||
+            row.createdAt ||
+            Date.now()
+        )
+      );
+
+      return {
+        incidentId: String(row.id),
+        incidentNo: `INC-${row.id}`,
+        companyId:
+          String(row.firmId || selectedFirmId),
+        companyName:
+          selectedFirmId === "all"
+            ? "Firma bilgisi bekleniyor"
+            : "Seçili Firma",
+        workplaceSgkNo: "",
+        naceCode: "",
+        employeeId: "",
+        employeeName:
+          row.employeeName || "",
+        employeeTcNo: "",
+        incidentType:
+          normalizeIncidentType(
+            row.eventType
+          ),
+        incidentDate:
+          date.toISOString().slice(0, 10),
+        incidentTime:
+          row.eventHour != null
+            ? `${String(row.eventHour).padStart(
+                2,
+                "0"
+              )}:00`
+            : "00:00",
+        department:
+          row.department || "",
+        location:
+          row.location || "",
+        description:
+          row.description || row.title || "",
+        severity:
+          Number(row.severity || 0),
+        lostDay:
+          Number(row.lostWorkDays || 0),
+        fatal:
+          Number(row.severity || 0) >= 5,
+        hospitalTransfer: false,
+        investigationCompleted: false,
+        rootCauseCompleted:
+          Boolean(row.rootCauseCategory),
+        correctiveActionCreated: false,
+        missingFields: [],
+        status: "DRAFT",
+      };
+    });
+
+    setIbysItems(nextIbysItems);
+
+    const now =
+      new Date().toISOString();
+
+    setAuditLogs(
+      rows.map((row) => ({
+        id: `audit-${row.id}`,
+        incidentId: String(row.id),
+        incidentNo: `INC-${row.id}`,
+        companyId:
+          String(row.firmId || selectedFirmId),
+        companyName:
+          selectedFirmId === "all"
+            ? "Tüm Firmalar"
+            : "Seçili Firma",
+        action: "INCIDENT_CREATED",
+        title: "Kaza/Olay kaydı görüntülendi",
+        description:
+          row.title ||
+          `Kaza/Olay #${row.id}`,
+        status: "INFO",
+        severity:
+          Number(row.severity || 0) >= 4
+            ? "HIGH"
+            : "LOW",
+        userName: "SYSTEM",
+        module: "INCIDENT",
+        createdAt:
+          row.createdAt || row.eventDate
+            ? new Date(
+                normalizeTimestamp(
+                  row.createdAt ||
+                    row.eventDate
+                )
+              ).toISOString()
+            : now,
+      }))
+    );
+  }, [rows, selectedFirmId]);
+
   return (
     <div
       style={{
@@ -619,26 +944,57 @@ export default function AdminAccidentsPage() {
         }}
       >
         <PageTabButton
-          title="Kaza ve Olay Kayıtları"
-          active={
-            activeTab === "RECORDS"
-          }
-          onClick={() =>
-            setActiveTab("RECORDS")
-          }
+          title="Genel Bakış"
+          active={activeTab === "OVERVIEW"}
+          onClick={() => setActiveTab("OVERVIEW")}
         />
 
         <PageTabButton
-          title="Analytics Merkezi"
-          active={
-            activeTab ===
-            "ANALYTICS"
-          }
-          onClick={() =>
-            setActiveTab(
-              "ANALYTICS"
-            )
-          }
+          title="Kayıtlar"
+          active={activeTab === "RECORDS"}
+          onClick={() => setActiveTab("RECORDS")}
+        />
+
+        <PageTabButton
+          title="Analytics"
+          active={activeTab === "ANALYTICS"}
+          onClick={() => setActiveTab("ANALYTICS")}
+        />
+
+        <PageTabButton
+          title="Soruşturmalar"
+          active={activeTab === "INVESTIGATION"}
+          onClick={() => setActiveTab("INVESTIGATION")}
+        />
+
+        <PageTabButton
+          title="Workflow"
+          active={activeTab === "WORKFLOW"}
+          onClick={() => setActiveTab("WORKFLOW")}
+        />
+
+        <PageTabButton
+          title="SGK"
+          active={activeTab === "SGK"}
+          onClick={() => setActiveTab("SGK")}
+        />
+
+        <PageTabButton
+          title="İBYS"
+          active={activeTab === "IBYS"}
+          onClick={() => setActiveTab("IBYS")}
+        />
+
+        <PageTabButton
+          title="Audit"
+          active={activeTab === "AUDIT"}
+          onClick={() => setActiveTab("AUDIT")}
+        />
+
+        <PageTabButton
+          title="Raporlar"
+          active={activeTab === "REPORTS"}
+          onClick={() => setActiveTab("REPORTS")}
         />
       </div>
 
@@ -759,14 +1115,102 @@ export default function AdminAccidentsPage() {
         >
           {error}
         </div>
-      ) : activeTab ===
-        "ANALYTICS" ? (
-        <IncidentAnalyticsCenter
-          incidents={
-            analyticsRecords
+      ) : activeTab === "OVERVIEW" ? (
+        <IncidentOverview
+          rows={rows}
+          stats={stats}
+          onOpenRecords={() =>
+            setActiveTab("RECORDS")
           }
+          onOpenAnalytics={() =>
+            setActiveTab("ANALYTICS")
+          }
+          onOpenInvestigation={() =>
+            setActiveTab("INVESTIGATION")
+          }
+        />
+      ) : activeTab === "ANALYTICS" ? (
+        <IncidentAnalyticsCenter
+          incidents={analyticsRecords}
           workedHours={0}
           employeeCount={0}
+        />
+      ) : activeTab === "INVESTIGATION" ? (
+        <ModuleShell
+          title="Soruşturma Merkezi"
+          description="Olay seçimi yaparak soruşturma, delil, tanık, görüşme, kök neden ve aksiyon süreçlerini yönetin."
+        >
+          <IncidentSelector
+            rows={rows}
+            selectedIncidentId={selectedIncidentId}
+            onChange={setSelectedIncidentId}
+          />
+
+          <InvestigationCenterView
+            reports={investigationReports}
+            selectedIncidentId={selectedIncidentId}
+          />
+        </ModuleShell>
+      ) : activeTab === "WORKFLOW" ? (
+        <ModuleShell
+          title="Workflow Merkezi"
+          description="Seçilen olay için soruşturma, risk, denetim, eğitim, DÖF, ajanda, bildirim ve İBYS adımlarını izleyin."
+        >
+          <IncidentSelector
+            rows={rows}
+            selectedIncidentId={selectedIncidentId}
+            onChange={setSelectedIncidentId}
+          />
+
+          {workflowContext ? (
+            <WorkflowCenterView
+              context={workflowContext}
+            />
+          ) : (
+            <EmptyModule
+              text="Workflow başlatmak için bir olay kaydı seçin."
+            />
+          )}
+        </ModuleShell>
+      ) : activeTab === "SGK" ? (
+        <ModuleShell
+          title="SGK Bildirim Merkezi"
+          description="İş kazası bildirim hazırlığı, eksik alanlar, bildirim süresi ve gönderim durumlarını yönetin."
+        >
+          <SgkCenterView
+            items={sgkItems}
+            onChange={setSgkItems}
+          />
+        </ModuleShell>
+      ) : activeTab === "IBYS" ? (
+        <ModuleShell
+          title="İBYS Hazırlık Merkezi"
+          description="Olay verilerini doğrulayın, eksik alanları tamamlayın ve mevcut İBYS Entegrasyon Merkezi için veri paketi hazırlayın."
+        >
+          <IbysCenterView
+            items={ibysItems}
+            onChange={setIbysItems}
+            onPayloadPrepared={(payload: unknown) => {
+              console.info(
+                "İBYS payload hazırlandı:",
+                payload
+              );
+            }}
+          />
+        </ModuleShell>
+      ) : activeTab === "AUDIT" ? (
+        <ModuleShell
+          title="Audit ve İzlenebilirlik Merkezi"
+          description="Kaza ve olay modülünde gerçekleştirilen işlemleri kullanıcı, tarih, durum ve önem düzeyine göre izleyin."
+        >
+          <IncidentAuditCenterView
+            logs={auditLogs}
+          />
+        </ModuleShell>
+      ) : activeTab === "REPORTS" ? (
+        <IncidentReportsCenter
+          rows={rows}
+          analyticsRecords={analyticsRecords}
         />
       ) : (
         <>
@@ -1630,6 +2074,556 @@ export default function AdminAccidentsPage() {
       )}
     </div>
   );
+}
+
+function IncidentOverview({
+  rows,
+  stats,
+  onOpenRecords,
+  onOpenAnalytics,
+  onOpenInvestigation,
+}: {
+  rows: AccidentRow[];
+  stats: {
+    total: number;
+    accident: number;
+    nearMiss: number;
+    danger: number;
+    totalLostDays: number;
+    last30Count: number;
+    topDepartment: string;
+    topRoot: string;
+  };
+  onOpenRecords(): void;
+  onOpenAnalytics(): void;
+  onOpenInvestigation(): void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(auto-fit,minmax(190px,1fr))",
+          gap: 16,
+        }}
+      >
+        <StatCard title="Toplam Kayıt" value={stats.total} />
+        <StatCard title="İş Kazası" value={stats.accident} color={BRAND.redBright} />
+        <StatCard title="Ramak Kala" value={stats.nearMiss} color={BRAND.amber} />
+        <StatCard title="Tehlikeli Durum" value={stats.danger} color={BRAND.blue} />
+        <StatCard title="Toplam Kayıp Gün" value={stats.totalLostDays} color={BRAND.redBright} />
+        <StatCard title="Son 30 Gün" value={stats.last30Count} color={BRAND.blue} />
+        <StatCard title="Riskli Departman" valueText={stats.topDepartment} color={BRAND.amber} />
+        <StatCard title="Sık Kök Neden" valueText={stats.topRoot} color={BRAND.green} />
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(auto-fit,minmax(250px,1fr))",
+          gap: 16,
+        }}
+      >
+        <QuickAction
+          title="Kaza ve Olay Kayıtları"
+          description={`${rows.length} kaydı görüntüle, düzenle ve pasifleştir.`}
+          button="Kayıtlara Git"
+          onClick={onOpenRecords}
+        />
+
+        <QuickAction
+          title="Analytics Merkezi"
+          description="KPI, trend, risk haritası, kök neden ve yönetici özetini incele."
+          button="Analitiği Aç"
+          onClick={onOpenAnalytics}
+        />
+
+        <QuickAction
+          title="Soruşturma Merkezi"
+          description="Delil, tanık, görüşme, 5 Why, Fishbone ve kök neden süreçlerini yönet."
+          button="Soruşturmaları Aç"
+          onClick={onOpenInvestigation}
+        />
+      </div>
+    </div>
+  );
+}
+
+function QuickAction({
+  title,
+  description,
+  button,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  button: string;
+  onClick(): void;
+}) {
+  return (
+    <article
+      style={{
+        padding: 20,
+        borderRadius: 20,
+        background: "#fff",
+        border: `1px solid ${BRAND.border}`,
+      }}
+    >
+      <div style={{ fontSize: 19, fontWeight: 950 }}>
+        {title}
+      </div>
+
+      <p
+        style={{
+          minHeight: 48,
+          margin: "10px 0 16px",
+          color: BRAND.muted,
+          lineHeight: 1.6,
+        }}
+      >
+        {description}
+      </p>
+
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          border: "none",
+          borderRadius: 12,
+          padding: "10px 14px",
+          background: BRAND.redBright,
+          color: "#fff",
+          fontWeight: 900,
+          cursor: "pointer",
+        }}
+      >
+        {button}
+      </button>
+    </article>
+  );
+}
+
+function ModuleShell({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section style={{ display: "grid", gap: 20 }}>
+      <header
+        style={{
+          padding: 22,
+          borderRadius: 20,
+          background:
+            "linear-gradient(135deg,#111827,#4a0d1a,#b91c1c)",
+          color: "#fff",
+        }}
+      >
+        <div style={{ fontSize: 26, fontWeight: 950 }}>
+          {title}
+        </div>
+
+        <div
+          style={{
+            marginTop: 8,
+            maxWidth: 900,
+            lineHeight: 1.7,
+            opacity: 0.9,
+          }}
+        >
+          {description}
+        </div>
+      </header>
+
+      {children}
+    </section>
+  );
+}
+
+function IncidentSelector({
+  rows,
+  selectedIncidentId,
+  onChange,
+}: {
+  rows: AccidentRow[];
+  selectedIncidentId: string;
+  onChange(value: string): void;
+}) {
+  return (
+    <div
+      style={{
+        padding: 16,
+        borderRadius: 16,
+        background: "#fff",
+        border: `1px solid ${BRAND.border}`,
+      }}
+    >
+      <label style={{ display: "grid", gap: 8 }}>
+        <span
+          style={{
+            color: BRAND.muted,
+            fontSize: 12,
+            fontWeight: 900,
+          }}
+        >
+          İŞLEM YAPILACAK KAZA / OLAY
+        </span>
+
+        <select
+          value={selectedIncidentId}
+          onChange={(event) =>
+            onChange(event.target.value)
+          }
+          style={{
+            minHeight: 46,
+            borderRadius: 12,
+            border: `1px solid ${BRAND.border}`,
+            padding: "10px 12px",
+            background: "#fff",
+            fontWeight: 800,
+          }}
+        >
+          {rows.length === 0 ? (
+            <option value="">
+              Kayıt bulunamadı
+            </option>
+          ) : (
+            rows.map((row) => (
+              <option
+                key={row.id}
+                value={String(row.id)}
+              >
+                {`INC-${row.id} • ${
+                  row.title || "Başlıksız kayıt"
+                } • ${
+                  row.employeeName || "Çalışan yok"
+                }`}
+              </option>
+            ))
+          )}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function EmptyModule({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div
+      style={{
+        padding: 36,
+        textAlign: "center",
+        borderRadius: 18,
+        background: "#fff",
+        border: `1px solid ${BRAND.border}`,
+        color: BRAND.muted,
+        fontWeight: 800,
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
+function IncidentReportsCenter({
+  rows,
+  analyticsRecords,
+}: {
+  rows: AccidentRow[];
+  analyticsRecords: IncidentAnalyticsRecord[];
+}) {
+  const totalLostDays = rows.reduce(
+    (sum, row) =>
+      sum + Number(row.lostWorkDays || 0),
+    0
+  );
+
+  function exportCsv() {
+    const header = [
+      "Kayıt No",
+      "Başlık",
+      "Çalışan",
+      "Tür",
+      "Tarih",
+      "Lokasyon",
+      "Departman",
+      "Şiddet",
+      "Kayıp Gün",
+      "Kök Neden",
+    ];
+
+    const body = rows.map((row) => [
+      `INC-${row.id}`,
+      row.title || "",
+      row.employeeName || "",
+      row.eventType || "",
+      formatDate(row.eventDate),
+      row.location || "",
+      row.department || "",
+      Number(row.severity || 0),
+      Number(row.lostWorkDays || 0),
+      row.rootCauseCategory || "",
+    ]);
+
+    const csv = [header, ...body]
+      .map((line) =>
+        line
+          .map((cell) =>
+            `"${String(cell).replace(/"/g, '""')}"`
+          )
+          .join(";")
+      )
+      .join("\n");
+
+    const blob = new Blob(
+      [`\uFEFF${csv}`],
+      {
+        type: "text/csv;charset=utf-8",
+      }
+    );
+
+    const url =
+      URL.createObjectURL(blob);
+
+    const anchor =
+      document.createElement("a");
+
+    anchor.href = url;
+    anchor.download =
+      "dsec-kaza-olay-raporu.csv";
+    anchor.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  function exportJson() {
+    const blob = new Blob(
+      [
+        JSON.stringify(
+          {
+            generatedAt:
+              new Date().toISOString(),
+            totalRecords: rows.length,
+            totalLostDays,
+            records: analyticsRecords,
+          },
+          null,
+          2
+        ),
+      ],
+      {
+        type: "application/json",
+      }
+    );
+
+    const url =
+      URL.createObjectURL(blob);
+
+    const anchor =
+      document.createElement("a");
+
+    anchor.href = url;
+    anchor.download =
+      "dsec-kaza-olay-raporu.json";
+    anchor.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <ModuleShell
+      title="Kurumsal Rapor Merkezi"
+      description="Kaza ve olay kayıtlarını CSV ve JSON formatında dışa aktarın. PDF için yalnızca bu rapor görünümünü yazdırın."
+    >
+      <div
+        className="incident-report-print-area"
+        style={{
+          padding: 24,
+          borderRadius: 20,
+          background: "#fff",
+          border: `1px solid ${BRAND.border}`,
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit,minmax(180px,1fr))",
+            gap: 14,
+          }}
+        >
+          <StatCard
+            title="Toplam Kayıt"
+            value={rows.length}
+          />
+
+          <StatCard
+            title="Toplam Kayıp Gün"
+            value={totalLostDays}
+            color={BRAND.redBright}
+          />
+
+          <StatCard
+            title="Rapor Tarihi"
+            valueText={new Date().toLocaleDateString(
+              "tr-TR"
+            )}
+            color={BRAND.blue}
+          />
+        </div>
+
+        <div
+          style={{
+            marginTop: 20,
+            overflowX: "auto",
+          }}
+        >
+          <table
+            style={{
+              width: "100%",
+              minWidth: 900,
+              borderCollapse: "collapse",
+            }}
+          >
+            <thead>
+              <tr style={{ background: "#f8fafc" }}>
+                <Th>No</Th>
+                <Th>Başlık</Th>
+                <Th>Çalışan</Th>
+                <Th>Tür</Th>
+                <Th>Departman</Th>
+                <Th>Şiddet</Th>
+                <Th>Kayıp Gün</Th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {rows.map((row) => (
+                <tr
+                  key={row.id}
+                  style={{
+                    borderBottom:
+                      "1px solid #e5e7eb",
+                  }}
+                >
+                  <Td>{`INC-${row.id}`}</Td>
+                  <Td>{row.title || "-"}</Td>
+                  <Td>
+                    {row.employeeName || "-"}
+                  </Td>
+                  <Td>{row.eventType || "-"}</Td>
+                  <Td>
+                    {row.department || "-"}
+                  </Td>
+                  <Td>
+                    {Number(row.severity || 0)}
+                  </Td>
+                  <Td>
+                    {Number(
+                      row.lostWorkDays || 0
+                    )}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div
+        className="no-print"
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => window.print()}
+          style={reportButtonStyle(
+            "#111827"
+          )}
+        >
+          PDF / Yazdır
+        </button>
+
+        <button
+          type="button"
+          onClick={exportCsv}
+          style={reportButtonStyle(
+            "#166534"
+          )}
+        >
+          Excel / CSV
+        </button>
+
+        <button
+          type="button"
+          onClick={exportJson}
+          style={reportButtonStyle(
+            "#1d4ed8"
+          )}
+        >
+          JSON
+        </button>
+      </div>
+
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+
+          .incident-report-print-area,
+          .incident-report-print-area * {
+            visibility: visible !important;
+          }
+
+          .incident-report-print-area {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+
+          .no-print {
+            display: none !important;
+          }
+
+          @page {
+            size: A4 landscape;
+            margin: 12mm;
+          }
+        }
+      `}</style>
+    </ModuleShell>
+  );
+}
+
+function reportButtonStyle(
+  background: string
+): React.CSSProperties {
+  return {
+    border: "none",
+    borderRadius: 12,
+    padding: "12px 18px",
+    background,
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  };
 }
 
 function normalizeIncidentType(
