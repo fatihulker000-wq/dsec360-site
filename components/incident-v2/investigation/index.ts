@@ -20,3 +20,4 @@ export * from "./FiveWhyEngine";
 export * from "./FishboneEngine";
 export * from "./RootCauseEngine";
 export * from "./types";
+export { default as InvestigationReport } from "./InvestigationReport";
