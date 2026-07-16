@@ -1,0 +1,286 @@
+.panel {
+  margin-bottom: 20px;
+  padding: 22px;
+  border: 1px solid #e5e7eb;
+  border-radius: 25px;
+  background:
+    radial-gradient(circle at top right, rgba(168, 85, 247, .1), transparent 30%),
+    linear-gradient(180deg, #ffffff, #fdfaff);
+  box-shadow: 0 17px 46px rgba(15, 23, 42, .065);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  color: #9333ea;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 5px 0 0;
+  color: #111827;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.header p {
+  max-width: 740px;
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.header button {
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: #111827;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.summary div {
+  padding: 11px;
+  border-radius: 13px;
+  background: #faf5ff;
+  text-align: center;
+}
+
+.summary span {
+  display: block;
+  color: #a855f7;
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.summary strong {
+  display: block;
+  margin-top: 4px;
+  color: #7e22ce;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 210px;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.toolbar input,
+.toolbar select {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #dbe2ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 13px;
+  margin-top: 15px;
+}
+
+.card {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 9px 24px rgba(15, 23, 42, .045);
+}
+
+.cardTop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.cardTop span {
+  color: #9333ea;
+  font-size: 7px;
+  font-weight: 950;
+}
+
+.cardTop h3 {
+  margin: 5px 0 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.cardTop p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 9px;
+}
+
+.cardTop img {
+  width: 90px;
+  height: 90px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.meta div {
+  min-width: 0;
+  padding: 9px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.meta span,
+.meta strong {
+  display: block;
+}
+
+.meta span {
+  color: #94a3b8;
+  font-size: 6px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.meta strong {
+  overflow: hidden;
+  margin-top: 4px;
+  color: #111827;
+  font-size: 8px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hash {
+  margin-top: 11px;
+  padding: 10px;
+  border-radius: 11px;
+  background: #f8fafc;
+}
+
+.hash span {
+  display: block;
+  color: #64748b;
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hash code {
+  display: block;
+  margin-top: 4px;
+  color: #334155;
+  font-size: 7px;
+  overflow-wrap: anywhere;
+}
+
+.revoked,
+.error,
+.empty {
+  margin-top: 12px;
+  padding: 11px;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.revoked,
+.error {
+  color: #991b1b;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+}
+
+.empty {
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  text-align: center;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.actions a,
+.actions button {
+  border: 0;
+  border-radius: 10px;
+  padding: 9px;
+  background: #7e22ce;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 950;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.dangerButton {
+  background: #dc2626 !important;
+}
+
+@media (max-width: 800px) {
+  .header {
+    flex-direction: column;
+  }
+
+  .summary,
+  .meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .panel {
+    padding: 16px;
+  }
+
+  .summary,
+  .meta,
+  .actions {
+    grid-template-columns: 1fr;
+  }
+
+  .cardTop {
+    grid-template-columns: 1fr;
+  }
+}

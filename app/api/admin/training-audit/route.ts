@@ -4,226 +4,45 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-type AnyRow = Record<string, any>;
+type Row = Record<string, any>;
 
-function getSupabase() {
+function client() {
   const url =
     process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) {
-    throw new Error("Supabase ortam değişkenleri eksik.");
+    throw new Error(
+      "Supabase ortam değişkenleri eksik."
+    );
   }
 
   return createClient(url, key);
 }
 
-function toText(value: unknown) {
+function text(value: unknown) {
   return String(value ?? "").trim();
-}
-
-function toBoolean(value: unknown) {
-  return value === true;
-}
-
-function toNumber(value: unknown) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function normalizeStatus(row: AnyRow) {
-  const status = toText(row.status).toLowerCase();
-
-  if (
-    row.final_exam_passed === true &&
-    row.watch_completed === true
-  ) {
-    return "completed";
-  }
-
-  if (
-    status === "completed" ||
-    status === "in_progress" ||
-    status === "assigned" ||
-    status === "not_started"
-  ) {
-    return status;
-  }
-
-  if (row.started_at) {
-    return "in_progress";
-  }
-
-  return "assigned";
-}
-
-function buildEvidenceScore(row: AnyRow) {
-  const checks = [
-    Boolean(row.created_at),
-    Boolean(row.started_at),
-    toBoolean(row.watch_completed),
-    toNumber(row.watch_seconds) > 0,
-    toBoolean(row.final_exam_passed),
-    Boolean(row.completed_at),
-    Boolean(row.certificate_no),
-    Boolean(row.verification_code),
-  ];
-
-  return Math.round(
-    (checks.filter(Boolean).length / checks.length) * 100
-  );
-}
-
-function buildEvents(row: AnyRow) {
-  const events: Array<{
-    type: string;
-    label: string;
-    occurred_at: string | null;
-    status: "success" | "info" | "warning";
-    detail?: string | null;
-  }> = [];
-
-  events.push({
-    type: "ASSIGNED",
-    label: "Eğitim atandı",
-    occurred_at: row.created_at || null,
-    status: "info",
-  });
-
-  if (row.started_at) {
-    events.push({
-      type: "STARTED",
-      label: "Eğitim başlatıldı",
-      occurred_at: row.started_at,
-      status: "info",
-    });
-  }
-
-  if (
-    toNumber(row.watch_seconds) > 0 ||
-    toNumber(row.max_watched_seconds) > 0
-  ) {
-    events.push({
-      type: "WATCH_PROGRESS",
-      label: "İzleme ilerlemesi kaydedildi",
-      occurred_at:
-        row.watch_completed_at ||
-        row.completed_at ||
-        row.started_at ||
-        null,
-      status: row.watch_completed ? "success" : "info",
-      detail: `${Math.max(
-        toNumber(row.watch_seconds),
-        toNumber(row.max_watched_seconds)
-      )} saniye`,
-    });
-  }
-
-  if (row.watch_completed) {
-    events.push({
-      type: "WATCH_COMPLETED",
-      label: "Zorunlu içerik tamamlandı",
-      occurred_at:
-        row.watch_completed_at ||
-        row.completed_at ||
-        null,
-      status: "success",
-    });
-  }
-
-  if (
-    row.pre_exam_score != null ||
-    row.pre_exam_passed != null
-  ) {
-    events.push({
-      type: "PRE_EXAM",
-      label: "Ön sınav sonucu kaydedildi",
-      occurred_at:
-        row.pre_exam_completed_at ||
-        row.updated_at ||
-        row.completed_at ||
-        null,
-      status: row.pre_exam_passed ? "success" : "warning",
-      detail:
-        row.pre_exam_score != null
-          ? `${toNumber(row.pre_exam_score)} puan`
-          : null,
-    });
-  }
-    if (
-    row.final_exam_score != null ||
-    row.final_exam_passed != null
-  ) {
-    events.push({
-      type: "FINAL_EXAM",
-      label: "Final sınavı sonucu kaydedildi",
-      occurred_at:
-        row.final_exam_completed_at ||
-        row.completed_at ||
-        row.updated_at ||
-        null,
-      status: row.final_exam_passed ? "success" : "warning",
-      detail:
-        row.final_exam_score != null
-          ? `${toNumber(row.final_exam_score)} puan`
-          : null,
-    });
-  }
-
-  if (row.completed_at) {
-    events.push({
-      type: "COMPLETED",
-      label: "Eğitim tamamlandı",
-      occurred_at: row.completed_at,
-      status: "success",
-    });
-  }
-
-  if (
-    row.certificate_no ||
-    row.certificate_issued_at ||
-    row.verification_code
-  ) {
-    events.push({
-      type: "CERTIFICATE",
-      label: "Sertifika kaydı oluşturuldu",
-      occurred_at:
-        row.certificate_issued_at ||
-        row.completed_at ||
-        null,
-      status: "success",
-      detail: row.certificate_no
-        ? `Belge No: ${row.certificate_no}`
-        : null,
-    });
-  }
-
-  return events
-    .filter((event) => event.occurred_at)
-    .sort(
-      (first, second) =>
-        new Date(second.occurred_at || 0).getTime() -
-        new Date(first.occurred_at || 0).getTime()
-    );
 }
 
 export async function GET(request: Request) {
   try {
-    const cookieStore = await cookies();
+    const store = await cookies();
 
-    const adminAuth =
-      cookieStore.get("dsec_admin_auth")?.value;
+    const auth =
+      store.get("dsec_admin_auth")?.value;
 
-    const adminRole =
-      cookieStore.get("dsec_admin_role")?.value;
+    const role =
+      store.get("dsec_admin_role")?.value;
 
     if (
-      adminAuth !== "ok" ||
-      !["super_admin", "company_admin"].includes(
-        String(adminRole || "")
-      )
+      auth !== "ok" ||
+      ![
+        "super_admin",
+        "company_admin",
+      ].includes(String(role || ""))
     ) {
       return NextResponse.json(
         {
@@ -235,319 +54,386 @@ export async function GET(request: Request) {
       );
     }
 
-    const { searchParams } = new URL(request.url);
+    const { searchParams } =
+      new URL(request.url);
 
-    const trainingId = toText(
+    const trainingId = text(
       searchParams.get("trainingId")
     );
 
-    const requestedLimit = Math.min(
+    const limit = Math.min(
       Math.max(
-        toNumber(searchParams.get("limit")) || 100,
+        Number(
+          searchParams.get("limit") ||
+            200
+        ),
         1
       ),
       500
     );
 
-    const supabase = getSupabase();
+    const supabase = client();
 
-    let assignmentQuery = supabase
-      .from("training_assignments")
+    let query = supabase
+      .from("training_audit_events")
       .select("*")
-      .order("created_at", {
+      .order("occurred_at", {
         ascending: false,
       })
-      .limit(requestedLimit);
+      .limit(limit);
 
     if (trainingId) {
-      assignmentQuery = assignmentQuery.eq(
+      query = query.eq(
         "training_id",
         trainingId
       );
     }
 
     const {
-      data: assignmentRows,
+      data,
+      error,
+    } = await query;
+
+    if (error) {
+      return NextResponse.json(
+        {
+          error:
+            "Audit olayları alınamadı.",
+          detail: error.message,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    const events = data || [];
+
+    const assignmentIds =
+      Array.from(
+        new Set(
+          events
+            .map((row: Row) =>
+              text(
+                row.assignment_id
+              )
+            )
+            .filter(Boolean)
+        )
+      );
+
+    const {
+      data: assignments,
       error: assignmentError,
-    } = await assignmentQuery;
+    } =
+      assignmentIds.length > 0
+        ? await supabase
+            .from(
+              "training_assignments"
+            )
+            .select("*")
+            .in(
+              "id",
+              assignmentIds
+            )
+        : {
+            data: [],
+            error: null,
+          };
 
     if (assignmentError) {
-      return NextResponse.json(
-        {
-          error: "Eğitim kayıtları alınamadı.",
-          detail: assignmentError.message,
-        },
-        {
-          status: 500,
-        }
+      throw new Error(
+        assignmentError.message
       );
     }
 
-    const assignments = assignmentRows || [];
+    const assignmentMap =
+      new Map<string, Row>();
 
-    const trainingIds = Array.from(
-      new Set(
-        assignments
-          .map((row: AnyRow) =>
-            toText(row.training_id)
-          )
-          .filter(Boolean)
-      )
-    );
-
-    const userIds = Array.from(
-      new Set(
-        assignments
-          .map((row: AnyRow) =>
-            toText(row.user_id)
-          )
-          .filter(Boolean)
-      )
-    );
-
-    const [trainingResult, userResult] =
-      await Promise.all([
-        trainingIds.length > 0
-          ? supabase
-              .from("trainings")
-              .select(
-                "id,title,type,duration_minutes"
-              )
-              .in("id", trainingIds)
-          : Promise.resolve({
-              data: [],
-              error: null,
-            }),
-
-        userIds.length > 0
-          ? supabase
-              .from("users")
-              .select(
-                "id,employee_id,full_name,email,company,company_id"
-              )
-              .in("id", userIds)
-          : Promise.resolve({
-              data: [],
-              error: null,
-            }),
-      ]);
-
-    if (trainingResult.error) {
-      return NextResponse.json(
-        {
-          error:
-            "Eğitim bilgileri alınamadı.",
-          detail:
-            trainingResult.error.message,
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
-    if (userResult.error) {
-      return NextResponse.json(
-        {
-          error:
-            "Kullanıcı bilgileri alınamadı.",
-          detail:
-            userResult.error.message,
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
-    const trainingMap = new Map<
-      string,
-      AnyRow
-    >();
-
-    const userMap = new Map<
-      string,
-      AnyRow
-    >();
-
-    (trainingResult.data || []).forEach(
-      (row: AnyRow) => {
-        trainingMap.set(
-          toText(row.id),
+    (assignments || []).forEach(
+      (row: Row) => {
+        assignmentMap.set(
+          text(row.id),
           row
         );
       }
     );
 
-    (userResult.data || []).forEach(
-      (row: AnyRow) => {
-        userMap.set(
-          toText(row.id),
-          row
-        );
+    const grouped =
+      new Map<string, Row[]>();
+
+    events.forEach(
+      (event: Row) => {
+        const key =
+          text(
+            event.assignment_id
+          ) ||
+          `event:${event.id}`;
+
+        grouped.set(key, [
+          ...(grouped.get(key) ||
+            []),
+          event,
+        ]);
       }
     );
+        const records = Array.from(grouped.entries()).map(
+      ([assignmentId, rows]) => {
 
-    const records = assignments.map(
-      (row: AnyRow) => {
-        const training =
-          trainingMap.get(
-            toText(row.training_id)
-          ) || {};
+        const assignment =
+          assignmentMap.get(assignmentId) || {};
 
-        const user =
-          userMap.get(
-            toText(row.user_id)
-          ) || {};
+        const ordered = [...rows].sort(
+          (a, b) =>
+            new Date(
+              b.occurred_at || 0
+            ).getTime() -
+            new Date(
+              a.occurred_at || 0
+            ).getTime()
+        );
 
-        const events = buildEvents(row);
-                return {
-          assignment_id: toText(row.id),
+        const has = (type: string) =>
+          ordered.some(
+            (row) =>
+              row.event_type === type
+          );
 
-          training_id: toText(row.training_id),
-          training_title:
-            toText(training.title) ||
-            "Adsız Eğitim",
-          training_type:
-            toText(training.type) ||
-            "training",
-          duration_minutes: toNumber(
-            training.duration_minutes
+        const evidenceChecks = [
+          has("ASSIGNED"),
+          has("STARTED"),
+          has("WATCH_COMPLETED"),
+          has("FINAL_EXAM_COMPLETED"),
+          has("COMPLETED"),
+          has("CERTIFICATE_CREATED"),
+
+          ordered.every(
+            (row) =>
+              Boolean(
+                row.payload_hash
+              )
           ),
+        ];
 
-          user_id: toText(row.user_id),
-          employee_id: toText(
-            user.employee_id
-          ),
-          employee_name:
-            toText(user.full_name) ||
-            "Adsız Çalışan",
-          email: toText(user.email),
-          company_name: toText(
-            user.company
-          ),
-          company_id: toText(
-            user.company_id
-          ),
+        return {
 
-          status: normalizeStatus(row),
+          assignment_id:
+            assignmentId,
 
-          created_at:
-            row.created_at || null,
-          started_at:
-            row.started_at || null,
-          completed_at:
-            row.completed_at || null,
-
-          watch_seconds: toNumber(
-            row.watch_seconds
-          ),
-          max_watched_seconds: toNumber(
-            row.max_watched_seconds
-          ),
-          click_count: toNumber(
-            row.click_count
-          ),
-
-          watch_completed:
-            toBoolean(
-              row.watch_completed
+          training_id:
+            text(
+              ordered[0]
+                ?.training_id
             ),
 
-          watch_completed_at:
-            row.watch_completed_at ||
+          training_title:
+            text(
+              ordered[0]
+                ?.metadata
+                ?.training_title
+            ) || "Eğitim",
+
+          employee_name:
+            text(
+              ordered[0]
+                ?.metadata
+                ?.employee_name
+            ) || "Çalışan",
+
+          email:
+            text(
+              ordered[0]
+                ?.metadata
+                ?.email
+            ),
+
+          company_name:
+            text(
+              ordered[0]
+                ?.metadata
+                ?.company_name
+            ),
+
+          status:
+            assignment.completed_at
+              ? "completed"
+              : assignment.started_at
+                ? "in_progress"
+                : "assigned",
+
+          created_at:
+            assignment.created_at ||
             null,
 
-          pre_exam_score:
-            row.pre_exam_score == null
-              ? null
-              : toNumber(
-                  row.pre_exam_score
-                ),
+          started_at:
+            assignment.started_at ||
+            null,
 
-          pre_exam_passed:
-            row.pre_exam_passed == null
-              ? null
-              : toBoolean(
-                  row.pre_exam_passed
-                ),
+          completed_at:
+            assignment.completed_at ||
+            null,
+
+          watch_seconds:
+            Number(
+              assignment.watch_seconds ||
+              0
+            ),
+
+          max_watched_seconds:
+            Number(
+              assignment.max_watched_seconds ||
+              0
+            ),
+
+          click_count:
+            Number(
+              assignment.click_count ||
+              0
+            ),
+
+          watch_completed:
+            assignment.watch_completed ===
+            true,
 
           final_exam_score:
-            row.final_exam_score == null
-              ? null
-              : toNumber(
-                  row.final_exam_score
-                ),
-
-          final_exam_passed:
-            row.final_exam_passed == null
-              ? null
-              : toBoolean(
-                  row.final_exam_passed
-                ),
-
-          certificate_no:
-            toText(
-              row.certificate_no
-            ) || null,
-
-          certificate_issued_at:
-            row.certificate_issued_at ||
+            assignment.final_exam_score ??
             null,
 
-          verification_code:
-            toText(
-              row.verification_code
+          final_exam_passed:
+            assignment.final_exam_passed ??
+            null,
+
+          certificate_no:
+            text(
+              assignment.certificate_no
             ) || null,
 
           evidence_score:
-            buildEvidenceScore(row),
+            Math.round(
+              (
+                evidenceChecks.filter(
+                  Boolean
+                ).length /
+                evidenceChecks.length
+              ) *
+                100
+            ),
 
-          events,
+          events: ordered.map(
+            (row) => ({
+              id: row.id,
+
+              type:
+                row.event_type,
+
+              label:
+                row.event_label,
+
+              occurred_at:
+                row.occurred_at,
+
+              status:
+                row.event_status,
+
+              detail:
+                row.metadata?.score !=
+                null
+                  ? `${row.metadata.score} puan`
+                  : row.metadata
+                      ?.certificate_no
+                    ? `Belge No: ${row.metadata.certificate_no}`
+                    : null,
+
+              payload_hash:
+                row.payload_hash,
+            })
+          ),
         };
       }
     );
-
-    const summary = {
+        const summary = {
       total: records.length,
 
       completed: records.filter(
-        (record) =>
-          record.status ===
-          "completed"
+        (row) => row.status === "completed"
       ).length,
 
       watched: records.filter(
-        (record) =>
-          record.watch_completed
+        (row) => row.watch_completed
       ).length,
 
       passed: records.filter(
-        (record) =>
-          record.final_exam_passed ===
-          true
+        (row) =>
+          row.final_exam_passed === true
       ).length,
 
-      certificated:
-        records.filter(
-          (record) =>
-            Boolean(
-              record.certificate_no
-            )
-        ).length,
+      certificated: records.filter(
+        (row) =>
+          Boolean(row.certificate_no)
+      ).length,
 
       average_evidence_score:
         records.length > 0
           ? Math.round(
               records.reduce(
-                (
-                  total,
-                  record
-                ) =>
-                  total +
-                  record.evidence_score,
+                (sum, row) =>
+                  sum + row.evidence_score,
                 0
               ) / records.length
+            )
+          : 0,
+
+      event_count: events.length,
+
+      hash_verified:
+        events.filter(
+          (row: Row) =>
+            Boolean(row.payload_hash)
+        ).length,
+
+      started: records.filter(
+        (row) =>
+          row.status === "in_progress"
+      ).length,
+
+      assigned: records.filter(
+        (row) =>
+          row.status === "assigned"
+      ).length,
+
+      completion_rate:
+        records.length > 0
+          ? Math.round(
+              (
+                records.filter(
+                  (row) =>
+                    row.status ===
+                    "completed"
+                ).length /
+                records.length
+              ) * 100
+            )
+          : 0,
+
+      certificate_rate:
+        records.filter(
+          (row) =>
+            row.status === "completed"
+        ).length > 0
+          ? Math.round(
+              (
+                records.filter(
+                  (row) =>
+                    Boolean(
+                      row.certificate_no
+                    )
+                ).length /
+                records.filter(
+                  (row) =>
+                    row.status ===
+                    "completed"
+                ).length
+              ) * 100
             )
           : 0,
     };
@@ -562,23 +448,24 @@ export async function GET(request: Request) {
       generated_at:
         new Date().toISOString(),
 
-      note:
-        "Bu görünüm mevcut training_assignments kayıtlarından oluşturulan kanıt özetidir.",
+      source:
+        "training_audit_events",
     });
+
   } catch (error: any) {
+
     console.error(
       "training audit route error:",
       error
     );
-
-    return NextResponse.json(
+        return NextResponse.json(
       {
-        error:
-          "Sunucu hatası oluştu.",
+        error: "Sunucu hatası oluştu.",
+        detail: error?.message || null,
 
-        detail:
-          error?.message ||
-          null,
+        generated_at: new Date().toISOString(),
+
+        source: "training_audit_events",
       },
       {
         status: 500,

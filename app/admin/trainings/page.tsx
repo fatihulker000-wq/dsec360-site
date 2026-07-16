@@ -17,6 +17,8 @@ import TrainingExamCenter from "../../../components/training-v2/exams";
 import TrainingCertificateCenter from "../../../components/training-v2/certificates";
 import TrainingAuditCenter from "../../../components/training-v2/audit";
 import TrainingExecutiveDashboard from "../../../components/training-v2/executive";
+import TrainingComplianceEngine from "../../../components/training-v2/compliance/TrainingComplianceEngine";
+import TrainingCertificateEngineV2 from "../../../components/training-v2/certificate-v2";
 
 type UserApiRow = {
   id: string;
@@ -724,6 +726,22 @@ if (companyFilter !== "all") {
                   (company) => company.id === companyFilter
                 )?.name || "Seçili Firma"
           }
+        />
+
+        <TrainingComplianceEngine
+          trainings={trainings}
+          totalEmployees={totalEmployeeCount}
+          selectedCompanyName={
+            companyFilter === "all"
+              ? "Tüm Firmalar"
+              : companies.find(
+                  (company) => company.id === companyFilter
+                )?.name || "Seçili Firma"
+          }
+        />
+
+        <TrainingCertificateEngineV2
+          selectedTrainingId={trainingId}
         />
 
         <TrainingAnalytics
