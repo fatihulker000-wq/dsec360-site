@@ -2,6 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  IncidentExecutiveHero,
+  IncidentKpiGrid,
+  IncidentTrendChart,
+  IncidentDepartmentChart,
+  IncidentRootCauseChart,
+  IncidentAiSummary,
+  IncidentOpenInvestigations,
+  IncidentRecentEvents,
+} from "@/components/incident-v2/dashboard";
+
 type AccidentRow = {
   id: number;
   title?: string | null;
@@ -58,6 +69,9 @@ export default function AdminAccidentsPage() {
   const [deleting, setDeleting] = useState(false);
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [selectedFirmId, setSelectedFirmId] = useState<string>("all");
+  const [dashboard, setDashboard] = useState<any>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState("");
 
   const loadData = async () => {
     try {
@@ -65,11 +79,13 @@ export default function AdminAccidentsPage() {
       setError("");
 
       const url =
-  selectedFirmId === "all"
-    ? "/api/admin/accidents"
-    : `/api/admin/accidents?firmId=${encodeURIComponent(selectedFirmId)}`;
+        selectedFirmId === "all"
+          ? "/api/admin/accidents"
+          : `/api/admin/accidents?firmId=${encodeURIComponent(
+              selectedFirmId
+            )}`;
 
-    const res = await fetch(url, {
+      const res = await fetch(url, {
         method: "GET",
         cache: "no-store",
         credentials: "include",
@@ -86,6 +102,44 @@ export default function AdminAccidentsPage() {
       setError(err?.message || "Bilinmeyen hata");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDashboard = async () => {
+    try {
+      setDashboardLoading(true);
+      setDashboardError("");
+
+      const url =
+        selectedFirmId === "all"
+          ? "/api/admin/incident-dashboard"
+          : `/api/admin/incident-dashboard?companyId=${encodeURIComponent(
+              selectedFirmId
+            )}`;
+
+      const res = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.success) {
+        throw new Error(
+          json?.error || "Yönetici dashboard verileri alınamadı"
+        );
+      }
+
+      setDashboard(json?.data || null);
+    } catch (err: any) {
+      console.error("Incident dashboard error:", err);
+      setDashboard(null);
+      setDashboardError(
+        err?.message || "Yönetici dashboard verileri alınamadı"
+      );
+    } finally {
+      setDashboardLoading(false);
     }
   };
 
@@ -186,8 +240,9 @@ useEffect(() => {
 }, []);
   
   useEffect(() => {
-  void loadData();
-}, [selectedFirmId]);
+    void loadData();
+    void loadDashboard();
+  }, [selectedFirmId]);
 
   
   const stats = useMemo(() => {
@@ -304,6 +359,78 @@ useEffect(() => {
 })}
   </select>
 </div>
+
+      {dashboardLoading ? (
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 18,
+            padding: 20,
+            border: `1px solid ${BRAND.border}`,
+            fontWeight: 800,
+          }}
+        >
+          Yönetici dashboard verileri yükleniyor...
+        </div>
+      ) : dashboardError ? (
+        <div
+          style={{
+            background: "#fff7f7",
+            borderRadius: 18,
+            padding: 20,
+            border: "1px solid #fecaca",
+            color: "#991b1b",
+            fontWeight: 800,
+          }}
+        >
+          {dashboardError}
+        </div>
+      ) : dashboard ? (
+        <>
+          <IncidentExecutiveHero metrics={dashboard.metrics} />
+
+          <IncidentKpiGrid metrics={dashboard.metrics} />
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit,minmax(360px,1fr))",
+              gap: 20,
+            }}
+          >
+            <IncidentTrendChart trend={dashboard.trend || []} />
+            <IncidentAiSummary metrics={dashboard.metrics} />
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit,minmax(360px,1fr))",
+              gap: 20,
+            }}
+          >
+            <IncidentDepartmentChart
+              departments={dashboard.departments || []}
+            />
+
+            <IncidentRootCauseChart
+              rootCauses={dashboard.rootCauses || []}
+            />
+          </div>
+
+          {(dashboard.investigations || []).length > 0 ? (
+            <IncidentOpenInvestigations
+              investigations={dashboard.investigations}
+            />
+          ) : null}
+
+          {(dashboard.recent || []).length > 0 ? (
+            <IncidentRecentEvents recent={dashboard.recent} />
+          ) : null}
+        </>
+      ) : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 16 }}>
         <StatCard title="Toplam Kayıt" value={stats.total} />
