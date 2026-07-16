@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
+import InvestigationCenter from "@/components/incident-v2/investigation-v2/InvestigationCenter";
+
+import type {
+  IncidentOption,
+} from "@/components/incident-v2/investigation-v2/InvestigationTypes";
 
 import { IncidentAnalyticsCenter } from "@/components/incident-v2/analytics";
 
@@ -582,8 +587,54 @@ export default function AdminAccidentsPage() {
     }, [rows]);
 
 
+const investigationIncidents =
+  useMemo<IncidentOption[]>(() => {
+    return rows.map((row) => ({
+      id: String(row.id),
 
-  const activeIncident =
+      incidentNo: `INC-${row.id}`,
+
+      title:
+        row.title ||
+        `Kaza / Olay #${row.id}`,
+
+      employeeName:
+        row.employeeName || "",
+
+      eventDate: row.eventDate
+        ? new Date(
+            normalizeTimestamp(
+              row.eventDate
+            )
+          ).toISOString()
+        : row.createdAt
+        ? new Date(
+            normalizeTimestamp(
+              row.createdAt
+            )
+          ).toISOString()
+        : undefined,
+
+      department:
+        row.department ||
+        "Belirtilmemiş",
+
+      location:
+        row.location ||
+        "Belirtilmemiş",
+
+      severity:
+        Number(row.severity || 0),
+
+      description:
+        row.description ||
+        row.title ||
+        "",
+    }));
+  }, [rows]);
+  
+  
+    const activeIncident =
     useMemo(() => {
       const selected = rows.find(
         (row) =>
@@ -592,51 +643,6 @@ export default function AdminAccidentsPage() {
 
       return selected || rows[0] || null;
     }, [rows, selectedIncidentId]);
-
-  const investigationReports =
-    useMemo(() => {
-      return rows.map((row) => ({
-        id: String(row.id),
-        incidentId: String(row.id),
-        incidentNo: `INC-${row.id}`,
-        title: row.title || `Kaza/Olay #${row.id}`,
-        status: "OPEN",
-        priority:
-          Number(row.severity || 0) >= 4
-            ? "CRITICAL"
-            : Number(row.severity || 0) >= 3
-            ? "HIGH"
-            : "MEDIUM",
-        investigatorName: "Atanmadı",
-        department:
-          row.department || "Belirtilmemiş",
-        location:
-          row.location || "Belirtilmemiş",
-        occurredAt: new Date(
-          normalizeTimestamp(
-            row.eventDate ||
-              row.createdAt ||
-              Date.now()
-          )
-        ).toISOString(),
-        createdAt: new Date(
-          normalizeTimestamp(
-            row.createdAt ||
-              row.eventDate ||
-              Date.now()
-          )
-        ).toISOString(),
-        description: row.description || "",
-        rootCause:
-          row.rootCauseCategory || "",
-        findings: [],
-        evidence: [],
-        witnesses: [],
-        interviews: [],
-        actions: [],
-        timeline: [],
-      }));
-    }, [rows]);
 
   const workflowContext =
     useMemo(() => {
@@ -1135,21 +1141,19 @@ export default function AdminAccidentsPage() {
           employeeCount={0}
         />
       ) : activeTab === "INVESTIGATION" ? (
-        <ModuleShell
-          title="Soruşturma Merkezi"
-          description="Olay seçimi yaparak soruşturma, delil, tanık, görüşme, kök neden ve aksiyon süreçlerini yönetin."
-        >
-          <IncidentSelector
-            rows={rows}
-            selectedIncidentId={selectedIncidentId}
-            onChange={setSelectedIncidentId}
-          />
-
-          <InvestigationWorkspace
-            reports={investigationReports}
-            selectedIncidentId={selectedIncidentId}
-          />
-        </ModuleShell>
+  <InvestigationCenter
+    incidents={investigationIncidents}
+    initialIncidentId={
+      selectedIncidentId ||
+      investigationIncidents[0]?.id
+    }
+    onSave={(investigationFile) => {
+      console.info(
+        "Soruşturma dosyası kaydedildi:",
+        investigationFile
+      );
+    }}
+  />
       ) : activeTab === "WORKFLOW" ? (
         <ModuleShell
           title="Workflow Merkezi"
@@ -2226,154 +2230,6 @@ function QuickAction({
   );
 }
 
-
-function InvestigationWorkspace({
-  reports,
-  selectedIncidentId,
-}: {
-  reports: any[];
-  selectedIncidentId: string;
-}) {
-  const selected =
-    reports.find((item) => String(item.incidentId) === selectedIncidentId) ||
-    reports[0] ||
-    null;
-
-  if (!selected) {
-    return <EmptyModule text="Soruşturma başlatmak için önce bir olay kaydı seçin." />;
-  }
-
-  const stages = [
-    {
-      title: "Olayın İlk Değerlendirmesi",
-      text: "Olayın türü, şiddeti, lokasyonu ve ilk bildirim bilgileri gözden geçirilir.",
-      status: "HAZIR",
-    },
-    {
-      title: "Delil ve Doküman Yönetimi",
-      text: "Fotoğraf, video, belge, ekipman kaydı ve saha kanıtları soruşturma dosyasına eklenir.",
-      status: "BEKLİYOR",
-    },
-    {
-      title: "Tanık ve Görüşme Süreci",
-      text: "Tanık ifadeleri alınır, görüşmeler kaydedilir ve çelişkili beyanlar işaretlenir.",
-      status: "BEKLİYOR",
-    },
-    {
-      title: "Kök Neden Analizi",
-      text: "5 Neden, balık kılçığı ve temel neden analizi ile olayın gerçek nedenleri belirlenir.",
-      status: selected.rootCause ? "TAMAMLANDI" : "BEKLİYOR",
-    },
-    {
-      title: "DÖF ve Aksiyon Planı",
-      text: "Düzeltici faaliyetler, sorumlular, termin tarihleri ve kapanış kanıtları tanımlanır.",
-      status: "BEKLİYOR",
-    },
-  ];
-
-  return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <section
-        style={{
-          padding: 22,
-          borderRadius: 22,
-          background: "linear-gradient(135deg,#111827,#4a0d1a,#b91c1c)",
-          color: "#fff",
-          boxShadow: "0 18px 45px rgba(74,13,26,.18)",
-        }}
-      >
-        <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 1, opacity: .82 }}>
-          SEÇİLİ SORUŞTURMA DOSYASI
-        </div>
-        <h3 style={{ margin: "8px 0 0", fontSize: 28, fontWeight: 950 }}>
-          {selected.incidentNo} · {selected.title}
-        </h3>
-        <p style={{ margin: "12px 0 0", maxWidth: 900, lineHeight: 1.7, opacity: .9 }}>
-          Bu merkezde olayın ilk değerlendirmesinden delil ve tanık yönetimine, kök neden analizinden DÖF kapanışına kadar tüm soruşturma adımları tek dosya altında izlenir.
-        </p>
-      </section>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-          gap: 14,
-        }}
-      >
-        <Detail label="Durum" value={selected.status || "OPEN"} />
-        <Detail label="Öncelik" value={selected.priority || "MEDIUM"} />
-        <Detail label="Araştırmacı" value={selected.investigatorName || "Atanmadı"} />
-        <Detail label="Departman" value={selected.department || "Belirtilmemiş"} />
-        <Detail label="Lokasyon" value={selected.location || "Belirtilmemiş"} />
-      </div>
-
-      <section
-        style={{
-          padding: 22,
-          borderRadius: 20,
-          background: "#fff",
-          border: `1px solid ${BRAND.border}`,
-        }}
-      >
-        <div style={{ fontSize: 22, fontWeight: 950 }}>Soruşturma Yol Haritası</div>
-        <div style={{ marginTop: 8, color: BRAND.muted, lineHeight: 1.6 }}>
-          Aşağıdaki adımlar olay dosyasının eksiksiz ve denetlenebilir şekilde kapatılması için takip edilmelidir.
-        </div>
-
-        <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
-          {stages.map((stage, index) => (
-            <article
-              key={stage.title}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "54px minmax(0,1fr) auto",
-                gap: 16,
-                alignItems: "center",
-                padding: 16,
-                borderRadius: 16,
-                background: "#f8fafc",
-                border: "1px solid #e5e7eb",
-              }}
-            >
-              <div
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 14,
-                  display: "grid",
-                  placeItems: "center",
-                  background: BRAND.redBright,
-                  color: "#fff",
-                  fontWeight: 950,
-                }}
-              >
-                {index + 1}
-              </div>
-              <div>
-                <div style={{ fontWeight: 950, fontSize: 16 }}>{stage.title}</div>
-                <div style={{ marginTop: 5, color: BRAND.muted, lineHeight: 1.55, fontSize: 13 }}>
-                  {stage.text}
-                </div>
-              </div>
-              <span
-                style={{
-                  padding: "7px 11px",
-                  borderRadius: 999,
-                  background: stage.status === "TAMAMLANDI" ? "#dcfce7" : stage.status === "HAZIR" ? "#dbeafe" : "#fef3c7",
-                  color: stage.status === "TAMAMLANDI" ? "#166534" : stage.status === "HAZIR" ? "#1d4ed8" : "#92400e",
-                  fontSize: 11,
-                  fontWeight: 900,
-                }}
-              >
-                {stage.status}
-              </span>
-            </article>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
 
 function ModuleShell({
   title,
