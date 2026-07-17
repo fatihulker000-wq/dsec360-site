@@ -22,9 +22,10 @@ import {
 } from "@/components/reports-v2/pdf-pro";
 
 import {
-  ReportPdfExportButton,
   ReportVerificationCard,
 } from "@/components/reports-v2/pdf-engine";
+
+import ReportSectionPdfExportButton from "@/components/reports-v2/pdf-engine/ReportSectionPdfExportButton";
 
 import ExecutiveAiPanel from "@/components/reports-v2/dora-ai/ExecutiveAiPanel";
 
@@ -1735,78 +1736,16 @@ const auditTotalDistribution =
                   Excel / CSV
                 </button>
 
-                <ReportPdfExportButton
+                <ReportSectionPdfExportButton
                   elementId="report-export-area"
+                  filename={`${
+                    report?.company?.name ||
+                    "firma"
+                  }-${activeTab}-raporu`}
                   label="Kurumsal PDF"
-                  options={{
-                    filename:
-                      `${
-                        report?.company?.name ||
-                        "firma"
-                      }-${activeTab}-raporu`,
-
-                    orientation: "landscape",
-                    pageSize: "a4",
-
-                    headerText:
-                      "D-SEC Kurumsal İSG Yönetim Raporu",
-
-                    footerText:
-                      "D-SEC Dijital Sağlık • Emniyet • Çevre Yönetimi",
-
-                    watermark: "D-SEC",
-
-                    showPageNumbers: true,
-
-                    reportNo,
-                    revisionNo: "00",
-
-                    verificationCode,
-
-                    verificationUrl:
-                      "https://dsec360.com/report-verify",
-
-                    signature: {
-                      preparedBy:
-                        "İş Güvenliği Uzmanı",
-
-                      preparedTitle:
-                        "Raporu Hazırlayan",
-
-                      approvedBy:
-                        report?.company
-                          ?.employer_representative ||
-                        "",
-
-                      approvedTitle:
-                        "İşveren / İşveren Vekili",
-                    },
-
-                    metadata: {
-                      title:
-                        `${
-                          report?.company?.name ||
-                          "Firma"
-                        } D-SEC Yönetici Raporu`,
-
-                      subject:
-                        "İş Sağlığı, Güvenliği ve Çevre Yönetim Raporu",
-
-                      author: "D-SEC",
-
-                      creator:
-                        "D-SEC Raporlama Merkezi",
-
-                      keywords: [
-                        "İSG",
-                        "HSE",
-                        "D-SEC",
-                        "Denetim",
-                        "Risk",
-                        "Eğitim",
-                      ],
-                    },
-                  }}
+                  reportTitle="D-SEC Kurumsal İSG Yönetim Raporu"
+                  reportNo={reportNo}
+                  verificationCode={verificationCode}
                 />
               </div>
             ) : null}
@@ -1875,6 +1814,7 @@ const auditTotalDistribution =
           
 <div id="report-export-area">
             <div
+              data-pdf-split-children="true"
               style={{
                 display: "grid",
                 gap: 20,
@@ -1931,8 +1871,9 @@ const auditTotalDistribution =
               />
 
 <ReportAdvancedAnalyticsCenter
-  input={analyticsInput}
-/>
+                companyId={selectedCompanyId}
+                months={12}
+              />
 
               <section
                 style={{

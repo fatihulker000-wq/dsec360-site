@@ -1,97 +1,131 @@
 "use client";
 
-import React from "react";
-
-export interface HeatmapItem {
-  title: string;
-  value: number;
-}
-
-interface Props {
-  items?: HeatmapItem[];
-}
+import type {
+  AnalyticsHeatmapCell,
+} from "./types";
 
 export default function ReportAdvancedHeatmap({
-  items = [],
-}: Props) {
+  cells,
+}: {
+  cells: AnalyticsHeatmapCell[];
+}) {
+  const rows = Array.from(
+    new Set(
+      cells.map(
+        (cell) => cell.rowLabel
+      )
+    )
+  );
+
+  const columns = Array.from(
+    new Set(
+      cells.map(
+        (cell) => cell.columnLabel
+      )
+    )
+  );
+
+  const max = Math.max(
+    1,
+    ...cells.map(
+      (cell) => cell.value
+    )
+  );
+
   return (
-    <div
+    <section
       style={{
-        background: "#ffffff",
+        padding: 18,
+        borderRadius: 20,
+        background: "#fff",
         border: "1px solid #e5e7eb",
-        borderRadius: 16,
-        padding: 24,
       }}
     >
-      <h2
+      <h3
         style={{
-          margin: 0,
-          marginBottom: 20,
-          fontSize: 22,
-          fontWeight: 700,
+          margin: "0 0 14px",
+          fontSize: 20,
+          fontWeight: 950,
         }}
       >
-        Risk Isı Haritası
-      </h2>
+        Şube / Departman Isı Haritası
+      </h3>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))",
-          gap: 16,
-        }}
-      >
-        {items.map((item) => {
-          const color =
-            item.value >= 80
-              ? "#dc2626"
-              : item.value >= 60
-              ? "#ea580c"
-              : item.value >= 40
-              ? "#facc15"
-              : "#22c55e";
+      <div style={{ overflowX: "auto" }}>
+        <table
+          style={{
+            minWidth: 680,
+            width: "100%",
+            borderSpacing: 7,
+          }}
+        >
+          <thead>
+            <tr>
+              <th />
 
-          return (
-            <div
-              key={item.title}
-              style={{
-                background: color,
-                color: "#fff",
-                borderRadius: 12,
-                padding: 16,
-                minHeight: 90,
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-              }}
-            >
-              <strong>{item.title}</strong>
+              {columns.map((column) => (
+                <th key={column}>
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
 
-              <div
-                style={{
-                  fontSize: 28,
-                  fontWeight: 700,
-                }}
-              >
-                {item.value}
-              </div>
-            </div>
-          );
-        })}
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row}>
+                <th
+                  style={{
+                    textAlign: "left",
+                  }}
+                >
+                  {row}
+                </th>
 
-        {items.length === 0 && (
-          <div
-            style={{
-              gridColumn: "1/-1",
-              padding: 24,
-              textAlign: "center",
-              color: "#64748b",
-            }}
-          >
-            Isı haritası verisi bulunamadı.
-          </div>
-        )}
+                {columns.map((column) => {
+                  const value =
+                    cells.find(
+                      (cell) =>
+                        cell.rowLabel === row &&
+                        cell.columnLabel === column
+                    )?.value || 0;
+
+                  const ratio =
+                    value / max;
+
+                  const background =
+                    ratio >= 0.75
+                      ? "#b91c1c"
+                      : ratio >= 0.5
+                      ? "#ea580c"
+                      : ratio >= 0.25
+                      ? "#facc15"
+                      : "#dcfce7";
+
+                  return (
+                    <td
+                      key={`${row}-${column}`}
+                      style={{
+                        padding: 14,
+                        borderRadius: 12,
+                        textAlign: "center",
+                        background,
+                        color:
+                          ratio >= 0.5
+                            ? "#fff"
+                            : "#111827",
+                        fontWeight: 950,
+                      }}
+                    >
+                      {value}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-    </div>
+    </section>
   );
 }
