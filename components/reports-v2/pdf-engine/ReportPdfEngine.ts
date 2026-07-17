@@ -1,3 +1,6 @@
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+
 import type {
   ReportPdfExportOptions,
   ReportPdfExportResult,
@@ -19,14 +22,18 @@ const DEFAULT_OPTIONS: Required<
   >
 > = {
   orientation: "portrait",
+
   pageSize: "a4",
 
   marginTopMm: 14,
+
   marginRightMm: 12,
+
   marginBottomMm: 17,
+
   marginLeftMm: 12,
 
-  scale: 1.5,
+  scale: 2,
 
   backgroundColor: "#ffffff",
 
@@ -42,249 +49,204 @@ export async function exportElementToProfessionalPdf(
 ): Promise<ReportPdfExportResult> {
 
   const settings = {
+
     ...DEFAULT_OPTIONS,
+
     ...options,
+
   };
 
-  try {
+  if (!element) {
 
-    if (!element) {
-      throw new Error(
-        "PDF oluşturulacak rapor alanı bulunamadı."
-      );
-    }
+    throw new Error(
+      "PDF oluşturulacak alan bulunamadı."
+    );
 
-    const [
-      { default: jsPDF },
-      { default: html2canvas },
-    ] = await Promise.all([
-      import("jspdf"),
-      import("html2canvas"),
-    ]);
+  }
 
-    const canvas =
-      await html2canvas(element, {
+  const canvas =
+    await html2canvas(element, {
 
-        scale:
-          settings.scale,
+      scale:
+        settings.scale,
 
-        backgroundColor:
-          settings.backgroundColor,
+      backgroundColor:
+        settings.backgroundColor,
 
-        useCORS: true,
+      useCORS: true,
 
-        allowTaint: false,
+      allowTaint: false,
 
-        logging: false,
+      logging: false,
 
-        windowWidth: Math.max(
-          element.scrollWidth,
-          element.clientWidth
-        ),
+      windowWidth:
+        element.scrollWidth,
 
-        windowHeight: Math.max(
-          element.scrollHeight,
-          element.clientHeight
-        ),
-
-      });
-
-    const pdf = new jsPDF({
-
-      orientation:
-        settings.orientation,
-
-      unit: "mm",
-
-      format:
-        settings.pageSize,
-
-      compress: true,
+      windowHeight:
+        element.scrollHeight,
 
     });
 
-    applyMetadata(
-      pdf,
-      settings.metadata
+  const pdf = new jsPDF({
+
+    orientation:
+      settings.orientation,
+
+    unit: "mm",
+
+    format:
+      settings.pageSize,
+
+    compress: true,
+
+  });
+
+  applyMetadata(
+    pdf,
+    settings.metadata
+  );
+
+  const pageWidth =
+    pdf.internal.pageSize.getWidth();
+
+  const pageHeight =
+    pdf.internal.pageSize.getHeight();
+
+  const printableWidth =
+
+    pageWidth -
+
+    settings.marginLeftMm -
+
+    settings.marginRightMm;
+
+  const printableHeight =
+
+    pageHeight -
+
+    settings.marginTopMm -
+
+    settings.marginBottomMm;
+
+  const imageData =
+    canvas.toDataURL(
+      "image/jpeg",
+      0.96
     );
 
-    const pageWidth =
-      pdf.internal.pageSize.getWidth();
+  const imageHeight =
 
-    const pageHeight =
-      pdf.internal.pageSize.getHeight();
+    (
+      canvas.height *
+      printableWidth
+    ) / canvas.width;
 
-    const contentWidth =
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        imageHeight /
+          printableHeight
+      )
+    );
+      // -------------------------------------------------
+  // Çok Sayfalı PDF Oluştur
+  // -------------------------------------------------
 
-      pageWidth -
+  for (
+    let pageIndex = 0;
+    pageIndex < totalPages;
+    pageIndex++
+  ) {
 
-      settings.marginLeftMm -
+    if (pageIndex > 0) {
+      pdf.addPage();
+    }
 
-      settings.marginRightMm;
-
-    const contentHeight =
-
-      pageHeight -
+    const imageY =
 
       settings.marginTopMm -
 
-      settings.marginBottomMm;
+      pageIndex *
+      printableHeight;
 
-    const imageData =
-      canvas.toDataURL(
-        "image/jpeg",
-        0.94
-      );
+    pdf.addImage(
 
-    const renderedImageHeight =
+      imageData,
 
-      (
-        canvas.height *
-        contentWidth
-      ) / canvas.width;
+      "JPEG",
 
-    const totalPages =
-      Math.max(
-        1,
-        Math.ceil(
-          renderedImageHeight /
-          contentHeight
-        )
-      );
-          // -------------------------------------------------
-    // Sayfaları oluştur
-    // -------------------------------------------------
+      settings.marginLeftMm,
 
-    for (
-      let pageIndex = 0;
-      pageIndex < totalPages;
-      pageIndex += 1
-    ) {
+      imageY,
 
-      if (pageIndex > 0) {
-        pdf.addPage();
+      printableWidth,
+
+      imageHeight,
+
+      undefined,
+
+      "FAST"
+
+    );
+
+    drawPageChrome(
+
+      pdf,
+
+      {
+
+        pageIndex,
+
+        totalPages,
+
+        pageWidth,
+
+        pageHeight,
+
+        options: settings,
+
       }
 
-      const imageY =
+    );
 
-        settings.marginTopMm -
+  }
 
-        pageIndex *
-          contentHeight;
+  // -------------------------------------------------
+  // PDF Kaydet
+  // -------------------------------------------------
 
-      pdf.addImage(
+  pdf.save(
 
-        imageData,
+    normalizePdfFilename(
 
-        "JPEG",
+      settings.filename
 
-        settings.marginLeftMm,
+    )
 
-        imageY,
+  );
 
-        contentWidth,
+  return {
 
-        renderedImageHeight,
+    success: true,
 
-        undefined,
-
-        "FAST"
-
-      );
-
-      drawPageChrome(
-
-        pdf,
-
-        {
-
-          pageIndex,
-
-          totalPages,
-
-          pageWidth,
-
-          pageHeight,
-
-          options: settings,
-
-        }
-
-      );
-
-    }
-
-    // -------------------------------------------------
-    // PDF Kaydet
-    // -------------------------------------------------
-
-    pdf.save(
+    filename:
 
       normalizePdfFilename(
 
         settings.filename
 
-      )
+      ),
 
-    );
+    pageCount:
 
-    return {
+      totalPages,
 
-      success: true,
+    createdAt:
 
-      filename:
+      new Date().toISOString(),
 
-        normalizePdfFilename(
-
-          settings.filename
-
-        ),
-
-      pageCount:
-
-        totalPages,
-
-      createdAt:
-
-        new Date().toISOString(),
-
-    };
-
-  }
-
-  catch (errorValue: unknown) {
-
-    const message =
-
-      errorValue instanceof Error
-
-        ? errorValue.message
-
-        : "PDF oluşturulamadı.";
-
-    return {
-
-      success: false,
-
-      filename:
-
-        normalizePdfFilename(
-
-          options.filename
-
-        ),
-
-      pageCount: 0,
-
-      createdAt:
-
-        new Date().toISOString(),
-
-      error: message,
-
-    };
-
-  }
+  };
 
 }
 
@@ -292,7 +254,7 @@ export async function exportElementToProfessionalPdf(
 
 function drawPageChrome(
 
-  pdf: any,
+  pdf: jsPDF,
 
   args: {
 
@@ -384,9 +346,13 @@ function drawPageChrome(
     );
 
     pdf.text(
+
       options.headerText,
+
       options.marginLeftMm,
+
       options.marginTopMm - 6
+
     );
 
   }
@@ -426,6 +392,7 @@ function drawPageChrome(
   if (options.showPageNumbers) {
 
     const pageText =
+
       options.pageNumberFormat
 
         .replace(
@@ -458,7 +425,9 @@ function drawPageChrome(
         9,
 
       {
+
         align: "right",
+
       }
 
     );
@@ -476,9 +445,9 @@ function drawPageChrome(
     pdf.setFontSize(34);
 
     pdf.setTextColor(
-      225,
-      228,
-      234
+      230,
+      233,
+      238
     );
 
     pdf.text(
@@ -504,7 +473,7 @@ function drawPageChrome(
   }
 
   // -------------------------------------------------
-  // Rapor Doğrulama
+  // Doğrulama Bilgileri
   // -------------------------------------------------
 
   drawVerificationInfo(
@@ -520,11 +489,12 @@ function drawPageChrome(
   );
 
   // -------------------------------------------------
-  // Son Sayfa İmza
+  // Son Sayfaya İmza
   // -------------------------------------------------
 
   if (
-    pageIndex === totalPages - 1
+    pageIndex ===
+    totalPages - 1
   ) {
 
     drawSignatureBlock(
@@ -547,7 +517,7 @@ function drawPageChrome(
 
 function drawVerificationInfo(
 
-  pdf: any,
+  pdf: jsPDF,
 
   options: ReportPdfExportOptions,
 
@@ -560,15 +530,21 @@ function drawVerificationInfo(
   const details = [
 
     options.reportNo
+
       ? `Rapor No: ${options.reportNo}`
+
       : "",
 
     options.revisionNo
+
       ? `Rev: ${options.revisionNo}`
+
       : "",
 
     options.verificationCode
+
       ? `Doğrulama: ${options.verificationCode}`
+
       : "",
 
   ].filter(Boolean);
@@ -606,9 +582,8 @@ function drawVerificationInfo(
 }
 // ------------------------------------------------------------
 
-
 function drawSignatureBlock(
-  pdf: any,
+  pdf: jsPDF,
   options: ReportPdfExportOptions,
   pageWidth: number,
   pageHeight: number
@@ -620,7 +595,10 @@ function drawSignatureBlock(
     return;
   }
 
-  // BURAYA EKLE
+  // -------------------------------------------------
+  // Strict TypeScript düzeltmesi
+  // -------------------------------------------------
+
   const marginBottom =
     options.marginBottomMm ?? 17;
 
@@ -635,24 +613,25 @@ function drawSignatureBlock(
     marginBottom -
     21;
 
- const leftX =
-  marginLeft;
+  const leftX =
+    marginLeft;
 
   const rightX =
-  pageWidth -
-  marginRight -
-  62;
+    pageWidth -
+    marginRight -
+    62;
 
   pdf.setFontSize(8);
+
   pdf.setTextColor(
     60,
     68,
     78
   );
 
-  // ------------------------
+  // -------------------------------------------------
   // Hazırlayan
-  // ------------------------
+  // -------------------------------------------------
 
   pdf.text(
     "Hazırlayan",
@@ -673,11 +652,13 @@ function drawSignatureBlock(
   );
 
   if (signature.preparedAt) {
+
     pdf.text(
       signature.preparedAt,
       leftX,
       blockY + 13
     );
+
   }
 
   pdf.line(
@@ -687,9 +668,9 @@ function drawSignatureBlock(
     blockY + 17
   );
 
-  // ------------------------
+  // -------------------------------------------------
   // Onaylayan
-  // ------------------------
+  // -------------------------------------------------
 
   pdf.text(
     "Onaylayan",
@@ -710,11 +691,13 @@ function drawSignatureBlock(
   );
 
   if (signature.approvedAt) {
+
     pdf.text(
       signature.approvedAt,
       rightX,
       blockY + 13
     );
+
   }
 
   pdf.line(
@@ -723,12 +706,12 @@ function drawSignatureBlock(
     rightX + 62,
     blockY + 17
   );
-}
 
+}
 // ------------------------------------------------------------
 
 function applyMetadata(
-  pdf: any,
+  pdf: jsPDF,
   metadata?: ReportPdfExportOptions["metadata"]
 ) {
   if (!metadata) {
@@ -736,6 +719,7 @@ function applyMetadata(
   }
 
   pdf.setProperties({
+
     title:
       metadata.title,
 
@@ -751,7 +735,9 @@ function applyMetadata(
     keywords:
       (metadata.keywords || [])
         .join(", "),
+
   });
+
 }
 
 // ------------------------------------------------------------
@@ -759,20 +745,51 @@ function applyMetadata(
 function normalizePdfFilename(
   value: string
 ) {
+
   const safe =
-    String(value || "dsec-rapor")
+
+    String(
+      value || "dsec-rapor"
+    )
+
       .trim()
+
       .replace(
         /[\\/:*?"<>|]+/g,
         "-"
       )
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
+
+      .replace(
+        /\s+/g,
+        "-"
+      )
+
+      .replace(
+        /-+/g,
+        "-"
+      )
+
+      .replace(
+        /^-|-$/g,
+        ""
+      );
 
   return safe
+
     .toLocaleLowerCase("tr-TR")
+
     .endsWith(".pdf")
+
       ? safe
+
       : `${safe}.pdf`;
+
 }
+
+// ------------------------------------------------------------
+
+export default {
+
+  exportElementToProfessionalPdf,
+
+};

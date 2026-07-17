@@ -2,6 +2,27 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  ExecutiveReportsDashboard,
+} from "@/components/reports-v2/executive-dashboard";
+
+import {
+  ReportAnalyticsCenter,
+} from "@/components/reports-v2/analytics";
+
+import {
+  ReportPdfPreview,
+} from "@/components/reports-v2/pdf";
+
+import {
+  ReportPdfCover,
+} from "@/components/reports-v2/pdf-pro";
+
+import {
+  ReportPdfExportButton,
+  ReportVerificationCard,
+} from "@/components/reports-v2/pdf-engine";
+
 type CompanyRow = {
   id: string;
   name: string;
@@ -960,13 +981,7 @@ const res = await fetch(
 
   const auditSummary = auditReport?.summary;
 
-const auditTotalDistribution =
-  (auditSummary?.uygun_count || 0) +
-  (auditSummary?.uygunsuz_count || 0) +
-  (auditSummary?.kismen_count || 0) +
-  (auditSummary?.kapsam_disi_count || 0);
-
-const auditTone = useMemo(() => {
+  const auditTone = useMemo(() => {
   const score = auditSummary?.compliance_score || 0;
 
   if (score >= 85) {
@@ -991,6 +1006,309 @@ const auditTone = useMemo(() => {
     text: "Denetim uyum skoru düşük. Uygunsuzluklar için hızlı aksiyon planı önerilir.",
   };
 }, [auditSummary]);
+
+const executiveDashboardInput = useMemo(() => {
+  const activeEmployeeCount = matrix.filter(
+    (employee) => employee.is_active
+  ).length;
+
+  const passiveEmployeeCount = matrix.filter(
+    (employee) => !employee.is_active
+  ).length;
+
+  return {
+    companyId:
+      report?.company?.id ||
+      selectedCompanyId ||
+      "ALL",
+
+    companyName:
+      report?.company?.name ||
+      "Tüm Firmalar",
+
+    companyTitle:
+      report?.company?.company_title ||
+      undefined,
+
+    employeeCount:
+      report?.company?.employee_count ||
+      report?.summary?.total_employees ||
+      0,
+
+    activeEmployeeCount,
+    passiveEmployeeCount,
+
+    totalTrainings:
+      report?.summary?.total_trainings ||
+      0,
+
+    completedTrainings:
+      report?.summary?.completed_count ||
+      0,
+
+    missingTrainings:
+      report?.summary?.not_started_count ||
+      0,
+
+    inProgressTrainings:
+      report?.summary?.in_progress_count ||
+      0,
+
+    totalAudits:
+      auditSummary?.total_audits ||
+      0,
+
+    completedAudits:
+      auditSummary?.completed_audits ||
+      0,
+
+    draftAudits:
+      auditSummary?.draft_audits ||
+      0,
+
+    complianceScore:
+      auditSummary?.compliance_score ||
+      0,
+
+    nonconformityCount:
+      auditSummary?.uygunsuz_count ||
+      0,
+
+    openDofCount:
+      auditSummary?.open_dof_count ||
+      0,
+
+    closedDofCount:
+      auditSummary?.closed_dof_count ||
+      0,
+
+    totalRisks: 0,
+    highRiskCount: 0,
+    mediumRiskCount: 0,
+    lowRiskCount: 0,
+
+    totalHealthRecords: 0,
+    expiringHealthCount: 0,
+    expiredHealthCount: 0,
+
+    totalPpeAssignments: 0,
+    pendingPpeCount: 0,
+
+    accidentCount: 0,
+    nearMissCount: 0,
+    occupationalDiseaseCount: 0,
+
+    ibysSuccessCount: 0,
+    ibysPendingCount: 0,
+    ibysErrorCount: 0,
+  };
+}, [
+  report,
+  auditSummary,
+  matrix,
+  selectedCompanyId,
+]);
+
+const analyticsInput = useMemo(() => {
+  return {
+    trainingTrend: [
+      {
+        label: "Mevcut",
+        value:
+          report?.summary?.completed_count ||
+          0,
+        secondaryValue:
+          report?.summary?.not_started_count ||
+          0,
+      },
+    ],
+
+    auditTrend: [
+      {
+        label: "Mevcut",
+        value:
+          auditSummary?.completed_audits ||
+          0,
+        secondaryValue:
+          auditSummary?.open_dof_count ||
+          0,
+      },
+    ],
+
+    dofTrend: [
+      {
+        label: "Mevcut",
+        value:
+          auditSummary?.open_dof_count ||
+          0,
+        secondaryValue:
+          auditSummary?.closed_dof_count ||
+          0,
+      },
+    ],
+
+    accidentTrend: [],
+    riskTrend: [],
+    healthTrend: [],
+    ppeTrend: [],
+
+    companyComparison: [],
+
+    monthlyChanges: [
+      {
+        key: "TRAINING" as const,
+        title: "Tamamlanan Eğitim",
+        current:
+          report?.summary?.completed_count ||
+          0,
+        previous: 0,
+      },
+      {
+        key: "AUDIT" as const,
+        title: "Tamamlanan Denetim",
+        current:
+          auditSummary?.completed_audits ||
+          0,
+        previous: 0,
+      },
+      {
+        key: "DOF" as const,
+        title: "Açık DÖF",
+        current:
+          auditSummary?.open_dof_count ||
+          0,
+        previous: 0,
+        inversePositive: true,
+      },
+    ],
+
+    heatmap:
+      auditReport?.top_nonconformities?.map(
+        (item, index) => ({
+          rowLabel: "Uygunsuzluk",
+          columnLabel: `Alan ${index + 1}`,
+          value: item.count,
+        })
+      ) || [],
+  };
+}, [
+  report,
+  auditSummary,
+  auditReport,
+]);
+
+const reportNo = useMemo(
+  () =>
+    `DSEC-${new Date().getFullYear()}-${
+      selectedCompanyId || "ALL"
+    }`,
+  [selectedCompanyId]
+);
+
+const verificationCode = useMemo(
+  () =>
+    `VRF-${selectedCompanyId || "ALL"}-${new Date()
+      .toISOString()
+      .slice(0, 10)
+      .replaceAll("-", "")}`,
+  [selectedCompanyId]
+);
+
+const pdfCover = useMemo(
+  () => ({
+    reportNo,
+    revisionNo: "00",
+    companyName:
+      report?.company?.name ||
+      "Tüm Firmalar",
+    reportTitle:
+      "D-SEC Kurumsal İSG Yönetim Raporu",
+    generatedAt:
+      new Date().toLocaleDateString(
+        "tr-TR"
+      ),
+    preparedBy:
+      "İş Güvenliği Uzmanı",
+    approvedBy:
+      report?.company
+        ?.employer_representative ||
+      "",
+    score:
+      Math.round(
+        (
+          completionRate +
+          (auditSummary?.compliance_score ||
+            0)
+        ) / 2
+      ),
+  }),
+  [
+    report,
+    reportNo,
+    completionRate,
+    auditSummary,
+  ]
+);
+
+const pdfPreviewDocument = useMemo(
+  () => ({
+    companyName:
+      report?.company?.name ||
+      "Tüm Firmalar",
+    reportTitle:
+      "D-SEC Kurumsal İSG Yönetim Raporu",
+    generatedAt:
+      new Date().toISOString(),
+    score: pdfCover.score,
+    executiveSummary:
+      executiveTone.text,
+    doraSummary:
+      auditTone.text,
+    sections: [
+      {
+        title: "Eğitim Performansı",
+        content:
+          `Tamamlanan: ${
+            report?.summary
+              ?.completed_count || 0
+          }, devam eden: ${
+            report?.summary
+              ?.in_progress_count || 0
+          }, başlamayan: ${
+            report?.summary
+              ?.not_started_count || 0
+          }.`,
+      },
+      {
+        title: "Denetim Performansı",
+        content:
+          `Toplam denetim: ${
+            auditSummary?.total_audits ||
+            0
+          }, uygunsuzluk: ${
+            auditSummary?.uygunsuz_count ||
+            0
+          }, açık DÖF: ${
+            auditSummary?.open_dof_count ||
+            0
+          }.`,
+      },
+    ],
+  }),
+  [
+    report,
+    pdfCover.score,
+    executiveTone,
+    auditTone,
+    auditSummary,
+  ]
+);
+
+const auditTotalDistribution =
+  (auditSummary?.uygun_count || 0) +
+  (auditSummary?.uygunsuz_count || 0) +
+  (auditSummary?.kismen_count || 0) +
+  (auditSummary?.kapsam_disi_count || 0);
 
   const openEmployeeDetail = (row: MatrixRow) => {
     const rows = row.statuses
@@ -1279,20 +1597,79 @@ const auditTone = useMemo(() => {
                   Excel / CSV
                 </button>
 
-                <button
-                  onClick={exportPDF}
-                  style={{
-                    border: "none",
-                    borderRadius: 12,
-                    padding: "12px 16px",
-                    background: "#111827",
-                    color: "#ffffff",
-                    fontWeight: 900,
-                    cursor: "pointer",
+                <ReportPdfExportButton
+                  elementId="report-export-area"
+                  label="Kurumsal PDF"
+                  options={{
+                    filename:
+                      `${
+                        report?.company?.name ||
+                        "firma"
+                      }-${activeTab}-raporu`,
+
+                    orientation: "landscape",
+                    pageSize: "a4",
+
+                    headerText:
+                      "D-SEC Kurumsal İSG Yönetim Raporu",
+
+                    footerText:
+                      "D-SEC Dijital Sağlık • Emniyet • Çevre Yönetimi",
+
+                    watermark: "D-SEC",
+
+                    showPageNumbers: true,
+
+                    reportNo,
+                    revisionNo: "00",
+
+                    verificationCode,
+
+                    verificationUrl:
+                      "https://dsec360.com/report-verify",
+
+                    signature: {
+                      preparedBy:
+                        "İş Güvenliği Uzmanı",
+
+                      preparedTitle:
+                        "Raporu Hazırlayan",
+
+                      approvedBy:
+                        report?.company
+                          ?.employer_representative ||
+                        "",
+
+                      approvedTitle:
+                        "İşveren / İşveren Vekili",
+                    },
+
+                    metadata: {
+                      title:
+                        `${
+                          report?.company?.name ||
+                          "Firma"
+                        } D-SEC Yönetici Raporu`,
+
+                      subject:
+                        "İş Sağlığı, Güvenliği ve Çevre Yönetim Raporu",
+
+                      author: "D-SEC",
+
+                      creator:
+                        "D-SEC Raporlama Merkezi",
+
+                      keywords: [
+                        "İSG",
+                        "HSE",
+                        "D-SEC",
+                        "Denetim",
+                        "Risk",
+                        "Eğitim",
+                      ],
+                    },
                   }}
-                >
-                  Kurumsal PDF
-                </button>
+                />
               </div>
             ) : null}
           </div>
@@ -1357,7 +1734,54 @@ const auditTone = useMemo(() => {
         {loadingReport ? <div style={cardStyle()}>Rapor yükleniyor...</div> : null}
 
         {!loadingReport && report?.company ? (
-          <div id="report-export-area">
+          
+<div id="report-export-area">
+            <div
+              style={{
+                display: "grid",
+                gap: 20,
+                marginBottom: 20,
+              }}
+            >
+              <ExecutiveReportsDashboard
+                input={
+                  executiveDashboardInput
+                }
+              />
+
+              <ReportAnalyticsCenter
+                input={analyticsInput}
+              />
+
+              <section
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(auto-fit,minmax(340px,1fr))",
+                  gap: 18,
+                }}
+              >
+                <ReportPdfCover
+                  cover={pdfCover}
+                />
+
+                <ReportPdfPreview
+                  document={
+                    pdfPreviewDocument
+                  }
+                />
+              </section>
+
+              <ReportVerificationCard
+                verification={{
+                  reportNo,
+                  revisionNo: "00",
+                  verificationCode,
+                  verificationUrl:
+                    "https://dsec360.com/report-verify",
+                }}
+              />
+            </div>
            <div
   style={{
     display: "grid",
