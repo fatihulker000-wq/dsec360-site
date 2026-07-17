@@ -2,10 +2,41 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  EmployeeDashboard,
+} from "@/components/employees-v2/dashboard";
+
+import {
+  EmployeeListCenter,
+} from "@/components/employees-v2/list";
+
+import type {
+  EmployeeListRow,
+} from "@/components/employees-v2/list";
+
+import {
+  EmployeeProfile,
+} from "@/components/employees-v2/profile";
+
+import type {
+  EmployeeProfileEmployee,
+} from "@/components/employees-v2/profile";
+
+import {
+  EmployeeIntegrationBridge,
+  mapIntegrationToEmployeeSummary,
+  mapIntegrationToProfileProps,
+} from "@/components/employees-v2/integration";
+
+import {
+  DoraEmployeeProfileBridge,
+} from "@/components/employees-v2/dora-analysis";
+
 type Employee = {
   id: string;
   firm_id?: string | null;
   full_name: string;
+  department?: string | null;
   job_title?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -13,8 +44,11 @@ type Employee = {
   tc_no?: string | null;
   start_date?: string | null;
   exit_date?: string | null;
+  birth_date?: string | null;
   gender?: string | null;
   disability_status?: string | null;
+  education_level?: string | null;
+  blood_type?: string | null;
   active: boolean;
 };
 
@@ -25,24 +59,34 @@ type Company = {
 
 type EmployeeForm = {
   full_name: string;
+  department: string;
   job_title: string;
   phone: string;
   email: string;
   registry_no: string;
   tc_no: string;
+  start_date: string;
+  birth_date: string;
   gender: string;
   disability_status: string;
+  education_level: string;
+  blood_type: string;
 };
 
 const emptyForm: EmployeeForm = {
   full_name: "",
+  department: "",
   job_title: "",
   phone: "",
   email: "",
   registry_no: "",
   tc_no: "",
+  start_date: "",
+  birth_date: "",
   gender: "",
   disability_status: "",
+  education_level: "",
+  blood_type: "",
 };
 
 export default function EmployeesPage() {
@@ -50,31 +94,37 @@ export default function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [firmFilter, setFirmFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "passive">("all");
-  const [letterFilter, setLetterFilter] = useState<string | null>(null);
 
   const [editModal, setEditModal] = useState<Employee | null>(null);
   const [editForm, setEditForm] = useState<EmployeeForm>(emptyForm);
-  const [bulkFile, setBulkFile] = useState<File | null>(null);
-  const [bulkLoading, setBulkLoading] = useState(false);
+
   const [addModal, setAddModal] = useState(false);
   const [addForm, setAddForm] = useState<EmployeeForm>(emptyForm);
+
+  const [profileEmployee, setProfileEmployee] =
+    useState<Employee | null>(null);
+
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [previewSummary, setPreviewSummary] = useState<any>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const loadEmployees = async (firmId = firmFilter) => {
+  const loadEmployees = async (firmId = "all") => {
     try {
       setLoading(true);
       setError("");
 
-      const res = await fetch(`/api/admin/employees?firmId=${encodeURIComponent(firmId)}`, {
-        cache: "no-store",
-        credentials: "include",
-      });
+      const res = await fetch(
+        `/api/admin/employees?firmId=${encodeURIComponent(firmId)}`,
+        {
+          cache: "no-store",
+          credentials: "include",
+        }
+      );
 
       const json = await res.json().catch(() => ({}));
 
@@ -84,8 +134,10 @@ export default function EmployeesPage() {
         return;
       }
 
-      setData(json?.data || []);
-      setCompanies(json?.companies || []);
+      setData(Array.isArray(json?.data) ? json.data : []);
+      setCompanies(
+        Array.isArray(json?.companies) ? json.companies : []
+      );
     } catch {
       setData([]);
       setError("Çalışan listesi yüklenirken hata oluştu.");
@@ -96,77 +148,109 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     void loadEmployees("all");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const companyMap = useMemo(() => {
+    return new Map(
+      companies.map((company) => [
+        String(company.id),
+        company.name,
+      ])
+    );
+  }, [companies]);
+
+  const employeeRows = useMemo<EmployeeListRow[]>(
+    () =>
+      data.map((employee) => ({
+        ...employee,
+        id: String(employee.id),
+        firm_id: employee.firm_id
+          ? String(employee.firm_id)
+          : null,
+        firm_name: employee.firm_id
+          ? companyMap.get(String(employee.firm_id)) || null
+          : null,
+        training_status: "UNKNOWN",
+        health_status: "UNKNOWN",
+        ppe_status: "UNKNOWN",
+        document_status: "UNKNOWN",
+        risk_status: "UNKNOWN",
+        accident_count: 0,
+      })),
+    [data, companyMap]
+  );
+
+  const selectedCompanyName = useMemo(() => {
+    if (firmFilter === "all") return "Tüm firmalar";
+    return companyMap.get(String(firmFilter)) || "Seçili firma";
+  }, [firmFilter, companyMap]);
+
   const handleAddEmployee = () => {
-  if (firmFilter === "all") {
-    alert("Önce firma seçmelisin.");
-    return;
-  }
-
-  setAddForm(emptyForm);
-  setAddModal(true);
- };
-
-const saveNewEmployee = async () => {
-  if (firmFilter === "all") {
-    alert("Önce firma seçmelisin.");
-    return;
-  }
-
-  if (!addForm.full_name.trim()) {
-    alert("Ad Soyad zorunlu.");
-    return;
-  }
-
-  try {
-    setActionLoading(true);
-
-    const res = await fetch("/api/admin/employees", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        firm_id: firmFilter,
-        full_name: addForm.full_name.trim(),
-        job_title: addForm.job_title.trim(),
-        phone: addForm.phone.trim(),
-        email: addForm.email.trim(),
-        registry_no: addForm.registry_no.trim(),
-        tc_no: addForm.tc_no.trim(),
-        gender: addForm.gender.trim(),
-        disability_status: addForm.disability_status.trim(),
-        active: true,
-      }),
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      alert(json?.error || "Çalışan eklenemedi.");
+    if (firmFilter === "all") {
+      alert("Yeni çalışan eklemek için önce işlem firmasını seçmelisin.");
       return;
     }
 
-    setAddModal(false);
     setAddForm(emptyForm);
-    await loadEmployees(firmFilter);
-  } finally {
-    setActionLoading(false);
-  }
-};
+    setAddModal(true);
+  };
 
-  const openEditModal = (emp: Employee) => {
-    setEditModal(emp);
+  const saveNewEmployee = async () => {
+    if (firmFilter === "all") {
+      alert("Önce firma seçmelisin.");
+      return;
+    }
+
+    if (!addForm.full_name.trim()) {
+      alert("Ad Soyad zorunlu.");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+
+      const res = await fetch("/api/admin/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          firm_id: firmFilter,
+          ...normalizeForm(addForm),
+          active: true,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json?.error || "Çalışan eklenemedi.");
+        return;
+      }
+
+      setAddModal(false);
+      setAddForm(emptyForm);
+      await loadEmployees("all");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openEditModal = (employee: Employee) => {
+    setEditModal(employee);
     setEditForm({
-      full_name: emp.full_name || "",
-      job_title: emp.job_title || "",
-      phone: emp.phone || "",
-      email: emp.email || "",
-      registry_no: emp.registry_no || "",
-      tc_no: emp.tc_no || "",
-      gender: emp.gender || "",
-      disability_status: emp.disability_status || "",
+      full_name: employee.full_name || "",
+      department: employee.department || "",
+      job_title: employee.job_title || "",
+      phone: employee.phone || "",
+      email: employee.email || "",
+      registry_no: employee.registry_no || "",
+      tc_no: employee.tc_no || "",
+      start_date: employee.start_date || "",
+      birth_date: employee.birth_date || "",
+      gender: employee.gender || "",
+      disability_status: employee.disability_status || "",
+      education_level: employee.education_level || "",
+      blood_type: employee.blood_type || "",
     });
   };
 
@@ -187,14 +271,7 @@ const saveNewEmployee = async () => {
         credentials: "include",
         body: JSON.stringify({
           id: editModal.id,
-          full_name: editForm.full_name.trim(),
-          job_title: editForm.job_title.trim(),
-          phone: editForm.phone.trim(),
-          email: editForm.email.trim(),
-          registry_no: editForm.registry_no.trim(),
-          tc_no: editForm.tc_no.trim(),
-          gender: editForm.gender.trim(),
-          disability_status: editForm.disability_status.trim(),
+          ...normalizeForm(editForm),
         }),
       });
 
@@ -207,109 +284,13 @@ const saveNewEmployee = async () => {
 
       setEditModal(null);
       setEditForm(emptyForm);
-      await loadEmployees(firmFilter);
+      await loadEmployees("all");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const downloadEmployeeTemplate = () => {
-  const csv =
-    "full_name,job_title,phone,email,registry_no,tc_no,gender,disability_status,active\n" +
-    "Ali Veli,Operatör,05551234567,ali.veli@mail.com,SCL-001,11111111111,Erkek,Yok,true\n";
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "dsec-calisan-toplu-yukleme-sablon.csv";
-  a.click();
-
-  URL.revokeObjectURL(url);
-};
-
-const uploadBulkEmployees = async () => {
-  if (firmFilter === "all") {
-    alert("Toplu yükleme için önce firma seçmelisin.");
-    return;
-  }
-
-  if (!bulkFile) {
-    alert("Önce CSV veya Excel dosyası seç.");
-    return;
-  }
-
-  try {
-    setBulkLoading(true);
-
-    const formData = new FormData();
-    formData.append("file", bulkFile);
-    formData.append("firm_id", firmFilter);
-
-    const res = await fetch("/api/admin/employees/bulk-upload", {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      alert(json?.error || "Toplu çalışan yükleme başarısız.");
-      return;
-    }
-
-    alert(
-      `Toplu yükleme tamamlandı.\nEklenen: ${json.insertedCount || 0}\nAtlanan: ${json.skippedCount || 0}`
-    );
-
-    setBulkFile(null);
-    await loadEmployees(firmFilter);
-  } finally {
-    setBulkLoading(false);
-  }
- };
-
-const uploadFromPreview = async () => {
-  if (!previewData.length) {
-    alert("Önizleme verisi yok");
-    return;
-  }
-
-  try {
-    setBulkLoading(true);
-
-    const res = await fetch("/api/admin/employees/bulk-upload-from-preview", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        firm_id: firmFilter,
-        rows: previewData,
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) {
-      alert(json.error || "Yükleme hatası");
-      return;
-    }
-
-    alert(`Eklenen: ${json.insertedCount}`);
-
-    setPreviewOpen(false);
-    setPreviewData([]);
-
-    await loadEmployees(firmFilter);
-  } finally {
-    setBulkLoading(false);
-  }
-};
-
-  const handleActiveEmployee = async (emp: Employee) => {
+  const handleActivateEmployee = async (employee: Employee) => {
     try {
       setActionLoading(true);
 
@@ -318,7 +299,7 @@ const uploadFromPreview = async () => {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          id: emp.id,
+          id: employee.id,
           active: true,
           exit_date: "",
         }),
@@ -331,50 +312,246 @@ const uploadFromPreview = async () => {
         return;
       }
 
-      await loadEmployees(firmFilter);
+      await loadEmployees("all");
     } finally {
       setActionLoading(false);
     }
   };
 
- const handlePassiveEmployee = async (emp: Employee) => {
-  if (!confirm(`${emp.full_name} pasife alınsın mı?`)) return;
-
-  try {
-    setActionLoading(true);
-
-    const res = await fetch(`/api/admin/employees?id=${encodeURIComponent(emp.id)}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      alert(json?.error || "Çalışan pasife alınamadı.");
+  const handlePassiveEmployee = async (employee: Employee) => {
+    if (!confirm(`${employee.full_name} pasife alınsın mı?`)) {
       return;
     }
 
-    await loadEmployees(firmFilter);
-  } finally {
-    setActionLoading(false);
-  }
- };
+    try {
+      setActionLoading(true);
 
- const handleHardDeleteEmployee = async (emp: Employee) => {
-  const ok = confirm(
-    `${emp.full_name} kaydı kalıcı olarak silinecek. Bu işlem geri alınamaz. Emin misin?`
-  );
+      const res = await fetch(
+        `/api/admin/employees?id=${encodeURIComponent(employee.id)}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
 
-  if (!ok) return;
+      const json = await res.json().catch(() => ({}));
 
-  try {
-    setActionLoading(true);
+      if (!res.ok) {
+        alert(json?.error || "Çalışan pasife alınamadı.");
+        return;
+      }
+
+      await loadEmployees("all");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleHardDeleteEmployee = async (employee: Employee) => {
+    const confirmed = confirm(
+      `${employee.full_name} kaydı kalıcı olarak silinecek. Bu işlem geri alınamaz. Emin misin?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setActionLoading(true);
+
+      const res = await fetch(
+        `/api/admin/employees?id=${encodeURIComponent(
+          employee.id
+        )}&mode=hard`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(json?.error || "Çalışan silinemedi.");
+        return;
+      }
+
+      await loadEmployees("all");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const findOriginalEmployee = (
+    employee: EmployeeListRow
+  ): Employee | null => {
+    return (
+      data.find(
+        (item) => String(item.id) === String(employee.id)
+      ) || null
+    );
+  };
+
+  const handleBulkActivate = async (ids: string[]) => {
+    for (const id of ids) {
+      const employee = data.find(
+        (item) => String(item.id) === String(id)
+      );
+
+      if (employee && !employee.active) {
+        await handleActivateEmployee(employee);
+      }
+    }
+  };
+
+  const handleBulkPassive = async (ids: string[]) => {
+    if (
+      !confirm(
+        `${ids.length} çalışan pasife alınacak. Devam edilsin mi?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+
+      await Promise.all(
+        ids.map((id) =>
+          fetch(
+            `/api/admin/employees?id=${encodeURIComponent(id)}`,
+            {
+              method: "DELETE",
+              credentials: "include",
+            }
+          )
+        )
+      );
+
+      await loadEmployees("all");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async (ids: string[]) => {
+    if (
+      !confirm(
+        `${ids.length} çalışan kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam edilsin mi?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+
+      await Promise.all(
+        ids.map((id) =>
+          fetch(
+            `/api/admin/employees?id=${encodeURIComponent(
+              id
+            )}&mode=hard`,
+            {
+              method: "DELETE",
+              credentials: "include",
+            }
+          )
+        )
+      );
+
+      await loadEmployees("all");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const downloadEmployeeTemplate = () => {
+    const csv =
+      "full_name,department,job_title,phone,email,registry_no,tc_no,start_date,birth_date,gender,disability_status,education_level,blood_type,active\n" +
+      "Ali Veli,Depo,Operatör,05551234567,ali.veli@mail.com,SCL-001,11111111111,2026-01-01,1990-01-01,Erkek,Yok,Lise,A Rh+,true\n";
+
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = "dsec-calisan-toplu-yukleme-sablon.csv";
+    anchor.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  const uploadBulkEmployees = async () => {
+    if (firmFilter === "all") {
+      alert("Toplu yükleme için önce işlem firmasını seçmelisin.");
+      return;
+    }
+
+    if (!bulkFile) {
+      alert("Önce CSV veya Excel dosyası seç.");
+      return;
+    }
+
+    try {
+      setBulkLoading(true);
+
+      const formData = new FormData();
+      formData.append("file", bulkFile);
+      formData.append("firm_id", firmFilter);
+
+      const res = await fetch(
+        "/api/admin/employees/bulk-upload",
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        }
+      );
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(
+          json?.error || "Toplu çalışan yükleme başarısız."
+        );
+        return;
+      }
+
+      alert(
+        `Toplu yükleme tamamlandı.\nEklenen: ${
+          json.insertedCount || 0
+        }\nAtlanan: ${json.skippedCount || 0}`
+      );
+
+      setBulkFile(null);
+      await loadEmployees("all");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const openBulkPreview = async () => {
+    if (!bulkFile) {
+      alert("Önce dosya seç.");
+      return;
+    }
+
+    if (firmFilter === "all") {
+      alert("Önce işlem firmasını seç.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", bulkFile);
+    formData.append("firm_id", firmFilter);
 
     const res = await fetch(
-      `/api/admin/employees?id=${encodeURIComponent(emp.id)}&mode=hard`,
+      "/api/admin/employees/bulk-preview",
       {
-        method: "DELETE",
+        method: "POST",
+        body: formData,
         credentials: "include",
       }
     );
@@ -382,700 +559,985 @@ const uploadFromPreview = async () => {
     const json = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      alert(json?.error || "Çalışan silinemedi.");
+      alert(json?.error || "Önizleme hatası.");
       return;
     }
 
-    await loadEmployees(firmFilter);
-  } finally {
-    setActionLoading(false);
-  }
- };
-
-  const filtered = useMemo(() => {
-  let list = data;
-
-  if (statusFilter === "active") list = list.filter((x) => x.active);
-  if (statusFilter === "passive") list = list.filter((x) => !x.active);
-
-  if (letterFilter) {
-    list = list.filter((emp) =>
-      String(emp.full_name || "")
-        .trim()
-        .toLocaleUpperCase("tr-TR")
-        .startsWith(letterFilter)
+    setPreviewData(
+      Array.isArray(json?.preview) ? json.preview : []
     );
-  }
+    setPreviewSummary(json?.summary || null);
+    setPreviewOpen(true);
+  };
 
-  const q = search.trim().toLowerCase();
-  if (!q) return list;
+  const uploadFromPreview = async () => {
+    if (!previewData.length) {
+      alert("Önizleme verisi yok.");
+      return;
+    }
 
-  return list.filter((emp) =>
-    [
-      emp.full_name,
-      emp.job_title,
-      emp.phone,
-      emp.email,
-      emp.registry_no,
-      emp.tc_no,
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(q)
-  );
- }, [data, search, statusFilter, letterFilter]);
+    try {
+      setBulkLoading(true);
 
-  
-  const activeCount = filtered.filter((x) => x.active).length;
-  const passiveCount = filtered.filter((x) => !x.active).length;
-  const activeEmployees = filtered.filter((x) => x.active);
+      const res = await fetch(
+        "/api/admin/employees/bulk-upload-from-preview",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            firm_id: firmFilter,
+            rows: previewData,
+          }),
+        }
+      );
 
-  const maleCount = activeEmployees.filter((x) => {
-    const v = String(x.gender || "").toLowerCase().trim();
-    return v === "erkek" || v === "e" || v === "male" || v === "bay";
-  }).length;
+      const json = await res.json().catch(() => ({}));
 
-  const femaleCount = activeEmployees.filter((x) => {
-    const v = String(x.gender || "").toLowerCase().trim();
-    return v === "kadın" || v === "kadin" || v === "k" || v === "female" || v === "bayan";
-  }).length;
+      if (!res.ok) {
+        alert(json?.error || "Yükleme hatası.");
+        return;
+      }
 
-  const disabledCount = activeEmployees.filter((x) => {
-    const v = String(x.disability_status || "").toLowerCase().trim();
-    if (!v || v === "yok" || v === "hayır" || v === "hayir" || v === "0" || v === "false") return false;
-    return true;
-  }).length;
+      alert(`Eklenen: ${json.insertedCount || 0}`);
+
+      setPreviewOpen(false);
+      setPreviewData([]);
+      setPreviewSummary(null);
+      setBulkFile(null);
+
+      await loadEmployees("all");
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   return (
-    <main style={{ padding: 28 }}>
-      <div
-        style={{
-          borderRadius: 28,
-          padding: 28,
-          background: "linear-gradient(135deg, #4a0d1a 0%, #7f1734 48%, #c62828 100%)",
-          color: "#fff",
-          marginBottom: 24,
+    <main
+      style={{
+        padding: 28,
+        display: "grid",
+        gap: 20,
+      }}
+    >
+      <EmployeeDashboard
+        employees={data}
+        visibleEmployees={data}
+        selectedCompanyName={selectedCompanyName}
+        onEmployeeClick={(employeeId) => {
+          const employee =
+            data.find(
+              (item) =>
+                String(item.id) === String(employeeId)
+            ) || null;
+
+          setProfileEmployee(employee);
         }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>
-          D-SEC Çalışan Yönetimi
-        </div>
-
-        <h1 style={{ margin: "10px 0 8px", fontSize: 34, fontWeight: 900 }}>
-          Çalışanlar
-        </h1>
-
-        <p style={{ margin: 0, opacity: 0.88 }}>
-          Web-app entegrasyonlu çalışan listesi, aktif/pasif takip ve firma bazlı arama ekranı.
-        </p>
-      </div>
+      />
 
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: 14,
-          marginBottom: 20,
-        }}
-      >
-        <Kpi title="Toplam" value={filtered.length} />
-        <Kpi title="Aktif" value={activeCount} />
-        <Kpi title="Pasif" value={passiveCount} />
-        <Kpi title="Görünen" value={filtered.length} />
-        <Kpi title="Erkek" value={maleCount} />
-        <Kpi title="Kadın" value={femaleCount} />
-        <Kpi title="Engelli" value={disabledCount} />
-      </section>
-
- <section
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 6,
-          marginBottom: 20,
+          padding: 18,
+          borderRadius: 20,
           background: "#fff",
-          padding: 12,
-          borderRadius: 16,
           border: "1px solid #e5e7eb",
         }}
       >
-        {"ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ".split("").map((letter) => (
-          <button
-            key={letter}
-            onClick={() => setLetterFilter(letter)}
+        <div>
+          <div
             style={{
-              padding: "7px 11px",
-              borderRadius: 10,
-              border: "none",
-              fontWeight: 900,
-              cursor: "pointer",
-              background: letterFilter === letter ? "#c62828" : "#f3f4f6",
-              color: letterFilter === letter ? "#fff" : "#374151",
+              fontSize: 18,
+              fontWeight: 950,
+              color: "#111827",
             }}
           >
-            {letter}
-          </button>
-        ))}
+            Kayıt ve Toplu İşlem Merkezi
+          </div>
 
-        <button
-          onClick={() => setLetterFilter(null)}
+          <div
+            style={{
+              marginTop: 5,
+              color: "#64748b",
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}
+          >
+            Yeni çalışan ve toplu yükleme işlemlerinde
+            kullanılacak firmayı seçin.
+          </div>
+        </div>
+
+        <div
           style={{
-            padding: "7px 12px",
-            borderRadius: 10,
-            border: "none",
-            fontWeight: 900,
-            cursor: "pointer",
-            background: "#111827",
-            color: "#fff",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            alignItems: "center",
           }}
         >
-          Tümü
-        </button>
-      </section>
-
-             <section
-  style={{
-    background: "#fff",
-    border: "1px solid #e5e7eb",
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 20,
-  }}
->
-  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <select
             value={firmFilter}
-            onChange={(e) => {
-              const nextFirmId = e.target.value;
-              setFirmFilter(nextFirmId);
-              void loadEmployees(nextFirmId);
-            }}
+            onChange={(event) =>
+              setFirmFilter(event.target.value)
+            }
             style={inputStyle}
           >
-            <option value="all">Tüm firmalar</option>
-            {companies.map((firm) => (
-              <option key={firm.id} value={firm.id}>
-                {firm.name || "Firma"}
+            <option value="all">
+              İşlem firması seç
+            </option>
+
+            {companies.map((company) => (
+              <option
+                key={company.id}
+                value={company.id}
+              >
+                {company.name || "Firma"}
               </option>
             ))}
           </select>
 
+          <button
+            type="button"
+            onClick={downloadEmployeeTemplate}
+            style={darkBtn()}
+          >
+            Şablon İndir
+          </button>
+
           <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Ad, ünvan, telefon, e-posta, sicil veya TC ara"
-            style={{ ...inputStyle, flex: 1, minWidth: 260 }}
+            type="file"
+            accept=".csv,.xlsx"
+            onChange={(event) =>
+              setBulkFile(
+                event.target.files?.[0] || null
+              )
+            }
+            style={{
+              minWidth: 220,
+              border: "1px solid #e5e7eb",
+              borderRadius: 14,
+              padding: "10px 12px",
+              background: "#fff",
+              fontWeight: 800,
+            }}
           />
 
-          <button onClick={() => setStatusFilter("all")} style={btn(statusFilter === "all")}>
-            Tümü
-          </button>
-          <button onClick={() => setStatusFilter("active")} style={btn(statusFilter === "active")}>
-            Aktif
-          </button>
-          <button onClick={() => setStatusFilter("passive")} style={btn(statusFilter === "passive")}>
-            Pasif
-          </button>
-
-          <button onClick={() => loadEmployees(firmFilter)} style={darkBtn()}>
-            Yenile
+          <button
+            type="button"
+            onClick={openBulkPreview}
+            disabled={!bulkFile}
+            style={darkBtn(!bulkFile)}
+          >
+            Önizleme
           </button>
 
-          <button onClick={handleAddEmployee} disabled={actionLoading} style={blueBtn(actionLoading)}>
-            + Çalışan Ekle
+          <button
+            type="button"
+            onClick={uploadBulkEmployees}
+            disabled={bulkLoading || !bulkFile}
+            style={blueBtn(bulkLoading || !bulkFile)}
+          >
+            {bulkLoading
+              ? "Yükleniyor..."
+              : "Toplu Yükle"}
           </button>
-          <button onClick={downloadEmployeeTemplate} style={darkBtn()}>
-  Şablon İndir
- </button>
-
- <input
-  type="file"
-  accept=".csv,.xlsx"
-  onChange={(e) => setBulkFile(e.target.files?.[0] || null)}
-  style={{
-    minWidth: 220,
-    border: "1px solid #e5e7eb",
-    borderRadius: 14,
-    padding: "10px 12px",
-    background: "#fff",
-    fontWeight: 800,
-  }}
-/>
-<button
-  onClick={async () => {
-    if (!bulkFile) return alert("Dosya seç");
-    if (firmFilter === "all") return alert("Firma seç");
-
-    const fd = new FormData();
-    fd.append("file", bulkFile);
-    fd.append("firm_id", firmFilter);
-
-    const res = await fetch("/api/admin/employees/bulk-preview", {
-      method: "POST",
-      body: fd,
-      credentials: "include",
-    });
-
-    const json = await res.json();
-
-    if (!res.ok) return alert(json.error || "Preview hatası");
-
-    setPreviewData(json.preview);
-    setPreviewSummary(json.summary);
-    setPreviewOpen(true);
-  }}
-  style={darkBtn()}
->
-  Önizleme
-</button>
-
-<button
-  onClick={uploadBulkEmployees}
-  disabled={bulkLoading || !bulkFile}
-  style={blueBtn(bulkLoading || !bulkFile)}
->
-  {bulkLoading ? "Yükleniyor..." : "Toplu Yükle"}
-</button>
         </div>
       </section>
 
-      {loading ? (
-        <CardText title="Yükleniyor" text="Çalışan kayıtları getiriliyor..." />
-      ) : error ? (
-        <CardText title="Hata" text={error} />
-      ) : filtered.length === 0 ? (
-        <CardText title="Kayıt bulunamadı" text="Seçili filtreye uygun çalışan görünmüyor." />
+      {error ? (
+        <CardText
+          title="Çalışan verileri alınamadı"
+          text={error}
+        />
       ) : (
-        
-        <section style={{ display: "grid", gap: 14 }}>
-  {filtered.map((emp) => (
-    <div
-      key={emp.id}
-      style={{
-        background: "#fff",
-        border: "1px solid #e5e7eb",
-        borderRadius: 22,
-        padding: 18,
-        boxShadow: "0 12px 30px rgba(15,23,42,0.04)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <div style={{ fontSize: 19, fontWeight: 900, color: "#111827" }}>
-            {emp.full_name || "Adsız çalışan"}
-          </div>
-
-          <div style={{ marginTop: 6, color: "#6b7280", lineHeight: 1.7 }}>
-            <div>Ünvan: {emp.job_title || "-"}</div>
-            <div>Telefon: {emp.phone || "-"}</div>
-            <div>E-posta: {emp.email || "-"}</div>
-            <div>Sicil: {emp.registry_no || "-"}</div>
-            <div>Firma ID: {emp.firm_id || "-"}</div>
-          </div>
-
-          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => openEditModal(emp)} disabled={actionLoading} style={smallBtn("#2563eb")}>
-              Düzenle
-            </button>
-
-            {emp.active ? (
-              <button onClick={() => handlePassiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#dc2626")}>
-                Pasife Al
-              </button>
-            ) : (
-              <button onClick={() => handleActiveEmployee(emp)} disabled={actionLoading} style={smallBtn("#16a34a")}>
-                Aktif Yap
-              </button>
-            )}
-
-<button
-  onClick={() => handleHardDeleteEmployee(emp)}
-  disabled={actionLoading}
-  style={smallBtn("#7f1d1d")}
->
-  Sil
-</button>
-
-          </div>
-        </div>
-
-        <span
-          style={{
-            height: 34,
-            padding: "8px 12px",
-            borderRadius: 999,
-            fontSize: 13,
-            fontWeight: 900,
-            background: emp.active ? "#ecfdf5" : "#fef2f2",
-            color: emp.active ? "#166534" : "#b91c1c",
+        <EmployeeListCenter
+          employees={employeeRows}
+          companies={companies}
+          loading={loading}
+          actionLoading={actionLoading}
+          onRefresh={() => {
+            void loadEmployees("all");
           }}
-        >
-          {emp.active ? "Aktif" : "Pasif"}
-        </span>
-      </div>
-    </div>
-  ))}
-</section>
+          onAdd={handleAddEmployee}
+          onOpen={(employee) => {
+            setProfileEmployee(
+              findOriginalEmployee(employee)
+            );
+          }}
+          onEdit={(employee) => {
+            const original =
+              findOriginalEmployee(employee);
+
+            if (original) {
+              openEditModal(original);
+            }
+          }}
+          onActivate={(employee) => {
+            const original =
+              findOriginalEmployee(employee);
+
+            if (original) {
+              void handleActivateEmployee(original);
+            }
+          }}
+          onPassive={(employee) => {
+            const original =
+              findOriginalEmployee(employee);
+
+            if (original) {
+              void handlePassiveEmployee(original);
+            }
+          }}
+          onDelete={(employee) => {
+            const original =
+              findOriginalEmployee(employee);
+
+            if (original) {
+              void handleHardDeleteEmployee(original);
+            }
+          }}
+          onBulkActivate={(ids) => {
+            void handleBulkActivate(ids);
+          }}
+          onBulkPassive={(ids) => {
+            void handleBulkPassive(ids);
+          }}
+          onBulkDelete={(ids) => {
+            void handleBulkDelete(ids);
+          }}
+        />
       )}
 
-{addModal && (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(15,23,42,0.55)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 9999,
-      padding: 20,
-    }}
-  >
-    <div
-      style={{
-        width: "min(760px, 100%)",
-        maxHeight: "90vh",
-        overflowY: "auto",
-        background: "#fff",
-        borderRadius: 24,
-        padding: 24,
-        boxShadow: "0 30px 80px rgba(0,0,0,0.25)",
-      }}
-    >
-      <div
-        style={{
-          borderRadius: 20,
-          padding: 20,
-          background: "linear-gradient(135deg, #4a0d1a 0%, #c62828 100%)",
-          color: "#fff",
-          marginBottom: 18,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>
-          Yeni Çalışan
-        </div>
-        <h2 style={{ margin: "6px 0 0", fontSize: 26, fontWeight: 950 }}>
-          Çalışan Ekle
-        </h2>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 12,
-        }}
-      >
-        <FormInput label="Ad Soyad *" value={addForm.full_name} onChange={(v) => setAddForm({ ...addForm, full_name: v })} />
-        <FormInput label="Ünvan" value={addForm.job_title} onChange={(v) => setAddForm({ ...addForm, job_title: v })} />
-        <FormInput label="Telefon" value={addForm.phone} onChange={(v) => setAddForm({ ...addForm, phone: v })} />
-        <FormInput label="E-posta" value={addForm.email} onChange={(v) => setAddForm({ ...addForm, email: v })} />
-        <FormInput label="Sicil No" value={addForm.registry_no} onChange={(v) => setAddForm({ ...addForm, registry_no: v })} />
-        <FormInput label="TC No" value={addForm.tc_no} onChange={(v) => setAddForm({ ...addForm, tc_no: v })} />
-        <FormInput label="Cinsiyet" value={addForm.gender} onChange={(v) => setAddForm({ ...addForm, gender: v })} />
-        <FormInput label="Engellilik Durumu" value={addForm.disability_status} onChange={(v) => setAddForm({ ...addForm, disability_status: v })} />
-      </div>
-
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-        <button
-          onClick={() => {
+      {addModal ? (
+        <EmployeeFormModal
+          eyebrow="Yeni Çalışan"
+          title="Çalışan Ekle"
+          form={addForm}
+          loading={actionLoading}
+          onChange={setAddForm}
+          onCancel={() => {
             setAddModal(false);
             setAddForm(emptyForm);
           }}
-          disabled={actionLoading}
-          style={darkBtn()}
-        >
-          İptal
-        </button>
-
-        <button onClick={saveNewEmployee} disabled={actionLoading} style={blueBtn(actionLoading)}>
-          {actionLoading ? "Kaydediliyor..." : "Kaydet"}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-      {editModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: 20,
+          onSave={() => {
+            void saveNewEmployee();
           }}
+        />
+      ) : null}
+
+      {editModal ? (
+        <EmployeeFormModal
+          eyebrow="Çalışan Bilgisi"
+          title="Çalışanı Düzenle"
+          form={editForm}
+          loading={actionLoading}
+          onChange={setEditForm}
+          onCancel={() => {
+            setEditModal(null);
+            setEditForm(emptyForm);
+          }}
+          onSave={() => {
+            void saveEditEmployee();
+          }}
+        />
+      ) : null}
+
+      {previewOpen ? (
+        <BulkPreviewModal
+          rows={previewData}
+          summary={previewSummary}
+          loading={bulkLoading}
+          onClose={() => setPreviewOpen(false)}
+          onUpload={() => {
+            void uploadFromPreview();
+          }}
+        />
+      ) : null}
+
+      {profileEmployee ? (
+        <EmployeeIntegrationBridge
+          employeeId={profileEmployee.id}
         >
-          <div
-            style={{
-              width: "min(720px, 100%)",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              background: "#fff",
-              borderRadius: 24,
-              padding: 24,
-              boxShadow: "0 30px 80px rgba(0,0,0,0.25)",
-            }}
-          >
-            <div
-              style={{
-                borderRadius: 20,
-                padding: 20,
-                background: "linear-gradient(135deg, #4a0d1a 0%, #c62828 100%)",
-                color: "#fff",
-                marginBottom: 18,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.85 }}>
-                Çalışan Bilgisi
-              </div>
-              <h2 style={{ margin: "6px 0 0", fontSize: 26, fontWeight: 950 }}>
-                Düzenle
-              </h2>
-            </div>
+          {({ integration }) => {
+            const summary =
+              mapIntegrationToEmployeeSummary(
+                integration
+              );
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: 12,
-              }}
-            >
-              <FormInput label="Ad Soyad *" value={editForm.full_name} onChange={(v) => setEditForm({ ...editForm, full_name: v })} />
-              <FormInput label="Ünvan" value={editForm.job_title} onChange={(v) => setEditForm({ ...editForm, job_title: v })} />
-              <FormInput label="Telefon" value={editForm.phone} onChange={(v) => setEditForm({ ...editForm, phone: v })} />
-              <FormInput label="E-posta" value={editForm.email} onChange={(v) => setEditForm({ ...editForm, email: v })} />
-              <FormInput label="Sicil No" value={editForm.registry_no} onChange={(v) => setEditForm({ ...editForm, registry_no: v })} />
-              <FormInput label="TC No" value={editForm.tc_no} onChange={(v) => setEditForm({ ...editForm, tc_no: v })} />
-              <FormInput label="Cinsiyet" value={editForm.gender} onChange={(v) => setEditForm({ ...editForm, gender: v })} />
-              <FormInput label="Engellilik Durumu" value={editForm.disability_status} onChange={(v) => setEditForm({ ...editForm, disability_status: v })} />
-            </div>
+            const profileProps =
+              mapIntegrationToProfileProps(
+                integration
+              );
 
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 }}>
-              <button
-                onClick={() => {
-                  setEditModal(null);
-                  setEditForm(emptyForm);
-                }}
-                disabled={actionLoading}
-                style={darkBtn()}
-              >
-                İptal
-              </button>
-
-              <button onClick={saveEditEmployee} disabled={actionLoading} style={blueBtn(actionLoading)}>
-                {actionLoading ? "Kaydediliyor..." : "Kaydet"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-{previewOpen && (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.6)",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 9999,
-    }}
-  >
-    <div
-      style={{
-        width: "95%",
-        maxHeight: "90vh",
-        overflow: "auto",
-        background: "#fff",
-        borderRadius: 20,
-        padding: 20,
-      }}
-    >
-      <h2>Toplu Yükleme Önizleme</h2>
-
-      <div style={{ marginBottom: 12 }}>
-        Toplam: {previewSummary?.total} |
-        Hatalı: {previewSummary?.errorCount} |
-        Uyarı: {previewSummary?.warningCount} |
-        Hazır: {previewSummary?.readyCount}
-      </div>
-
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th>Ad Soyad</th>
-            <th>Email</th>
-            <th>Sicil</th>
-            <th>Durum</th>
-          </tr>
-        </thead>
-        <tbody>
-          {previewData.map((row, i) => {
-            let bg = "#ecfdf5";
-
-            if (row.errors.length > 0) bg = "#fee2e2";
-            else if (row.warnings.length > 0) bg = "#fef9c3";
+            const employee: EmployeeProfileEmployee = {
+              ...profileEmployee,
+              firm_name:
+                profileEmployee.firm_id
+                  ? companyMap.get(
+                      String(
+                        profileEmployee.firm_id
+                      )
+                    ) || null
+                  : null,
+              ...summary,
+            };
 
             return (
-              <tr key={i} style={{ background: bg }}>
-                <td>{row.full_name}</td>
-                <td>{row.email}</td>
-                <td>{row.registry_no}</td>
-                <td>
-                  {row.errors.join(", ") ||
-                    row.warnings.join(", ") ||
-                    "OK"}
-                </td>
-              </tr>
+              <div
+                onClick={() =>
+                  setProfileEmployee(null)
+                }
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 15000,
+                  overflowY: "auto",
+                  padding: 18,
+                  background:
+                    "rgba(15,23,42,.72)",
+                }}
+              >
+                <div
+                  onClick={(event) =>
+                    event.stopPropagation()
+                  }
+                  style={{
+                    width: "min(1500px,100%)",
+                    margin: "0 auto",
+                    display: "grid",
+                    gap: 18,
+                    padding: 20,
+                    borderRadius: 28,
+                    background: "#f8fafc",
+                    boxShadow:
+                      "0 34px 100px rgba(0,0,0,.30)",
+                  }}
+                >
+                  <EmployeeProfile
+                    employee={employee}
+                    onClose={() =>
+                      setProfileEmployee(null)
+                    }
+                    onEdit={() => {
+                      setProfileEmployee(null);
+                      openEditModal(
+                        profileEmployee
+                      );
+                    }}
+                    {...profileProps}
+                  />
+
+                  <DoraEmployeeProfileBridge
+                    employee={employee}
+                    integration={integration}
+                  />
+                </div>
+              </div>
             );
-          })}
-        </tbody>
-      </table>
-
-      <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-        <button onClick={() => setPreviewOpen(false)} style={darkBtn()}>
-          Kapat
-        </button>
-
-       <button onClick={uploadFromPreview} style={blueBtn(false)}>
-       Onayla ve Yükle
-     </button>
-      </div>
-    </div>
-  </div>
-)}
-
+          }}
+        </EmployeeIntegrationBridge>
+      ) : null}
     </main>
   );
 }
 
+function normalizeForm(form: EmployeeForm) {
+  return {
+    full_name: form.full_name.trim(),
+    department: form.department.trim(),
+    job_title: form.job_title.trim(),
+    phone: form.phone.trim(),
+    email: form.email.trim(),
+    registry_no: form.registry_no.trim(),
+    tc_no: form.tc_no.trim(),
+    start_date: form.start_date.trim(),
+    birth_date: form.birth_date.trim(),
+    gender: form.gender.trim(),
+    disability_status:
+      form.disability_status.trim(),
+    education_level:
+      form.education_level.trim(),
+    blood_type: form.blood_type.trim(),
+  };
+}
 
+function EmployeeFormModal({
+  eyebrow,
+  title,
+  form,
+  loading,
+  onChange,
+  onCancel,
+  onSave,
+}: {
+  eyebrow: string;
+  title: string;
+  form: EmployeeForm;
+  loading: boolean;
+  onChange(form: EmployeeForm): void;
+  onCancel(): void;
+  onSave(): void;
+}) {
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 16000,
+        display: "grid",
+        placeItems: "center",
+        padding: 20,
+        background:
+          "rgba(15,23,42,0.60)",
+      }}
+    >
+      <div
+        onClick={(event) =>
+          event.stopPropagation()
+        }
+        style={{
+          width: "min(880px,100%)",
+          maxHeight: "92vh",
+          overflowY: "auto",
+          padding: 24,
+          borderRadius: 25,
+          background: "#fff",
+          boxShadow:
+            "0 32px 90px rgba(0,0,0,.28)",
+        }}
+      >
+        <div
+          style={{
+            padding: 20,
+            marginBottom: 18,
+            borderRadius: 20,
+            color: "#fff",
+            background:
+              "linear-gradient(135deg,#111827 0%,#4a0d1a 50%,#c62828 100%)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 900,
+              opacity: 0.82,
+            }}
+          >
+            {eyebrow}
+          </div>
+
+          <h2
+            style={{
+              margin: "6px 0 0",
+              fontSize: 27,
+              fontWeight: 950,
+            }}
+          >
+            {title}
+          </h2>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit,minmax(220px,1fr))",
+            gap: 12,
+          }}
+        >
+          <FormInput
+            label="Ad Soyad *"
+            value={form.full_name}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                full_name: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="Departman"
+            value={form.department}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                department: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="Ünvan"
+            value={form.job_title}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                job_title: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="Telefon"
+            value={form.phone}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                phone: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="E-posta"
+            value={form.email}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                email: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="Sicil No"
+            value={form.registry_no}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                registry_no: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="T.C. No"
+            value={form.tc_no}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                tc_no: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="İşe Giriş Tarihi"
+            type="date"
+            value={form.start_date}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                start_date: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="Doğum Tarihi"
+            type="date"
+            value={form.birth_date}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                birth_date: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="Cinsiyet"
+            value={form.gender}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                gender: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="Engellilik Durumu"
+            value={form.disability_status}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                disability_status: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="Öğrenim Durumu"
+            value={form.education_level}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                education_level: value,
+              })
+            }
+          />
+
+          <FormInput
+            label="Kan Grubu"
+            value={form.blood_type}
+            onChange={(value) =>
+              onChange({
+                ...form,
+                blood_type: value,
+              })
+            }
+          />
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+            marginTop: 20,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            style={darkBtn()}
+          >
+            İptal
+          </button>
+
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={loading}
+            style={blueBtn(loading)}
+          >
+            {loading
+              ? "Kaydediliyor..."
+              : "Kaydet"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BulkPreviewModal({
+  rows,
+  summary,
+  loading,
+  onClose,
+  onUpload,
+}: {
+  rows: any[];
+  summary: any;
+  loading: boolean;
+  onClose(): void;
+  onUpload(): void;
+}) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 17000,
+        display: "grid",
+        placeItems: "center",
+        padding: 20,
+        background: "rgba(0,0,0,.66)",
+      }}
+    >
+      <div
+        onClick={(event) =>
+          event.stopPropagation()
+        }
+        style={{
+          width: "min(1200px,96%)",
+          maxHeight: "92vh",
+          overflow: "auto",
+          padding: 22,
+          borderRadius: 22,
+          background: "#fff",
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>
+          Toplu Yükleme Önizleme
+        </h2>
+
+        <div
+          style={{
+            marginBottom: 14,
+            color: "#475569",
+            fontWeight: 800,
+          }}
+        >
+          Toplam: {summary?.total || 0} ·
+          Hatalı: {summary?.errorCount || 0} ·
+          Uyarı: {summary?.warningCount || 0} ·
+          Hazır: {summary?.readyCount || 0}
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{
+              width: "100%",
+              minWidth: 760,
+              borderCollapse: "collapse",
+            }}
+          >
+            <thead>
+              <tr>
+                <Th>Ad Soyad</Th>
+                <Th>E-posta</Th>
+                <Th>Sicil</Th>
+                <Th>Durum</Th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {rows.map((row, index) => {
+                const errors = Array.isArray(
+                  row.errors
+                )
+                  ? row.errors
+                  : [];
+
+                const warnings = Array.isArray(
+                  row.warnings
+                )
+                  ? row.warnings
+                  : [];
+
+                const background =
+                  errors.length > 0
+                    ? "#fee2e2"
+                    : warnings.length > 0
+                    ? "#fef9c3"
+                    : "#ecfdf5";
+
+                return (
+                  <tr
+                    key={index}
+                    style={{ background }}
+                  >
+                    <Td>{row.full_name || "-"}</Td>
+                    <Td>{row.email || "-"}</Td>
+                    <Td>{row.registry_no || "-"}</Td>
+                    <Td>
+                      {errors.join(", ") ||
+                        warnings.join(", ") ||
+                        "Hazır"}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            justifyContent: "flex-end",
+            marginTop: 20,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={darkBtn()}
+          >
+            Kapat
+          </button>
+
+          <button
+            type="button"
+            onClick={onUpload}
+            disabled={loading}
+            style={blueBtn(loading)}
+          >
+            {loading
+              ? "Yükleniyor..."
+              : "Onayla ve Yükle"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function FormInput({
   label,
   value,
+  type = "text",
   onChange,
 }: {
   label: string;
   value: string;
-  onChange: (value: string) => void;
+  type?: string;
+  onChange(value: string): void;
 }) {
   return (
-    <label style={{ display: "grid", gap: 6 }}>
-      <span style={{ fontSize: 13, fontWeight: 800, color: "#374151" }}>
+    <label
+      style={{
+        display: "grid",
+        gap: 6,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 850,
+          color: "#374151",
+        }}
+      >
         {label}
       </span>
+
       <input
+        type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
         style={{
           width: "100%",
-          border: "1px solid #e5e7eb",
-          borderRadius: 14,
+          boxSizing: "border-box",
           padding: "12px 14px",
+          borderRadius: 14,
+          border: "1px solid #e5e7eb",
           fontSize: 14,
           color: "#111827",
-          boxSizing: "border-box",
         }}
       />
     </label>
   );
 }
 
+function CardText({
+  title,
+  text,
+}: {
+  title: string;
+  text: string;
+}) {
+  return (
+    <div
+      style={{
+        padding: 22,
+        borderRadius: 22,
+        background: "#fff",
+        border: "1px solid #e5e7eb",
+      }}
+    >
+      <h3
+        style={{
+          margin: 0,
+          color: "#111827",
+        }}
+      >
+        {title}
+      </h3>
+
+      <p
+        style={{
+          marginBottom: 0,
+          color: "#6b7280",
+        }}
+      >
+        {text}
+      </p>
+    </div>
+  );
+}
+
+function Th({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <th
+      style={{
+        padding: 12,
+        textAlign: "left",
+        borderBottom: "1px solid #e5e7eb",
+      }}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <td
+      style={{
+        padding: 12,
+        borderBottom: "1px solid #e5e7eb",
+      }}
+    >
+      {children}
+    </td>
+  );
+}
+
 const inputStyle: React.CSSProperties = {
-  minWidth: 240,
-  border: "1px solid #e5e7eb",
-  borderRadius: 14,
+  minWidth: 260,
   padding: "12px 14px",
-  fontSize: 14,
+  borderRadius: 14,
+  border: "1px solid #e5e7eb",
   background: "#fff",
-  fontWeight: 800,
   color: "#374151",
+  fontSize: 14,
+  fontWeight: 800,
 };
 
-function Kpi({ title, value }: { title: string; value: number }) {
-  return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid #e5e7eb",
-        borderRadius: 20,
-        padding: 18,
-      }}
-    >
-      <div style={{ color: "#6b7280", fontWeight: 800 }}>{title}</div>
-      <div style={{ marginTop: 8, fontSize: 30, fontWeight: 950, color: "#111827" }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function CardText({ title, text }: { title: string; text: string }) {
-  return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid #e5e7eb",
-        borderRadius: 22,
-        padding: 22,
-      }}
-    >
-      <h3 style={{ margin: 0, color: "#111827" }}>{title}</h3>
-      <p style={{ marginBottom: 0, color: "#6b7280" }}>{text}</p>
-    </div>
-  );
-}
-
-function btn(active: boolean): React.CSSProperties {
-  return {
-    border: "1px solid #e5e7eb",
-    borderRadius: 14,
-    padding: "12px 16px",
-    background: active ? "#c62828" : "#fff",
-    color: active ? "#fff" : "#374151",
-    fontWeight: 800,
-    cursor: "pointer",
-  };
-}
-
-function darkBtn(): React.CSSProperties {
+function darkBtn(
+  disabled = false
+): React.CSSProperties {
   return {
     border: 0,
     borderRadius: 14,
     padding: "12px 16px",
-    background: "#111827",
+    background: disabled
+      ? "#94a3b8"
+      : "#111827",
     color: "#fff",
-    fontWeight: 800,
-    cursor: "pointer",
+    fontWeight: 850,
+    cursor: disabled
+      ? "not-allowed"
+      : "pointer",
   };
 }
 
-function blueBtn(disabled: boolean): React.CSSProperties {
+function blueBtn(
+  disabled: boolean
+): React.CSSProperties {
   return {
     border: 0,
     borderRadius: 14,
     padding: "12px 16px",
-    background: disabled ? "#93c5fd" : "#2563eb",
+    background: disabled
+      ? "#93c5fd"
+      : "#2563eb",
     color: "#fff",
-    fontWeight: 800,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-}
-
-function smallBtn(bg: string): React.CSSProperties {
-  return {
-    border: 0,
-    borderRadius: 12,
-    padding: "8px 12px",
-    background: bg,
-    color: "#fff",
-    fontWeight: 800,
-    cursor: "pointer",
+    fontWeight: 850,
+    cursor: disabled
+      ? "not-allowed"
+      : "pointer",
   };
 }
