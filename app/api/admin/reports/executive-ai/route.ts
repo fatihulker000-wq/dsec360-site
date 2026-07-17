@@ -27,19 +27,16 @@ function normalizePriority(
   score: number
 ): ExecutivePriority {
 
-  if (score >= 90) {
-    return "LOW";
-  }
+    if(score>=90)
+        return "LOW";
 
-  if (score >= 75) {
-    return "MEDIUM";
-  }
+    if(score>=75)
+        return "MEDIUM";
 
-  if (score >= 60) {
-    return "HIGH";
-  }
+    if(score>=60)
+        return "HIGH";
 
-  return "CRITICAL";
+    return "CRITICAL";
 
 }
 
@@ -74,8 +71,9 @@ function percent(
 
 ){
 
-    if(total===0)
-        return 100;
+    if (total === 0) {
+        return 0;
+    }
 
     return Math.round(
 
@@ -300,7 +298,7 @@ try{
       employeeIds.length > 0
         ? supabase
             .from(
-              "employee_health_records"
+              "health_records"
             )
             .select(
               "employee_id,status"
@@ -342,7 +340,7 @@ try{
 
     const accidentPromise =
       supabase
-        .from("accidents")
+        .from("accident_records")
         .select(
           "firm_id,event_type"
         );
@@ -719,201 +717,309 @@ try{
       );
 
     //--------------------------------------------------
+    // Modül performans detayları
+    //--------------------------------------------------
+
+    const completedTrainingCount =
+      trainings.filter(
+        (row: any) =>
+          [
+            "COMPLETED",
+            "TAMAMLANDI",
+          ].includes(
+            String(row.status || "")
+              .trim()
+              .toUpperCase()
+          )
+      ).length;
+
+    const completedInspectionCount =
+      inspections.filter(
+        (row: any) =>
+          [
+            "COMPLETED",
+            "CLOSED",
+            "TAMAMLANDI",
+            "KAPANDI",
+          ].includes(
+            String(row.status || "")
+              .trim()
+              .toUpperCase()
+          )
+      ).length;
+
+    const validHealthCount =
+      healths.filter(
+        (row: any) =>
+          [
+            "COMPLETED",
+            "VALID",
+            "ACTIVE",
+            "TAMAMLANDI",
+            "GEÇERLİ",
+            "GECERLI",
+          ].includes(
+            String(row.status || "")
+              .trim()
+              .toUpperCase()
+          ) ||
+          Boolean(
+            row.exam_date_millis ||
+            row.exam_date
+          )
+      ).length;
+
+    const closedDofCount =
+      dofs.filter(
+        (row: any) =>
+          [
+            "CLOSED",
+            "COMPLETED",
+            "KAPANDI",
+            "TAMAMLANDI",
+          ].includes(
+            String(row.status || "")
+              .trim()
+              .toUpperCase()
+          )
+      ).length;
+
+    const openDofCount =
+      Math.max(
+        dofs.length -
+        closedDofCount,
+        0
+      );
+
+    //--------------------------------------------------
     // Executive Module List
     //--------------------------------------------------
 
     const modules: ExecutiveModuleScore[] = [
-
       {
-
         key: "training",
-
-        title: "Eğitim",
-
+        title: "Eğitim Performansı",
         score: trainingScore,
-
-        weight: 15,
-
+        weight: 25,
         priority:
           normalizePriority(
             trainingScore
           ),
-
-        trend: 2,
-
+        trend: 0,
+        total: trainings.length,
+        completed:
+          completedTrainingCount,
+        missing:
+          Math.max(
+            trainings.length -
+            completedTrainingCount,
+            0
+          ),
+        detail:
+          trainings.length === 0
+            ? `${employees?.length || 0} çalışan için eğitim ataması bulunmuyor.`
+            : `${completedTrainingCount}/${trainings.length} eğitim ataması tamamlandı.`,
       },
-
       {
-
         key: "audit",
-
-        title: "Denetim",
-
+        title: "Denetim Performansı",
         score: inspectionScore,
-
-        weight: 15,
-
+        weight: 20,
         priority:
           normalizePriority(
             inspectionScore
           ),
-
-        trend: 1,
-
-      },
-
-      {
-
-        key: "risk",
-
-        title: "Risk",
-
-        score: riskScore,
-
-        weight: 20,
-
-        priority:
-          normalizePriority(
-            riskScore
+        trend: 0,
+        total: inspections.length,
+        completed:
+          completedInspectionCount,
+        missing:
+          Math.max(
+            inspections.length -
+            completedInspectionCount,
+            0
           ),
-
-        trend: -1,
-
+        detail:
+          inspections.length === 0
+            ? "Tamamlanmış veya planlanmış denetim bulunmuyor."
+            : `${completedInspectionCount}/${inspections.length} denetim tamamlandı.`,
       },
-
       {
-
         key: "health",
-
-        title: "Sağlık",
-
+        title: "Sağlık Performansı",
         score: healthScore,
-
-        weight: 12,
-
+        weight: 15,
         priority:
           normalizePriority(
             healthScore
           ),
-
-        trend: 1,
-
-      },
-
-      {
-
-        key: "ppe",
-
-        title: "KKD",
-
-        score: ppeScore,
-
-        weight: 8,
-
-        priority:
-          normalizePriority(
-            ppeScore
+        trend: 0,
+        total: healths.length,
+        completed:
+          validHealthCount,
+        missing:
+          Math.max(
+            (employees?.length || 0) -
+            validHealthCount,
+            0
           ),
-
-        trend: 1,
-
+        detail:
+          healths.length === 0
+            ? `${employees?.length || 0} çalışan için sağlık kaydı bulunmuyor.`
+            : `${validHealthCount} geçerli sağlık kaydı bulunuyor.`,
       },
-
       {
-
         key: "accident",
-
-        title: "İş Kazaları",
-
-        score: accidentScore,
-
-        weight: 12,
-
+        title: "İş Kazası Performansı",
+        score:
+          accidents.length === 0
+            ? 100
+            : Math.max(
+                0,
+                100 -
+                accidents.length * 20
+              ),
+        weight: 15,
         priority:
           normalizePriority(
-            accidentScore
+            accidents.length === 0
+              ? 100
+              : Math.max(
+                  0,
+                  100 -
+                  accidents.length * 20
+                )
           ),
-
-        trend: -2,
-
+        trend: 0,
+        total: accidents.length,
+        completed:
+          accidents.length === 0
+            ? 1
+            : 0,
+        missing: accidents.length,
+        detail:
+          accidents.length === 0
+            ? "Kayıtlı iş kazası veya olay bulunmuyor."
+            : `${accidents.length} iş kazası/olay kaydı bulunuyor.`,
       },
-
       {
-
         key: "dof",
-
-        title: "DÖF",
-
+        title: "DÖF Performansı",
         score: dofScore,
-
-        weight: 8,
-
+        weight: 15,
         priority:
           normalizePriority(
             dofScore
           ),
-
-        trend: 1,
-
+        trend: 0,
+        total: dofs.length,
+        completed:
+          closedDofCount,
+        missing:
+          openDofCount,
+        detail:
+          dofs.length === 0
+            ? "DÖF kaydı bulunmuyor."
+            : `${closedDofCount} kapalı, ${openDofCount} açık DÖF bulunuyor.`,
       },
-
       {
-
-        key: "ibys",
-
-        title: "İBYS",
-
-        score: ibysScore,
-
-        weight: 5,
-
-        priority:
-          normalizePriority(
-            ibysScore
-          ),
-
-        trend: 2,
-
-      },
-
-      {
-
         key: "documentation",
-
-        title: "Dokümantasyon",
-
+        title: "Dokümantasyon Performansı",
         score: documentScore,
-
-        weight: 3,
-
+        weight: 5,
         priority:
           normalizePriority(
             documentScore
           ),
-
-        trend: 1,
-
+        trend: 0,
+        total: documents.length,
+        completed:
+          documents.filter(
+            (row: any) =>
+              [
+                "ACTIVE",
+                "VALID",
+                "AKTİF",
+                "GECERLI",
+                "GEÇERLİ",
+              ].includes(
+                String(row.status || "")
+                  .trim()
+                  .toUpperCase()
+              )
+          ).length,
+        missing: Math.max(
+          documents.length -
+          documents.filter(
+            (row: any) =>
+              [
+                "ACTIVE",
+                "VALID",
+                "AKTİF",
+                "GECERLI",
+                "GEÇERLİ",
+              ].includes(
+                String(row.status || "")
+                  .trim()
+                  .toUpperCase()
+              )
+          ).length,
+          0
+        ),
+        detail:
+          documents.length === 0
+            ? "Aktif doküman kaydı bulunmuyor."
+            : `${documents.length} doküman değerlendirildi.`,
       },
-
       {
-
         key: "emergency",
-
-        title: "Acil Durum",
-
+        title: "Acil Durum Performansı",
         score: emergencyScore,
-
-        weight: 2,
-
+        weight: 5,
         priority:
           normalizePriority(
             emergencyScore
           ),
-
-        trend: 1,
-
+        trend: 0,
+        total: emergencies.length,
+        completed:
+          emergencies.filter(
+            (row: any) =>
+              [
+                "ACTIVE",
+                "VALID",
+                "COMPLETED",
+                "AKTİF",
+                "TAMAMLANDI",
+              ].includes(
+                String(row.status || "")
+                  .trim()
+                  .toUpperCase()
+              )
+          ).length,
+        missing: Math.max(
+          emergencies.length -
+          emergencies.filter(
+            (row: any) =>
+              [
+                "ACTIVE",
+                "VALID",
+                "COMPLETED",
+                "AKTİF",
+                "TAMAMLANDI",
+              ].includes(
+                String(row.status || "")
+                  .trim()
+                  .toUpperCase()
+              )
+          ).length,
+          0
+        ),
+        detail:
+          emergencies.length === 0
+            ? "Acil durum planı veya kayıt bulunmuyor."
+            : `${emergencies.length} acil durum kaydı değerlendirildi.`,
       },
-
     ];
         //--------------------------------------------------
     // DORA AI

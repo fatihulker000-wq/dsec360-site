@@ -18,6 +18,11 @@ export interface ExecutiveModuleScore {
   weight: number;
   priority: ExecutivePriority;
   trend: number;
+
+  total?: number;
+  completed?: number;
+  missing?: number;
+  detail?: string;
 }
 
 export interface ExecutiveRecommendation {
@@ -41,27 +46,15 @@ export interface ExecutiveTimelineItem {
 }
 
 export interface ExecutiveSummary {
-
   overallScore: number;
-
   grade: ExecutiveGrade;
-
   maturity: number;
-
   legalCompliance: number;
-
   digitalization: number;
-
   operationalRisk: number;
-
   modules: ExecutiveModuleScore[];
-
   recommendations: ExecutiveRecommendation[];
-
   predictions: ExecutivePrediction[];
-
   timeline: ExecutiveTimelineItem[];
-
   executiveText: string;
-
 }
