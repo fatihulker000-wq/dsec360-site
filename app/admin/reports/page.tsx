@@ -32,6 +32,12 @@ import type {
   ExecutiveSummary,
 } from "@/components/reports-v2/dora-ai/types";
 
+import {
+  mapEnterpriseSummaryToDashboard,
+  ReportEnterpriseStatus,
+  useReportEnterpriseSummary,
+} from "@/components/reports-v2/data-integration";
+
 type CompanyRow = {
   id: string;
   name: string;
@@ -585,6 +591,14 @@ const [
   setExecutiveAiError,
 ] = useState("");
 
+const {
+  data: enterpriseSummary,
+  loading: loadingEnterpriseSummary,
+  error: enterpriseSummaryError,
+} = useReportEnterpriseSummary(
+  selectedCompanyId
+);
+
   const [scope, setScope] = useState<ScopeResponse | null>(null);
   const [loadingScope, setLoadingScope] = useState(true);
 
@@ -793,6 +807,75 @@ const res = await fetch(
   }
 };
 
+
+const loadExecutiveAi = async (
+  companyId: string
+) => {
+  if (!companyId) {
+    setExecutiveAiSummary(null);
+    setExecutiveAiError("");
+    return;
+  }
+
+  try {
+    setLoadingExecutiveAi(true);
+    setExecutiveAiError("");
+
+    const response = await fetch(
+      `/api/admin/reports/executive-ai?companyId=${encodeURIComponent(
+        companyId
+      )}`,
+      {
+        method: "GET",
+        cache: "no-store",
+        credentials: "include",
+      }
+    );
+
+    if (response.status === 401) {
+      window.location.href =
+        "/admin/login";
+      return;
+    }
+
+    const json: ExecutiveAiResponse =
+      await response
+        .json()
+        .catch(() => ({}));
+
+    if (
+      !response.ok ||
+      !json.success ||
+      !json.executiveSummary
+    ) {
+      setExecutiveAiSummary(null);
+      setExecutiveAiError(
+        json.error ||
+          "DORA yönetici analizi oluşturulamadı."
+      );
+      return;
+    }
+
+    setExecutiveAiSummary(
+      json.executiveSummary
+    );
+  } catch (errorValue: unknown) {
+    console.error(
+      "DORA executive AI load error:",
+      errorValue
+    );
+
+    setExecutiveAiSummary(null);
+    setExecutiveAiError(
+      errorValue instanceof Error
+        ? errorValue.message
+        : "DORA yönetici analizi alınamadı."
+    );
+  } finally {
+    setLoadingExecutiveAi(false);
+  }
+};
+
   useEffect(() => {
     void loadScope();
   }, []);
@@ -811,6 +894,10 @@ const res = await fetch(
   if (selectedCompanyId) {
     void loadReport(selectedCompanyId);
     void loadAuditReport(selectedCompanyId);
+    void loadExecutiveAi(selectedCompanyId);
+  } else {
+    setExecutiveAiSummary(null);
+    setExecutiveAiError("");
   }
 }, [selectedCompanyId, companies]); 
 
@@ -1066,6 +1153,15 @@ const res = await fetch(
   };
 }, [auditSummary]);
 
+const enterpriseDashboardPatch =
+  useMemo(
+    () =>
+      mapEnterpriseSummaryToDashboard(
+        enterpriseSummary
+      ),
+    [enterpriseSummary]
+  );
+
 const executiveDashboardInput = useMemo(() => {
   const activeEmployeeCount = matrix.filter(
     (employee) => employee.is_active
@@ -1141,31 +1237,14 @@ const executiveDashboardInput = useMemo(() => {
       auditSummary?.closed_dof_count ||
       0,
 
-    totalRisks: 0,
-    highRiskCount: 0,
-    mediumRiskCount: 0,
-    lowRiskCount: 0,
-
-    totalHealthRecords: 0,
-    expiringHealthCount: 0,
-    expiredHealthCount: 0,
-
-    totalPpeAssignments: 0,
-    pendingPpeCount: 0,
-
-    accidentCount: 0,
-    nearMissCount: 0,
-    occupationalDiseaseCount: 0,
-
-    ibysSuccessCount: 0,
-    ibysPendingCount: 0,
-    ibysErrorCount: 0,
+    ...enterpriseDashboardPatch,
   };
 }, [
   report,
   auditSummary,
   matrix,
   selectedCompanyId,
+  enterpriseDashboardPatch,
 ]);
 
 const analyticsInput = useMemo(() => {
@@ -1802,10 +1881,49 @@ const auditTotalDistribution =
                 marginBottom: 20,
               }}
             >
+              {loadingExecutiveAi ? (
+                <div
+                  style={{
+                    ...cardStyle(),
+                    color: BRAND.blue,
+                    fontWeight: 800,
+                  }}
+                >
+                  DORA yönetici analizi hazırlanıyor...
+                </div>
+              ) : null}
+
+              {!loadingExecutiveAi &&
+              executiveAiError ? (
+                <div
+                  style={{
+                    ...cardStyle(),
+                    color: BRAND.red,
+                    background: BRAND.redSoft,
+                    fontWeight: 800,
+                  }}
+                >
+                  {executiveAiError}
+                </div>
+              ) : null}
+
+              {!loadingExecutiveAi &&
+              executiveAiSummary ? (
+                <ExecutiveAiPanel
+                  summary={executiveAiSummary}
+                />
+              ) : null}
+
               <ExecutiveReportsDashboard
                 input={
                   executiveDashboardInput
                 }
+              />
+
+              <ReportEnterpriseStatus
+                data={enterpriseSummary}
+                loading={loadingEnterpriseSummary}
+                error={enterpriseSummaryError}
               />
 
               <ReportAnalyticsCenter
@@ -1813,7 +1931,7 @@ const auditTotalDistribution =
               />
 
 <ReportAdvancedAnalyticsCenter
-    input={analyticsInput}
+  input={analyticsInput}
 />
 
               <section
