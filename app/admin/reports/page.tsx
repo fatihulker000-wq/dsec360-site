@@ -1813,8 +1813,7 @@ const auditTotalDistribution =
               />
 
 <ReportAdvancedAnalyticsCenter
-  companyId={selectedCompanyId}
-  months={12}
+    input={analyticsInput}
 />
 
               <section

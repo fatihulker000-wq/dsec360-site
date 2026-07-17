@@ -24,19 +24,22 @@ function getSupabase() {
 }
 
 function normalizePriority(
-    score:number
-){
+  score: number
+): ExecutivePriority {
 
-    if(score>=90)
-        return "LOW";
+  if (score >= 90) {
+    return "LOW";
+  }
 
-    if(score>=75)
-        return "MEDIUM";
+  if (score >= 75) {
+    return "MEDIUM";
+  }
 
-    if(score>=60)
-        return "HIGH";
+  if (score >= 60) {
+    return "HIGH";
+  }
 
-    return "CRITICAL";
+  return "CRITICAL";
 
 }
 
