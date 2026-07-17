@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  ReportAdvancedAnalyticsCenter,
+} from "@/components/reports-v2/advanced-analytics";
 
 import {
   ExecutiveReportsDashboard,
@@ -22,6 +25,12 @@ import {
   ReportPdfExportButton,
   ReportVerificationCard,
 } from "@/components/reports-v2/pdf-engine";
+
+import ExecutiveAiPanel from "@/components/reports-v2/dora-ai/ExecutiveAiPanel";
+
+import type {
+  ExecutiveSummary,
+} from "@/components/reports-v2/dora-ai/types";
 
 type CompanyRow = {
   id: string;
@@ -145,6 +154,40 @@ type DetailModalState =
         status: string;
       }>;
     };
+
+type ExecutiveAiResponse = {
+  success?: boolean;
+
+  dashboard?: {
+    company?: string;
+    employeeCount?: number;
+    trainingCount?: number;
+    inspectionCount?: number;
+    riskCount?: number;
+    accidentCount?: number;
+    dofCount?: number;
+    ibysCount?: number;
+    documentCount?: number;
+    emergencyCount?: number;
+    generatedAt?: string;
+  } | null;
+
+  executiveSummary?: ExecutiveSummary | null;
+
+  pdfSummary?: {
+    title?: string;
+    company?: string;
+    overallScore?: number;
+    grade?: string;
+    maturity?: number;
+    legalCompliance?: number;
+    digitalization?: number;
+    operationalRisk?: number;
+    executiveText?: string;
+  } | null;
+
+  error?: string;
+};
 
 type ReportTab = "matrix" | "employee" | "training" | "audit";
 
@@ -525,6 +568,22 @@ export default function AdminReportsPage() {
   const [error, setError] = useState("");
   const [auditReport, setAuditReport] = useState<AuditAnalysisResponse | null>(null);
   const [loadingAuditReport, setLoadingAuditReport] = useState(false);
+  const [
+  executiveAiSummary,
+  setExecutiveAiSummary,
+] = useState<ExecutiveSummary | null>(
+  null
+);
+
+const [
+  loadingExecutiveAi,
+  setLoadingExecutiveAi,
+] = useState(false);
+
+const [
+  executiveAiError,
+  setExecutiveAiError,
+] = useState("");
 
   const [scope, setScope] = useState<ScopeResponse | null>(null);
   const [loadingScope, setLoadingScope] = useState(true);
@@ -1752,6 +1811,11 @@ const auditTotalDistribution =
               <ReportAnalyticsCenter
                 input={analyticsInput}
               />
+
+<ReportAdvancedAnalyticsCenter
+  companyId={selectedCompanyId}
+  months={12}
+/>
 
               <section
                 style={{
