@@ -313,12 +313,21 @@ export default function AdminAccidentsPage() {
   const passiveDelete = async (
     id: number
   ) => {
-    const confirmed =
+    const firstConfirm =
       window.confirm(
-        "Bu kayıt pasifleştirilecek. Devam edilsin mi?"
+        "Bu kaza/olay kaydı web listesinden kaldırılacak ve mobil uygulamaya silindi bilgisi gönderilecektir. Devam edilsin mi?"
       );
 
-    if (!confirmed) {
+    if (!firstConfirm) {
+      return;
+    }
+
+    const secondConfirm =
+      window.confirm(
+        "Bu işlem kaydı kalıcı olarak veritabanından silmez; senkronizasyon için silinmiş olarak işaretler. Kaydı silmek istediğinize emin misiniz?"
+      );
+
+    if (!secondConfirm) {
       return;
     }
 
@@ -349,7 +358,7 @@ export default function AdminAccidentsPage() {
       ) {
         throw new Error(
           json?.error ||
-            "Kayıt pasifleştirilemedi."
+            "Kayıt silinemedi."
         );
       }
 
@@ -360,7 +369,7 @@ export default function AdminAccidentsPage() {
       const message =
         errorValue instanceof Error
           ? errorValue.message
-          : "Pasifleştirme hatası.";
+          : "Silme işlemi sırasında hata oluştu.";
 
       window.alert(message);
     } finally {
@@ -1367,7 +1376,7 @@ const investigationIncidents =
                     <Th>Vardiya</Th>
                     <Th>Yaralanma</Th>
                     <Th>Kök Neden</Th>
-                    <Th>Detay</Th>
+                    <Th>İşlemler</Th>
                   </tr>
                 </thead>
 
@@ -1445,30 +1454,64 @@ const investigationIncidents =
                       </Td>
 
                       <Td>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedRow(
-                              row
-                            )
-                          }
+                        <div
                           style={{
-                            border: "none",
-                            borderRadius:
-                              999,
-                            padding:
-                              "8px 12px",
-                            background:
-                              BRAND.redBright,
-                            color: "#fff",
-                            fontWeight:
-                              800,
-                            cursor:
-                              "pointer",
+                            display: "flex",
+                            gap: 8,
+                            flexWrap: "wrap",
                           }}
                         >
-                          Aç
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedRow(
+                                row
+                              )
+                            }
+                            style={{
+                              border: "none",
+                              borderRadius: 999,
+                              padding: "8px 12px",
+                              background:
+                                BRAND.redBright,
+                              color: "#fff",
+                              fontWeight: 800,
+                              cursor: "pointer",
+                            }}
+                          >
+                            Aç
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              passiveDelete(
+                                row.id
+                              )
+                            }
+                            disabled={deleting}
+                            style={{
+                              border:
+                                "1px solid #fecaca",
+                              borderRadius: 999,
+                              padding: "8px 12px",
+                              background:
+                                "#fff1f2",
+                              color: "#b91c1c",
+                              fontWeight: 900,
+                              cursor: deleting
+                                ? "not-allowed"
+                                : "pointer",
+                              opacity: deleting
+                                ? 0.6
+                                : 1,
+                            }}
+                          >
+                            {deleting
+                              ? "Siliniyor..."
+                              : "Sil"}
+                          </button>
+                        </div>
                       </Td>
                     </tr>
                   ))}
@@ -1594,7 +1637,7 @@ const investigationIncidents =
                         padding:
                           "10px 14px",
                         background:
-                          "#111827",
+                          "#b91c1c",
                         color: "#fff",
                         fontWeight:
                           900,
@@ -1607,8 +1650,8 @@ const investigationIncidents =
                       }}
                     >
                       {deleting
-                        ? "İşleniyor..."
-                        : "Pasifleştir"}
+                        ? "Siliniyor..."
+                        : "Kaydı Sil"}
                     </button>
 
                     <button
