@@ -21,10 +21,31 @@ type CompanyRow = {
   isg_uzmani?: string | null;
   isyeri_hekimi?: string | null;
   dsp?: string | null;
+  is_demo?: boolean;
 };
 
 type CompanyResponse = {
   data?: CompanyRow[];
+  error?: string;
+};
+
+type ModulePerformanceItem = {
+  key: string;
+  title: string;
+  score: number;
+  status: "GOOD" | "DEVELOP" | "HIGH" | "CRITICAL";
+  total: number;
+  completed: number;
+  missing: number;
+  detail: string;
+};
+
+type CompanyPerformanceResponse = {
+  success?: boolean;
+  companyId?: string;
+  overallScore?: number;
+  modules?: ModulePerformanceItem[];
+  warnings?: string[];
   error?: string;
 };
 
@@ -77,6 +98,18 @@ export default function AdminCompaniesPage() {
   const [seedingDemo, setSeedingDemo] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<"ALL" | "ACTIVE" | "PASSIVE" | "DEMO">("ALL");
+  const [sortBy, setSortBy] =
+    useState<"NAME" | "EMPLOYEE" | "NEWEST">("NAME");
+  const [detailTab, setDetailTab] =
+    useState<"PROFILE" | "PERFORMANCE">("PROFILE");
+  const [companyPerformance, setCompanyPerformance] =
+    useState<CompanyPerformanceResponse | null>(null);
+  const [performanceLoading, setPerformanceLoading] =
+    useState(false);
+  const [performanceError, setPerformanceError] =
+    useState("");
 
  const [editingId, setEditingId] = useState<string | null>(null);
 const [editingName, setEditingName] = useState("");
@@ -167,23 +200,61 @@ useEffect(() => {
 }, []);
 
   const filteredCompanies = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return companies;
+    const q = search.trim().toLocaleLowerCase("tr-TR");
 
-    return companies.filter((c) => {
+    const filtered = companies.filter((company) => {
       const text = [
-        c.name,
-        c.yetkili || "",
-        c.phone || "",
-        c.email || "",
-        c.address || "",
+        company.name,
+        company.yetkili || "",
+        company.phone || "",
+        company.email || "",
+        company.address || "",
+        company.sektor || "",
+        company.nace_kodu || "",
       ]
         .join(" ")
-        .toLowerCase();
+        .toLocaleLowerCase("tr-TR");
 
-      return text.includes(q);
+      const matchesSearch = !q || text.includes(q);
+
+      const matchesStatus =
+        statusFilter === "ALL"
+          ? true
+          : statusFilter === "ACTIVE"
+          ? company.is_active !== false
+          : statusFilter === "PASSIVE"
+          ? company.is_active === false
+          : Boolean(
+              company.is_demo ||
+                company.name
+                  .toLocaleLowerCase("tr-TR")
+                  .includes("d-sec demo lojistik")
+            );
+
+      return matchesSearch && matchesStatus;
     });
-  }, [companies, search]);
+
+    return [...filtered].sort((first, second) => {
+      if (sortBy === "EMPLOYEE") {
+        return (
+          Number(second.user_count || 0) -
+          Number(first.user_count || 0)
+        );
+      }
+
+      if (sortBy === "NEWEST") {
+        return (
+          new Date(second.created_at || 0).getTime() -
+          new Date(first.created_at || 0).getTime()
+        );
+      }
+
+      return first.name.localeCompare(
+        second.name,
+        "tr-TR"
+      );
+    });
+  }, [companies, search, statusFilter, sortBy]);
 
   const addCompany = async () => {
     const name = newCompany.name.trim();
@@ -291,9 +362,55 @@ useEffect(() => {
   setEditingIsActive(true);
 };
 
+  const loadCompanyPerformance = async (
+    companyId: string
+  ) => {
+    try {
+      setPerformanceLoading(true);
+      setPerformanceError("");
+
+      const response = await fetch(
+        `/api/admin/companies/performance?companyId=${encodeURIComponent(
+          companyId
+        )}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        }
+      );
+
+      const json: CompanyPerformanceResponse =
+        await response.json().catch(() => ({}));
+
+      if (!response.ok || !json.success) {
+        setCompanyPerformance(null);
+        setPerformanceError(
+          json.error ||
+            "Firma performansı alınamadı."
+        );
+        return;
+      }
+
+      setCompanyPerformance(json);
+    } catch (errorValue) {
+      console.error(errorValue);
+      setCompanyPerformance(null);
+      setPerformanceError(
+        "Firma performansı alınamadı."
+      );
+    } finally {
+      setPerformanceLoading(false);
+    }
+  };
+
   const openDetail = (company: CompanyRow) => {
-  setDetailCompany(company);
-  setShowDetailModal(true);
+    setDetailCompany(company);
+    setDetailTab("PROFILE");
+    setCompanyPerformance(null);
+    setPerformanceError("");
+    setShowDetailModal(true);
+    void loadCompanyPerformance(company.id);
   };
 
  const saveEdit = async () => {
@@ -793,7 +910,7 @@ const seedDemoData = async () => {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Firma ara..."
+              placeholder="Firma, sektör, NACE veya yetkili ara..."
               style={{
                 width: "100%",
                 padding: "12px 14px",
@@ -803,6 +920,66 @@ const seedDemoData = async () => {
                 minWidth: 0,
               }}
             />
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit,minmax(150px,1fr))",
+                gap: 10,
+                marginTop: 10,
+              }}
+            >
+              <select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(
+                    event.target.value as
+                      | "ALL"
+                      | "ACTIVE"
+                      | "PASSIVE"
+                      | "DEMO"
+                  )
+                }
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  background: "#fff",
+                  fontWeight: 800,
+                }}
+              >
+                <option value="ALL">Tüm Firmalar</option>
+                <option value="ACTIVE">Aktif Firmalar</option>
+                <option value="PASSIVE">Pasif Firmalar</option>
+                <option value="DEMO">Demo Firma</option>
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={(event) =>
+                  setSortBy(
+                    event.target.value as
+                      | "NAME"
+                      | "EMPLOYEE"
+                      | "NEWEST"
+                  )
+                }
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: `1px solid ${BRAND.border}`,
+                  background: "#fff",
+                  fontWeight: 800,
+                }}
+              >
+                <option value="NAME">Ada Göre</option>
+                <option value="EMPLOYEE">Çalışan Sayısına Göre</option>
+                <option value="NEWEST">En Yeni Firma</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1125,6 +1302,28 @@ const seedDemoData = async () => {
 >
   {company.is_active ? "AKTİF" : "PASİF"}
 </div>
+
+{(company.is_demo ||
+  company.name
+    .toLocaleLowerCase("tr-TR")
+    .includes("d-sec demo lojistik")) && (
+  <div
+    style={{
+      marginTop: 6,
+      marginLeft: 8,
+      display: "inline-block",
+      padding: "4px 10px",
+      borderRadius: 999,
+      fontSize: 11,
+      fontWeight: 900,
+      background: "#dbeafe",
+      color: "#1d4ed8",
+      border: "1px solid #bfdbfe",
+    }}
+  >
+    DEMO FİRMA
+  </div>
+)}
 
                         {company.yetkili && (
                           <div
@@ -1451,6 +1650,64 @@ minWidth: isMobile ? "100%" : 96,
       <div style={{ padding: 24 }}>
         <div
           style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            marginBottom: 18,
+            padding: 6,
+            borderRadius: 14,
+            background: "#f3f4f6",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setDetailTab("PROFILE")}
+            style={{
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 14px",
+              fontWeight: 900,
+              cursor: "pointer",
+              background:
+                detailTab === "PROFILE"
+                  ? BRAND.red
+                  : "transparent",
+              color:
+                detailTab === "PROFILE"
+                  ? "#fff"
+                  : BRAND.text,
+            }}
+          >
+            Firma Profili
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDetailTab("PERFORMANCE")}
+            style={{
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 14px",
+              fontWeight: 900,
+              cursor: "pointer",
+              background:
+                detailTab === "PERFORMANCE"
+                  ? BRAND.red
+                  : "transparent",
+              color:
+                detailTab === "PERFORMANCE"
+                  ? "#fff"
+                  : BRAND.text,
+            }}
+          >
+            Modül Performansı
+          </button>
+        </div>
+
+        {detailTab === "PROFILE" ? (
+        <>
+        <div
+          style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 14,
@@ -1557,6 +1814,82 @@ minWidth: isMobile ? "100%" : 96,
           </div>
         </div>
 
+        </>
+        ) : (
+          <div style={{ display: "grid", gap: 14 }}>
+            {performanceLoading ? (
+              <div style={cardStyle()}>
+                Firma performansı hesaplanıyor...
+              </div>
+            ) : performanceError ? (
+              <div
+                style={{
+                  ...cardStyle(),
+                  color: "#991b1b",
+                  background: "#fff7f7",
+                  border: "1px solid #fecaca",
+                  fontWeight: 800,
+                }}
+              >
+                {performanceError}
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    ...cardStyle(),
+                    background:
+                      "linear-gradient(135deg,#111827,#5a0f1f,#c62828)",
+                    color: "#fff",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 900,
+                      opacity: 0.8,
+                    }}
+                  >
+                    GENEL MODÜL PERFORMANSI
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 48,
+                      fontWeight: 950,
+                    }}
+                  >
+                    %{companyPerformance?.overallScore ?? 0}
+                  </div>
+                </div>
+
+                {(companyPerformance?.modules || []).map(
+                  (module) => (
+                    <CompanyPerformanceRow
+                      key={module.key}
+                      module={module}
+                    />
+                  )
+                )}
+
+                {companyPerformance?.warnings?.length ? (
+                  <div
+                    style={{
+                      ...cardStyle(),
+                      color: "#92400e",
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                    }}
+                  >
+                    {companyPerformance.warnings.join(" • ")}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
+        )}
+
         <div
           style={{
             display: "flex",
@@ -1586,4 +1919,136 @@ minWidth: isMobile ? "100%" : 96,
 
 </main>
   );
+
+function CompanyPerformanceRow({
+  module,
+}: {
+  module: ModulePerformanceItem;
+}) {
+  const score = Math.max(
+    0,
+    Math.min(100, Math.round(module.score))
+  );
+
+  const visual =
+    module.status === "GOOD"
+      ? {
+          label: "İYİ",
+          color: "#166534",
+          soft: "#f0fdf4",
+          border: "#bbf7d0",
+        }
+      : module.status === "DEVELOP"
+      ? {
+          label: "GELİŞTİRİLMELİ",
+          color: "#92400e",
+          soft: "#fffbeb",
+          border: "#fde68a",
+        }
+      : module.status === "HIGH"
+      ? {
+          label: "YÜKSEK RİSK",
+          color: "#c2410c",
+          soft: "#fff7ed",
+          border: "#fed7aa",
+        }
+      : {
+          label: "KRİTİK",
+          color: "#b91c1c",
+          soft: "#fff7f7",
+          border: "#fecaca",
+        };
+
+  return (
+    <article
+      style={{
+        padding: 16,
+        borderRadius: 16,
+        background: visual.soft,
+        border: `1px solid ${visual.border}`,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontWeight: 950,
+              color: BRAND.text,
+            }}
+          >
+            {module.title}
+          </div>
+
+          <div
+            style={{
+              marginTop: 5,
+              color: BRAND.muted,
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}
+          >
+            {module.detail}
+          </div>
+        </div>
+
+        <div
+          style={{
+            fontSize: 24,
+            fontWeight: 950,
+            color: visual.color,
+          }}
+        >
+          %{score}
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: 12,
+          height: 10,
+          borderRadius: 999,
+          background: "#e5e7eb",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${score}%`,
+            height: "100%",
+            background: visual.color,
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          marginTop: 8,
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 8,
+          flexWrap: "wrap",
+          fontSize: 11,
+          color: BRAND.muted,
+          fontWeight: 800,
+        }}
+      >
+        <span>Toplam: {module.total}</span>
+        <span>Tamamlanan: {module.completed}</span>
+        <span>Eksik/Açık: {module.missing}</span>
+        <span style={{ color: visual.color }}>
+          {visual.label}
+        </span>
+      </div>
+    </article>
+  );
+}
+
 }
