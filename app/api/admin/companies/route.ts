@@ -247,31 +247,136 @@ export async function PUT(req: NextRequest) {
 }
 
 // ======================
-// DELETE
+// DELETE / PASİFE ALMA
 // ======================
 export async function DELETE(req: NextRequest) {
   try {
     const allowed = await checkAdmin();
+
     if (!allowed) {
-      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
+      return NextResponse.json(
+        {
+          error: "Yetkisiz erişim.",
+        },
+        {
+          status: 401,
+        }
+      );
     }
 
-    const id = req.nextUrl.searchParams.get("id");
+    const id =
+      req.nextUrl.searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          error: "Firma ID eksik.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
     const supabase = getSupabase();
 
-    const { error } = await supabase
+    // Önce firma kaydını bul.
+    const {
+      data: company,
+      error: companyError,
+    } = await supabase
       .from("companies")
-      .delete()
-      .eq("id", id);
+      .select("id, name, is_active")
+      .eq("id", id)
+      .maybeSingle();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (companyError) {
+      return NextResponse.json(
+        {
+          error: companyError.message,
+        },
+        {
+          status: 500,
+        }
+      );
     }
 
-    return NextResponse.json({ success: true });
+    if (!company) {
+      return NextResponse.json(
+        {
+          error: "Firma bulunamadı.",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
 
-  } catch {
-    return NextResponse.json({ error: "Sunucu hatası" }, { status: 500 });
+    const normalizedName =
+      String(company.name || "")
+        .trim()
+        .toLocaleLowerCase("tr-TR");
+
+    const isDemoCompany =
+      normalizedName.includes(
+        "d-sec demo lojistik"
+      );
+
+    // Demo firma silinemez veya pasife alınamaz.
+    if (isDemoCompany) {
+      return NextResponse.json(
+        {
+          error:
+            "D-SEC Demo Lojistik ve Depolama A.Ş. korumalı demo firmasıdır. Silinemez veya pasife alınamaz.",
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    // Fiziksel silme yapılmaz.
+    const {
+      error: updateError,
+    } = await supabase
+      .from("companies")
+      .update({
+        is_active: false,
+      })
+      .eq("id", id);
+
+    if (updateError) {
+      return NextResponse.json(
+        {
+          error: updateError.message,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message:
+        "Firma silinmedi; pasif duruma alındı.",
+    });
+  } catch (errorValue: unknown) {
+    console.error(
+      "companies DELETE error:",
+      errorValue
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          errorValue instanceof Error
+            ? errorValue.message
+            : "Sunucu hatası",
+      },
+      {
+        status: 500,
+      }
+    );
   }
 }
