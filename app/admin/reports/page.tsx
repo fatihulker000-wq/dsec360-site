@@ -1870,11 +1870,13 @@ const auditTotalDistribution =
                 />
               </section>
 
-              <ReportEnterpriseStatus
-                data={enterpriseSummary}
-                loading={loadingEnterpriseSummary}
-                error={enterpriseSummaryError}
-              />
+              <div data-pdf-exclude="true">
+                <ReportEnterpriseStatus
+                  data={enterpriseSummary}
+                  loading={loadingEnterpriseSummary}
+                  error={enterpriseSummaryError}
+                />
+              </div>
 
               <div data-pdf-exclude="true">
                 <ReportAnalyticsCenter
@@ -1890,11 +1892,13 @@ const auditTotalDistribution =
               <section
                 data-pdf-cover="true"
                 data-pdf-title="Kapak"
+                data-pdf-no-slice="true"
                 style={{
                   display: "grid",
                   gridTemplateColumns:
                     "minmax(0,1fr)",
                   gap: 18,
+                  width: "100%",
                 }}
               >
                 <ReportPdfCover

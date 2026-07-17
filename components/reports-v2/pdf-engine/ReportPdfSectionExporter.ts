@@ -11,155 +11,64 @@ export type ReportPdfSectionOptions = {
 type PdfSection = {
   element: HTMLElement;
   title?: string;
-  orientation: "portrait" | "landscape";
+  noSlice?: boolean;
 };
 
-function visibleChildren(
-  element: HTMLElement
-): HTMLElement[] {
-  return Array.from(element.children).filter(
-    (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
-      child.dataset.pdfExclude !== "true" &&
-      child.offsetWidth > 0 &&
-      child.offsetHeight > 0
-  );
-}
-
-function splitSmartSection(
-  element: HTMLElement,
-  inheritedTitle?: string
-): PdfSection[] {
-  const title =
-    element.dataset.pdfTitle ||
-    inheritedTitle;
-
-  const children =
-    visibleChildren(element);
-
-  const shouldSplit =
-    element.dataset.pdfSmartSplit ===
-      "true" &&
-    children.length > 0;
-
-  if (!shouldSplit) {
-    return [
-      {
-        element,
-        title,
-        orientation:
-          element.dataset.pdfWide ===
-          "true"
-            ? "landscape"
-            : detectOrientation(element),
-      },
-    ];
-  }
-
-  return children.flatMap((child) => {
-    const nestedChildren =
-      visibleChildren(child);
-
-    const childIsLarge =
-      child.scrollHeight >
-      child.scrollWidth * 1.15;
-
-    if (
-      nestedChildren.length > 1 &&
-      childIsLarge
-    ) {
-      return splitSmartSection(
-        child,
-        title
-      );
-    }
-
-    return [
-      {
-        element: child,
-        title,
-        orientation:
-          child.dataset.pdfWide ===
-          "true"
-            ? "landscape"
-            : detectOrientation(child),
-      },
-    ];
-  });
-}
-
-function detectOrientation(
-  element: HTMLElement
-): "portrait" | "landscape" {
-  const width =
-    Math.max(
-      element.scrollWidth,
-      element.offsetWidth
-    );
-
-  const height =
-    Math.max(
-      element.scrollHeight,
-      element.offsetHeight
-    );
-
-  return width / Math.max(height, 1) >
-    1.15
-    ? "landscape"
-    : "portrait";
-}
-
-function collectSections(
+function getVisibleTopLevelSections(
   rootElement: HTMLElement
 ): PdfSection[] {
-  const topLevel =
-    visibleChildren(rootElement);
-
-  const coverElements =
-    topLevel.filter(
-      (element) =>
-        element.dataset.pdfCover ===
-        "true"
+  const children =
+    Array.from(rootElement.children).filter(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement &&
+        child.dataset.pdfExclude !== "true" &&
+        child.offsetWidth > 0 &&
+        child.offsetHeight > 0
     );
 
-  const normalElements =
-    topLevel.filter(
+  const covers =
+    children.filter(
       (element) =>
-        element.dataset.pdfCover !==
-        "true"
+        element.dataset.pdfCover === "true"
     );
 
-  return [
-    ...coverElements,
-    ...normalElements,
-  ].flatMap((element) =>
-    splitSmartSection(element)
+  const normal =
+    children.filter(
+      (element) =>
+        element.dataset.pdfCover !== "true"
+    );
+
+  return [...covers, ...normal].map(
+    (element) => ({
+      element,
+      title:
+        element.dataset.pdfTitle,
+      noSlice:
+        element.dataset.pdfNoSlice === "true",
+    })
   );
 }
 
-function temporarilyHideInteractiveElements(
+function hidePdfExcludedAndInteractive(
   rootElement: HTMLElement
 ): () => void {
-  const selectors = [
-    "button",
-    "input",
-    "select",
-    "textarea",
-    '[data-pdf-exclude="true"]',
-  ];
-
   const elements =
     Array.from(
       rootElement.querySelectorAll<HTMLElement>(
-        selectors.join(",")
+        [
+          '[data-pdf-exclude="true"]',
+          "button",
+          "input",
+          "select",
+          "textarea",
+        ].join(",")
       )
     );
 
   const previous =
     elements.map((element) => ({
       element,
-      display:
-        element.style.display,
+      display: element.style.display,
     }));
 
   elements.forEach((element) => {
@@ -169,222 +78,375 @@ function temporarilyHideInteractiveElements(
   return () => {
     previous.forEach(
       ({ element, display }) => {
-        element.style.display =
-          display;
+        element.style.display = display;
       }
     );
   };
 }
 
-async function renderElement(
+async function renderSection(
   element: HTMLElement
-) {
-  const originalWidth =
-    element.style.width;
+): Promise<HTMLCanvasElement> {
+  const original = {
+    width: element.style.width,
+    maxWidth: element.style.maxWidth,
+    minWidth: element.style.minWidth,
+    transform: element.style.transform,
+    transformOrigin:
+      element.style.transformOrigin,
+    overflow: element.style.overflow,
+  };
 
-  const originalMaxWidth =
-    element.style.maxWidth;
-
-  const originalTransform =
-    element.style.transform;
-
-  const originalTransformOrigin =
-    element.style.transformOrigin;
+  const captureWidth = 1280;
 
   element.style.width =
-    `${Math.max(
-      element.scrollWidth,
-      element.offsetWidth
-    )}px`;
+    `${captureWidth}px`;
 
-  element.style.maxWidth = "none";
+  element.style.maxWidth =
+    `${captureWidth}px`;
+
+  element.style.minWidth =
+    `${captureWidth}px`;
+
   element.style.transform = "none";
   element.style.transformOrigin =
     "top left";
+
+  element.style.overflow = "visible";
 
   try {
     return await html2canvas(
       element,
       {
-        scale: 1.65,
-        backgroundColor:
-          "#ffffff",
+        scale: 1.35,
+        backgroundColor: "#ffffff",
         useCORS: true,
         allowTaint: false,
         logging: false,
         removeContainer: true,
-        windowWidth:
-          Math.max(
-            element.scrollWidth,
-            element.offsetWidth
-          ),
+        width: captureWidth,
+        windowWidth: captureWidth,
         windowHeight:
           Math.max(
             element.scrollHeight,
             element.offsetHeight
           ),
+        scrollX: 0,
+        scrollY: 0,
       }
     );
   } finally {
     element.style.width =
-      originalWidth;
+      original.width;
 
     element.style.maxWidth =
-      originalMaxWidth;
+      original.maxWidth;
+
+    element.style.minWidth =
+      original.minWidth;
 
     element.style.transform =
-      originalTransform;
+      original.transform;
 
     element.style.transformOrigin =
-      originalTransformOrigin;
+      original.transformOrigin;
+
+    element.style.overflow =
+      original.overflow;
   }
+}
+
+function createCanvasSlice(
+  source: HTMLCanvasElement,
+  sourceY: number,
+  sliceHeight: number
+): HTMLCanvasElement {
+  const canvas =
+    document.createElement("canvas");
+
+  canvas.width = source.width;
+  canvas.height = sliceHeight;
+
+  const context =
+    canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error(
+      "PDF görüntü alanı oluşturulamadı."
+    );
+  }
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  context.drawImage(
+    source,
+    0,
+    sourceY,
+    source.width,
+    sliceHeight,
+    0,
+    0,
+    source.width,
+    sliceHeight
+  );
+
+  return canvas;
+}
+
+function addHeaderAndFooter(
+  pdf: jsPDF,
+  pageNumber: number,
+  totalPages: number,
+  options: ReportPdfSectionOptions,
+  sectionTitle?: string
+) {
+  const pageWidth =
+    pdf.internal.pageSize.getWidth();
+
+  const pageHeight =
+    pdf.internal.pageSize.getHeight();
+
+  pdf.setFontSize(8);
+  pdf.setTextColor(75, 85, 99);
+
+  pdf.text(
+    sectionTitle ||
+      options.reportTitle ||
+      "D-SEC Kurumsal ISG Yönetim Raporu",
+    12,
+    8
+  );
+
+  const footer = [
+    options.reportNo
+      ? `Rapor No: ${options.reportNo}`
+      : "",
+    options.verificationCode
+      ? `Dogrulama: ${options.verificationCode}`
+      : "",
+    `Sayfa ${pageNumber}/${totalPages}`,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  pdf.text(
+    footer,
+    pageWidth - 12,
+    pageHeight - 5,
+    {
+      align: "right",
+    }
+  );
 }
 
 export async function exportReportSectionsToPdf(
   rootElement: HTMLElement,
   options: ReportPdfSectionOptions
 ) {
-  const restoreInteractive =
-    temporarilyHideInteractiveElements(
+  const restore =
+    hidePdfExcludedAndInteractive(
       rootElement
     );
 
   try {
     const sections =
-      collectSections(rootElement);
+      getVisibleTopLevelSections(
+        rootElement
+      );
 
     if (!sections.length) {
       throw new Error(
-        "PDF için rapor bölümü bulunamadı."
+        "PDF rapor bölümü bulunamadı."
       );
     }
 
-    let pdf: jsPDF | null = null;
+    const rendered: Array<{
+      canvas: HTMLCanvasElement;
+      title?: string;
+      noSlice?: boolean;
+    }> = [];
 
-    for (
-      let index = 0;
-      index < sections.length;
-      index++
-    ) {
-      const section =
-        sections[index];
+    for (const section of sections) {
+      rendered.push({
+        canvas:
+          await renderSection(
+            section.element
+          ),
+        title: section.title,
+        noSlice: section.noSlice,
+      });
+    }
 
-      const canvas =
-        await renderElement(
-          section.element
+    const pdf = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4",
+      compress: true,
+    });
+
+    const pageWidth =
+      pdf.internal.pageSize.getWidth();
+
+    const pageHeight =
+      pdf.internal.pageSize.getHeight();
+
+    const marginLeft = 12;
+    const marginRight = 12;
+    const marginTop = 14;
+    const marginBottom = 13;
+
+    const printableWidth =
+      pageWidth -
+      marginLeft -
+      marginRight;
+
+    const printableHeight =
+      pageHeight -
+      marginTop -
+      marginBottom;
+
+    let pageCreated = false;
+    const pageTitles: Array<
+      string | undefined
+    > = [];
+
+    for (const item of rendered) {
+      const {
+        canvas,
+        title,
+        noSlice,
+      } = item;
+
+      const sourcePixelsPerMm =
+        canvas.width /
+        printableWidth;
+
+      const pageSliceHeightPx =
+        Math.max(
+          1,
+          Math.floor(
+            printableHeight *
+            sourcePixelsPerMm
+          )
         );
 
-      const orientation =
-        section.orientation;
+      if (noSlice) {
+        if (pageCreated) {
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+        }
 
-      if (!pdf) {
-        pdf = new jsPDF({
-          orientation,
-          unit: "mm",
-          format: "a4",
-          compress: true,
-        });
-      } else {
-        pdf.addPage(
-          "a4",
-          orientation
+        pageCreated = true;
+
+        const scale =
+          Math.min(
+            printableWidth /
+              canvas.width,
+            printableHeight /
+              canvas.height
+          );
+
+        const drawWidth =
+          canvas.width * scale;
+
+        const drawHeight =
+          canvas.height * scale;
+
+        const x =
+          marginLeft +
+          (
+            printableWidth -
+            drawWidth
+          ) /
+          2;
+
+        const y =
+          marginTop +
+          (
+            printableHeight -
+            drawHeight
+          ) /
+          2;
+
+        pdf.addImage(
+          canvas.toDataURL(
+            "image/jpeg",
+            0.94
+          ),
+          "JPEG",
+          x,
+          y,
+          drawWidth,
+          drawHeight,
+          undefined,
+          "FAST"
         );
+
+        pageTitles.push(title);
+        continue;
       }
 
-      const pageWidth =
-        pdf.internal.pageSize.getWidth();
+      let sourceY = 0;
 
-      const pageHeight =
-        pdf.internal.pageSize.getHeight();
+      while (
+        sourceY <
+        canvas.height
+      ) {
+        const remaining =
+          canvas.height -
+          sourceY;
 
-      const marginLeft = 12;
-      const marginRight = 12;
-      const marginTop = 18;
-      const marginBottom = 14;
+        const sliceHeight =
+          Math.min(
+            pageSliceHeightPx,
+            remaining
+          );
 
-      const printableWidth =
-        pageWidth -
-        marginLeft -
-        marginRight;
+        const slice =
+          createCanvasSlice(
+            canvas,
+            sourceY,
+            sliceHeight
+          );
 
-      const printableHeight =
-        pageHeight -
-        marginTop -
-        marginBottom;
+        if (pageCreated) {
+          pdf.addPage(
+            "a4",
+            "landscape"
+          );
+        }
 
-      const widthRatio =
-        printableWidth /
-        canvas.width;
+        pageCreated = true;
 
-      const heightRatio =
-        printableHeight /
-        canvas.height;
+        const drawHeight =
+          slice.height /
+          sourcePixelsPerMm;
 
-      const scale =
-        Math.min(
-          widthRatio,
-          heightRatio
-        );
-
-      const drawWidth =
-        canvas.width * scale;
-
-      const drawHeight =
-        canvas.height * scale;
-
-      const x =
-        marginLeft +
-        (
-          printableWidth -
-          drawWidth
-        ) /
-        2;
-
-      const y =
-        marginTop +
-        (
-          printableHeight -
-          drawHeight
-        ) /
-        2;
-
-      const imageData =
-        canvas.toDataURL(
-          "image/jpeg",
-          0.93
-        );
-
-      pdf.addImage(
-        imageData,
-        "JPEG",
-        x,
-        y,
-        drawWidth,
-        drawHeight,
-        undefined,
-        "FAST"
-      );
-
-      if (section.title) {
-        pdf.setFontSize(8);
-        pdf.setTextColor(
-          90,
-          98,
-          110
-        );
-
-        pdf.text(
-          section.title,
+        pdf.addImage(
+          slice.toDataURL(
+            "image/jpeg",
+            0.94
+          ),
+          "JPEG",
           marginLeft,
-          11
+          marginTop,
+          printableWidth,
+          drawHeight,
+          undefined,
+          "FAST"
         );
-      }
-    }
 
-    if (!pdf) {
-      throw new Error(
-        "PDF oluşturulamadı."
-      );
+        pageTitles.push(title);
+        sourceY += sliceHeight;
+      }
     }
 
     const totalPages =
@@ -397,43 +459,14 @@ export async function exportReportSectionsToPdf(
     ) {
       pdf.setPage(pageNumber);
 
-      const pageWidth =
-        pdf.internal.pageSize.getWidth();
-
-      const pageHeight =
-        pdf.internal.pageSize.getHeight();
-
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(
-        80,
-        88,
-        100
-      );
-
-      pdf.text(
-        options.reportTitle ||
-          "D-SEC Kurumsal ISG Yönetim Raporu",
-        12,
-        8
-      );
-
-      const footerParts = [
-        options.reportNo
-          ? `Rapor No: ${options.reportNo}`
-          : "",
-        options.verificationCode
-          ? `Dogrulama: ${options.verificationCode}`
-          : "",
-        `Sayfa ${pageNumber}/${totalPages}`,
-      ].filter(Boolean);
-
-      pdf.text(
-        footerParts.join(" | "),
-        pageWidth - 12,
-        pageHeight - 5,
-        {
-          align: "right",
-        }
+      addHeaderAndFooter(
+        pdf,
+        pageNumber,
+        totalPages,
+        options,
+        pageTitles[
+          pageNumber - 1
+        ]
       );
     }
 
@@ -466,6 +499,6 @@ export async function exportReportSectionsToPdf(
         : `${safeFilename}.pdf`
     );
   } finally {
-    restoreInteractive();
+    restore();
   }
 }
