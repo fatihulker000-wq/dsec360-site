@@ -1849,16 +1849,26 @@ const auditTotalDistribution =
 
               {!loadingExecutiveAi &&
               executiveAiSummary ? (
-                <ExecutiveAiPanel
-                  summary={executiveAiSummary}
-                />
+                <section
+                  data-pdf-smart-split="true"
+                  data-pdf-title="DORA AI Yönetici Analizi"
+                >
+                  <ExecutiveAiPanel
+                    summary={executiveAiSummary}
+                  />
+                </section>
               ) : null}
 
-              <ExecutiveReportsDashboard
-                input={
-                  executiveDashboardInput
-                }
-              />
+              <section
+                data-pdf-smart-split="true"
+                data-pdf-title="Yönetici Dashboard"
+              >
+                <ExecutiveReportsDashboard
+                  input={
+                    executiveDashboardInput
+                  }
+                />
+              </section>
 
               <ReportEnterpriseStatus
                 data={enterpriseSummary}
@@ -1866,9 +1876,11 @@ const auditTotalDistribution =
                 error={enterpriseSummaryError}
               />
 
-              <ReportAnalyticsCenter
-                input={analyticsInput}
-              />
+              <div data-pdf-exclude="true">
+                <ReportAnalyticsCenter
+                  input={analyticsInput}
+                />
+              </div>
 
 <ReportAdvancedAnalyticsCenter
                 companyId={selectedCompanyId}
@@ -1876,33 +1888,39 @@ const auditTotalDistribution =
               />
 
               <section
+                data-pdf-cover="true"
+                data-pdf-title="Kapak"
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    "repeat(auto-fit,minmax(340px,1fr))",
+                    "minmax(0,1fr)",
                   gap: 18,
                 }}
               >
                 <ReportPdfCover
                   cover={pdfCover}
                 />
+              </section>
 
+              <div data-pdf-exclude="true">
                 <ReportPdfPreview
                   document={
                     pdfPreviewDocument
                   }
                 />
-              </section>
+              </div>
 
-              <ReportVerificationCard
-                verification={{
-                  reportNo,
-                  revisionNo: "00",
-                  verificationCode,
-                  verificationUrl:
-                    "https://dsec360.com/report-verify",
-                }}
-              />
+              <div data-pdf-exclude="true">
+                <ReportVerificationCard
+                  verification={{
+                    reportNo,
+                    revisionNo: "00",
+                    verificationCode,
+                    verificationUrl:
+                      "https://dsec360.com/report-verify",
+                  }}
+                />
+              </div>
             </div>
            <div
   style={{
@@ -2229,7 +2247,13 @@ const auditTotalDistribution =
               </div>
             </div>
 
-            <div style={{ ...cardStyle(), marginBottom: 20 }}>
+            <div
+              data-pdf-exclude="true"
+              style={{
+                ...cardStyle(),
+                marginBottom: 20,
+              }}
+            >
              <div
   style={{
     display: "grid",
@@ -2407,7 +2431,12 @@ const auditTotalDistribution =
             </div>
 
             {activeTab === "matrix" ? (
-              <div style={cardStyle()}>
+              <div
+                data-pdf-smart-split="true"
+                data-pdf-wide="true"
+                data-pdf-title="Eğitim Durum Matrisi"
+                style={cardStyle()}
+              >
                 <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
                   Eğitim Durum Matrisi
                 </h2>
@@ -2538,7 +2567,12 @@ const auditTotalDistribution =
             ) : null}
 
             {activeTab === "employee" ? (
-              <div style={cardStyle()}>
+              <div
+                data-pdf-smart-split="true"
+                data-pdf-wide="true"
+                data-pdf-title="Çalışan Bazlı Rapor"
+                style={cardStyle()}
+              >
                 <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
                   Çalışan Bazlı Rapor
                 </h2>
@@ -2658,7 +2692,12 @@ const auditTotalDistribution =
             ) : null}
 
             {activeTab === "training" ? (
-              <div style={cardStyle()}>
+              <div
+                data-pdf-smart-split="true"
+                data-pdf-wide="true"
+                data-pdf-title="Eğitim Bazlı Rapor"
+                style={cardStyle()}
+              >
                 <h2 style={{ marginTop: 0, marginBottom: 16, fontSize: 24, fontWeight: 900 }}>
                   Eğitim Bazlı Rapor
                 </h2>
