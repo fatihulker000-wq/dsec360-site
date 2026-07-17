@@ -2452,26 +2452,44 @@ const auditTotalDistribution =
                     <tbody>
                       {employeeBasedRows.map((row) => (
                         <tr key={row.user_id}>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
-                            <div style={{ fontWeight: 800 }}>{row.full_name}</div>
-                          </td>
-
- <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
-                          {row.appRecord}
-                        </td>
-
                           <td
-                            style={{
-                              padding: 12,
-                              borderBottom: `1px solid ${BRAND.border}`,
-                              color: BRAND.muted,
-                            }}
-                          >
-                            {row.email || "-"}
-                          </td>
-                          <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
-                            {row.completed}
-                          </td>
+  style={{
+    padding: 12,
+    borderBottom: `1px solid ${BRAND.border}`,
+  }}
+>
+  <div style={{ fontWeight: 800 }}>
+    {row.full_name}
+  </div>
+</td>
+
+<td
+  style={{
+    padding: 12,
+    borderBottom: `1px solid ${BRAND.border}`,
+    color: BRAND.muted,
+  }}
+>
+  {row.email || "-"}
+</td>
+
+<td
+  style={{
+    padding: 12,
+    borderBottom: `1px solid ${BRAND.border}`,
+  }}
+>
+  {row.completed}
+</td>
+
+<td
+  style={{
+    padding: 12,
+    borderBottom: `1px solid ${BRAND.border}`,
+  }}
+>
+  {row.appRecord}
+</td>
                           <td style={{ padding: 12, borderBottom: `1px solid ${BRAND.border}` }}>
                             {row.inProgress}
                           </td>
