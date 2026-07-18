@@ -1,595 +1,386 @@
 "use client";
 
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import type {
   Company,
 } from "../types";
 
 import {
-  BRAND,
-} from "../constants";
+  getDemoCompanyData,
+  type DemoActivity,
+  type DemoMetrics,
+} from "../services/demoCompanyService";
 
 interface Props {
   companies: Company[];
-  onOpenCompany: (
-    company: Company
-  ) => void;
 }
-
-type CompanyInsight = {
-  company: Company;
-  employeeCount: number;
-  profileScore: number;
-  missingFields: number;
-};
-
-const PROFILE_FIELDS: Array<
-  keyof Company
-> = [
-  "yetkili",
-  "phone",
-  "email",
-  "address",
-  "nace_kodu",
-  "tehlike_sinifi",
-  "sgk_sicil_no",
-  "sektor",
-  "isg_uzmani",
-  "isyeri_hekimi",
-  "dsp",
-];
 
 export default function CompanyPortfolioInsights({
   companies,
-  onOpenCompany,
 }: Props) {
-  const insights:
-    CompanyInsight[] =
-    companies.map((company) => {
-      const completedFields =
-        PROFILE_FIELDS.filter(
-          (field) =>
-            String(
-              company[field] ?? ""
-            ).trim().length > 0
-        ).length;
+  const demo =
+    useMemo(
+      () =>
+        companies.find(
+          (company) =>
+            company.name
+              .toLocaleLowerCase(
+                "tr-TR"
+              )
+              .includes(
+                "d-sec demo lojistik"
+              )
+        ) || null,
+      [companies]
+    );
 
-      const profileScore =
-        Math.round(
+  const [
+    metrics,
+    setMetrics,
+  ] =
+    useState<DemoMetrics | null>(
+      null
+    );
+
+  const [
+    activities,
+    setActivities,
+  ] =
+    useState<DemoActivity[]>([]);
+
+  useEffect(() => {
+    if (!demo?.id) {
+      setMetrics(null);
+      setActivities([]);
+      return;
+    }
+
+    let active = true;
+
+    void getDemoCompanyData(
+      demo.id
+    )
+      .then((result) => {
+        if (!active) {
+          return;
+        }
+
+        setMetrics(
+          result.metrics ||
+            null
+        );
+
+        setActivities(
+          Array.isArray(
+            result.activities
+          )
+            ? result.activities
+            : []
+        );
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setMetrics(null);
+        setActivities([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [demo?.id]);
+
+  if (!metrics) {
+    return null;
+  }
+
+  const trainingRate =
+    metrics.training_total > 0
+      ? Math.round(
           (
-            completedFields /
-            PROFILE_FIELDS.length
+            metrics.training_completed /
+            metrics.training_total
           ) * 100
-        );
+        )
+      : 0;
 
-      return {
-        company,
-        employeeCount:
-          Number(
-            company.user_count ??
-              company.calisan_sayisi ??
-              0
-          ),
-        profileScore,
-        missingFields:
-          PROFILE_FIELDS.length -
-          completedFields,
-      };
-    });
+  const inspectionRate =
+    metrics.inspection_total > 0
+      ? Math.round(
+          (
+            metrics.inspection_completed /
+            metrics.inspection_total
+          ) * 100
+        )
+      : 0;
 
-  const activeCount =
-    companies.filter(
-      (company) =>
-        company.is_active !== false
-    ).length;
-
-  const passiveCount =
-    companies.length -
-    activeCount;
-
-  const totalEmployees =
-    insights.reduce(
-      (total, item) =>
-        total +
-        item.employeeCount,
-      0
-    );
-
-  const averageProfileScore =
-    insights.length === 0
-      ? 0
-      : Math.round(
-          insights.reduce(
-            (total, item) =>
-              total +
-              item.profileScore,
-            0
-          ) /
-            insights.length
-        );
-
-  const incompleteCompanies =
-    insights.filter(
-      (item) =>
-        item.profileScore < 75
-    );
-
-  const sortedCompanies =
-    [...insights]
-      .sort(
-        (first, second) =>
-          second.employeeCount -
-          first.employeeCount
-      )
-      .slice(0, 6);
-
-  const largestEmployeeCount =
-    Math.max(
-      ...sortedCompanies.map(
-        (item) =>
-          item.employeeCount
-      ),
-      1
-    );
+  const healthRate =
+    metrics.health_total > 0
+      ? Math.round(
+          (
+            metrics.health_current /
+            metrics.health_total
+          ) * 100
+        )
+      : 0;
 
   return (
     <section
       style={{
         display: "grid",
-        gap: 18,
-        marginBottom: 20,
+        gridTemplateColumns:
+          "minmax(0,1.3fr) minmax(300px,0.7fr)",
+        gap: 16,
+        marginBottom: 18,
       }}
     >
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit,minmax(210px,1fr))",
-          gap: 14,
+          padding: 20,
+          borderRadius: 18,
+          border:
+            "1px solid #e5e7eb",
+          background: "#fff",
         }}
       >
-        <InsightCard
-          eyebrow="PORTFÖY"
-          title="Toplam Çalışan"
-          value={totalEmployees}
-          description={`${companies.length} firma genelinde aktif çalışan`}
-          accent="#1d4ed8"
-        />
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            gap: 16,
+            alignItems:
+              "flex-start",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                color:
+                  "#6b7280",
+                fontSize: 12,
+                fontWeight: 900,
+              }}
+            >
+              DEMO FİRMA KARNESİ
+            </div>
 
-        <InsightCard
-          eyebrow="FİRMA DURUMU"
-          title="Aktif / Pasif"
-          value={`${activeCount} / ${passiveCount}`}
-          description="Aktif ve pasif firma dağılımı"
-          accent="#166534"
-        />
+            <h3
+              style={{
+                margin:
+                  "5px 0 0",
+                fontSize: 22,
+              }}
+            >
+              Operasyonel Görünüm
+            </h3>
+          </div>
 
-        <InsightCard
-          eyebrow="DORA ÖN SKOR"
-          title="Profil Hazırlığı"
-          value={`%${averageProfileScore}`}
-          description="Firma ana bilgilerinin tamamlanma oranı"
-          accent="#7c3aed"
-        />
+          <div
+            style={{
+              minWidth: 82,
+              textAlign: "center",
+              padding:
+                "10px 12px",
+              borderRadius: 16,
+              background:
+                metrics.overall_score >=
+                80
+                  ? "#ecfdf5"
+                  : "#fff7ed",
+              color:
+                metrics.overall_score >=
+                80
+                  ? "#047857"
+                  : "#c2410c",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 28,
+                fontWeight: 950,
+              }}
+            >
+              {metrics.overall_score}
+            </div>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 900,
+              }}
+            >
+              GENEL SKOR
+            </div>
+          </div>
+        </div>
 
-        <InsightCard
-          eyebrow="DİKKAT"
-          title="Eksik Profilli Firma"
-          value={incompleteCompanies.length}
-          description="Profil hazırlığı %75 altında olan firmalar"
-          accent={
-            incompleteCompanies.length > 0
-              ? "#c62828"
-              : "#166534"
-          }
-        />
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit,minmax(150px,1fr))",
+            gap: 12,
+            marginTop: 18,
+          }}
+        >
+          <Metric
+            label="Eğitim"
+            value={`${trainingRate}%`}
+            tone="#2563eb"
+          />
+          <Metric
+            label="Denetim"
+            value={`${inspectionRate}%`}
+            tone="#7c3aed"
+          />
+          <Metric
+            label="Sağlık"
+            value={`${healthRate}%`}
+            tone="#059669"
+          />
+          <Metric
+            label="Açık DÖF"
+            value={String(
+              metrics.open_dof
+            )}
+            tone="#dc2626"
+          />
+          <Metric
+            label="Risk Skoru"
+            value={String(
+              metrics.risk_score
+            )}
+            tone="#ea580c"
+          />
+          <Metric
+            label="Kaza / Ramak Kala"
+            value={String(
+              metrics.accident_count +
+                metrics.near_miss_count
+            )}
+            tone="#be123c"
+          />
+        </div>
       </div>
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns:
-            "minmax(0,1.35fr) minmax(300px,0.65fr)",
-          gap: 18,
+          padding: 20,
+          borderRadius: 18,
+          color: "#fff",
+          background:
+            "linear-gradient(145deg,#172554,#1e3a8a)",
         }}
       >
-        <div style={panelStyle}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent:
-                "space-between",
-              alignItems:
-                "flex-start",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <div style={eyebrowStyle}>
-                FİRMA PORTFÖYÜ
-              </div>
-
-              <h3 style={headingStyle}>
-                Çalışan Dağılımı
-              </h3>
-
-              <p style={descriptionStyle}>
-                En yüksek çalışan
-                sayısına sahip firmaların
-                karşılaştırmalı görünümü.
-              </p>
-            </div>
-
-            <span
-              style={{
-                padding: "6px 10px",
-                borderRadius: 999,
-                background:
-                  "#eff6ff",
-                color: "#1d4ed8",
-                fontSize: 11,
-                fontWeight: 900,
-              }}
-            >
-              İlk 6 Firma
-            </span>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gap: 14,
-              marginTop: 22,
-            }}
-          >
-            {sortedCompanies.length ===
-            0 ? (
-              <div
-                style={{
-                  padding: 20,
-                  borderRadius: 14,
-                  background:
-                    "#f8fafc",
-                  color:
-                    BRAND.muted,
-                }}
-              >
-                Firma verisi bulunmuyor.
-              </div>
-            ) : (
-              sortedCompanies.map(
-                (item) => {
-                  const width =
-                    Math.max(
-                      4,
-                      Math.round(
-                        (
-                          item.employeeCount /
-                          largestEmployeeCount
-                        ) * 100
-                      )
-                    );
-
-                  return (
-                    <button
-                      key={
-                        item.company.id
-                      }
-                      type="button"
-                      onClick={() =>
-                        onOpenCompany(
-                          item.company
-                        )
-                      }
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "minmax(170px,240px) minmax(180px,1fr) 72px",
-                        gap: 14,
-                        alignItems:
-                          "center",
-                        width: "100%",
-                        padding: 0,
-                        border: "none",
-                        background:
-                          "transparent",
-                        textAlign:
-                          "left",
-                        cursor:
-                          "pointer",
-                      }}
-                    >
-                      <div
-                        style={{
-                          minWidth: 0,
-                        }}
-                      >
-                        <div
-                          style={{
-                            overflow:
-                              "hidden",
-                            textOverflow:
-                              "ellipsis",
-                            whiteSpace:
-                              "nowrap",
-                            color:
-                              BRAND.text,
-                            fontWeight: 900,
-                          }}
-                        >
-                          {
-                            item.company
-                              .name
-                          }
-                        </div>
-
-                        <div
-                          style={{
-                            marginTop: 4,
-                            color:
-                              BRAND.muted,
-                            fontSize: 11,
-                          }}
-                        >
-                          Profil %
-                          {
-                            item.profileScore
-                          }
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          height: 12,
-                          borderRadius: 999,
-                          overflow:
-                            "hidden",
-                          background:
-                            "#e5e7eb",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${width}%`,
-                            height:
-                              "100%",
-                            borderRadius: 999,
-                            background:
-                              "linear-gradient(90deg,#5a0f1f,#c62828)",
-                          }}
-                        />
-                      </div>
-
-                      <strong
-                        style={{
-                          textAlign:
-                            "right",
-                          color:
-                            BRAND.text,
-                          fontSize: 16,
-                        }}
-                      >
-                        {
-                          item.employeeCount
-                        }
-                      </strong>
-                    </button>
-                  );
-                }
-              )
-            )}
-          </div>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 900,
+            color:
+              "rgba(255,255,255,0.7)",
+          }}
+        >
+          DORA AI • SON AKTİVİTELER
         </div>
 
-        <div style={panelStyle}>
-          <div style={eyebrowStyle}>
-            YÖNETİM UYARILARI
-          </div>
-
-          <h3 style={headingStyle}>
-            Firma Sağlık Göstergesi
-          </h3>
-
-          <p style={descriptionStyle}>
-            Firma profillerindeki eksik
-            alanlar satış demosu ve
-            raporlama kalitesini etkiler.
-          </p>
-
-          <div
-            style={{
-              display: "grid",
-              gap: 10,
-              marginTop: 18,
-            }}
-          >
-            {incompleteCompanies
-              .slice(0, 5)
-              .map((item) => (
-                <button
+        <div
+          style={{
+            display: "grid",
+            gap: 10,
+            marginTop: 14,
+          }}
+        >
+          {activities
+            .slice(0, 4)
+            .map(
+              (activity) => (
+                <div
                   key={
-                    item.company.id
-                  }
-                  type="button"
-                  onClick={() =>
-                    onOpenCompany(
-                      item.company
-                    )
+                    activity.id
                   }
                   style={{
-                    width: "100%",
-                    padding:
-                      "12px 14px",
-                    borderRadius: 14,
-                    border:
-                      "1px solid #fecaca",
+                    padding: 11,
+                    borderRadius: 12,
                     background:
-                      "#fff7f7",
-                    textAlign:
-                      "left",
-                    cursor:
-                      "pointer",
+                      "rgba(255,255,255,0.08)",
+                    border:
+                      "1px solid rgba(255,255,255,0.1)",
                   }}
                 >
                   <div
                     style={{
-                      color:
-                        "#991b1b",
+                      fontSize: 13,
                       fontWeight: 900,
                     }}
                   >
-                    {
-                      item.company
-                        .name
-                    }
+                    {activity.title}
                   </div>
-
                   <div
                     style={{
-                      marginTop: 4,
-                      color:
-                        "#7f1d1d",
+                      marginTop: 3,
                       fontSize: 11,
+                      lineHeight: 1.45,
+                      color:
+                        "rgba(255,255,255,0.72)",
                     }}
                   >
-                    {
-                      item.missingFields
-                    } eksik profil alanı
-                    · Hazırlık %
-                    {
-                      item.profileScore
-                    }
+                    {activity.description}
                   </div>
-                </button>
-              ))}
-
-            {incompleteCompanies.length ===
-            0 ? (
-              <div
-                style={{
-                  padding: 16,
-                  borderRadius: 14,
-                  border:
-                    "1px solid #bbf7d0",
-                  background:
-                    "#f0fdf4",
-                  color:
-                    "#166534",
-                  fontWeight: 800,
-                }}
-              >
-                Tüm firma profilleri
-                yeterli seviyede.
-              </div>
-            ) : null}
-          </div>
+                </div>
+              )
+            )}
         </div>
       </div>
     </section>
   );
 }
 
-function InsightCard({
-  eyebrow,
-  title,
+function Metric({
+  label,
   value,
-  description,
-  accent,
+  tone,
 }: {
-  eyebrow: string;
-  title: string;
-  value: number | string;
-  description: string;
-  accent: string;
+  label: string;
+  value: string;
+  tone: string;
 }) {
   return (
-    <article
+    <div
       style={{
-        ...panelStyle,
-        borderTop:
-          `4px solid ${accent}`,
+        padding: 14,
+        borderRadius: 14,
+        background:
+          "#f8fafc",
+        border:
+          "1px solid #e5e7eb",
       }}
     >
       <div
         style={{
-          color: accent,
-          fontSize: 10,
-          fontWeight: 950,
-          letterSpacing: 0.8,
+          color: "#6b7280",
+          fontSize: 11,
+          fontWeight: 800,
         }}
       >
-        {eyebrow}
+        {label}
       </div>
-
       <div
         style={{
-          marginTop: 8,
-          color: BRAND.text,
-          fontSize: 14,
-          fontWeight: 850,
-        }}
-      >
-        {title}
-      </div>
-
-      <div
-        style={{
-          marginTop: 8,
-          color: accent,
-          fontSize: 32,
+          marginTop: 5,
+          color: tone,
+          fontSize: 24,
           fontWeight: 950,
-          lineHeight: 1,
         }}
       >
         {value}
       </div>
-
-      <div
-        style={{
-          marginTop: 8,
-          color: BRAND.muted,
-          fontSize: 11,
-          lineHeight: 1.5,
-        }}
-      >
-        {description}
-      </div>
-    </article>
+    </div>
   );
 }
-
-const panelStyle:
-  React.CSSProperties = {
-    padding: 18,
-    borderRadius: 18,
-    border:
-      `1px solid ${BRAND.border}`,
-    background: "#fff",
-    boxShadow:
-      "0 10px 30px rgba(15,23,42,0.05)",
-    minWidth: 0,
-  };
-
-const eyebrowStyle:
-  React.CSSProperties = {
-    color: BRAND.red,
-    fontSize: 10,
-    fontWeight: 950,
-    letterSpacing: 0.9,
-  };
-
-const headingStyle:
-  React.CSSProperties = {
-    margin: "6px 0 0",
-    color: BRAND.text,
-    fontSize: 21,
-    fontWeight: 950,
-  };
-
-const descriptionStyle:
-  React.CSSProperties = {
-    margin: "6px 0 0",
-    color: BRAND.muted,
-    fontSize: 12,
-    lineHeight: 1.6,
-  };

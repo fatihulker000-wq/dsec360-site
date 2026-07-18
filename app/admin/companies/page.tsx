@@ -356,31 +356,19 @@ export default function AdminCompaniesPage() {
         await reload();
 
         const employees =
-          result.employees?.inserted ??
-          0;
+  result.metrics?.employee_count ?? 0;
 
-        const accidents =
-          result.accidents?.inserted ??
-          0;
+const accidents =
+  result.moduleRecords?.accidents ?? 0;
 
-        const inspections =
-          result.inspections?.inserted ??
-          0;
+const inspections =
+  result.moduleRecords?.inspections ?? 0;
 
-        const cbs =
-          result.cbs?.inserted ??
-          0;
+const cbs =
+  result.moduleRecords?.cbs ?? 0;
 
-        const allErrors = [
-          ...(result.employees?.errors ||
-            []),
-          ...(result.accidents?.errors ||
-            []),
-          ...(result.inspections?.errors ||
-            []),
-          ...(result.cbs?.errors ||
-            []),
-        ];
+        const allErrors =
+  result.moduleRecords?.errors ?? [];
 
         alert(
           [
