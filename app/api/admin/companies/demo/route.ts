@@ -260,7 +260,7 @@ export async function POST(req: NextRequest) {
 
           template_type: inspection.template_type,
 
-          total_score: inspection.score,
+          score: inspection.score,
 
           status: "COMPLETED",
 
