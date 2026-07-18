@@ -9,14 +9,59 @@ function getSupabase() {
   );
 }
 
-async function checkAdmin() {
+type AccessContext = {
+  allowed: boolean;
+  role: string;
+  companyId: string;
+  companyScoped: boolean;
+};
+
+async function getAccessContext(): Promise<AccessContext> {
   const cookieStore = await cookies();
-  const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-  const adminRole = cookieStore.get("dsec_admin_role")?.value;
+
+  const auth = String(
+    cookieStore.get("dsec_admin_auth")?.value ||
+      cookieStore.get("dsec_user_auth")?.value ||
+      ""
+  ).trim();
+
+  const role = String(
+    cookieStore.get("dsec_admin_role")?.value ||
+      cookieStore.get("dsec_user_role")?.value ||
+      ""
+  ).trim();
+
+  const companyId = String(
+    cookieStore.get("dsec_company_id")?.value || ""
+  ).trim();
+
+  const allowedRoles = [
+    "admin",
+    "super_admin",
+    "company_admin",
+    "demo_user",
+  ];
+
+  const companyScoped =
+    role === "company_admin" || role === "demo_user";
+
+  return {
+    allowed:
+      auth === "ok" &&
+      allowedRoles.includes(role) &&
+      (!companyScoped || Boolean(companyId)),
+    role,
+    companyId,
+    companyScoped,
+  };
+}
+
+async function checkWriteAdmin() {
+  const access = await getAccessContext();
 
   return (
-    adminAuth === "ok" &&
-    (adminRole === "admin" || adminRole === "super_admin")
+    access.allowed &&
+    (access.role === "admin" || access.role === "super_admin")
   );
 }
 
@@ -45,17 +90,20 @@ type CompanyRow = {
 
 export async function GET() {
   try {
-    const allowed = await checkAdmin();
+    const access = await getAccessContext();
 
-    if (!allowed) {
-      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
-    }
+if (!access.allowed) {
+  return NextResponse.json(
+    { error: "Yetkisiz erişim veya firma bilgisi eksik." },
+    { status: 401 }
+  );
+}
 
-    const supabase = getSupabase();
+const supabase = getSupabase();
 
-    const { data, error } = await supabase
-      .from("companies")
-      .select(`
+let companyQuery = supabase
+  .from("companies")
+  .select(`
         id,
         name,
         local_firm_id,
@@ -73,8 +121,16 @@ export async function GET() {
         dsp,
         created_at,
         is_active
-      `)
-      .order("created_at", { ascending: false });
+        `);
+
+if (access.companyScoped) {
+  companyQuery = companyQuery.eq("id", access.companyId);
+}
+
+const { data, error } = await companyQuery.order(
+  "created_at",
+  { ascending: false }
+);
 
     if (error) {
       console.error("companies GET error:", error);
@@ -91,10 +147,18 @@ let from = 0;
 const step = 1000;
 
 while (true) {
-  const { data: employeesPage, error: employeeCountError } = await supabase
-    .from("employees")
-    .select("id, firm_id, active")
-    .range(from, from + step - 1);
+  let employeeQuery = supabase
+  .from("employees")
+  .select("id, firm_id, active");
+
+if (access.companyScoped) {
+  employeeQuery = employeeQuery.eq("firm_id", access.companyId);
+}
+
+const {
+  data: employeesPage,
+  error: employeeCountError,
+} = await employeeQuery.range(from, from + step - 1);
 
   if (employeeCountError) {
     console.error("employees count error:", employeeCountError);
@@ -156,7 +220,7 @@ allEmployees.forEach((emp) => {
 // ======================
 export async function POST(req: NextRequest) {
   try {
-    const allowed = await checkAdmin();
+    const allowed = await checkWriteAdmin();
     if (!allowed) {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
@@ -202,7 +266,7 @@ export async function POST(req: NextRequest) {
 // ======================
 export async function PUT(req: NextRequest) {
   try {
-    const allowed = await checkAdmin();
+    const allowed = await checkWriteAdmin();
     if (!allowed) {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
@@ -251,7 +315,7 @@ export async function PUT(req: NextRequest) {
 // ======================
 export async function DELETE(req: NextRequest) {
   try {
-    const allowed = await checkAdmin();
+    const allowed = await checkWriteAdmin();
 
     if (!allowed) {
       return NextResponse.json(

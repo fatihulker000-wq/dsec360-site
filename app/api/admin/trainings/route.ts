@@ -22,6 +22,7 @@ type TrainingRow = {
 
 type AssignmentAggRow = {
   training_id: string;
+  user_id: string | null;
   status: "not_started" | "in_progress" | "completed" | null;
   watch_completed?: boolean | null;
   video_chain_completed?: boolean | null;
@@ -31,11 +32,29 @@ type AssignmentAggRow = {
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
+    const adminAuth = String(
+  cookieStore.get("dsec_admin_auth")?.value ||
+    cookieStore.get("dsec_user_auth")?.value ||
+    ""
+).trim();
 
-    const isAllowedRole =
-      adminRole === "super_admin" || adminRole === "company_admin";
+const adminRole = String(
+  cookieStore.get("dsec_admin_role")?.value ||
+    cookieStore.get("dsec_user_role")?.value ||
+    ""
+).trim();
+
+const companyId = String(
+  cookieStore.get("dsec_company_id")?.value || ""
+).trim();
+
+const isCompanyScoped =
+  adminRole === "company_admin" || adminRole === "demo_user";
+
+const isAllowedRole =
+  adminRole === "super_admin" ||
+  adminRole === "company_admin" ||
+  adminRole === "demo_user";
 
     if (adminAuth !== "ok" || !isAllowedRole) {
       return NextResponse.json(
@@ -44,7 +63,54 @@ export async function GET() {
       );
     }
 
+if (isCompanyScoped && !companyId) {
+  return NextResponse.json(
+    { error: "Kullanıcı için firma bilgisi bulunamadı." },
+    { status: 403 }
+  );
+}
+
     const supabase = getSupabase();
+
+let scopedUserIds: string[] | null = null;
+
+if (isCompanyScoped) {
+  const [{ data: directUsers, error: directUsersError }, accessResult] =
+    await Promise.all([
+      supabase
+        .from("users")
+        .select("id")
+        .eq("company_id", companyId),
+
+      supabase
+        .from("user_firm_access")
+        .select("user_id")
+        .eq("firm_id", companyId),
+    ]);
+
+  if (directUsersError || accessResult.error) {
+    console.error(
+      "Firma eğitim kullanıcıları alınamadı:",
+      directUsersError || accessResult.error
+    );
+
+    return NextResponse.json(
+      { error: "Firma kullanıcıları alınamadı." },
+      { status: 500 }
+    );
+  }
+
+  scopedUserIds = Array.from(
+    new Set([
+      ...(directUsers || []).map((row: any) =>
+        String(row.id || "").trim()
+      ),
+      ...(accessResult.data || []).map((row: any) =>
+        String(row.user_id || "").trim()
+      ),
+    ])
+  ).filter(Boolean);
+}
 
     const { data: trainings, error: trainingsError } = await supabase
       .from("trainings")
@@ -83,11 +149,27 @@ export async function GET() {
     >();
 
     if (trainingIds.length > 0) {
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from("training_assignments")
-        .select("training_id, status, watch_completed, video_chain_completed, final_exam_passed")
-        .in("training_id", trainingIds)
-        .returns<AssignmentAggRow[]>();
+      let assignments: AssignmentAggRow[] = [];
+let assignmentsError: any = null;
+
+if (!isCompanyScoped || (scopedUserIds && scopedUserIds.length > 0)) {
+  let assignmentQuery = supabase
+    .from("training_assignments")
+    .select(
+      "training_id, user_id, status, watch_completed, video_chain_completed, final_exam_passed"
+    )
+    .in("training_id", trainingIds);
+
+  if (isCompanyScoped && scopedUserIds) {
+    assignmentQuery = assignmentQuery.in("user_id", scopedUserIds);
+  }
+
+  const assignmentResult =
+    await assignmentQuery.returns<AssignmentAggRow[]>();
+
+  assignments = assignmentResult.data || [];
+  assignmentsError = assignmentResult.error;
+}
 
       if (assignmentsError) {
         console.error("Training assignment stats fetch hatası:", assignmentsError);

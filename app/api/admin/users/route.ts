@@ -48,23 +48,39 @@ export async function GET(req: Request) {
 
     if (apiKey !== MOBILE_API_KEY) {
       const cookieStore = await cookies();
-      const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
+     const adminAuth = String(
+  cookieStore.get("dsec_admin_auth")?.value ||
+    cookieStore.get("dsec_user_auth")?.value ||
+    ""
+).trim();
 
-      adminRole = String(cookieStore.get("dsec_admin_role")?.value || "").trim();
-      companyIdFromCookie = String(cookieStore.get("dsec_company_id")?.value || "").trim();
+adminRole = String(
+  cookieStore.get("dsec_admin_role")?.value ||
+    cookieStore.get("dsec_user_role")?.value ||
+    ""
+).trim();
 
-      const isAllowedRole =
-        adminRole === "super_admin" || adminRole === "company_admin";
+companyIdFromCookie = String(
+  cookieStore.get("dsec_company_id")?.value || ""
+).trim();
+
+const isAllowedRole =
+  adminRole === "super_admin" ||
+  adminRole === "company_admin" ||
+  adminRole === "demo_user";
 
       if (adminAuth !== "ok" || !isAllowedRole) {
         return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
       }
 
-      if (adminRole === "company_admin" && !companyIdFromCookie) {
+      if (
+  (adminRole === "company_admin" || adminRole === "demo_user") &&
+  !companyIdFromCookie
+) {
         return NextResponse.json(
-          { error: "Firma yöneticisi için firma bilgisi bulunamadı." },
-          { status: 403 }
-        );
+  { error: "Kullanıcı için firma bilgisi bulunamadı." },
+  { status: 403 }
+);
       }
     } else {
       adminRole = "super_admin";
@@ -214,13 +230,29 @@ export async function GET(req: Request) {
             return a.is_primary ? -1 : 1;
           });
 
-        if (adminRole === "company_admin") {
-          const hasAccess = firms.some((f: any) => f.firm_id === companyIdFromCookie);
-          if (!hasAccess) return null;
-        }
+        if (adminRole === "company_admin" || adminRole === "demo_user") {
+  const directCompanyId = String(user.company_id || "").trim();
+
+  const hasAccess =
+    directCompanyId === companyIdFromCookie ||
+    firms.some((firm: any) => firm.firm_id === companyIdFromCookie);
+
+  if (!hasAccess) {
+    return null;
+  }
+}
 
         
-const primaryFirm = firms.find((f: any) => f.is_primary) || firms[0] || null;
+const scopedFirm =
+  adminRole === "company_admin" || adminRole === "demo_user"
+    ? firms.find((firm: any) => firm.firm_id === companyIdFromCookie)
+    : null;
+
+const primaryFirm =
+  scopedFirm ||
+  firms.find((firm: any) => firm.is_primary) ||
+  firms[0] ||
+  null;
 
 const finalPermissions = Array.from(
   new Set(
