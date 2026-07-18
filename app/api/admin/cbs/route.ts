@@ -3,14 +3,29 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 function getSupabase() {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl =
+    process.env.SUPABASE_URL;
 
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error("Supabase yapılandırması eksik.");
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (
+    !supabaseUrl ||
+    !serviceRoleKey
+  ) {
+    throw new Error(
+      "Supabase yapılandırması eksik."
+    );
   }
 
-  return createClient(supabaseUrl, supabaseServiceRoleKey);
+  return createClient(
+    supabaseUrl,
+    serviceRoleKey
+  );
+}
+
+function clean(value: unknown) {
+  return String(value ?? "").trim();
 }
 
 function normalizeKey(value: string) {
@@ -25,13 +40,21 @@ function normalizeKey(value: string) {
     .trim();
 }
 
-function normalizeFirmName(value: string) {
+function normalizeFirmName(
+  value: string
+) {
   return normalizeKey(value)
     .replace(/\s+/g, " ")
     .replace(/a\.s\./g, "as")
     .replace(/a\.ş\./g, "as")
-    .replace(/anonim sirketi/g, "")
-    .replace(/limited sirketi/g, "")
+    .replace(
+      /anonim sirketi/g,
+      ""
+    )
+    .replace(
+      /limited sirketi/g,
+      ""
+    )
     .replace(/ltd\.sti\./g, "")
     .replace(/ltd/g, "")
     .replace(/sti/g, "")
@@ -40,8 +63,12 @@ function normalizeFirmName(value: string) {
 
 type AdminSession = {
   userId: string;
-  role: "super_admin" | "company_admin";
+  role:
+    | "super_admin"
+    | "company_admin"
+    | "demo_user";
   companyId: string;
+  readOnly: boolean;
 };
 
 type CompanyRow = {
@@ -57,77 +84,197 @@ type CbsRow = {
   created_at: string | null;
   status: string | null;
   category: string | null;
-  firm_id: string | number | null;
+  firm_id:
+    | string
+    | number
+    | null;
   assigned_to: string | null;
-  resolution_note: string | null;
+  resolution_note:
+    | string
+    | null;
   firma_adi: string | null;
   priority: string | null;
   sla_due_at: string | null;
   closed_at: string | null;
 };
 
-async function getAdminSession(): Promise<AdminSession | null> {
-  const cookieStore = await cookies();
+async function getAdminSession():
+  Promise<AdminSession | null> {
+  const cookieStore =
+    await cookies();
 
-  const adminAuth = String(cookieStore.get("dsec_admin_auth")?.value || "").trim();
-  const adminRole = String(cookieStore.get("dsec_admin_role")?.value || "").trim();
-  const userId = String(cookieStore.get("dsec_user_id")?.value || "").trim();
-  const companyIdFromCookie = String(cookieStore.get("dsec_company_id")?.value || "").trim();
+  const auth = clean(
+    cookieStore.get(
+      "dsec_admin_auth"
+    )?.value ||
+      cookieStore.get(
+        "dsec_user_auth"
+      )?.value
+  );
 
-  const isAllowedRole =
-    adminRole === "super_admin" || adminRole === "company_admin";
+  const role = clean(
+    cookieStore.get(
+      "dsec_admin_role"
+    )?.value ||
+      cookieStore.get(
+        "dsec_user_role"
+      )?.value
+  );
 
-  if (adminAuth !== "ok" || !isAllowedRole) {
+  const userId = clean(
+    cookieStore.get(
+      "dsec_user_id"
+    )?.value
+  );
+
+  const companyIdFromCookie =
+    clean(
+      cookieStore.get(
+        "dsec_company_id"
+      )?.value
+    );
+
+  const allowedRoles = [
+    "super_admin",
+    "company_admin",
+    "demo_user",
+  ];
+
+  if (
+    auth !== "ok" ||
+    !allowedRoles.includes(role)
+  ) {
     return null;
   }
 
-  const baseSession: AdminSession = {
-    userId: userId || "cookie-admin",
-    role: adminRole === "super_admin" ? "super_admin" : "company_admin",
-    companyId: companyIdFromCookie,
-  };
-
-  if (baseSession.role === "super_admin") {
-    return baseSession;
-  }
-
-  if (baseSession.companyId) {
-    return baseSession;
+  if (role === "super_admin") {
+    return {
+      userId:
+        userId || "cookie-admin",
+      role: "super_admin",
+      companyId: "",
+      readOnly: false,
+    };
   }
 
   if (!userId) {
-    return null;
-  }
-
-  try {
-    const supabase = getSupabase();
-
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, role, company_id")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (error || !data) {
+    if (!companyIdFromCookie) {
       return null;
     }
 
     return {
-      userId: String(data.id || userId).trim(),
+      userId: "cookie-user",
       role:
-        String(data.role || "").trim() === "super_admin"
-          ? "super_admin"
+        role === "demo_user"
+          ? "demo_user"
           : "company_admin",
-      companyId: String(data.company_id || "").trim(),
+      companyId:
+        companyIdFromCookie,
+      readOnly:
+        role === "demo_user",
+    };
+  }
+
+  try {
+    const supabase =
+      getSupabase();
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("users")
+      .select(
+        "id, role, company_id, is_active"
+      )
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (
+      error ||
+      !data ||
+      data.is_active === false
+    ) {
+      return null;
+    }
+
+    const databaseRole =
+      clean(data.role);
+
+    if (databaseRole !== role) {
+      return null;
+    }
+
+    let companyId = clean(
+      data.company_id
+    );
+
+    if (!companyId) {
+      const {
+        data: primaryAccess,
+      } = await supabase
+        .from(
+          "user_firm_access"
+        )
+        .select("firm_id")
+        .eq("user_id", userId)
+        .eq("is_primary", true)
+        .limit(1)
+        .maybeSingle();
+
+      companyId = clean(
+        primaryAccess?.firm_id
+      );
+    }
+
+    if (!companyId) {
+      companyId =
+        companyIdFromCookie;
+    }
+
+    if (!companyId) {
+      return null;
+    }
+
+    return {
+      userId: clean(data.id),
+      role:
+        role === "demo_user"
+          ? "demo_user"
+          : "company_admin",
+      companyId,
+      readOnly:
+        role === "demo_user",
     };
   } catch (error) {
-    console.error("getAdminSession hata:", error);
+    console.error(
+      "getAdminSession hata:",
+      error
+    );
+
     return null;
   }
 }
 
 function unauthorized() {
-  return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Yetkisiz erişim.",
+    },
+    { status: 401 }
+  );
+}
+
+function readOnlyError() {
+  return NextResponse.json(
+    {
+      success: false,
+      error:
+        "Demo kullanıcısı ÇBS kayıtlarını değiştiremez.",
+    },
+    { status: 403 }
+  );
 }
 
 async function getAuthorizedRecord(
@@ -135,24 +282,43 @@ async function getAuthorizedRecord(
   session: AdminSession
 ): Promise<{
   id: number;
-  firm_id: string | number | null;
+  firm_id:
+    | string
+    | number
+    | null;
 } | null> {
-  const supabase = getSupabase();
+  const supabase =
+    getSupabase();
 
-  const { data, error } = await supabase
+  const {
+    data,
+    error,
+  } = await supabase
     .from("cbs_forms")
     .select("id, firm_id")
     .eq("id", id)
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    return null;
+  }
 
-  if (session.role === "super_admin") {
+  if (
+    session.role ===
+    "super_admin"
+  ) {
     return data;
   }
 
-  const recordFirmId = String(data.firm_id || "").trim();
-  if (!recordFirmId || recordFirmId !== session.companyId) {
+  const recordFirmId = clean(
+    data.firm_id
+  );
+
+  if (
+    !recordFirmId ||
+    recordFirmId !==
+      session.companyId
+  ) {
     return null;
   }
 
@@ -160,26 +326,47 @@ async function getAuthorizedRecord(
 }
 
 function findSuggestedCompany(
-  item: Pick<CbsRow, "firma_adi" | "firm_id">,
+  item: Pick<
+    CbsRow,
+    "firma_adi" | "firm_id"
+  >,
   companies: CompanyRow[]
 ) {
-  const rawFirmId = String(item.firm_id ?? "").trim();
-  const rawFirmaAdi = String(item.firma_adi ?? "").trim();
+  const rawFirmId = clean(
+    item.firm_id
+  );
+
+  const rawCompanyName = clean(
+    item.firma_adi
+  );
 
   if (rawFirmId) {
-    const exactIdMatch = companies.find(
-      (company) => String(company.id || "").trim() === rawFirmId
-    );
+    const exactIdMatch =
+      companies.find(
+        (company) =>
+          clean(company.id) ===
+          rawFirmId
+      );
 
     if (exactIdMatch) {
       return {
-        suggestedFirmId: String(exactIdMatch.id || "").trim(),
-        suggestedFirmName: String(exactIdMatch.name || "").trim() || null,
+        suggestedFirmId:
+          clean(
+            exactIdMatch.id
+          ),
+        suggestedFirmName:
+          clean(
+            exactIdMatch.name
+          ) || null,
       };
     }
   }
 
-  const normalizedInput = normalizeFirmName(rawFirmaAdi);
+  const normalizedInput =
+    normalizeFirmName(
+      rawCompanyName
+    );
+
   if (!normalizedInput) {
     return {
       suggestedFirmId: null,
@@ -187,23 +374,41 @@ function findSuggestedCompany(
     };
   }
 
-  const exact = companies.find((company) => {
-    return normalizeFirmName(String(company.name || "")) === normalizedInput;
-  });
+  const exact =
+    companies.find(
+      (company) =>
+        normalizeFirmName(
+          clean(company.name)
+        ) === normalizedInput
+    );
 
-  const includes =
+  const matched =
     exact ||
-    companies.find((company) => {
-      const dbName = normalizeFirmName(String(company.name || ""));
-      return (
-        dbName.includes(normalizedInput) || normalizedInput.includes(dbName)
-      );
-    });
+    companies.find(
+      (company) => {
+        const databaseName =
+          normalizeFirmName(
+            clean(company.name)
+          );
 
-  if (includes?.id) {
+        return (
+          databaseName.includes(
+            normalizedInput
+          ) ||
+          normalizedInput.includes(
+            databaseName
+          )
+        );
+      }
+    );
+
+  if (matched?.id) {
     return {
-      suggestedFirmId: String(includes.id || "").trim(),
-      suggestedFirmName: String(includes.name || "").trim() || null,
+      suggestedFirmId:
+        clean(matched.id),
+      suggestedFirmName:
+        clean(matched.name) ||
+        null,
     };
   }
 
@@ -216,81 +421,164 @@ function findSuggestedCompany(
 /* =========================
    GET
 ========================= */
-export async function GET(req: Request) {
+
+export async function GET(
+  req: Request
+) {
   try {
-    const supabase = getSupabase();
+    const session =
+      await getAdminSession();
 
-    const session = await getAdminSession();
+    if (!session) {
+      return unauthorized();
+    }
 
-    const headerRole = String(req.headers.get("x-role") || "").trim();
-    const headerFirmId = String(req.headers.get("x-firm-id") || "").trim();
+    const supabase =
+      getSupabase();
 
-    const url = new URL(req.url);
-const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
+    const url =
+      new URL(req.url);
 
-    const userRole =
-      session?.role || (headerRole === "company_admin" ? "company_admin" : "super_admin");
-
-    const userFirmId =
-      session?.companyId || headerFirmId || "";
+    const firmIdParam = clean(
+      url.searchParams.get(
+        "firmId"
+      )
+    );
 
     let query = supabase
       .from("cbs_forms")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", {
+        ascending: false,
+      });
 
-    if (userRole === "company_admin" && userFirmId) {
-  query = query.eq("firm_id", userFirmId);
-}
+    if (
+      session.role ===
+        "company_admin" ||
+      session.role === "demo_user"
+    ) {
+      query = query.eq(
+        "firm_id",
+        session.companyId
+      );
+    } else if (
+      firmIdParam &&
+      firmIdParam !== "all"
+    ) {
+      query = query.eq(
+        "firm_id",
+        firmIdParam
+      );
+    }
 
-if (userRole === "super_admin" && firmIdParam && firmIdParam !== "all") {
-  query = query.eq("firm_id", firmIdParam);
-}
-
-    const { data, error } = await query;
+    const {
+      data,
+      error,
+    } = await query;
 
     if (error) {
-      console.error("CBS GET hata:", error);
+      console.error(
+        "CBS GET hata:",
+        error
+      );
+
       return NextResponse.json(
-        { error: "Kayıtlar alınamadı." },
+        {
+          success: false,
+          error:
+            "Kayıtlar alınamadı.",
+          detail: error.message,
+        },
         { status: 500 }
       );
     }
 
-    const { data: companies, error: companiesError } = await supabase
-      .from("companies")
-      .select("id, name")
-      .order("name", { ascending: true });
+    let companiesQuery =
+      supabase
+        .from("companies")
+        .select("id, name")
+        .order("name", {
+          ascending: true,
+        });
 
-    if (companiesError) {
-      console.error("CBS companies hata:", companiesError);
+    if (
+      session.role ===
+        "company_admin" ||
+      session.role === "demo_user"
+    ) {
+      companiesQuery =
+        companiesQuery.eq(
+          "id",
+          session.companyId
+        );
     }
 
-    const companyList: CompanyRow[] = companies || [];
+    const {
+      data: companies,
+      error: companiesError,
+    } = await companiesQuery;
 
-    const formatted = ((data || []) as CbsRow[]).map((item) => {
-      const directFirmId = String(item.firm_id ?? "").trim() || null;
-
-      const { suggestedFirmId, suggestedFirmName } = findSuggestedCompany(
-        item,
-        companyList
+    if (companiesError) {
+      console.error(
+        "CBS companies hata:",
+        companiesError
       );
+    }
+
+    const companyList:
+      CompanyRow[] =
+      companies || [];
+
+    const formatted = (
+      (data || []) as CbsRow[]
+    ).map((item) => {
+      const directFirmId =
+        clean(item.firm_id) ||
+        null;
+
+      const {
+        suggestedFirmId,
+        suggestedFirmName,
+      } =
+        findSuggestedCompany(
+          item,
+          companyList
+        );
 
       return {
         id: item.id,
-        full_name: item.full_name || "",
-        email: item.email || "",
-        message: item.message || "",
-        created_at: item.created_at,
-        status: item.status || "new",
-        category: item.category || "Genel",
-        firmId: directFirmId,
-        assignedTo: item.assigned_to || "",
-        resolutionNote: item.resolution_note || "",
-        firma_adi: item.firma_adi || "",
-        priority: item.priority || "normal",
-        sla_due_at: item.sla_due_at || null,
-        closed_at: item.closed_at || null,
+        full_name:
+          item.full_name || "",
+        email:
+          item.email || "",
+        message:
+          item.message || "",
+        created_at:
+          item.created_at,
+        status:
+          item.status || "new",
+        category:
+          item.category ||
+          "Genel",
+        firmId:
+          directFirmId,
+        assignedTo:
+          item.assigned_to ||
+          "",
+        resolutionNote:
+          item.resolution_note ||
+          "",
+        firma_adi:
+          item.firma_adi || "",
+        priority:
+          item.priority ||
+          "normal",
+        sla_due_at:
+          item.sla_due_at ||
+          null,
+        closed_at:
+          item.closed_at ||
+          null,
         suggestedFirmId,
         suggestedFirmName,
       };
@@ -298,16 +586,34 @@ if (userRole === "super_admin" && firmIdParam && firmIdParam !== "all") {
 
     return NextResponse.json({
       success: true,
+      role: session.role,
+      read_only:
+        session.readOnly,
       data: formatted,
-      companies: companyList.map((c) => ({
-        id: String(c.id || "").trim(),
-        name: String(c.name || "").trim(),
-      })),
+      companies:
+        companyList.map(
+          (company) => ({
+            id: clean(
+              company.id
+            ),
+            name: clean(
+              company.name
+            ),
+          })
+        ),
     });
-  } catch (e: any) {
-    console.error("CBS GET genel hata:", e);
+  } catch (error) {
+    console.error(
+      "CBS GET genel hata:",
+      error
+    );
+
     return NextResponse.json(
-      { error: "Sunucu hatası." },
+      {
+        success: false,
+        error:
+          "Sunucu hatası.",
+      },
       { status: 500 }
     );
   }
@@ -316,69 +622,121 @@ if (userRole === "super_admin" && firmIdParam && firmIdParam !== "all") {
 /* =========================
    PATCH
 ========================= */
-export async function PATCH(req: Request) {
-  try {
-    const session = await getAdminSession();
-    if (!session) return unauthorized();
 
-    const body = await req.json();
+export async function PATCH(
+  req: Request
+) {
+  try {
+    const session =
+      await getAdminSession();
+
+    if (!session) {
+      return unauthorized();
+    }
+
+    if (session.readOnly) {
+      return readOnlyError();
+    }
+
+    const body =
+      await req.json();
+
     const id = Number(body?.id);
-    const status = String(body?.status || "").trim();
+    const status = clean(
+      body?.status
+    );
 
     if (!id || !status) {
       return NextResponse.json(
-        { error: "ID ve durum zorunludur." },
+        {
+          error:
+            "ID ve durum zorunludur.",
+        },
         { status: 400 }
       );
     }
 
-    const allowedStatuses = ["new", "read", "processing", "closed"];
-    if (!allowedStatuses.includes(status)) {
+    const allowedStatuses = [
+      "new",
+      "read",
+      "processing",
+      "closed",
+    ];
+
+    if (
+      !allowedStatuses.includes(
+        status
+      )
+    ) {
       return NextResponse.json(
-        { error: "Geçersiz durum değeri." },
+        {
+          error:
+            "Geçersiz durum değeri.",
+        },
         { status: 400 }
       );
     }
 
-    const record = await getAuthorizedRecord(id, session);
+    const record =
+      await getAuthorizedRecord(
+        id,
+        session
+      );
+
     if (!record) {
       return NextResponse.json(
-        { error: "Bu kayıt için yetkiniz yok." },
+        {
+          error:
+            "Bu kayıt için yetkiniz yok.",
+        },
         { status: 403 }
       );
     }
 
-    const supabase = getSupabase();
+    const supabase =
+      getSupabase();
 
-    const updatePayload: Record<string, unknown> = {
+    const updatePayload:
+      Record<string, unknown> = {
       status,
-      updated_at: new Date().toISOString(),
+      updated_at:
+        new Date().toISOString(),
+      closed_at:
+        status === "closed"
+          ? new Date().toISOString()
+          : null,
     };
 
-    if (status === "closed") {
-      updatePayload.closed_at = new Date().toISOString();
-    } else {
-      updatePayload.closed_at = null;
-    }
-
-    const { error } = await supabase
-      .from("cbs_forms")
-      .update(updatePayload)
-      .eq("id", id);
+    const { error } =
+      await supabase
+        .from("cbs_forms")
+        .update(updatePayload)
+        .eq("id", id);
 
     if (error) {
-      console.error("CBS PATCH hatası:", error);
       return NextResponse.json(
-        { error: "Durum güncellenemedi." },
+        {
+          error:
+            "Durum güncellenemedi.",
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+    });
   } catch (error) {
-    console.error("CBS PATCH genel hata:", error);
+    console.error(
+      "CBS PATCH genel hata:",
+      error
+    );
+
     return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
+      {
+        error:
+          "Sunucu hatası oluştu.",
+      },
       { status: 500 }
     );
   }
@@ -387,117 +745,206 @@ export async function PATCH(req: Request) {
 /* =========================
    PUT
 ========================= */
-export async function PUT(req: Request) {
-  try {
-    const session = await getAdminSession();
-    if (!session) return unauthorized();
 
-    const body = await req.json();
+export async function PUT(
+  req: Request
+) {
+  try {
+    const session =
+      await getAdminSession();
+
+    if (!session) {
+      return unauthorized();
+    }
+
+    if (session.readOnly) {
+      return readOnlyError();
+    }
+
+    const body =
+      await req.json();
+
     const id = Number(body?.id);
 
     if (!id) {
       return NextResponse.json(
-        { error: "ID zorunludur." },
+        {
+          error:
+            "ID zorunludur.",
+        },
         { status: 400 }
       );
     }
 
-    const record = await getAuthorizedRecord(id, session);
+    const record =
+      await getAuthorizedRecord(
+        id,
+        session
+      );
+
     if (!record) {
       return NextResponse.json(
-        { error: "Bu kayıt için yetkiniz yok." },
+        {
+          error:
+            "Bu kayıt için yetkiniz yok.",
+        },
         { status: 403 }
       );
     }
 
-    const supabase = getSupabase();
+    const supabase =
+      getSupabase();
 
-    const updatePayload: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
+    const updatePayload:
+      Record<string, unknown> = {
+      updated_at:
+        new Date().toISOString(),
     };
 
-    if (body?.category !== undefined) {
-      updatePayload.category = String(body.category || "").trim() || null;
+    if (
+      body?.category !== undefined
+    ) {
+      updatePayload.category =
+        clean(body.category) ||
+        null;
     }
 
-    if (body?.assignedTo !== undefined) {
-      updatePayload.assigned_to = String(body.assignedTo || "").trim() || null;
+    if (
+      body?.assignedTo !==
+      undefined
+    ) {
+      updatePayload.assigned_to =
+        clean(body.assignedTo) ||
+        null;
     }
 
-    if (body?.resolutionNote !== undefined) {
+    if (
+      body?.resolutionNote !==
+      undefined
+    ) {
       updatePayload.resolution_note =
-        String(body.resolutionNote || "").trim() || null;
+        clean(
+          body.resolutionNote
+        ) || null;
     }
 
-    if (body?.priority !== undefined) {
-      const cleanPriority = String(body.priority || "").trim();
-      const allowedPriorities = ["low", "normal", "high", "critical"];
+    if (
+      body?.priority !== undefined
+    ) {
+      const priority = clean(
+        body.priority
+      );
 
-      if (!allowedPriorities.includes(cleanPriority)) {
+      const allowedPriorities = [
+        "low",
+        "normal",
+        "high",
+        "critical",
+      ];
+
+      if (
+        !allowedPriorities.includes(
+          priority
+        )
+      ) {
         return NextResponse.json(
-          { error: "Geçersiz öncelik değeri." },
+          {
+            error:
+              "Geçersiz öncelik değeri.",
+          },
           { status: 400 }
         );
       }
 
-      updatePayload.priority = cleanPriority;
+      updatePayload.priority =
+        priority;
     }
 
-    if (body?.firmId !== undefined) {
-      const cleanFirmId = String(body.firmId || "").trim() || null;
+    if (
+      body?.firmId !== undefined
+    ) {
+      const firmId =
+        clean(body.firmId) ||
+        null;
 
       if (
-        session.role === "company_admin" &&
-        cleanFirmId &&
-        cleanFirmId !== session.companyId
+        session.role !==
+          "super_admin" &&
+        firmId &&
+        firmId !==
+          session.companyId
       ) {
         return NextResponse.json(
-          { error: "Sadece kendi firmanı bağlayabilirsin." },
+          {
+            error:
+              "Sadece kendi firmanı bağlayabilirsin.",
+          },
           { status: 403 }
         );
       }
 
-      updatePayload.firm_id = cleanFirmId;
+      updatePayload.firm_id =
+        firmId;
 
-      if (cleanFirmId) {
-        const { data: companyData, error: companyError } = await supabase
+      if (firmId) {
+        const {
+          data: company,
+          error: companyError,
+        } = await supabase
           .from("companies")
           .select("id, name")
-          .eq("id", cleanFirmId)
+          .eq("id", firmId)
           .maybeSingle();
 
         if (companyError) {
           return NextResponse.json(
-            { error: "Firma bilgisi alınamadı." },
+            {
+              error:
+                "Firma bilgisi alınamadı.",
+            },
             { status: 500 }
           );
         }
 
         updatePayload.firma_adi =
-          String(companyData?.name || "").trim() || null;
+          clean(company?.name) ||
+          null;
       } else {
-        updatePayload.firma_adi = null;
+        updatePayload.firma_adi =
+          null;
       }
     }
 
-    const { error } = await supabase
-      .from("cbs_forms")
-      .update(updatePayload)
-      .eq("id", id);
+    const { error } =
+      await supabase
+        .from("cbs_forms")
+        .update(updatePayload)
+        .eq("id", id);
 
     if (error) {
-      console.error("CBS PUT hatası:", error);
       return NextResponse.json(
-        { error: "Güncelleme yapılamadı." },
+        {
+          error:
+            "Güncelleme yapılamadı.",
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+    });
   } catch (error) {
-    console.error("CBS PUT genel hata:", error);
+    console.error(
+      "CBS PUT genel hata:",
+      error
+    );
+
     return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
+      {
+        error:
+          "Sunucu hatası oluştu.",
+      },
       { status: 500 }
     );
   }
@@ -506,49 +953,86 @@ export async function PUT(req: Request) {
 /* =========================
    DELETE
 ========================= */
-export async function DELETE(req: Request) {
-  try {
-    const session = await getAdminSession();
-    if (!session) return unauthorized();
 
-    const body = await req.json();
+export async function DELETE(
+  req: Request
+) {
+  try {
+    const session =
+      await getAdminSession();
+
+    if (!session) {
+      return unauthorized();
+    }
+
+    if (session.readOnly) {
+      return readOnlyError();
+    }
+
+    const body =
+      await req.json();
+
     const id = Number(body?.id);
 
     if (!id) {
       return NextResponse.json(
-        { error: "ID zorunludur." },
+        {
+          error:
+            "ID zorunludur.",
+        },
         { status: 400 }
       );
     }
 
-    const record = await getAuthorizedRecord(id, session);
+    const record =
+      await getAuthorizedRecord(
+        id,
+        session
+      );
+
     if (!record) {
       return NextResponse.json(
-        { error: "Bu kayıt için yetkiniz yok." },
+        {
+          error:
+            "Bu kayıt için yetkiniz yok.",
+        },
         { status: 403 }
       );
     }
 
-    const supabase = getSupabase();
+    const supabase =
+      getSupabase();
 
-    const { error } = await supabase
-      .from("cbs_forms")
-      .delete()
-      .eq("id", id);
+    const { error } =
+      await supabase
+        .from("cbs_forms")
+        .delete()
+        .eq("id", id);
 
     if (error) {
-      console.error("CBS DELETE hatası:", error);
       return NextResponse.json(
-        { error: "Kayıt silinemedi." },
+        {
+          error:
+            "Kayıt silinemedi.",
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+    });
   } catch (error) {
-    console.error("CBS DELETE genel hata:", error);
+    console.error(
+      "CBS DELETE genel hata:",
+      error
+    );
+
     return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
+      {
+        error:
+          "Sunucu hatası oluştu.",
+      },
       { status: 500 }
     );
   }
