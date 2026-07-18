@@ -455,8 +455,6 @@ async function ensureEmployees(
       firm_id: companyId,
       full_name:
         employee.full_name,
-      department:
-        employee.department,
       job_title:
         employee.job_title,
       email: employee.email,
@@ -1115,18 +1113,30 @@ async function refreshAccidents(
 ) {
   const supabase = getSupabase();
 
-  const { error: deleteError } =
+  // Önce UUID ile yazılmış güncel demo kayıtlarını temizle.
+  const { error: deleteByWebFirmError } =
     await supabase
       .from("accident_records")
       .delete()
-      .eq(
-        "web_firm_id",
-        companyId
-      );
+      .eq("web_firm_id", companyId);
 
-  if (deleteError) {
+  if (deleteByWebFirmError) {
     throw new Error(
-      `Eski kaza kayıtları temizlenemedi: ${deleteError.message}`
+      `Eski kaza kayıtları temizlenemedi: ${deleteByWebFirmError.message}`
+    );
+  }
+
+  // Önceki sürümlerde yalnızca yerel firma ID'si ile yazılan demo
+  // kayıtlarını da temizle. Böylece her yenilemede kayıt sayısı artmaz.
+  const { error: deleteByLocalFirmError } =
+    await supabase
+      .from("accident_records")
+      .delete()
+      .eq("firm_id", localFirmId);
+
+  if (deleteByLocalFirmError) {
+    throw new Error(
+      `Eski yerel kaza kayıtları temizlenemedi: ${deleteByLocalFirmError.message}`
     );
   }
 
@@ -1247,15 +1257,29 @@ async function refreshCbs(
 ) {
   const supabase = getSupabase();
 
-  const { error: deleteError } =
+  const { error: deleteByFirmError } =
     await supabase
       .from("cbs_forms")
       .delete()
       .eq("firm_id", companyId);
 
-  if (deleteError) {
+  if (deleteByFirmError) {
     throw new Error(
-      `Eski ÇBS kayıtları temizlenemedi: ${deleteError.message}`
+      `Eski ÇBS kayıtları temizlenemedi: ${deleteByFirmError.message}`
+    );
+  }
+
+  // Eski demo üreticileri firma kimliği yerine yalnızca firma adını
+  // yazabiliyordu. Bu kayıtları da yalnızca korumalı demo firma adıyla sil.
+  const { error: deleteByNameError } =
+    await supabase
+      .from("cbs_forms")
+      .delete()
+      .eq("firma_adi", DEMO_COMPANY.name);
+
+  if (deleteByNameError) {
+    throw new Error(
+      `Eski ÇBS demo kayıtları temizlenemedi: ${deleteByNameError.message}`
     );
   }
 
