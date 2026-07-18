@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextRequest, NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 import { cookies } from "next/headers";
 
 function getSupabase() {
@@ -9,13 +12,23 @@ function getSupabase() {
   );
 }
 
-type CompanyAnyRow = Record<string, unknown>;
+type CompanyAnyRow =
+  Record<string, unknown>;
+
+type EmployeeRow = {
+  id: string;
+  firm_id: string | null;
+  full_name: string | null;
+  email: string | null;
+  active: boolean | null;
+};
 
 type UserRow = {
   id: string;
   full_name: string | null;
   email: string | null;
   company_id: string | null;
+  employee_id: string | null;
   role: string | null;
   is_active: boolean | null;
 };
@@ -35,334 +48,1007 @@ type AssignmentRow = {
   completed_at?: string | null;
   created_at?: string | null;
   watch_completed?: boolean | null;
+  video_chain_completed?: boolean | null;
   final_exam_passed?: boolean | null;
 };
 
-function pickText(row: CompanyAnyRow, keys: string[]) {
+function pickText(
+  row: CompanyAnyRow,
+  keys: string[]
+) {
   for (const key of keys) {
     const value = row[key];
-    if (typeof value === "string" && value.trim()) {
+
+    if (
+      typeof value === "string" &&
+      value.trim()
+    ) {
       return value.trim();
     }
   }
+
   return "-";
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(
+  req: NextRequest
+) {
   try {
     const cookieStore = await cookies();
 
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
+    const auth = String(
+      cookieStore.get(
+        "dsec_admin_auth"
+      )?.value ||
+        cookieStore.get(
+          "dsec_user_auth"
+        )?.value ||
+        ""
+    ).trim();
 
-    const userAuth = cookieStore.get("dsec_user_auth")?.value;
-    const userRole = cookieStore.get("dsec_user_role")?.value;
-    const userId = cookieStore.get("dsec_user_id")?.value; // 🔥 BU YOK ŞU AN
+    const resolvedRole = String(
+      cookieStore.get(
+        "dsec_admin_role"
+      )?.value ||
+        cookieStore.get(
+          "dsec_user_role"
+        )?.value ||
+        ""
+    ).trim();
 
-    const resolvedRole =
-      adminAuth === "ok" && adminRole
-        ? adminRole
-        : userAuth === "ok" && userRole
-        ? userRole
-        : null;
+    const userId = String(
+      cookieStore.get(
+        "dsec_user_id"
+      )?.value || ""
+    ).trim();
 
-    if (!resolvedRole) {
+    const companyIdFromCookie =
+      String(
+        cookieStore.get(
+          "dsec_company_id"
+        )?.value || ""
+      ).trim();
+
+    if (auth !== "ok" || !resolvedRole) {
       return NextResponse.json(
-        { error: "Yetkisiz erişim." },
+        {
+          error:
+            "Yetkisiz erişim.",
+        },
         { status: 401 }
+      );
+    }
+
+    const allowedRoles = [
+      "admin",
+      "super_admin",
+      "company_admin",
+      "demo_user",
+    ];
+
+    if (
+      !allowedRoles.includes(
+        resolvedRole
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Bu rol raporlara erişemez.",
+        },
+        { status: 403 }
       );
     }
 
     const supabase = getSupabase();
 
-    let requestedCompanyId = String(
-      req.nextUrl.searchParams.get("companyId") || ""
-    ).trim();
+    let requestedCompanyId =
+      String(
+        req.nextUrl.searchParams.get(
+          "companyId"
+        ) || ""
+      ).trim();
 
-    if (resolvedRole === "company_admin") {
+    const companyScoped =
+      resolvedRole ===
+        "company_admin" ||
+      resolvedRole === "demo_user";
+
+    /*
+     * Firma yöneticisi ve demo kullanıcısı
+     * URL'den başka firma gönderse bile kendi
+     * firmasına sabitlenir.
+     */
+    if (companyScoped) {
       if (!userId) {
         return NextResponse.json(
-          { error: "Kullanıcı bilgisi bulunamadı." },
+          {
+            error:
+              "Kullanıcı bilgisi bulunamadı.",
+          },
           { status: 401 }
         );
       }
 
-      const { data: userRow, error: userError } = await supabase
+      const {
+        data: userRow,
+        error: userError,
+      } = await supabase
         .from("users")
-        .select("id, company_id")
+        .select(
+          "id, role, company_id, is_active"
+        )
         .eq("id", userId)
         .maybeSingle();
 
-      if (userError || !userRow) {
+      if (userError) {
+        console.error(
+          "training matrix user error:",
+          userError
+        );
+
         return NextResponse.json(
-          { error: "Kullanıcı firma bilgisi alınamadı." },
+          {
+            error:
+              "Kullanıcı firma bilgisi alınamadı.",
+          },
           { status: 500 }
         );
       }
 
-      const ownCompanyId = String(
-        (userRow as { company_id?: string | null }).company_id || ""
-      ).trim();
-
-      if (!ownCompanyId) {
+      if (!userRow) {
         return NextResponse.json(
-          { error: "Bu kullanıcıya bağlı firma bulunamadı." },
+          {
+            error:
+              "Kullanıcı bulunamadı.",
+          },
+          { status: 404 }
+        );
+      }
+
+      if (
+        userRow.is_active === false
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Kullanıcı pasif durumda.",
+          },
           { status: 403 }
         );
       }
 
-      requestedCompanyId = ownCompanyId;
-    } else if (!(resolvedRole === "super_admin" || resolvedRole === "admin")) {
-      return NextResponse.json(
-        { error: "Bu rol raporlara erişemez." },
-        { status: 403 }
-      );
+      if (
+        String(
+          userRow.role || ""
+        ).trim() !== resolvedRole
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Oturum rolü uyuşmuyor.",
+          },
+          { status: 403 }
+        );
+      }
+
+      let ownCompanyId = String(
+        userRow.company_id || ""
+      ).trim();
+
+      if (!ownCompanyId) {
+        const {
+          data: primaryAccess,
+        } = await supabase
+          .from(
+            "user_firm_access"
+          )
+          .select("firm_id")
+          .eq("user_id", userId)
+          .eq("is_primary", true)
+          .limit(1)
+          .maybeSingle();
+
+        ownCompanyId = String(
+          primaryAccess?.firm_id ||
+            ""
+        ).trim();
+      }
+
+      if (!ownCompanyId) {
+        const {
+          data: firstAccess,
+        } = await supabase
+          .from(
+            "user_firm_access"
+          )
+          .select("firm_id")
+          .eq("user_id", userId)
+          .limit(1)
+          .maybeSingle();
+
+        ownCompanyId = String(
+          firstAccess?.firm_id || ""
+        ).trim();
+      }
+
+      if (!ownCompanyId) {
+        ownCompanyId =
+          companyIdFromCookie;
+      }
+
+      if (
+        !ownCompanyId ||
+        ownCompanyId === "ALL"
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Bu kullanıcıya bağlı firma bulunamadı.",
+          },
+          { status: 403 }
+        );
+      }
+
+      requestedCompanyId =
+        ownCompanyId;
     }
 
     if (!requestedCompanyId) {
       return NextResponse.json(
-        { error: "Firma seçilmedi." },
+        {
+          error: "Firma seçilmedi.",
+        },
         { status: 400 }
+      );
+    }
+
+    /*
+     * Demo ve firma yöneticisine ALL kapsamı
+     * hiçbir durumda verilmez.
+     */
+    if (
+      companyScoped &&
+      requestedCompanyId === "ALL"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Bu kullanıcı tüm firmaları görüntüleyemez.",
+        },
+        { status: 403 }
       );
     }
 
     let companyRow: CompanyAnyRow;
 
-if (requestedCompanyId === "ALL") {
-  companyRow = {
-    id: "ALL",
-    name: "Tüm Firmalar",
-  };
-} else {
-  const { data: companyData, error: companyError } = await supabase
-    .from("companies")
-    .select("*")
-    .eq("id", requestedCompanyId)
-    .maybeSingle();
+    if (
+      requestedCompanyId === "ALL"
+    ) {
+      companyRow = {
+        id: "ALL",
+        name: "Tüm Firmalar",
+      };
+    } else {
+      const {
+        data: companyData,
+        error: companyError,
+      } = await supabase
+        .from("companies")
+        .select("*")
+        .eq(
+          "id",
+          requestedCompanyId
+        )
+        .maybeSingle();
 
-  if (companyError || !companyData) {
-    return NextResponse.json(
-      { error: "Firma bilgisi alınamadı." },
-      { status: 500 }
-    );
-  }
+      if (companyError) {
+        console.error(
+          "training matrix company error:",
+          companyError
+        );
 
-  companyRow = companyData as CompanyAnyRow;
-}
-
-    let usersQuery = supabase
-  .from("users")
-  .select("id, full_name, email, company_id, role, is_active")
-  .eq("role", "training_user")
-  .order("full_name", { ascending: true });
-
-if (requestedCompanyId !== "ALL") {
-  usersQuery = usersQuery.eq("company_id", requestedCompanyId);
-}
-
-const { data: usersData, error: usersError } = await usersQuery;
-
-    if (usersError) {
-      return NextResponse.json(
-        { error: "Firma çalışanları alınamadı." },
-        { status: 500 }
-      );
-    }
-
-    const participants = ((usersData || []) as UserRow[]).map((u) => ({
-      id: String(u.id),
-      full_name: String(u.full_name || "Adsız Kullanıcı").trim(),
-      email: String(u.email || "").trim(),
-      is_active: Boolean(u.is_active),
-    }));
-
-    const participantIds = participants.map((p) => p.id);
-
-    let assignedTrainingIds: string[] = [];
-
-if (participantIds.length > 0) {
-  const { data: assignedRows } = await supabase
-    .from("training_assignments")
-    .select("training_id")
-    .in("user_id", participantIds);
-
-  assignedTrainingIds = Array.from(
-    new Set((assignedRows || []).map((r) => String(r.training_id)).filter(Boolean))
-  );
-}
-
-let trainingsQuery = supabase
-  .from("trainings")
-  .select("id, title, type, duration_minutes")
-  .order("title", { ascending: true });
-
-if (requestedCompanyId !== "ALL" && assignedTrainingIds.length > 0) {
-  trainingsQuery = trainingsQuery.in("id", assignedTrainingIds);
-}
-
-const { data: trainingsData, error: trainingsError } = await trainingsQuery;
-
-    if (trainingsError) {
-      return NextResponse.json(
-        { error: "Eğitim listesi alınamadı." },
-        { status: 500 }
-      );
-    }
-
-    const trainings = ((trainingsData || []) as TrainingRow[]).map((t) => ({
-  id: String(t.id),
-  title: String(t.title || "Adsız Eğitim").trim(),
-  type: String(t.type || "").trim().toLowerCase(),
-  duration_minutes:
-    typeof t.duration_minutes === "number" ? t.duration_minutes : 0,
-}));
-
-    let assignments: AssignmentRow[] = [];
-
-    if (participantIds.length > 0) {
-      const { data: assignmentsData, error: assignmentsError } = await supabase
-        .from("training_assignments")
-        .select("user_id, training_id, status, started_at, completed_at, created_at, watch_completed, final_exam_passed")
-        .in("user_id", participantIds);
-
-      if (assignmentsError) {
         return NextResponse.json(
-          { error: "Eğitim atama verileri alınamadı." },
+          {
+            error:
+              "Firma bilgisi alınamadı.",
+          },
           { status: 500 }
         );
       }
 
-      assignments = (assignmentsData || []) as AssignmentRow[];
+      if (!companyData) {
+        return NextResponse.json(
+          {
+            error:
+              "Firma bulunamadı.",
+          },
+          { status: 404 }
+        );
+      }
+
+      companyRow =
+        companyData as CompanyAnyRow;
     }
 
+    /*
+     * Çalışan sayısı users tablosundan değil,
+     * gerçek employees tablosundan alınır.
+     */
+    let employeesQuery = supabase
+      .from("employees")
+      .select(
+        "id, firm_id, full_name, email, active"
+      )
+      .order("full_name", {
+        ascending: true,
+      });
 
-    const trainingTypeMap = new Map<string, string>();
+    if (
+      requestedCompanyId !== "ALL"
+    ) {
+      employeesQuery =
+        employeesQuery.eq(
+          "firm_id",
+          requestedCompanyId
+        );
+    }
 
-trainings.forEach((t: any) => {
-  trainingTypeMap.set(String(t.id), String(t.type || "").toLowerCase());
-});
+    const {
+      data: employeesData,
+      error: employeesError,
+    } = await employeesQuery;
 
-const trainingMetaMap = new Map<string, any>();
+    if (employeesError) {
+      console.error(
+        "training matrix employees error:",
+        employeesError
+      );
 
-trainings.forEach((t: any) => {
-  trainingMetaMap.set(String(t.id), t);
-});
+      return NextResponse.json(
+        {
+          error:
+            "Firma çalışanları alınamadı.",
+        },
+        { status: 500 }
+      );
+    }
 
-function resolveTrainingStatus(a: AssignmentRow) {
-  const type = trainingTypeMap.get(String(a.training_id)) || "";
+    const employeeRows =
+      (employeesData ||
+        []) as EmployeeRow[];
 
-  const isAppRecord =
-    type === "orgun" ||
-    type === "örgün" ||
-    type === "ozel" ||
-    type === "özel";
+    const employeeIds =
+      employeeRows
+        .map((employee) =>
+          String(
+            employee.id || ""
+          ).trim()
+        )
+        .filter(Boolean);
 
-  if (isAppRecord) return "App Kaydı";
+    /*
+     * Çalışanlara bağlı eğitim kullanıcılarını bul.
+     */
+    let trainingUsers: UserRow[] =
+      [];
 
-  const isCompleted =
-  a.status === "completed" &&
-  (
-    (a.watch_completed === true && a.final_exam_passed === true) ||
-    (a.watch_completed !== false && a.final_exam_passed !== false)
-  );
+    if (employeeIds.length > 0) {
+      const {
+        data: usersData,
+        error: usersError,
+      } = await supabase
+        .from("users")
+        .select(
+          "id, full_name, email, company_id, employee_id, role, is_active"
+        )
+        .eq(
+          "role",
+          "training_user"
+        )
+        .in(
+          "employee_id",
+          employeeIds
+        );
 
-  if (isCompleted) return "Tamamlandı";
-  if (a.status === "in_progress") return "Devam Ediyor";
+      if (usersError) {
+        console.error(
+          "training matrix users error:",
+          usersError
+        );
 
-  return "Başlamadı";
-}
+        return NextResponse.json(
+          {
+            error:
+              "Eğitim kullanıcıları alınamadı.",
+          },
+          { status: 500 }
+        );
+      }
 
-   const assignmentMap = new Map<string, any>();
+      trainingUsers =
+        (usersData ||
+          []) as UserRow[];
+    }
 
-assignments.forEach((a) => {
-  const key = `${a.user_id}__${a.training_id}`;
-  const trainingMeta = trainingMetaMap.get(String(a.training_id));
+    /*
+     * Eski kayıtlarda employee_id bulunmayabilir.
+     * Firma bağlantılı training_user kayıtlarını da al.
+     */
+    if (
+      requestedCompanyId !== "ALL"
+    ) {
+      const {
+        data: companyUsersData,
+        error: companyUsersError,
+      } = await supabase
+        .from("users")
+        .select(
+          "id, full_name, email, company_id, employee_id, role, is_active"
+        )
+        .eq(
+          "role",
+          "training_user"
+        )
+        .eq(
+          "company_id",
+          requestedCompanyId
+        );
 
-  assignmentMap.set(key, {
-    status: resolveTrainingStatus(a),
-    training_date: a.completed_at || a.started_at || a.created_at || null,
-    duration_minutes: trainingMeta?.duration_minutes || 0,
-    type: trainingMeta?.type || "",
-  });
-});
+      if (companyUsersError) {
+        console.error(
+          "training matrix company users error:",
+          companyUsersError
+        );
+      } else {
+        const userMap = new Map(
+          trainingUsers.map(
+            (user) => [
+              String(user.id),
+              user,
+            ]
+          )
+        );
 
-    const matrix = participants.map((participant) => {
-      const statuses = trainings.map((training) => {
-  const key = `${participant.id}__${training.id}`;
-  const found = assignmentMap.get(key);
+        (
+          (companyUsersData ||
+            []) as UserRow[]
+        ).forEach((user) => {
+          userMap.set(
+            String(user.id),
+            user
+          );
+        });
 
-  return {
-    training_id: training.id,
-    status: found?.status || "Atanmadı",
-    type: found?.type || training.type || "",
-    duration_minutes: found?.duration_minutes || training.duration_minutes || 0,
-    training_date: found?.training_date || null,
-  };
-});
+        trainingUsers =
+          Array.from(
+            userMap.values()
+          );
+      }
+    }
 
-      return {
-        user_id: participant.id,
-        full_name: participant.full_name,
-        email: participant.email,
-        is_active: participant.is_active,
-        statuses,
-      };
-    });
+    const userByEmployeeId =
+      new Map<string, UserRow>();
 
-    const completedCount = assignments.filter((a) => {
-  const status = resolveTrainingStatus(a);
-  return status === "Tamamlandı" || status === "App Kaydı";
-}).length;
+    const userByEmail =
+      new Map<string, UserRow>();
 
-const inProgressCount = assignments.filter((a) => {
-  return resolveTrainingStatus(a) === "Devam Ediyor";
-}).length;
+    trainingUsers.forEach(
+      (user) => {
+        const employeeId =
+          String(
+            user.employee_id || ""
+          ).trim();
 
-const appRecordCount = assignments.filter((a) => {
-  return resolveTrainingStatus(a) === "App Kaydı";
-}).length;
+        const email = String(
+          user.email || ""
+        )
+          .trim()
+          .toLowerCase();
 
-const notStartedCount = assignments.filter((a) => {
-  return resolveTrainingStatus(a) === "Başlamadı";
-}).length;
+        if (employeeId) {
+          userByEmployeeId.set(
+            employeeId,
+            user
+          );
+        }
+
+        if (email) {
+          userByEmail.set(
+            email,
+            user
+          );
+        }
+      }
+    );
+
+    /*
+     * Her gerçek çalışan rapor matrisine eklenir.
+     * Eğitim hesabı olmayan çalışan da görünür.
+     */
+    const participants =
+      employeeRows.map(
+        (employee) => {
+          const employeeId =
+            String(employee.id);
+
+          const email = String(
+            employee.email || ""
+          )
+            .trim()
+            .toLowerCase();
+
+          const trainingUser =
+            userByEmployeeId.get(
+              employeeId
+            ) ||
+            (email
+              ? userByEmail.get(
+                  email
+                )
+              : undefined);
+
+          return {
+            employee_id:
+              employeeId,
+            assignment_user_id:
+              trainingUser?.id
+                ? String(
+                    trainingUser.id
+                  )
+                : null,
+            full_name:
+              String(
+                employee.full_name ||
+                  trainingUser?.full_name ||
+                  "Adsız Çalışan"
+              ).trim(),
+            email:
+              String(
+                employee.email ||
+                  trainingUser?.email ||
+                  ""
+              ).trim(),
+            is_active:
+              employee.active !==
+              false,
+          };
+        }
+      );
+
+    const participantUserIds =
+      participants
+        .map(
+          (participant) =>
+            participant.assignment_user_id
+        )
+        .filter(
+          (
+            id
+          ): id is string =>
+            Boolean(id)
+        );
+
+    let assignments: AssignmentRow[] =
+      [];
+
+    if (
+      participantUserIds.length > 0
+    ) {
+      const {
+        data: assignmentsData,
+        error: assignmentsError,
+      } = await supabase
+        .from(
+          "training_assignments"
+        )
+        .select(
+          "user_id, training_id, status, started_at, completed_at, created_at, watch_completed, video_chain_completed, final_exam_passed"
+        )
+        .in(
+          "user_id",
+          participantUserIds
+        );
+
+      if (assignmentsError) {
+        console.error(
+          "training matrix assignments error:",
+          assignmentsError
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Eğitim atama verileri alınamadı.",
+          },
+          { status: 500 }
+        );
+      }
+
+      assignments =
+        (assignmentsData ||
+          []) as AssignmentRow[];
+    }
+
+    const assignedTrainingIds =
+      Array.from(
+        new Set(
+          assignments
+            .map((assignment) =>
+              String(
+                assignment.training_id ||
+                  ""
+              ).trim()
+            )
+            .filter(Boolean)
+        )
+      );
+
+    let trainingsQuery = supabase
+      .from("trainings")
+      .select(
+        "id, title, type, duration_minutes"
+      )
+      .order("title", {
+        ascending: true,
+      });
+
+    /*
+     * Firmaya atanmış eğitim varsa yalnızca onları;
+     * henüz atama yoksa demo kataloğunu gösterebilmek
+     * için mevcut eğitim listesini getirir.
+     */
+    if (
+      requestedCompanyId !==
+        "ALL" &&
+      assignedTrainingIds.length >
+        0
+    ) {
+      trainingsQuery =
+        trainingsQuery.in(
+          "id",
+          assignedTrainingIds
+        );
+    }
+
+    const {
+      data: trainingsData,
+      error: trainingsError,
+    } = await trainingsQuery;
+
+    if (trainingsError) {
+      console.error(
+        "training matrix trainings error:",
+        trainingsError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Eğitim listesi alınamadı.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const trainings =
+      (
+        (trainingsData ||
+          []) as TrainingRow[]
+      ).map((training) => ({
+        id: String(training.id),
+        title:
+          String(
+            training.title ||
+              "Adsız Eğitim"
+          ).trim(),
+        type:
+          String(
+            training.type || ""
+          )
+            .trim()
+            .toLocaleLowerCase(
+              "tr-TR"
+            ),
+        duration_minutes:
+          typeof training.duration_minutes ===
+          "number"
+            ? training.duration_minutes
+            : 0,
+      }));
+
+    const trainingTypeMap =
+      new Map<string, string>();
+
+    const trainingMetaMap =
+      new Map<
+        string,
+        (typeof trainings)[number]
+      >();
+
+    trainings.forEach(
+      (training) => {
+        trainingTypeMap.set(
+          training.id,
+          training.type
+        );
+
+        trainingMetaMap.set(
+          training.id,
+          training
+        );
+      }
+    );
+
+    function resolveTrainingStatus(
+      assignment: AssignmentRow
+    ) {
+      const type =
+        trainingTypeMap.get(
+          String(
+            assignment.training_id
+          )
+        ) || "";
+
+      const isAppRecord = [
+        "orgun",
+        "örgün",
+        "ozel",
+        "özel",
+      ].includes(type);
+
+      if (isAppRecord) {
+        return "App Kaydı";
+      }
+
+      const watched =
+        assignment.video_chain_completed ===
+          true ||
+        assignment.watch_completed ===
+          true;
+
+      const isCompleted =
+        assignment.status ===
+          "completed" &&
+        watched &&
+        assignment.final_exam_passed ===
+          true;
+
+      if (isCompleted) {
+        return "Tamamlandı";
+      }
+
+      if (
+        assignment.status ===
+        "in_progress"
+      ) {
+        return "Devam Ediyor";
+      }
+
+      return "Başlamadı";
+    }
+
+    const assignmentMap =
+      new Map<
+        string,
+        {
+          status: string;
+          training_date:
+            | string
+            | null;
+          duration_minutes: number;
+          type: string;
+        }
+      >();
+
+    assignments.forEach(
+      (assignment) => {
+        const key =
+          `${assignment.user_id}__${assignment.training_id}`;
+
+        const trainingMeta =
+          trainingMetaMap.get(
+            String(
+              assignment.training_id
+            )
+          );
+
+        assignmentMap.set(
+          key,
+          {
+            status:
+              resolveTrainingStatus(
+                assignment
+              ),
+            training_date:
+              assignment.completed_at ||
+              assignment.started_at ||
+              assignment.created_at ||
+              null,
+            duration_minutes:
+              trainingMeta?.duration_minutes ||
+              0,
+            type:
+              trainingMeta?.type ||
+              "",
+          }
+        );
+      }
+    );
+
+    const matrix =
+      participants.map(
+        (participant) => {
+          const statuses =
+            trainings.map(
+              (training) => {
+                const key =
+                  participant.assignment_user_id
+                    ? `${participant.assignment_user_id}__${training.id}`
+                    : "";
+
+                const found = key
+                  ? assignmentMap.get(
+                      key
+                    )
+                  : undefined;
+
+                return {
+                  training_id:
+                    training.id,
+                  status:
+                    found?.status ||
+                    "Atanmadı",
+                  type:
+                    found?.type ||
+                    training.type ||
+                    "",
+                  duration_minutes:
+                    found?.duration_minutes ||
+                    training.duration_minutes ||
+                    0,
+                  training_date:
+                    found?.training_date ||
+                    null,
+                };
+              }
+            );
+
+          return {
+            user_id:
+              participant.assignment_user_id ||
+              `employee:${participant.employee_id}`,
+            full_name:
+              participant.full_name,
+            email:
+              participant.email,
+            is_active:
+              participant.is_active,
+            statuses,
+          };
+        }
+      );
+
+    const completedCount =
+      assignments.filter(
+        (assignment) => {
+          const status =
+            resolveTrainingStatus(
+              assignment
+            );
+
+          return (
+            status ===
+              "Tamamlandı" ||
+            status === "App Kaydı"
+          );
+        }
+      ).length;
+
+    const inProgressCount =
+      assignments.filter(
+        (assignment) =>
+          resolveTrainingStatus(
+            assignment
+          ) === "Devam Ediyor"
+      ).length;
+
+    const appRecordCount =
+      assignments.filter(
+        (assignment) =>
+          resolveTrainingStatus(
+            assignment
+          ) === "App Kaydı"
+      ).length;
+
+    const notStartedCount =
+      assignments.filter(
+        (assignment) =>
+          resolveTrainingStatus(
+            assignment
+          ) === "Başlamadı"
+      ).length;
 
     return NextResponse.json({
       success: true,
       role: resolvedRole,
+      read_only:
+        resolvedRole ===
+        "demo_user",
       company: {
-        id: String(companyRow.id || requestedCompanyId),
-        name: pickText(companyRow, ["name", "company_name", "firma_adi"]),
-        company_title: pickText(companyRow, [
-          "company_title",
-          "title",
-          "unvan",
-          "company_official_title",
-        ]),
-        address: pickText(companyRow, ["address", "adres", "full_address"]),
-        employer_representative: pickText(companyRow, [
-          "employer_representative",
-          "isveren_vekili",
-          "authorized_person",
-          "yetkili_kisi",
-        ]),
-        employee_count: participants.length,
+        id: String(
+          companyRow.id ||
+            requestedCompanyId
+        ),
+        name: pickText(
+          companyRow,
+          [
+            "name",
+            "company_name",
+            "firma_adi",
+          ]
+        ),
+        company_title: pickText(
+          companyRow,
+          [
+            "company_title",
+            "title",
+            "unvan",
+            "company_official_title",
+          ]
+        ),
+        address: pickText(
+          companyRow,
+          [
+            "address",
+            "adres",
+            "full_address",
+          ]
+        ),
+        employer_representative:
+          pickText(
+            companyRow,
+            [
+              "employer_representative",
+              "isveren_vekili",
+              "authorized_person",
+              "yetkili_kisi",
+              "yetkili",
+            ]
+          ),
+        employee_count:
+          participants.length,
       },
       summary: {
-  total_employees: participants.length,
-  total_trainings: trainings.length,
-  total_assignments: assignments.length,
-  completed_count: completedCount,
-  app_record_count: appRecordCount,
-  in_progress_count: inProgressCount,
-  not_started_count: notStartedCount,
-},
+        total_employees:
+          participants.length,
+        total_trainings:
+          trainings.length,
+        total_assignments:
+          assignments.length,
+        completed_count:
+          completedCount,
+        app_record_count:
+          appRecordCount,
+        in_progress_count:
+          inProgressCount,
+        not_started_count:
+          notStartedCount,
+      },
       trainings,
       matrix,
     });
   } catch (error) {
-    console.error("company training matrix error:", error);
+    console.error(
+      "company training matrix error:",
+      error
+    );
+
     return NextResponse.json(
-      { error: "Sunucu hatası oluştu." },
+      {
+        error:
+          "Sunucu hatası oluştu.",
+      },
       { status: 500 }
     );
   }

@@ -25,22 +25,55 @@ function diffDays(from: string) {
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
-    const companyIdFromCookie = String(
-      cookieStore.get("dsec_company_id")?.value || ""
-    ).trim();
+    const auth = String(
+  cookieStore.get("dsec_admin_auth")?.value ||
+    cookieStore.get("dsec_user_auth")?.value ||
+    ""
+).trim();
 
-    const isAllowedRole =
-      adminRole === "super_admin" || adminRole === "company_admin" || !adminRole;
+const role = String(
+  cookieStore.get("dsec_admin_role")?.value ||
+    cookieStore.get("dsec_user_role")?.value ||
+    ""
+).trim();
 
-    if (adminAuth !== "ok" && adminRole) {
-      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
-    }
+const companyIdFromCookie = String(
+  cookieStore.get("dsec_company_id")?.value || ""
+).trim();
 
-    if (!isAllowedRole) {
-      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
-    }
+const allowedRoles = [
+  "admin",
+  "super_admin",
+  "company_admin",
+  "demo_user",
+];
+
+if (
+  auth !== "ok" ||
+  !allowedRoles.includes(role)
+) {
+  return NextResponse.json(
+    { error: "Yetkisiz erişim." },
+    { status: 401 }
+  );
+}
+
+const companyScoped =
+  role === "company_admin" ||
+  role === "demo_user";
+
+if (
+  companyScoped &&
+  !companyIdFromCookie
+) {
+  return NextResponse.json(
+    {
+      error:
+        "Kullanıcı için firma bilgisi bulunamadı.",
+    },
+    { status: 403 }
+  );
+}
 
     const today = new Date();
 const todayStr = toDateOnly(today);
@@ -60,7 +93,7 @@ const supabase = getSupabase();
       .select("id, full_name, firm_id, job_title")
       .limit(10000);
 
-    if (adminRole === "company_admin" && companyIdFromCookie) {
+    if (companyScoped) {
       employeesQuery = employeesQuery.eq("firm_id", companyIdFromCookie);
     }
 
@@ -84,7 +117,7 @@ const supabase = getSupabase();
   .order("created_at", { ascending: false })
   .limit(1000);
 
-    if (adminRole === "company_admin" && companyIdFromCookie) {
+    if (companyScoped) {
       examsQuery = examsQuery.eq("company_id", companyIdFromCookie);
     }
 
@@ -259,7 +292,9 @@ const recentPrescriptions = (prescriptions || [])
     ];
 
     return NextResponse.json({
-      success: true,
+  success: true,
+  role,
+  read_only: role === "demo_user",
 
       summary: {
         todayExams,

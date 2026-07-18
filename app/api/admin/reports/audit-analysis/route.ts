@@ -88,30 +88,67 @@ function normalizeDofStatus(value: unknown, result: unknown) {
   return "NONE";
 }
 
-function runMatchesCompany(run: AnyRow, companyId: string, companyName: string) {
-  const firmId = text(run.firm_id);
-  const firmName = text(run.firm_name);
+function runMatchesCompany(
+  run: AnyRow,
+  companyIds: string[],
+  companyNames: string[]
+) {
+  const runFirmId = key(run.firm_id);
+  const runFirmName = key(run.firm_name);
 
-  const companyIdKey = key(companyId);
-  const companyNameKey = key(companyName);
-  const firmIdKey = key(firmId);
-  const firmNameKey = key(firmName);
+  const normalizedIds = companyIds
+    .map((value) => key(value))
+    .filter(Boolean);
 
-  if (companyIdKey && firmIdKey && firmIdKey === companyIdKey) return true;
-  if (firmNameKey === companyNameKey) return true;
+  const normalizedNames = companyNames
+    .map((value) => key(value))
+    .filter(Boolean);
 
-  if (companyNameKey && firmNameKey) {
-    if (firmNameKey === companyNameKey) return true;
-    if (firmNameKey.includes(companyNameKey)) return true;
-    if (companyNameKey.includes(firmNameKey)) return true;
+  if (
+    runFirmId &&
+    normalizedIds.includes(runFirmId)
+  ) {
+    return true;
   }
 
-  // App kayıtları Firma#1033038177 gibi geldiyse yakala
-  if (firmNameKey.startsWith("firma") && companyIdKey) {
-    if (firmNameKey.includes(companyIdKey)) return true;
+  if (
+    runFirmName &&
+    normalizedNames.includes(runFirmName)
+  ) {
+    return true;
   }
 
-  // App kayıtları firm_id=0 / -1 / boş geldiyse firma bazlı eşleştirme yapılamaz
+  if (runFirmName) {
+    const matchesName = normalizedNames.some(
+      (companyName) =>
+        runFirmName.includes(companyName) ||
+        companyName.includes(runFirmName)
+    );
+
+    if (matchesName) {
+      return true;
+    }
+  }
+
+  /*
+   * Mobil uygulama kayıtları bazen:
+   * Firma#123
+   * Firma 123
+   * şeklinde gelebilir.
+   */
+  if (
+    runFirmName.startsWith("firma")
+  ) {
+    const matchesLocalId =
+      normalizedIds.some((companyId) =>
+        runFirmName.includes(companyId)
+      );
+
+    if (matchesLocalId) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -119,45 +156,213 @@ export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
 
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
-    const companyIdFromCookie = text(cookieStore.get("dsec_company_id")?.value);
-    const companyIdFromQuery = text(req.nextUrl.searchParams.get("companyId"));
-    const companyNameFromQuery = text(req.nextUrl.searchParams.get("companyName"));
+    const auth = text(
+  cookieStore.get("dsec_admin_auth")?.value ||
+    cookieStore.get("dsec_user_auth")?.value
+);
 
-    const isAllowed =
-      adminAuth === "ok" &&
-      (adminRole === "super_admin" ||
-        adminRole === "admin" ||
-        adminRole === "company_admin");
+const role = text(
+  cookieStore.get("dsec_admin_role")?.value ||
+    cookieStore.get("dsec_user_role")?.value
+);
 
-    if (!isAllowed) {
-      return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
-    }
+const userId = text(
+  cookieStore.get("dsec_user_id")?.value
+);
 
-    const requestedCompanyId =
-      adminRole === "company_admin"
-        ? companyIdFromCookie || companyIdFromQuery
-        : companyIdFromQuery;
+const companyIdFromCookie = text(
+  cookieStore.get("dsec_company_id")?.value
+);
 
-    if (!requestedCompanyId) {
-      return NextResponse.json({ error: "Firma seçilmedi." }, { status: 400 });
-    }
+const companyIdFromQuery = text(
+  req.nextUrl.searchParams.get("companyId")
+);
+
+const companyNameFromQuery = text(
+  req.nextUrl.searchParams.get("companyName")
+);
+
+const allowedRoles = [
+  "admin",
+  "super_admin",
+  "company_admin",
+  "demo_user",
+];
+
+if (
+  auth !== "ok" ||
+  !allowedRoles.includes(role)
+) {
+  return NextResponse.json(
+    { error: "Yetkisiz erişim." },
+    { status: 401 }
+  );
+}
+
+const supabase = getSupabase();
+
+const companyScoped =
+  role === "company_admin" ||
+  role === "demo_user";
+
+let requestedCompanyId =
+  companyIdFromQuery;
+
+if (companyScoped) {
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Kullanıcı bilgisi bulunamadı." },
+      { status: 401 }
+    );
+  }
+
+  const {
+    data: userRow,
+    error: userError,
+  } = await supabase
+    .from("users")
+    .select(
+      "id, role, company_id, is_active"
+    )
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userError) {
+    console.error(
+      "audit user scope error:",
+      userError
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Kullanıcı firma bilgisi alınamadı.",
+      },
+      { status: 500 }
+    );
+  }
+
+  if (!userRow) {
+    return NextResponse.json(
+      { error: "Kullanıcı bulunamadı." },
+      { status: 404 }
+    );
+  }
+
+  if (userRow.is_active === false) {
+    return NextResponse.json(
+      { error: "Kullanıcı pasif durumda." },
+      { status: 403 }
+    );
+  }
+
+  if (
+    text(userRow.role) !== role
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Oturum rolü ile kullanıcı rolü uyuşmuyor.",
+      },
+      { status: 403 }
+    );
+  }
+
+  requestedCompanyId = text(
+    userRow.company_id
+  );
+
+  if (!requestedCompanyId) {
+    const {
+      data: primaryAccess,
+    } = await supabase
+      .from("user_firm_access")
+      .select("firm_id")
+      .eq("user_id", userId)
+      .eq("is_primary", true)
+      .limit(1)
+      .maybeSingle();
+
+    requestedCompanyId = text(
+      primaryAccess?.firm_id
+    );
+  }
+
+  if (!requestedCompanyId) {
+    requestedCompanyId =
+      companyIdFromCookie;
+  }
+}
+
+if (!requestedCompanyId) {
+  return NextResponse.json(
+    { error: "Firma seçilmedi." },
+    { status: 400 }
+  );
+}
+
+if (
+  companyScoped &&
+  requestedCompanyId === "ALL"
+) {
+  return NextResponse.json(
+    {
+      error:
+        "Bu kullanıcı tüm firmaları görüntüleyemez.",
+    },
+    { status: 403 }
+  );
+}
 
     const showAllCompanies = requestedCompanyId === "ALL";
 
-    const supabase = getSupabase();
+    
 
     let companyName = "Tüm Firmalar";
- 
+let localFirmId = "";
+
 if (!showAllCompanies) {
-  const { data: companyData } = await supabase
+  const {
+    data: companyData,
+    error: companyError,
+  } = await supabase
     .from("companies")
-    .select("*")
+    .select("id, name, local_firm_id")
     .eq("id", requestedCompanyId)
     .maybeSingle();
 
-  companyName = companyNameFromQuery || pickCompanyName(companyData as AnyRow | null);
+  if (companyError) {
+    console.error(
+      "audit company error:",
+      companyError
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Firma bilgisi alınamadı.",
+      },
+      { status: 500 }
+    );
+  }
+
+  if (!companyData) {
+    return NextResponse.json(
+      { error: "Firma bulunamadı." },
+      { status: 404 }
+    );
+  }
+
+  companyName =
+    pickCompanyName(
+      companyData as AnyRow
+    ) ||
+    companyNameFromQuery ||
+    "-";
+
+  localFirmId = text(
+    companyData.local_firm_id
+  );
 }
 
     const { data: allRuns, error: runsError } = await supabase
@@ -175,10 +380,25 @@ if (!showAllCompanies) {
       );
     }
 
-    const runs = showAllCompanies
-  ? (allRuns || [])
-  : (allRuns || []).filter((run: AnyRow) =>
-      runMatchesCompany(run, requestedCompanyId, companyName)
+   const companyIds = [
+  requestedCompanyId,
+  localFirmId,
+].filter(Boolean);
+
+const companyNames = [
+  companyName,
+  companyNameFromQuery,
+].filter(Boolean);
+
+const runs = showAllCompanies
+  ? allRuns || []
+  : (allRuns || []).filter(
+      (run: AnyRow) =>
+        runMatchesCompany(
+          run,
+          companyIds,
+          companyNames
+        )
     );
 
     const runRemoteIds = runs
@@ -275,8 +495,10 @@ if (!showAllCompanies) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    return NextResponse.json({
-      success: true,
+   return NextResponse.json({
+  success: true,
+  role,
+  read_only: role === "demo_user",
       company: {
         id: requestedCompanyId,
         name: companyName || "-",
