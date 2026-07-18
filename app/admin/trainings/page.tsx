@@ -55,6 +55,15 @@ type CompanyApiRow = {
   is_active?: boolean | null;
 };
 
+type MeResponse = {
+  success?: boolean;
+  user?: {
+    role?: string | null;
+    is_demo?: boolean | null;
+  };
+  error?: string;
+};
+
 type UserRow = {
   id: string;
   employee_id: string;
@@ -219,6 +228,8 @@ function getTrainingDurationText(value?: number | null) {
 }
 
 export default function AdminTrainingPage() {
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [sessionRole, setSessionRole] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
   const [totalEmployeeCount, setTotalEmployeeCount] = useState(0);
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
@@ -447,9 +458,61 @@ if (employeeIds.length > 0) {
 
 
 
+  const canManageTraining = [
+    "super_admin",
+    "admin",
+    "company_admin",
+  ].includes(sessionRole);
+
   useEffect(() => {
-    void loadAll();
+    let active = true;
+
+    async function loadSession() {
+      try {
+        const response = await fetch("/api/admin/me", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        const json: MeResponse = await response.json().catch(() => ({}));
+        if (!active) return;
+
+        if (!response.ok) {
+          setSessionRole("");
+          setError(
+            `Oturum doğrulanamadı (${response.status}): ${
+              json?.error || "Lütfen sayfayı yenileyin."
+            }`
+          );
+          return;
+        }
+
+        setSessionRole(String(json?.user?.role || "").trim());
+      } catch (sessionError) {
+        if (!active) return;
+        setSessionRole("");
+        setError(
+          sessionError instanceof Error
+            ? sessionError.message
+            : "Oturum bilgisi okunamadı."
+        );
+      } finally {
+        if (active) setSessionLoading(false);
+      }
+    }
+
+    void loadSession();
+
+    return () => {
+      active = false;
+    };
   }, []);
+
+  useEffect(() => {
+    if (sessionLoading) return;
+    void loadAll();
+  }, [sessionLoading]);
 
   useEffect(() => {
     const found =
@@ -667,6 +730,31 @@ if (companyFilter !== "all") {
       }));
   }, [trainings]);
 
+  // Rol okunmadan alt eğitim bileşenlerini çalıştırma. Bazı yönetim
+  // bileşenleri kendi API çağrılarında demo rolünü admin girişine yönlendiriyor.
+  if (sessionLoading) {
+    return (
+      <main
+        style={{
+          minHeight: "100%",
+          background: BRAND.bg,
+          padding: "clamp(12px, 2vw, 24px)",
+        }}
+      >
+        <div
+          style={{
+            ...cardStyle(),
+            maxWidth: 1400,
+            margin: "0 auto",
+            fontWeight: 800,
+          }}
+        >
+          Eğitim oturumu doğrulanıyor...
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main
       style={{
@@ -726,6 +814,8 @@ if (companyFilter !== "all") {
           notStarted={trainingTotals.totalNotStarted}
         />
 
+        {canManageTraining ? (
+          <>
         <TrainingExecutiveDashboard
           trainings={trainings}
           totalEmployees={totalEmployeeCount}
@@ -765,6 +855,22 @@ if (companyFilter !== "all") {
                 )?.name || "Seçili Firma"
           }
         />
+          </>
+        ) : (
+          <div
+            style={{
+              ...cardStyle(),
+              marginBottom: 20,
+              borderColor: "#fecaca",
+              background: "#fff7f7",
+              color: "#991b1b",
+              fontWeight: 800,
+            }}
+          >
+            Demo hesabı salt okunur. Eğitim verilerini ve istatistiklerini
+            inceleyebilirsiniz; yönetim motorları ve kayıt işlemleri kapalıdır.
+          </div>
+        )}
 
         <TrainingAnalytics
           totalAssigned={trainingTotals.totalAssigned}
@@ -796,6 +902,8 @@ if (companyFilter !== "all") {
         />
 
 
+        {canManageTraining ? (
+          <>
         <TrainingCatalog
           trainings={trainings}
           selectedTrainingId={trainingId}
@@ -825,6 +933,8 @@ if (companyFilter !== "all") {
             trainingTitle={selectedTrainingInfo.title}
             onChanged={loadAll}
           />
+        ) : null}
+          </>
         ) : null}
 
        
@@ -911,8 +1021,9 @@ if (companyFilter !== "all") {
 </div>
 
 
+        {canManageTraining ? (
+          <>
         <ParticipantImportCenter onCompleted={loadAll} />
-
 
         <AssignmentCenter
           companySelected={companyFilter !== "all"}
@@ -928,6 +1039,8 @@ if (companyFilter !== "all") {
           onSelectedEmployeesChange={setSelectedEmployees}
           onAssign={assign}
         />
+          </>
+        ) : null}
 
         
       </div>
