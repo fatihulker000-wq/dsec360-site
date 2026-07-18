@@ -60,6 +60,8 @@ if (nextRole === "training_user") {
   router.push("/portal/training");
 } else if (nextRole === "super_admin") {
   router.push("/admin/dashboard");
+} else if (nextRole === "demo_user") {
+  router.push("/admin/dashboard");
 } else if (nextRole === "company_admin" || nextRole === "operator") {
   router.push("/panel");
 } else {

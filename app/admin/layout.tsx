@@ -185,6 +185,21 @@ export default function AdminLayout({
       },
     ];
 
+    if (role === "demo_user") {
+      return items.filter((item) =>
+        [
+          "/admin/dashboard",
+          "/admin/trainings",
+          "/admin/health",
+          "/admin/denetimler",
+          "/admin/employees",
+          "/admin/reports",
+          "/admin/cbs",
+          "/admin/accidents",
+        ].includes(item.href)
+      );
+    }
+
     if (role === "super_admin") {
       items.splice(4, 0, {
         name: "Firmalar",
@@ -295,7 +310,13 @@ export default function AdminLayout({
           <div className="admin-active-box">
             <small>AKTİF BÖLÜM</small>
             <strong>{activeLabel}</strong>
-            <span>{role === "super_admin" ? "Süper Admin" : "Firma Admin"}</span>
+            <span>
+              {role === "super_admin"
+                ? "Süper Admin"
+                : role === "demo_user"
+                ? "Demo • Salt Okunur"
+                : "Firma Admin"}
+            </span>
           </div>
 
           <nav className="admin-sidebar-nav">{renderMenuItems()}</nav>
@@ -336,7 +357,11 @@ export default function AdminLayout({
               <small>AKTİF BÖLÜM</small>
               <strong>{activeLabel}</strong>
               <span>
-                {role === "super_admin" ? "Süper Admin" : "Firma Admin"}
+                {role === "super_admin"
+                  ? "Süper Admin"
+                  : role === "demo_user"
+                  ? "Demo • Salt Okunur"
+                  : "Firma Admin"}
               </span>
             </div>
 

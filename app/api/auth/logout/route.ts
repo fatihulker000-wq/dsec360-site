@@ -19,6 +19,7 @@ export async function POST() {
   response.cookies.set("dsec_user_id", "", cookieBase);
   response.cookies.set("dsec_user_email", "", cookieBase);
   response.cookies.set("dsec_company_id", "", cookieBase);
+  response.cookies.set("dsec_is_demo", "", cookieBase);
 
   return response;
 }

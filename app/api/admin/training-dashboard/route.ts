@@ -60,14 +60,23 @@ function isTrainingCompleted(row: AssignmentRow, training?: TrainingRow) {
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
+    const adminAuth =
+      cookieStore.get("dsec_admin_auth")?.value ||
+      cookieStore.get("dsec_user_auth")?.value;
+    const adminRole =
+      cookieStore.get("dsec_admin_role")?.value ||
+      cookieStore.get("dsec_user_role")?.value;
     const companyIdFromCookie = String(
       cookieStore.get("dsec_company_id")?.value || ""
     ).trim();
 
     const isAllowedRole =
-      adminRole === "super_admin" || adminRole === "company_admin";
+      adminRole === "super_admin" ||
+      adminRole === "company_admin" ||
+      adminRole === "demo_user";
+
+    const isCompanyScoped =
+      adminRole === "company_admin" || adminRole === "demo_user";
 
     if (adminAuth !== "ok" || !isAllowedRole) {
       return NextResponse.json(
@@ -76,7 +85,7 @@ export async function GET() {
       );
     }
 
-    if (adminRole === "company_admin" && !companyIdFromCookie) {
+    if (isCompanyScoped && !companyIdFromCookie) {
       return NextResponse.json(
         { error: "Firma yöneticisi için firma bilgisi bulunamadı." },
         { status: 403 }
@@ -140,7 +149,7 @@ export async function GET() {
         .select("id, full_name, email, company_id")
         .in("id", userIds);
 
-      if (adminRole === "company_admin") {
+      if (isCompanyScoped) {
         userQuery = userQuery.eq("company_id", companyIdFromCookie);
       }
 
@@ -162,7 +171,7 @@ export async function GET() {
   .from("companies")
   .select("id, name");
 
-if (adminRole === "company_admin") {
+if (isCompanyScoped) {
   companiesQuery = companiesQuery.eq("id", companyIdFromCookie);
 }
 
@@ -343,7 +352,7 @@ const upcomingTrainings = trainings
   .map((training) => ({
     id: training.id,
     title: training.title,
-    company: adminRole === "company_admin" ? companyMap[companyIdFromCookie] || "Firma" : "Genel",
+    company: isCompanyScoped ? companyMap[companyIdFromCookie] || "Firma" : "Genel",
     date: new Date().toISOString(),
   }));
 

@@ -442,7 +442,10 @@ const loadInspectionDashboard = async (firm = "all") => {
 ]);
 
   useEffect(() => {
-    if (adminRole === "company_admin" && adminCompanyId) {
+    if (
+      (adminRole === "company_admin" || adminRole === "demo_user") &&
+      adminCompanyId
+    ) {
       const adminKey = normalizeCompanyKey(adminCompanyId);
 
       const matched =
@@ -467,7 +470,8 @@ const loadInspectionDashboard = async (firm = "all") => {
   }, [adminCompanyId, companies]);
 
   const effectiveSelectedCompany =
-    adminRole === "company_admin" && resolvedAdminCompany
+    (adminRole === "company_admin" || adminRole === "demo_user") &&
+    resolvedAdminCompany
       ? resolvedAdminCompany
       : selectedCompany;
 
@@ -1084,7 +1088,9 @@ const dashboardPieData = [
           onCompanyChange={setSelectedCompany}
           searchValue={dashboardSearch}
           onSearchChange={setDashboardSearch}
-          companyLocked={adminRole === "company_admin"}
+          companyLocked={
+            adminRole === "company_admin" || adminRole === "demo_user"
+          }
           criticalCount={criticalRiskCount}
           executiveRecommendation={
             hasActiveDashboardFilter

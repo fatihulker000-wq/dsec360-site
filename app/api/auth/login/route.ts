@@ -258,7 +258,12 @@ if (hasGlobalFirmAccess) {
     }
 
     // 🏢 FİRMA KONTROL
-    const companyBoundRoles = ["company_admin", "operator", "training_user"];
+    const companyBoundRoles = [
+      "company_admin",
+      "operator",
+      "training_user",
+      "demo_user",
+    ];
 const mustCheckCompany =
   companyBoundRoles.includes(userRole) && !hasGlobalFirmAccess;
 
@@ -393,6 +398,11 @@ const response = NextResponse.json({
     response.cookies.set("dsec_user_role", userRole, activeCookieBase);
     response.cookies.set("dsec_user_id", userId, activeCookieBase);
     response.cookies.set("dsec_user_email", userEmail, activeCookieBase);
+    response.cookies.set(
+      "dsec_is_demo",
+      userRole === "demo_user" ? "true" : "false",
+      activeCookieBase
+    );
    response.cookies.set(
   "dsec_company_id",
   companyId || appFirms[0]?.id || "",

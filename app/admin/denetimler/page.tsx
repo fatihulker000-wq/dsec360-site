@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import ExecutiveHero from "../../../components/inspection-v2/ExecutiveHero";
 import FilterToolbar, {
@@ -41,6 +42,14 @@ function getSupabase() {
 async function deleteDenetimAction(formData: FormData) {
   "use server";
 
+  const cookieStore = await cookies();
+  const role = String(
+    cookieStore.get("dsec_user_role")?.value ||
+      cookieStore.get("dsec_admin_role")?.value ||
+      ""
+  ).trim();
+  if (role === "demo_user") return;
+
   const remoteId = Number(formData.get("remoteId") || 0);
   if (!remoteId) return;
 
@@ -55,6 +64,14 @@ async function deleteDenetimAction(formData: FormData) {
 
 async function closeDofAction(formData: FormData) {
   "use server";
+
+  const cookieStore = await cookies();
+  const role = String(
+    cookieStore.get("dsec_user_role")?.value ||
+      cookieStore.get("dsec_admin_role")?.value ||
+      ""
+  ).trim();
+  if (role === "demo_user") return;
 
   const answerId = Number(formData.get("answerId") || 0);
   const runRemoteId = Number(formData.get("runRemoteId") || 0);
@@ -113,10 +130,46 @@ export default async function AdminDenetimlerPage({
 
   const supabase = getSupabase();
 
-  const { data: runs, error } = await supabase
+  const cookieStore = await cookies();
+  const sessionRole = String(
+    cookieStore.get("dsec_user_role")?.value ||
+      cookieStore.get("dsec_admin_role")?.value ||
+      ""
+  ).trim();
+  const sessionCompanyId = String(
+    cookieStore.get("dsec_company_id")?.value || ""
+  ).trim();
+  const isCompanyScoped =
+    sessionRole === "company_admin" || sessionRole === "demo_user";
+
+  if (isCompanyScoped && !sessionCompanyId) {
+    redirect("/login");
+  }
+
+  let scopedRunFirmId = sessionCompanyId;
+
+  if (isCompanyScoped) {
+    const { data: scopedCompany } = await supabase
+      .from("companies")
+      .select("id, local_firm_id")
+      .eq("id", sessionCompanyId)
+      .maybeSingle();
+
+    scopedRunFirmId = String(
+      scopedCompany?.local_firm_id ?? scopedCompany?.id ?? sessionCompanyId
+    ).trim();
+  }
+
+  let runsQuery = supabase
     .from("denetim_runs")
     .select("*")
     .order("inserted_at", { ascending: false });
+
+  if (isCompanyScoped) {
+    runsQuery = runsQuery.eq("firm_id", scopedRunFirmId);
+  }
+
+  const { data: runs, error } = await runsQuery;
 
   const safeRuns = runs || [];
   const runIds = safeRuns.map((r: any) => r.id);
@@ -130,10 +183,16 @@ export default async function AdminDenetimlerPage({
 
   const answerList = answers || [];
 
-  const { data: companies } = await supabase
-  .from("companies")
-  .select("id, name")
-  .order("name", { ascending: true });
+  let companiesQuery = supabase
+    .from("companies")
+    .select("id, name")
+    .order("name", { ascending: true });
+
+  if (isCompanyScoped) {
+    companiesQuery = companiesQuery.eq("id", sessionCompanyId);
+  }
+
+  const { data: companies } = await companiesQuery;
 
 const companyList = companies || [];
 
