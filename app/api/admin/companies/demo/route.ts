@@ -1182,10 +1182,9 @@ async function refreshAccidents(
 
   const rows = [
     {
-      web_firm_id: companyId,
+      web_firm_id: localFirmId,
       firm_id: localFirmId,
-      employee_id:
-        ahmet?.id || null,
+      employee_id: null,
       event_type: "İş Kazası",
       title:
         "Forklift ile raf teması",
@@ -1222,10 +1221,9 @@ async function refreshAccidents(
       updated_at: now,
     },
     {
-      web_firm_id: companyId,
+      web_firm_id: localFirmId,
       firm_id: localFirmId,
-      employee_id:
-        ali?.id || null,
+      employee_id: null,
       event_type:
         "Ramak Kala",
       title:
