@@ -433,22 +433,48 @@ async function ensureEmployees(
     DEMO_EMPLOYEES
   ) {
     const {
-      data: existingEmployee,
+      data: existingEmployees,
       error: existingError,
     } = await supabase
       .from("employees")
-      .select("id")
-      .eq("firm_id", companyId)
+      .select("id, firm_id")
       .eq(
         "registry_no",
         employee.registry_no
-      )
-      .maybeSingle();
+      );
 
     if (existingError) {
       throw new Error(
         `Çalışan kontrol edilemedi (${employee.full_name}): ${existingError.message}`
       );
+    }
+
+    const employeeRows = existingEmployees || [];
+
+    const existingEmployee =
+      employeeRows.find(
+        (row) =>
+          String(row.firm_id || "") === companyId
+      ) || employeeRows[0] || null;
+
+    const duplicateIds = employeeRows
+      .filter((row) => row.id !== existingEmployee?.id)
+      .map((row) => row.id);
+
+    if (duplicateIds.length > 0) {
+      const { error: passiveError } = await supabase
+        .from("employees")
+        .update({
+          active: false,
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", duplicateIds);
+
+      if (passiveError) {
+        throw new Error(
+          `Mükerrer çalışanlar pasife alınamadı (${employee.full_name}): ${passiveError.message}`
+        );
+      }
     }
 
     const payload = {
@@ -1192,9 +1218,8 @@ async function refreshAccidents(
       is_deleted: false,
       source: "WEB",
       created_at:
-        isoDate(-35),
-      updated_at:
-        new Date().toISOString(),
+        now - 35 * 24 * 60 * 60 * 1000,
+      updated_at: now,
     },
     {
       web_firm_id: companyId,
@@ -1233,23 +1258,50 @@ async function refreshAccidents(
       is_deleted: false,
       source: "WEB",
       created_at:
-        isoDate(-18),
-      updated_at:
-        new Date().toISOString(),
+        now - 18 * 24 * 60 * 60 * 1000,
+      updated_at: now,
     },
   ];
 
+  const toEpochMillis = (
+    value: string | number
+  ) => {
+    if (
+      typeof value === "number" &&
+      Number.isFinite(value)
+    ) {
+      return Math.trunc(value);
+    }
+
+    const parsed = new Date(value).getTime();
+
+    if (!Number.isFinite(parsed)) {
+      throw new Error(
+        `Geçersiz kaza tarihi: ${String(value)}`
+      );
+    }
+
+    return parsed;
+  };
+
+  const safeRows = rows.map((row) => ({
+    ...row,
+    event_date: toEpochMillis(row.event_date),
+    created_at: toEpochMillis(row.created_at),
+    updated_at: toEpochMillis(row.updated_at),
+  }));
+
   const { error } = await supabase
     .from("accident_records")
-    .insert(rows);
+    .insert(safeRows);
 
   if (error) {
     throw new Error(
-      `Kaza kayıtları oluşturulamadı: ${error.message}`
+      `Kaza kayıtları oluşturulamadı [DEMO-V4]: ${error.message}`
     );
   }
 
-  return rows.length;
+  return safeRows.length;
 }
 
 async function refreshCbs(
