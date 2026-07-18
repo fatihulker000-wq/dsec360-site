@@ -1,37 +1,72 @@
 export type DemoSeedResult = {
-  success?: boolean;
+  success: boolean;
+
   error?: string;
+
+  message?: string;
+
   company?: {
-    id?: string;
-    name?: string;
+    id: string;
+
+    local_firm_id?:
+      | number
+      | null;
+
+    name: string;
   };
+
   employees?: {
-    inserted?: number;
-    skipped?: number;
+    inserted: number;
+
+    errors: string[];
   };
-  summary?: Record<string, number>;
+
+  accidents?: {
+    inserted: number;
+
+    errors: string[];
+  };
+
+  inspections?: {
+    inserted: number;
+
+    errors: string[];
+  };
+
+  cbs?: {
+    inserted: number;
+
+    errors: string[];
+  };
 };
 
-export async function seedDemoCompany(): Promise<DemoSeedResult> {
-  const response = await fetch("/api/admin/demo/seed", {
-    method: "POST",
-    credentials: "include",
-  });
+export async function createDemoCompanyData():
+  Promise<DemoSeedResult> {
+  const response =
+    await fetch(
+      "/api/admin/demo/seed",
+      {
+        method: "POST",
+        credentials:
+          "include",
+      }
+    );
+
+  const json =
+    await response
+      .json()
+      .catch(
+        () =>
+          ({}) as DemoSeedResult
+      );
 
   if (
-    response.status === 401 &&
-    typeof window !== "undefined"
+    !response.ok ||
+    !json.success
   ) {
-    window.location.href = "/admin/login";
-  }
-
-  const json: DemoSeedResult = await response
-    .json()
-    .catch(() => ({} as DemoSeedResult));
-
-  if (!response.ok) {
     throw new Error(
-      json.error || "Demo verileri oluşturulamadı."
+      json.error ||
+        "Demo verileri oluşturulamadı."
     );
   }
 

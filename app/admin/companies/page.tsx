@@ -26,7 +26,7 @@ import {
 } from "./services/companyService";
 
 import {
-  seedDemoCompany,
+  createDemoCompanyData,
 } from "./services/demoCompanyService";
 
 import type {
@@ -66,9 +66,15 @@ export default function AdminCompaniesPage() {
     setSearch,
     setStatusFilter,
     setSortBy,
+    reload,
     persistCompany,
     deactivateCompany,
   } = useCompanies();
+
+  const [
+    demoLoading,
+    setDemoLoading,
+  ] = useState(false);
 
   const [
     isMobile,
@@ -136,11 +142,6 @@ export default function AdminCompaniesPage() {
     performanceError,
     setPerformanceError,
   ] = useState("");
-
-  const [
-    seedingDemo,
-    setSeedingDemo,
-  ] = useState(false);
 
   useEffect(() => {
     const media =
@@ -335,11 +336,11 @@ export default function AdminCompaniesPage() {
       }
     };
 
-  const refreshDemoData =
+  const createOrRefreshDemo =
     async () => {
       const approved =
         window.confirm(
-          "Demo firma ve örnek veriler oluşturulsun veya güncellensin mi?"
+          "D-SEC Demo Lojistik ve Depolama A.Ş. için örnek veriler oluşturulsun veya yenilensin mi?"
         );
 
       if (!approved) {
@@ -347,27 +348,52 @@ export default function AdminCompaniesPage() {
       }
 
       try {
-        setSeedingDemo(true);
+        setDemoLoading(true);
 
         const result =
-          await seedDemoCompany();
+          await createDemoCompanyData();
 
-        const inserted =
-          result.employees
-            ?.inserted ?? 0;
+        await reload();
 
-        const skipped =
-          result.employees
-            ?.skipped ?? 0;
+        const employees =
+          result.employees?.inserted ??
+          0;
+
+        const accidents =
+          result.accidents?.inserted ??
+          0;
+
+        const inspections =
+          result.inspections?.inserted ??
+          0;
+
+        const cbs =
+          result.cbs?.inserted ??
+          0;
+
+        const allErrors = [
+          ...(result.employees?.errors ||
+            []),
+          ...(result.accidents?.errors ||
+            []),
+          ...(result.inspections?.errors ||
+            []),
+          ...(result.cbs?.errors ||
+            []),
+        ];
 
         alert(
-          `Demo verileri hazırlandı.\nFirma: ${
-            result.company?.name ||
-            "D-SEC Demo Lojistik ve Depolama A.Ş."
-          }\nEklenen çalışan: ${inserted}\nAtlanan çalışan: ${skipped}`
+          [
+            "Demo verileri hazırlandı.",
+            `Çalışan: ${employees}`,
+            `Kaza/Olay: ${accidents}`,
+            `Denetim: ${inspections}`,
+            `ÇBS: ${cbs}`,
+            allErrors.length > 0
+              ? `Uyarı: ${allErrors.length} kayıt oluşturulamadı.`
+              : "Tüm işlemler tamamlandı.",
+          ].join("\n")
         );
-
-        window.location.reload();
       } catch (errorValue) {
         alert(
           errorValue instanceof Error
@@ -375,7 +401,7 @@ export default function AdminCompaniesPage() {
             : "Demo verileri oluşturulamadı."
         );
       } finally {
-        setSeedingDemo(false);
+        setDemoLoading(false);
       }
     };
 
@@ -403,15 +429,19 @@ export default function AdminCompaniesPage() {
           }
         />
 
-        <CompanyStats
-          companies={companies}
-        />
-
         <CompanyDemoCenter
           companies={companies}
-          loading={seedingDemo}
-          onCreateOrRefresh={refreshDemoData}
-          onOpenDemo={openDetail}
+          loading={demoLoading}
+          onCreateOrRefresh={
+            createOrRefreshDemo
+          }
+          onOpenDemo={
+            openDetail
+          }
+        />
+
+        <CompanyStats
+          companies={companies}
         />
 
         {error ? (
