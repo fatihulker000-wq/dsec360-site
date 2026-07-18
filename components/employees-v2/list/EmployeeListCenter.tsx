@@ -1,6 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import EmployeeBulkActions from "./EmployeeBulkActions";
 import EmployeeTable from "./EmployeeTable";
@@ -29,6 +33,7 @@ export default function EmployeeListCenter({
   companies,
   loading = false,
   actionLoading = false,
+  readOnly = false,
   onRefresh,
   onAdd,
   onOpen,
@@ -44,6 +49,7 @@ export default function EmployeeListCenter({
   companies: EmployeeListCompany[];
   loading?: boolean;
   actionLoading?: boolean;
+  readOnly?: boolean;
   onRefresh(): void;
   onAdd(): void;
   onOpen(employee: EmployeeListRow): void;
@@ -67,11 +73,24 @@ export default function EmployeeListCenter({
       direction: "asc",
     });
 
+  /*
+   * Kullanıcı salt-okunur duruma geçtiğinde
+   * daha önce seçilmiş çalışanları temizle.
+   */
+  useEffect(() => {
+    if (readOnly) {
+      setSelectedIds([]);
+    }
+  }, [readOnly]);
+
   const departments = useMemo(
     () =>
       uniqueSorted(
         employees
-          .map((employee) => employee.department)
+          .map(
+            (employee) =>
+              employee.department
+          )
           .filter(Boolean) as string[]
       ),
     [employees]
@@ -81,7 +100,10 @@ export default function EmployeeListCenter({
     () =>
       uniqueSorted(
         employees
-          .map((employee) => employee.job_title)
+          .map(
+            (employee) =>
+              employee.job_title
+          )
           .filter(Boolean) as string[]
       ),
     [employees]
@@ -96,21 +118,26 @@ export default function EmployeeListCenter({
       .filter((employee) => {
         if (
           filters.companyId !== "all" &&
-          String(employee.firm_id) !== filters.companyId
+          String(employee.firm_id) !==
+            filters.companyId
         ) {
           return false;
         }
 
         if (
           filters.department !== "all" &&
-          String(employee.department || "") !== filters.department
+          String(
+            employee.department || ""
+          ) !== filters.department
         ) {
           return false;
         }
 
         if (
           filters.jobTitle !== "all" &&
-          String(employee.job_title || "") !== filters.jobTitle
+          String(
+            employee.job_title || ""
+          ) !== filters.jobTitle
         ) {
           return false;
         }
@@ -129,7 +156,9 @@ export default function EmployeeListCenter({
           return false;
         }
 
-        if (!query) return true;
+        if (!query) {
+          return true;
+        }
 
         return [
           employee.full_name,
@@ -150,7 +179,9 @@ export default function EmployeeListCenter({
       );
   }, [employees, filters, sort]);
 
-  function handleSort(key: EmployeeTableSortKey) {
+  function handleSort(
+    key: EmployeeTableSortKey
+  ) {
     setSort((current) => ({
       key,
       direction:
@@ -162,15 +193,27 @@ export default function EmployeeListCenter({
   }
 
   function toggleOne(id: string) {
+    if (readOnly) {
+      return;
+    }
+
     setSelectedIds((current) =>
       current.includes(id)
-        ? current.filter((value) => value !== id)
+        ? current.filter(
+            (value) => value !== id
+          )
         : [...current, id]
     );
   }
 
   function toggleAll() {
-    const visibleIds = filteredRows.map((row) => row.id);
+    if (readOnly) {
+      return;
+    }
+
+    const visibleIds = filteredRows.map(
+      (row) => row.id
+    );
 
     const allSelected =
       visibleIds.length > 0 &&
@@ -180,73 +223,133 @@ export default function EmployeeListCenter({
 
     setSelectedIds((current) =>
       allSelected
-        ? current.filter((id) => !visibleIds.includes(id))
-        : Array.from(new Set([...current, ...visibleIds]))
+        ? current.filter(
+            (id) =>
+              !visibleIds.includes(id)
+          )
+        : Array.from(
+            new Set([
+              ...current,
+              ...visibleIds,
+            ])
+          )
     );
   }
 
-  const selectedRows = employees.filter((employee) =>
-    selectedIds.includes(employee.id)
+  const selectedRows = useMemo(
+    () =>
+      employees.filter((employee) =>
+        selectedIds.includes(employee.id)
+      ),
+    [employees, selectedIds]
   );
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
+    <div
+      style={{
+        display: "grid",
+        gap: 14,
+      }}
+    >
       <EmployeeToolbar
         filters={filters}
         companies={companies}
         departments={departments}
         jobTitles={jobTitles}
+        readOnly={readOnly}
         onChange={setFilters}
         onRefresh={onRefresh}
-        onAdd={onAdd}
+        onAdd={() => {
+          if (!readOnly) {
+            onAdd();
+          }
+        }}
       />
 
-      <EmployeeBulkActions
-        selectedCount={selectedIds.length}
-        loading={actionLoading}
-        onActivate={() =>
-          onBulkActivate?.(selectedIds)
-        }
-        onPassive={() =>
-          onBulkPassive?.(selectedIds)
-        }
-        onDelete={() =>
-          onBulkDelete?.(selectedIds)
-        }
-        onExportCsv={() =>
-          exportEmployeesCsv(
-            selectedRows.length > 0
-              ? selectedRows
-              : filteredRows
-          )
-        }
-        onClear={() => setSelectedIds([])}
-      />
+      {!readOnly ? (
+        <EmployeeBulkActions
+          selectedCount={
+            selectedIds.length
+          }
+          loading={actionLoading}
+          onActivate={() =>
+            onBulkActivate?.(
+              selectedIds
+            )
+          }
+          onPassive={() =>
+            onBulkPassive?.(
+              selectedIds
+            )
+          }
+          onDelete={() =>
+            onBulkDelete?.(
+              selectedIds
+            )
+          }
+          onExportCsv={() =>
+            exportEmployeesCsv(
+              selectedRows.length > 0
+                ? selectedRows
+                : filteredRows
+            )
+          }
+          onClear={() =>
+            setSelectedIds([])
+          }
+        />
+      ) : null}
 
       <EmployeeTable
         rows={filteredRows}
-        selectedIds={selectedIds}
+        selectedIds={
+          readOnly ? [] : selectedIds
+        }
         sort={sort}
         loading={loading}
+        readOnly={readOnly}
         onSort={handleSort}
         onToggleAll={toggleAll}
         onToggleOne={toggleOne}
         onOpen={onOpen}
-        onEdit={onEdit}
-        onPassive={onPassive}
-        onActivate={onActivate}
-        onDelete={onDelete}
+        onEdit={(employee) => {
+          if (!readOnly) {
+            onEdit(employee);
+          }
+        }}
+        onPassive={(employee) => {
+          if (!readOnly) {
+            onPassive(employee);
+          }
+        }}
+        onActivate={(employee) => {
+          if (!readOnly) {
+            onActivate(employee);
+          }
+        }}
+        onDelete={(employee) => {
+          if (!readOnly) {
+            onDelete(employee);
+          }
+        }}
       />
     </div>
   );
 }
 
-function uniqueSorted(values: string[]) {
-  return Array.from(new Set(values))
+function uniqueSorted(
+  values: string[]
+) {
+  return Array.from(
+    new Set(values)
+  )
     .map((value) => value.trim())
     .filter(Boolean)
     .sort((first, second) =>
-      first.localeCompare(second, "tr")
+      first.localeCompare(
+        second,
+        "tr"
+      )
     );
 }
 
@@ -258,18 +361,26 @@ function compareRows(
   const firstValue =
     sort.key === "active"
       ? Number(first.active)
-      : String(first[sort.key] || "");
+      : String(
+          first[sort.key] || ""
+        );
 
   const secondValue =
     sort.key === "active"
       ? Number(second.active)
-      : String(second[sort.key] || "");
+      : String(
+          second[sort.key] || ""
+        );
 
   const comparison =
-    typeof firstValue === "number" &&
-    typeof secondValue === "number"
+    typeof firstValue ===
+      "number" &&
+    typeof secondValue ===
+      "number"
       ? firstValue - secondValue
-      : String(firstValue).localeCompare(
+      : String(
+          firstValue
+        ).localeCompare(
           String(secondValue),
           "tr",
           {

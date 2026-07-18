@@ -14,6 +14,7 @@ export default function EmployeeTable({
   selectedIds,
   sort,
   loading = false,
+  readOnly = false,
   onSort,
   onToggleAll,
   onToggleOne,
@@ -27,6 +28,7 @@ export default function EmployeeTable({
   selectedIds: string[];
   sort: EmployeeTableSort;
   loading?: boolean;
+  readOnly?: boolean;
   onSort(key: EmployeeTableSortKey): void;
   onToggleAll(): void;
   onToggleOne(id: string): void;
@@ -37,8 +39,13 @@ export default function EmployeeTable({
   onDelete(employee: EmployeeListRow): void;
 }) {
   const allSelected =
+    !readOnly &&
     rows.length > 0 &&
-    rows.every((row) => selectedIds.includes(row.id));
+    rows.every((row) =>
+      selectedIds.includes(row.id)
+    );
+
+  const columnCount = readOnly ? 15 : 16;
 
   return (
     <section
@@ -53,69 +60,84 @@ export default function EmployeeTable({
         <table
           style={{
             width: "100%",
-            minWidth: 1540,
+            minWidth: readOnly ? 1460 : 1540,
             borderCollapse: "collapse",
           }}
         >
           <thead>
             <tr style={{ background: "#f8fafc" }}>
-              <Th>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={onToggleAll}
-                />
-              </Th>
+              {!readOnly ? (
+                <Th>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={onToggleAll}
+                    aria-label="Görünen çalışanların tümünü seç"
+                  />
+                </Th>
+              ) : null}
+
               <SortableTh
                 label="Ad Soyad"
                 sortKey="full_name"
                 sort={sort}
                 onSort={onSort}
               />
+
               <SortableTh
                 label="Sicil"
                 sortKey="registry_no"
                 sort={sort}
                 onSort={onSort}
               />
+
               <SortableTh
                 label="Firma"
                 sortKey="firm_name"
                 sort={sort}
                 onSort={onSort}
               />
+
               <SortableTh
                 label="Departman"
                 sortKey="department"
                 sort={sort}
                 onSort={onSort}
               />
+
               <SortableTh
                 label="Ünvan"
                 sortKey="job_title"
                 sort={sort}
                 onSort={onSort}
               />
+
               <Th>İletişim</Th>
+
               <SortableTh
                 label="İşe Giriş"
                 sortKey="start_date"
                 sort={sort}
                 onSort={onSort}
               />
+
               <SortableTh
                 label="Durum"
                 sortKey="active"
                 sort={sort}
                 onSort={onSort}
               />
+
               <Th>Eğitim</Th>
               <Th>Sağlık</Th>
               <Th>KKD</Th>
               <Th>Evrak</Th>
               <Th>Risk</Th>
               <Th>Kaza</Th>
-              <Th>İşlemler</Th>
+
+              <Th>
+                {readOnly ? "Görüntüle" : "İşlemler"}
+              </Th>
             </tr>
           </thead>
 
@@ -123,7 +145,7 @@ export default function EmployeeTable({
             {loading ? (
               <tr>
                 <td
-                  colSpan={16}
+                  colSpan={columnCount}
                   style={{
                     padding: 28,
                     textAlign: "center",
@@ -137,7 +159,7 @@ export default function EmployeeTable({
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={16}
+                  colSpan={columnCount}
                   style={{
                     padding: 28,
                     textAlign: "center",
@@ -158,28 +180,40 @@ export default function EmployeeTable({
                   !employee.registry_no ||
                   !employee.tc_no;
 
+                const isSelected =
+                  !readOnly &&
+                  selectedIds.includes(employee.id);
+
                 return (
                   <tr
                     key={employee.id}
                     style={{
-                      borderTop: "1px solid #f1f5f9",
-                      background: selectedIds.includes(employee.id)
+                      borderTop:
+                        "1px solid #f1f5f9",
+                      background: isSelected
                         ? "#eff6ff"
                         : "#fff",
                     }}
                   >
-                    <Td>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(employee.id)}
-                        onChange={() => onToggleOne(employee.id)}
-                      />
-                    </Td>
+                    {!readOnly ? (
+                      <Td>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() =>
+                            onToggleOne(employee.id)
+                          }
+                          aria-label={`${employee.full_name} çalışanını seç`}
+                        />
+                      </Td>
+                    ) : null}
 
                     <Td>
                       <button
                         type="button"
-                        onClick={() => onOpen(employee)}
+                        onClick={() =>
+                          onOpen(employee)
+                        }
                         style={{
                           border: "none",
                           padding: 0,
@@ -190,25 +224,56 @@ export default function EmployeeTable({
                           textAlign: "left",
                         }}
                       >
-                        {employee.full_name || "Adsız çalışan"}
+                        {employee.full_name ||
+                          "Adsız çalışan"}
                       </button>
                     </Td>
 
-                    <Td>{employee.registry_no || "-"}</Td>
-                    <Td>{employee.firm_name || employee.firm_id || "-"}</Td>
-                    <Td>{employee.department || "-"}</Td>
-                    <Td>{employee.job_title || "-"}</Td>
+                    <Td>
+                      {employee.registry_no || "-"}
+                    </Td>
 
                     <Td>
-                      <div style={{ display: "grid", gap: 4 }}>
-                        <span>{employee.phone || "-"}</span>
-                        <span style={{ color: "#64748b", fontSize: 11 }}>
+                      {employee.firm_name ||
+                        employee.firm_id ||
+                        "-"}
+                    </Td>
+
+                    <Td>
+                      {employee.department || "-"}
+                    </Td>
+
+                    <Td>
+                      {employee.job_title || "-"}
+                    </Td>
+
+                    <Td>
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: 4,
+                        }}
+                      >
+                        <span>
+                          {employee.phone || "-"}
+                        </span>
+
+                        <span
+                          style={{
+                            color: "#64748b",
+                            fontSize: 11,
+                          }}
+                        >
                           {employee.email || "-"}
                         </span>
                       </div>
                     </Td>
 
-                    <Td>{formatDate(employee.start_date)}</Td>
+                    <Td>
+                      {formatDate(
+                        employee.start_date
+                      )}
+                    </Td>
 
                     <Td>
                       <EmployeeStatusBadge
@@ -220,35 +285,50 @@ export default function EmployeeTable({
                     <Td>
                       <EmployeeModuleBadge
                         label="Eğitim"
-                        status={employee.training_status || "UNKNOWN"}
+                        status={
+                          employee.training_status ||
+                          "UNKNOWN"
+                        }
                       />
                     </Td>
 
                     <Td>
                       <EmployeeModuleBadge
                         label="Sağlık"
-                        status={employee.health_status || "UNKNOWN"}
+                        status={
+                          employee.health_status ||
+                          "UNKNOWN"
+                        }
                       />
                     </Td>
 
                     <Td>
                       <EmployeeModuleBadge
                         label="KKD"
-                        status={employee.ppe_status || "UNKNOWN"}
+                        status={
+                          employee.ppe_status ||
+                          "UNKNOWN"
+                        }
                       />
                     </Td>
 
                     <Td>
                       <EmployeeModuleBadge
                         label="Evrak"
-                        status={employee.document_status || "UNKNOWN"}
+                        status={
+                          employee.document_status ||
+                          "UNKNOWN"
+                        }
                       />
                     </Td>
 
                     <Td>
                       <EmployeeModuleBadge
                         label="Risk"
-                        status={employee.risk_status || "UNKNOWN"}
+                        status={
+                          employee.risk_status ||
+                          "UNKNOWN"
+                        }
                       />
                     </Td>
 
@@ -261,18 +341,26 @@ export default function EmployeeTable({
                           borderRadius: 999,
                           padding: "6px 9px",
                           background:
-                            Number(employee.accident_count || 0) > 0
+                            Number(
+                              employee.accident_count ||
+                                0
+                            ) > 0
                               ? "#fee2e2"
                               : "#f1f5f9",
                           color:
-                            Number(employee.accident_count || 0) > 0
+                            Number(
+                              employee.accident_count ||
+                                0
+                            ) > 0
                               ? "#b91c1c"
                               : "#64748b",
                           fontSize: 11,
                           fontWeight: 900,
                         }}
                       >
-                        {Number(employee.accident_count || 0)}
+                        {Number(
+                          employee.accident_count || 0
+                        )}
                       </span>
                     </Td>
 
@@ -287,34 +375,48 @@ export default function EmployeeTable({
                         <SmallButton
                           title="Detay"
                           background="#111827"
-                          onClick={() => onOpen(employee)}
+                          onClick={() =>
+                            onOpen(employee)
+                          }
                         />
 
-                        <SmallButton
-                          title="Düzenle"
-                          background="#2563eb"
-                          onClick={() => onEdit(employee)}
-                        />
+                        {!readOnly ? (
+                          <>
+                            <SmallButton
+                              title="Düzenle"
+                              background="#2563eb"
+                              onClick={() =>
+                                onEdit(employee)
+                              }
+                            />
 
-                        {employee.active ? (
-                          <SmallButton
-                            title="Pasife Al"
-                            background="#b45309"
-                            onClick={() => onPassive(employee)}
-                          />
-                        ) : (
-                          <SmallButton
-                            title="Aktif Yap"
-                            background="#166534"
-                            onClick={() => onActivate(employee)}
-                          />
-                        )}
+                            {employee.active ? (
+                              <SmallButton
+                                title="Pasife Al"
+                                background="#b45309"
+                                onClick={() =>
+                                  onPassive(employee)
+                                }
+                              />
+                            ) : (
+                              <SmallButton
+                                title="Aktif Yap"
+                                background="#166534"
+                                onClick={() =>
+                                  onActivate(employee)
+                                }
+                              />
+                            )}
 
-                        <SmallButton
-                          title="Sil"
-                          background="#b91c1c"
-                          onClick={() => onDelete(employee)}
-                        />
+                            <SmallButton
+                              title="Sil"
+                              background="#b91c1c"
+                              onClick={() =>
+                                onDelete(employee)
+                              }
+                            />
+                          </>
+                        ) : null}
                       </div>
                     </Td>
                   </tr>
@@ -366,6 +468,7 @@ function SortableTh({
         }}
       >
         {label}
+
         {active
           ? sort.direction === "asc"
             ? " ↑"

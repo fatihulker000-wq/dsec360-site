@@ -10,6 +10,7 @@ export default function EmployeeToolbar({
   companies,
   departments,
   jobTitles,
+  readOnly = false,
   onChange,
   onRefresh,
   onAdd,
@@ -18,6 +19,7 @@ export default function EmployeeToolbar({
   companies: EmployeeListCompany[];
   departments: string[];
   jobTitles: string[];
+  readOnly?: boolean;
   onChange(filters: EmployeeListFilters): void;
   onRefresh(): void;
   onAdd(): void;
@@ -33,11 +35,53 @@ export default function EmployeeToolbar({
         border: "1px solid #e5e7eb",
       }}
     >
+      {readOnly ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: "11px 14px",
+            borderRadius: 14,
+            background: "#fff7ed",
+            border: "1px solid #fed7aa",
+            color: "#9a3412",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 850,
+              lineHeight: 1.5,
+            }}
+          >
+            Demo görünümü: Çalışan kayıtlarını inceleyebilirsiniz.
+            Ekleme, düzenleme ve silme işlemleri kapalıdır.
+          </div>
+
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "6px 10px",
+              borderRadius: 999,
+              background: "#ffedd5",
+              border: "1px solid #fdba74",
+              fontSize: 11,
+              fontWeight: 950,
+            }}
+          >
+            SALT OKUNUR
+          </div>
+        </div>
+      ) : null}
+
       <div
         style={{
           display: "grid",
-          gridTemplateColumns:
-            "minmax(240px,1.5fr) repeat(4,minmax(150px,1fr)) auto auto",
+          gridTemplateColumns: readOnly
+            ? "minmax(240px,1.5fr) repeat(4,minmax(150px,1fr)) auto"
+            : "minmax(240px,1.5fr) repeat(4,minmax(150px,1fr)) auto auto",
           gap: 10,
           alignItems: "center",
         }}
@@ -64,15 +108,22 @@ export default function EmployeeToolbar({
           }
           style={fieldStyle}
         >
-          <option value="all">Tüm firmalar</option>
-          {companies.map((company) => (
-            <option
-              key={company.id}
-              value={company.id}
-            >
-              {company.name}
-            </option>
-          ))}
+          <option value="all">
+            {companies.length === 1
+              ? companies[0]?.name || "Firma"
+              : "Tüm firmalar"}
+          </option>
+
+          {companies.length > 1
+            ? companies.map((company) => (
+                <option
+                  key={company.id}
+                  value={company.id}
+                >
+                  {company.name}
+                </option>
+              ))
+            : null}
         </select>
 
         <select
@@ -86,8 +137,12 @@ export default function EmployeeToolbar({
           style={fieldStyle}
         >
           <option value="all">Tüm departmanlar</option>
+
           {departments.map((department) => (
-            <option key={department} value={department}>
+            <option
+              key={department}
+              value={department}
+            >
               {department}
             </option>
           ))}
@@ -104,8 +159,12 @@ export default function EmployeeToolbar({
           style={fieldStyle}
         >
           <option value="all">Tüm ünvanlar</option>
+
           {jobTitles.map((jobTitle) => (
-            <option key={jobTitle} value={jobTitle}>
+            <option
+              key={jobTitle}
+              value={jobTitle}
+            >
               {jobTitle}
             </option>
           ))}
@@ -117,7 +176,8 @@ export default function EmployeeToolbar({
             onChange({
               ...filters,
               status:
-                event.target.value as EmployeeListFilters["status"],
+                event.target
+                  .value as EmployeeListFilters["status"],
             })
           }
           style={fieldStyle}
@@ -135,24 +195,29 @@ export default function EmployeeToolbar({
           Yenile
         </button>
 
-        <button
-          type="button"
-          onClick={onAdd}
-          style={primaryButton}
-        >
-          + Çalışan Ekle
-        </button>
+        {!readOnly ? (
+          <button
+            type="button"
+            onClick={onAdd}
+            style={primaryButton}
+          >
+            + Çalışan Ekle
+          </button>
+        ) : null}
       </div>
 
       <style jsx>{`
         @media (max-width: 1200px) {
-          section > div {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          section > div:last-child {
+            grid-template-columns: repeat(
+              2,
+              minmax(0, 1fr)
+            ) !important;
           }
         }
 
         @media (max-width: 680px) {
-          section > div {
+          section > div:last-child {
             grid-template-columns: 1fr !important;
           }
         }

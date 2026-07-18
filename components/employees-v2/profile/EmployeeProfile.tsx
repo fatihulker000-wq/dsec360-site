@@ -29,8 +29,9 @@ export default function EmployeeProfile({
   sgkItems,
   ibysItems,
   activityItems,
-  onEdit,
-  onClose,
+readOnly = false,
+onEdit,
+onClose,
 }: {
   employee: EmployeeProfileEmployee;
 
@@ -47,7 +48,8 @@ export default function EmployeeProfile({
 
   activityItems?: EmployeeProfileActivityItem[];
 
-  onEdit?(): void;
+readOnly?: boolean;
+onEdit?(): void;
   onClose?(): void;
 }) {
   const [activeTab, setActiveTab] =
@@ -76,10 +78,10 @@ export default function EmployeeProfile({
           }}
         >
           <EmployeeProfileSidebar
-            employee={employee}
-            onEdit={onEdit}
-            onClose={onClose}
-          />
+  employee={employee}
+  onEdit={readOnly ? undefined : onEdit}
+  onClose={onClose}
+/>
         </div>
 
         <main

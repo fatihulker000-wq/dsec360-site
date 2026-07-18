@@ -96,6 +96,7 @@ export default function EmployeesPage() {
   const [error, setError] = useState("");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [firmFilter, setFirmFilter] = useState("all");
+  const [readOnly, setReadOnly] = useState(false);
 
   const [editModal, setEditModal] = useState<Employee | null>(null);
   const [editForm, setEditForm] = useState<EmployeeForm>(emptyForm);
@@ -134,13 +135,39 @@ export default function EmployeesPage() {
         return;
       }
 
-      setData(Array.isArray(json?.data) ? json.data : []);
-      setCompanies(
-        Array.isArray(json?.companies) ? json.companies : []
-      );
+      const nextEmployees = Array.isArray(json?.data)
+  ? json.data
+  : [];
+
+const nextCompanies = Array.isArray(json?.companies)
+  ? json.companies
+  : [];
+
+const nextReadOnly =
+  json?.scope?.read_only === true;
+
+const scopedCompanyId = String(
+  json?.scope?.company_id || ""
+).trim();
+
+setData(nextEmployees);
+setCompanies(nextCompanies);
+setReadOnly(nextReadOnly);
+
+/*
+ * Demo ve firma kapsamlı kullanıcıda firma seçimini
+ * API'nin döndürdüğü firmaya sabitliyoruz.
+ */
+if (scopedCompanyId && nextCompanies.length === 1) {
+  setFirmFilter(scopedCompanyId);
+}
     } catch {
-      setData([]);
-      setError("Çalışan listesi yüklenirken hata oluştu.");
+  setData([]);
+  setCompanies([]);
+  setReadOnly(false);
+  setError(
+    "Çalışan listesi yüklenirken hata oluştu."
+  );
     } finally {
       setLoading(false);
     }
@@ -181,12 +208,34 @@ export default function EmployeesPage() {
   );
 
   const selectedCompanyName = useMemo(() => {
-    if (firmFilter === "all") return "Tüm firmalar";
-    return companyMap.get(String(firmFilter)) || "Seçili firma";
-  }, [firmFilter, companyMap]);
+  if (
+    readOnly &&
+    companies.length === 1
+  ) {
+    return companies[0]?.name || "Demo firma";
+  }
+
+  if (firmFilter === "all") {
+    return "Tüm firmalar";
+  }
+
+  return (
+    companyMap.get(String(firmFilter)) ||
+    "Seçili firma"
+  );
+}, [
+  firmFilter,
+  companyMap,
+  companies,
+  readOnly,
+]);
 
   const handleAddEmployee = () => {
-    if (firmFilter === "all") {
+  if (readOnly) {
+    return;
+  }
+
+  if (firmFilter === "all") {
       alert("Yeni çalışan eklemek için önce işlem firmasını seçmelisin.");
       return;
     }
@@ -223,9 +272,15 @@ export default function EmployeesPage() {
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        alert(json?.error || "Çalışan eklenemedi.");
-        return;
-      }
+  setData([]);
+  setCompanies([]);
+  setReadOnly(false);
+  setError(
+    json?.error ||
+      "Çalışanlar alınamadı."
+  );
+  return;
+}
 
       setAddModal(false);
       setAddForm(emptyForm);
@@ -637,6 +692,7 @@ export default function EmployeesPage() {
         }}
       />
 
+{!readOnly ? (
       <section
         style={{
           display: "grid",
@@ -746,7 +802,8 @@ export default function EmployeesPage() {
               : "Toplu Yükle"}
           </button>
         </div>
-      </section>
+       </section>
+) : null}
 
       {error ? (
         <CardText
@@ -755,10 +812,11 @@ export default function EmployeesPage() {
         />
       ) : (
         <EmployeeListCenter
-          employees={employeeRows}
-          companies={companies}
-          loading={loading}
-          actionLoading={actionLoading}
+  employees={employeeRows}
+  companies={companies}
+  loading={loading}
+  actionLoading={actionLoading}
+  readOnly={readOnly}
           onRefresh={() => {
             void loadEmployees("all");
           }}
@@ -919,15 +977,20 @@ export default function EmployeesPage() {
                 >
                   <EmployeeProfile
                     employee={employee}
+                    readOnly={readOnly}
                     onClose={() =>
                       setProfileEmployee(null)
                     }
                     onEdit={() => {
-                      setProfileEmployee(null);
-                      openEditModal(
-                        profileEmployee
-                      );
-                    }}
+  if (readOnly) {
+    return;
+  }
+
+  setProfileEmployee(null);
+  openEditModal(
+    profileEmployee
+  );
+}}
                     {...profileProps}
                   />
 
