@@ -263,37 +263,50 @@ export default function AdminTrainingPage() {
   }),
 ]);
 
-      if (
-        usersRes.status === 401 ||
-        trainingsRes.status === 401 ||
-        companiesRes.status === 401
-      ) {
-        window.location.href = "/admin/login";
-        return;
+      const usersJson = await usersRes.json().catch(() => ({}));
+      const trainingsJson = await trainingsRes.json().catch(() => ({}));
+      const companiesJson = await companiesRes.json().catch(() => ({}));
+      const employeesJson = await employeesRes.json().catch(() => ({}));
+
+      const apiErrors: string[] = [];
+
+      if (!usersRes.ok) {
+        apiErrors.push(
+          `Kullanıcı API (${usersRes.status}): ${
+            usersJson?.error || "Kullanıcı listesi alınamadı."
+          }`
+        );
       }
 
-      const usersJson = await usersRes.json();
-      const trainingsJson = await trainingsRes.json();
-      const companiesJson = await companiesRes.json();
-      const employeesJson = await employeesRes.json();
+      if (!trainingsRes.ok) {
+        apiErrors.push(
+          `Eğitim API (${trainingsRes.status}): ${
+            trainingsJson?.error || "Eğitim listesi alınamadı."
+          }`
+        );
+      }
+
+      if (!companiesRes.ok) {
+        apiErrors.push(
+          `Firma API (${companiesRes.status}): ${
+            companiesJson?.error || "Firma listesi alınamadı."
+          }`
+        );
+      }
+
+      if (!employeesRes.ok) {
+        apiErrors.push(
+          `Çalışan API (${employeesRes.status}): ${
+            employeesJson?.error || "Çalışan listesi alınamadı."
+          }`
+        );
+      }
 
 setTotalEmployeeCount(
   Array.isArray(employeesJson?.data)
     ? employeesJson.data.filter((e: any) => e.active !== false).length
     : 0
 );
-
-      if (!usersRes.ok) {
-        throw new Error(usersJson?.error || "Kullanıcı listesi alınamadı.");
-      }
-
-      if (!trainingsRes.ok) {
-        throw new Error(trainingsJson?.error || "Eğitim listesi alınamadı.");
-      }
-
-      if (!companiesRes.ok) {
-        throw new Error(companiesJson?.error || "Firma listesi alınamadı.");
-      }
 
       const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
         ? usersJson.data.map((u: UserApiRow) => ({
@@ -349,6 +362,7 @@ final_exam_count:
       setUsers(normalizedUsers);
       setTrainings(normalizedTrainings);
       setCompanies(normalizedCompanies);
+      setError(apiErrors.join(" • "));
     } catch (err) {
       console.error(err);
       setUsers([]);
@@ -568,12 +582,7 @@ if (!linkRes.ok) {
 }),
       });
 
-      if (res.status === 401) {
-        window.location.href = "/admin/login";
-        return;
-      }
-
-      const data: AssignResponse = await res.json();
+      const data: AssignResponse = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setAssignSummary(data);
