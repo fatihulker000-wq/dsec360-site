@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
       .eq("name", DEMO_COMPANY.name)
       .maybeSingle();
 
+    if (existing.error) {
+      throw new Error(`Demo firma sorgulanamadı: ${existing.error.message}`);
+    }
+
     if (existing.data?.id) {
       companyId = existing.data.id;
 
@@ -55,10 +59,20 @@ export async function POST(req: NextRequest) {
           ...DEMO_COMPANY,
           is_active: true
         })
-        .select()
+        .select("id")
         .single();
 
+      if (created.error || !created.data?.id) {
+        throw new Error(
+          `Demo firma oluşturulamadı: ${created.error?.message ?? "Firma kimliği dönmedi."}`
+        );
+      }
+
       companyId = created.data.id;
+    }
+
+    if (!companyId) {
+      throw new Error("Demo firma kimliği belirlenemedi.");
     }
 
     //-------------------------------------------------------
@@ -253,8 +267,14 @@ export async function POST(req: NextRequest) {
           app_run_id: Date.now()
 
         })
-        .select()
+        .select("id")
         .single();
+
+      if (inserted.error || !inserted.data?.id) {
+        throw new Error(
+          `Denetim kaydı oluşturulamadı (${inspection.template_type}): ${inserted.error?.message ?? "Denetim kimliği dönmedi."}`
+        );
+      }
 
       inspectionIds.push(inserted.data.id);
 
@@ -450,6 +470,17 @@ export async function POST(req: NextRequest) {
         accidents: totalAccidents,
         inspections: totalInspections,
         cbs: totalCbs,
+      },
+
+      metrics: {
+        employee_count: totalEmployees,
+      },
+
+      moduleRecords: {
+        accidents: totalAccidents,
+        inspections: totalInspections,
+        cbs: totalCbs,
+        errors: [],
       },
 
       message: "Demo firma başarıyla oluşturuldu."
