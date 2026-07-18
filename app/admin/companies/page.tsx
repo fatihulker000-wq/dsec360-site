@@ -5,10 +5,10 @@ import {
   useState,
 } from "react";
 
+import CompanyDemoCenter from "./components/CompanyDemoCenter";
 import CompanyDetailModal from "./components/CompanyDetailModal";
 import CompanyFormModal from "./components/CompanyFormModal";
 import CompanyHeader from "./components/CompanyHeader";
-import CompanyPortfolioInsights from "./components/CompanyPortfolioInsights";
 import CompanyStats from "./components/CompanyStats";
 import CompanyTable from "./components/CompanyTable";
 import CompanyToolbar from "./components/CompanyToolbar";
@@ -24,6 +24,10 @@ import {
 import {
   getCompanyPerformance,
 } from "./services/companyService";
+
+import {
+  seedDemoCompany,
+} from "./services/demoCompanyService";
 
 import type {
   Company,
@@ -132,6 +136,11 @@ export default function AdminCompaniesPage() {
     performanceError,
     setPerformanceError,
   ] = useState("");
+
+  const [
+    seedingDemo,
+    setSeedingDemo,
+  ] = useState(false);
 
   useEffect(() => {
     const media =
@@ -326,6 +335,50 @@ export default function AdminCompaniesPage() {
       }
     };
 
+  const refreshDemoData =
+    async () => {
+      const approved =
+        window.confirm(
+          "Demo firma ve örnek veriler oluşturulsun veya güncellensin mi?"
+        );
+
+      if (!approved) {
+        return;
+      }
+
+      try {
+        setSeedingDemo(true);
+
+        const result =
+          await seedDemoCompany();
+
+        const inserted =
+          result.employees
+            ?.inserted ?? 0;
+
+        const skipped =
+          result.employees
+            ?.skipped ?? 0;
+
+        alert(
+          `Demo verileri hazırlandı.\nFirma: ${
+            result.company?.name ||
+            "D-SEC Demo Lojistik ve Depolama A.Ş."
+          }\nEklenen çalışan: ${inserted}\nAtlanan çalışan: ${skipped}`
+        );
+
+        window.location.reload();
+      } catch (errorValue) {
+        alert(
+          errorValue instanceof Error
+            ? errorValue.message
+            : "Demo verileri oluşturulamadı."
+        );
+      } finally {
+        setSeedingDemo(false);
+      }
+    };
+
   return (
     <main
       style={{
@@ -354,9 +407,11 @@ export default function AdminCompaniesPage() {
           companies={companies}
         />
 
-        <CompanyPortfolioInsights
+        <CompanyDemoCenter
           companies={companies}
-          onOpenCompany={openDetail}
+          loading={seedingDemo}
+          onCreateOrRefresh={refreshDemoData}
+          onOpenDemo={openDetail}
         />
 
         {error ? (
