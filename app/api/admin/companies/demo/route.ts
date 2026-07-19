@@ -572,6 +572,75 @@ async function ensureEmployees(
     });
   }
 
+  // Demo üreticisinin önceki sürümleri aynı kişileri farklı firma/sicil
+  // eşleşmeleriyle oluşturmuş olabilir. Yalnızca bu demoya ait e-posta veya
+  // DEMO-* sicil numarası taşıyan kayıtlar arasından oluşturduğumuz 10 kaydı
+  // aktif bırak; diğer demo kopyalarını pasife al. Gerçek çalışanlara dokunma.
+  const keepIds = new Set(
+    result.map((employee) => employee.id)
+  );
+  const demoEmails = DEMO_EMPLOYEES.map((employee) =>
+    employee.email.toLowerCase()
+  );
+  const demoRegistryNumbers = DEMO_EMPLOYEES.map(
+    (employee) => employee.registry_no
+  );
+
+  const [emailMatches, registryMatches, companyMatches] =
+    await Promise.all([
+      supabase
+        .from("employees")
+        .select("id")
+        .in("email", demoEmails),
+      supabase
+        .from("employees")
+        .select("id")
+        .in("registry_no", demoRegistryNumbers),
+      supabase
+        .from("employees")
+        .select("id")
+        .eq("firm_id", companyId),
+    ]);
+
+  const cleanupReadError =
+    emailMatches.error ||
+    registryMatches.error ||
+    companyMatches.error;
+
+  if (cleanupReadError) {
+    throw new Error(
+      `Eski demo çalışanları kontrol edilemedi: ${cleanupReadError.message}`
+    );
+  }
+
+  const staleIds = Array.from(
+    new Set(
+      [
+        ...(emailMatches.data || []),
+        ...(registryMatches.data || []),
+        ...(companyMatches.data || []),
+      ]
+        .map((row) => String(row.id))
+        .filter((id) => id && !keepIds.has(id))
+    )
+  );
+
+  if (staleIds.length > 0) {
+    const { error: staleError } = await supabase
+      .from("employees")
+      .update({
+        active: false,
+        updated_at: new Date().toISOString(),
+      })
+      .in("id", staleIds);
+
+    if (staleError) {
+      throw new Error(
+        `Eski demo çalışanları pasife alınamadı: ${staleError.message}`
+      );
+    }
+  }
+
   return result;
 }
 
@@ -1129,7 +1198,7 @@ async function refreshInspections(
 }
 
 async function refreshAccidents(
-  companyId: string,
+  _companyId: string,
   localFirmId: number,
   employees: Awaited<
     ReturnType<
@@ -1139,21 +1208,8 @@ async function refreshAccidents(
 ) {
   const supabase = getSupabase();
 
-  // Önce UUID ile yazılmış güncel demo kayıtlarını temizle.
-  const { error: deleteByWebFirmError } =
-    await supabase
-      .from("accident_records")
-      .delete()
-      .eq("web_firm_id", companyId);
-
-  if (deleteByWebFirmError) {
-    throw new Error(
-      `Eski kaza kayıtları temizlenemedi: ${deleteByWebFirmError.message}`
-    );
-  }
-
-  // Önceki sürümlerde yalnızca yerel firma ID'si ile yazılan demo
-  // kayıtlarını da temizle. Böylece her yenilemede kayıt sayısı artmaz.
+  // accident_records APP tablosudur: firma/çalışan/tarih/bayrak alanları
+  // sayısaldır. Bu fonksiyon bu tabloya hiçbir UUID veya boolean göndermez.
   const { error: deleteByLocalFirmError } =
     await supabase
       .from("accident_records")
@@ -1163,6 +1219,17 @@ async function refreshAccidents(
   if (deleteByLocalFirmError) {
     throw new Error(
       `Eski yerel kaza kayıtları temizlenemedi: ${deleteByLocalFirmError.message}`
+    );
+  }
+
+  const { error: deleteByWebLocalFirmError } = await supabase
+    .from("accident_records")
+    .delete()
+    .eq("web_firm_id", localFirmId);
+
+  if (deleteByWebLocalFirmError) {
+    throw new Error(
+      `Eski web kaza kayıtları temizlenemedi: ${deleteByWebLocalFirmError.message}`
     );
   }
 
@@ -1182,10 +1249,9 @@ async function refreshAccidents(
 
   const rows = [
     {
-      web_firm_id: companyId,
+      web_firm_id: localFirmId,
       firm_id: localFirmId,
-      employee_id:
-        ahmet?.id || null,
+      employee_id: null,
       event_type: "İş Kazası",
       title:
         "Forklift ile raf teması",
@@ -1214,18 +1280,17 @@ async function refreshAccidents(
           60 *
           60 *
           1000,
-      is_active: true,
-      is_deleted: false,
+      is_active: 1,
+      is_deleted: 0,
       source: "WEB",
       created_at:
         now - 35 * 24 * 60 * 60 * 1000,
       updated_at: now,
     },
     {
-      web_firm_id: companyId,
+      web_firm_id: localFirmId,
       firm_id: localFirmId,
-      employee_id:
-        ali?.id || null,
+      employee_id: null,
       event_type:
         "Ramak Kala",
       title:
@@ -1254,8 +1319,8 @@ async function refreshAccidents(
           60 *
           60 *
           1000,
-      is_active: true,
-      is_deleted: false,
+      is_active: 1,
+      is_deleted: 0,
       source: "WEB",
       created_at:
         now - 18 * 24 * 60 * 60 * 1000,
@@ -1297,7 +1362,7 @@ async function refreshAccidents(
 
   if (error) {
     throw new Error(
-      `Kaza kayıtları oluşturulamadı [DEMO-V4]: ${error.message}`
+      `Kaza kayıtları oluşturulamadı [DEMO-FINAL]: ${error.message}`
     );
   }
 
@@ -1502,7 +1567,8 @@ async function loadMetrics(
   } = await supabase
     .from("employees")
     .select("id")
-    .eq("firm_id", companyId);
+    .eq("firm_id", companyId)
+    .eq("active", true);
 
   if (employeeError) {
     throw new Error(
@@ -1603,12 +1669,9 @@ async function loadMetrics(
     supabase
       .from("accident_records")
       .select("id, event_type")
-      .eq(
-        "web_firm_id",
-        companyId
-      )
+      .eq("firm_id", localFirmId)
       .or(
-        "is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0"
+        "is_deleted.is.null,is_deleted.eq.0"
       ),
     supabase
       .from(
