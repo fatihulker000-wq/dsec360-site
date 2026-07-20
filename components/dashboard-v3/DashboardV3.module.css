@@ -1166,17 +1166,7 @@
   }
 }
 
-:global(.dashboardPdfMode) {
-  width: 1400px !important;
-  max-width: 1400px !important;
-  padding: 12px !important;
-}
 
-:global(.dashboardPdfMode) button,
-:global(.dashboardPdfMode) input,
-:global(.dashboardPdfMode) select {
-  display: none !important;
-}
 
 @media print {
   .toolbarButton,

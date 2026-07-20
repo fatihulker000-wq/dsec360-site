@@ -1,83 +1,36 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-type AgendaTask = {
-  id: string;
-  sync_key: string | null;
+import {
+  createAgenda,
+  patchAgenda,
+  removeAgenda,
+} from "./api";
 
-  firm_id: number;
-  web_firm_id: string | null;
+import {
+  isOverdue,
+  useAgendaData,
+  useAgendaStats,
+  useCompanyData,
+  useEmployeeData,
+  useFilteredAgenda,
+} from "./hooks";
 
-  title: string;
-  note: string | null;
+import CompanySelect from "./components/CompanySelect";
+import EmployeeSelect from "./components/EmployeeSelect";
 
-  status: number;
-  priority: number;
-  progress: number;
-
-  type: string;
-  category: string | null;
-
-  due_at: string | null;
-  end_at: string | null;
-  completed_at: string | null;
-
-  location: string | null;
-  meeting_link: string | null;
-
-  assigned_to: string | null;
-  assigned_by: string | null;
-  participants_csv: string | null;
-
-  is_all_day: boolean;
-
-  repeat_type: string | null;
-  repeat_until: string | null;
-
-  source: string;
-
-  is_archived: boolean;
-  is_deleted: boolean;
-
-  created_at: string;
-  updated_at: string;
-};
-
-type AgendaResponse = {
-  success?: boolean;
-  records?: AgendaTask[];
-  error?: string;
-};
-
-type CompanyItem = {
-  id: string;
-  name: string;
-  local_firm_id: number | null;
-  localId: number | null;
-  is_active?: boolean;
-};
-
-type CompaniesResponse = {
-  data?: CompanyItem[];
-  error?: string;
-};
-
-type TaskType =
-  | "TASK"
-  | "MEETING"
-  | "INSPECTION"
-  | "TRAINING"
-  | "VISIT"
-  | "REMINDER";
-
-type TaskFilter =
-  | "ALL"
-  | "OPEN"
-  | "DONE"
-  | "TODAY"
-  | "UPCOMING"
-  | "OVERDUE";
+import type {
+  CompanyItem,
+  EmployeeItem,
+  TaskFilter,
+  TaskType,
+} from "./types";
 
 const TASK_TYPES: Array<{
   value: TaskType;
@@ -103,155 +56,36 @@ const FILTERS: Array<{
   { value: "OVERDUE", label: "Geciken" },
 ];
 
-function startOfToday(): Date {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return now;
-}
-
-function endOfToday(): Date {
-  const now = new Date();
-  now.setHours(23, 59, 59, 999);
-  return now;
-}
-
-function endOfNextSevenDays(): Date {
-  const result = endOfToday();
-  result.setDate(result.getDate() + 7);
-  return result;
-}
-
-function isToday(value: string | null): boolean {
-  if (!value) return false;
-
-  const date = new Date(value);
-
-  return date >= startOfToday() && date <= endOfToday();
-}
-
-function isOverdue(task: AgendaTask): boolean {
-  if (task.status === 1 || !task.due_at) return false;
-
-  return new Date(task.due_at).getTime() < Date.now();
-}
-
-function isUpcoming(task: AgendaTask): boolean {
-  if (task.status === 1 || !task.due_at) return false;
-
-  const due = new Date(task.due_at);
-
-  return due > endOfToday() && due <= endOfNextSevenDays();
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "Tarih belirtilmedi";
-
-  const date = new Date(value);
-
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function typeLabel(value: string): string {
-  return (
-    TASK_TYPES.find((item) => item.value === value)?.label ??
-    value
-  );
-}
-
-function priorityLabel(priority: number): string {
-  if (priority === 2) return "Kritik";
-  if (priority === 0) return "Minör";
-  return "Normal";
-}
-
-function priorityStyle(priority: number) {
-  if (priority === 2) {
-    return {
-      background: "#fff1f2",
-      color: "#be123c",
-      border: "1px solid #fecdd3",
-    };
-  }
-
-  if (priority === 0) {
-    return {
-      background: "#f8fafc",
-      color: "#64748b",
-      border: "1px solid #e2e8f0",
-    };
-  }
-
-  return {
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    border: "1px solid #bfdbfe",
-  };
-}
-
-function typeStyle(type: string) {
-  switch (type) {
-    case "MEETING":
-      return {
-        background: "#f5f3ff",
-        color: "#6d28d9",
-      };
-
-    case "INSPECTION":
-      return {
-        background: "#fff7ed",
-        color: "#c2410c",
-      };
-
-    case "TRAINING":
-      return {
-        background: "#ecfdf5",
-        color: "#047857",
-      };
-
-    case "VISIT":
-      return {
-        background: "#ecfeff",
-        color: "#0e7490",
-      };
-
-    case "REMINDER":
-      return {
-        background: "#fefce8",
-        color: "#a16207",
-      };
-
-    default:
-      return {
-        background: "#eff6ff",
-        color: "#1d4ed8",
-      };
-  }
-}
-
 export default function AgendaPage() {
-  const [tasks, setTasks] = useState<AgendaTask[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { tasks, loading, refresh } = useAgendaData();
+  const {
+    companies,
+    loading: companiesLoading,
+  } = useCompanyData();
+
+  const [selectedCompany, setSelectedCompany] =
+    useState<CompanyItem | null>(null);
+
+  const {
+    employees,
+    loading: employeesLoading,
+  } = useEmployeeData(selectedCompany?.id ?? "");
+
+  const [selectedEmployee, setSelectedEmployee] =
+    useState<EmployeeItem | null>(null);
+
+  const [filter, setFilter] =
+    useState<TaskFilter>("ALL");
+
+  const [typeFilter, setTypeFilter] =
+    useState("ALL");
+
+  const [search, setSearch] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-
-  const [filter, setFilter] = useState<TaskFilter>("ALL");
-  const [typeFilter, setTypeFilter] = useState("ALL");
-  const [search, setSearch] = useState("");
-
-  const [showCreate, setShowCreate] = useState(false);
-
-  const [companies, setCompanies] = useState<CompanyItem[]>([]);
-  const [companiesLoading, setCompaniesLoading] = useState(true);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  const [selectedLocalFirmId, setSelectedLocalFirmId] = useState<number | null>(null);
 
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
@@ -260,185 +94,38 @@ export default function AgendaPage() {
   const [dueAt, setDueAt] = useState("");
   const [endAt, setEndAt] = useState("");
   const [location, setLocation] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
   const [isAllDay, setIsAllDay] = useState(false);
 
-  const loadCompanies = useCallback(async () => {
-    try {
-      setCompaniesLoading(true);
-
-      const response = await fetch("/api/admin/companies", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      const json: CompaniesResponse = await response
-        .json()
-        .catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(json.error || "Firmalar alınamadı.");
-      }
-
-      const activeCompanies = (Array.isArray(json.data) ? json.data : [])
-        .filter((company) => company.is_active !== false)
-        .map((company) => ({
-          ...company,
-          id: String(company.id || "").trim(),
-          name: String(company.name || "").trim(),
-          localId: company.localId ?? company.local_firm_id ?? null,
-        }))
-        .filter((company) => company.id && company.name);
-
-      setCompanies(activeCompanies);
-
-      if (activeCompanies.length > 0) {
-        const firstCompany = activeCompanies[0];
-        setSelectedCompanyId((current) => current || firstCompany.id);
-        setSelectedLocalFirmId((current) => current ?? firstCompany.localId);
-      }
-    } catch (companyError) {
-      setCompanies([]);
-      setSelectedCompanyId("");
-      setSelectedLocalFirmId(null);
-      setError(
-        companyError instanceof Error
-          ? companyError.message
-          : "Firmalar alınamadı."
-      );
-    } finally {
-      setCompaniesLoading(false);
+  useEffect(() => {
+    if (!selectedCompany && companies.length > 0) {
+      setSelectedCompany(companies[0]);
     }
-  }, []);
-
-  const loadTasks = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const response = await fetch("/api/admin/agenda", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      const json: AgendaResponse = await response
-        .json()
-        .catch(() => ({}));
-
-      if (!response.ok || !json.success) {
-        throw new Error(
-          json.error || "Ajanda kayıtları alınamadı."
-        );
-      }
-
-      setTasks(Array.isArray(json.records) ? json.records : []);
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Ajanda kayıtları alınamadı."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  }, [companies, selectedCompany]);
 
   useEffect(() => {
-    void loadCompanies();
-    void loadTasks();
-  }, [loadCompanies, loadTasks]);
+    setSelectedEmployee(null);
+  }, [selectedCompany?.id]);
 
-  const stats = useMemo(() => {
-    const activeTasks = tasks.filter(
-      (task) => !task.is_deleted && !task.is_archived
-    );
+  const stats = useAgendaStats(
+    selectedCompany
+      ? tasks.filter(
+          (task) =>
+            !task.web_firm_id ||
+            task.web_firm_id === selectedCompany.id
+        )
+      : tasks
+  );
 
-    return {
-      total: activeTasks.length,
+  const filteredTasks = useFilteredAgenda(
+    tasks,
+    filter,
+    typeFilter,
+    search,
+    selectedCompany?.id ?? ""
+  );
 
-      open: activeTasks.filter(
-        (task) => task.status === 0
-      ).length,
-
-      done: activeTasks.filter(
-        (task) => task.status === 1
-      ).length,
-
-      today: activeTasks.filter(
-        (task) => isToday(task.due_at)
-      ).length,
-
-      upcoming: activeTasks.filter(isUpcoming).length,
-
-      overdue: activeTasks.filter(isOverdue).length,
-    };
-  }, [tasks]);
-
-  const filteredTasks = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase("tr-TR");
-
-    return tasks
-      .filter(
-        (task) => !task.is_deleted && !task.is_archived
-      )
-      .filter((task) => {
-        if (filter === "OPEN") return task.status === 0;
-        if (filter === "DONE") return task.status === 1;
-        if (filter === "TODAY") return isToday(task.due_at);
-        if (filter === "UPCOMING") return isUpcoming(task);
-        if (filter === "OVERDUE") return isOverdue(task);
-
-        return true;
-      })
-      .filter((task) => {
-        return typeFilter === "ALL" || task.type === typeFilter;
-      })
-      .filter((task) => {
-        if (!query) return true;
-
-        const content = [
-          task.title,
-          task.note,
-          task.location,
-          task.assigned_to,
-          task.assigned_by,
-          task.participants_csv,
-          typeLabel(task.type),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLocaleLowerCase("tr-TR");
-
-        return content.includes(query);
-      })
-      .sort((first, second) => {
-        const firstOverdue = isOverdue(first) ? 0 : 1;
-        const secondOverdue = isOverdue(second) ? 0 : 1;
-
-        if (firstOverdue !== secondOverdue) {
-          return firstOverdue - secondOverdue;
-        }
-
-        if (first.status !== second.status) {
-          return first.status - second.status;
-        }
-
-        const firstDue = first.due_at
-          ? new Date(first.due_at).getTime()
-          : Number.MAX_SAFE_INTEGER;
-
-        const secondDue = second.due_at
-          ? new Date(second.due_at).getTime()
-          : Number.MAX_SAFE_INTEGER;
-
-        return firstDue - secondDue;
-      });
-  }, [tasks, filter, typeFilter, search]);
-
-  function clearCreateForm() {
+  function clearForm() {
     setTitle("");
     setNote("");
     setType("TASK");
@@ -446,28 +133,33 @@ export default function AgendaPage() {
     setDueAt("");
     setEndAt("");
     setLocation("");
-    setAssignedTo("");
     setMeetingLink("");
+    setSelectedEmployee(null);
     setIsAllDay(false);
   }
 
-  async function createTask(event: FormEvent<HTMLFormElement>) {
+  async function handleCreate(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
-    if (!title.trim()) {
-      setError("Görev başlığı zorunludur.");
-      return;
-    }
-
-    if (!selectedCompanyId) {
+    if (!selectedCompany) {
       setError("Görev için firma seçilmelidir.");
       return;
     }
 
-    if (!selectedLocalFirmId || selectedLocalFirmId <= 0) {
+    if (
+      !selectedCompany.localId ||
+      selectedCompany.localId <= 0
+    ) {
       setError(
-        "Seçilen firmanın mobil firma ID bilgisi eksik. Firmalar modülünde local_firm_id alanını kontrol edin."
+        "Seçilen firmanın mobil firma ID bilgisi eksik."
       );
+      return;
+    }
+
+    if (!title.trim()) {
+      setError("Görev başlığı zorunludur.");
       return;
     }
 
@@ -476,50 +168,39 @@ export default function AgendaPage() {
       setError("");
       setMessage("");
 
-      const response = await fetch("/api/admin/agenda", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          firm_id: selectedLocalFirmId,
-          web_firm_id: selectedCompanyId,
-          title: title.trim(),
-          note: note.trim() || null,
-          type,
-          priority: Number(priority),
-          due_at: dueAt
-            ? new Date(dueAt).toISOString()
-            : null,
-          end_at: endAt
-            ? new Date(endAt).toISOString()
-            : null,
-          location: location.trim() || null,
-          assigned_to: assignedTo.trim() || null,
-          meeting_link: meetingLink.trim() || null,
-          is_all_day: isAllDay,
-        }),
+      await createAgenda({
+        firm_id: selectedCompany.localId,
+        web_firm_id: selectedCompany.id,
+        title: title.trim(),
+        note: note.trim() || null,
+        type,
+        priority: Number(priority),
+        due_at: dueAt
+          ? new Date(dueAt).toISOString()
+          : null,
+        end_at: endAt
+          ? new Date(endAt).toISOString()
+          : null,
+        location: location.trim() || null,
+        meeting_link:
+          meetingLink.trim() || null,
+        assigned_to:
+          selectedEmployee?.full_name || null,
+        assigned_employee_remote_id:
+          selectedEmployee?.id || null,
+        assigned_employee_local_id:
+          selectedEmployee?.local_employee_id ?? null,
+        is_all_day: isAllDay,
       });
 
-      const json = await response.json().catch(() => ({}));
-
-      if (!response.ok || !json?.success) {
-        throw new Error(
-          json?.error || "Ajanda kaydı oluşturulamadı."
-        );
-      }
-
-      clearCreateForm();
+      clearForm();
       setShowCreate(false);
       setMessage("Ajanda kaydı oluşturuldu.");
-
-      await loadTasks();
-    } catch (createError) {
+      await refresh();
+    } catch (value) {
       setError(
-        createError instanceof Error
-          ? createError.message
+        value instanceof Error
+          ? value.message
           : "Ajanda kaydı oluşturulamadı."
       );
     } finally {
@@ -527,37 +208,16 @@ export default function AgendaPage() {
     }
   }
 
-  async function updateStatus(
-    task: AgendaTask,
+  async function toggleTask(
+    id: string,
     completed: boolean
   ) {
     try {
       setError("");
-      setMessage("");
-
-      const response = await fetch(
-        `/api/admin/agenda/${task.id}`,
-        {
-          method: "PATCH",
-          credentials: "include",
-          cache: "no-store",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            status: completed ? 1 : 0,
-            progress: completed ? 100 : 0,
-          }),
-        }
-      );
-
-      const json = await response.json().catch(() => ({}));
-
-      if (!response.ok || !json?.success) {
-        throw new Error(
-          json?.error || "Görev durumu güncellenemedi."
-        );
-      }
+      await patchAgenda(id, {
+        status: completed ? 1 : 0,
+        progress: completed ? 100 : 0,
+      });
 
       setMessage(
         completed
@@ -565,248 +225,121 @@ export default function AgendaPage() {
           : "Görev tekrar açıldı."
       );
 
-      await loadTasks();
-    } catch (updateError) {
+      await refresh();
+    } catch (value) {
       setError(
-        updateError instanceof Error
-          ? updateError.message
-          : "Görev durumu güncellenemedi."
+        value instanceof Error
+          ? value.message
+          : "Görev güncellenemedi."
       );
     }
   }
 
-  async function deleteTask(task: AgendaTask) {
-    const confirmed = window.confirm(
-      `"${task.title}" kaydı silinsin mi?`
-    );
-
-    if (!confirmed) return;
+  async function deleteTask(
+    id: string,
+    titleValue: string
+  ) {
+    if (
+      !window.confirm(
+        `"${titleValue}" kaydı silinsin mi?`
+      )
+    ) {
+      return;
+    }
 
     try {
       setError("");
-      setMessage("");
-
-      const response = await fetch(
-        `/api/admin/agenda/${task.id}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-          cache: "no-store",
-        }
-      );
-
-      const json = await response.json().catch(() => ({}));
-
-      if (!response.ok || !json?.success) {
-        throw new Error(
-          json?.error || "Ajanda kaydı silinemedi."
-        );
-      }
-
+      await removeAgenda(id);
       setMessage("Ajanda kaydı silindi.");
-
-      await loadTasks();
-    } catch (deleteError) {
+      await refresh();
+    } catch (value) {
       setError(
-        deleteError instanceof Error
-          ? deleteError.message
+        value instanceof Error
+          ? value.message
           : "Ajanda kaydı silinemedi."
       );
     }
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        padding: "30px",
-        background:
-          "linear-gradient(180deg, #fff7f7 0%, #f8fafc 42%, #ffffff 100%)",
-        color: "#172033",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1500,
-          margin: "0 auto",
-        }}
-      >
-        <section
-          style={{
-            borderRadius: 30,
-            padding: 28,
-            color: "#ffffff",
-            background:
-              "radial-gradient(circle at top right, rgba(255,255,255,0.20), transparent 32%), linear-gradient(135deg, #3b0712, #7a1026 55%, #b4233c)",
-            boxShadow: "0 24px 70px rgba(72, 7, 22, 0.24)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: 20,
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  display: "inline-flex",
-                  borderRadius: 999,
-                  padding: "7px 12px",
-                  fontSize: 12,
-                  fontWeight: 900,
-                  letterSpacing: 0.6,
-                  background: "rgba(255,255,255,0.14)",
-                  border: "1px solid rgba(255,255,255,0.16)",
-                }}
-              >
-                D-SEC OPERASYON MERKEZİ
-              </div>
-
-              <h1
-                style={{
-                  margin: "16px 0 8px",
-                  fontSize: 34,
-                  lineHeight: 1.1,
-                }}
-              >
-                Ajanda ve Görev Yönetimi
-              </h1>
-
-              <p
-                style={{
-                  maxWidth: 760,
-                  margin: 0,
-                  color: "rgba(255,255,255,0.78)",
-                  lineHeight: 1.7,
-                }}
-              >
-                Görev, toplantı, denetim, eğitim, ziyaret ve
-                hatırlatma kayıtlarını firma bazında yönetin.
-              </p>
+    <main style={pageStyle}>
+      <div style={{ maxWidth: 1500, margin: "0 auto" }}>
+        <section style={heroStyle}>
+          <div>
+            <div style={heroBadgeStyle}>
+              D-SEC OPERASYON MERKEZİ
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setMessage("");
-                setShowCreate(true);
-              }}
-              style={{
-                minHeight: 48,
-                padding: "0 20px",
-                borderRadius: 16,
-                border: "1px solid rgba(255,255,255,0.25)",
-                background: "#ffffff",
-                color: "#7a1026",
-                fontWeight: 950,
-                cursor: "pointer",
-                boxShadow: "0 14px 32px rgba(0,0,0,0.16)",
-              }}
-            >
-              + Yeni Kayıt
-            </button>
+            <h1 style={{ margin: "16px 0 8px", fontSize: 34 }}>
+              Ajanda ve Görev Yönetimi
+            </h1>
+
+            <p style={heroDescriptionStyle}>
+              Görev, toplantı, denetim, eğitim, ziyaret ve
+              hatırlatma kayıtlarını firma ve çalışan bazında
+              yönetin.
+            </p>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setMessage("");
+              setShowCreate(true);
+            }}
+            style={primaryButtonStyle}
+          >
+            + Yeni Kayıt
+          </button>
         </section>
 
         {error ? (
-          <div
-            style={{
-              marginTop: 18,
-              borderRadius: 16,
-              padding: 14,
-              color: "#991b1b",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-            }}
-          >
-            {error}
-          </div>
+          <Notice
+            text={error}
+            background="#fef2f2"
+            border="#fecaca"
+            color="#991b1b"
+          />
         ) : null}
 
         {message ? (
-          <div
-            style={{
-              marginTop: 18,
-              borderRadius: 16,
-              padding: 14,
-              color: "#166534",
-              background: "#f0fdf4",
-              border: "1px solid #bbf7d0",
-            }}
-          >
-            {message}
-          </div>
+          <Notice
+            text={message}
+            background="#f0fdf4"
+            border="#bbf7d0"
+            color="#166534"
+          />
         ) : null}
 
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 14,
-            marginTop: 20,
-          }}
-        >
-          <StatCard
-            title="Toplam"
-            value={stats.total}
-            description="Aktif kayıt"
-          />
-          <StatCard
-            title="Açık"
-            value={stats.open}
-            description="Devam eden"
-          />
-          <StatCard
-            title="Tamamlanan"
-            value={stats.done}
-            description="Kapatılan görev"
-          />
-          <StatCard
-            title="Bugün"
-            value={stats.today}
-            description="Bugünkü plan"
-          />
-          <StatCard
-            title="Yaklaşan"
-            value={stats.upcoming}
-            description="Önümüzdeki 7 gün"
-          />
+        <section style={statsGridStyle}>
+          <StatCard title="Toplam" value={stats.total} />
+          <StatCard title="Açık" value={stats.open} />
+          <StatCard title="Tamamlanan" value={stats.done} />
+          <StatCard title="Bugün" value={stats.today} />
+          <StatCard title="Yaklaşan" value={stats.upcoming} />
           <StatCard
             title="Geciken"
             value={stats.overdue}
-            description="Termin aşımı"
             danger
           />
         </section>
 
-        <section
-          style={{
-            marginTop: 20,
-            padding: 18,
-            borderRadius: 24,
-            background: "#ffffff",
-            border: "1px solid #e5e7eb",
-            boxShadow: "0 18px 50px rgba(15,23,42,0.06)",
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "minmax(220px, 1fr) minmax(180px, 240px)",
-              gap: 12,
-            }}
-          >
+        <section style={filterPanelStyle}>
+          <div style={filterGridStyle}>
+            <CompanySelect
+              companies={companies}
+              loading={companiesLoading}
+              value={selectedCompany?.id ?? ""}
+              onChange={setSelectedCompany}
+            />
+
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Başlık, açıklama, sorumlu veya lokasyon ara..."
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+              placeholder="Başlık, açıklama, çalışan veya lokasyon ara..."
               style={inputStyle}
             />
 
@@ -817,48 +350,46 @@ export default function AgendaPage() {
               }
               style={inputStyle}
             >
-              <option value="ALL">Tüm kayıt türleri</option>
+              <option value="ALL">
+                Tüm kayıt türleri
+              </option>
 
               {TASK_TYPES.map((item) => (
-                <option key={item.value} value={item.value}>
+                <option
+                  key={item.value}
+                  value={item.value}
+                >
                   {item.label}
                 </option>
               ))}
             </select>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              marginTop: 14,
-            }}
-          >
-            {FILTERS.map((item) => {
-              const active = filter === item.value;
-
-              return (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => setFilter(item.value)}
-                  style={{
-                    padding: "9px 14px",
-                    borderRadius: 999,
-                    border: active
+          <div style={filterButtonsStyle}>
+            {FILTERS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setFilter(item.value)}
+                style={{
+                  ...filterButtonStyle,
+                  background:
+                    filter === item.value
+                      ? "#8a1530"
+                      : "#ffffff",
+                  color:
+                    filter === item.value
+                      ? "#ffffff"
+                      : "#475569",
+                  border:
+                    filter === item.value
                       ? "1px solid #8a1530"
                       : "1px solid #e2e8f0",
-                    background: active ? "#8a1530" : "#ffffff",
-                    color: active ? "#ffffff" : "#475569",
-                    fontWeight: 850,
-                    cursor: "pointer",
-                  }}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         </section>
 
@@ -872,221 +403,101 @@ export default function AgendaPage() {
               Filtreye uygun Ajanda kaydı bulunamadı.
             </div>
           ) : (
-            <div
-              style={{
-                display: "grid",
-                gap: 14,
-              }}
-            >
+            <div style={{ display: "grid", gap: 14 }}>
               {filteredTasks.map((task) => {
-                const overdue = isOverdue(task);
                 const completed = task.status === 1;
+                const overdue = isOverdue(task);
 
                 return (
                   <article
                     key={task.id}
                     style={{
-                      padding: 20,
-                      borderRadius: 22,
+                      ...taskCardStyle,
                       background: completed
                         ? "#f0fdf4"
                         : overdue
-                          ? "#fff1f2"
-                          : "#ffffff",
-                      border: completed
-                        ? "1px solid #bbf7d0"
-                        : overdue
-                          ? "1px solid #fecdd3"
-                          : "1px solid #e5e7eb",
-                      boxShadow:
-                        "0 14px 38px rgba(15,23,42,0.06)",
+                        ? "#fff1f2"
+                        : "#ffffff",
                     }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        gap: 16,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 240 }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            flexWrap: "wrap",
-                          }}
-                        >
-                          <span
-                            style={{
-                              padding: "6px 9px",
-                              borderRadius: 999,
-                              fontSize: 11,
-                              fontWeight: 900,
-                              ...typeStyle(task.type),
-                            }}
-                          >
-                            {typeLabel(task.type)}
-                          </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={badgeRowStyle}>
+                        <Badge text={typeLabel(task.type)} />
+                        <Badge text={priorityLabel(task.priority)} />
 
-                          <span
-                            style={{
-                              padding: "6px 9px",
-                              borderRadius: 999,
-                              fontSize: 11,
-                              fontWeight: 900,
-                              ...priorityStyle(task.priority),
-                            }}
-                          >
-                            {priorityLabel(task.priority)}
-                          </span>
-
-                          {overdue ? (
-                            <span
-                              style={{
-                                padding: "6px 9px",
-                                borderRadius: 999,
-                                fontSize: 11,
-                                fontWeight: 950,
-                                color: "#be123c",
-                                background: "#ffe4e6",
-                              }}
-                            >
-                              GECİKMİŞ
-                            </span>
-                          ) : null}
-
-                          {completed ? (
-                            <span
-                              style={{
-                                padding: "6px 9px",
-                                borderRadius: 999,
-                                fontSize: 11,
-                                fontWeight: 950,
-                                color: "#166534",
-                                background: "#dcfce7",
-                              }}
-                            >
-                              TAMAMLANDI
-                            </span>
-                          ) : null}
-                        </div>
-
-                        <h2
-                          style={{
-                            margin: "12px 0 6px",
-                            fontSize: 20,
-                          }}
-                        >
-                          {task.title}
-                        </h2>
-
-                        <div
-                          style={{
-                            color: "#64748b",
-                            fontSize: 13,
-                          }}
-                        >
-                          {formatDateTime(task.due_at)}
-                        </div>
-
-                        {task.note ? (
-                          <p
-                            style={{
-                              margin: "12px 0 0",
-                              color: "#475569",
-                              lineHeight: 1.65,
-                            }}
-                          >
-                            {task.note}
-                          </p>
+                        {overdue ? (
+                          <Badge text="GECİKMİŞ" danger />
                         ) : null}
 
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 14,
-                            marginTop: 14,
-                            color: "#475569",
-                            fontSize: 13,
-                          }}
-                        >
-                          {task.assigned_to ? (
-                            <span>
-                              <strong>Sorumlu:</strong>{" "}
-                              {task.assigned_to}
-                            </span>
-                          ) : null}
+                        {completed ? (
+                          <Badge text="TAMAMLANDI" success />
+                        ) : null}
+                      </div>
 
-                          {task.location ? (
-                            <span>
-                              <strong>Lokasyon:</strong>{" "}
-                              {task.location}
-                            </span>
-                          ) : null}
+                      <h2 style={{ margin: "12px 0 6px" }}>
+                        {task.title}
+                      </h2>
 
+                      <div style={mutedTextStyle}>
+                        {formatDateTime(task.due_at)}
+                      </div>
+
+                      {task.note ? (
+                        <p style={{ color: "#475569" }}>
+                          {task.note}
+                        </p>
+                      ) : null}
+
+                      <div style={metaRowStyle}>
+                        {task.assigned_to ? (
                           <span>
-                            <strong>Kaynak:</strong>{" "}
-                            {task.source}
+                            <strong>Sorumlu:</strong>{" "}
+                            {task.assigned_to}
                           </span>
-                        </div>
-                      </div>
+                        ) : null}
 
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          flexWrap: "wrap",
-                        }}
+                        {task.location ? (
+                          <span>
+                            <strong>Lokasyon:</strong>{" "}
+                            {task.location}
+                          </span>
+                        ) : null}
+
+                        <span>
+                          <strong>Kaynak:</strong>{" "}
+                          {task.source}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={actionRowStyle}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void toggleTask(
+                            task.id,
+                            !completed
+                          )
+                        }
+                        style={secondaryActionStyle}
                       >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void updateStatus(task, !completed)
-                          }
-                          style={{
-                            minHeight: 40,
-                            padding: "0 13px",
-                            borderRadius: 12,
-                            border: completed
-                              ? "1px solid #bfdbfe"
-                              : "1px solid #bbf7d0",
-                            background: completed
-                              ? "#eff6ff"
-                              : "#f0fdf4",
-                            color: completed
-                              ? "#1d4ed8"
-                              : "#166534",
-                            fontWeight: 900,
-                            cursor: "pointer",
-                          }}
-                        >
-                          {completed
-                            ? "Tekrar Aç"
-                            : "Tamamla"}
-                        </button>
+                        {completed
+                          ? "Tekrar Aç"
+                          : "Tamamla"}
+                      </button>
 
-                        <button
-                          type="button"
-                          onClick={() => void deleteTask(task)}
-                          style={{
-                            minHeight: 40,
-                            padding: "0 13px",
-                            borderRadius: 12,
-                            border: "1px solid #fecaca",
-                            background: "#fef2f2",
-                            color: "#b91c1c",
-                            fontWeight: 900,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Sil
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void deleteTask(
+                            task.id,
+                            task.title
+                          )
+                        }
+                        style={dangerActionStyle}
+                      >
+                        Sil
+                      </button>
                     </div>
                   </article>
                 );
@@ -1097,51 +508,16 @@ export default function AgendaPage() {
       </div>
 
       {showCreate ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 100,
-            display: "grid",
-            placeItems: "center",
-            padding: 20,
-            background: "rgba(15,23,42,0.56)",
-            backdropFilter: "blur(8px)",
-          }}
-        >
+        <div style={dialogOverlayStyle}>
           <form
-            onSubmit={createTask}
-            style={{
-              width: "min(760px, 100%)",
-              maxHeight: "92vh",
-              overflowY: "auto",
-              borderRadius: 28,
-              padding: 24,
-              background: "#ffffff",
-              boxShadow: "0 34px 90px rgba(0,0,0,0.28)",
-            }}
+            onSubmit={handleCreate}
+            style={dialogStyle}
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 16,
-                alignItems: "flex-start",
-              }}
-            >
+            <div style={dialogHeaderStyle}>
               <div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 950,
-                    color: "#8a1530",
-                  }}
-                >
+                <div style={dialogEyebrowStyle}>
                   YENİ AJANDA KAYDI
                 </div>
-
                 <h2 style={{ margin: "8px 0 0" }}>
                   Görev veya plan oluştur
                 </h2>
@@ -1150,66 +526,36 @@ export default function AgendaPage() {
               <button
                 type="button"
                 onClick={() => setShowCreate(false)}
-                style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 12,
-                  border: "1px solid #e2e8f0",
-                  background: "#ffffff",
-                  cursor: "pointer",
-                  fontSize: 18,
-                }}
+                style={closeButtonStyle}
               >
                 ×
               </button>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(2, minmax(0, 1fr))",
-                gap: 14,
-                marginTop: 20,
-              }}
-            >
-              <label style={labelStyle}>
-                Firma
-                <select
-                  value={selectedCompanyId}
-                  disabled={companiesLoading || companies.length === 0}
-                  onChange={(event) => {
-                    const companyId = event.target.value;
-                    const company = companies.find(
-                      (item) => item.id === companyId
-                    );
+            <div style={formGridStyle}>
+              <CompanySelect
+                companies={companies}
+                loading={companiesLoading}
+                value={selectedCompany?.id ?? ""}
+                onChange={setSelectedCompany}
+              />
 
-                    setSelectedCompanyId(companyId);
-                    setSelectedLocalFirmId(company?.localId ?? null);
-                  }}
-                  style={inputStyle}
-                >
-                  {companiesLoading ? (
-                    <option value="">Firmalar yükleniyor...</option>
-                  ) : companies.length === 0 ? (
-                    <option value="">Aktif firma bulunamadı</option>
-                  ) : (
-                    companies.map((company) => (
-                      <option key={company.id} value={company.id}>
-                        {company.name}
-                        {company.localId ? ` • Mobil ID: ${company.localId}` : " • Mobil ID eksik"}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </label>
+              <EmployeeSelect
+                employees={employees}
+                loading={employeesLoading}
+                value={selectedEmployee?.id ?? ""}
+                disabled={!selectedCompany}
+                onChange={setSelectedEmployee}
+              />
 
               <label style={labelStyle}>
                 Kayıt türü
                 <select
                   value={type}
                   onChange={(event) =>
-                    setType(event.target.value as TaskType)
+                    setType(
+                      event.target.value as TaskType
+                    )
                   }
                   style={inputStyle}
                 >
@@ -1222,43 +568,6 @@ export default function AgendaPage() {
                     </option>
                   ))}
                 </select>
-              </label>
-
-              <label
-                style={{
-                  ...labelStyle,
-                  gridColumn: "1 / -1",
-                }}
-              >
-                Başlık
-                <input
-                  value={title}
-                  onChange={(event) =>
-                    setTitle(event.target.value)
-                  }
-                  placeholder="Örneğin: Aylık saha denetimini tamamla"
-                  style={inputStyle}
-                />
-              </label>
-
-              <label
-                style={{
-                  ...labelStyle,
-                  gridColumn: "1 / -1",
-                }}
-              >
-                Açıklama
-                <textarea
-                  value={note}
-                  onChange={(event) =>
-                    setNote(event.target.value)
-                  }
-                  rows={4}
-                  style={{
-                    ...inputStyle,
-                    resize: "vertical",
-                  }}
-                />
               </label>
 
               <label style={labelStyle}>
@@ -1276,14 +585,29 @@ export default function AgendaPage() {
                 </select>
               </label>
 
-              <label style={labelStyle}>
-                Sorumlu
+              <label style={fullLabelStyle}>
+                Başlık
                 <input
-                  value={assignedTo}
+                  value={title}
                   onChange={(event) =>
-                    setAssignedTo(event.target.value)
+                    setTitle(event.target.value)
                   }
                   style={inputStyle}
+                />
+              </label>
+
+              <label style={fullLabelStyle}>
+                Açıklama
+                <textarea
+                  value={note}
+                  onChange={(event) =>
+                    setNote(event.target.value)
+                  }
+                  rows={4}
+                  style={{
+                    ...inputStyle,
+                    resize: "vertical",
+                  }}
                 />
               </label>
 
@@ -1333,16 +657,7 @@ export default function AgendaPage() {
                 />
               </label>
 
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  gridColumn: "1 / -1",
-                  color: "#334155",
-                  fontWeight: 800,
-                }}
-              >
+              <label style={checkboxStyle}>
                 <input
                   type="checkbox"
                   checked={isAllDay}
@@ -1354,27 +669,11 @@ export default function AgendaPage() {
               </label>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 10,
-                marginTop: 24,
-              }}
-            >
+            <div style={dialogActionsStyle}>
               <button
                 type="button"
                 onClick={() => setShowCreate(false)}
-                style={{
-                  minHeight: 46,
-                  padding: "0 18px",
-                  borderRadius: 14,
-                  border: "1px solid #dbe2ea",
-                  background: "#ffffff",
-                  color: "#475569",
-                  fontWeight: 900,
-                  cursor: "pointer",
-                }}
+                style={cancelButtonStyle}
               >
                 İptal
               </button>
@@ -1382,20 +681,11 @@ export default function AgendaPage() {
               <button
                 type="submit"
                 disabled={saving}
-                style={{
-                  minHeight: 46,
-                  padding: "0 20px",
-                  borderRadius: 14,
-                  border: 0,
-                  background: saving
-                    ? "#94a3b8"
-                    : "linear-gradient(135deg, #5a0f1f, #a51d38)",
-                  color: "#ffffff",
-                  fontWeight: 950,
-                  cursor: saving ? "not-allowed" : "pointer",
-                }}
+                style={saveButtonStyle}
               >
-                {saving ? "Kaydediliyor..." : "Kaydı Oluştur"}
+                {saving
+                  ? "Kaydediliyor..."
+                  : "Kaydı Oluştur"}
               </button>
             </div>
           </form>
@@ -1405,15 +695,40 @@ export default function AgendaPage() {
   );
 }
 
+function Notice({
+  text,
+  background,
+  border,
+  color,
+}: {
+  text: string;
+  background: string;
+  border: string;
+  color: string;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 18,
+        borderRadius: 16,
+        padding: 14,
+        background,
+        border: `1px solid ${border}`,
+        color,
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
 function StatCard({
   title,
   value,
-  description,
   danger = false,
 }: {
   title: string;
   value: number;
-  description: string;
   danger?: boolean;
 }) {
   return (
@@ -1425,19 +740,9 @@ function StatCard({
         border: danger
           ? "1px solid #fecdd3"
           : "1px solid #e5e7eb",
-        boxShadow: "0 14px 36px rgba(15,23,42,0.06)",
       }}
     >
-      <div
-        style={{
-          color: danger ? "#be123c" : "#64748b",
-          fontSize: 12,
-          fontWeight: 900,
-        }}
-      >
-        {title}
-      </div>
-
+      <div style={mutedTextStyle}>{title}</div>
       <div
         style={{
           marginTop: 8,
@@ -1448,19 +753,155 @@ function StatCard({
       >
         {value}
       </div>
-
-      <div
-        style={{
-          marginTop: 4,
-          color: "#94a3b8",
-          fontSize: 12,
-        }}
-      >
-        {description}
-      </div>
     </div>
   );
 }
+
+function Badge({
+  text,
+  danger = false,
+  success = false,
+}: {
+  text: string;
+  danger?: boolean;
+  success?: boolean;
+}) {
+  const background = danger
+    ? "#ffe4e6"
+    : success
+    ? "#dcfce7"
+    : "#eff6ff";
+
+  const color = danger
+    ? "#be123c"
+    : success
+    ? "#166534"
+    : "#1d4ed8";
+
+  return (
+    <span
+      style={{
+        padding: "6px 9px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 900,
+        background,
+        color,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function typeLabel(type: TaskType) {
+  return (
+    TASK_TYPES.find((item) => item.value === type)
+      ?.label ?? type
+  );
+}
+
+function priorityLabel(priority: number) {
+  if (priority === 2) return "Kritik";
+  if (priority === 0) return "Minör";
+  return "Normal";
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "Tarih belirtilmedi";
+
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+const pageStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  padding: 30,
+  background:
+    "linear-gradient(180deg, #fff7f7 0%, #f8fafc 42%, #ffffff 100%)",
+  color: "#172033",
+};
+
+const heroStyle: React.CSSProperties = {
+  borderRadius: 30,
+  padding: 28,
+  color: "#ffffff",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 20,
+  flexWrap: "wrap",
+  background:
+    "radial-gradient(circle at top right, rgba(255,255,255,0.20), transparent 32%), linear-gradient(135deg, #3b0712, #7a1026 55%, #b4233c)",
+};
+
+const heroBadgeStyle: React.CSSProperties = {
+  display: "inline-flex",
+  borderRadius: 999,
+  padding: "7px 12px",
+  fontSize: 12,
+  fontWeight: 900,
+  background: "rgba(255,255,255,0.14)",
+};
+
+const heroDescriptionStyle: React.CSSProperties = {
+  maxWidth: 760,
+  margin: 0,
+  color: "rgba(255,255,255,0.78)",
+  lineHeight: 1.7,
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  minHeight: 48,
+  padding: "0 20px",
+  borderRadius: 16,
+  border: 0,
+  background: "#ffffff",
+  color: "#7a1026",
+  fontWeight: 950,
+  cursor: "pointer",
+};
+
+const statsGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: 14,
+  marginTop: 20,
+};
+
+const filterPanelStyle: React.CSSProperties = {
+  marginTop: 20,
+  padding: 18,
+  borderRadius: 24,
+  background: "#ffffff",
+  border: "1px solid #e5e7eb",
+};
+
+const filterGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+};
+
+const filterButtonsStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  marginTop: 14,
+};
+
+const filterButtonStyle: React.CSSProperties = {
+  padding: "9px 14px",
+  borderRadius: 999,
+  fontWeight: 850,
+  cursor: "pointer",
+};
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -1483,6 +924,11 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 850,
 };
 
+const fullLabelStyle: React.CSSProperties = {
+  ...labelStyle,
+  gridColumn: "1 / -1",
+};
+
 const emptyStyle: React.CSSProperties = {
   padding: 40,
   borderRadius: 22,
@@ -1490,4 +936,153 @@ const emptyStyle: React.CSSProperties = {
   color: "#64748b",
   background: "#ffffff",
   border: "1px dashed #cbd5e1",
+};
+
+const taskCardStyle: React.CSSProperties = {
+  padding: 20,
+  borderRadius: 22,
+  border: "1px solid #e5e7eb",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 16,
+  flexWrap: "wrap",
+};
+
+const badgeRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const mutedTextStyle: React.CSSProperties = {
+  color: "#64748b",
+  fontSize: 13,
+};
+
+const metaRowStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 14,
+  marginTop: 14,
+  color: "#475569",
+  fontSize: 13,
+};
+
+const actionRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const secondaryActionStyle: React.CSSProperties = {
+  minHeight: 40,
+  padding: "0 13px",
+  borderRadius: 12,
+  border: "1px solid #bbf7d0",
+  background: "#f0fdf4",
+  color: "#166534",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const dangerActionStyle: React.CSSProperties = {
+  minHeight: 40,
+  padding: "0 13px",
+  borderRadius: 12,
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#b91c1c",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const dialogOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 100,
+  display: "grid",
+  placeItems: "center",
+  padding: 20,
+  background: "rgba(15,23,42,0.56)",
+  backdropFilter: "blur(8px)",
+};
+
+const dialogStyle: React.CSSProperties = {
+  width: "min(760px, 100%)",
+  maxHeight: "92vh",
+  overflowY: "auto",
+  borderRadius: 28,
+  padding: 24,
+  background: "#ffffff",
+};
+
+const dialogHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 16,
+  alignItems: "flex-start",
+};
+
+const dialogEyebrowStyle: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 950,
+  color: "#8a1530",
+};
+
+const closeButtonStyle: React.CSSProperties = {
+  width: 38,
+  height: 38,
+  borderRadius: 12,
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+  cursor: "pointer",
+  fontSize: 18,
+};
+
+const formGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: 14,
+  marginTop: 20,
+};
+
+const checkboxStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  gridColumn: "1 / -1",
+  color: "#334155",
+  fontWeight: 800,
+};
+
+const dialogActionsStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10,
+  marginTop: 24,
+};
+
+const cancelButtonStyle: React.CSSProperties = {
+  minHeight: 46,
+  padding: "0 18px",
+  borderRadius: 14,
+  border: "1px solid #dbe2ea",
+  background: "#ffffff",
+  color: "#475569",
+  fontWeight: 900,
+  cursor: "pointer",
+};
+
+const saveButtonStyle: React.CSSProperties = {
+  minHeight: 46,
+  padding: "0 20px",
+  borderRadius: 14,
+  border: 0,
+  background:
+    "linear-gradient(135deg, #5a0f1f, #a51d38)",
+  color: "#ffffff",
+  fontWeight: 950,
+  cursor: "pointer",
 };

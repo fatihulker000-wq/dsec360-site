@@ -3422,3 +3422,12 @@ line-height:1.7;
     margin: 10mm;
   }
 }
+.dashboardPdfMode {
+  width: 1400px !important;
+  max-width: 1400px !important;
+}
+.dashboardPdfMode button,
+.dashboardPdfMode input,
+.dashboardPdfMode select {
+  display: none !important;
+}
