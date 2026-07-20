@@ -50,6 +50,19 @@ type AgendaResponse = {
   error?: string;
 };
 
+type CompanyItem = {
+  id: string;
+  name: string;
+  local_firm_id: number | null;
+  localId: number | null;
+  is_active?: boolean;
+};
+
+type CompaniesResponse = {
+  data?: CompanyItem[];
+  error?: string;
+};
+
 type TaskType =
   | "TASK"
   | "MEETING"
@@ -235,7 +248,11 @@ export default function AgendaPage() {
 
   const [showCreate, setShowCreate] = useState(false);
 
-  const [firmId, setFirmId] = useState("1");
+  const [companies, setCompanies] = useState<CompanyItem[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(true);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [selectedLocalFirmId, setSelectedLocalFirmId] = useState<number | null>(null);
+
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [type, setType] = useState<TaskType>("TASK");
@@ -246,6 +263,55 @@ export default function AgendaPage() {
   const [assignedTo, setAssignedTo] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
   const [isAllDay, setIsAllDay] = useState(false);
+
+  const loadCompanies = useCallback(async () => {
+    try {
+      setCompaniesLoading(true);
+
+      const response = await fetch("/api/admin/companies", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      const json: CompaniesResponse = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(json.error || "Firmalar alınamadı.");
+      }
+
+      const activeCompanies = (Array.isArray(json.data) ? json.data : [])
+        .filter((company) => company.is_active !== false)
+        .map((company) => ({
+          ...company,
+          id: String(company.id || "").trim(),
+          name: String(company.name || "").trim(),
+          localId: company.localId ?? company.local_firm_id ?? null,
+        }))
+        .filter((company) => company.id && company.name);
+
+      setCompanies(activeCompanies);
+
+      if (activeCompanies.length > 0) {
+        const firstCompany = activeCompanies[0];
+        setSelectedCompanyId((current) => current || firstCompany.id);
+        setSelectedLocalFirmId((current) => current ?? firstCompany.localId);
+      }
+    } catch (companyError) {
+      setCompanies([]);
+      setSelectedCompanyId("");
+      setSelectedLocalFirmId(null);
+      setError(
+        companyError instanceof Error
+          ? companyError.message
+          : "Firmalar alınamadı."
+      );
+    } finally {
+      setCompaniesLoading(false);
+    }
+  }, []);
 
   const loadTasks = useCallback(async () => {
     try {
@@ -281,8 +347,9 @@ export default function AgendaPage() {
   }, []);
 
   useEffect(() => {
+    void loadCompanies();
     void loadTasks();
-  }, [loadTasks]);
+  }, [loadCompanies, loadTasks]);
 
   const stats = useMemo(() => {
     const activeTasks = tasks.filter(
@@ -392,10 +459,15 @@ export default function AgendaPage() {
       return;
     }
 
-    const parsedFirmId = Number(firmId);
+    if (!selectedCompanyId) {
+      setError("Görev için firma seçilmelidir.");
+      return;
+    }
 
-    if (!Number.isFinite(parsedFirmId) || parsedFirmId <= 0) {
-      setError("Geçerli bir firma ID girilmelidir.");
+    if (!selectedLocalFirmId || selectedLocalFirmId <= 0) {
+      setError(
+        "Seçilen firmanın mobil firma ID bilgisi eksik. Firmalar modülünde local_firm_id alanını kontrol edin."
+      );
       return;
     }
 
@@ -412,7 +484,8 @@ export default function AgendaPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          firm_id: parsedFirmId,
+          firm_id: selectedLocalFirmId,
+          web_firm_id: selectedCompanyId,
           title: title.trim(),
           note: note.trim() || null,
           type,
@@ -1101,15 +1174,34 @@ export default function AgendaPage() {
               }}
             >
               <label style={labelStyle}>
-                Firma ID
-                <input
-                  value={firmId}
-                  onChange={(event) =>
-                    setFirmId(event.target.value)
-                  }
-                  inputMode="numeric"
+                Firma
+                <select
+                  value={selectedCompanyId}
+                  disabled={companiesLoading || companies.length === 0}
+                  onChange={(event) => {
+                    const companyId = event.target.value;
+                    const company = companies.find(
+                      (item) => item.id === companyId
+                    );
+
+                    setSelectedCompanyId(companyId);
+                    setSelectedLocalFirmId(company?.localId ?? null);
+                  }}
                   style={inputStyle}
-                />
+                >
+                  {companiesLoading ? (
+                    <option value="">Firmalar yükleniyor...</option>
+                  ) : companies.length === 0 ? (
+                    <option value="">Aktif firma bulunamadı</option>
+                  ) : (
+                    companies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name}
+                        {company.localId ? ` • Mobil ID: ${company.localId}` : " • Mobil ID eksik"}
+                      </option>
+                    ))
+                  )}
+                </select>
               </label>
 
               <label style={labelStyle}>
