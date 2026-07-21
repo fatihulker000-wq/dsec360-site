@@ -7,6 +7,7 @@ import RiskDetailPanel from "./components/RiskDetailPanel";
 import RiskDialog from "./components/RiskDialog";
 import RiskHeatMap from "./components/RiskHeatMap";
 import RiskCharts from "./components/RiskCharts";
+import { exportRisksToCsv } from "./utils/riskExport";
 import {
   AlertTriangle,
   Building2,
@@ -958,6 +959,7 @@ export default function RiskManagementPage() {
             onSelect={setSelectedRiskId}
             onEdit={openEditRisk}
             onDelete={deleteRisk}
+            onExport={() => exportRisksToCsv(filteredRecords)}
           />
 
           <RiskDetailPanel
