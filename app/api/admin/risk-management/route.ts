@@ -3,583 +3,1603 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
+
+/* ============================================================
+   TYPES
+============================================================ */
+
+type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 type MatrixRiskRow = {
   id: string;
   sync_key: string;
+
   company_id: string | null;
   local_firm_id: number | null;
 
   title: string;
   hazard: string;
   consequence: string | null;
-  control: string | null;
+  control: string |null;
 
-  probability: number;
-  severity: number;
-  score: number;
+  probability:number;
+  severity:number;
+  score:number;
 
-  department: string | null;
-  location: string | null;
-  machine: string | null;
-  responsible: string | null;
+  department:string|null;
+  location:string|null;
+  machine:string|null;
+  responsible:string|null;
 
-  dof_status: "OPEN" | "CLOSED";
-  dof_action: string;
-  dof_responsible: string;
-  dof_due_date_millis: number | null;
-  dof_closed_at_millis: number | null;
-  dof_note: string;
+  dof_status:"OPEN"|"CLOSED";
+  dof_action:string;
+  dof_responsible:string;
+  dof_due_date_millis:number|null;
+  dof_closed_at_millis:number|null;
+  dof_note:string;
 
-  source: "APP" | "WEB" | "MERGED" | "SYSTEM";
-  sync_status: "PENDING" | "SYNCING" | "SYNCED" | "FAILED";
-  sync_error: string | null;
-  last_synced_at: string | null;
+  source:"APP"|"WEB"|"MERGED"|"SYSTEM";
 
-  is_deleted: boolean;
-  deleted_at: string | null;
+  sync_status:"PENDING"|"SYNCING"|"SYNCED"|"FAILED";
+  sync_error:string|null;
+  last_synced_at:string|null;
 
-  created_at: string;
-  updated_at: string;
+  is_deleted:boolean;
+  deleted_at:string|null;
+
+  created_at:string;
+  updated_at:string;
 };
 
 type FineKinneyRiskRow = {
-  id: string;
-  sync_key: string;
-  company_id: string | null;
-  local_firm_id: number | null;
 
-  title: string;
-  hazard: string;
-  consequence: string | null;
-  control: string | null;
+  id:string;
+  sync_key:string;
 
-  probability_value: number;
-  frequency_value: number;
-  severity_value: number;
-  score: number;
+  company_id:string|null;
+  local_firm_id:number|null;
 
-  level: string;
-  action: string;
+  title:string;
+  hazard:string;
 
-  department: string | null;
-  location: string | null;
-  machine: string | null;
-  responsible: string | null;
+  consequence:string|null;
+  control:string|null;
 
-  dof_status: "OPEN" | "CLOSED";
-  dof_action: string;
-  dof_responsible: string;
-  dof_due_date_millis: number | null;
-  dof_closed_at_millis: number | null;
-  dof_note: string;
+  probability_value:number;
+  frequency_value:number;
+  severity_value:number;
 
-  source: "APP" | "WEB" | "MERGED" | "SYSTEM";
-  sync_status: "PENDING" | "SYNCING" | "SYNCED" | "FAILED";
-  sync_error: string | null;
-  last_synced_at: string | null;
+  score:number;
 
-  is_deleted: boolean;
-  deleted_at: string | null;
+  level:string;
+  action:string;
 
-  created_at: string;
-  updated_at: string;
+  department:string|null;
+  location:string|null;
+  machine:string|null;
+  responsible:string|null;
+
+  dof_status:"OPEN"|"CLOSED";
+  dof_action:string;
+  dof_responsible:string;
+  dof_due_date_millis:number|null;
+  dof_closed_at_millis:number|null;
+  dof_note:string;
+
+  source:"APP"|"WEB"|"MERGED"|"SYSTEM";
+
+  sync_status:"PENDING"|"SYNCING"|"SYNCED"|"FAILED";
+  sync_error:string|null;
+  last_synced_at:string|null;
+
+  is_deleted:boolean;
+  deleted_at:string|null;
+
+  created_at:string;
+  updated_at:string;
+
 };
 
-type CompanyRow = {
-  id: string;
-  name: string | null;
+type CompanyRow={
+    id:string;
+    name:string|null;
 };
 
-type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+type RiskWritePayload={
 
-function getSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    id?:string;
 
-  if (!url || !key) {
-    throw new Error(
-      "SUPABASE_URL veya SUPABASE_SERVICE_ROLE_KEY tanımlı değil."
-    );
-  }
+    method?:"MATRIX"|"FINE_KINNEY";
 
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+    companyId?:string;
+
+    localFirmId?:number|null;
+
+    syncKey?:string;
+
+    title?:string;
+
+    hazard?:string;
+
+    consequence?:string|null;
+
+    control?:string|null;
+
+    probability?:number|null;
+
+    severity?:number|null;
+
+    probabilityValue?:number|null;
+
+    frequencyValue?:number|null;
+
+    severityValue?:number|null;
+
+    level?:string|null;
+
+    action?:string|null;
+
+    department?:string|null;
+
+    location?:string|null;
+
+    machine?:string|null;
+
+    responsible?:string|null;
+
+    dofStatus?:"OPEN"|"CLOSED";
+
+    dofAction?:string|null;
+
+    dofResponsible?:string|null;
+
+    dofDueDate?:string|null;
+
+    dofClosedDate?:string|null;
+
+    dofNote?:string|null;
+
+};
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+function getSupabase(){
+
+    const url=process.env.SUPABASE_URL;
+
+    const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if(!url || !key){
+
+        throw new Error("Supabase ENV bulunamadı.");
+
+    }
+
+    return createClient(url,key,{
+
+        auth:{
+
+            persistSession:false,
+
+            autoRefreshToken:false
+
+        }
+
+    });
+
 }
 
-function normalizeCompanyKey(value?: string | null) {
-  return String(value || "")
-    .trim()
-    .toLocaleLowerCase("tr-TR")
-    .replace(/\s+/g, " ");
+function normalizeCompanyKey(value?:string|null){
+
+    return String(value||"")
+
+        .trim()
+
+        .toLocaleLowerCase("tr-TR")
+
+        .replace(/\s+/g," ");
+
 }
 
-function matrixLevel(score: number): RiskLevel {
-  if (score >= 20) return "CRITICAL";
-  if (score >= 15) return "HIGH";
-  if (score >= 8) return "MEDIUM";
-  return "LOW";
+function matrixLevel(score:number):RiskLevel{
+
+    if(score>=20)return"CRITICAL";
+
+    if(score>=15)return"HIGH";
+
+    if(score>=8)return"MEDIUM";
+
+    return"LOW";
+
 }
 
-function fineKinneyLevel(score: number): RiskLevel {
-  if (score >= 400) return "CRITICAL";
-  if (score >= 200) return "HIGH";
-  if (score >= 70) return "MEDIUM";
-  return "LOW";
+function fineKinneyLevel(score:number):RiskLevel{
+
+    if(score>=400)return"CRITICAL";
+
+    if(score>=200)return"HIGH";
+
+    if(score>=70)return"MEDIUM";
+
+    return"LOW";
+
 }
 
-function levelLabel(level: RiskLevel) {
-  if (level === "CRITICAL") return "Kritik";
-  if (level === "HIGH") return "Yüksek";
-  if (level === "MEDIUM") return "Orta";
-  return "Düşük";
+function levelLabel(level:RiskLevel){
+
+    switch(level){
+
+        case"CRITICAL":return"Kritik";
+
+        case"HIGH":return"Yüksek";
+
+        case"MEDIUM":return"Orta";
+
+        default:return"Düşük";
+
+    }
+
 }
 
-function millisToIso(value?: number | null) {
-  if (!value || value <= 0) return null;
+function millisToIso(value?:number|null){
 
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+    if(!value)return null;
+
+    const d=new Date(value);
+
+    if(Number.isNaN(d.getTime()))return null;
+
+    return d.toISOString();
+
 }
 
-function isOverdue(
-  status: "OPEN" | "CLOSED",
-  dueDateMillis: number | null
-) {
-  return (
-    status === "OPEN" &&
-    typeof dueDateMillis === "number" &&
-    dueDateMillis > 0 &&
-    dueDateMillis < Date.now()
-  );
+function isoToMillis(value?:string|null){
+
+    if(!value)return null;
+
+    const t=new Date(value).getTime();
+
+    if(Number.isNaN(t))return null;
+
+    return t;
+
 }
 
-export async function GET(request: Request) {
-  try {
+function cleanText(value?:string|null){
+
+    const txt=String(value||"").trim();
+
+    return txt.length?txt:null;
+
+}
+/* ============================================================
+   ADMIN CONTEXT
+============================================================ */
+
+async function getAdminContext() {
+
     const cookieStore = await cookies();
 
     const adminAuth =
-      cookieStore.get("dsec_admin_auth")?.value ||
-      cookieStore.get("dsec_user_auth")?.value;
+        cookieStore.get("dsec_admin_auth")?.value ||
+        cookieStore.get("dsec_user_auth")?.value;
 
     const adminRole =
-      cookieStore.get("dsec_admin_role")?.value ||
-      cookieStore.get("dsec_user_role")?.value;
+        cookieStore.get("dsec_admin_role")?.value ||
+        cookieStore.get("dsec_user_role")?.value;
 
-    const companyIdFromCookie = String(
-      cookieStore.get("dsec_company_id")?.value || ""
+    const companyId = String(
+        cookieStore.get("dsec_company_id")?.value || ""
     ).trim();
 
-    const isAllowedRole =
-      adminRole === "super_admin" ||
-      adminRole === "company_admin" ||
-      adminRole === "demo_user";
+    return {
 
-    const isCompanyScoped =
-      adminRole === "company_admin" || adminRole === "demo_user";
+        allowed:
+            adminAuth === "ok" &&
+            (
+                adminRole === "super_admin" ||
+                adminRole === "company_admin" ||
+                adminRole === "demo_user"
+            ),
 
-    if (adminAuth !== "ok" || !isAllowedRole) {
+        adminRole,
+
+        companyId,
+
+        companyScoped:
+            adminRole === "company_admin" ||
+            adminRole === "demo_user",
+
+        readOnly:
+            adminRole === "demo_user"
+
+    };
+
+}
+
+/* ============================================================
+   GET
+============================================================ */
+
+export async function GET(request: Request) {
+
+    try {
+
+        const ctx = await getAdminContext();
+
+        if (!ctx.allowed) {
+
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Yetkisiz erişim."
+                },
+                {
+                    status: 401
+                }
+            );
+
+        }
+
+        const url = new URL(request.url);
+
+        const firm =
+            String(
+                url.searchParams.get("firm") || ""
+            ).trim();
+
+        const supabase = getSupabase();
+
+        let companiesQuery = supabase
+            .from("companies")
+            .select("id,name")
+            .order("name");
+
+        if (ctx.companyScoped) {
+
+            companiesQuery =
+                companiesQuery.eq(
+                    "id",
+                    ctx.companyId
+                );
+
+        }
+
+        const {
+
+            data: companies,
+            error: companyError
+
+        } =
+            await companiesQuery
+                .returns<CompanyRow[]>();
+
+        if (companyError) {
+
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: companyError.message
+                },
+                {
+                    status: 500
+                }
+            );
+
+        }
+
+        const companyMap =
+            Object.fromEntries(
+
+                (companies || []).map(c => [
+
+                    c.id,
+
+                    c.name || "Firma"
+
+                ])
+
+            );
+
+        let selectedCompany = "";
+
+        if (ctx.companyScoped) {
+
+            selectedCompany = ctx.companyId;
+
+        }
+
+        else if (firm) {
+
+            selectedCompany =
+                (companies || []).find(c =>
+
+                    c.id === firm ||
+
+                    normalizeCompanyKey(c.name) ===
+                    normalizeCompanyKey(firm)
+
+                )?.id || "";
+
+        }
+
+        let matrixQuery =
+            supabase
+                .from("risk_items")
+                .select("*")
+                .eq("is_deleted", false)
+                .order("score", {
+                    ascending: false
+                });
+
+        let fineQuery =
+            supabase
+                .from("fine_kinney_risks")
+                .select("*")
+                .eq("is_deleted", false)
+                .order("score", {
+                    ascending: false
+                });
+
+        if (selectedCompany) {
+
+            matrixQuery =
+                matrixQuery.eq(
+                    "company_id",
+                    selectedCompany
+                );
+
+            fineQuery =
+                fineQuery.eq(
+                    "company_id",
+                    selectedCompany
+                );
+
+        }
+
+        const [
+
+            matrixResult,
+
+            fineResult
+
+        ] = await Promise.all([
+
+            matrixQuery.returns<MatrixRiskRow[]>(),
+
+            fineQuery.returns<FineKinneyRiskRow[]>()
+
+        ]);
+
+        if (matrixResult.error) {
+
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: matrixResult.error.message
+                },
+                {
+                    status: 500
+                }
+            );
+
+        }
+
+        if (fineResult.error) {
+
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: fineResult.error.message
+                },
+                {
+                    status: 500
+                }
+            );
+
+        }
+
+        const matrixRows =
+            matrixResult.data || [];
+
+        const fineRows =
+            fineResult.data || [];
+                    const matrixRecords = matrixRows.map((row) => {
+            const level = matrixLevel(Number(row.score || 0));
+            const companyId = String(row.company_id || "").trim();
+
+            return {
+                id: row.id,
+                method: "MATRIX",
+
+                title: row.title,
+                hazard: row.hazard,
+                consequence: row.consequence,
+                control: row.control,
+
+                company: companyMap[companyId] || "Firma",
+
+                probability: row.probability,
+                severity: row.severity,
+
+                score: Number(row.score || 0),
+
+                level,
+                levelLabel: levelLabel(level),
+
+                department: row.department,
+                location: row.location,
+                machine: row.machine,
+                responsible: row.responsible,
+
+                dofStatus: row.dof_status,
+                dofAction: row.dof_action,
+                dofResponsible: row.dof_responsible,
+                dofDueDate: millisToIso(row.dof_due_date_millis),
+                dofClosedDate: millisToIso(row.dof_closed_at_millis),
+                dofNote: row.dof_note,
+
+                source: row.source,
+                syncStatus: row.sync_status,
+
+                createdAt: row.created_at,
+                updatedAt: row.updated_at
+            };
+        });
+
+        const fineRecords = fineRows.map((row) => {
+
+            const level = fineKinneyLevel(Number(row.score || 0));
+
+            const companyId = String(row.company_id || "").trim();
+
+            return {
+
+                id: row.id,
+
+                method: "FINE_KINNEY",
+
+                title: row.title,
+
+                hazard: row.hazard,
+
+                consequence: row.consequence,
+
+                control: row.control,
+
+                company: companyMap[companyId] || "Firma",
+
+                probabilityValue: row.probability_value,
+
+                frequencyValue: row.frequency_value,
+
+                severityValue: row.severity_value,
+
+                score: Number(row.score || 0),
+
+                level,
+
+                levelLabel: row.level || levelLabel(level),
+
+                action: row.action,
+
+                department: row.department,
+
+                location: row.location,
+
+                machine: row.machine,
+
+                responsible: row.responsible,
+
+                dofStatus: row.dof_status,
+
+                dofAction: row.dof_action,
+
+                dofResponsible: row.dof_responsible,
+
+                dofDueDate: millisToIso(row.dof_due_date_millis),
+
+                dofClosedDate: millisToIso(row.dof_closed_at_millis),
+
+                dofNote: row.dof_note,
+
+                source: row.source,
+
+                syncStatus: row.sync_status,
+
+                createdAt: row.created_at,
+
+                updatedAt: row.updated_at
+
+            };
+
+        });
+
+        const records =
+
+            [...matrixRecords, ...fineRecords]
+
+                .sort((a, b) => {
+
+                    if (b.score !== a.score) {
+
+                        return b.score - a.score;
+
+                    }
+
+                    return (
+                        new Date(b.updatedAt).getTime() -
+                        new Date(a.updatedAt).getTime()
+                    );
+
+                });
+
+        const summary = {
+
+            total: records.length,
+
+            critical:
+                records.filter(r => r.level === "CRITICAL").length,
+
+            high:
+                records.filter(r => r.level === "HIGH").length,
+
+            medium:
+                records.filter(r => r.level === "MEDIUM").length,
+
+            low:
+                records.filter(r => r.level === "LOW").length,
+
+            openDof:
+                records.filter(r => r.dofStatus === "OPEN").length,
+
+            closedDof:
+                records.filter(r => r.dofStatus === "CLOSED").length,
+
+            matrixCount:
+                matrixRecords.length,
+
+            fineKinneyCount:
+                fineRecords.length
+
+        };
+
+        const riskScore = Math.max(
+
+            0,
+
+            100 -
+
+            (
+
+                summary.critical * 18 +
+
+                summary.high * 9 +
+
+                summary.medium * 4
+
+            )
+
+        );
+
+        return NextResponse.json({
+
+            success: true,
+
+            records,
+
+            companies:
+
+                Object.values(companyMap)
+
+                    .sort(),
+
+            summary: {
+
+                ...summary,
+
+                riskScore
+
+            }
+
+        });
+
+    }
+
+    catch (e) {
+
+        console.error(e);
+
+        return NextResponse.json(
+
+            {
+
+                success: false,
+
+                message: "Risk verileri okunamadı.",
+
+                detail:
+
+                    e instanceof Error
+
+                        ? e.message
+
+                        : String(e)
+
+            },
+
+            {
+
+                status: 500
+
+            }
+
+        );
+
+    }
+
+}
+
+/* ============================================================
+   VALIDATION
+============================================================ */
+
+function validateRiskPayload(payload: RiskWritePayload): string {
+  const title = String(payload.title || "").trim();
+  const hazard = String(payload.hazard || "").trim();
+
+  if (!title) {
+    return "Risk başlığı zorunludur.";
+  }
+
+  if (!hazard) {
+    return "Tehlike alanı zorunludur.";
+  }
+
+  if (payload.method === "FINE_KINNEY") {
+    const probabilityValue = Number(payload.probabilityValue ?? 0);
+    const frequencyValue = Number(payload.frequencyValue ?? 0);
+    const severityValue = Number(payload.severityValue ?? 0);
+
+    if (
+      !Number.isFinite(probabilityValue) ||
+      !Number.isFinite(frequencyValue) ||
+      !Number.isFinite(severityValue)
+    ) {
+      return "Fine-Kinney değerleri geçersizdir.";
+    }
+
+    if (
+      probabilityValue < 0 ||
+      frequencyValue < 0 ||
+      severityValue < 0
+    ) {
+      return "Fine-Kinney değerleri negatif olamaz.";
+    }
+  } else {
+    const probability = Number(payload.probability ?? 1);
+    const severity = Number(payload.severity ?? 1);
+
+    if (
+      !Number.isFinite(probability) ||
+      !Number.isFinite(severity)
+    ) {
+      return "5x5 risk değerleri geçersizdir.";
+    }
+
+    if (
+      probability < 1 ||
+      probability > 5 ||
+      severity < 1 ||
+      severity > 5
+    ) {
+      return "5x5 olasılık ve şiddet değerleri 1-5 arasında olmalıdır.";
+    }
+  }
+
+  return "";
+}
+
+function fineKinneyLevelText(score: number): string {
+  if (score >= 400) return "Tolerans Gösterilemez Risk";
+  if (score >= 200) return "Esaslı Risk";
+  if (score >= 70) return "Önemli Risk";
+  if (score >= 20) return "Olası Risk";
+  return "Önemsiz Risk";
+}
+
+function fineKinneyActionText(score: number): string {
+  if (score >= 400) {
+    return "Faaliyet derhal durdurulmalı ve risk kabul edilebilir seviyeye indirilmeden işe başlanmamalıdır.";
+  }
+
+  if (score >= 200) {
+    return "Kısa vadeli iyileştirme planı hazırlanmalı ve önlemler öncelikli olarak uygulanmalıdır.";
+  }
+
+  if (score >= 70) {
+    return "Planlı düzeltici faaliyet oluşturulmalı ve belirlenen termin içinde tamamlanmalıdır.";
+  }
+
+  if (score >= 20) {
+    return "Mevcut kontroller sürdürülmeli ve ilave iyileştirmeler değerlendirilmelidir.";
+  }
+
+  return "Mevcut kontroller korunmalı ve periyodik izleme yapılmalıdır.";
+}
+
+async function resolveCompanyId(
+  requestedCompany: string | undefined,
+  context: Awaited<ReturnType<typeof getAdminContext>>
+): Promise<string> {
+  if (context.companyScoped) {
+    return context.companyId;
+  }
+
+  const requested = String(requestedCompany || "").trim();
+
+  if (!requested) {
+    return "";
+  }
+
+  const supabase = getSupabase();
+
+  const { data: directCompany } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("id", requested)
+    .maybeSingle<{ id: string }>();
+
+  if (directCompany?.id) {
+    return directCompany.id;
+  }
+
+  const { data: companies, error } = await supabase
+    .from("companies")
+    .select("id,name")
+    .returns<CompanyRow[]>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const normalizedRequested = normalizeCompanyKey(requested);
+
+  return (
+    (companies || []).find(
+      (company) =>
+        normalizeCompanyKey(company.name) === normalizedRequested
+    )?.id || ""
+  );
+}
+
+/* ============================================================
+   POST — CREATE
+============================================================ */
+
+export async function POST(request: Request) {
+  try {
+    const ctx = await getAdminContext();
+
+    if (!ctx.allowed) {
       return NextResponse.json(
         {
           success: false,
-          message: "Yetkisiz erişim.",
+          message: "Yetkisiz erişim."
         },
-        { status: 401 }
+        {
+          status: 401
+        }
       );
     }
 
-    if (isCompanyScoped && !companyIdFromCookie) {
+    if (ctx.readOnly) {
       return NextResponse.json(
         {
           success: false,
-          message: "Firma bilgisi bulunamadı.",
+          message: "Demo kullanıcısı risk kaydı oluşturamaz."
         },
-        { status: 403 }
+        {
+          status: 403
+        }
       );
     }
 
-    const url = new URL(request.url);
-    const firmParam = String(url.searchParams.get("firm") || "").trim();
+    const payload: RiskWritePayload =
+      await request.json().catch(() => ({}));
+
+    const validationError = validateRiskPayload(payload);
+
+    if (validationError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: validationError
+        },
+        {
+          status: 400
+        }
+      );
+    }
+
+    const companyId = await resolveCompanyId(
+      payload.companyId,
+      ctx
+    );
+
+    if (!companyId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Firma seçilmelidir."
+        },
+        {
+          status: 400
+        }
+      );
+    }
 
     const supabase = getSupabase();
 
-    let companiesQuery = supabase
-      .from("companies")
-      .select("id, name")
-      .order("name", { ascending: true });
+    const method =
+      payload.method === "FINE_KINNEY"
+        ? "FINE_KINNEY"
+        : "MATRIX";
 
-    if (isCompanyScoped) {
-      companiesQuery = companiesQuery.eq("id", companyIdFromCookie);
-    }
+    const syncKey =
+      String(payload.syncKey || "").trim() ||
+      crypto.randomUUID();
 
-    const { data: companies, error: companiesError } =
-      await companiesQuery.returns<CompanyRow[]>();
+    if (method === "FINE_KINNEY") {
+      const probabilityValue =
+        Number(payload.probabilityValue ?? 0);
 
-    if (companiesError) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Firma listesi alınamadı.",
-          detail: companiesError.message,
-        },
-        { status: 500 }
-      );
-    }
+      const frequencyValue =
+        Number(payload.frequencyValue ?? 0);
 
-    const companyRows = companies || [];
+      const severityValue =
+        Number(payload.severityValue ?? 0);
 
-    const companyMap = Object.fromEntries(
-      companyRows.map((company) => [
-        String(company.id || "").trim(),
-        String(company.name || "Firma Yok").trim() || "Firma Yok",
-      ])
-    );
+      const score =
+        probabilityValue *
+        frequencyValue *
+        severityValue;
 
-    let selectedCompanyId = "";
+      const { data, error } = await supabase
+        .from("fine_kinney_risks")
+        .insert({
+          sync_key: syncKey,
+          company_id: companyId,
+          local_firm_id: payload.localFirmId ?? null,
 
-    if (isCompanyScoped) {
-      selectedCompanyId = companyIdFromCookie;
-    } else if (firmParam) {
-      const normalizedFirm = normalizeCompanyKey(firmParam);
+          title: String(payload.title || "").trim(),
+          hazard: String(payload.hazard || "").trim(),
+          consequence: cleanText(payload.consequence),
+          control: cleanText(payload.control),
 
-      selectedCompanyId =
-        companyRows.find(
-          (company) =>
-            normalizeCompanyKey(company.name) === normalizedFirm ||
-            String(company.id || "").trim() === firmParam
-        )?.id || "";
-    }
+          probability_value: probabilityValue,
+          frequency_value: frequencyValue,
+          severity_value: severityValue,
 
-    let matrixQuery = supabase
-      .from("risk_items")
-      .select(
-        [
-          "id",
-          "sync_key",
-          "company_id",
-          "local_firm_id",
-          "title",
-          "hazard",
-          "consequence",
-          "control",
-          "probability",
-          "severity",
-          "score",
-          "department",
-          "location",
-          "machine",
-          "responsible",
-          "dof_status",
-          "dof_action",
-          "dof_responsible",
-          "dof_due_date_millis",
-          "dof_closed_at_millis",
-          "dof_note",
-          "source",
-          "sync_status",
-          "sync_error",
-          "last_synced_at",
-          "is_deleted",
-          "deleted_at",
-          "created_at",
-          "updated_at",
-        ].join(",")
-      )
-      .eq("is_deleted", false)
-      .order("score", { ascending: false })
-      .order("updated_at", { ascending: false });
+          level:
+            cleanText(payload.level) ||
+            fineKinneyLevelText(score),
 
-    let fineQuery = supabase
-      .from("fine_kinney_risks")
-      .select(
-        [
-          "id",
-          "sync_key",
-          "company_id",
-          "local_firm_id",
-          "title",
-          "hazard",
-          "consequence",
-          "control",
-          "probability_value",
-          "frequency_value",
-          "severity_value",
-          "score",
-          "level",
-          "action",
-          "department",
-          "location",
-          "machine",
-          "responsible",
-          "dof_status",
-          "dof_action",
-          "dof_responsible",
-          "dof_due_date_millis",
-          "dof_closed_at_millis",
-          "dof_note",
-          "source",
-          "sync_status",
-          "sync_error",
-          "last_synced_at",
-          "is_deleted",
-          "deleted_at",
-          "created_at",
-          "updated_at",
-        ].join(",")
-      )
-      .eq("is_deleted", false)
-      .order("score", { ascending: false })
-      .order("updated_at", { ascending: false });
+          action:
+            cleanText(payload.action) ||
+            fineKinneyActionText(score),
 
-    if (selectedCompanyId) {
-      matrixQuery = matrixQuery.eq("company_id", selectedCompanyId);
-      fineQuery = fineQuery.eq("company_id", selectedCompanyId);
-    }
+          department: cleanText(payload.department),
+          location: cleanText(payload.location),
+          machine: cleanText(payload.machine),
+          responsible: cleanText(payload.responsible),
 
-    const [
-      { data: matrixRows, error: matrixError },
-      { data: fineRows, error: fineError },
-    ] = await Promise.all([
-      matrixQuery.returns<MatrixRiskRow[]>(),
-      fineQuery.returns<FineKinneyRiskRow[]>(),
-    ]);
+          dof_status:
+            payload.dofStatus === "CLOSED"
+              ? "CLOSED"
+              : "OPEN",
 
-    if (matrixError) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "5x5 risk kayıtları alınamadı.",
-          detail: matrixError.message,
-        },
-        { status: 500 }
-      );
-    }
+          dof_action:
+            cleanText(payload.dofAction) || "",
 
-    if (fineError) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Fine-Kinney kayıtları alınamadı.",
-          detail: fineError.message,
-        },
-        { status: 500 }
-      );
-    }
+          dof_responsible:
+            cleanText(payload.dofResponsible) || "",
 
-    const matrixRecords = (matrixRows || []).map((row) => {
-      const level = matrixLevel(Number(row.score || 0));
-      const companyId = String(row.company_id || "").trim();
+          dof_due_date_millis:
+            isoToMillis(payload.dofDueDate),
 
-      return {
-        id: row.id,
-        localId: row.local_firm_id,
-        remoteId: row.id,
-        syncKey: row.sync_key,
+          dof_closed_at_millis:
+            payload.dofStatus === "CLOSED"
+              ? (
+                  isoToMillis(payload.dofClosedDate) ||
+                  Date.now()
+                )
+              : null,
 
-        firmId: String(row.local_firm_id || ""),
-        webFirmId: companyId || null,
-        company: companyMap[companyId] || "Firma Yok",
+          dof_note:
+            cleanText(payload.dofNote) || "",
 
-        method: "MATRIX" as const,
+          source: "WEB",
+          sync_status: "SYNCED",
+          sync_error: null,
+          last_synced_at: new Date().toISOString(),
+          is_deleted: false,
+          deleted_at: null
+        })
+        .select("id")
+        .single<{ id: string }>();
 
-        title: row.title,
-        hazard: row.hazard,
-        consequence: row.consequence,
-        control: row.control,
-
-        probability: row.probability,
-        severity: row.severity,
-
-        probabilityValue: null,
-        frequencyValue: null,
-        severityValue: null,
-
-        score: Number(row.score || 0),
-        level,
-        levelLabel: levelLabel(level),
-        action: row.dof_action || null,
-
-        department: row.department,
-        location: row.location,
-        machine: row.machine,
-        responsible: row.responsible || row.dof_responsible || null,
-
-        dofStatus: row.dof_status,
-        dofAction: row.dof_action || null,
-        dofResponsible: row.dof_responsible || null,
-        dofDueDate: millisToIso(row.dof_due_date_millis),
-        dofClosedDate: millisToIso(row.dof_closed_at_millis),
-        dofNote: row.dof_note || null,
-
-        source:
-          row.source === "APP" ||
-          row.source === "MERGED"
-            ? row.source
-            : "WEB",
-
-        syncStatus: row.sync_status,
-        syncError: row.sync_error,
-        lastSyncedAt: row.last_synced_at,
-
-        isDeleted: row.is_deleted,
-        deletedAt: row.deleted_at,
-
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-
-        overdue: isOverdue(
-          row.dof_status,
-          row.dof_due_date_millis
-        ),
-      };
-    });
-
-    const fineRecords = (fineRows || []).map((row) => {
-      const level = fineKinneyLevel(Number(row.score || 0));
-      const companyId = String(row.company_id || "").trim();
-
-      return {
-        id: row.id,
-        localId: row.local_firm_id,
-        remoteId: row.id,
-        syncKey: row.sync_key,
-
-        firmId: String(row.local_firm_id || ""),
-        webFirmId: companyId || null,
-        company: companyMap[companyId] || "Firma Yok",
-
-        method: "FINE_KINNEY" as const,
-
-        title: row.title,
-        hazard: row.hazard,
-        consequence: row.consequence,
-        control: row.control,
-
-        probability: null,
-        severity: null,
-
-        probabilityValue: Number(row.probability_value || 0),
-        frequencyValue: Number(row.frequency_value || 0),
-        severityValue: Number(row.severity_value || 0),
-
-        score: Number(row.score || 0),
-        level,
-        levelLabel: row.level || levelLabel(level),
-        action: row.action || null,
-
-        department: row.department,
-        location: row.location,
-        machine: row.machine,
-        responsible: row.responsible || row.dof_responsible || null,
-
-        dofStatus: row.dof_status,
-        dofAction: row.dof_action || null,
-        dofResponsible: row.dof_responsible || null,
-        dofDueDate: millisToIso(row.dof_due_date_millis),
-        dofClosedDate: millisToIso(row.dof_closed_at_millis),
-        dofNote: row.dof_note || null,
-
-        source:
-          row.source === "APP" ||
-          row.source === "MERGED"
-            ? row.source
-            : "WEB",
-
-        syncStatus: row.sync_status,
-        syncError: row.sync_error,
-        lastSyncedAt: row.last_synced_at,
-
-        isDeleted: row.is_deleted,
-        deletedAt: row.deleted_at,
-
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-
-        overdue: isOverdue(
-          row.dof_status,
-          row.dof_due_date_millis
-        ),
-      };
-    });
-
-    const records = [...matrixRecords, ...fineRecords].sort(
-      (a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-
-        return (
-          new Date(b.updatedAt).getTime() -
-          new Date(a.updatedAt).getTime()
+      if (error) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Fine-Kinney kaydı oluşturulamadı.",
+            detail: error.message
+          },
+          {
+            status: 500
+          }
         );
       }
+
+      return NextResponse.json({
+        success: true,
+        id: data.id,
+        method,
+        message: "Fine-Kinney kaydı oluşturuldu."
+      });
+    }
+
+    const probability = Math.min(
+      5,
+      Math.max(
+        1,
+        Number(payload.probability ?? 1)
+      )
     );
 
-    const summary = {
-      total: records.length,
-      critical: records.filter(
-        (record) => record.level === "CRITICAL"
-      ).length,
-      high: records.filter(
-        (record) => record.level === "HIGH"
-      ).length,
-      medium: records.filter(
-        (record) => record.level === "MEDIUM"
-      ).length,
-      low: records.filter(
-        (record) => record.level === "LOW"
-      ).length,
-      openDof: records.filter(
-        (record) => record.dofStatus === "OPEN"
-      ).length,
-      closedDof: records.filter(
-        (record) => record.dofStatus === "CLOSED"
-      ).length,
-      overdueDof: records.filter(
-        (record) => record.overdue
-      ).length,
-      matrixCount: matrixRecords.length,
-      fineKinneyCount: fineRecords.length,
-    };
+    const severity = Math.min(
+      5,
+      Math.max(
+        1,
+        Number(payload.severity ?? 1)
+      )
+    );
 
-    const weightedPenalty =
-      summary.critical * 18 +
-      summary.high * 9 +
-      summary.medium * 4 +
-      summary.overdueDof * 6;
+    const { data, error } = await supabase
+      .from("risk_items")
+      .insert({
+        sync_key: syncKey,
+        company_id: companyId,
+        local_firm_id: payload.localFirmId ?? null,
 
-    const riskScore =
-      records.length === 0
-        ? 100
-        : Math.max(0, Math.min(100, 100 - weightedPenalty));
+        title: String(payload.title || "").trim(),
+        hazard: String(payload.hazard || "").trim(),
+        consequence: cleanText(payload.consequence),
+        control: cleanText(payload.control),
+
+        probability,
+        severity,
+
+        department: cleanText(payload.department),
+        location: cleanText(payload.location),
+        machine: cleanText(payload.machine),
+        responsible: cleanText(payload.responsible),
+
+        dof_status:
+          payload.dofStatus === "CLOSED"
+            ? "CLOSED"
+            : "OPEN",
+
+        dof_action:
+          cleanText(payload.dofAction) || "",
+
+        dof_responsible:
+          cleanText(payload.dofResponsible) || "",
+
+        dof_due_date_millis:
+          isoToMillis(payload.dofDueDate),
+
+        dof_closed_at_millis:
+          payload.dofStatus === "CLOSED"
+            ? (
+                isoToMillis(payload.dofClosedDate) ||
+                Date.now()
+              )
+            : null,
+
+        dof_note:
+          cleanText(payload.dofNote) || "",
+
+        source: "WEB",
+        sync_status: "SYNCED",
+        sync_error: null,
+        last_synced_at: new Date().toISOString(),
+        is_deleted: false,
+        deleted_at: null
+      })
+      .select("id")
+      .single<{ id: string }>();
+
+    if (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "5x5 risk kaydı oluşturulamadı.",
+          detail: error.message
+        },
+        {
+          status: 500
+        }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      records,
-      companies: Object.values(companyMap).sort((a, b) =>
-        a.localeCompare(b, "tr")
-      ),
-      summary: {
-        ...summary,
-        riskScore,
-      },
+      id: data.id,
+      method,
+      message: "5x5 risk kaydı oluşturuldu."
     });
   } catch (error) {
-    console.error("risk management route error:", error);
+    console.error("risk create error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        message: "Risk verileri alınırken sunucu hatası oluştu.",
+        message:
+          "Risk kaydı oluşturulurken sunucu hatası oluştu.",
         detail:
           error instanceof Error
             ? error.message
-            : String(error),
+            : String(error)
       },
-      { status: 500 }
+      {
+        status: 500
+      }
+    );
+  }
+}
+
+/* ============================================================
+   PATCH — UPDATE
+============================================================ */
+
+export async function PATCH(request: Request) {
+  try {
+    const ctx = await getAdminContext();
+
+    if (!ctx.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Yetkisiz erişim."
+        },
+        {
+          status: 401
+        }
+      );
+    }
+
+    if (ctx.readOnly) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Demo kullanıcısı risk kaydı düzenleyemez."
+        },
+        {
+          status: 403
+        }
+      );
+    }
+
+    const payload: RiskWritePayload =
+      await request.json().catch(() => ({}));
+
+    const id = String(payload.id || "").trim();
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Risk ID zorunludur."
+        },
+        {
+          status: 400
+        }
+      );
+    }
+
+    const validationError = validateRiskPayload(payload);
+
+    if (validationError) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: validationError
+        },
+        {
+          status: 400
+        }
+      );
+    }
+
+    const supabase = getSupabase();
+
+    const method =
+      payload.method === "FINE_KINNEY"
+        ? "FINE_KINNEY"
+        : "MATRIX";
+
+    if (method === "FINE_KINNEY") {
+      const probabilityValue =
+        Number(payload.probabilityValue ?? 0);
+
+      const frequencyValue =
+        Number(payload.frequencyValue ?? 0);
+
+      const severityValue =
+        Number(payload.severityValue ?? 0);
+
+      const score =
+        probabilityValue *
+        frequencyValue *
+        severityValue;
+
+      let updateQuery = supabase
+        .from("fine_kinney_risks")
+        .update({
+          title: String(payload.title || "").trim(),
+          hazard: String(payload.hazard || "").trim(),
+          consequence: cleanText(payload.consequence),
+          control: cleanText(payload.control),
+
+          probability_value: probabilityValue,
+          frequency_value: frequencyValue,
+          severity_value: severityValue,
+
+          level:
+            cleanText(payload.level) ||
+            fineKinneyLevelText(score),
+
+          action:
+            cleanText(payload.action) ||
+            fineKinneyActionText(score),
+
+          department: cleanText(payload.department),
+          location: cleanText(payload.location),
+          machine: cleanText(payload.machine),
+          responsible: cleanText(payload.responsible),
+
+          dof_status:
+            payload.dofStatus === "CLOSED"
+              ? "CLOSED"
+              : "OPEN",
+
+          dof_action:
+            cleanText(payload.dofAction) || "",
+
+          dof_responsible:
+            cleanText(payload.dofResponsible) || "",
+
+          dof_due_date_millis:
+            isoToMillis(payload.dofDueDate),
+
+          dof_closed_at_millis:
+            payload.dofStatus === "CLOSED"
+              ? (
+                  isoToMillis(payload.dofClosedDate) ||
+                  Date.now()
+                )
+              : null,
+
+          dof_note:
+            cleanText(payload.dofNote) || "",
+
+          source: "WEB",
+          sync_status: "SYNCED",
+          sync_error: null,
+          last_synced_at: new Date().toISOString()
+        })
+        .eq("id", id)
+        .eq("is_deleted", false);
+
+      if (ctx.companyScoped) {
+        updateQuery =
+          updateQuery.eq("company_id", ctx.companyId);
+      }
+
+      const { data, error } = await updateQuery
+        .select("id")
+        .maybeSingle<{ id: string }>();
+
+      if (error) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Fine-Kinney kaydı güncellenemedi.",
+            detail: error.message
+          },
+          {
+            status: 500
+          }
+        );
+      }
+
+      if (!data) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Fine-Kinney kaydı bulunamadı."
+          },
+          {
+            status: 404
+          }
+        );
+      }
+    } else {
+      const probability = Math.min(
+        5,
+        Math.max(
+          1,
+          Number(payload.probability ?? 1)
+        )
+      );
+
+      const severity = Math.min(
+        5,
+        Math.max(
+          1,
+          Number(payload.severity ?? 1)
+        )
+      );
+
+      let updateQuery = supabase
+        .from("risk_items")
+        .update({
+          title: String(payload.title || "").trim(),
+          hazard: String(payload.hazard || "").trim(),
+          consequence: cleanText(payload.consequence),
+          control: cleanText(payload.control),
+
+          probability,
+          severity,
+
+          department: cleanText(payload.department),
+          location: cleanText(payload.location),
+          machine: cleanText(payload.machine),
+          responsible: cleanText(payload.responsible),
+
+          dof_status:
+            payload.dofStatus === "CLOSED"
+              ? "CLOSED"
+              : "OPEN",
+
+          dof_action:
+            cleanText(payload.dofAction) || "",
+
+          dof_responsible:
+            cleanText(payload.dofResponsible) || "",
+
+          dof_due_date_millis:
+            isoToMillis(payload.dofDueDate),
+
+          dof_closed_at_millis:
+            payload.dofStatus === "CLOSED"
+              ? (
+                  isoToMillis(payload.dofClosedDate) ||
+                  Date.now()
+                )
+              : null,
+
+          dof_note:
+            cleanText(payload.dofNote) || "",
+
+          source: "WEB",
+          sync_status: "SYNCED",
+          sync_error: null,
+          last_synced_at: new Date().toISOString()
+        })
+        .eq("id", id)
+        .eq("is_deleted", false);
+
+      if (ctx.companyScoped) {
+        updateQuery =
+          updateQuery.eq("company_id", ctx.companyId);
+      }
+
+      const { data, error } = await updateQuery
+        .select("id")
+        .maybeSingle<{ id: string }>();
+
+      if (error) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "5x5 risk kaydı güncellenemedi.",
+            detail: error.message
+          },
+          {
+            status: 500
+          }
+        );
+      }
+
+      if (!data) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "5x5 risk kaydı bulunamadı."
+          },
+          {
+            status: 404
+          }
+        );
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      method,
+      message: "Risk kaydı güncellendi."
+    });
+  } catch (error) {
+    console.error("risk update error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          "Risk kaydı güncellenirken sunucu hatası oluştu.",
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error)
+      },
+      {
+        status: 500
+      }
+    );
+  }
+}
+
+/* ============================================================
+   DELETE — SOFT DELETE
+============================================================ */
+
+export async function DELETE(request: Request) {
+  try {
+    const ctx = await getAdminContext();
+
+    if (!ctx.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Yetkisiz erişim."
+        },
+        {
+          status: 401
+        }
+      );
+    }
+
+    if (ctx.readOnly) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Demo kullanıcısı risk kaydı silemez."
+        },
+        {
+          status: 403
+        }
+      );
+    }
+
+    const url = new URL(request.url);
+
+    const id =
+      String(url.searchParams.get("id") || "").trim();
+
+    const method =
+      String(
+        url.searchParams.get("method") || "MATRIX"
+      )
+        .trim()
+        .toUpperCase();
+
+    if (!id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Risk ID zorunludur."
+        },
+        {
+          status: 400
+        }
+      );
+    }
+
+    const supabase = getSupabase();
+
+    const table =
+      method === "FINE_KINNEY"
+        ? "fine_kinney_risks"
+        : "risk_items";
+
+    let deleteQuery = supabase
+      .from(table)
+      .update({
+        is_deleted: true,
+        deleted_at: new Date().toISOString(),
+        source: "WEB",
+        sync_status: "SYNCED",
+        sync_error: null,
+        last_synced_at: new Date().toISOString()
+      })
+      .eq("id", id)
+      .eq("is_deleted", false);
+
+    if (ctx.companyScoped) {
+      deleteQuery =
+        deleteQuery.eq("company_id", ctx.companyId);
+    }
+
+    const { data, error } = await deleteQuery
+      .select("id")
+      .maybeSingle<{ id: string }>();
+
+    if (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Risk kaydı silinemedi.",
+          detail: error.message
+        },
+        {
+          status: 500
+        }
+      );
+    }
+
+    if (!data) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Risk kaydı bulunamadı."
+        },
+        {
+          status: 404
+        }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      id,
+      method:
+        method === "FINE_KINNEY"
+          ? "FINE_KINNEY"
+          : "MATRIX",
+      message: "Risk kaydı silindi."
+    });
+  } catch (error) {
+    console.error("risk delete error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          "Risk kaydı silinirken sunucu hatası oluştu.",
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error)
+      },
+      {
+        status: 500
+      }
     );
   }
 }
