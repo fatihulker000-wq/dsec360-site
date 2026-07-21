@@ -5,6 +5,8 @@ import RiskKpiCards from "./components/RiskKpiCards";
 import RiskTable from "./components/RiskTable";
 import RiskDetailPanel from "./components/RiskDetailPanel";
 import RiskDialog from "./components/RiskDialog";
+import RiskHeatMap from "./components/RiskHeatMap";
+import RiskCharts from "./components/RiskCharts";
 import {
   AlertTriangle,
   Building2,
@@ -33,6 +35,11 @@ type RiskRecord = {
   consequence?: string | null;
   control?: string | null;
   method: RiskMethod;
+  probability?: number | null;
+  severity?: number | null;
+  probabilityValue?: number | null;
+  frequencyValue?: number | null;
+  severityValue?: number | null;
   score: number;
   level: RiskLevel;
   department?: string | null;
@@ -224,6 +231,10 @@ export default function RiskManagementPage() {
   const [savingRisk, setSavingRisk] = useState(false);
   const [deletingRisk, setDeletingRisk] = useState(false);
   const [riskForm, setRiskForm] = useState<RiskFormState>(EMPTY_FORM);
+  const [selectedHeatCell, setSelectedHeatCell] = useState<{
+    probability: number;
+    severity: number;
+  } | null>(null);
 
   const loadRisks = async () => {
     try {
@@ -762,6 +773,21 @@ export default function RiskManagementPage() {
         ) : null}
 
         <RiskKpiCards totals={totals} />
+
+        <RiskHeatMap
+          risks={records}
+          selectedCell={selectedHeatCell}
+          onCellClick={(probability, severity, riskIds) => {
+            setSelectedHeatCell({ probability, severity });
+            setSelectedMethod("MATRIX");
+
+            if (riskIds.length > 0) {
+              setSelectedRiskId(riskIds[0]);
+            }
+          }}
+        />
+
+        <RiskCharts records={records} />
 
         <section
           style={{
