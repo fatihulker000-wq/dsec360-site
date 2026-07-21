@@ -36,6 +36,15 @@ const mainItems: SidebarItem[] = [
     icon: "📅",
     desc: "Görev, toplantı ve planlama",
   },
+
+
+{
+  href: "/admin/risk",
+  label: "Risk Yönetimi",
+  icon: "🛡",
+  desc: "5x5 • Fine-Kinney • DÖF",
+},
+
   {
     href: "/admin/permissions",
     label: "Yetki Matrisi V3",
@@ -110,6 +119,7 @@ export default function AdminSidebar() {
     if (pathname.startsWith("/admin/trainings")) return "Eğitim Yönetimi";
     if (pathname.startsWith("/admin/health")) return "Sağlık Yönetimi";
     if (pathname.startsWith("/admin/agenda")) return "Ajanda Yönetimi";
+    if (pathname.startsWith("/admin/risk")) return "Risk Yönetimi";
     if (pathname.startsWith("/admin/permissions")) return "Yetki Matrisi V3";
     if (pathname.startsWith("/cbs")) return "ÇBS Yönetimi";
     return "Admin Panel";
