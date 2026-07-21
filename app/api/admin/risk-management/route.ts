@@ -2,6 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic"
+
 type MatrixRiskRow = {
   id: string;
   sync_key: string;
