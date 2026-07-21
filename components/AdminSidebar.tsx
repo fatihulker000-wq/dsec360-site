@@ -36,15 +36,12 @@ const mainItems: SidebarItem[] = [
     icon: "📅",
     desc: "Görev, toplantı ve planlama",
   },
-
-
-{
-  href: "/admin/risk",
-  label: "Risk Yönetimi",
-  icon: "🛡",
-  desc: "5x5 • Fine-Kinney • DÖF",
-},
-
+  {
+    href: "/admin/risk",
+    label: "Risk Yönetimi",
+    icon: "🛡",
+    desc: "5x5 • Fine-Kinney • DÖF",
+  },
   {
     href: "/admin/permissions",
     label: "Yetki Matrisi V3",
