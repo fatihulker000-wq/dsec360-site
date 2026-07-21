@@ -41,6 +41,7 @@ type MenuItem = {
 const ACTIVE_LABELS: Record<string, string> = {
   "/admin/dashboard": "Dashboard",
   "/admin/agenda": "Ajanda Yönetimi",
+  "/admin/risk": "Risk Yönetimi",
   "/admin/trainings": "Eğitimler",
   "/admin/health": "Sağlık Yönetimi",
   "/admin/health/employees": "Çalışan Sağlık Kartları",
@@ -168,6 +169,11 @@ export default function AdminLayout({
   href: "/admin/agenda",
   icon: ClipboardCheck,
 },
+      {
+        name: "Risk Yönetimi",
+        href: "/admin/risk",
+        icon: AlertTriangle,
+      },
       { name: "Sistem Kullanıcıları", href: "/admin/users", icon: Users },
       {
         name: "Modül ve Yetki Yönetimi V3",
@@ -197,6 +203,7 @@ export default function AdminLayout({
           "/admin/dashboard",
           "/admin/trainings",
           "/admin/health",
+          "/admin/risk",
           "/admin/denetimler",
           "/admin/employees",
           "/admin/reports",
