@@ -1,5 +1,4 @@
 import type { RiskRecord } from "../types";
-
 import {
   formatDate,
   riskLabel,
@@ -451,24 +450,48 @@ export function printRiskPdf(
     companyName
   );
 
-  const reportWindow = window.open(
-    "",
-    "_blank",
-    "noopener,noreferrer"
-  );
+  const iframe = document.createElement("iframe");
 
-  if (!reportWindow) {
-    throw new Error(
-      "Rapor penceresi açılamadı. Tarayıcı açılır pencere engelini kontrol edin."
-    );
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "1px";
+  iframe.style.height = "1px";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  iframe.style.pointerEvents = "none";
+
+  document.body.appendChild(iframe);
+
+  const frameWindow = iframe.contentWindow;
+  const frameDocument = iframe.contentDocument;
+
+  if (!frameWindow || !frameDocument) {
+    iframe.remove();
+    throw new Error("PDF yazdırma görünümü oluşturulamadı.");
   }
 
-  reportWindow.document.open();
-  reportWindow.document.write(html);
-  reportWindow.document.close();
+  frameDocument.open();
+  frameDocument.write(html);
+  frameDocument.close();
 
-  reportWindow.onload = () => {
-    reportWindow.focus();
-    reportWindow.print();
+  const print = () => {
+    try {
+      frameWindow.focus();
+      frameWindow.print();
+    } finally {
+      window.setTimeout(() => {
+        iframe.remove();
+      }, 1500);
+    }
   };
+
+  if (frameDocument.readyState === "complete") {
+    window.setTimeout(print, 300);
+  } else {
+    iframe.onload = () => {
+      window.setTimeout(print, 300);
+    };
+  }
 }

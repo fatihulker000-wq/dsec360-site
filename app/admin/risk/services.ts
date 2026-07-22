@@ -210,6 +210,9 @@ export async function syncRisks(): Promise<void> {
   );
 }
 
+// services.ts içindeki mevcut getEmergencyBundle fonksiyonunun
+// TAMAMINI bununla değiştirin.
+
 async function getEmergencyBundle(
   firmId: string
 ): Promise<{
@@ -217,15 +220,38 @@ async function getEmergencyBundle(
   teams: EmergencySupportMember[];
   drills: EmergencyDrill[];
 }> {
-  const json = await request<ApiEnvelope<never>>(
-    `${EMERGENCY_API}?firmId=${encodeURIComponent(firmId)}`
-  );
+  if (!firmId) {
+    return {
+      plans: [],
+      teams: [],
+      drills: [],
+    };
+  }
 
-  return {
-    plans: Array.isArray(json.plans) ? json.plans : [],
-    teams: Array.isArray(json.teams) ? json.teams : [],
-    drills: Array.isArray(json.drills) ? json.drills : [],
-  };
+  try {
+    const json = await request<ApiEnvelope<never>>(
+      `${EMERGENCY_API}?firmId=${encodeURIComponent(firmId)}`
+    );
+
+    return {
+      plans: Array.isArray(json.plans) ? json.plans : [],
+      teams: Array.isArray(json.teams) ? json.teams : [],
+      drills: Array.isArray(json.drills) ? json.drills : [],
+    };
+  } catch (error) {
+    // Firma seçildiğinde acil durum kaydı yoksa veya acil durum API'si
+    // geçici hata verirse Risk Dashboard'un tamamını bozma.
+    console.warn(
+      "Acil durum verileri yüklenemedi:",
+      error
+    );
+
+    return {
+      plans: [],
+      teams: [],
+      drills: [],
+    };
+  }
 }
 
 export async function getEmergencyPlans(

@@ -201,10 +201,10 @@ export default function RiskDistributionChart({
           className="distributionGrid"
           style={{
             display: "grid",
-            gridTemplateColumns:
-              "minmax(260px, 0.85fr) minmax(300px, 1.15fr)",
-            gap: 20,
-            alignItems: "center",
+            gridTemplateColumns: "minmax(0, 1fr)",
+            gap: 18,
+            alignItems: "start",
+            minWidth: 0,
           }}
         >
           <div
@@ -216,14 +216,14 @@ export default function RiskDistributionChart({
             <div
               style={{
                 position: "relative",
-                width: 210,
-                height: 210,
+                width: "min(210px, 72vw)",
+                height: "min(210px, 72vw)",
               }}
             >
               <svg
                 viewBox="0 0 200 200"
-                width="210"
-                height="210"
+                width="100%"
+                height="100%"
                 role="img"
                 aria-label="Risk dağılım grafiği"
               >
@@ -360,7 +360,13 @@ export default function RiskDistributionChart({
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: 13 }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 12,
+              minWidth: 0,
+            }}
+          >
             {items.map((item) => {
               const itemPercent = percent(
                 item.value,
@@ -402,8 +408,10 @@ export default function RiskDistributionChart({
                       <span
                         style={{
                           color: "#475569",
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: 850,
+                          minWidth: 0,
+                          overflowWrap: "anywhere",
                         }}
                       >
                         {item.label}
@@ -413,8 +421,10 @@ export default function RiskDistributionChart({
                     <div
                       style={{
                         color: "#0f172a",
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: 900,
+                        whiteSpace: "nowrap",
+                        flex: "0 0 auto",
                       }}
                     >
                       {item.value} · %{itemPercent}
