@@ -22,6 +22,9 @@ import {
 } from "lucide-react";
 
 import type { RiskLevel, RiskMethod, RiskRecord } from "../types";
+import RiskDialog, { type RiskFormState } from "./RiskDialog";
+import RiskDetailDrawer from "./RiskDetailDrawer";
+import RiskReportCenter from "./RiskReportCenter";
 import {
   createRisk,
   deleteRisk,
@@ -43,29 +46,6 @@ type Props = {
   onReload: () => void | Promise<void>;
 };
 
-type RiskFormState = {
-  id?: string;
-  firmId: string;
-  company: string;
-  department: string;
-  process: string;
-  activity: string;
-  hazard: string;
-  consequence: string;
-  existingControl: string;
-  proposedControl: string;
-  responsible: string;
-  dueDateMillis: number | null;
-  completed: boolean;
-  probability: number;
-  frequency: number;
-  severity: number;
-  score: number;
-  method: RiskMethod;
-  level: RiskLevel;
-  photoUrl: string | null;
-  attachmentUrl: string | null;
-};
 
 const EMPTY_FORM: RiskFormState = {
   firmId: "",
@@ -90,23 +70,6 @@ const EMPTY_FORM: RiskFormState = {
   attachmentUrl: null,
 };
 
-function toDateInput(value?: number | null) {
-  if (!value) return "";
-
-  const date = new Date(value);
-
-  return Number.isNaN(date.getTime())
-    ? ""
-    : date.toISOString().slice(0, 10);
-}
-
-function toMillis(value: string) {
-  if (!value) return null;
-
-  const millis = new Date(`${value}T00:00:00`).getTime();
-
-  return Number.isNaN(millis) ? null : millis;
-}
 
 function calculateLevel(score: number): RiskLevel {
   if (score < 20) return "LOW";
@@ -221,6 +184,8 @@ export default function RiskWorkspace({
     useState("");
 
   const [error, setError] = useState("");
+  const [showReports, setShowReports] =
+    useState(false);
 
   const filteredRecords = useMemo(() => {
     const normalizedSearch = search
@@ -541,7 +506,7 @@ export default function RiskWorkspace({
             <button
               type="button"
               onClick={() =>
-                exportCsv(filteredRecords)
+                setShowReports(true)
               }
               style={{
                 minHeight: 42,
@@ -558,7 +523,7 @@ export default function RiskWorkspace({
               }}
             >
               <Download size={16} />
-              CSV
+              Raporlar
             </button>
 
             <button
@@ -1372,671 +1337,37 @@ export default function RiskWorkspace({
         </div>
       )}
 
-      {selectedRisk ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 120,
-            background:
-              "rgba(15,23,42,0.55)",
-            display: "flex",
-            justifyContent: "flex-end",
-          }}
-          onClick={() =>
-            setSelectedRisk(null)
+      <RiskDetailDrawer
+        open={Boolean(selectedRisk)}
+        record={selectedRisk}
+        onClose={() => setSelectedRisk(null)}
+        onEdit={openEditRisk}
+      />
+
+      <RiskDialog
+        open={showDialog}
+        form={form}
+        saving={saving}
+        error={error}
+        onClose={() => {
+          if (!saving) {
+            setShowDialog(false);
           }
-        >
-          <aside
-            style={{
-              width: "min(520px, 100%)",
-              height: "100%",
-              background: "#ffffff",
-              padding: 20,
-              overflowY: "auto",
-              boxShadow:
-                "-20px 0 60px rgba(15,23,42,0.2)",
-            }}
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent:
-                  "space-between",
-                alignItems:
-                  "flex-start",
-                gap: 12,
-              }}
-            >
-              <div>
-                <h3
-                  style={{
-                    margin: 0,
-                    color: "#0f172a",
-                    fontSize: 22,
-                    fontWeight: 950,
-                  }}
-                >
-                  Risk Detayı
-                </h3>
+        }}
+        onSave={handleSave}
+        onChange={updateForm}
+      />
 
-                <p
-                  style={{
-                    margin: "5px 0 0",
-                    color: "#64748b",
-                    fontSize: 13,
-                  }}
-                >
-                  {selectedRisk.company}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setSelectedRisk(null)
-                }
-                style={{
-                  width: 40,
-                  height: 40,
-                  border: 0,
-                  borderRadius: 12,
-                  background: "#f1f5f9",
-                  display: "grid",
-                  placeItems: "center",
-                  cursor: "pointer",
-                }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div
-              style={{
-                marginTop: 18,
-                display: "grid",
-                gap: 12,
-              }}
-            >
-              {[
-                [
-                  "Faaliyet",
-                  selectedRisk.activity,
-                ],
-                [
-                  "Tehlike",
-                  selectedRisk.hazard,
-                ],
-                [
-                  "Olası Sonuç",
-                  selectedRisk.consequence,
-                ],
-                [
-                  "Mevcut Kontrol",
-                  selectedRisk.existingControl,
-                ],
-                [
-                  "Önerilen Kontrol",
-                  selectedRisk.proposedControl,
-                ],
-                [
-                  "Sorumlu",
-                  selectedRisk.responsible,
-                ],
-                [
-                  "Termin",
-                  formatDate(
-                    selectedRisk.dueDateMillis
-                  ),
-                ],
-              ].map(([label, value]) => (
-                <div
-                  key={String(label)}
-                  style={{
-                    borderRadius: 14,
-                    border:
-                      "1px solid #e5e7eb",
-                    padding: 13,
-                  }}
-                >
-                  <div
-                    style={{
-                      color: "#94a3b8",
-                      fontSize: 11,
-                      fontWeight: 850,
-                    }}
-                  >
-                    {label}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 5,
-                      color: "#0f172a",
-                      fontSize: 13,
-                      lineHeight: 1.5,
-                      fontWeight: 750,
-                    }}
-                  >
-                    {value || "-"}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </aside>
-        </div>
-      ) : null}
-
-      {showDialog ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 130,
-            background:
-              "rgba(15,23,42,0.6)",
-            display: "grid",
-            placeItems: "center",
-            padding: 18,
-          }}
-          onClick={() => {
-            if (!saving) {
-              setShowDialog(false);
-            }
-          }}
-        >
-          <section
-            style={{
-              width: "min(950px, 100%)",
-              maxHeight: "92vh",
-              overflowY: "auto",
-              borderRadius: 22,
-              background: "#ffffff",
-              padding: 20,
-            }}
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent:
-                  "space-between",
-                alignItems:
-                  "flex-start",
-                gap: 12,
-              }}
-            >
-              <div>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: 22,
-                    fontWeight: 950,
-                  }}
-                >
-                  {form.id
-                    ? "Riski Düzenle"
-                    : "Yeni Risk"}
-                </h3>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowDialog(false)
-                }
-                disabled={saving}
-                style={{
-                  width: 40,
-                  height: 40,
-                  border: 0,
-                  borderRadius: 12,
-                  background: "#f1f5f9",
-                  display: "grid",
-                  placeItems: "center",
-                  cursor: "pointer",
-                }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div
-              className="riskFormGrid"
-              style={{
-                marginTop: 18,
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(2, minmax(0, 1fr))",
-                gap: 12,
-              }}
-            >
-              {[
-                [
-                  "Firma",
-                  "company",
-                  form.company,
-                ],
-                [
-                  "Departman",
-                  "department",
-                  form.department,
-                ],
-                [
-                  "Süreç",
-                  "process",
-                  form.process,
-                ],
-                [
-                  "Faaliyet",
-                  "activity",
-                  form.activity,
-                ],
-                [
-                  "Sorumlu",
-                  "responsible",
-                  form.responsible,
-                ],
-              ].map(
-                ([label, field, value]) => (
-                  <label
-                    key={String(field)}
-                    style={{
-                      display: "grid",
-                      gap: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "#64748b",
-                        fontSize: 12,
-                        fontWeight: 850,
-                      }}
-                    >
-                      {label}
-                    </span>
-
-                    <input
-                      value={String(value)}
-                      onChange={(event) =>
-                        updateForm(
-                          field as keyof RiskFormState,
-                          event.target
-                            .value as never
-                        )
-                      }
-                      style={{
-                        height: 43,
-                        borderRadius: 11,
-                        border:
-                          "1px solid #dbe3ec",
-                        padding: "0 11px",
-                      }}
-                    />
-                  </label>
-                )
-              )}
-
-              <label
-                style={{
-                  display: "grid",
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    color: "#64748b",
-                    fontSize: 12,
-                    fontWeight: 850,
-                  }}
-                >
-                  Yöntem
-                </span>
-
-                <select
-                  value={form.method}
-                  onChange={(event) =>
-                    updateForm(
-                      "method",
-                      event.target
-                        .value as RiskMethod
-                    )
-                  }
-                  style={{
-                    height: 43,
-                    borderRadius: 11,
-                    border:
-                      "1px solid #dbe3ec",
-                    padding: "0 11px",
-                  }}
-                >
-                  <option value="FINE_KINNEY">
-                    Fine-Kinney
-                  </option>
-                  <option value="MATRIX_5X5">
-                    5x5 Matris
-                  </option>
-                </select>
-              </label>
-
-              {[
-                [
-                  "Olasılık",
-                  "probability",
-                  form.probability,
-                ],
-                [
-                  "Frekans",
-                  "frequency",
-                  form.frequency,
-                ],
-                [
-                  "Şiddet",
-                  "severity",
-                  form.severity,
-                ],
-              ].map(
-                ([label, field, value]) => (
-                  <label
-                    key={String(field)}
-                    style={{
-                      display: "grid",
-                      gap: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "#64748b",
-                        fontSize: 12,
-                        fontWeight: 850,
-                      }}
-                    >
-                      {label}
-                    </span>
-
-                    <input
-                      type="number"
-                      min={1}
-                      value={Number(value)}
-                      onChange={(event) =>
-                        updateForm(
-                          field as keyof RiskFormState,
-                          Number(
-                            event.target.value
-                          ) as never
-                        )
-                      }
-                      style={{
-                        height: 43,
-                        borderRadius: 11,
-                        border:
-                          "1px solid #dbe3ec",
-                        padding: "0 11px",
-                      }}
-                    />
-                  </label>
-                )
-              )}
-
-              <label
-                style={{
-                  display: "grid",
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    color: "#64748b",
-                    fontSize: 12,
-                    fontWeight: 850,
-                  }}
-                >
-                  Termin
-                </span>
-
-                <input
-                  type="date"
-                  value={toDateInput(
-                    form.dueDateMillis
-                  )}
-                  onChange={(event) =>
-                    updateForm(
-                      "dueDateMillis",
-                      toMillis(
-                        event.target.value
-                      )
-                    )
-                  }
-                  style={{
-                    height: 43,
-                    borderRadius: 11,
-                    border:
-                      "1px solid #dbe3ec",
-                    padding: "0 11px",
-                  }}
-                />
-              </label>
-
-              {[
-                [
-                  "Tehlike",
-                  "hazard",
-                  form.hazard,
-                ],
-                [
-                  "Olası Sonuç",
-                  "consequence",
-                  form.consequence,
-                ],
-                [
-                  "Mevcut Kontrol",
-                  "existingControl",
-                  form.existingControl,
-                ],
-                [
-                  "Önerilen Kontrol",
-                  "proposedControl",
-                  form.proposedControl,
-                ],
-              ].map(
-                ([label, field, value]) => (
-                  <label
-                    key={String(field)}
-                    style={{
-                      display: "grid",
-                      gap: 6,
-                      gridColumn:
-                        "1 / -1",
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "#64748b",
-                        fontSize: 12,
-                        fontWeight: 850,
-                      }}
-                    >
-                      {label}
-                    </span>
-
-                    <textarea
-                      value={String(value)}
-                      onChange={(event) =>
-                        updateForm(
-                          field as keyof RiskFormState,
-                          event.target
-                            .value as never
-                        )
-                      }
-                      style={{
-                        minHeight: 90,
-                        borderRadius: 11,
-                        border:
-                          "1px solid #dbe3ec",
-                        padding: 11,
-                        resize: "vertical",
-                      }}
-                    />
-                  </label>
-                )
-              )}
-
-              <label
-                style={{
-                  display: "grid",
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    color: "#64748b",
-                    fontSize: 12,
-                    fontWeight: 850,
-                  }}
-                >
-                  DÖF Durumu
-                </span>
-
-                <select
-                  value={
-                    form.completed
-                      ? "CLOSED"
-                      : "OPEN"
-                  }
-                  onChange={(event) =>
-                    updateForm(
-                      "completed",
-                      event.target.value ===
-                        "CLOSED"
-                    )
-                  }
-                  style={{
-                    height: 43,
-                    borderRadius: 11,
-                    border:
-                      "1px solid #dbe3ec",
-                    padding: "0 11px",
-                  }}
-                >
-                  <option value="OPEN">
-                    Açık
-                  </option>
-                  <option value="CLOSED">
-                    Kapalı
-                  </option>
-                </select>
-              </label>
-
-              <div
-                style={{
-                  borderRadius: 14,
-                  background:
-                    riskBackground(
-                      form.level
-                    ),
-                  color: riskColor(
-                    form.level
-                  ),
-                  padding: 13,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 850,
-                  }}
-                >
-                  Hesaplanan Risk
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 5,
-                    fontSize: 21,
-                    fontWeight: 950,
-                  }}
-                >
-                  {form.score} ·{" "}
-                  {riskLabel(form.level)}
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                marginTop: 18,
-                paddingTop: 16,
-                borderTop:
-                  "1px solid #e5e7eb",
-                display: "flex",
-                justifyContent:
-                  "flex-end",
-                gap: 9,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() =>
-                  setShowDialog(false)
-                }
-                disabled={saving}
-                style={{
-                  minHeight: 42,
-                  borderRadius: 11,
-                  border:
-                    "1px solid #dbe3ec",
-                  background: "#ffffff",
-                  padding: "0 14px",
-                  fontWeight: 850,
-                  cursor: "pointer",
-                }}
-              >
-                İptal
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  void handleSave()
-                }
-                disabled={saving}
-                style={{
-                  minHeight: 42,
-                  borderRadius: 11,
-                  border: 0,
-                  background: "#6b1020",
-                  color: "#ffffff",
-                  padding: "0 16px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 7,
-                  fontWeight: 900,
-                  cursor: saving
-                    ? "wait"
-                    : "pointer",
-                }}
-              >
-                {saving ? (
-                  <Loader2
-                    size={16}
-                    className="riskWorkspaceSpin"
-                  />
-                ) : (
-                  <Plus size={16} />
-                )}
-                {saving
-                  ? "Kaydediliyor"
-                  : "Kaydet"}
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <RiskReportCenter
+        open={showReports}
+        records={filteredRecords}
+        companyName={
+          filteredRecords[0]?.company || ""
+        }
+        onClose={() =>
+          setShowReports(false)
+        }
+      />
 
       <style jsx>{`
         .riskWorkspaceSpin {

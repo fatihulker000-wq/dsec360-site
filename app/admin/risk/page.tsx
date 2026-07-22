@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import RiskAnalyticsSection from "./dashboard/RiskAnalyticsSection";
 import {
   AlertTriangle,
   Building2,
@@ -654,6 +655,12 @@ export default function RiskManagementPage() {
                 loading={loading}
               />
             </div>
+
+            <RiskAnalyticsSection
+  records={filteredRecords}
+  loading={loading}
+  onOpenRisks={() => setMainTab("RISKS")}
+/>
 
             <div
               className="dashboardTwoColumn"
