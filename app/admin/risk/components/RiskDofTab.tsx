@@ -1,23 +1,11 @@
 "use client";
 
 import { memo } from "react";
+import { Clock3 } from "lucide-react";
 
-import {
-  Clock3,
-} from "lucide-react";
-
-import type {
-  DofSuggestion,
-  RiskControlBundle,
-} from "./riskControlLibrary";
-
-function toDateInput(
-  value?: number | null
-) {
+function toDateInput(value?: number | null) {
   if (!value) return "";
-
   const date = new Date(value);
-
   return Number.isNaN(date.getTime())
     ? ""
     : date.toISOString().slice(0, 10);
@@ -25,140 +13,33 @@ function toDateInput(
 
 function toMillis(value: string) {
   if (!value) return null;
-
-  const result = new Date(
-    `${value}T00:00:00`
-  ).getTime();
-
-  return Number.isNaN(result)
-    ? null
-    : result;
+  const result = new Date(`${value}T00:00:00`).getTime();
+  return Number.isNaN(result) ? null : result;
 }
 
 type Props = {
   completed: boolean;
   dueDateMillis: number | null;
   suggestedDays: number;
-  bundle: RiskControlBundle;
-  onCompletedChange: (
-    value: boolean
-  ) => void;
-  onDueDateChange: (
-    value: number | null
-  ) => void;
-  onApplySuggestion: (
-    item: DofSuggestion
-  ) => void;
+  onCompletedChange: (value: boolean) => void;
+  onDueDateChange: (value: number | null) => void;
 };
 
 function RiskDofTab({
   completed,
   dueDateMillis,
   suggestedDays,
-  bundle,
   onCompletedChange,
   onDueDateChange,
-  onApplySuggestion,
 }: Props) {
   const applySuggestedDate = () => {
     const date = new Date();
-
-    date.setDate(
-      date.getDate() + suggestedDays
-    );
-
+    date.setDate(date.getDate() + suggestedDays);
     onDueDateChange(date.getTime());
   };
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: 13,
-      }}
-    >
-      <section
-        style={{
-          borderRadius: 16,
-          border: "1px solid #dbe3ec",
-          background: "#f8fafc",
-          padding: 13,
-          display: "grid",
-          gap: 9,
-        }}
-      >
-        <h3
-          style={{
-            margin: 0,
-            color: "#0f172a",
-            fontSize: 14,
-            fontWeight: 950,
-          }}
-        >
-          Hazır DÖF Önerileri
-        </h3>
-
-        <div
-          style={{
-            display: "grid",
-            gap: 8,
-            contentVisibility: "auto",
-          }}
-        >
-          {bundle.dof.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() =>
-                onApplySuggestion(item)
-              }
-              style={{
-                borderRadius: 13,
-                border: "1px solid #dbe3ec",
-                background: "#ffffff",
-                padding: 12,
-                textAlign: "left",
-                cursor: "pointer",
-                display: "grid",
-                gap: 5,
-              }}
-            >
-              <strong
-                style={{
-                  color: "#0f172a",
-                  fontSize: 12,
-                }}
-              >
-                + {item.title}
-              </strong>
-
-              <span
-                style={{
-                  color: "#64748b",
-                  fontSize: 10,
-                  lineHeight: 1.45,
-                }}
-              >
-                {item.action}
-              </span>
-
-              <span
-                style={{
-                  color: "#6b1020",
-                  fontSize: 10,
-                  fontWeight: 900,
-                }}
-              >
-                {item.responsibleRole} ·{" "}
-                {item.suggestedDays === 0
-                  ? "Bugün"
-                  : `${item.suggestedDays} gün`}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-
+    <div style={{ display: "grid", gap: 13 }}>
       <div
         className="riskDofGrid"
         style={{
@@ -168,33 +49,15 @@ function RiskDofTab({
           gap: 12,
         }}
       >
-        <label
-          style={{
-            display: "grid",
-            gap: 6,
-          }}
-        >
-          <span
-            style={{
-              color: "#64748b",
-              fontSize: 12,
-              fontWeight: 850,
-            }}
-          >
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 850, color: "#64748b" }}>
             DÖF Durumu
           </span>
 
           <select
-            value={
-              completed
-                ? "CLOSED"
-                : "OPEN"
-            }
+            value={completed ? "CLOSED" : "OPEN"}
             onChange={(event) =>
-              onCompletedChange(
-                event.target.value ===
-                  "CLOSED"
-              )
+              onCompletedChange(event.currentTarget.value === "CLOSED")
             }
             style={{
               height: 44,
@@ -203,43 +66,21 @@ function RiskDofTab({
               padding: "0 11px",
             }}
           >
-            <option value="OPEN">
-              Açık
-            </option>
-
-            <option value="CLOSED">
-              Kapalı
-            </option>
+            <option value="OPEN">Açık</option>
+            <option value="CLOSED">Kapalı</option>
           </select>
         </label>
 
-        <label
-          style={{
-            display: "grid",
-            gap: 6,
-          }}
-        >
-          <span
-            style={{
-              color: "#64748b",
-              fontSize: 12,
-              fontWeight: 850,
-            }}
-          >
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 850, color: "#64748b" }}>
             Termin Tarihi
           </span>
 
           <input
             type="date"
-            value={toDateInput(
-              dueDateMillis
-            )}
+            value={toDateInput(dueDateMillis)}
             onChange={(event) =>
-              onDueDateChange(
-                toMillis(
-                  event.target.value
-                )
-              )
+              onDueDateChange(toMillis(event.currentTarget.value))
             }
             style={{
               height: 44,
@@ -271,17 +112,14 @@ function RiskDofTab({
         >
           <Clock3 size={16} />
           Önerilen termini uygula:{" "}
-          {suggestedDays === 0
-            ? "Bugün"
-            : `${suggestedDays} gün`}
+          {suggestedDays === 0 ? "Bugün" : `${suggestedDays} gün`}
         </button>
       </div>
 
       <style jsx>{`
         @media (max-width: 700px) {
           .riskDofGrid {
-            grid-template-columns:
-              1fr !important;
+            grid-template-columns: 1fr !important;
           }
         }
       `}</style>

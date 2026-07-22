@@ -13,7 +13,7 @@ type Props = {
   process: string;
   activity: string;
   responsible: string;
-  onFieldChange: (
+  onFieldCommit: (
     field: FieldName,
     value: string
   ) => void;
@@ -24,7 +24,7 @@ function RiskGeneralTab({
   process,
   activity,
   responsible,
-  onFieldChange,
+  onFieldCommit,
 }: Props) {
   const fields: Array<{
     label: string;
@@ -88,11 +88,12 @@ function RiskGeneralTab({
           </span>
 
           <input
-            value={item.value}
+            key={`${item.field}-${item.value}`}
+            defaultValue={item.value}
             autoComplete="off"
             placeholder={item.placeholder}
-            onChange={(event) =>
-              onFieldChange(
+            onBlur={(event) =>
+              onFieldCommit(
                 item.field,
                 event.currentTarget.value
               )

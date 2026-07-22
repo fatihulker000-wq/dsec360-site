@@ -1,61 +1,57 @@
 "use client";
 
 import { memo } from "react";
-
-import type {
-  RiskMethod,
-} from "../types";
+import type { RiskMethod } from "../types";
 
 type ScoreOption = {
   value: number;
   title: string;
-  description: string;
 };
 
 const PROBABILITY_OPTIONS: ScoreOption[] = [
-  { value: 0.2, title: "Pratikte imkânsız", description: "Normal şartlarda beklenmez." },
-  { value: 0.5, title: "Çok düşük", description: "Çok seyrek gerçekleşebilir." },
-  { value: 1, title: "Düşük", description: "Nadir gerçekleşebilir." },
-  { value: 3, title: "Olası", description: "Zaman zaman gerçekleşebilir." },
-  { value: 6, title: "Yüksek", description: "Gerçekleşmesi kuvvetle muhtemeldir." },
-  { value: 10, title: "Çok yüksek", description: "Gerçekleşmesi beklenir." },
+  { value: 0.2, title: "Pratikte imkânsız" },
+  { value: 0.5, title: "Çok düşük" },
+  { value: 1, title: "Düşük" },
+  { value: 3, title: "Olası" },
+  { value: 6, title: "Yüksek" },
+  { value: 10, title: "Çok yüksek" },
 ];
 
 const FREQUENCY_OPTIONS: ScoreOption[] = [
-  { value: 0.5, title: "Yılda bir veya seyrek", description: "İstisnai maruziyet." },
-  { value: 1, title: "Ayda bir", description: "Aylık maruziyet." },
-  { value: 2, title: "Haftada bir", description: "Haftalık maruziyet." },
-  { value: 3, title: "Günde bir", description: "Günlük maruziyet." },
-  { value: 6, title: "Günde birçok kez", description: "Sık tekrarlanan maruziyet." },
-  { value: 10, title: "Sürekli", description: "Kesintisiz maruziyet." },
+  { value: 0.5, title: "Yılda bir veya seyrek" },
+  { value: 1, title: "Ayda bir" },
+  { value: 2, title: "Haftada bir" },
+  { value: 3, title: "Günde bir" },
+  { value: 6, title: "Günde birçok kez" },
+  { value: 10, title: "Sürekli" },
 ];
 
 const SEVERITY_OPTIONS: ScoreOption[] = [
-  { value: 1, title: "Önemsiz", description: "İş gücü kaybı beklenmez." },
-  { value: 3, title: "İlk yardım", description: "Basit tıbbi müdahale." },
-  { value: 7, title: "İş günü kaybı", description: "Geçici iş göremezlik." },
-  { value: 15, title: "Kalıcı yaralanma", description: "Kalıcı sağlık etkisi." },
-  { value: 40, title: "Tek ölüm", description: "Ölümle sonuçlanabilir." },
-  { value: 100, title: "Birden fazla ölüm", description: "Afet boyutunda sonuç." },
+  { value: 1, title: "Önemsiz" },
+  { value: 3, title: "İlk yardım" },
+  { value: 7, title: "İş günü kaybı" },
+  { value: 15, title: "Kalıcı yaralanma" },
+  { value: 40, title: "Tek ölüm" },
+  { value: 100, title: "Birden fazla ölüm" },
 ];
 
 const MATRIX_PROBABILITY: ScoreOption[] = [
-  { value: 1, title: "Çok düşük", description: "Beklenmez." },
-  { value: 2, title: "Düşük", description: "Nadiren." },
-  { value: 3, title: "Orta", description: "Zaman zaman." },
-  { value: 4, title: "Yüksek", description: "Sıklıkla." },
-  { value: 5, title: "Çok yüksek", description: "Beklenir." },
+  { value: 1, title: "Çok düşük" },
+  { value: 2, title: "Düşük" },
+  { value: 3, title: "Orta" },
+  { value: 4, title: "Yüksek" },
+  { value: 5, title: "Çok yüksek" },
 ];
 
 const MATRIX_SEVERITY: ScoreOption[] = [
-  { value: 1, title: "Önemsiz", description: "Çok hafif etki." },
-  { value: 2, title: "Hafif", description: "İlk yardım." },
-  { value: 3, title: "Ciddi", description: "İş günü kaybı." },
-  { value: 4, title: "Çok ciddi", description: "Kalıcı yaralanma." },
-  { value: 5, title: "Felaket", description: "Birden fazla ölüm." },
+  { value: 1, title: "Önemsiz" },
+  { value: 2, title: "Hafif" },
+  { value: 3, title: "Ciddi" },
+  { value: 4, title: "Çok ciddi" },
+  { value: 5, title: "Felaket" },
 ];
 
-function OptionGrid({
+function CompactOptions({
   title,
   options,
   value,
@@ -67,102 +63,33 @@ function OptionGrid({
   onSelect: (value: number) => void;
 }) {
   return (
-    <section
-      style={{
-        display: "grid",
-        gap: 9,
-      }}
-    >
-      <h4
-        style={{
-          margin: 0,
-          color: "#0f172a",
-          fontSize: 14,
-          fontWeight: 950,
-        }}
-      >
+    <section style={{ display: "grid", gap: 8 }}>
+      <h4 style={{ margin: 0, fontSize: 13, fontWeight: 900 }}>
         {title}
       </h4>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(auto-fit,minmax(185px,1fr))",
-          gap: 8,
-          contentVisibility: "auto",
-        }}
-      >
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
         {options.map((item) => {
-          const selected =
-            value === item.value;
+          const selected = value === item.value;
 
           return (
             <button
               key={item.value}
               type="button"
-              onClick={() =>
-                onSelect(item.value)
-              }
+              onClick={() => onSelect(item.value)}
               style={{
-                minHeight: 75,
-                borderRadius: 13,
+                minHeight: 38,
+                borderRadius: 10,
                 border: selected
                   ? "2px solid #6b1020"
                   : "1px solid #dbe3ec",
-                background: selected
-                  ? "#fff1f2"
-                  : "#ffffff",
-                padding: 10,
-                display: "grid",
-                gridTemplateColumns:
-                  "35px 1fr",
-                gap: 8,
-                textAlign: "left",
+                background: selected ? "#fff1f2" : "#ffffff",
+                padding: "0 11px",
                 cursor: "pointer",
+                fontWeight: selected ? 900 : 700,
               }}
             >
-              <span
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 10,
-                  display: "grid",
-                  placeItems: "center",
-                  background: selected
-                    ? "#6b1020"
-                    : "#f1f5f9",
-                  color: selected
-                    ? "#ffffff"
-                    : "#334155",
-                  fontWeight: 950,
-                }}
-              >
-                {item.value}
-              </span>
-
-              <span>
-                <strong
-                  style={{
-                    display: "block",
-                    color: "#0f172a",
-                    fontSize: 11,
-                  }}
-                >
-                  {item.title}
-                </strong>
-
-                <span
-                  style={{
-                    display: "block",
-                    marginTop: 3,
-                    color: "#64748b",
-                    fontSize: 10,
-                  }}
-                >
-                  {item.description}
-                </span>
-              </span>
+              {item.value} · {item.title}
             </button>
           );
         })}
@@ -178,18 +105,13 @@ type Props = {
   probability: number;
   frequency: number;
   severity: number;
-  onMethodChange: (
-    value: RiskMethod
-  ) => void;
-  onTextChange: (
+  onMethodChange: (value: RiskMethod) => void;
+  onTextCommit: (
     field: "hazard" | "consequence",
     value: string
   ) => void;
   onScoreChange: (
-    field:
-      | "probability"
-      | "frequency"
-      | "severity",
+    field: "probability" | "frequency" | "severity",
     value: number
   ) => void;
 };
@@ -202,38 +124,31 @@ function RiskAnalysisTab({
   frequency,
   severity,
   onMethodChange,
-  onTextChange,
+  onTextCommit,
   onScoreChange,
 }: Props) {
+  const textAreaProps = {
+    spellCheck: false,
+    autoCorrect: "off",
+    autoCapitalize: "off",
+    translate: "no" as const,
+    "data-gramm": "false",
+    "data-gramm_editor": "false",
+    "data-enable-grammarly": "false",
+    "data-lt-active": "false",
+  };
+
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: 14,
-      }}
-    >
-      <label
-        style={{
-          display: "grid",
-          gap: 6,
-        }}
-      >
-        <span
-          style={{
-            color: "#64748b",
-            fontSize: 12,
-            fontWeight: 850,
-          }}
-        >
+    <div style={{ display: "grid", gap: 14 }}>
+      <label style={{ display: "grid", gap: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 850, color: "#64748b" }}>
           Değerlendirme Yöntemi
         </span>
 
         <select
           value={method}
           onChange={(event) =>
-            onMethodChange(
-              event.target.value as RiskMethod
-            )
+            onMethodChange(event.currentTarget.value as RiskMethod)
           }
           style={{
             height: 44,
@@ -242,146 +157,89 @@ function RiskAnalysisTab({
             padding: "0 11px",
           }}
         >
-          <option value="FINE_KINNEY">
-            Fine-Kinney
-          </option>
-
-          <option value="MATRIX_5X5">
-            5×5 Risk Matrisi
-          </option>
+          <option value="FINE_KINNEY">Fine-Kinney</option>
+          <option value="MATRIX_5X5">5×5 Risk Matrisi</option>
         </select>
       </label>
 
-      <label
-        style={{
-          display: "grid",
-          gap: 6,
-        }}
-      >
-        <span
-          style={{
-            color: "#64748b",
-            fontSize: 12,
-            fontWeight: 850,
-          }}
-        >
+      <label style={{ display: "grid", gap: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 850, color: "#64748b" }}>
           Tehlikenin Ayrıntılı Açıklaması
         </span>
 
         <textarea
-          value={hazard}
-          onChange={(event) =>
-            onTextChange(
-              "hazard",
-              event.target.value
-            )
+          {...textAreaProps}
+          defaultValue={hazard}
+          onBlur={(event) =>
+            onTextCommit("hazard", event.currentTarget.value)
           }
           style={{
-            minHeight: 105,
+            minHeight: 120,
             borderRadius: 11,
             border: "1px solid #dbe3ec",
             padding: 11,
             resize: "vertical",
+            contain: "content",
           }}
         />
       </label>
 
-      <label
-        style={{
-          display: "grid",
-          gap: 6,
-        }}
-      >
-        <span
-          style={{
-            color: "#64748b",
-            fontSize: 12,
-            fontWeight: 850,
-          }}
-        >
+      <label style={{ display: "grid", gap: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 850, color: "#64748b" }}>
           Olası Sonuçlar
         </span>
 
         <textarea
-          value={consequence}
-          onChange={(event) =>
-            onTextChange(
-              "consequence",
-              event.target.value
-            )
+          {...textAreaProps}
+          defaultValue={consequence}
+          onBlur={(event) =>
+            onTextCommit("consequence", event.currentTarget.value)
           }
           style={{
-            minHeight: 105,
+            minHeight: 120,
             borderRadius: 11,
             border: "1px solid #dbe3ec",
             padding: 11,
             resize: "vertical",
+            contain: "content",
           }}
         />
       </label>
 
       {method === "FINE_KINNEY" ? (
         <>
-          <OptionGrid
+          <CompactOptions
             title="Olasılık"
             options={PROBABILITY_OPTIONS}
             value={probability}
-            onSelect={(value) =>
-              onScoreChange(
-                "probability",
-                value
-              )
-            }
+            onSelect={(value) => onScoreChange("probability", value)}
           />
-
-          <OptionGrid
+          <CompactOptions
             title="Maruziyet Frekansı"
             options={FREQUENCY_OPTIONS}
             value={frequency}
-            onSelect={(value) =>
-              onScoreChange(
-                "frequency",
-                value
-              )
-            }
+            onSelect={(value) => onScoreChange("frequency", value)}
           />
-
-          <OptionGrid
+          <CompactOptions
             title="Şiddet"
             options={SEVERITY_OPTIONS}
             value={severity}
-            onSelect={(value) =>
-              onScoreChange(
-                "severity",
-                value
-              )
-            }
+            onSelect={(value) => onScoreChange("severity", value)}
           />
         </>
       ) : (
         <>
-          <OptionGrid
+          <CompactOptions
             title="Olasılık"
             options={MATRIX_PROBABILITY}
             value={probability}
-            onSelect={(value) =>
-              onScoreChange(
-                "probability",
-                value
-              )
-            }
+            onSelect={(value) => onScoreChange("probability", value)}
           />
-
-          <OptionGrid
+          <CompactOptions
             title="Şiddet"
             options={MATRIX_SEVERITY}
             value={severity}
-            onSelect={(value) =>
-              onScoreChange(
-                "severity",
-                value
-              )
-            }
+            onSelect={(value) => onScoreChange("severity", value)}
           />
         </>
       )}

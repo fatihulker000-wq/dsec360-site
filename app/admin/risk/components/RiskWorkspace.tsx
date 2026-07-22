@@ -309,20 +309,20 @@ export default function RiskWorkspace({
       return;
     }
 
-    if (!submittedForm.firmId) {
-      setError("Firma bilgisi bulunamadı.");
-      return;
-    }
 
     try {
       setSaving(true);
       setError("");
 
       const payload: Partial<RiskRecord> = {
-        ...submittedForm,
-        createdAtMillis: Date.now(),
-        updatedAtMillis: Date.now(),
-      };
+  ...submittedForm,
+  firmId: submittedForm.firmId || firmId,
+  updatedAtMillis: Date.now(),
+};
+
+if (!submittedForm.id) {
+  payload.createdAtMillis = Date.now();
+}
 
       if (submittedForm.id) {
         await updateRisk(payload);

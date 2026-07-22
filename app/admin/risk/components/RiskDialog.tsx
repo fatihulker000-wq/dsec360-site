@@ -3,12 +3,10 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 
 import {
-  AlertTriangle,
   ChevronRight,
   Loader2,
   Save,
@@ -19,12 +17,6 @@ import type {
   RiskLevel,
   RiskMethod,
 } from "../types";
-
-import {
-  getRiskControlBundle,
-  type ControlSuggestion,
-  type DofSuggestion,
-} from "./riskControlLibrary";
 
 import RiskGeneralTab from "./RiskGeneralTab";
 import RiskAnalysisTab from "./RiskAnalysisTab";
@@ -73,26 +65,11 @@ type Props = {
   ) => void | Promise<void>;
 };
 
-const TABS: Array<{
-  id: TabId;
-  label: string;
-}> = [
-  {
-    id: "GENERAL",
-    label: "Genel Bilgiler",
-  },
-  {
-    id: "ANALYSIS",
-    label: "Risk Analizi",
-  },
-  {
-    id: "CONTROLS",
-    label: "Kontroller",
-  },
-  {
-    id: "DOF",
-    label: "DÖF ve Termin",
-  },
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: "GENERAL", label: "Genel Bilgiler" },
+  { id: "ANALYSIS", label: "Risk Analizi" },
+  { id: "CONTROLS", label: "Kontroller" },
+  { id: "DOF", label: "DÖF ve Termin" },
 ];
 
 function calculateLevel(
@@ -122,28 +99,10 @@ function calculateScore(
 ) {
   const result =
     method === "FINE_KINNEY"
-      ? probability *
-        frequency *
-        severity
+      ? probability * frequency * severity
       : probability * severity;
 
   return Math.round(result * 100) / 100;
-}
-
-function appendParagraph(
-  current: string,
-  text: string
-) {
-  const normalized = current.trim();
-  const incoming = text.trim();
-
-  if (!normalized) return incoming;
-
-  if (normalized.includes(incoming)) {
-    return current;
-  }
-
-  return `${normalized}\n\n${incoming}`;
 }
 
 function suggestedDays(score: number) {
@@ -158,175 +117,81 @@ export default function RiskDialog({
   open,
   form,
   saving,
-  error = "",
   onClose,
   onSave,
 }: Props) {
-  const [tab, setTab] =
-    useState<TabId>("GENERAL");
-
-  const [draft, setDraft] =
-    useState<RiskFormState>(form);
+  const [tab, setTab] = useState<TabId>("GENERAL");
+  const [draft, setDraft] = useState<RiskFormState>(form);
 
   useEffect(() => {
     if (!open) return;
-
     setDraft(form);
     setTab("GENERAL");
   }, [open, form.id]);
 
-  const updateField = useCallback(
+  const commitField = useCallback(
     <K extends keyof RiskFormState>(
       field: K,
       value: RiskFormState[K]
+    ) => {
+      setDraft((current) => ({
+        ...current,
+        [field]: value,
+      }));
+    },
+    []
+  );
+
+  const updateScoreField = useCallback(
+    (
+      field: "probability" | "frequency" | "severity",
+      value: number
     ) => {
       setDraft((current) => {
         const next = {
           ...current,
           [field]: value,
-        } as RiskFormState;
+        };
 
-        if (
-          field === "method" ||
-          field === "probability" ||
-          field === "frequency" ||
-          field === "severity"
-        ) {
-          next.score = calculateScore(
-            next.method,
-            Number(next.probability),
-            Number(next.frequency),
-            Number(next.severity)
-          );
+        next.score = calculateScore(
+          next.method,
+          next.probability,
+          next.frequency,
+          next.severity
+        );
 
-          next.level = calculateLevel(
-            next.score,
-            next.method
-          );
-        }
-
+        next.level = calculateLevel(next.score, next.method);
         return next;
       });
     },
     []
   );
 
-  const updateGeneralField = useCallback(
-    (
-      field:
-        | "department"
-        | "process"
-        | "activity"
-        | "responsible",
-      value: string
-    ) => {
-      updateField(field, value);
-    },
-    [updateField]
-  );
+  const changeMethod = useCallback((method: RiskMethod) => {
+    setDraft((current) => {
+      const next = { ...current, method };
 
-  const updateAnalysisText = useCallback(
-    (
-      field:
-        | "hazard"
-        | "consequence",
-      value: string
-    ) => {
-      updateField(field, value);
-    },
-    [updateField]
-  );
+      if (method === "MATRIX_5X5") {
+        next.probability = Math.min(5, Math.max(1, next.probability));
+        next.frequency = 1;
+        next.severity = Math.min(5, Math.max(1, next.severity));
+      }
 
-  const updateScoreField = useCallback(
-    (
-      field:
-        | "probability"
-        | "frequency"
-        | "severity",
-      value: number
-    ) => {
-      updateField(field, value);
-    },
-    [updateField]
-  );
-
-  const updateControlText = useCallback(
-    (
-      field:
-        | "existingControl"
-        | "proposedControl",
-      value: string
-    ) => {
-      updateField(field, value);
-    },
-    [updateField]
-  );
-
-  const controlBundle = useMemo(
-    () => getRiskControlBundle(""),
-    []
-  );
-
-  const addExisting = useCallback(
-    (item: ControlSuggestion) => {
-      setDraft((current) => ({
-        ...current,
-        existingControl:
-          appendParagraph(
-            current.existingControl,
-            item.text
-          ),
-      }));
-    },
-    []
-  );
-
-  const addAdditional = useCallback(
-    (item: ControlSuggestion) => {
-      setDraft((current) => ({
-        ...current,
-        proposedControl:
-          appendParagraph(
-            current.proposedControl,
-            item.text
-          ),
-      }));
-    },
-    []
-  );
-
-  const applyDof = useCallback(
-    (item: DofSuggestion) => {
-      const date = new Date();
-
-      date.setDate(
-        date.getDate() +
-          item.suggestedDays
+      next.score = calculateScore(
+        next.method,
+        next.probability,
+        next.frequency,
+        next.severity
       );
 
-      setDraft((current) => ({
-        ...current,
-        proposedControl:
-          appendParagraph(
-            current.proposedControl,
-            item.action
-          ),
-        responsible:
-          item.responsibleRole,
-        dueDateMillis:
-          date.getTime(),
-        completed: false,
-      }));
-    },
-    []
-  );
+      next.level = calculateLevel(next.score, next.method);
+      return next;
+    });
+  }, []);
 
   if (!open) return null;
 
-  const currentIndex =
-    TABS.findIndex(
-      (item) => item.id === tab
-    );
+  const currentIndex = TABS.findIndex((item) => item.id === tab);
 
   return (
     <div
@@ -334,8 +199,7 @@ export default function RiskDialog({
         position: "fixed",
         inset: 0,
         zIndex: 140,
-        background:
-          "rgba(15,23,42,.64)",
+        background: "rgba(15,23,42,.64)",
         display: "grid",
         placeItems: "center",
         padding: 14,
@@ -351,24 +215,18 @@ export default function RiskDialog({
           overflow: "hidden",
           borderRadius: 24,
           background: "#ffffff",
-          boxShadow:
-            "0 34px 100px rgba(15,23,42,.38)",
+          boxShadow: "0 34px 100px rgba(15,23,42,.38)",
           display: "grid",
-          gridTemplateRows:
-            "auto auto minmax(0,1fr) auto",
+          gridTemplateRows: "auto auto minmax(0,1fr) auto",
         }}
-        onClick={(event) =>
-          event.stopPropagation()
-        }
+        onClick={(event) => event.stopPropagation()}
       >
         <header
           style={{
             padding: "18px 20px",
-            borderBottom:
-              "1px solid #e5e7eb",
+            borderBottom: "1px solid #e5e7eb",
             display: "flex",
-            justifyContent:
-              "space-between",
+            justifyContent: "space-between",
             gap: 14,
           }}
         >
@@ -393,8 +251,7 @@ export default function RiskDialog({
                 fontSize: 13,
               }}
             >
-              Risk kaydını adım adım
-              tamamlayın.
+              Risk kaydını adım adım tamamlayın.
             </p>
           </div>
 
@@ -420,36 +277,28 @@ export default function RiskDialog({
         <nav
           style={{
             padding: "10px 20px",
-            borderBottom:
-              "1px solid #e5e7eb",
+            borderBottom: "1px solid #e5e7eb",
             display: "flex",
             flexWrap: "wrap",
             gap: 8,
           }}
         >
           {TABS.map((item) => {
-            const active =
-              tab === item.id;
+            const active = tab === item.id;
 
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() =>
-                  setTab(item.id)
-                }
+                onClick={() => setTab(item.id)}
                 style={{
                   minHeight: 39,
                   borderRadius: 11,
                   border: active
                     ? "1px solid #6b1020"
                     : "1px solid #dbe3ec",
-                  background: active
-                    ? "#6b1020"
-                    : "#ffffff",
-                  color: active
-                    ? "#ffffff"
-                    : "#475569",
+                  background: active ? "#6b1020" : "#ffffff",
+                  color: active ? "#ffffff" : "#475569",
                   padding: "0 13px",
                   fontWeight: 850,
                   cursor: "pointer",
@@ -467,51 +316,20 @@ export default function RiskDialog({
             overflowY: "auto",
             padding: 18,
             display: "grid",
-            gridTemplateColumns:
-              "minmax(0,1fr) 320px",
+            gridTemplateColumns: "minmax(0,1fr) 320px",
             gap: 16,
             alignItems: "start",
           }}
         >
-          <div
-            style={{
-              display: "grid",
-              gap: 14,
-              minWidth: 0,
-            }}
-          >
-            {error ? (
-              <div
-                style={{
-                  borderRadius: 13,
-                  border:
-                    "1px solid #fecaca",
-                  background: "#fef2f2",
-                  color: "#b91c1c",
-                  padding: 12,
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "center",
-                  fontWeight: 800,
-                }}
-              >
-                <AlertTriangle size={16} />
-                {error}
-              </div>
-            ) : null}
-
+          <div style={{ minWidth: 0 }}>
             {tab === "GENERAL" ? (
               <RiskGeneralTab
-                department={
-                  draft.department
-                }
+                department={draft.department}
                 process={draft.process}
                 activity={draft.activity}
-                responsible={
-                  draft.responsible
-                }
-                onFieldChange={
-                  updateGeneralField
+                responsible={draft.responsible}
+                onFieldCommit={(field, value) =>
+                  commitField(field, value)
                 }
               />
             ) : null}
@@ -520,80 +338,38 @@ export default function RiskDialog({
               <RiskAnalysisTab
                 method={draft.method}
                 hazard={draft.hazard}
-                consequence={
-                  draft.consequence
-                }
-                probability={
-                  draft.probability
-                }
+                consequence={draft.consequence}
+                probability={draft.probability}
                 frequency={draft.frequency}
                 severity={draft.severity}
-                onMethodChange={(value) =>
-                  updateField(
-                    "method",
-                    value
-                  )
+                onMethodChange={changeMethod}
+                onTextCommit={(field, value) =>
+                  commitField(field, value)
                 }
-                onTextChange={
-                  updateAnalysisText
-                }
-                onScoreChange={
-                  updateScoreField
-                }
+                onScoreChange={updateScoreField}
               />
             ) : null}
 
             {tab === "CONTROLS" ? (
               <RiskControlsTab
-                existingControl={
-                  draft.existingControl
-                }
-                proposedControl={
-                  draft.proposedControl
-                }
-                bundle={controlBundle}
-                onTextChange={
-                  updateControlText
-                }
-                onAddExisting={
-                  addExisting
-                }
-                onAddAdditional={
-                  addAdditional
+                existingControl={draft.existingControl}
+                proposedControl={draft.proposedControl}
+                onTextCommit={(field, value) =>
+                  commitField(field, value)
                 }
               />
             ) : null}
 
             {tab === "DOF" ? (
               <RiskDofTab
-                completed={
-                  draft.completed
+                completed={draft.completed}
+                dueDateMillis={draft.dueDateMillis}
+                suggestedDays={suggestedDays(draft.score)}
+                onCompletedChange={(value) =>
+                  commitField("completed", value)
                 }
-                dueDateMillis={
-                  draft.dueDateMillis
-                }
-                suggestedDays={suggestedDays(
-                  draft.score
-                )}
-                bundle={controlBundle}
-                onCompletedChange={(
-                  value
-                ) =>
-                  updateField(
-                    "completed",
-                    value
-                  )
-                }
-                onDueDateChange={(
-                  value
-                ) =>
-                  updateField(
-                    "dueDateMillis",
-                    value
-                  )
-                }
-                onApplySuggestion={
-                  applyDof
+                onDueDateChange={(value) =>
+                  commitField("dueDateMillis", value)
                 }
               />
             ) : null}
@@ -601,9 +377,7 @@ export default function RiskDialog({
 
           <RiskSummaryPanel
             method={draft.method}
-            probability={
-              draft.probability
-            }
+            probability={draft.probability}
             frequency={draft.frequency}
             severity={draft.severity}
             score={draft.score}
@@ -615,11 +389,9 @@ export default function RiskDialog({
         <footer
           style={{
             padding: "14px 20px",
-            borderTop:
-              "1px solid #e5e7eb",
+            borderTop: "1px solid #e5e7eb",
             display: "flex",
-            justifyContent:
-              "space-between",
+            justifyContent: "space-between",
             gap: 10,
             alignItems: "center",
           }}
@@ -629,16 +401,13 @@ export default function RiskDialog({
             disabled={currentIndex === 0}
             onClick={() => {
               if (currentIndex > 0) {
-                setTab(
-                  TABS[currentIndex - 1].id
-                );
+                setTab(TABS[currentIndex - 1].id);
               }
             }}
             style={{
               minHeight: 42,
               borderRadius: 11,
-              border:
-                "1px solid #dbe3ec",
+              border: "1px solid #dbe3ec",
               background: "#ffffff",
               padding: "0 14px",
               fontWeight: 850,
@@ -648,12 +417,7 @@ export default function RiskDialog({
             Önceki
           </button>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 9,
-            }}
-          >
+          <div style={{ display: "flex", gap: 9 }}>
             <button
               type="button"
               onClick={onClose}
@@ -661,8 +425,7 @@ export default function RiskDialog({
               style={{
                 minHeight: 42,
                 borderRadius: 11,
-                border:
-                  "1px solid #dbe3ec",
+                border: "1px solid #dbe3ec",
                 background: "#ffffff",
                 padding: "0 14px",
                 fontWeight: 850,
@@ -676,11 +439,7 @@ export default function RiskDialog({
               <button
                 type="button"
                 onClick={() =>
-                  setTab(
-                    TABS[
-                      currentIndex + 1
-                    ].id
-                  )
+                  setTab(TABS[currentIndex + 1].id)
                 }
                 style={{
                   minHeight: 42,
@@ -702,9 +461,7 @@ export default function RiskDialog({
             ) : (
               <button
                 type="button"
-                onClick={() =>
-                  void onSave(draft)
-                }
+                onClick={() => void onSave(draft)}
                 disabled={saving}
                 style={{
                   minHeight: 42,
@@ -717,23 +474,15 @@ export default function RiskDialog({
                   alignItems: "center",
                   gap: 8,
                   fontWeight: 900,
-                  cursor: saving
-                    ? "wait"
-                    : "pointer",
+                  cursor: saving ? "wait" : "pointer",
                 }}
               >
                 {saving ? (
-                  <Loader2
-                    size={16}
-                    className="riskSpin"
-                  />
+                  <Loader2 size={16} className="riskSpin" />
                 ) : (
                   <Save size={16} />
                 )}
-
-                {saving
-                  ? "Kaydediliyor"
-                  : "Riski Kaydet"}
+                {saving ? "Kaydediliyor" : "Riski Kaydet"}
               </button>
             )}
           </div>
@@ -741,8 +490,7 @@ export default function RiskDialog({
 
         <style jsx>{`
           .riskSpin {
-            animation: risk-spin .9s linear
-              infinite;
+            animation: risk-spin .9s linear infinite;
           }
 
           @keyframes risk-spin {
@@ -753,8 +501,7 @@ export default function RiskDialog({
 
           @media (max-width: 980px) {
             .riskDialogBody {
-              grid-template-columns:
-                1fr !important;
+              grid-template-columns: 1fr !important;
             }
           }
         `}</style>
