@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -123,21 +124,30 @@ export default function RiskDialog({
   const [tab, setTab] = useState<TabId>("GENERAL");
   const [draft, setDraft] = useState<RiskFormState>(form);
 
+  // Uncontrolled input/textarea değerlerini senkron tutar.
+  // Böylece Kaydet'e basıldığında React state güncellemesini beklemeyiz.
+  const draftRef = useRef<RiskFormState>(form);
+
   useEffect(() => {
     if (!open) return;
+
+    draftRef.current = form;
     setDraft(form);
     setTab("GENERAL");
-  }, [open, form.id]);
+  }, [open, form]);
 
   const commitField = useCallback(
     <K extends keyof RiskFormState>(
       field: K,
       value: RiskFormState[K]
     ) => {
-      setDraft((current) => ({
-        ...current,
+      // Ref senkron güncellenir; kaydetme her zaman son değeri görür.
+      draftRef.current = {
+        ...draftRef.current,
         [field]: value,
-      }));
+      };
+
+      setDraft(draftRef.current);
     },
     []
   );
@@ -147,35 +157,10 @@ export default function RiskDialog({
       field: "probability" | "frequency" | "severity",
       value: number
     ) => {
-      setDraft((current) => {
-        const next = {
-          ...current,
-          [field]: value,
-        };
-
-        next.score = calculateScore(
-          next.method,
-          next.probability,
-          next.frequency,
-          next.severity
-        );
-
-        next.level = calculateLevel(next.score, next.method);
-        return next;
-      });
-    },
-    []
-  );
-
-  const changeMethod = useCallback((method: RiskMethod) => {
-    setDraft((current) => {
-      const next = { ...current, method };
-
-      if (method === "MATRIX_5X5") {
-        next.probability = Math.min(5, Math.max(1, next.probability));
-        next.frequency = 1;
-        next.severity = Math.min(5, Math.max(1, next.severity));
-      }
+      const next = {
+        ...draftRef.current,
+        [field]: value,
+      };
 
       next.score = calculateScore(
         next.method,
@@ -185,8 +170,45 @@ export default function RiskDialog({
       );
 
       next.level = calculateLevel(next.score, next.method);
-      return next;
-    });
+
+      draftRef.current = next;
+      setDraft(next);
+    },
+    []
+  );
+
+  const changeMethod = useCallback((method: RiskMethod) => {
+    const next = {
+      ...draftRef.current,
+      method,
+    };
+
+    if (method === "MATRIX_5X5") {
+      next.probability = Math.min(
+        5,
+        Math.max(1, next.probability)
+      );
+      next.frequency = 1;
+      next.severity = Math.min(
+        5,
+        Math.max(1, next.severity)
+      );
+    }
+
+    next.score = calculateScore(
+      next.method,
+      next.probability,
+      next.frequency,
+      next.severity
+    );
+
+    next.level = calculateLevel(
+      next.score,
+      next.method
+    );
+
+    draftRef.current = next;
+    setDraft(next);
   }, []);
 
   if (!open) return null;
@@ -461,7 +483,9 @@ export default function RiskDialog({
             ) : (
               <button
                 type="button"
-                onClick={() => void onSave(draft)}
+                onClick={() =>
+                  void onSave(draftRef.current)
+                }
                 disabled={saving}
                 style={{
                   minHeight: 42,
