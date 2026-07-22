@@ -295,50 +295,21 @@ export default function RiskWorkspace({
     setShowDialog(true);
   };
 
-  const updateForm = <K extends keyof RiskFormState>(
-    field: K,
-    value: RiskFormState[K]
+
+  const handleSave = async (
+    submittedForm: RiskFormState
   ) => {
-    setForm((current) => {
-      const next = {
-        ...current,
-        [field]: value,
-      };
-
-      if (
-        field === "probability" ||
-        field === "frequency" ||
-        field === "severity" ||
-        field === "method"
-      ) {
-        const score =
-          next.method === "FINE_KINNEY"
-            ? Number(next.probability) *
-              Number(next.frequency) *
-              Number(next.severity)
-            : Number(next.probability) *
-              Number(next.severity);
-
-        next.score = score;
-        next.level = calculateLevel(score);
-      }
-
-      return next;
-    });
-  };
-
-  const handleSave = async () => {
-    if (!form.hazard.trim()) {
+    if (!submittedForm.hazard.trim()) {
       setError("Tehlike alanı zorunludur.");
       return;
     }
 
-    if (!form.activity.trim()) {
+    if (!submittedForm.activity.trim()) {
       setError("Faaliyet alanı zorunludur.");
       return;
     }
 
-    if (!form.firmId) {
+    if (!submittedForm.firmId) {
       setError("Firma bilgisi bulunamadı.");
       return;
     }
@@ -348,12 +319,12 @@ export default function RiskWorkspace({
       setError("");
 
       const payload: Partial<RiskRecord> = {
-        ...form,
+        ...submittedForm,
         createdAtMillis: Date.now(),
         updatedAtMillis: Date.now(),
       };
 
-      if (form.id) {
+      if (submittedForm.id) {
         await updateRisk(payload);
       } else {
         await createRisk(payload);
@@ -1355,7 +1326,6 @@ export default function RiskWorkspace({
           }
         }}
         onSave={handleSave}
-        onChange={updateForm}
       />
 
       <RiskReportCenter

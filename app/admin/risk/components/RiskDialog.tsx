@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Calculator,
@@ -70,11 +70,9 @@ type Props = {
   saving: boolean;
   error?: string;
   onClose: () => void;
-  onSave: () => void | Promise<void>;
-  onChange: <K extends keyof RiskFormState>(
-    field: K,
-    value: RiskFormState[K]
-  ) => void;
+  onSave: (
+    form: RiskFormState
+  ) => void | Promise<void>;
 };
 
 type ScoreOption = {
@@ -331,6 +329,25 @@ function SuggestionButton({
   );
 }
 
+function calculateDialogLevel(
+  score: number,
+  method: RiskMethod
+): RiskLevel {
+  if (method === "MATRIX_5X5") {
+    if (score <= 6) return "LOW";
+    if (score <= 12) return "MEDIUM";
+    if (score <= 16) return "HIGH";
+    if (score <= 20) return "VERY_HIGH";
+    return "INTOLERABLE";
+  }
+
+  if (score < 20) return "LOW";
+  if (score < 70) return "MEDIUM";
+  if (score < 200) return "HIGH";
+  if (score < 400) return "VERY_HIGH";
+  return "INTOLERABLE";
+}
+
 function OptionGrid({
   title,
   options,
@@ -446,30 +463,84 @@ export default function RiskDialog({
   error = "",
   onClose,
   onSave,
-  onChange,
 }: Props) {
   const [tab, setTab] = useState<TabId>("GENERAL");
+  const [draft, setDraft] =
+    useState<RiskFormState>(form);
+
   const [librarySearch, setLibrarySearch] = useState("");
   const [librarySector, setLibrarySector] = useState("ALL");
   const [selectedTemplateId, setSelectedTemplateId] =
     useState("");
 
   const [residualProbability, setResidualProbability] =
-    useState(form.probability);
+    useState(draft.probability);
 
   const [residualFrequency, setResidualFrequency] =
-    useState(form.frequency);
+    useState(draft.frequency);
 
   const [residualSeverity, setResidualSeverity] =
-    useState(form.severity);
+    useState(draft.severity);
+
+  useEffect(() => {
+    if (!open) return;
+
+    setDraft(form);
+    setTab("GENERAL");
+    setLibrarySearch("");
+    setLibrarySector("ALL");
+    setSelectedTemplateId("");
+    setResidualProbability(form.probability);
+    setResidualFrequency(form.frequency);
+    setResidualSeverity(form.severity);
+  }, [open, form.id]);
+
+  const updateDraft = <
+    K extends keyof RiskFormState
+  >(
+    field: K,
+    value: RiskFormState[K]
+  ) => {
+    setDraft((current) => {
+      const next: RiskFormState = {
+        ...current,
+        [field]: value,
+      };
+
+      if (
+        field === "probability" ||
+        field === "frequency" ||
+        field === "severity" ||
+        field === "method"
+      ) {
+        const score =
+          next.method === "FINE_KINNEY"
+            ? Number(next.probability) *
+              Number(next.frequency) *
+              Number(next.severity)
+            : Number(next.probability) *
+              Number(next.severity);
+
+        next.score =
+          Math.round(score * 100) / 100;
+
+        next.level = calculateDialogLevel(
+          next.score,
+          next.method
+        );
+      }
+
+      return next;
+    });
+  };
 
   const advice = useMemo(
-    () => recommendation(form.score),
-    [form.score]
+    () => recommendation(draft.score),
+    [draft.score]
   );
 
   const residualScore = useMemo(() => {
-    if (form.method === "FINE_KINNEY") {
+    if (draft.method === "FINE_KINNEY") {
       return Math.round(
         residualProbability *
           residualFrequency *
@@ -484,7 +555,7 @@ export default function RiskDialog({
         100
     ) / 100;
   }, [
-    form.method,
+    draft.method,
     residualProbability,
     residualFrequency,
     residualSeverity,
@@ -492,7 +563,7 @@ export default function RiskDialog({
 
   const residualLevel = useMemo(
     () =>
-      form.method === "FINE_KINNEY"
+      draft.method === "FINE_KINNEY"
         ? residualScore >= 400
           ? "INTOLERABLE"
           : residualScore >= 200
@@ -511,40 +582,40 @@ export default function RiskDialog({
               : residualScore >= 8
                 ? "MEDIUM"
                 : "LOW",
-    [form.method, residualScore]
+    [draft.method, residualScore]
   );
 
   const reductionPercent = useMemo(() => {
-    if (form.score <= 0) return 0;
+    if (draft.score <= 0) return 0;
 
     return Math.max(
       0,
       Math.min(
         100,
         Math.round(
-          ((form.score - residualScore) /
-            form.score) *
+          ((draft.score - residualScore) /
+            draft.score) *
             100
         )
       )
     );
-  }, [form.score, residualScore]);
+  }, [draft.score, residualScore]);
 
   const riskScaleMaximum =
-    form.method === "FINE_KINNEY" ? 400 : 25;
+    draft.method === "FINE_KINNEY" ? 400 : 25;
 
   const riskScalePercent = Math.max(
     0,
     Math.min(
       100,
-      (Number(form.score || 0) /
+      (Number(draft.score || 0) /
         riskScaleMaximum) *
         100
     )
   );
 
   const actionItems = useMemo(() => {
-    if (form.score >= 400) {
+    if (draft.score >= 400) {
       return [
         "Faaliyeti derhal durdur",
         "Yönetimi ve ilgili bölüm sorumlusunu bilgilendir",
@@ -554,7 +625,7 @@ export default function RiskDialog({
       ];
     }
 
-    if (form.score >= 200) {
+    if (draft.score >= 200) {
       return [
         "Öncelikli DÖF kaydı aç",
         "Mühendislik kontrolü planla",
@@ -564,7 +635,7 @@ export default function RiskDialog({
       ];
     }
 
-    if (form.score >= 70) {
+    if (draft.score >= 70) {
       return [
         "Planlı DÖF oluştur",
         "Kontrol tedbirlerini terminli hale getir",
@@ -573,7 +644,7 @@ export default function RiskDialog({
       ];
     }
 
-    if (form.score >= 20) {
+    if (draft.score >= 20) {
       return [
         "Mevcut kontrolleri sürdür",
         "İlave iyileştirmeleri planla",
@@ -586,7 +657,7 @@ export default function RiskDialog({
       "Periyodik saha kontrolü yap",
       "Koşullar değişirse yeniden değerlendir",
     ];
-  }, [form.score]);
+  }, [draft.score]);
 
   const filteredTemplates = useMemo(() => {
     const query = librarySearch
@@ -629,10 +700,10 @@ export default function RiskDialog({
   const addExistingControl = (
     item: ControlSuggestion
   ) => {
-    onChange(
+    updateDraft(
       "existingControl",
       appendParagraph(
-        form.existingControl,
+        draft.existingControl,
         item.text
       )
     );
@@ -641,10 +712,10 @@ export default function RiskDialog({
   const addAdditionalControl = (
     item: ControlSuggestion
   ) => {
-    onChange(
+    updateDraft(
       "proposedControl",
       appendParagraph(
-        form.proposedControl,
+        draft.proposedControl,
         item.text
       )
     );
@@ -653,15 +724,15 @@ export default function RiskDialog({
   const applyDofSuggestion = (
     item: DofSuggestion
   ) => {
-    onChange(
+    updateDraft(
       "proposedControl",
       appendParagraph(
-        form.proposedControl,
+        draft.proposedControl,
         item.action
       )
     );
 
-    onChange(
+    updateDraft(
       "responsible",
       item.responsibleRole
     );
@@ -671,32 +742,32 @@ export default function RiskDialog({
       date.getDate() + item.suggestedDays
     );
 
-    onChange(
+    updateDraft(
       "dueDateMillis",
       date.getTime()
     );
 
-    onChange("completed", false);
+    updateDraft("completed", false);
   };
 
   const applyTemplate = (item: RiskLibraryItem) => {
     setSelectedTemplateId(item.id);
 
-    onChange("method", item.method);
-    onChange("activity", item.activity);
-    onChange("process", item.process);
-    onChange("hazard", item.hazard);
-    onChange("consequence", item.consequence);
-    onChange("existingControl", item.existingControl);
-    onChange("proposedControl", item.proposedControl);
-    onChange("responsible", item.responsibleRole);
-    onChange("probability", item.probability);
-    onChange("frequency", item.frequency);
-    onChange("severity", item.severity);
+    updateDraft("method", item.method);
+    updateDraft("activity", item.activity);
+    updateDraft("process", item.process);
+    updateDraft("hazard", item.hazard);
+    updateDraft("consequence", item.consequence);
+    updateDraft("existingControl", item.existingControl);
+    updateDraft("proposedControl", item.proposedControl);
+    updateDraft("responsible", item.responsibleRole);
+    updateDraft("probability", item.probability);
+    updateDraft("frequency", item.frequency);
+    updateDraft("severity", item.severity);
 
     const date = new Date();
     date.setDate(date.getDate() + item.suggestedDays);
-    onChange("dueDateMillis", date.getTime());
+    updateDraft("dueDateMillis", date.getTime());
 
     setTab("ANALYSIS");
   };
@@ -716,7 +787,7 @@ export default function RiskDialog({
   const applySuggestedDueDate = () => {
     const date = new Date();
     date.setDate(date.getDate() + advice.days);
-    onChange("dueDateMillis", date.getTime());
+    updateDraft("dueDateMillis", date.getTime());
   };
 
   return (
@@ -766,7 +837,7 @@ export default function RiskDialog({
                 fontWeight: 950,
               }}
             >
-              {form.id
+              {draft.id
                 ? "Risk Kaydını Düzenle"
                 : "Yeni Risk Değerlendirmesi"}
             </h2>
@@ -1071,15 +1142,15 @@ export default function RiskDialog({
                   }}
                 >
                 {[
-                  ["Firma", "company", form.company],
+                  ["Firma", "company", draft.company],
                   [
                     "Departman",
                     "department",
-                    form.department,
+                    draft.department,
                   ],
-                  ["Süreç / Lokasyon", "process", form.process],
-                  ["Faaliyet", "activity", form.activity],
-                  ["Risk Sorumlusu", "responsible", form.responsible],
+                  ["Süreç / Lokasyon", "process", draft.process],
+                  ["Faaliyet", "activity", draft.activity],
+                  ["Risk Sorumlusu", "responsible", draft.responsible],
                 ].map(([label, field, value]) => (
                   <label
                     key={String(field)}
@@ -1101,7 +1172,7 @@ export default function RiskDialog({
                     <input
                       value={String(value)}
                       onChange={(event) =>
-                        onChange(
+                        updateDraft(
                           field as keyof RiskFormState,
                           event.target.value as never
                         )
@@ -1133,9 +1204,9 @@ export default function RiskDialog({
                   </span>
 
                   <select
-                    value={form.method}
+                    value={draft.method}
                     onChange={(event) =>
-                      onChange(
+                      updateDraft(
                         "method",
                         event.target.value as RiskMethod
                       )
@@ -1168,9 +1239,9 @@ export default function RiskDialog({
                   </span>
 
                   <textarea
-                    value={form.hazard}
+                    value={draft.hazard}
                     onChange={(event) =>
-                      onChange(
+                      updateDraft(
                         "hazard",
                         event.target.value
                       )
@@ -1198,9 +1269,9 @@ export default function RiskDialog({
                   </span>
 
                   <textarea
-                    value={form.consequence}
+                    value={draft.consequence}
                     onChange={(event) =>
-                      onChange(
+                      updateDraft(
                         "consequence",
                         event.target.value
                       )
@@ -1216,32 +1287,32 @@ export default function RiskDialog({
                   />
                 </label>
 
-                {form.method === "FINE_KINNEY" ? (
+                {draft.method === "FINE_KINNEY" ? (
                   <>
                     <OptionGrid
                       title="Olasılık Değeri"
                       options={PROBABILITY_OPTIONS}
-                      value={form.probability}
+                      value={draft.probability}
                       onSelect={(value) =>
-                        onChange("probability", value)
+                        updateDraft("probability", value)
                       }
                     />
 
                     <OptionGrid
                       title="Maruziyet Frekansı"
                       options={FREQUENCY_OPTIONS}
-                      value={form.frequency}
+                      value={draft.frequency}
                       onSelect={(value) =>
-                        onChange("frequency", value)
+                        updateDraft("frequency", value)
                       }
                     />
 
                     <OptionGrid
                       title="Şiddet Değeri"
                       options={SEVERITY_OPTIONS}
-                      value={form.severity}
+                      value={draft.severity}
                       onSelect={(value) =>
-                        onChange("severity", value)
+                        updateDraft("severity", value)
                       }
                     />
                   </>
@@ -1250,18 +1321,18 @@ export default function RiskDialog({
                     <OptionGrid
                       title="Olasılık"
                       options={MATRIX_PROBABILITY}
-                      value={form.probability}
+                      value={draft.probability}
                       onSelect={(value) =>
-                        onChange("probability", value)
+                        updateDraft("probability", value)
                       }
                     />
 
                     <OptionGrid
                       title="Şiddet"
                       options={MATRIX_SEVERITY}
-                      value={form.severity}
+                      value={draft.severity}
                       onSelect={(value) =>
-                        onChange("severity", value)
+                        updateDraft("severity", value)
                       }
                     />
                   </>
@@ -1341,9 +1412,9 @@ export default function RiskDialog({
                   </span>
 
                   <textarea
-                    value={form.existingControl}
+                    value={draft.existingControl}
                     onChange={(event) =>
-                      onChange(
+                      updateDraft(
                         "existingControl",
                         event.target.value
                       )
@@ -1429,9 +1500,9 @@ export default function RiskDialog({
                   </span>
 
                   <textarea
-                    value={form.proposedControl}
+                    value={draft.proposedControl}
                     onChange={(event) =>
-                      onChange(
+                      updateDraft(
                         "proposedControl",
                         event.target.value
                       )
@@ -1563,10 +1634,10 @@ export default function RiskDialog({
 
                   <select
                     value={
-                      form.completed ? "CLOSED" : "OPEN"
+                      draft.completed ? "CLOSED" : "OPEN"
                     }
                     onChange={(event) =>
-                      onChange(
+                      updateDraft(
                         "completed",
                         event.target.value === "CLOSED"
                       )
@@ -1596,9 +1667,9 @@ export default function RiskDialog({
 
                   <input
                     type="date"
-                    value={toDateInput(form.dueDateMillis)}
+                    value={toDateInput(draft.dueDateMillis)}
                     onChange={(event) =>
-                      onChange(
+                      updateDraft(
                         "dueDateMillis",
                         toMillis(event.target.value)
                       )
@@ -1648,11 +1719,11 @@ export default function RiskDialog({
               top: 0,
               borderRadius: 18,
               border: `1px solid ${riskColor(
-                form.level
+                draft.level
               )}44`,
-              background: riskBackground(form.level),
+              background: riskBackground(draft.level),
               padding: 16,
-              color: riskColor(form.level),
+              color: riskColor(draft.level),
               display: "grid",
               gap: 14,
             }}
@@ -1688,7 +1759,7 @@ export default function RiskDialog({
                   fontWeight: 950,
                 }}
               >
-                {form.score}
+                {draft.score}
               </div>
 
               <div
@@ -1698,7 +1769,7 @@ export default function RiskDialog({
                   fontWeight: 950,
                 }}
               >
-                {riskLabel(form.level)}
+                {riskLabel(draft.level)}
               </div>
             </div>
 
@@ -1797,11 +1868,11 @@ export default function RiskDialog({
                   fontWeight: 900,
                 }}
               >
-                {form.method === "FINE_KINNEY"
-                  ? `${form.probability} × ${form.frequency} × ${form.severity}`
-                  : `${form.probability} × ${form.severity}`}
+                {draft.method === "FINE_KINNEY"
+                  ? `${draft.probability} × ${draft.frequency} × ${draft.severity}`
+                  : `${draft.probability} × ${draft.severity}`}
                 {" = "}
-                {form.score}
+                {draft.score}
               </div>
             </div>
 
@@ -2014,7 +2085,7 @@ export default function RiskDialog({
                 style={{
                   display: "grid",
                   gridTemplateColumns:
-                    form.method === "FINE_KINNEY"
+                    draft.method === "FINE_KINNEY"
                       ? "repeat(3, minmax(0, 1fr))"
                       : "repeat(2, minmax(0, 1fr))",
                   gap: 7,
@@ -2057,7 +2128,7 @@ export default function RiskDialog({
                   />
                 </label>
 
-                {form.method === "FINE_KINNEY" ? (
+                {draft.method === "FINE_KINNEY" ? (
                   <label
                     style={{
                       display: "grid",
@@ -2263,7 +2334,7 @@ export default function RiskDialog({
             ) : (
               <button
                 type="button"
-                onClick={() => void onSave()}
+                onClick={() => void onSave(draft)}
                 disabled={saving}
                 style={{
                   minHeight: 42,
