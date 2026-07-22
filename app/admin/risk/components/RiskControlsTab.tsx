@@ -5,7 +5,7 @@ import { memo } from "react";
 type Props = {
   existingControl: string;
   proposedControl: string;
-  onTextCommit: (
+  onTextInput: (
     field: "existingControl" | "proposedControl",
     value: string
   ) => void;
@@ -14,9 +14,9 @@ type Props = {
 function RiskControlsTab({
   existingControl,
   proposedControl,
-  onTextCommit,
+  onTextInput,
 }: Props) {
-  const textAreaProps = {
+  const noTextAssist = {
     spellCheck: false,
     autoCorrect: "off",
     autoCapitalize: "off",
@@ -35,10 +35,10 @@ function RiskControlsTab({
         </span>
 
         <textarea
-          {...textAreaProps}
+          {...noTextAssist}
           defaultValue={existingControl}
-          onBlur={(event) =>
-            onTextCommit(
+          onInput={(event) =>
+            onTextInput(
               "existingControl",
               event.currentTarget.value
             )
@@ -60,10 +60,10 @@ function RiskControlsTab({
         </span>
 
         <textarea
-          {...textAreaProps}
+          {...noTextAssist}
           defaultValue={proposedControl}
-          onBlur={(event) =>
-            onTextCommit(
+          onInput={(event) =>
+            onTextInput(
               "proposedControl",
               event.currentTarget.value
             )

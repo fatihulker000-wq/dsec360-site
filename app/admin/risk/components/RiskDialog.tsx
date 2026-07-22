@@ -136,18 +136,32 @@ export default function RiskDialog({
     setTab("GENERAL");
   }, [open, form]);
 
-  const commitField = useCallback(
+  const writeField = useCallback(
     <K extends keyof RiskFormState>(
       field: K,
       value: RiskFormState[K]
     ) => {
-      // Ref senkron güncellenir; kaydetme her zaman son değeri görür.
+      // Sadece ref güncellenir. Yazarken render oluşmaz.
       draftRef.current = {
         ...draftRef.current,
         [field]: value,
       };
+    },
+    []
+  );
 
-      setDraft(draftRef.current);
+  const commitUiField = useCallback(
+    <K extends keyof RiskFormState>(
+      field: K,
+      value: RiskFormState[K]
+    ) => {
+      const next = {
+        ...draftRef.current,
+        [field]: value,
+      };
+
+      draftRef.current = next;
+      setDraft(next);
     },
     []
   );
@@ -214,6 +228,12 @@ export default function RiskDialog({
   if (!open) return null;
 
   const currentIndex = TABS.findIndex((item) => item.id === tab);
+
+  const changeTab = useCallback((nextTab: TabId) => {
+    // Sekme değişirken ref'teki son metinleri state'e aktar.
+    setDraft({ ...draftRef.current });
+    setTab(nextTab);
+  }, []);
 
   return (
     <div
@@ -312,7 +332,7 @@ export default function RiskDialog({
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setTab(item.id)}
+                onClick={() => changeTab(item.id)}
                 style={{
                   minHeight: 39,
                   borderRadius: 11,
@@ -350,8 +370,8 @@ export default function RiskDialog({
                 process={draft.process}
                 activity={draft.activity}
                 responsible={draft.responsible}
-                onFieldCommit={(field, value) =>
-                  commitField(field, value)
+                onFieldInput={(field, value) =>
+                  writeField(field, value)
                 }
               />
             ) : null}
@@ -365,8 +385,8 @@ export default function RiskDialog({
                 frequency={draft.frequency}
                 severity={draft.severity}
                 onMethodChange={changeMethod}
-                onTextCommit={(field, value) =>
-                  commitField(field, value)
+                onTextInput={(field, value) =>
+                  writeField(field, value)
                 }
                 onScoreChange={updateScoreField}
               />
@@ -376,8 +396,8 @@ export default function RiskDialog({
               <RiskControlsTab
                 existingControl={draft.existingControl}
                 proposedControl={draft.proposedControl}
-                onTextCommit={(field, value) =>
-                  commitField(field, value)
+                onTextInput={(field, value) =>
+                  writeField(field, value)
                 }
               />
             ) : null}
@@ -388,10 +408,10 @@ export default function RiskDialog({
                 dueDateMillis={draft.dueDateMillis}
                 suggestedDays={suggestedDays(draft.score)}
                 onCompletedChange={(value) =>
-                  commitField("completed", value)
+                  commitUiField("completed", value)
                 }
                 onDueDateChange={(value) =>
-                  commitField("dueDateMillis", value)
+                  commitUiField("dueDateMillis", value)
                 }
               />
             ) : null}
@@ -423,7 +443,7 @@ export default function RiskDialog({
             disabled={currentIndex === 0}
             onClick={() => {
               if (currentIndex > 0) {
-                setTab(TABS[currentIndex - 1].id);
+                changeTab(TABS[currentIndex - 1].id);
               }
             }}
             style={{
@@ -461,7 +481,7 @@ export default function RiskDialog({
               <button
                 type="button"
                 onClick={() =>
-                  setTab(TABS[currentIndex + 1].id)
+                  changeTab(TABS[currentIndex + 1].id)
                 }
                 style={{
                   minHeight: 42,
@@ -483,9 +503,13 @@ export default function RiskDialog({
             ) : (
               <button
                 type="button"
-                onClick={() =>
-                  void onSave(draftRef.current)
-                }
+                onClick={() => {
+                  const latest = {
+                    ...draftRef.current,
+                  };
+
+                  void onSave(latest);
+                }}
                 disabled={saving}
                 style={{
                   minHeight: 42,

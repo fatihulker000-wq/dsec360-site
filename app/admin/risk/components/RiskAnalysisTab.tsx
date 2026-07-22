@@ -64,9 +64,7 @@ function CompactOptions({
 }) {
   return (
     <section style={{ display: "grid", gap: 8 }}>
-      <h4 style={{ margin: 0, fontSize: 13, fontWeight: 900 }}>
-        {title}
-      </h4>
+      <h4 style={{ margin: 0, fontSize: 13, fontWeight: 900 }}>{title}</h4>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
         {options.map((item) => {
@@ -106,7 +104,7 @@ type Props = {
   frequency: number;
   severity: number;
   onMethodChange: (value: RiskMethod) => void;
-  onTextCommit: (
+  onTextInput: (
     field: "hazard" | "consequence",
     value: string
   ) => void;
@@ -124,10 +122,10 @@ function RiskAnalysisTab({
   frequency,
   severity,
   onMethodChange,
-  onTextCommit,
+  onTextInput,
   onScoreChange,
 }: Props) {
-  const textAreaProps = {
+  const noTextAssist = {
     spellCheck: false,
     autoCorrect: "off",
     autoCapitalize: "off",
@@ -168,10 +166,10 @@ function RiskAnalysisTab({
         </span>
 
         <textarea
-          {...textAreaProps}
+          {...noTextAssist}
           defaultValue={hazard}
-          onBlur={(event) =>
-            onTextCommit("hazard", event.currentTarget.value)
+          onInput={(event) =>
+            onTextInput("hazard", event.currentTarget.value)
           }
           style={{
             minHeight: 120,
@@ -190,10 +188,10 @@ function RiskAnalysisTab({
         </span>
 
         <textarea
-          {...textAreaProps}
+          {...noTextAssist}
           defaultValue={consequence}
-          onBlur={(event) =>
-            onTextCommit("consequence", event.currentTarget.value)
+          onInput={(event) =>
+            onTextInput("consequence", event.currentTarget.value)
           }
           style={{
             minHeight: 120,

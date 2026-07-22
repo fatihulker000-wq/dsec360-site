@@ -43,6 +43,7 @@ type Props = {
   records: RiskRecord[];
   loading?: boolean;
   firmId?: string;
+  companyName?: string;
   onReload: () => void | Promise<void>;
 };
 
@@ -155,6 +156,7 @@ export default function RiskWorkspace({
   records,
   loading = false,
   firmId = "",
+  companyName = "",
   onReload,
 }: Props) {
   const [viewMode, setViewMode] =
@@ -259,6 +261,7 @@ export default function RiskWorkspace({
     setForm({
       ...EMPTY_FORM,
       firmId,
+      company: companyName,
       createdAtMillis: undefined as never,
     } as RiskFormState);
 
@@ -314,15 +317,28 @@ export default function RiskWorkspace({
       setSaving(true);
       setError("");
 
-      const payload: Partial<RiskRecord> = {
-  ...submittedForm,
-  firmId: submittedForm.firmId || firmId,
-  updatedAtMillis: Date.now(),
-};
+      const resolvedFirmId =
+        submittedForm.firmId || firmId;
 
-if (!submittedForm.id) {
-  payload.createdAtMillis = Date.now();
-}
+      const resolvedCompany =
+        submittedForm.company || companyName;
+
+      if (!resolvedFirmId) {
+        throw new Error(
+          "Risk kaydı için seçili firma kimliği bulunamadı."
+        );
+      }
+
+      const payload: Partial<RiskRecord> = {
+        ...submittedForm,
+        firmId: resolvedFirmId,
+        company: resolvedCompany,
+        updatedAtMillis: Date.now(),
+      };
+
+      if (!submittedForm.id) {
+        payload.createdAtMillis = Date.now();
+      }
 
       if (submittedForm.id) {
         await updateRisk(payload);

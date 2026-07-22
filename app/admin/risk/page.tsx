@@ -244,6 +244,18 @@ export default function RiskManagementPage() {
         .filter((company) => company.id && company.name && company.isActive)
         .sort((a, b) => a.name.localeCompare(b.name, "tr"));
       setCompanies(rows);
+
+      // Firma ekranında kayıt oluştururken boş firmId kalmasını engeller.
+      setSelectedCompanyId((current) => {
+        if (
+          (current === "ALL" || !current) &&
+          rows.length > 0
+        ) {
+          return rows[0].id;
+        }
+
+        return current;
+      });
     } catch (companyError) {
       console.error("Company load error:", companyError);
       setCompanies([]);
@@ -725,6 +737,7 @@ export default function RiskManagementPage() {
             records={filteredRecords}
             loading={loading}
             firmId={selectedFirmId}
+            companyName={selectedCompanyName}
             onReload={loadRiskData}
           />
         ) : null}
