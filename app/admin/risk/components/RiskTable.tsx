@@ -48,7 +48,9 @@ type Props = {
   onSelect: (id: string) => void;
   onEdit: (record: RiskTableRecord) => void;
   onDelete: (record: RiskTableRecord) => void | Promise<void>;
-  onExport?: () => void;
+  onExportCsv?: () => void;
+  onExportXlsx?: () => void | Promise<void>;
+  exportingXlsx?: boolean;
 };
 
 const LEVEL_META: Record<
@@ -166,7 +168,9 @@ export default function RiskTable({
   onSelect,
   onEdit,
   onDelete,
-  onExport,
+  onExportCsv,
+  onExportXlsx,
+  exportingXlsx = false,
 }: Props) {
   return (
     <section
@@ -211,26 +215,61 @@ export default function RiskTable({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onExport}
+        <div
           style={{
-            height: 40,
-            borderRadius: 12,
-            border: "1px solid #dbe3ec",
-            padding: "0 12px",
-            background: "#ffffff",
-            color: "#334155",
-            fontWeight: 800,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 7,
-            cursor: "pointer",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
           }}
         >
-          <FileDown size={16} />
-          Dışa Aktar
-        </button>
+          <button
+            type="button"
+            onClick={onExportCsv}
+            style={{
+              height: 40,
+              borderRadius: 12,
+              border: "1px solid #dbe3ec",
+              padding: "0 12px",
+              background: "#ffffff",
+              color: "#334155",
+              fontWeight: 800,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              cursor: "pointer",
+            }}
+          >
+            <FileDown size={16} />
+            CSV
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void onExportXlsx?.()}
+            disabled={exportingXlsx}
+            style={{
+              height: 40,
+              borderRadius: 12,
+              border: "1px solid #bbf7d0",
+              padding: "0 12px",
+              background: "#ecfdf5",
+              color: "#047857",
+              fontWeight: 850,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              cursor: exportingXlsx ? "wait" : "pointer",
+              opacity: exportingXlsx ? 0.7 : 1,
+            }}
+          >
+            {exportingXlsx ? (
+              <Loader2 size={16} className="riskTableSpin" />
+            ) : (
+              <FileDown size={16} />
+            )}
+            {exportingXlsx ? "Hazırlanıyor" : "Excel"}
+          </button>
+        </div>
       </div>
 
       {loading ? (

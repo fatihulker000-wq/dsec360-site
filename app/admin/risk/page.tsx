@@ -8,6 +8,9 @@ import RiskDialog from "./components/RiskDialog";
 import RiskHeatMap from "./components/RiskHeatMap";
 import RiskCharts from "./components/RiskCharts";
 import { exportRisksToCsv } from "./utils/riskExport";
+import { exportRisksToXlsx } from "./utils/riskXlsxExport";
+import CriticalRisksPanel from "./components/CriticalRisksPanel";
+import RiskActivityPanel from "./components/RiskActivityPanel";
 import {
   AlertTriangle,
   Building2,
@@ -231,6 +234,7 @@ export default function RiskManagementPage() {
   const [showRiskDialog, setShowRiskDialog] = useState(false);
   const [savingRisk, setSavingRisk] = useState(false);
   const [deletingRisk, setDeletingRisk] = useState(false);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
   const [riskForm, setRiskForm] = useState<RiskFormState>(EMPTY_FORM);
   const [selectedHeatCell, setSelectedHeatCell] = useState<{
     probability: number;
@@ -559,6 +563,26 @@ export default function RiskManagementPage() {
   };
 
 
+  const handleXlsxExport = async () => {
+    try {
+      setExportingXlsx(true);
+      setError("");
+
+      await exportRisksToXlsx(filteredRecords);
+    } catch (exportError) {
+      console.error("xlsx export error:", exportError);
+
+      setError(
+        exportError instanceof Error
+          ? exportError.message
+          : "Excel dosyası oluşturulamadı."
+      );
+    } finally {
+      setExportingXlsx(false);
+    }
+  };
+
+
   return (
     <main
       style={{
@@ -790,6 +814,38 @@ export default function RiskManagementPage() {
 
         <RiskCharts records={records} />
 
+        <CriticalRisksPanel
+          records={records}
+          onSelect={(id: string) => {
+            setSelectedRiskId(id);
+
+            window.setTimeout(() => {
+              document
+                .querySelector(".riskMainGrid")
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+            }, 0);
+          }}
+        />
+
+        <RiskActivityPanel
+          records={records}
+          onSelect={(id: string) => {
+            setSelectedRiskId(id);
+
+            window.setTimeout(() => {
+              document
+                .querySelector(".riskMainGrid")
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+            }, 0);
+          }}
+        />
+
         <section
           style={{
             background: "#ffffff",
@@ -959,7 +1015,9 @@ export default function RiskManagementPage() {
             onSelect={setSelectedRiskId}
             onEdit={openEditRisk}
             onDelete={deleteRisk}
-            onExport={() => exportRisksToCsv(filteredRecords)}
+            onExportCsv={() => exportRisksToCsv(filteredRecords)}
+            onExportXlsx={handleXlsxExport}
+            exportingXlsx={exportingXlsx}
           />
 
           <RiskDetailPanel
