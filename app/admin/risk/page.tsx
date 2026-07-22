@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Building2,
@@ -39,6 +39,24 @@ import {
 
 type MainTab = "DASHBOARD" | "RISKS" | "EMERGENCY";
 
+type CompanyItem = {
+  id: string;
+  name: string;
+  isActive: boolean;
+};
+
+type CompaniesResponse = {
+  data?: Array<{
+    id?: string | number | null;
+    name?: string | null;
+    title?: string | null;
+    company_name?: string | null;
+    is_active?: boolean | null;
+  }>;
+  message?: string;
+  error?: string;
+};
+
 const EMPTY_RISK_TOTALS: RiskDashboardTotals = {
   totalRisk: 0,
   criticalRisk: 0,
@@ -74,6 +92,12 @@ export default function RiskManagementPage() {
   const [records, setRecords] =
     useState<RiskRecord[]>([]);
 
+  const [companies, setCompanies] =
+    useState<CompanyItem[]>([]);
+
+  const [selectedCompanyId, setSelectedCompanyId] =
+    useState("ALL");
+
   const [plans, setPlans] =
     useState<EmergencyPlan[]>([]);
 
@@ -83,58 +107,29 @@ export default function RiskManagementPage() {
   const [drills, setDrills] =
     useState<EmergencyDrill[]>([]);
 
-  const [selectedCompany, setSelectedCompany] =
-    useState("ALL");
-
   const [loading, setLoading] = useState(true);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
+  const [loadingEmergency, setLoadingEmergency] = useState(false);
   const [error, setError] = useState("");
 
-  const companies = useMemo(() => {
-    return Array.from(
-      new Set(
-        records
-          .map((record) => record.company?.trim())
-          .filter(Boolean)
-      )
-    ).sort((a, b) =>
-      a.localeCompare(b, "tr")
-    );
-  }, [records]);
+  const selectedCompany = useMemo(
+    () => companies.find((company) => company.id === selectedCompanyId) || null,
+    [companies, selectedCompanyId]
+  );
 
-  const selectedCompanyRecord = useMemo(() => {
-    if (selectedCompany === "ALL") {
-      return records[0] || null;
-    }
-
-    return (
-      records.find(
-        (record) =>
-          normalizeCompany(record.company) ===
-          normalizeCompany(selectedCompany)
-      ) || null
-    );
-  }, [records, selectedCompany]);
-
-  const selectedFirmId = String(
-    selectedCompanyRecord?.firmId || ""
-  ).trim();
-
-  const selectedCompanyName =
-    selectedCompany === "ALL"
-      ? selectedCompanyRecord?.company || ""
-      : selectedCompany;
+  const selectedFirmId = selectedCompany?.id || "";
+  const selectedCompanyName = selectedCompany?.name || "";
 
   const filteredRecords = useMemo(() => {
-    if (selectedCompany === "ALL") {
+    if (selectedCompanyId === "ALL") {
       return records;
     }
 
-    return records.filter(
-      (record) =>
-        normalizeCompany(record.company) ===
-        normalizeCompany(selectedCompany)
-    );
-  }, [records, selectedCompany]);
+    return records.filter((record) => {
+      if (String(record.firmId || "") === selectedCompanyId) return true;
+      return normalizeCompany(record.company) === normalizeCompany(selectedCompanyName);
+    });
+  }, [records, selectedCompanyId, selectedCompanyName]);
 
   const riskTotals = useMemo<RiskDashboardTotals>(
     () => {
@@ -227,6 +222,36 @@ export default function RiskManagementPage() {
       };
     }, [plans, teams, drills]);
 
+  const loadCompanies = useCallback(async () => {
+    try {
+      setLoadingCompanies(true);
+      const response = await fetch("/api/admin/companies", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+      const json: CompaniesResponse = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(json.error || json.message || "Firmalar alınamadı.");
+      }
+      const rows = (Array.isArray(json.data) ? json.data : [])
+        .map((row): CompanyItem => ({
+          id: String(row.id || "").trim(),
+          name: String(row.name || row.title || row.company_name || "").trim(),
+          isActive: row.is_active !== false,
+        }))
+        .filter((company) => company.id && company.name && company.isActive)
+        .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+      setCompanies(rows);
+    } catch (companyError) {
+      console.error("Company load error:", companyError);
+      setCompanies([]);
+      setError(companyError instanceof Error ? companyError.message : "Firmalar yüklenemedi.");
+    } finally {
+      setLoadingCompanies(false);
+    }
+  }, []);
+
   const loadRiskData = async () => {
     try {
       setLoading(true);
@@ -266,6 +291,7 @@ export default function RiskManagementPage() {
     }
 
     try {
+      setLoadingEmergency(true);
       const [
         planRows,
         teamRows,
@@ -304,20 +330,30 @@ export default function RiskManagementPage() {
           ? loadError.message
           : "Acil durum verileri yüklenemedi."
       );
+    } finally {
+      setLoadingEmergency(false);
     }
   };
 
   const loadAll = async () => {
-    await loadRiskData();
+    await Promise.all([loadCompanies(), loadRiskData()]);
+    if (selectedFirmId) await loadEmergencyData(selectedFirmId);
   };
 
   useEffect(() => {
-    void loadRiskData();
-  }, []);
+    void Promise.all([loadCompanies(), loadRiskData()]);
+  }, [loadCompanies]);
 
   useEffect(() => {
     void loadEmergencyData(selectedFirmId);
   }, [selectedFirmId]);
+
+  const handleTabChange = (tab: MainTab) => {
+    if (tab === "EMERGENCY" && selectedCompanyId === "ALL" && companies.length > 0) {
+      setSelectedCompanyId(companies[0].id);
+    }
+    setMainTab(tab);
+  };
 
   const tabs: Array<{
     value: MainTab;
@@ -463,64 +499,6 @@ export default function RiskManagementPage() {
             </button>
           </div>
 
-          <div
-            style={{
-              marginTop: 20,
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: 10,
-            }}
-          >
-            {[
-              [
-                "Toplam Risk",
-                riskTotals.totalRisk,
-              ],
-              [
-                "Kritik Risk",
-                riskTotals.criticalRisk,
-              ],
-              ["Açık DÖF", riskTotals.openDof],
-              [
-                "Acil Durum Planı",
-                emergencyTotals.totalPlans,
-              ],
-            ].map(([label, value]) => (
-              <div
-                key={String(label)}
-                style={{
-                  borderRadius: 18,
-                  padding: 14,
-                  background:
-                    "rgba(255,255,255,0.1)",
-                  border:
-                    "1px solid rgba(255,255,255,0.12)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 12,
-                    color:
-                      "rgba(255,255,255,0.68)",
-                    fontWeight: 800,
-                  }}
-                >
-                  {label}
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 5,
-                    fontSize: 23,
-                    fontWeight: 950,
-                  }}
-                >
-                  {value}
-                </div>
-              </div>
-            ))}
-          </div>
         </section>
 
         {error ? (
@@ -573,7 +551,7 @@ export default function RiskManagementPage() {
                   key={tab.value}
                   type="button"
                   onClick={() =>
-                    setMainTab(tab.value)
+                    handleTabChange(tab.value)
                   }
                   style={{
                     minHeight: 43,
@@ -619,9 +597,10 @@ export default function RiskManagementPage() {
             <Building2 size={16} />
 
             <select
-              value={selectedCompany}
+              value={selectedCompanyId}
+              disabled={loadingCompanies}
               onChange={(event) =>
-                setSelectedCompany(
+                setSelectedCompanyId(
                   event.target.value
                 )
               }
@@ -639,11 +618,8 @@ export default function RiskManagementPage() {
               </option>
 
               {companies.map((company) => (
-                <option
-                  key={company}
-                  value={company}
-                >
-                  {company}
+                <option key={company.id} value={company.id}>
+                  {company.name}
                 </option>
               ))}
             </select>
@@ -654,8 +630,8 @@ export default function RiskManagementPage() {
           <div style={{ display: "grid", gap: 16 }}>
             <DashboardCards
               risk={riskTotals}
-              emergency={emergencyTotals}
-              loading={loading}
+              emergency={selectedCompany ? emergencyTotals : EMPTY_EMERGENCY_TOTALS}
+              loading={loading || loadingCompanies}
             />
 
             <div
@@ -704,11 +680,12 @@ export default function RiskManagementPage() {
                 }}
               />
 
+              {selectedCompany ? (
               <EmergencySummary
                 plans={plans}
                 teams={teams}
                 drills={drills}
-                loading={loading}
+                loading={loadingEmergency}
                 onOpenPlans={() =>
                   setMainTab("EMERGENCY")
                 }
@@ -719,6 +696,11 @@ export default function RiskManagementPage() {
                   setMainTab("EMERGENCY")
                 }
               />
+              ) : (
+                <section style={{minHeight:360,borderRadius:22,border:"1px solid #e5e7eb",background:"#fff",display:"grid",placeItems:"center",padding:24,textAlign:"center",color:"#64748b"}}>
+                  <div><Building2 size={36} color="#7f1d1d"/><h3 style={{margin:"12px 0 6px",color:"#0f172a"}}>Acil durum özeti için firma seçin</h3><p style={{margin:0}}>Plan, ekip ve tatbikat verileri firma bazında gösterilir.</p></div>
+                </section>
+              )}
             </div>
 
             <RecentRisks
@@ -741,10 +723,16 @@ export default function RiskManagementPage() {
         ) : null}
 
         {mainTab === "EMERGENCY" ? (
-          <EmergencyWorkspace
-            firmId={selectedFirmId}
-            companyName={selectedCompanyName}
-          />
+          selectedCompany ? (
+            <EmergencyWorkspace
+              firmId={selectedFirmId}
+              companyName={selectedCompanyName}
+            />
+          ) : (
+            <section style={{minHeight:300,borderRadius:20,border:"1px solid #fde68a",background:"#fffbeb",color:"#92400e",display:"grid",placeItems:"center",padding:24,textAlign:"center"}}>
+              <div><Building2 size={36}/><h3 style={{margin:"12px 0 6px"}}>Firma seçimi gerekli</h3><p style={{margin:0}}>Acil durum kayıtları için yukarıdan firma seçin.</p></div>
+            </section>
+          )
         ) : null}
       </div>
 
