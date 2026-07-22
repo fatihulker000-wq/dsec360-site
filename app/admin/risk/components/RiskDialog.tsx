@@ -26,10 +26,6 @@ import {
   type DofSuggestion,
 } from "./riskControlLibrary";
 
-import type {
-  RiskLibraryItem,
-} from "./riskLibrary";
-
 import RiskGeneralTab from "./RiskGeneralTab";
 import RiskAnalysisTab from "./RiskAnalysisTab";
 import RiskControlsTab from "./RiskControlsTab";
@@ -77,6 +73,28 @@ type Props = {
   ) => void | Promise<void>;
 };
 
+const TABS: Array<{
+  id: TabId;
+  label: string;
+}> = [
+  {
+    id: "GENERAL",
+    label: "Genel Bilgiler",
+  },
+  {
+    id: "ANALYSIS",
+    label: "Risk Analizi",
+  },
+  {
+    id: "CONTROLS",
+    label: "Kontroller",
+  },
+  {
+    id: "DOF",
+    label: "DÖF ve Termin",
+  },
+];
+
 function calculateLevel(
   score: number,
   method: RiskMethod
@@ -120,6 +138,7 @@ function appendParagraph(
   const incoming = text.trim();
 
   if (!normalized) return incoming;
+
   if (normalized.includes(incoming)) {
     return current;
   }
@@ -149,17 +168,11 @@ export default function RiskDialog({
   const [draft, setDraft] =
     useState<RiskFormState>(form);
 
-  const [
-    selectedTemplateId,
-    setSelectedTemplateId,
-  ] = useState("");
-
   useEffect(() => {
     if (!open) return;
 
     setDraft(form);
     setTab("GENERAL");
-    setSelectedTemplateId("");
   }, [open, form.id]);
 
   const updateField = useCallback(
@@ -201,7 +214,6 @@ export default function RiskDialog({
   const updateGeneralField = useCallback(
     (
       field:
-        | "company"
         | "department"
         | "process"
         | "activity"
@@ -250,80 +262,10 @@ export default function RiskDialog({
     [updateField]
   );
 
-  const applyTemplate = useCallback(
-    (item: RiskLibraryItem) => {
-      setSelectedTemplateId(item.id);
-
-      setDraft((current) => {
-        const score = calculateScore(
-          item.method,
-          item.probability,
-          item.frequency,
-          item.severity
-        );
-
-        const date = new Date();
-        date.setDate(
-          date.getDate() +
-            item.suggestedDays
-        );
-
-        return {
-          ...current,
-          method: item.method,
-          activity: item.activity,
-          process: item.process,
-          hazard: item.hazard,
-          consequence:
-            item.consequence,
-          existingControl:
-            item.existingControl,
-          proposedControl:
-            item.proposedControl,
-          responsible:
-            item.responsibleRole,
-          probability:
-            item.probability,
-          frequency: item.frequency,
-          severity: item.severity,
-          score,
-          level: calculateLevel(
-            score,
-            item.method
-          ),
-          dueDateMillis:
-            date.getTime(),
-        };
-      });
-
-      setTab("ANALYSIS");
-    },
+  const controlBundle = useMemo(
+    () => getRiskControlBundle(""),
     []
   );
-
-  const controlBundle = useMemo(
-    () =>
-      getRiskControlBundle(
-        selectedTemplateId
-      ),
-    [selectedTemplateId]
-  );
-
-  const [
-    templateLegislation,
-    setTemplateLegislation,
-  ] = useState<string[]>([]);
-
-  const applyTemplateWithLegislation =
-    useCallback(
-      (item: RiskLibraryItem) => {
-        setTemplateLegislation(
-          item.legislation || []
-        );
-        applyTemplate(item);
-      },
-      [applyTemplate]
-    );
 
   const addExisting = useCallback(
     (item: ControlSuggestion) => {
@@ -356,6 +298,7 @@ export default function RiskDialog({
   const applyDof = useCallback(
     (item: DofSuggestion) => {
       const date = new Date();
+
       date.setDate(
         date.getDate() +
           item.suggestedDays
@@ -380,30 +323,8 @@ export default function RiskDialog({
 
   if (!open) return null;
 
-  const tabs: Array<{
-    id: TabId;
-    label: string;
-  }> = [
-    {
-      id: "GENERAL",
-      label: "Genel Bilgiler",
-    },
-    {
-      id: "ANALYSIS",
-      label: "Risk Analizi",
-    },
-    {
-      id: "CONTROLS",
-      label: "Kontroller",
-    },
-    {
-      id: "DOF",
-      label: "DÖF ve Termin",
-    },
-  ];
-
   const currentIndex =
-    tabs.findIndex(
+    TABS.findIndex(
       (item) => item.id === tab
     );
 
@@ -506,7 +427,7 @@ export default function RiskDialog({
             gap: 8,
           }}
         >
-          {tabs.map((item) => {
+          {TABS.map((item) => {
             const active =
               tab === item.id;
 
@@ -581,7 +502,6 @@ export default function RiskDialog({
 
             {tab === "GENERAL" ? (
               <RiskGeneralTab
-                company={draft.company}
                 department={
                   draft.department
                 }
@@ -590,14 +510,8 @@ export default function RiskDialog({
                 responsible={
                   draft.responsible
                 }
-                selectedTemplateId={
-                  selectedTemplateId
-                }
                 onFieldChange={
                   updateGeneralField
-                }
-                onApplyTemplate={
-                  applyTemplateWithLegislation
                 }
               />
             ) : null}
@@ -694,9 +608,7 @@ export default function RiskDialog({
             severity={draft.severity}
             score={draft.score}
             level={draft.level}
-            legislation={
-              templateLegislation
-            }
+            legislation={[]}
           />
         </div>
 
@@ -718,7 +630,7 @@ export default function RiskDialog({
             onClick={() => {
               if (currentIndex > 0) {
                 setTab(
-                  tabs[currentIndex - 1].id
+                  TABS[currentIndex - 1].id
                 );
               }
             }}
@@ -765,7 +677,7 @@ export default function RiskDialog({
                 type="button"
                 onClick={() =>
                   setTab(
-                    tabs[
+                    TABS[
                       currentIndex + 1
                     ].id
                   )
