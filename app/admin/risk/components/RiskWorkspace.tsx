@@ -25,6 +25,8 @@ import type { RiskLevel, RiskMethod, RiskRecord } from "../types";
 import RiskDialog, { type RiskFormState } from "./RiskDialog";
 import RiskDetailDrawer from "./RiskDetailDrawer";
 import RiskReportCenter from "./RiskReportCenter";
+import RiskImportCenter from "./RiskImportCenter";
+import RiskReportArchiveCenter from "./RiskReportArchiveCenter";
 import {
   createRisk,
   deleteRisk,
@@ -187,6 +189,12 @@ export default function RiskWorkspace({
 
   const [error, setError] = useState("");
   const [showReports, setShowReports] =
+    useState(false);
+
+  const [showImport, setShowImport] =
+    useState(false);
+
+  const [showArchive, setShowArchive] =
     useState(false);
 
   const filteredRecords = useMemo(() => {
@@ -488,6 +496,48 @@ export default function RiskWorkspace({
                 <RefreshCw size={16} />
               )}
               Yenile
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowImport(true)}
+              style={{
+                minHeight: 42,
+                borderRadius: 12,
+                border: "1px solid #bfdbfe",
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                padding: "0 13px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                fontWeight: 850,
+                cursor: "pointer",
+              }}
+            >
+              <Upload size={16} />
+              Toplu Aktar
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowArchive(true)}
+              style={{
+                minHeight: 42,
+                borderRadius: 12,
+                border: "1px solid #fde68a",
+                background: "#fffbeb",
+                color: "#92400e",
+                padding: "0 13px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                fontWeight: 850,
+                cursor: "pointer",
+              }}
+            >
+              <FileSpreadsheet size={16} />
+              Rapor Arşivi
             </button>
 
             <button
@@ -1353,6 +1403,22 @@ export default function RiskWorkspace({
         onClose={() =>
           setShowReports(false)
         }
+      />
+
+      <RiskImportCenter
+        open={showImport}
+        firmId={firmId}
+        companyName={companyName}
+        onClose={() => setShowImport(false)}
+        onImported={onReload}
+      />
+
+      <RiskReportArchiveCenter
+        open={showArchive}
+        firmId={firmId}
+        companyName={companyName}
+        onClose={() => setShowArchive(false)}
+        onRestored={onReload}
       />
 
       <style jsx>{`

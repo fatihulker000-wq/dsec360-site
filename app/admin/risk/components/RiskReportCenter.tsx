@@ -13,6 +13,14 @@ import {
 } from "lucide-react";
 
 import type { RiskRecord } from "../types";
+import {
+  createRiskReportNo,
+  printClassicRiskReport,
+} from "./riskClassicReport";
+import {
+  archiveRiskReport,
+  downloadRiskReportPackage,
+} from "./riskReportArchive";
 
 import {
   createRiskReportSummary,
@@ -23,6 +31,10 @@ import {
   type RiskReportType,
 } from "./riskReportUtils";
 
+type ExtendedRiskReportType =
+  | RiskReportType
+  | "CLASSIC";
+
 type Props = {
   open: boolean;
   records: RiskRecord[];
@@ -31,11 +43,18 @@ type Props = {
 };
 
 const REPORT_OPTIONS: Array<{
-  value: RiskReportType;
+  value: ExtendedRiskReportType;
   title: string;
   description: string;
   icon: React.ReactNode;
 }> = [
+  {
+    value: "CLASSIC",
+    title: "Klasik Risk Değerlendirmesi",
+    description:
+      "Riskleri yüksekten düşüğe sıralayan klasik yatay risk tablosu.",
+    icon: <FileSpreadsheet size={18} />,
+  },
   {
     value: "EXECUTIVE",
     title: "Yönetici Özeti",
@@ -94,7 +113,7 @@ export default function RiskReportCenter({
   onClose,
 }: Props) {
   const [reportType, setReportType] =
-    useState<RiskReportType>("EXECUTIVE");
+    useState<ExtendedRiskReportType>("EXECUTIVE");
 
   const [working, setWorking] = useState<
     "" | "PDF" | "WORD" | "CSV"
@@ -104,10 +123,12 @@ export default function RiskReportCenter({
 
   const selectedRecords = useMemo(
     () =>
-      filterReportRecords(
-        records,
-        reportType
-      ),
+      reportType === "CLASSIC"
+        ? records
+        : filterReportRecords(
+            records,
+            reportType
+          ),
     [records, reportType]
   );
 
@@ -129,21 +150,38 @@ export default function RiskReportCenter({
       setError("");
 
       if (mode === "PDF") {
-        printRiskPdf(
-          records,
-          reportType,
-          companyName
-        );
+        if (reportType === "CLASSIC") {
+          const reportNo = createRiskReportNo();
+          printClassicRiskReport(
+            records,
+            companyName,
+            reportNo
+          );
+
+          const archived = archiveRiskReport(
+            records,
+            companyName,
+            reportNo
+          );
+
+          downloadRiskReportPackage(archived);
+        } else {
+          printRiskPdf(
+            records,
+            reportType,
+            companyName
+          );
+        }
       } else if (mode === "WORD") {
         exportRiskWord(
           records,
-          reportType,
+          reportType as RiskReportType,
           companyName
         );
       } else {
         exportRiskCsv(
           records,
-          reportType
+          reportType as RiskReportType
         );
       }
     } catch (reportError) {
