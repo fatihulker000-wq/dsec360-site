@@ -1,191 +1,64 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import RiskKpiCards from "./components/RiskKpiCards";
-import RiskTable from "./components/RiskTable";
-import RiskDetailPanel from "./components/RiskDetailPanel";
-import RiskDialog from "./components/RiskDialog";
-import RiskHeatMap from "./components/RiskHeatMap";
-import RiskCharts from "./components/RiskCharts";
-import { exportRisksToCsv } from "./utils/riskExport";
-import { exportRisksToXlsx } from "./utils/riskXlsxExport";
-import type { ImportedRiskRow } from "./utils/riskExcelImport";
-import CriticalRisksPanel from "./components/CriticalRisksPanel";
-import RiskActivityPanel from "./components/RiskActivityPanel";
-import RiskImportDialog from "./components/RiskImportDialog";
 import {
   AlertTriangle,
   Building2,
-  Filter,
+  LayoutDashboard,
   Loader2,
-  Plus,
   RefreshCw,
-  Search,
   ShieldAlert,
-  SlidersHorizontal,
-  Upload,
+  Siren,
 } from "lucide-react";
 
-type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-type RiskMethod = "MATRIX" | "FINE_KINNEY";
-type DofStatus = "OPEN" | "CLOSED";
+import DashboardCards from "./dashboard/DashboardCards";
+import RiskTrendChart from "./dashboard/RiskTrendChart";
+import RiskDistributionChart from "./dashboard/RiskDistributionChart";
+import HeatMapCard from "./dashboard/HeatMapCard";
+import EmergencySummary from "./dashboard/EmergencySummary";
+import RecentRisks from "./dashboard/RecentRisks";
 
-type RiskRecord = {
-  id: string;
-  remoteId?: string | null;
-  syncKey?: string | null;
-  firmId: string;
-  webFirmId?: string | null;
-  company: string;
-  title: string;
-  hazard: string;
-  consequence?: string | null;
-  control?: string | null;
-  method: RiskMethod;
-  probability?: number | null;
-  severity?: number | null;
-  probabilityValue?: number | null;
-  frequencyValue?: number | null;
-  severityValue?: number | null;
-  score: number;
-  level: RiskLevel;
-  department?: string | null;
-  responsible?: string | null;
-  dofStatus: DofStatus;
-  dofDueDate?: string | null;
-  source?: "APP" | "WEB" | "MERGED";
-  updatedAt: string;
+import RiskWorkspace from "./components/RiskWorkspace";
+import EmergencyWorkspace from "./components/EmergencyWorkspace";
+
+import type {
+  EmergencyDashboard,
+  EmergencyDrill,
+  EmergencyPlan,
+  EmergencySupportMember,
+  RiskDashboardTotals,
+  RiskRecord,
+} from "./types";
+
+import {
+  getEmergencyDrills,
+  getEmergencyPlans,
+  getRisks,
+  getSupportTeams,
+} from "./services";
+
+type MainTab = "DASHBOARD" | "RISKS" | "EMERGENCY";
+
+const EMPTY_RISK_TOTALS: RiskDashboardTotals = {
+  totalRisk: 0,
+  criticalRisk: 0,
+  intolerableRisk: 0,
+  highRisk: 0,
+  mediumRisk: 0,
+  lowRisk: 0,
+  averageScore: 0,
+  openDof: 0,
+  closedDof: 0,
 };
 
-type RiskDashboardResponse = {
-  success?: boolean;
-  records?: RiskRecord[];
-  companies?: string[];
-  message?: string;
+const EMPTY_EMERGENCY_TOTALS: EmergencyDashboard = {
+  totalPlans: 0,
+  expiredPlans: 0,
+  totalMembers: 0,
+  pendingSignatures: 0,
+  totalDrills: 0,
+  upcomingDrills: 0,
 };
-
-
-type RiskFormState = {
-  id?: string;
-  method: RiskMethod;
-  companyId: string;
-  title: string;
-  hazard: string;
-  consequence: string;
-  control: string;
-  probability: number;
-  severity: number;
-  probabilityValue: number;
-  frequencyValue: number;
-  severityValue: number;
-  department: string;
-  location: string;
-  machine: string;
-  responsible: string;
-  dofStatus: DofStatus;
-  dofAction: string;
-  dofResponsible: string;
-  dofDueDate: string;
-  dofNote: string;
-};
-
-const EMPTY_FORM: RiskFormState = {
-  method: "MATRIX",
-  companyId: "",
-  title: "",
-  hazard: "",
-  consequence: "",
-  control: "",
-  probability: 1,
-  severity: 1,
-  probabilityValue: 1,
-  frequencyValue: 1,
-  severityValue: 1,
-  department: "",
-  location: "",
-  machine: "",
-  responsible: "",
-  dofStatus: "OPEN",
-  dofAction: "",
-  dofResponsible: "",
-  dofDueDate: "",
-  dofNote: "",
-};
-
-const DEMO_RISKS: RiskRecord[] = [
-  {
-    id: "demo-1",
-    firmId: "1",
-    company: "D-SEC Demo İşletmesi",
-    title: "Forklift ve yaya yolunun kesişmesi",
-    hazard: "Forklift-yaya çarpışması",
-    consequence: "Ezilme, ağır yaralanma veya ölüm",
-    control: "Yaya yolu ayrılmalı, bariyer ve ikaz sistemi kurulmalı.",
-    method: "FINE_KINNEY",
-    score: 420,
-    level: "CRITICAL",
-    department: "Lojistik",
-    responsible: "Depo Müdürü",
-    dofStatus: "OPEN",
-    dofDueDate: "2026-07-30",
-    source: "APP",
-    updatedAt: "2026-07-21T10:30:00.000Z",
-  },
-  {
-    id: "demo-2",
-    firmId: "1",
-    company: "D-SEC Demo İşletmesi",
-    title: "Elektrik panosu önünde malzeme istifi",
-    hazard: "Elektrik panosuna erişimin engellenmesi",
-    consequence: "Yangın ve acil müdahale gecikmesi",
-    control: "Pano önü en az 1 metre boş bırakılmalı.",
-    method: "MATRIX",
-    score: 20,
-    level: "CRITICAL",
-    department: "Üretim",
-    responsible: "Bakım Şefi",
-    dofStatus: "OPEN",
-    dofDueDate: "2026-07-24",
-    source: "WEB",
-    updatedAt: "2026-07-21T09:10:00.000Z",
-  },
-  {
-    id: "demo-3",
-    firmId: "1",
-    company: "D-SEC Demo İşletmesi",
-    title: "Islak zeminde kayma riski",
-    hazard: "Kaygan zemin",
-    consequence: "Burkulma, kırık ve iş göremezlik",
-    control: "Zemin kurutulmalı ve uyarı levhası kullanılmalı.",
-    method: "MATRIX",
-    score: 12,
-    level: "MEDIUM",
-    department: "Market",
-    responsible: "Şube Müdürü",
-    dofStatus: "CLOSED",
-    dofDueDate: null,
-    source: "APP",
-    updatedAt: "2026-07-20T13:00:00.000Z",
-  },
-  {
-    id: "demo-4",
-    firmId: "1",
-    company: "D-SEC Demo İşletmesi",
-    title: "Raf üstü uygunsuz yükleme",
-    hazard: "Yük düşmesi",
-    consequence: "Baş ve vücut yaralanmaları",
-    control: "Raf yük limitleri işaretlenmeli ve ağır yükler alt raflara alınmalı.",
-    method: "FINE_KINNEY",
-    score: 168,
-    level: "HIGH",
-    department: "Depo",
-    responsible: "Depo Sorumlusu",
-    dofStatus: "OPEN",
-    dofDueDate: "2026-08-02",
-    source: "WEB",
-    updatedAt: "2026-07-19T16:25:00.000Z",
-  },
-];
 
 function normalizeCompany(value?: string | null) {
   return String(value || "")
@@ -194,476 +67,279 @@ function normalizeCompany(value?: string | null) {
     .replace(/\s+/g, " ");
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "-";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
-}
-
-function isOverdue(record: RiskRecord) {
-  if (record.dofStatus === "CLOSED" || !record.dofDueDate) {
-    return false;
-  }
-
-  const due = new Date(record.dofDueDate);
-  if (Number.isNaN(due.getTime())) return false;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return due.getTime() < today.getTime();
-}
-
 export default function RiskManagementPage() {
-  const [records, setRecords] = useState<RiskRecord[]>([]);
-  const [companies, setCompanies] = useState<string[]>([]);
-  const [selectedCompany, setSelectedCompany] = useState("all");
-  const [selectedLevel, setSelectedLevel] = useState("all");
-  const [selectedMethod, setSelectedMethod] = useState("all");
-  const [selectedDof, setSelectedDof] = useState("all");
-  const [search, setSearch] = useState("");
-  const [selectedRiskId, setSelectedRiskId] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState("");
-  const [usingDemoData, setUsingDemoData] = useState(false);
-  const [showRiskDialog, setShowRiskDialog] = useState(false);
-  const [savingRisk, setSavingRisk] = useState(false);
-  const [deletingRisk, setDeletingRisk] = useState(false);
-  const [exportingXlsx, setExportingXlsx] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [importingRisks, setImportingRisks] = useState(false);
-  const [riskForm, setRiskForm] = useState<RiskFormState>(EMPTY_FORM);
-  const [selectedHeatCell, setSelectedHeatCell] = useState<{
-    probability: number;
-    severity: number;
-  } | null>(null);
+  const [mainTab, setMainTab] =
+    useState<MainTab>("DASHBOARD");
 
-  const loadRisks = async () => {
+  const [records, setRecords] =
+    useState<RiskRecord[]>([]);
+
+  const [plans, setPlans] =
+    useState<EmergencyPlan[]>([]);
+
+  const [teams, setTeams] =
+    useState<EmergencySupportMember[]>([]);
+
+  const [drills, setDrills] =
+    useState<EmergencyDrill[]>([]);
+
+  const [selectedCompany, setSelectedCompany] =
+    useState("ALL");
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const companies = useMemo(() => {
+    return Array.from(
+      new Set(
+        records
+          .map((record) => record.company?.trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) =>
+      a.localeCompare(b, "tr")
+    );
+  }, [records]);
+
+  const selectedCompanyRecord = useMemo(() => {
+    if (selectedCompany === "ALL") {
+      return records[0] || null;
+    }
+
+    return (
+      records.find(
+        (record) =>
+          normalizeCompany(record.company) ===
+          normalizeCompany(selectedCompany)
+      ) || null
+    );
+  }, [records, selectedCompany]);
+
+  const selectedFirmId = String(
+    selectedCompanyRecord?.firmId || ""
+  ).trim();
+
+  const selectedCompanyName =
+    selectedCompany === "ALL"
+      ? selectedCompanyRecord?.company || ""
+      : selectedCompany;
+
+  const filteredRecords = useMemo(() => {
+    if (selectedCompany === "ALL") {
+      return records;
+    }
+
+    return records.filter(
+      (record) =>
+        normalizeCompany(record.company) ===
+        normalizeCompany(selectedCompany)
+    );
+  }, [records, selectedCompany]);
+
+  const riskTotals = useMemo<RiskDashboardTotals>(
+    () => {
+      if (filteredRecords.length === 0) {
+        return EMPTY_RISK_TOTALS;
+      }
+
+      const totalRisk = filteredRecords.length;
+
+      const intolerableRisk = filteredRecords.filter(
+        (record) =>
+          record.level === "INTOLERABLE"
+      ).length;
+
+      const veryHighRisk = filteredRecords.filter(
+        (record) =>
+          record.level === "VERY_HIGH"
+      ).length;
+
+      const criticalRisk =
+        veryHighRisk + intolerableRisk;
+
+      const highRisk = filteredRecords.filter(
+        (record) => record.level === "HIGH"
+      ).length;
+
+      const mediumRisk = filteredRecords.filter(
+        (record) =>
+          record.level === "MEDIUM"
+      ).length;
+
+      const lowRisk = filteredRecords.filter(
+        (record) => record.level === "LOW"
+      ).length;
+
+      const averageScore = Math.round(
+        filteredRecords.reduce(
+          (sum, record) =>
+            sum + Number(record.score || 0),
+          0
+        ) / totalRisk
+      );
+
+      const openDof = filteredRecords.filter(
+        (record) => !record.completed
+      ).length;
+
+      const closedDof = filteredRecords.filter(
+        (record) => record.completed
+      ).length;
+
+      return {
+        totalRisk,
+        criticalRisk,
+        intolerableRisk,
+        highRisk,
+        mediumRisk,
+        lowRisk,
+        averageScore,
+        openDof,
+        closedDof,
+      };
+    },
+    [filteredRecords]
+  );
+
+  const emergencyTotals =
+    useMemo<EmergencyDashboard>(() => {
+      const now = Date.now();
+
+      return {
+        totalPlans: plans.length,
+        expiredPlans: plans.filter(
+          (plan) =>
+            plan.validUntilMillis !== null &&
+            plan.validUntilMillis < now
+        ).length,
+        totalMembers: teams.length,
+        pendingSignatures: teams.filter(
+          (member) =>
+            member.signatureStatus ===
+            "IMZA_BEKLIYOR"
+        ).length,
+        totalDrills: drills.length,
+        upcomingDrills: drills.filter(
+          (drill) =>
+            drill.nextDrillDueMillis !== null &&
+            drill.nextDrillDueMillis >= now
+        ).length,
+      };
+    }, [plans, teams, drills]);
+
+  const loadRiskData = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const response = await fetch("/api/admin/risk-management", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
+      const riskRows = await getRisks();
 
-      if (response.status === 401) {
-        window.location.href = "/admin/login";
-        return;
-      }
-
-      const json: RiskDashboardResponse = await response
-        .json()
-        .catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(json?.message || "Risk verileri alınamadı.");
-      }
-
-      const nextRecords = Array.isArray(json.records) ? json.records : [];
-
-      setRecords(nextRecords);
-      setCompanies(
-        Array.isArray(json.companies)
-          ? json.companies
-          : Array.from(
-              new Set(
-                nextRecords
-                  .map((item) => item.company?.trim())
-                  .filter(Boolean)
-              )
-            )
+      setRecords(
+        Array.isArray(riskRows)
+          ? riskRows
+          : []
       );
-      setUsingDemoData(false);
-
-      if (!selectedRiskId && nextRecords.length > 0) {
-        setSelectedRiskId(nextRecords[0].id);
-      }
     } catch (loadError) {
-      console.error("risk management load error:", loadError);
-
-      setRecords(DEMO_RISKS);
-      setCompanies(
-        Array.from(new Set(DEMO_RISKS.map((item) => item.company)))
+      console.error(
+        "Risk management load error:",
+        loadError
       );
-      setSelectedRiskId((current) => current || DEMO_RISKS[0]?.id || "");
-      setUsingDemoData(true);
+
       setError(
-        "Risk API henüz bağlı değil. Ekran geçici olarak demo verileriyle açıldı."
+        loadError instanceof Error
+          ? loadError.message
+          : "Risk verileri yüklenemedi."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    void loadRisks();
-  }, []);
-
-  const filteredRecords = useMemo(() => {
-    const normalizedSearch = search
-      .trim()
-      .toLocaleLowerCase("tr-TR");
-
-    return records.filter((record) => {
-      const companyMatch =
-        selectedCompany === "all" ||
-        normalizeCompany(record.company) === normalizeCompany(selectedCompany);
-
-      const levelMatch =
-        selectedLevel === "all" || record.level === selectedLevel;
-
-      const methodMatch =
-        selectedMethod === "all" || record.method === selectedMethod;
-
-      const dofMatch =
-        selectedDof === "all" || record.dofStatus === selectedDof;
-
-      const searchable = [
-        record.title,
-        record.hazard,
-        record.consequence,
-        record.control,
-        record.company,
-        record.department,
-        record.responsible,
-      ]
-        .join(" ")
-        .toLocaleLowerCase("tr-TR");
-
-      const searchMatch =
-        !normalizedSearch || searchable.includes(normalizedSearch);
-
-      return (
-        companyMatch &&
-        levelMatch &&
-        methodMatch &&
-        dofMatch &&
-        searchMatch
-      );
-    });
-  }, [
-    records,
-    selectedCompany,
-    selectedLevel,
-    selectedMethod,
-    selectedDof,
-    search,
-  ]);
-
-  const selectedRisk =
-    filteredRecords.find((item) => item.id === selectedRiskId) ||
-    filteredRecords[0] ||
-    null;
-
-  const totals = useMemo(() => {
-    const total = records.length;
-    const critical = records.filter(
-      (item) => item.level === "CRITICAL"
-    ).length;
-    const high = records.filter((item) => item.level === "HIGH").length;
-    const medium = records.filter((item) => item.level === "MEDIUM").length;
-    const low = records.filter((item) => item.level === "LOW").length;
-    const openDof = records.filter(
-      (item) => item.dofStatus === "OPEN"
-    ).length;
-    const closedDof = records.filter(
-      (item) => item.dofStatus === "CLOSED"
-    ).length;
-    const overdue = records.filter(isOverdue).length;
-
-    return {
-      total,
-      critical,
-      high,
-      medium,
-      low,
-      openDof,
-      closedDof,
-      overdue,
-    };
-  }, [records]);
-
-  const riskScore = useMemo(() => {
-    if (records.length === 0) return 100;
-
-    const penalty =
-      totals.critical * 18 +
-      totals.high * 9 +
-      totals.medium * 4 +
-      totals.overdue * 6;
-
-    return Math.max(0, Math.min(100, 100 - penalty));
-  }, [records.length, totals]);
-
-  const handleManualSync = async () => {
-    try {
-      setSyncing(true);
-      setError("");
-
-      const response = await fetch("/api/admin/risk-management/sync", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-      });
-
-      const json = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(
-          json?.message || "Risk senkronizasyonu başlatılamadı."
-        );
-      }
-
-      await loadRisks();
-    } catch (syncError) {
-      console.error("risk sync error:", syncError);
-      setError(
-        syncError instanceof Error
-          ? syncError.message
-          : "Risk senkronizasyonu başarısız."
-      );
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const clearFilters = () => {
-    setSelectedCompany("all");
-    setSelectedLevel("all");
-    setSelectedMethod("all");
-    setSelectedDof("all");
-    setSearch("");
-  };
-
-  const openNewRisk = () => {
-    setRiskForm({
-      ...EMPTY_FORM,
-      companyId:
-        selectedCompany !== "all"
-          ? selectedCompany
-          : "",
-    });
-    setShowRiskDialog(true);
-  };
-
-  const openEditRisk = (record: RiskRecord) => {
-    setRiskForm({
-      id: record.id,
-      method: record.method,
-      companyId: record.webFirmId || record.firmId || "",
-      title: record.title,
-      hazard: record.hazard,
-      consequence: record.consequence || "",
-      control: record.control || "",
-      probability: Number((record as any).probability || 1),
-      severity: Number((record as any).severity || 1),
-      probabilityValue: Number((record as any).probabilityValue || 1),
-      frequencyValue: Number((record as any).frequencyValue || 1),
-      severityValue: Number((record as any).severityValue || 1),
-      department: record.department || "",
-      location: (record as any).location || "",
-      machine: (record as any).machine || "",
-      responsible: record.responsible || "",
-      dofStatus: record.dofStatus,
-      dofAction: (record as any).dofAction || "",
-      dofResponsible: (record as any).dofResponsible || "",
-      dofDueDate: record.dofDueDate
-        ? record.dofDueDate.slice(0, 10)
-        : "",
-      dofNote: (record as any).dofNote || "",
-    });
-    setShowRiskDialog(true);
-  };
-
-  const saveRisk = async () => {
-    if (!riskForm.title.trim() || !riskForm.hazard.trim()) {
-      setError("Risk başlığı ve tehlike alanı zorunludur.");
+  const loadEmergencyData = async (
+    firmId: string
+  ) => {
+    if (!firmId) {
+      setPlans([]);
+      setTeams([]);
+      setDrills([]);
       return;
     }
 
     try {
-      setSavingRisk(true);
-      setError("");
+      const [
+        planRows,
+        teamRows,
+        drillRows,
+      ] = await Promise.all([
+        getEmergencyPlans(firmId),
+        getSupportTeams(firmId),
+        getEmergencyDrills(firmId),
+      ]);
 
-      const response = await fetch("/api/admin/risk-management", {
-        method: riskForm.id ? "PATCH" : "POST",
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(riskForm),
-      });
-
-      const json = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(json?.message || "Risk kaydı kaydedilemedi.");
-      }
-
-      setShowRiskDialog(false);
-      setRiskForm(EMPTY_FORM);
-      await loadRisks();
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Risk kaydı kaydedilemedi."
+      setPlans(
+        Array.isArray(planRows)
+          ? planRows
+          : []
       );
-    } finally {
-      setSavingRisk(false);
+
+      setTeams(
+        Array.isArray(teamRows)
+          ? teamRows
+          : []
+      );
+
+      setDrills(
+        Array.isArray(drillRows)
+          ? drillRows
+          : []
+      );
+    } catch (loadError) {
+      console.error(
+        "Emergency management load error:",
+        loadError
+      );
+
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Acil durum verileri yüklenemedi."
+      );
     }
   };
 
-  const deleteRisk = async (record: RiskRecord) => {
-    const accepted = window.confirm(
-      `"${record.title}" kaydı silinecek. Emin misiniz?`
-    );
-
-    if (!accepted) return;
-
-    try {
-      setDeletingRisk(true);
-      setError("");
-
-      const response = await fetch(
-        `/api/admin/risk-management?id=${encodeURIComponent(
-          record.id
-        )}&method=${encodeURIComponent(record.method)}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-          cache: "no-store",
-        }
-      );
-
-      const json = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(json?.message || "Risk kaydı silinemedi.");
-      }
-
-      setSelectedRiskId("");
-      await loadRisks();
-    } catch (deleteError) {
-      setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "Risk kaydı silinemedi."
-      );
-    } finally {
-      setDeletingRisk(false);
-    }
+  const loadAll = async () => {
+    await loadRiskData();
   };
 
+  useEffect(() => {
+    void loadRiskData();
+  }, []);
 
-  const handleXlsxExport = async () => {
-    try {
-      setExportingXlsx(true);
-      setError("");
+  useEffect(() => {
+    void loadEmergencyData(selectedFirmId);
+  }, [selectedFirmId]);
 
-      await exportRisksToXlsx(filteredRecords);
-    } catch (exportError) {
-      console.error("xlsx export error:", exportError);
-
-      setError(
-        exportError instanceof Error
-          ? exportError.message
-          : "Excel dosyası oluşturulamadı."
-      );
-    } finally {
-      setExportingXlsx(false);
-    }
-  };
-
-
-  const handleRiskImport = async (
-    rows: ImportedRiskRow[]
-  ) => {
-    try {
-      setImportingRisks(true);
-      setError("");
-
-      let successCount = 0;
-      const failedRows: number[] = [];
-
-      for (const row of rows) {
-        const response = await fetch(
-          "/api/admin/risk-management",
-          {
-            method: "POST",
-            credentials: "include",
-            cache: "no-store",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              method: row.method,
-              companyId: row.companyId,
-              title: row.title,
-              hazard: row.hazard,
-              consequence: row.consequence,
-              control: row.control,
-              probability: row.probability,
-              severity: row.severity,
-              probabilityValue: row.probabilityValue,
-              frequencyValue: row.frequencyValue,
-              severityValue: row.severityValue,
-              department: row.department,
-              location: row.location,
-              machine: row.machine,
-              responsible: row.responsible,
-              dofStatus: row.dofStatus,
-              dofAction: row.dofAction,
-              dofResponsible: row.dofResponsible,
-              dofDueDate: row.dofDueDate,
-              dofNote: row.dofNote,
-            }),
-          }
-        );
-
-        if (response.ok) {
-          successCount += 1;
-        } else {
-          failedRows.push(row.rowNumber);
-        }
-      }
-
-      await loadRisks();
-
-      if (failedRows.length === 0) {
-        setShowImportDialog(false);
-      } else {
-        setError(
-          `${successCount} kayıt aktarıldı. Hata alınan Excel satırları: ${failedRows.join(
-            ", "
-          )}`
-        );
-      }
-    } catch (importError) {
-      console.error("risk import error:", importError);
-
-      setError(
-        importError instanceof Error
-          ? importError.message
-          : "Risk kayıtları içe aktarılamadı."
-      );
-    } finally {
-      setImportingRisks(false);
-    }
-  };
-
+  const tabs: Array<{
+    value: MainTab;
+    label: string;
+    icon: React.ReactNode;
+  }> = [
+    {
+      value: "DASHBOARD",
+      label: "Dashboard",
+      icon: <LayoutDashboard size={17} />,
+    },
+    {
+      value: "RISKS",
+      label: "Risk Analizleri",
+      icon: <ShieldAlert size={17} />,
+    },
+    {
+      value: "EMERGENCY",
+      label: "Acil Durum Yönetimi",
+      icon: <Siren size={17} />,
+    },
+  ];
 
   return (
     <main
@@ -690,7 +366,8 @@ export default function RiskManagementPage() {
               "linear-gradient(135deg, #3f0d18 0%, #111827 55%, #8b1e2d 100%)",
             padding: 24,
             color: "#ffffff",
-            boxShadow: "0 24px 60px rgba(63,13,24,0.22)",
+            boxShadow:
+              "0 24px 60px rgba(63,13,24,0.22)",
           }}
         >
           <div
@@ -702,7 +379,7 @@ export default function RiskManagementPage() {
               alignItems: "flex-start",
             }}
           >
-            <div style={{ maxWidth: 760 }}>
+            <div style={{ maxWidth: 780 }}>
               <div
                 style={{
                   display: "inline-flex",
@@ -710,7 +387,8 @@ export default function RiskManagementPage() {
                   gap: 8,
                   borderRadius: 999,
                   padding: "7px 11px",
-                  background: "rgba(255,255,255,0.12)",
+                  background:
+                    "rgba(255,255,255,0.12)",
                   marginBottom: 14,
                   fontSize: 12,
                   fontWeight: 800,
@@ -729,130 +407,108 @@ export default function RiskManagementPage() {
                   letterSpacing: "-0.03em",
                 }}
               >
-                Kurumsal Risk Yönetimi
+                Kurumsal Risk ve Acil Durum
+                Yönetimi
               </h1>
 
               <p
                 style={{
                   margin: "10px 0 0",
-                  maxWidth: 720,
-                  color: "rgba(255,255,255,0.84)",
+                  maxWidth: 740,
+                  color:
+                    "rgba(255,255,255,0.84)",
                   lineHeight: 1.6,
                   fontSize: 15,
                 }}
               >
-                5x5 Matris, Fine-Kinney, DÖF ve kritik risk analizlerini
-                mobil uygulama ile aynı veri modeli üzerinden yönetin.
+                Fine-Kinney, 5x5 matris, DÖF,
+                acil durum planları, destek
+                ekipleri ve tatbikatları tek
+                çalışma alanından yönetin.
               </p>
             </div>
 
-            <div
+            <button
+              type="button"
+              onClick={() => void loadAll()}
+              disabled={loading}
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 10,
+                minHeight: 44,
+                borderRadius: 14,
+                border:
+                  "1px solid rgba(255,255,255,0.24)",
+                background:
+                  "rgba(255,255,255,0.13)",
+                color: "#ffffff",
+                padding: "0 15px",
+                display: "inline-flex",
                 alignItems: "center",
+                gap: 8,
+                fontWeight: 850,
+                cursor: loading
+                  ? "wait"
+                  : "pointer",
               }}
             >
-              <button
-                type="button"
-                onClick={handleManualSync}
-                disabled={syncing}
-                style={{
-                  border: "1px solid rgba(255,255,255,0.24)",
-                  borderRadius: 14,
-                  padding: "11px 14px",
-                  background: "rgba(255,255,255,0.13)",
-                  color: "#ffffff",
-                  fontWeight: 850,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  cursor: syncing ? "wait" : "pointer",
-                }}
-              >
-                {syncing ? (
-                  <Loader2 size={17} className="riskSpin" />
-                ) : (
-                  <RefreshCw size={17} />
-                )}
-                {syncing ? "Senkronize ediliyor" : "Senkronize Et"}
-              </button>
+              {loading ? (
+                <Loader2
+                  size={17}
+                  className="riskPageSpin"
+                />
+              ) : (
+                <RefreshCw size={17} />
+              )}
 
-              <button
-                type="button"
-                onClick={() => setShowImportDialog(true)}
-                style={{
-                  border: "1px solid rgba(255,255,255,0.24)",
-                  borderRadius: 14,
-                  padding: "11px 14px",
-                  background: "rgba(255,255,255,0.13)",
-                  color: "#ffffff",
-                  fontWeight: 850,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  cursor: "pointer",
-                }}
-              >
-                <Upload size={17} />
-                Excel İçe Aktar
-              </button>
-
-              <button
-                type="button"
-                onClick={openNewRisk}
-                style={{
-                  border: "1px solid rgba(255,255,255,0.24)",
-                  borderRadius: 14,
-                  padding: "11px 14px",
-                  background: "#ffffff",
-                  color: "#6b1020",
-                  fontWeight: 900,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  cursor: "pointer",
-                }}
-              >
-                <Plus size={17} />
-                Yeni Risk
-              </button>
-            </div>
+              Yenile
+            </button>
           </div>
 
           <div
             style={{
               marginTop: 20,
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(150px, 1fr))",
               gap: 10,
             }}
           >
             {[
-              ["Risk Skoru", `${riskScore}/100`],
-              ["Toplam Risk", totals.total],
-              ["Kritik", totals.critical],
-              ["Açık DÖF", totals.openDof],
+              [
+                "Toplam Risk",
+                riskTotals.totalRisk,
+              ],
+              [
+                "Kritik Risk",
+                riskTotals.criticalRisk,
+              ],
+              ["Açık DÖF", riskTotals.openDof],
+              [
+                "Acil Durum Planı",
+                emergencyTotals.totalPlans,
+              ],
             ].map(([label, value]) => (
               <div
                 key={String(label)}
                 style={{
                   borderRadius: 18,
                   padding: 14,
-                  background: "rgba(255,255,255,0.1)",
-                  border: "1px solid rgba(255,255,255,0.12)",
+                  background:
+                    "rgba(255,255,255,0.1)",
+                  border:
+                    "1px solid rgba(255,255,255,0.12)",
                 }}
               >
                 <div
                   style={{
                     fontSize: 12,
-                    color: "rgba(255,255,255,0.68)",
+                    color:
+                      "rgba(255,255,255,0.68)",
                     fontWeight: 800,
                   }}
                 >
                   {label}
                 </div>
+
                 <div
                   style={{
                     marginTop: 5,
@@ -870,304 +526,243 @@ export default function RiskManagementPage() {
         {error ? (
           <section
             style={{
-              border: "1px solid #fde68a",
-              background: "#fffbeb",
-              color: "#92400e",
+              border: "1px solid #fecaca",
+              background: "#fef2f2",
+              color: "#b91c1c",
               borderRadius: 16,
               padding: 14,
               display: "flex",
               gap: 10,
               alignItems: "center",
-              fontWeight: 750,
+              fontWeight: 800,
             }}
           >
             <AlertTriangle size={18} />
-            <span>{error}</span>
-            {usingDemoData ? (
-              <span
-                style={{
-                  marginLeft: "auto",
-                  fontSize: 12,
-                  borderRadius: 999,
-                  padding: "4px 8px",
-                  background: "#fef3c7",
-                }}
-              >
-                Demo görünüm
-              </span>
-            ) : null}
+            {error}
           </section>
         ) : null}
 
-        <RiskKpiCards totals={totals} />
-
-        <RiskHeatMap
-          risks={records}
-          selectedCell={selectedHeatCell}
-          onCellClick={(probability, severity, riskIds) => {
-            setSelectedHeatCell({ probability, severity });
-            setSelectedMethod("MATRIX");
-
-            if (riskIds.length > 0) {
-              setSelectedRiskId(riskIds[0]);
-            }
-          }}
-        />
-
-        <RiskCharts records={records} />
-
-        <CriticalRisksPanel
-          records={records}
-          onSelect={(id: string) => {
-            setSelectedRiskId(id);
-
-            window.setTimeout(() => {
-              document
-                .querySelector(".riskMainGrid")
-                ?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                });
-            }, 0);
-          }}
-        />
-
-        <RiskActivityPanel
-          records={records}
-          onSelect={(id: string) => {
-            setSelectedRiskId(id);
-
-            window.setTimeout(() => {
-              document
-                .querySelector(".riskMainGrid")
-                ?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                });
-            }, 0);
-          }}
-        />
-
         <section
           style={{
-            background: "#ffffff",
+            borderRadius: 18,
             border: "1px solid #e5e7eb",
-            borderRadius: 22,
-            padding: 16,
-            boxShadow: "0 14px 35px rgba(15,23,42,0.05)",
+            background: "#ffffff",
+            padding: 10,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            boxShadow:
+              "0 10px 28px rgba(15,23,42,0.04)",
           }}
         >
           <div
             style={{
               display: "flex",
               flexWrap: "wrap",
-              gap: 10,
-              alignItems: "center",
+              gap: 8,
             }}
           >
-            <div
+            {tabs.map((tab) => {
+              const active =
+                mainTab === tab.value;
+
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() =>
+                    setMainTab(tab.value)
+                  }
+                  style={{
+                    minHeight: 43,
+                    borderRadius: 12,
+                    border: active
+                      ? "1px solid #6b1020"
+                      : "1px solid transparent",
+                    background: active
+                      ? "#6b1020"
+                      : "#f8fafc",
+                    color: active
+                      ? "#ffffff"
+                      : "#475569",
+                    padding: "0 15px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontWeight: 900,
+                    cursor: "pointer",
+                  }}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <label
+            style={{
+              minWidth: 250,
+              height: 43,
+              borderRadius: 12,
+              border: "1px solid #dbe3ec",
+              padding: "0 11px",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "#ffffff",
+              color: "#64748b",
+            }}
+          >
+            <Building2 size={16} />
+
+            <select
+              value={selectedCompany}
+              onChange={(event) =>
+                setSelectedCompany(
+                  event.target.value
+                )
+              }
               style={{
-                flex: "1 1 280px",
-                position: "relative",
+                width: "100%",
+                border: 0,
+                outline: 0,
+                background: "transparent",
+                color: "#334155",
+                fontWeight: 800,
               }}
             >
-              <Search
-                size={17}
-                style={{
-                  position: "absolute",
-                  left: 13,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#94a3b8",
-                }}
+              <option value="ALL">
+                Tüm Firmalar
+              </option>
+
+              {companies.map((company) => (
+                <option
+                  key={company}
+                  value={company}
+                >
+                  {company}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+
+        {mainTab === "DASHBOARD" ? (
+          <div style={{ display: "grid", gap: 16 }}>
+            <DashboardCards
+              risk={riskTotals}
+              emergency={emergencyTotals}
+              loading={loading}
+            />
+
+            <div
+              className="dashboardTwoColumn"
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "minmax(0, 1.15fr) minmax(360px, 0.85fr)",
+                gap: 16,
+                alignItems: "start",
+              }}
+            >
+              <RiskTrendChart
+                records={filteredRecords}
+                loading={loading}
               />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Risk, tehlike, bölüm veya sorumlu ara..."
-                style={{
-                  width: "100%",
-                  height: 44,
-                  borderRadius: 13,
-                  border: "1px solid #dbe3ec",
-                  padding: "0 14px 0 40px",
-                  outline: "none",
-                  fontSize: 14,
-                  color: "#0f172a",
-                  background: "#f8fafc",
-                  boxSizing: "border-box",
-                }}
+
+              <RiskDistributionChart
+                totals={riskTotals}
+                loading={loading}
               />
             </div>
 
-            {[
-              {
-                value: selectedCompany,
-                setValue: setSelectedCompany,
-                icon: <Building2 size={15} />,
-                options: [
-                  ["all", "Tüm Firmalar"],
-                  ...companies.map((company) => [company, company]),
-                ],
-              },
-              {
-                value: selectedLevel,
-                setValue: setSelectedLevel,
-                icon: <ShieldAlert size={15} />,
-                options: [
-                  ["all", "Tüm Seviyeler"],
-                  ["CRITICAL", "Kritik"],
-                  ["HIGH", "Yüksek"],
-                  ["MEDIUM", "Orta"],
-                  ["LOW", "Düşük"],
-                ],
-              },
-              {
-                value: selectedMethod,
-                setValue: setSelectedMethod,
-                icon: <SlidersHorizontal size={15} />,
-                options: [
-                  ["all", "Tüm Yöntemler"],
-                  ["MATRIX", "5x5 Matris"],
-                  ["FINE_KINNEY", "Fine-Kinney"],
-                ],
-              },
-              {
-                value: selectedDof,
-                setValue: setSelectedDof,
-                icon: <Filter size={15} />,
-                options: [
-                  ["all", "Tüm DÖF Durumları"],
-                  ["OPEN", "Açık"],
-                  ["CLOSED", "Kapalı"],
-                ],
-              },
-            ].map((filter, index) => (
-              <label
-                key={index}
-                style={{
-                  minWidth: 170,
-                  height: 44,
-                  borderRadius: 13,
-                  border: "1px solid #dbe3ec",
-                  padding: "0 11px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  background: "#ffffff",
-                  color: "#64748b",
-                }}
-              >
-                {filter.icon}
-                <select
-                  value={filter.value}
-                  onChange={(event) => filter.setValue(event.target.value)}
-                  style={{
-                    border: 0,
-                    outline: 0,
-                    width: "100%",
-                    background: "transparent",
-                    color: "#334155",
-                    fontSize: 13,
-                    fontWeight: 750,
-                  }}
-                >
-                  {filter.options.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-
-            <button
-              type="button"
-              onClick={clearFilters}
+            <div
+              className="dashboardTwoColumn"
               style={{
-                height: 44,
-                borderRadius: 13,
-                border: "1px solid #dbe3ec",
-                padding: "0 14px",
-                background: "#ffffff",
-                color: "#475569",
-                fontWeight: 800,
-                cursor: "pointer",
+                display: "grid",
+                gridTemplateColumns:
+                  "minmax(0, 1fr) minmax(0, 1fr)",
+                gap: 16,
+                alignItems: "start",
               }}
             >
-              Filtreleri Temizle
-            </button>
+              <HeatMapCard
+                records={filteredRecords}
+                onCellClick={(
+                  probability,
+                  severity,
+                  selectedRecords
+                ) => {
+                  if (
+                    selectedRecords.length > 0
+                  ) {
+                    setMainTab("RISKS");
+                  }
+                }}
+              />
+
+              <EmergencySummary
+                plans={plans}
+                teams={teams}
+                drills={drills}
+                loading={loading}
+                onOpenPlans={() =>
+                  setMainTab("EMERGENCY")
+                }
+                onOpenTeams={() =>
+                  setMainTab("EMERGENCY")
+                }
+                onOpenDrills={() =>
+                  setMainTab("EMERGENCY")
+                }
+              />
+            </div>
+
+            <RecentRisks
+              records={filteredRecords}
+              loading={loading}
+              onSelect={() =>
+                setMainTab("RISKS")
+              }
+            />
           </div>
-        </section>
+        ) : null}
 
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1.65fr) minmax(320px, 0.75fr)",
-            gap: 16,
-            alignItems: "start",
-          }}
-          className="riskMainGrid"
-        >
-          <RiskTable
+        {mainTab === "RISKS" ? (
+          <RiskWorkspace
             records={filteredRecords}
-            selectedRiskId={selectedRiskId}
             loading={loading}
-            deletingRisk={deletingRisk}
-            onSelect={setSelectedRiskId}
-            onEdit={openEditRisk}
-            onDelete={deleteRisk}
-            onExportCsv={() => exportRisksToCsv(filteredRecords)}
-            onExportXlsx={handleXlsxExport}
-            exportingXlsx={exportingXlsx}
+            firmId={selectedFirmId}
+            onReload={loadRiskData}
           />
+        ) : null}
 
-          <RiskDetailPanel
-            risk={selectedRisk}
-            deleting={deletingRisk}
-            onEdit={openEditRisk}
-            onDelete={deleteRisk}
+        {mainTab === "EMERGENCY" ? (
+          <EmergencyWorkspace
+            firmId={selectedFirmId}
+            companyName={selectedCompanyName}
           />
-        </section>
+        ) : null}
       </div>
 
-
-      <RiskDialog
-        open={showRiskDialog}
-        saving={savingRisk}
-        form={riskForm}
-        companies={companies}
-        onChange={setRiskForm}
-        onClose={() => setShowRiskDialog(false)}
-        onSave={saveRisk}
-      />
-
-      <RiskImportDialog
-        open={showImportDialog}
-        importing={importingRisks}
-        companies={companies}
-        onClose={() => setShowImportDialog(false)}
-        onImport={handleRiskImport}
-      />
-
       <style jsx>{`
-        .riskSpin {
-          animation: risk-spin 0.9s linear infinite;
+        .riskPageSpin {
+          animation: risk-page-spin 0.9s
+            linear infinite;
         }
 
-        @keyframes risk-spin {
+        @keyframes risk-page-spin {
           to {
             transform: rotate(360deg);
           }
         }
 
-        @media (max-width: 1050px) {
-          .riskMainGrid {
+        @media (max-width: 1000px) {
+          .dashboardTwoColumn {
             grid-template-columns: 1fr !important;
-          }
-
-          .riskMainGrid aside {
-            position: static !important;
           }
         }
 
@@ -1175,7 +770,6 @@ export default function RiskManagementPage() {
           main {
             padding: 12px !important;
           }
-
         }
       `}</style>
     </main>
