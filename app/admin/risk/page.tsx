@@ -9,8 +9,10 @@ import RiskHeatMap from "./components/RiskHeatMap";
 import RiskCharts from "./components/RiskCharts";
 import { exportRisksToCsv } from "./utils/riskExport";
 import { exportRisksToXlsx } from "./utils/riskXlsxExport";
+import type { ImportedRiskRow } from "./utils/riskExcelImport";
 import CriticalRisksPanel from "./components/CriticalRisksPanel";
 import RiskActivityPanel from "./components/RiskActivityPanel";
+import RiskImportDialog from "./components/RiskImportDialog";
 import {
   AlertTriangle,
   Building2,
@@ -21,6 +23,7 @@ import {
   Search,
   ShieldAlert,
   SlidersHorizontal,
+  Upload,
 } from "lucide-react";
 
 type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -235,6 +238,8 @@ export default function RiskManagementPage() {
   const [savingRisk, setSavingRisk] = useState(false);
   const [deletingRisk, setDeletingRisk] = useState(false);
   const [exportingXlsx, setExportingXlsx] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importingRisks, setImportingRisks] = useState(false);
   const [riskForm, setRiskForm] = useState<RiskFormState>(EMPTY_FORM);
   const [selectedHeatCell, setSelectedHeatCell] = useState<{
     probability: number;
@@ -583,6 +588,83 @@ export default function RiskManagementPage() {
   };
 
 
+  const handleRiskImport = async (
+    rows: ImportedRiskRow[]
+  ) => {
+    try {
+      setImportingRisks(true);
+      setError("");
+
+      let successCount = 0;
+      const failedRows: number[] = [];
+
+      for (const row of rows) {
+        const response = await fetch(
+          "/api/admin/risk-management",
+          {
+            method: "POST",
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              method: row.method,
+              companyId: row.companyId,
+              title: row.title,
+              hazard: row.hazard,
+              consequence: row.consequence,
+              control: row.control,
+              probability: row.probability,
+              severity: row.severity,
+              probabilityValue: row.probabilityValue,
+              frequencyValue: row.frequencyValue,
+              severityValue: row.severityValue,
+              department: row.department,
+              location: row.location,
+              machine: row.machine,
+              responsible: row.responsible,
+              dofStatus: row.dofStatus,
+              dofAction: row.dofAction,
+              dofResponsible: row.dofResponsible,
+              dofDueDate: row.dofDueDate,
+              dofNote: row.dofNote,
+            }),
+          }
+        );
+
+        if (response.ok) {
+          successCount += 1;
+        } else {
+          failedRows.push(row.rowNumber);
+        }
+      }
+
+      await loadRisks();
+
+      if (failedRows.length === 0) {
+        setShowImportDialog(false);
+      } else {
+        setError(
+          `${successCount} kayıt aktarıldı. Hata alınan Excel satırları: ${failedRows.join(
+            ", "
+          )}`
+        );
+      }
+    } catch (importError) {
+      console.error("risk import error:", importError);
+
+      setError(
+        importError instanceof Error
+          ? importError.message
+          : "Risk kayıtları içe aktarılamadı."
+      );
+    } finally {
+      setImportingRisks(false);
+    }
+  };
+
+
   return (
     <main
       style={{
@@ -695,6 +777,26 @@ export default function RiskManagementPage() {
                   <RefreshCw size={17} />
                 )}
                 {syncing ? "Senkronize ediliyor" : "Senkronize Et"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowImportDialog(true)}
+                style={{
+                  border: "1px solid rgba(255,255,255,0.24)",
+                  borderRadius: 14,
+                  padding: "11px 14px",
+                  background: "rgba(255,255,255,0.13)",
+                  color: "#ffffff",
+                  fontWeight: 850,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                }}
+              >
+                <Upload size={17} />
+                Excel İçe Aktar
               </button>
 
               <button
@@ -1038,6 +1140,14 @@ export default function RiskManagementPage() {
         onChange={setRiskForm}
         onClose={() => setShowRiskDialog(false)}
         onSave={saveRisk}
+      />
+
+      <RiskImportDialog
+        open={showImportDialog}
+        importing={importingRisks}
+        companies={companies}
+        onClose={() => setShowImportDialog(false)}
+        onImport={handleRiskImport}
       />
 
       <style jsx>{`
