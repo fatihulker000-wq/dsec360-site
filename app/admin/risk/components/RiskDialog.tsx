@@ -225,15 +225,15 @@ export default function RiskDialog({
     setDraft(next);
   }, []);
 
-  if (!open) return null;
-
-  const currentIndex = TABS.findIndex((item) => item.id === tab);
-
   const changeTab = useCallback((nextTab: TabId) => {
     // Sekme değişirken ref'teki son metinleri state'e aktar.
     setDraft({ ...draftRef.current });
     setTab(nextTab);
   }, []);
+
+  if (!open) return null;
+
+  const currentIndex = TABS.findIndex((item) => item.id === tab);
 
   return (
     <div
