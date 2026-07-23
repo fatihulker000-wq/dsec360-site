@@ -3,9 +3,71 @@ export type EmergencyEntity =
   | "TEAM"
   | "DRILL";
 
+export type EmergencyScenario = {
+  title: string;
+  riskDescription: string;
+  alarmMethod: string;
+  firstResponse: string;
+  evacuationMethod: string;
+  responsibleTeams: string;
+  equipment: string;
+  externalInstitutions: string;
+};
+
+export type EmergencyPlanContent = {
+  purpose: string;
+  scope: string;
+  legalBasis: string;
+  definitions: string;
+  responsibilities: string;
+  alarmAndCommunication: string;
+  evacuationPrinciples: string;
+  specialGroups: string;
+  postEmergencyActions: string;
+
+  scenarios: EmergencyScenario[];
+
+  contacts: {
+    title: string;
+    phone: string;
+    note: string;
+  }[];
+
+  assemblyAreas: {
+    name: string;
+    location: string;
+    capacity: number;
+    responsible: string;
+    note: string;
+  }[];
+
+  equipment: {
+    name: string;
+    location: string;
+    quantity: number;
+    lastControlDate: string;
+    nextControlDate: string;
+    status:
+      | "UYGUN"
+      | "BAKIM_GEREKLI"
+      | "EKSIK";
+  }[];
+
+  approvals: {
+    preparedBy: string;
+    checkedBy: string;
+    occupationalSafetyExpert: string;
+    workplacePhysician: string;
+    approvedBy: string;
+  };
+};
+
 export type EmergencyPlan = {
   id: string;
   firmId: string;
+
+  planNo?: string;
+  planContent?: EmergencyPlanContent;
 
   planTitle: string;
   workplaceTitle: string;
