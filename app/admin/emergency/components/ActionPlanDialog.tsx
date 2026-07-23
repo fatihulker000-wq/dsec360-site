@@ -1,27 +1,58 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { FileText, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  FileText,
+  Plus,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import type {
   EmergencyEquipment,
   EmergencyPlan,
   EmergencyPlanContent,
+  EmergencySupportMember,
 } from "../../../../lib/emergency/types";
-import { DEFAULT_EMERGENCY_PLAN_CONTENT } from "./emergencyPlanTemplate";
-import { printEmergencyPlan } from "./emergencyPlanReport";
 
-type ExtendedPlan = Partial<EmergencyPlan>;
+import {
+  DEFAULT_EMERGENCY_PLAN_CONTENT,
+} from "./emergencyPlanTemplate";
+
+import {
+  printEmergencyPlan,
+} from "./emergencyPlanReport";
+
+import EmergencyTeamCards from "./EmergencyTeamCards";
+
+import {
+  printEmergencyTeamTables,
+} from "./emergencyTeamReport";
+
+type ExtendedPlan =
+  Partial<EmergencyPlan>;
 
 type Props = {
   open: boolean;
   plan: ExtendedPlan;
+
   onClose: () => void;
-  onSave: () => void | Promise<void>;
+
+  onSave:
+    () => void | Promise<void>;
+
   onChange: (
     field: keyof EmergencyPlan,
     value: unknown
   ) => void;
+
+  teams?: EmergencySupportMember[];
 };
 
 type Tab =
@@ -31,6 +62,7 @@ type Tab =
   | "CONTACTS"
   | "AREAS"
   | "EQUIPMENT"
+  | "TEAMS"
   | "SKETCHES"
   | "REVISIONS"
   | "APPROVALS";
@@ -44,17 +76,24 @@ const inputStyle = {
   boxSizing: "border-box" as const,
 };
 
-const labelStyle = { display: "grid", gap: 6 };
+const labelStyle = {
+  display: "grid",
+  gap: 6,
+};
+
 const labelText = {
   color: "#64748b",
   fontSize: 12,
   fontWeight: 850,
 };
 
-function cloneDefault(): EmergencyPlanContent {
+function cloneDefault():
+  EmergencyPlanContent {
   return JSON.parse(
-    JSON.stringify(DEFAULT_EMERGENCY_PLAN_CONTENT)
-  );
+    JSON.stringify(
+      DEFAULT_EMERGENCY_PLAN_CONTENT
+    )
+  ) as EmergencyPlanContent;
 }
 
 export default function ActionPlanDialog({
@@ -63,12 +102,15 @@ export default function ActionPlanDialog({
   onClose,
   onSave,
   onChange,
+  teams = [],
 }: Props) {
   const [tab, setTab] =
     useState<Tab>("GENERAL");
 
   const content = useMemo(
-    () => plan.planContent || cloneDefault(),
+    () =>
+      plan.planContent ||
+      cloneDefault(),
     [plan.planContent]
   );
 
@@ -78,7 +120,10 @@ export default function ActionPlanDialog({
     setTab("GENERAL");
 
     if (!plan.planContent) {
-      onChange("planContent", cloneDefault());
+      onChange(
+        "planContent",
+        cloneDefault()
+      );
     }
 
     if (!plan.planNo) {
@@ -89,12 +134,19 @@ export default function ActionPlanDialog({
         ).slice(-6)}`
       );
     }
-  }, [open, plan.id]);
+  }, [
+    open,
+    plan.id,
+    plan.planContent,
+    plan.planNo,
+    onChange,
+  ]);
 
   if (!open) return null;
 
   const updateContent = (
-    patch: Partial<EmergencyPlanContent>
+    patch:
+      Partial<EmergencyPlanContent>
   ) => {
     onChange("planContent", {
       ...content,
@@ -102,17 +154,19 @@ export default function ActionPlanDialog({
     });
   };
 
-  const tabs: Array<[Tab, string]> = [
-    ["GENERAL", "Genel"],
-    ["CONTENT", "Plan İçeriği"],
-    ["SCENARIOS", "Senaryolar"],
-    ["CONTACTS", "Acil İletişim"],
-    ["AREAS", "Toplanma Alanı"],
-    ["EQUIPMENT", "Ekipman"],
-    ["SKETCHES", "Krokiler"],
-    ["REVISIONS", "Revizyonlar"],
-    ["APPROVALS", "Onaylar"],
-  ];
+  const tabs:
+    Array<[Tab, string]> = [
+      ["GENERAL", "Genel"],
+      ["CONTENT", "Plan İçeriği"],
+      ["SCENARIOS", "Senaryolar"],
+      ["CONTACTS", "Acil İletişim"],
+      ["AREAS", "Toplanma Alanı"],
+      ["EQUIPMENT", "Ekipman"],
+      ["TEAMS", "Ekip Tabloları"],
+      ["SKETCHES", "Krokiler"],
+      ["REVISIONS", "Revizyonlar"],
+      ["APPROVALS", "Onaylar"],
+    ];
 
   return (
     <div
@@ -130,7 +184,8 @@ export default function ActionPlanDialog({
     >
       <section
         style={{
-          width: "min(1220px,100%)",
+          width:
+            "min(1220px,100%)",
           maxHeight: "95vh",
           overflow: "hidden",
           borderRadius: 24,
@@ -151,6 +206,7 @@ export default function ActionPlanDialog({
             display: "flex",
             justifyContent:
               "space-between",
+            gap: 12,
           }}
         >
           <div>
@@ -172,8 +228,10 @@ export default function ActionPlanDialog({
                 fontSize: 12,
               }}
             >
-              Plan, senaryolar, krokiler,
-              revizyonlar ve PDF çıktısı.
+              Plan, senaryolar,
+              destek ekipleri,
+              krokiler, revizyonlar
+              ve PDF çıktısı.
             </p>
           </div>
 
@@ -185,7 +243,12 @@ export default function ActionPlanDialog({
               height: 40,
               borderRadius: 11,
               border: 0,
+              background: "#f1f5f9",
+              color: "#475569",
+              display: "grid",
+              placeItems: "center",
               cursor: "pointer",
+              flexShrink: 0,
             }}
           >
             <X size={18} />
@@ -202,34 +265,42 @@ export default function ActionPlanDialog({
             gap: 7,
           }}
         >
-          {tabs.map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              style={{
-                minHeight: 38,
-                borderRadius: 10,
-                border:
-                  tab === id
-                    ? "1px solid #7f1d1d"
-                    : "1px solid #dbe3ec",
-                background:
-                  tab === id
-                    ? "#7f1d1d"
-                    : "#fff",
-                color:
-                  tab === id
-                    ? "#fff"
-                    : "#475569",
-                padding: "0 12px",
-                fontWeight: 850,
-                cursor: "pointer",
-              }}
-            >
-              {label}
-            </button>
-          ))}
+          {tabs.map(
+            ([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() =>
+                  setTab(id)
+                }
+                style={{
+                  minHeight: 38,
+                  borderRadius: 10,
+
+                  border:
+                    tab === id
+                      ? "1px solid #7f1d1d"
+                      : "1px solid #dbe3ec",
+
+                  background:
+                    tab === id
+                      ? "#7f1d1d"
+                      : "#fff",
+
+                  color:
+                    tab === id
+                      ? "#fff"
+                      : "#475569",
+
+                  padding: "0 12px",
+                  fontWeight: 850,
+                  cursor: "pointer",
+                }}
+              >
+                {label}
+              </button>
+            )
+          )}
         </nav>
 
         <main
@@ -248,19 +319,25 @@ export default function ActionPlanDialog({
           {tab === "CONTENT" ? (
             <ContentTab
               content={content}
-              updateContent={updateContent}
+              updateContent={
+                updateContent
+              }
             />
           ) : null}
 
           {tab === "SCENARIOS" ? (
             <ScenarioTab
               content={content}
-              updateContent={updateContent}
+              updateContent={
+                updateContent
+              }
             />
           ) : null}
 
           {tab === "CONTACTS" ? (
-            <EditableList
+            <EditableList<
+              EmergencyPlanContent["contacts"][number]
+            >
               items={content.contacts}
               fields={[
                 "title",
@@ -286,7 +363,9 @@ export default function ActionPlanDialog({
           ) : null}
 
           {tab === "AREAS" ? (
-            <EditableList
+            <EditableList<
+              EmergencyPlanContent["assemblyAreas"][number]
+            >
               items={
                 content.assemblyAreas
               }
@@ -313,56 +392,92 @@ export default function ActionPlanDialog({
               }}
               onChange={(items) =>
                 updateContent({
-                  assemblyAreas: items,
+                  assemblyAreas:
+                    items,
                 })
               }
             />
           ) : null}
 
           {tab === "EQUIPMENT" ? (
-  <EditableList<EmergencyEquipment>
-    items={content.equipment}
-    fields={[
-      "name",
-      "location",
-      "quantity",
-      "lastControlDate",
-      "nextControlDate",
-      "status",
-    ]}
-    labels={[
-      "Ekipman",
-      "Konum",
-      "Adet",
-      "Son Kontrol",
-      "Sonraki Kontrol",
-      "Durum",
-    ]}
-    emptyItem={{
-      name: "",
-      location: "",
-      quantity: 0,
-      lastControlDate: "",
-      nextControlDate: "",
-      status: "UYGUN",
-    }}
-    onChange={(items) =>
-      updateContent({
-        equipment: items,
-      })
-    }
-  />
-) : null}
+            <EditableList<
+              EmergencyEquipment
+            >
+              items={
+                content.equipment
+              }
+              fields={[
+                "name",
+                "location",
+                "quantity",
+                "lastControlDate",
+                "nextControlDate",
+                "status",
+              ]}
+              labels={[
+                "Ekipman",
+                "Konum",
+                "Adet",
+                "Son Kontrol",
+                "Sonraki Kontrol",
+                "Durum",
+              ]}
+              emptyItem={{
+                name: "",
+                location: "",
+                quantity: 0,
+                lastControlDate: "",
+                nextControlDate: "",
+                status: "UYGUN",
+              }}
+              onChange={(items) =>
+                updateContent({
+                  equipment: items,
+                })
+              }
+            />
+          ) : null}
+
+          {tab === "TEAMS" ? (
+            <EmergencyTeamCards
+              teams={teams}
+              companyName={
+                plan.workplaceTitle ||
+                ""
+              }
+              planNo={
+                plan.planNo || ""
+              }
+              revisionNo={
+                plan.revisionNo ||
+                "R0"
+              }
+              onPrint={() =>
+                printEmergencyTeamTables(
+                  teams,
+                  plan.workplaceTitle ||
+                    "",
+                  plan.planNo || "",
+                  plan.revisionNo ||
+                    "R0"
+                )
+              }
+            />
+          ) : null}
 
           {tab === "SKETCHES" ? (
             <SketchTab
               content={content}
-              updateContent={updateContent}
+              updateContent={
+                updateContent
+              }
             />
           ) : null}
 
           {tab === "REVISIONS" ? (
-            <EditableList
+            <EditableList<
+              EmergencyPlanContent["revisionHistory"][number]
+            >
               items={
                 content.revisionHistory
               }
@@ -389,7 +504,8 @@ export default function ActionPlanDialog({
               }}
               onChange={(items) =>
                 updateContent({
-                  revisionHistory: items,
+                  revisionHistory:
+                    items,
                 })
               }
             />
@@ -398,7 +514,9 @@ export default function ActionPlanDialog({
           {tab === "APPROVALS" ? (
             <ApprovalTab
               content={content}
-              updateContent={updateContent}
+              updateContent={
+                updateContent
+              }
             />
           ) : null}
         </main>
@@ -409,8 +527,10 @@ export default function ActionPlanDialog({
             borderTop:
               "1px solid #e5e7eb",
             display: "flex",
-            justifyContent: "flex-end",
+            justifyContent:
+              "flex-end",
             gap: 9,
+            flexWrap: "wrap",
           }}
         >
           <button
@@ -420,19 +540,26 @@ export default function ActionPlanDialog({
                 companyName:
                   plan.workplaceTitle ||
                   "",
+
                 planTitle:
                   plan.planTitle ||
                   "Acil Durum Eylem Planı",
+
                 planNo:
                   plan.planNo || "",
+
                 revisionNo:
-                  plan.revisionNo || "R0",
-                planDate: new Date(
-                  plan.planDateMillis ||
-                    Date.now()
-                ).toLocaleDateString(
-                  "tr-TR"
-                ),
+                  plan.revisionNo ||
+                  "R0",
+
+                planDate:
+                  new Date(
+                    plan.planDateMillis ||
+                      Date.now()
+                  ).toLocaleDateString(
+                    "tr-TR"
+                  ),
+
                 validUntil:
                   plan.validUntilMillis
                     ? new Date(
@@ -441,15 +568,23 @@ export default function ActionPlanDialog({
                         "tr-TR"
                       )
                     : "-",
+
                 dangerClass:
-                  plan.dangerClass || "",
-                employeeCount: Number(
-                  plan.employeeCount || 0
-                ),
+                  plan.dangerClass ||
+                  "",
+
+                employeeCount:
+                  Number(
+                    plan.employeeCount ||
+                      0
+                  ),
+
                 workplaceAddress:
                   plan.workplaceAddress ||
                   "",
+
                 content,
+                teams,
               })
             }
             style={{
@@ -480,6 +615,7 @@ export default function ActionPlanDialog({
               border:
                 "1px solid #dbe3ec",
               background: "#fff",
+              color: "#475569",
               padding: "0 14px",
               fontWeight: 850,
               cursor: "pointer",
@@ -512,6 +648,19 @@ export default function ActionPlanDialog({
           </button>
         </footer>
       </section>
+
+      <style jsx>{`
+        @media (max-width: 760px) {
+          footer {
+            justify-content: stretch;
+          }
+
+          footer button {
+            width: 100%;
+            justify-content: center;
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -523,8 +672,71 @@ function GeneralTab({
   plan: ExtendedPlan;
   onChange: Props["onChange"];
 }) {
+  const fields: Array<{
+    label: string;
+    field: keyof EmergencyPlan;
+    value: string | number;
+    type?: "text" | "number";
+  }> = [
+    {
+      label: "Plan Başlığı",
+      field: "planTitle",
+      value:
+        plan.planTitle || "",
+    },
+    {
+      label: "Plan No",
+      field: "planNo",
+      value:
+        plan.planNo || "",
+    },
+    {
+      label: "İşyeri",
+      field: "workplaceTitle",
+      value:
+        plan.workplaceTitle ||
+        "",
+    },
+    {
+      label: "Adres",
+      field: "workplaceAddress",
+      value:
+        plan.workplaceAddress ||
+        "",
+    },
+    {
+      label: "Revizyon No",
+      field: "revisionNo",
+      value:
+        plan.revisionNo || "R0",
+    },
+    {
+      label: "Çalışan Sayısı",
+      field: "employeeCount",
+      value:
+        plan.employeeCount || 0,
+      type: "number",
+    },
+    {
+      label:
+        "Acil Durum Koordinatörü",
+      field:
+        "emergencyCoordinator",
+      value:
+        plan.emergencyCoordinator ||
+        "",
+    },
+    {
+      label: "Toplanma Alanı",
+      field: "assemblyArea",
+      value:
+        plan.assemblyArea || "",
+    },
+  ];
+
   return (
     <div
+      className="generalGrid"
       style={{
         display: "grid",
         gridTemplateColumns:
@@ -532,67 +744,24 @@ function GeneralTab({
         gap: 12,
       }}
     >
-      {[
-        [
-          "Plan Başlığı",
-          "planTitle",
-          plan.planTitle || "",
-        ],
-        [
-          "Plan No",
-          "planNo",
-          plan.planNo || "",
-        ],
-        [
-          "İşyeri",
-          "workplaceTitle",
-          plan.workplaceTitle || "",
-        ],
-        [
-          "Adres",
-          "workplaceAddress",
-          plan.workplaceAddress || "",
-        ],
-        [
-          "Revizyon No",
-          "revisionNo",
-          plan.revisionNo || "R0",
-        ],
-        [
-          "Çalışan Sayısı",
-          "employeeCount",
-          plan.employeeCount || 0,
-        ],
-        [
-          "Acil Durum Koordinatörü",
-          "emergencyCoordinator",
-          plan.emergencyCoordinator || "",
-        ],
-        [
-          "Toplanma Alanı",
-          "assemblyArea",
-          plan.assemblyArea || "",
-        ],
-      ].map(([label, field, value]) => (
+      {fields.map((item) => (
         <label
-          key={String(field)}
+          key={item.field}
           style={labelStyle}
         >
           <span style={labelText}>
-            {label}
+            {item.label}
           </span>
 
           <input
             type={
-              field === "employeeCount"
-                ? "number"
-                : "text"
+              item.type || "text"
             }
-            value={String(value)}
+            value={item.value}
             onChange={(event) =>
               onChange(
-                field as keyof EmergencyPlan,
-                field === "employeeCount"
+                item.field,
+                item.type === "number"
                   ? Number(
                       event.target.value
                     )
@@ -625,9 +794,11 @@ function GeneralTab({
           <option value="AZ_TEHLIKELI">
             Az Tehlikeli
           </option>
+
           <option value="TEHLIKELI">
             Tehlikeli
           </option>
+
           <option value="COK_TEHLIKELI">
             Çok Tehlikeli
           </option>
@@ -650,14 +821,55 @@ function GeneralTab({
           onChange={(event) =>
             onChange(
               "planDateMillis",
-              new Date(
-                `${event.target.value}T00:00:00`
-              ).getTime()
+              event.target.value
+                ? new Date(
+                    `${event.target.value}T00:00:00`
+                  ).getTime()
+                : Date.now()
             )
           }
           style={inputStyle}
         />
       </label>
+
+      <label style={labelStyle}>
+        <span style={labelText}>
+          Geçerlilik Tarihi
+        </span>
+
+        <input
+          type="date"
+          value={
+            plan.validUntilMillis
+              ? new Date(
+                  plan.validUntilMillis
+                )
+                  .toISOString()
+                  .slice(0, 10)
+              : ""
+          }
+          onChange={(event) =>
+            onChange(
+              "validUntilMillis",
+              event.target.value
+                ? new Date(
+                    `${event.target.value}T00:00:00`
+                  ).getTime()
+                : null
+            )
+          }
+          style={inputStyle}
+        />
+      </label>
+
+      <style jsx>{`
+        @media (max-width: 760px) {
+          .generalGrid {
+            grid-template-columns:
+              1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -666,11 +878,73 @@ function ContentTab({
   content,
   updateContent,
 }: {
-  content: EmergencyPlanContent;
+  content:
+    EmergencyPlanContent;
+
   updateContent: (
-    patch: Partial<EmergencyPlanContent>
+    patch:
+      Partial<EmergencyPlanContent>
   ) => void;
 }) {
+  const fields: Array<{
+    label: string;
+    field:
+      | "purpose"
+      | "scope"
+      | "legalBasis"
+      | "definitions"
+      | "responsibilities"
+      | "alarmAndCommunication"
+      | "evacuationPrinciples"
+      | "specialGroups"
+      | "postEmergencyActions";
+  }> = [
+    {
+      label: "Amaç",
+      field: "purpose",
+    },
+    {
+      label: "Kapsam",
+      field: "scope",
+    },
+    {
+      label: "Yasal Dayanak",
+      field: "legalBasis",
+    },
+    {
+      label: "Tanımlar",
+      field: "definitions",
+    },
+    {
+      label:
+        "Görev ve Sorumluluklar",
+      field:
+        "responsibilities",
+    },
+    {
+      label:
+        "Alarm ve Haberleşme",
+      field:
+        "alarmAndCommunication",
+    },
+    {
+      label:
+        "Tahliye Esasları",
+      field:
+        "evacuationPrinciples",
+    },
+    {
+      label: "Özel Gruplar",
+      field: "specialGroups",
+    },
+    {
+      label:
+        "Acil Durum Sonrası İşlemler",
+      field:
+        "postEmergencyActions",
+    },
+  ];
+
   return (
     <div
       style={{
@@ -678,51 +952,30 @@ function ContentTab({
         gap: 12,
       }}
     >
-      {[
-        ["Amaç", "purpose"],
-        ["Kapsam", "scope"],
-        ["Yasal Dayanak", "legalBasis"],
-        ["Tanımlar", "definitions"],
-        [
-          "Görev ve Sorumluluklar",
-          "responsibilities",
-        ],
-        [
-          "Alarm ve Haberleşme",
-          "alarmAndCommunication",
-        ],
-        [
-          "Tahliye Esasları",
-          "evacuationPrinciples",
-        ],
-        ["Özel Gruplar", "specialGroups"],
-        [
-          "Acil Durum Sonrası İşlemler",
-          "postEmergencyActions",
-        ],
-      ].map(([label, field]) => (
+      {fields.map((item) => (
         <label
-          key={field}
+          key={item.field}
           style={labelStyle}
         >
           <span style={labelText}>
-            {label}
+            {item.label}
           </span>
 
           <textarea
-            value={String(
-              content[
-                field as keyof EmergencyPlanContent
-              ] || ""
-            )}
+            value={
+              content[item.field]
+            }
             onChange={(event) =>
               updateContent({
-                [field]:
+                [item.field]:
                   event.target.value,
-              } as Partial<EmergencyPlanContent>)
+              })
             }
             rows={4}
-            style={inputStyle}
+            style={{
+              ...inputStyle,
+              resize: "vertical",
+            }}
           />
         </label>
       ))}
@@ -734,9 +987,12 @@ function ScenarioTab({
   content,
   updateContent,
 }: {
-  content: EmergencyPlanContent;
+  content:
+    EmergencyPlanContent;
+
   updateContent: (
-    patch: Partial<EmergencyPlanContent>
+    patch:
+      Partial<EmergencyPlanContent>
   ) => void;
 }) {
   return (
@@ -766,68 +1022,93 @@ function ScenarioTab({
               {scenario.title}
             </h3>
 
-            {[
-              ["Başlık", "title"],
+            {(
               [
-                "Risk / Olay",
-                "riskDescription",
-              ],
-              ["Alarm", "alarmMethod"],
-              [
-                "İlk Müdahale",
-                "firstResponse",
-              ],
-              [
-                "Tahliye",
-                "evacuationMethod",
-              ],
-              [
-                "Sorumlu Ekipler",
-                "responsibleTeams",
-              ],
-              ["Ekipman", "equipment"],
-              [
-                "Dış Kurumlar",
-                "externalInstitutions",
-              ],
-            ].map(([label, field]) => (
-              <label
-                key={field}
-                style={{
-                  ...labelStyle,
-                  marginBottom: 8,
-                }}
-              >
-                <span style={labelText}>
-                  {label}
-                </span>
-
-                <textarea
-                  value={String(
-                    scenario[
-                      field as keyof typeof scenario
-                    ] || ""
-                  )}
-                  onChange={(event) => {
-                    const scenarios = [
-                      ...content.scenarios,
-                    ];
-
-                    scenarios[index] = {
-                      ...scenario,
-                      [field]:
-                        event.target.value,
-                    };
-
-                    updateContent({
-                      scenarios,
-                    });
+                [
+                  "Başlık",
+                  "title",
+                ],
+                [
+                  "Risk / Olay",
+                  "riskDescription",
+                ],
+                [
+                  "Alarm",
+                  "alarmMethod",
+                ],
+                [
+                  "İlk Müdahale",
+                  "firstResponse",
+                ],
+                [
+                  "Tahliye",
+                  "evacuationMethod",
+                ],
+                [
+                  "Sorumlu Ekipler",
+                  "responsibleTeams",
+                ],
+                [
+                  "Ekipman",
+                  "equipment",
+                ],
+                [
+                  "Dış Kurumlar",
+                  "externalInstitutions",
+                ],
+              ] as const
+            ).map(
+              ([label, field]) => (
+                <label
+                  key={field}
+                  style={{
+                    ...labelStyle,
+                    marginBottom: 8,
                   }}
-                  rows={2}
-                  style={inputStyle}
-                />
-              </label>
-            ))}
+                >
+                  <span
+                    style={
+                      labelText
+                    }
+                  >
+                    {label}
+                  </span>
+
+                  <textarea
+                    value={
+                      scenario[field]
+                    }
+                    onChange={(
+                      event
+                    ) => {
+                      const scenarios =
+                        [
+                          ...content.scenarios,
+                        ];
+
+                      scenarios[index] =
+                        {
+                          ...scenario,
+                          [field]:
+                            event
+                              .target
+                              .value,
+                        };
+
+                      updateContent({
+                        scenarios,
+                      });
+                    }}
+                    rows={2}
+                    style={{
+                      ...inputStyle,
+                      resize:
+                        "vertical",
+                    }}
+                  />
+                </label>
+              )
+            )}
           </article>
         )
       )}
@@ -839,9 +1120,12 @@ function SketchTab({
   content,
   updateContent,
 }: {
-  content: EmergencyPlanContent;
+  content:
+    EmergencyPlanContent;
+
   updateContent: (
-    patch: Partial<EmergencyPlanContent>
+    patch:
+      Partial<EmergencyPlanContent>
   ) => void;
 }) {
   return (
@@ -869,6 +1153,24 @@ function SketchTab({
           placeholder="https://..."
           style={inputStyle}
         />
+
+        {content.evacuationSketchUrl ? (
+          <img
+            src={
+              content.evacuationSketchUrl
+            }
+            alt="Tahliye krokisi"
+            style={{
+              width: "100%",
+              maxHeight: 420,
+              objectFit: "contain",
+              border:
+                "1px solid #dbe3ec",
+              borderRadius: 12,
+              marginTop: 6,
+            }}
+          />
+        ) : null}
       </label>
 
       <label style={labelStyle}>
@@ -890,6 +1192,25 @@ function SketchTab({
           placeholder="https://..."
           style={inputStyle}
         />
+
+        {content
+          .assemblyAreaSketchUrl ? (
+          <img
+            src={
+              content.assemblyAreaSketchUrl
+            }
+            alt="Toplanma alanı krokisi"
+            style={{
+              width: "100%",
+              maxHeight: 420,
+              objectFit: "contain",
+              border:
+                "1px solid #dbe3ec",
+              borderRadius: 12,
+              marginTop: 6,
+            }}
+          />
+        ) : null}
       </label>
     </div>
   );
@@ -899,13 +1220,41 @@ function ApprovalTab({
   content,
   updateContent,
 }: {
-  content: EmergencyPlanContent;
+  content:
+    EmergencyPlanContent;
+
   updateContent: (
-    patch: Partial<EmergencyPlanContent>
+    patch:
+      Partial<EmergencyPlanContent>
   ) => void;
 }) {
+  const fields =
+    [
+      [
+        "Hazırlayan",
+        "preparedBy",
+      ],
+      [
+        "Kontrol Eden",
+        "checkedBy",
+      ],
+      [
+        "İSG Uzmanı",
+        "occupationalSafetyExpert",
+      ],
+      [
+        "İşyeri Hekimi",
+        "workplacePhysician",
+      ],
+      [
+        "İşveren / Onaylayan",
+        "approvedBy",
+      ],
+    ] as const;
+
   return (
     <div
+      className="approvalGrid"
       style={{
         display: "grid",
         gridTemplateColumns:
@@ -913,55 +1262,52 @@ function ApprovalTab({
         gap: 12,
       }}
     >
-      {[
-        ["Hazırlayan", "preparedBy"],
-        ["Kontrol Eden", "checkedBy"],
-        [
-          "İSG Uzmanı",
-          "occupationalSafetyExpert",
-        ],
-        [
-          "İşyeri Hekimi",
-          "workplacePhysician",
-        ],
-        [
-          "İşveren / Onaylayan",
-          "approvedBy",
-        ],
-      ].map(([label, field]) => (
-        <label
-          key={field}
-          style={labelStyle}
-        >
-          <span style={labelText}>
-            {label}
-          </span>
+      {fields.map(
+        ([label, field]) => (
+          <label
+            key={field}
+            style={labelStyle}
+          >
+            <span style={labelText}>
+              {label}
+            </span>
 
-          <input
-            value={
-              content.approvals[
-                field as keyof typeof content.approvals
-              ]
-            }
-            onChange={(event) =>
-              updateContent({
-                approvals: {
-                  ...content.approvals,
-                  [field]:
-                    event.target.value,
-                },
-              })
-            }
-            style={inputStyle}
-          />
-        </label>
-      ))}
+            <input
+              value={
+                content.approvals[
+                  field
+                ]
+              }
+              onChange={(event) =>
+                updateContent({
+                  approvals: {
+                    ...content.approvals,
+                    [field]:
+                      event.target
+                        .value,
+                  },
+                })
+              }
+              style={inputStyle}
+            />
+          </label>
+        )
+      )}
+
+      <style jsx>{`
+        @media (max-width: 760px) {
+          .approvalGrid {
+            grid-template-columns:
+              1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
 
 function EditableList<
-  T extends Record<string, unknown>
+  T extends object
 >({
   items,
   fields,
@@ -970,11 +1316,50 @@ function EditableList<
   onChange,
 }: {
   items: T[];
-  fields: string[];
+  fields: Array<keyof T>;
   labels: string[];
   emptyItem: T;
   onChange: (items: T[]) => void;
 }) {
+  const changeItem = (
+    index: number,
+    field: keyof T,
+    rawValue: string
+  ) => {
+    const fieldName =
+      String(field);
+
+    let value: unknown =
+      rawValue;
+
+    if (
+      fieldName ===
+        "quantity" ||
+      fieldName ===
+        "capacity"
+    ) {
+      value = Number(rawValue);
+    }
+
+    if (
+      fieldName === "status"
+    ) {
+      value = rawValue as
+        | "UYGUN"
+        | "BAKIM_GEREKLI"
+        | "EKSIK";
+    }
+
+    const next = [...items];
+
+    next[index] = {
+      ...items[index],
+      [field]: value,
+    } as T;
+
+    onChange(next);
+  };
+
   return (
     <div
       style={{
@@ -982,109 +1367,182 @@ function EditableList<
         gap: 10,
       }}
     >
-      {items.map((item, index) => (
-        <article
-          key={index}
-          style={{
-            border:
-              "1px solid #dbe3ec",
-            borderRadius: 13,
-            padding: 12,
-          }}
-        >
-          {fields.map(
-            (field, fieldIndex) => (
-              <label
-                key={field}
-                style={{
-                  ...labelStyle,
-                  marginBottom: 8,
-                }}
-              >
-                <span style={labelText}>
-                  {labels[fieldIndex]}
-                </span>
-
-                <input
-                  type={
-                    field
-                      .toLowerCase()
-                      .includes("date")
-                      ? "date"
-                      : field ===
-                          "quantity" ||
-                        field ===
-                          "capacity"
-                      ? "number"
-                      : "text"
-                  }
-                  value={String(
-                    item[field] ?? ""
-                  )}
-                  onChange={(event) => {
-                    const next = [
-                      ...items,
-                    ];
-
-                    next[index] = {
-                      ...item,
-                      [field]:
-                        field ===
-                          "quantity" ||
-                        field ===
-                          "capacity"
-                          ? Number(
-                              event.target
-                                .value
-                            )
-                          : event.target
-                              .value,
-                    };
-
-                    onChange(next);
-                  }}
-                  style={inputStyle}
-                />
-              </label>
-            )
-          )}
-
-          <button
-            type="button"
-            onClick={() =>
-              onChange(
-                items.filter(
-                  (_, itemIndex) =>
-                    itemIndex !== index
-                )
-              )
-            }
+      {items.map(
+        (item, index) => (
+          <article
+            key={index}
             style={{
-              minHeight: 34,
-              borderRadius: 9,
               border:
-                "1px solid #fecaca",
-              background: "#fef2f2",
-              color: "#b91c1c",
-              padding: "0 10px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: "pointer",
+                "1px solid #dbe3ec",
+              borderRadius: 13,
+              padding: 12,
             }}
           >
-            <Trash2 size={14} />
-            Sil
-          </button>
-        </article>
-      ))}
+            <div
+              className="editableGrid"
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(2,minmax(0,1fr))",
+                gap: 10,
+              }}
+            >
+              {fields.map(
+                (
+                  field,
+                  fieldIndex
+                ) => {
+                  const fieldName =
+                    String(field);
+
+                  const value =
+                    String(
+                      item[field] ??
+                        ""
+                    );
+
+                  return (
+                    <label
+                      key={fieldName}
+                      style={
+                        labelStyle
+                      }
+                    >
+                      <span
+                        style={
+                          labelText
+                        }
+                      >
+                        {
+                          labels[
+                            fieldIndex
+                          ]
+                        }
+                      </span>
+
+                      {fieldName ===
+                      "status" ? (
+                        <select
+                          value={
+                            value ||
+                            "UYGUN"
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            changeItem(
+                              index,
+                              field,
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          style={
+                            inputStyle
+                          }
+                        >
+                          <option value="UYGUN">
+                            Uygun
+                          </option>
+
+                          <option value="BAKIM_GEREKLI">
+                            Bakım
+                            Gerekli
+                          </option>
+
+                          <option value="EKSIK">
+                            Eksik
+                          </option>
+                        </select>
+                      ) : (
+                        <input
+                          type={
+                            fieldName
+                              .toLowerCase()
+                              .includes(
+                                "date"
+                              )
+                              ? "date"
+                              : fieldName ===
+                                    "quantity" ||
+                                  fieldName ===
+                                    "capacity"
+                              ? "number"
+                              : "text"
+                          }
+                          value={value}
+                          onChange={(
+                            event
+                          ) =>
+                            changeItem(
+                              index,
+                              field,
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          style={
+                            inputStyle
+                          }
+                        />
+                      )}
+                    </label>
+                  );
+                }
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                onChange(
+                  items.filter(
+                    (
+                      _,
+                      itemIndex
+                    ) =>
+                      itemIndex !==
+                      index
+                  )
+                )
+              }
+              style={{
+                marginTop: 10,
+                minHeight: 34,
+                borderRadius: 9,
+                border:
+                  "1px solid #fecaca",
+                background:
+                  "#fef2f2",
+                color: "#b91c1c",
+                padding:
+                  "0 10px",
+                display:
+                  "inline-flex",
+                alignItems:
+                  "center",
+                gap: 6,
+                cursor:
+                  "pointer",
+              }}
+            >
+              <Trash2 size={14} />
+              Sil
+            </button>
+          </article>
+        )
+      )}
 
       <button
         type="button"
         onClick={() =>
           onChange([
             ...items,
-            { ...emptyItem },
+            {
+              ...emptyItem,
+            },
           ])
         }
         style={{
@@ -1096,7 +1554,8 @@ function EditableList<
           color: "#475569",
           fontWeight: 850,
           display: "inline-flex",
-          justifyContent: "center",
+          justifyContent:
+            "center",
           alignItems: "center",
           gap: 7,
           cursor: "pointer",
@@ -1105,6 +1564,15 @@ function EditableList<
         <Plus size={15} />
         Yeni Satır
       </button>
+
+      <style jsx>{`
+        @media (max-width: 760px) {
+          .editableGrid {
+            grid-template-columns:
+              1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

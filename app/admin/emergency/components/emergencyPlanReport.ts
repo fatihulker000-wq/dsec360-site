@@ -1,4 +1,8 @@
-import type { EmergencyPlanContent } from "../../../../lib/emergency/types";
+import type {
+  EmergencyPlanContent,
+  EmergencySupportMember,
+} from "../../../../lib/emergency/types";
+import { buildEmergencyTeamTablesHtml } from "./emergencyTeamReport";
 
 function esc(value: unknown) {
   return String(value ?? "")
@@ -32,6 +36,7 @@ export function printEmergencyPlan(params: {
   employeeCount: number;
   workplaceAddress: string;
   content: EmergencyPlanContent;
+  teams?: EmergencySupportMember[];
 }) {
   const popup = window.open("", "_blank", "width=1400,height=950");
 
@@ -49,6 +54,7 @@ export function printEmergencyPlan(params: {
     "Tahliye Esasları",
     "Özel Gruplar",
     "Acil Durum Senaryoları",
+    "Acil Durum Destek Ekipleri",
     "Acil İletişim Listesi",
     "Toplanma Alanları",
     "Acil Durum Ekipmanı",
@@ -156,7 +162,22 @@ export function printEmergencyPlan(params: {
         <h2>9. Acil Durum Senaryoları</h2>
         ${scenarioHtml}
 
-        <h2>10. Acil İletişim Listesi</h2>
+        <section class="page-break">
+          <h2>10. Acil Durum Destek Ekipleri</h2>
+          ${
+            params.teams &&
+            params.teams.length > 0
+              ? buildEmergencyTeamTablesHtml(
+                  params.teams,
+                  params.companyName,
+                  params.planNo,
+                  params.revisionNo
+                )
+              : '<div class="empty-sketch">Destek ekibi kaydı bulunmamaktadır.</div>'
+          }
+        </section>
+
+        <h2>11. Acil İletişim Listesi</h2>
         <table>
           <tr><th>Kurum / Kişi</th><th>Telefon</th><th>Not</th></tr>
           ${params.content.contacts.map((item) =>
@@ -164,7 +185,7 @@ export function printEmergencyPlan(params: {
           ).join("")}
         </table>
 
-        <h2>11. Toplanma Alanları</h2>
+        <h2>12. Toplanma Alanları</h2>
         <table>
           <tr><th>Alan</th><th>Konum</th><th>Kapasite</th><th>Sorumlu</th><th>Not</th></tr>
           ${params.content.assemblyAreas.map((item) =>
@@ -172,7 +193,7 @@ export function printEmergencyPlan(params: {
           ).join("")}
         </table>
 
-        <h2>12. Acil Durum Ekipmanı</h2>
+        <h2>13. Acil Durum Ekipmanı</h2>
         <table>
           <tr><th>Ekipman</th><th>Konum</th><th>Adet</th><th>Son Kontrol</th><th>Sonraki Kontrol</th><th>Durum</th></tr>
           ${params.content.equipment.map((item) =>
@@ -180,13 +201,13 @@ export function printEmergencyPlan(params: {
           ).join("")}
         </table>
 
-        ${imageBlock("13. Tahliye Krokisi", params.content.evacuationSketchUrl)}
-        ${imageBlock("14. Toplanma Alanı Krokisi", params.content.assemblyAreaSketchUrl)}
+        ${imageBlock("14. Tahliye Krokisi", params.content.evacuationSketchUrl)}
+        ${imageBlock("15. Toplanma Alanı Krokisi", params.content.assemblyAreaSketchUrl)}
 
-        <h2>15. Acil Durum Sonrası İşlemler</h2>
+        <h2>16. Acil Durum Sonrası İşlemler</h2>
         <p>${esc(params.content.postEmergencyActions)}</p>
 
-        <h2>16. Revizyon Geçmişi</h2>
+        <h2>17. Revizyon Geçmişi</h2>
         <table>
           <tr><th>Revizyon</th><th>Tarih</th><th>Değişiklik Nedeni</th><th>Hazırlayan</th><th>Onaylayan</th></tr>
           ${params.content.revisionHistory.map((item) =>
@@ -194,7 +215,7 @@ export function printEmergencyPlan(params: {
           ).join("")}
         </table>
 
-        <h2>17. Onaylar</h2>
+        <h2>18. Onaylar</h2>
         <div class="signature-grid">
           <div class="signature"><strong>Hazırlayan</strong><br/>${esc(params.content.approvals.preparedBy)}</div>
           <div class="signature"><strong>Kontrol Eden</strong><br/>${esc(params.content.approvals.checkedBy)}</div>
