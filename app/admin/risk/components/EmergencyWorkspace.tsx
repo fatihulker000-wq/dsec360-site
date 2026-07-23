@@ -39,6 +39,11 @@ import {
 
 type SubTab = "plans" | "teams" | "drills";
 
+type DangerClass =
+  | "AZ_TEHLIKELI"
+  | "TEHLIKELI"
+  | "COK_TEHLIKELI";
+
 type Props = {
   firmId: string;
   companyName?: string;
@@ -113,6 +118,10 @@ export default function EmergencyWorkspace({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [employeeCount, setEmployeeCount] = useState(0);
+  const [dangerClass, setDangerClass] =
+    useState<DangerClass>("AZ_TEHLIKELI");
+
   const [showPlanDialog, setShowPlanDialog] = useState(false);
   const [editingPlan, setEditingPlan] =
     useState<Partial<EmergencyPlan>>(EMPTY_PLAN);
@@ -164,6 +173,89 @@ export default function EmergencyWorkspace({
 
   useEffect(() => {
     void loadData();
+  }, [firmId]);
+
+  useEffect(() => {
+    if (!firmId) {
+      setEmployeeCount(0);
+      setDangerClass("AZ_TEHLIKELI");
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadCompanyMeta = async () => {
+      try {
+        const response = await fetch(
+          "/api/admin/companies",
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+          }
+        );
+
+        const json = await response
+          .json()
+          .catch(() => ({}));
+
+        if (!response.ok) return;
+
+        const rows = Array.isArray(json.data)
+          ? json.data
+          : [];
+
+        const company = rows.find(
+          (item: { id?: string }) =>
+            String(item.id || "") === firmId
+        );
+
+        if (!company || cancelled) return;
+
+        setEmployeeCount(
+          Number(
+            company.calisan_sayisi ??
+              company.user_count ??
+              0
+          )
+        );
+
+        const rawDangerClass = String(
+          company.tehlike_sinifi || ""
+        )
+          .trim()
+          .toLocaleUpperCase("tr-TR")
+          .replace(/Ç/g, "C")
+          .replace(/İ/g, "I")
+          .replace(/Ş/g, "S")
+          .replace(/Ğ/g, "G")
+          .replace(/Ü/g, "U")
+          .replace(/Ö/g, "O")
+          .replace(/\s+/g, "_");
+
+        if (
+          rawDangerClass.includes(
+            "COK_TEHLIKELI"
+          )
+        ) {
+          setDangerClass("COK_TEHLIKELI");
+        } else if (
+          rawDangerClass === "TEHLIKELI"
+        ) {
+          setDangerClass("TEHLIKELI");
+        } else {
+          setDangerClass("AZ_TEHLIKELI");
+        }
+      } catch {
+        // Firma meta bilgisi alınamazsa ekranı bozma.
+      }
+    };
+
+    void loadCompanyMeta();
+
+    return () => {
+      cancelled = true;
+    };
   }, [firmId]);
 
   const stats = useMemo(() => {
@@ -564,6 +656,8 @@ export default function EmergencyWorkspace({
       {!loading && subTab === "teams" ? (
         <SupportTeamTable
           data={teams}
+          employeeCount={employeeCount}
+          dangerClass={dangerClass}
           deletingId={deletingMemberId}
           onAdd={() => {
             setEditingMember({
@@ -618,6 +712,7 @@ export default function EmergencyWorkspace({
 
       <SupportTeamDialog
         open={showMemberDialog}
+        firmId={firmId}
         member={editingMember}
         onClose={() => {
           if (!savingMember) setShowMemberDialog(false);

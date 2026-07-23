@@ -1,22 +1,26 @@
 "use client";
 
-import {
-  Save,
-  UserPlus,
-  X,
-} from "lucide-react";
-
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, Save, Search, UserPlus, Users, X } from "lucide-react";
 import type { EmergencySupportMember } from "../types";
+
+type EmployeeRow = {
+  id: string;
+  full_name: string | null;
+  job_title?: string | null;
+  department?: string | null;
+  phone?: string | null;
+  registry_no?: string | null;
+  active?: boolean | null;
+};
 
 type Props = {
   open: boolean;
+  firmId: string;
   member: Partial<EmergencySupportMember>;
   onClose: () => void;
   onSave: () => void | Promise<void>;
-  onChange: (
-    field: keyof EmergencySupportMember,
-    value: unknown
-  ) => void;
+  onChange: (field: keyof EmergencySupportMember, value: unknown) => void;
 };
 
 const inputStyle = {
@@ -28,25 +32,118 @@ const inputStyle = {
   boxSizing: "border-box" as const,
 };
 
-const labelStyle = {
-  display: "grid",
-  gap: 6,
-};
-
-const labelTextStyle = {
-  color: "#64748b",
-  fontSize: 12,
-  fontWeight: 850,
-};
-
 export default function SupportTeamDialog({
   open,
+  firmId,
   member,
   onClose,
   onSave,
   onChange,
 }: Props) {
+  const [mode, setMode] = useState<"EMPLOYEE" | "MANUAL">("EMPLOYEE");
+  const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setMode(member.employeeId ? "EMPLOYEE" : "MANUAL");
+    setSearch("");
+  }, [open, member.id, member.employeeId]);
+
+  useEffect(() => {
+    if (!open || !firmId) return;
+
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await fetch(
+          `/api/admin/employees?firmId=${encodeURIComponent(firmId)}`,
+          { credentials: "include", cache: "no-store" }
+        );
+
+        const json = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(json.error || json.message || "Çalışanlar alınamadı.");
+        }
+
+        if (!cancelled) {
+          setEmployees(
+            (Array.isArray(json.data) ? json.data : []).filter(
+              (item: EmployeeRow) => item.active !== false
+            )
+          );
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error ? loadError.message : "Çalışanlar alınamadı."
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, firmId]);
+
+  const filteredEmployees = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("tr-TR");
+    if (!query) return employees;
+
+    return employees.filter((employee) =>
+      [
+        employee.full_name,
+        employee.job_title,
+        employee.department,
+        employee.registry_no,
+      ]
+        .join(" ")
+        .toLocaleLowerCase("tr-TR")
+        .includes(query)
+    );
+  }, [employees, search]);
+
   if (!open) return null;
+
+  const selectEmployee = (id: string) => {
+    const employee = employees.find((item) => item.id === id);
+
+    if (!employee) {
+      onChange("employeeId", null);
+      return;
+    }
+
+    onChange("employeeId", employee.id);
+    onChange("fullName", employee.full_name || "");
+    onChange("duty", employee.job_title || "");
+    onChange("department", employee.department || "");
+    onChange("phone", employee.phone || "");
+  };
+
+  const switchMode = (next: "EMPLOYEE" | "MANUAL") => {
+    setMode(next);
+    if (next === "MANUAL") onChange("employeeId", null);
+  };
+
+  const label = (title: string, child: React.ReactNode) => (
+    <label style={{ display: "grid", gap: 6 }}>
+      <span style={{ color: "#64748b", fontSize: 12, fontWeight: 850 }}>
+        {title}
+      </span>
+      {child}
+    </label>
+  );
 
   return (
     <div
@@ -54,7 +151,7 @@ export default function SupportTeamDialog({
         position: "fixed",
         inset: 0,
         zIndex: 110,
-        background: "rgba(15,23,42,0.62)",
+        background: "rgba(15,23,42,.62)",
         display: "grid",
         placeItems: "center",
         padding: 18,
@@ -63,397 +160,256 @@ export default function SupportTeamDialog({
     >
       <section
         style={{
-          width: "min(860px, 100%)",
+          width: "min(900px,100%)",
           maxHeight: "92vh",
           overflowY: "auto",
           borderRadius: 24,
-          background: "#ffffff",
+          background: "#fff",
           padding: 22,
-          boxShadow:
-            "0 30px 90px rgba(15,23,42,0.34)",
         }}
-        onClick={(event) =>
-          event.stopPropagation()
-        }
+        onClick={(event) => event.stopPropagation()}
       >
-        <div
+        <header
           style={{
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "flex-start",
             gap: 12,
             marginBottom: 18,
           }}
         >
           <div>
-            <h2
-              style={{
-                margin: 0,
-                color: "#0f172a",
-                fontSize: 23,
-                fontWeight: 950,
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-              }}
-            >
-              <UserPlus size={21} />
-              Destek Ekibi Üyesi
+            <h2 style={{ margin: 0, display: "flex", gap: 8, alignItems: "center" }}>
+              <UserPlus size={21} /> Destek Ekibi Üyesi
             </h2>
-
-            <p
-              style={{
-                margin: "5px 0 0",
-                color: "#64748b",
-                fontSize: 13,
-              }}
-            >
-              Android uygulamasındaki ekip üyesi alanlarıyla uyumludur.
+            <p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 13 }}>
+              Firma çalışanından seçin veya manuel kayıt oluşturun.
             </p>
           </div>
 
+          <button type="button" onClick={onClose} style={{ width: 40, height: 40 }}>
+            <X size={18} />
+          </button>
+        </header>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => switchMode("EMPLOYEE")}
             style={{
-              width: 40,
-              height: 40,
+              minHeight: 46,
               borderRadius: 12,
-              border: 0,
-              background: "#f1f5f9",
-              color: "#475569",
-              display: "grid",
-              placeItems: "center",
-              cursor: "pointer",
+              border: mode === "EMPLOYEE" ? "2px solid #047857" : "1px solid #dbe3ec",
+              background: mode === "EMPLOYEE" ? "#ecfdf5" : "#fff",
+              fontWeight: 900,
             }}
           >
-            <X size={18} />
+            <Users size={16} /> Firma Çalışanından Seç
+          </button>
+
+          <button
+            type="button"
+            onClick={() => switchMode("MANUAL")}
+            style={{
+              minHeight: 46,
+              borderRadius: 12,
+              border: mode === "MANUAL" ? "2px solid #6b1020" : "1px solid #dbe3ec",
+              background: mode === "MANUAL" ? "#fff1f2" : "#fff",
+              fontWeight: 900,
+            }}
+          >
+            <UserPlus size={16} /> Manuel Ekle
           </button>
         </div>
 
-        <div
-          className="supportTeamGrid"
-          style={{
-            display: "grid",
-            gridTemplateColumns:
-              "repeat(2, minmax(0, 1fr))",
-            gap: 12,
-          }}
-        >
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              Çalışan ID
-            </span>
+        {mode === "EMPLOYEE" ? (
+          <section
+            style={{
+              border: "1px solid #a7f3d0",
+              background: "#f0fdf4",
+              borderRadius: 14,
+              padding: 12,
+              marginBottom: 14,
+              display: "grid",
+              gap: 9,
+            }}
+          >
+            {label(
+              "Çalışan Ara",
+              <div style={{ position: "relative" }}>
+                <Search size={16} style={{ position: "absolute", left: 12, top: 14 }} />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Ad, görev, departman veya sicil no"
+                  style={{ ...inputStyle, paddingLeft: 38 }}
+                />
+              </div>
+            )}
 
-            <input
-              value={member.employeeId ?? ""}
-              onChange={(event) =>
-                onChange(
-                  "employeeId",
-                  event.target.value || null
-                )
-              }
-              style={inputStyle}
-            />
-          </label>
+            {label(
+              "Firma Çalışanı",
+              <select
+                value={member.employeeId ?? ""}
+                onChange={(event) => selectEmployee(event.target.value)}
+                disabled={loading}
+                style={inputStyle}
+              >
+                <option value="">
+                  {loading ? "Çalışanlar yükleniyor..." : "Çalışan seçin"}
+                </option>
+                {filteredEmployees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.full_name || "İsimsiz çalışan"}
+                    {employee.job_title ? ` · ${employee.job_title}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
 
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              Ad Soyad
-            </span>
+            {loading ? <div><Loader2 size={15} /> Çalışanlar yükleniyor</div> : null}
+            {error ? <div style={{ color: "#b91c1c" }}>{error}</div> : null}
+          </section>
+        ) : null}
 
+        <div className="supportTeamGrid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {label(
+            "Ad Soyad",
             <input
               value={member.fullName ?? ""}
-              onChange={(event) =>
-                onChange(
-                  "fullName",
-                  event.target.value
-                )
-              }
+              readOnly={mode === "EMPLOYEE"}
+              onChange={(event) => onChange("fullName", event.target.value)}
               style={inputStyle}
             />
-          </label>
+          )}
 
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              Ekip Türü
-            </span>
-
+          {label(
+            "Ekip Türü",
             <select
               value={member.teamType ?? "YANGIN"}
-              onChange={(event) =>
-                onChange(
-                  "teamType",
-                  event.target.value
-                )
-              }
+              onChange={(event) => onChange("teamType", event.target.value)}
               style={inputStyle}
             >
-              <option value="YANGIN">
-                Yangınla Mücadele
-              </option>
-              <option value="ARAMA_KURTARMA">
-                Arama ve Kurtarma
-              </option>
-              <option value="TAHLİYE">
-                Tahliye
-              </option>
-              <option value="ILK_YARDIM">
-                İlk Yardım
-              </option>
-              <option value="KORUMA">
-                Koruma
-              </option>
-              <option value="HABERLESME">
-                Haberleşme
-              </option>
+              <option value="YANGIN">Yangınla Mücadele</option>
+              <option value="ARAMA_KURTARMA">Arama ve Kurtarma</option>
+              <option value="TAHLİYE">Tahliye</option>
+              <option value="ILK_YARDIM">İlk Yardım</option>
+              <option value="KORUMA">Koruma</option>
+              <option value="HABERLESME">Haberleşme</option>
             </select>
-          </label>
+          )}
 
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              Ekip Rolü
-            </span>
-
+          {label(
+            "Ekip Rolü",
             <select
-              value={
-                member.teamRole ??
-                "EKIP_UYESI"
-              }
-              onChange={(event) =>
-                onChange(
-                  "teamRole",
-                  event.target.value
-                )
-              }
+              value={member.teamRole ?? "EKIP_UYESI"}
+              onChange={(event) => onChange("teamRole", event.target.value)}
               style={inputStyle}
             >
-              <option value="EKIP_LIDERI">
-                Ekip Lideri
-              </option>
-              <option value="EKIP_UYESI">
-                Ekip Üyesi
-              </option>
-              <option value="YEDEK_UYE">
-                Yedek Üye
-              </option>
+              <option value="EKIP_LIDERI">Ekip Lideri</option>
+              <option value="EKIP_UYESI">Ekip Üyesi</option>
+              <option value="YEDEK_UYE">Yedek Üye</option>
             </select>
-          </label>
+          )}
 
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              Görev
-            </span>
-
+          {label(
+            "Görev / Unvan",
             <input
               value={member.duty ?? ""}
-              onChange={(event) =>
-                onChange(
-                  "duty",
-                  event.target.value
-                )
-              }
+              onChange={(event) => onChange("duty", event.target.value)}
               style={inputStyle}
             />
-          </label>
+          )}
 
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              Departman
-            </span>
-
+          {label(
+            "Departman",
             <input
               value={member.department ?? ""}
-              onChange={(event) =>
-                onChange(
-                  "department",
-                  event.target.value
-                )
-              }
+              onChange={(event) => onChange("department", event.target.value)}
               style={inputStyle}
             />
-          </label>
+          )}
 
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              Telefon
-            </span>
-
+          {label(
+            "Telefon",
             <input
               value={member.phone ?? ""}
-              onChange={(event) =>
-                onChange(
-                  "phone",
-                  event.target.value
-                )
-              }
+              onChange={(event) => onChange("phone", event.target.value)}
               style={inputStyle}
             />
-          </label>
+          )}
 
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              Sertifika Bilgisi
-            </span>
-
+          {label(
+            "Sertifika Bilgisi",
             <input
-              value={
-                member.certificateInfo ?? ""
-              }
-              onChange={(event) =>
-                onChange(
-                  "certificateInfo",
-                  event.target.value
-                )
-              }
+              value={member.certificateInfo ?? ""}
+              onChange={(event) => onChange("certificateInfo", event.target.value)}
               style={inputStyle}
             />
-          </label>
+          )}
 
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              Atanma Tarihi
-            </span>
-
+          {label(
+            "Atanma Tarihi",
             <input
               type="date"
               value={
                 member.assignedDateMillis
-                  ? new Date(
-                      member.assignedDateMillis
-                    )
-                      .toISOString()
-                      .slice(0, 10)
+                  ? new Date(member.assignedDateMillis).toISOString().slice(0, 10)
                   : ""
               }
               onChange={(event) =>
                 onChange(
                   "assignedDateMillis",
                   event.target.value
-                    ? new Date(
-                        `${event.target.value}T00:00:00`
-                      ).getTime()
+                    ? new Date(`${event.target.value}T00:00:00`).getTime()
                     : Date.now()
                 )
               }
               style={inputStyle}
             />
-          </label>
+          )}
 
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              İmza Durumu
-            </span>
-
+          {label(
+            "İmza Durumu",
             <select
-              value={
-                member.signatureStatus ??
-                "IMZA_BEKLIYOR"
-              }
-              onChange={(event) =>
-                onChange(
-                  "signatureStatus",
-                  event.target.value
-                )
-              }
+              value={member.signatureStatus ?? "IMZA_BEKLIYOR"}
+              onChange={(event) => onChange("signatureStatus", event.target.value)}
               style={inputStyle}
             >
-              <option value="IMZA_BEKLIYOR">
-                İmza Bekliyor
-              </option>
-              <option value="IMZALANDI">
-                İmzalandı
-              </option>
+              <option value="IMZA_BEKLIYOR">İmza Bekliyor</option>
+              <option value="IMZALANDI">İmzalandı</option>
             </select>
-          </label>
+          )}
 
-          <label
-            style={{
-              ...labelStyle,
-              gridColumn: "1 / -1",
-            }}
-          >
-            <span style={labelTextStyle}>
-              Kayıt Durumu
-            </span>
-
+          {label(
+            "Kayıt Durumu",
             <select
-              value={
-                member.isActive === false
-                  ? "false"
-                  : "true"
-              }
-              onChange={(event) =>
-                onChange(
-                  "isActive",
-                  event.target.value === "true"
-                )
-              }
+              value={member.isActive === false ? "false" : "true"}
+              onChange={(event) => onChange("isActive", event.target.value === "true")}
               style={inputStyle}
             >
               <option value="true">Aktif</option>
               <option value="false">Pasif</option>
             </select>
-          </label>
+          )}
         </div>
 
-        <div
-          style={{
-            marginTop: 20,
-            paddingTop: 18,
-            borderTop: "1px solid #e5e7eb",
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 10,
-          }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              height: 44,
-              borderRadius: 12,
-              border: "1px solid #dbe3ec",
-              background: "#ffffff",
-              color: "#475569",
-              fontWeight: 850,
-              padding: "0 16px",
-              cursor: "pointer",
-            }}
-          >
-            İptal
-          </button>
-
+        <footer style={{ marginTop: 18, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button type="button" onClick={onClose}>İptal</button>
           <button
             type="button"
             onClick={() => void onSave()}
-            style={{
-              height: 44,
-              borderRadius: 12,
-              border: 0,
-              background: "#047857",
-              color: "#ffffff",
-              fontWeight: 900,
-              padding: "0 18px",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              cursor: "pointer",
-            }}
+            style={{ minHeight: 44, background: "#047857", color: "#fff", border: 0, borderRadius: 12, padding: "0 16px", fontWeight: 900 }}
           >
-            <Save size={16} />
-            Üyeyi Kaydet
+            <Save size={16} /> Üyeyi Kaydet
           </button>
-        </div>
-      </section>
+        </footer>
 
-      <style jsx>{`
-        @media (max-width: 720px) {
-          .supportTeamGrid {
-            grid-template-columns: 1fr !important;
+        <style jsx>{`
+          @media (max-width: 720px) {
+            .supportTeamGrid { grid-template-columns: 1fr !important; }
           }
-        }
-      `}</style>
+        `}</style>
+      </section>
     </div>
   );
 }
