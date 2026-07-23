@@ -14,6 +14,42 @@ export type EmergencyScenario = {
   externalInstitutions: string;
 };
 
+export type EmergencyPlanRevision = {
+  revisionNo: string;
+  revisionDate: string;
+  changeReason: string;
+  preparedBy: string;
+  approvedBy: string;
+};
+
+export type EmergencyPlanContact = {
+  title: string;
+  phone: string;
+  note: string;
+};
+
+export type EmergencyAssemblyArea = {
+  name: string;
+  location: string;
+  capacity: number;
+  responsible: string;
+  note: string;
+};
+
+export type EmergencyEquipmentStatus =
+  | "UYGUN"
+  | "BAKIM_GEREKLI"
+  | "EKSIK";
+
+export type EmergencyEquipment = {
+  name: string;
+  location: string;
+  quantity: number;
+  lastControlDate: string;
+  nextControlDate: string;
+  status: EmergencyEquipmentStatus;
+};
+
 export type EmergencyPlanContent = {
   purpose: string;
   scope: string;
@@ -27,31 +63,16 @@ export type EmergencyPlanContent = {
 
   scenarios: EmergencyScenario[];
 
-  contacts: {
-    title: string;
-    phone: string;
-    note: string;
-  }[];
+  contacts: EmergencyPlanContact[];
 
-  assemblyAreas: {
-    name: string;
-    location: string;
-    capacity: number;
-    responsible: string;
-    note: string;
-  }[];
+  assemblyAreas: EmergencyAssemblyArea[];
 
-  equipment: {
-    name: string;
-    location: string;
-    quantity: number;
-    lastControlDate: string;
-    nextControlDate: string;
-    status:
-      | "UYGUN"
-      | "BAKIM_GEREKLI"
-      | "EKSIK";
-  }[];
+  equipment: EmergencyEquipment[];
+
+  evacuationSketchUrl: string;
+  assemblyAreaSketchUrl: string;
+
+  revisionHistory: EmergencyPlanRevision[];
 
   approvals: {
     preparedBy: string;
@@ -115,12 +136,16 @@ export type EmergencySupportMember = {
     | "YANGIN"
     | "ARAMA_KURTARMA"
     | "ILKYARDIM"
+    | "ILK_YARDIM"
     | "KORUMA"
-    | "TAHLIYE";
+    | "TAHLIYE"
+    | "TAHLİYE"
+    | "HABERLESME";
 
   teamRole:
     | "EKIP_LIDERI"
-    | "EKIP_UYESI";
+    | "EKIP_UYESI"
+    | "YEDEK_UYE";
 
   fullName: string;
   duty: string;
