@@ -698,6 +698,7 @@ export default function EmergencyWorkspace({
       <ActionPlanDialog
         open={showPlanDialog}
         plan={editingPlan}
+        teams={teams}
         onClose={() => {
           if (!savingPlan) setShowPlanDialog(false);
         }}
