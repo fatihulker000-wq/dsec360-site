@@ -13,7 +13,7 @@ import type {
 } from "./types";
 
 const RISK_API = "/api/admin/risk-management";
-const EMERGENCY_API = "/api/admin/emergency";
+const EMERGENCY_API = "/api/risk-management/emergency";
 
 type ApiEnvelope<T> = {
   success?: boolean;
