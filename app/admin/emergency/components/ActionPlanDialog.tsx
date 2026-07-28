@@ -367,7 +367,7 @@ export default function ActionPlanDialog({
             overflowY: "auto",
             padding: "18px 18px 120px",
             position: "relative",
-            zIndex: 1,
+            zIndex: 0,
           }}
         >
           {tab === "GENERAL" ? (
@@ -592,6 +592,9 @@ export default function ActionPlanDialog({
               "flex-end",
             gap: 9,
             flexWrap: "wrap",
+            position: "relative",
+            zIndex: 20,
+            background: "#ffffff",
           }}
         >
           <button
@@ -687,9 +690,11 @@ export default function ActionPlanDialog({
 
           <button
             type="button"
-            onClick={() =>
-              void onSave()
-            }
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void onSave();
+            }}
             style={{
               minHeight: 43,
               borderRadius: 11,
