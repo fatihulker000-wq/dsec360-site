@@ -245,8 +245,18 @@ function planRowToRecord(row: Record<string, any>) {
     dangerClass: row.danger_class || "AZ_TEHLIKELI",
     employeeCount: Number(row.employee_count || 0),
     planDateMillis: Number(row.plan_date_millis || Date.now()),
-    validUntilMillis: row.valid_until_millis ?? null,
-    revisionDateMillis: row.revision_date_millis ?? null,
+    validUntilMillis:
+  row.valid_until_millis === null ||
+  row.valid_until_millis === undefined
+    ? null
+    : Number(row.valid_until_millis),
+
+revisionDateMillis:
+  row.revision_date_millis === null ||
+  row.revision_date_millis === undefined
+    ? null
+    : Number(row.revision_date_millis),
+    
     revisionNo: row.revision_no || "R0",
     assemblyArea: row.assembly_area || "",
     emergencyCoordinator: row.emergency_coordinator || "",

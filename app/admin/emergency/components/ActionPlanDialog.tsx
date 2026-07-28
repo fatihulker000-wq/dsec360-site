@@ -87,6 +87,65 @@ const labelText = {
   fontWeight: 850,
 };
 
+function millisToDateInput(
+  value: unknown
+): string {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "";
+  }
+
+  const millis = Number(value);
+
+  if (!Number.isFinite(millis)) {
+    return "";
+  }
+
+  const date = new Date(millis);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function dateInputToMillis(
+  value: string
+): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const [year, month, day] =
+    value.split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    12,
+    0,
+    0,
+    0
+  ).getTime();
+}
+
 function cloneDefault():
   EmergencyPlanContent {
   return JSON.parse(
@@ -812,22 +871,21 @@ function GeneralTab({
 
         <input
           type="date"
-          value={new Date(
+          value={millisToDateInput(
             plan.planDateMillis ||
               Date.now()
-          )
-            .toISOString()
-            .slice(0, 10)}
-          onChange={(event) =>
+          )}
+          onChange={(event) => {
+            const millis =
+              dateInputToMillis(
+                event.target.value
+              );
+
             onChange(
               "planDateMillis",
-              event.target.value
-                ? new Date(
-                    `${event.target.value}T00:00:00`
-                  ).getTime()
-                : Date.now()
-            )
-          }
+              millis ?? Date.now()
+            );
+          }}
           style={inputStyle}
         />
       </label>
@@ -839,25 +897,23 @@ function GeneralTab({
 
         <input
           type="date"
-          value={
+          value={millisToDateInput(
             plan.validUntilMillis
-              ? new Date(
-                  plan.validUntilMillis
-                )
-                  .toISOString()
-                  .slice(0, 10)
-              : ""
-          }
-          onChange={(event) =>
+          )}
+          min={millisToDateInput(
+            plan.planDateMillis
+          )}
+          onChange={(event) => {
+            const millis =
+              dateInputToMillis(
+                event.target.value
+              );
+
             onChange(
               "validUntilMillis",
-              event.target.value
-                ? new Date(
-                    `${event.target.value}T00:00:00`
-                  ).getTime()
-                : null
-            )
-          }
+              millis
+            );
+          }}
           style={inputStyle}
         />
       </label>
