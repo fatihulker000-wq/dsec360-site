@@ -363,13 +363,14 @@ export default function ActionPlanDialog({
         </nav>
 
         <main
-          style={{
-            overflowY: "auto",
-            padding: "18px 18px 120px",
-            position: "relative",
-            zIndex: 0,
-          }}
-        >
+  style={{
+    overflowY: "auto",
+    padding: "18px 18px 220px",
+    position: "relative",
+    zIndex: 0,
+    scrollPaddingBottom: 220,
+  }}
+>
           {tab === "GENERAL" ? (
             <GeneralTab
               plan={plan}
@@ -920,34 +921,6 @@ function GeneralTab({
           }}
         />
       </label>
-
-<label style={labelStyle}>
-  <span style={labelText}>
-    Geçerlilik Tarihi
-  </span>
-
-  <input
-    type="date"
-    value={millisToDateInput(
-      plan.validUntilMillis
-    )}
-    min={millisToDateInput(
-      plan.planDateMillis
-    )}
-    onChange={(event) => {
-      const millis =
-        dateInputToMillis(
-          event.target.value
-        );
-
-      onChange(
-        "validUntilMillis",
-        millis
-      );
-    }}
-    style={inputStyle}
-  />
-</label>
 
       <label
         style={{
