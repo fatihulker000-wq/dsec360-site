@@ -365,7 +365,9 @@ export default function ActionPlanDialog({
         <main
           style={{
             overflowY: "auto",
-            padding: 18,
+            padding: "18px 18px 120px",
+            position: "relative",
+            zIndex: 1,
           }}
         >
           {tab === "GENERAL" ? (
@@ -864,7 +866,13 @@ function GeneralTab({
         </select>
       </label>
 
-      <label style={labelStyle}>
+      <label
+        style={{
+          ...labelStyle,
+          position: "relative",
+          zIndex: 2,
+        }}
+      >
         <span style={labelText}>
           Plan Tarihi
         </span>
@@ -875,6 +883,18 @@ function GeneralTab({
             plan.planDateMillis ||
               Date.now()
           )}
+          disabled={false}
+          readOnly={false}
+          onClick={(event) => {
+            event.currentTarget.focus();
+
+            if (
+              typeof event.currentTarget.showPicker ===
+              "function"
+            ) {
+              event.currentTarget.showPicker();
+            }
+          }}
           onChange={(event) => {
             const millis =
               dateInputToMillis(
@@ -886,11 +906,25 @@ function GeneralTab({
               millis ?? Date.now()
             );
           }}
-          style={inputStyle}
+          style={{
+            ...inputStyle,
+            cursor: "pointer",
+            pointerEvents: "auto",
+            position: "relative",
+            zIndex: 3,
+            background: "#ffffff",
+            color: "#0f172a",
+          }}
         />
       </label>
 
-      <label style={labelStyle}>
+      <label
+        style={{
+          ...labelStyle,
+          position: "relative",
+          zIndex: 3,
+        }}
+      >
         <span style={labelText}>
           Geçerlilik Tarihi
         </span>
@@ -903,6 +937,18 @@ function GeneralTab({
           min={millisToDateInput(
             plan.planDateMillis
           )}
+          disabled={false}
+          readOnly={false}
+          onClick={(event) => {
+            event.currentTarget.focus();
+
+            if (
+              typeof event.currentTarget.showPicker ===
+              "function"
+            ) {
+              event.currentTarget.showPicker();
+            }
+          }}
           onChange={(event) => {
             const millis =
               dateInputToMillis(
@@ -914,7 +960,15 @@ function GeneralTab({
               millis
             );
           }}
-          style={inputStyle}
+          style={{
+            ...inputStyle,
+            cursor: "pointer",
+            pointerEvents: "auto",
+            position: "relative",
+            zIndex: 4,
+            background: "#ffffff",
+            color: "#0f172a",
+          }}
         />
       </label>
 
