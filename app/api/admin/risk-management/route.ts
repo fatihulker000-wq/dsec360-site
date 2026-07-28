@@ -534,6 +534,68 @@ async function resolveCompanyId(
   );
 }
 
+
+async function resolveLocalFirmId(
+  companyId: string,
+  requestedLocalFirmId?: number | null
+): Promise<number | null> {
+  if (
+    typeof requestedLocalFirmId === "number" &&
+    Number.isFinite(requestedLocalFirmId) &&
+    requestedLocalFirmId > 0
+  ) {
+    return Math.trunc(requestedLocalFirmId);
+  }
+
+  const supabase = getSupabase();
+
+  const { data: matrixMatch, error: matrixError } =
+    await supabase
+      .from("risk_items")
+      .select("local_firm_id")
+      .eq("company_id", companyId)
+      .not("local_firm_id", "is", null)
+      .limit(1)
+      .maybeSingle<{ local_firm_id: number | null }>();
+
+  if (matrixError) {
+    throw new Error(
+      `Firma yerel ID eşlemesi okunamadı: ${matrixError.message}`
+    );
+  }
+
+  if (
+    typeof matrixMatch?.local_firm_id === "number" &&
+    matrixMatch.local_firm_id > 0
+  ) {
+    return matrixMatch.local_firm_id;
+  }
+
+  const { data: fineMatch, error: fineError } =
+    await supabase
+      .from("fine_kinney_risks")
+      .select("local_firm_id")
+      .eq("company_id", companyId)
+      .not("local_firm_id", "is", null)
+      .limit(1)
+      .maybeSingle<{ local_firm_id: number | null }>();
+
+  if (fineError) {
+    throw new Error(
+      `Firma yerel ID eşlemesi okunamadı: ${fineError.message}`
+    );
+  }
+
+  if (
+    typeof fineMatch?.local_firm_id === "number" &&
+    fineMatch.local_firm_id > 0
+  ) {
+    return fineMatch.local_firm_id;
+  }
+
+  return null;
+}
+
 /* ============================================================
    VALIDATION
 ============================================================ */
@@ -944,6 +1006,25 @@ export async function POST(request: Request) {
       payload.method
     );
 
+    const localFirmId =
+      await resolveLocalFirmId(
+        companyId,
+        payload.localFirmId
+      );
+
+    if (!localFirmId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Firmanın mobil uygulama ID eşlemesi bulunamadı. Önce bu firmadan uygulama üzerinden bir risk kaydı senkronize edilmelidir.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const nowIso = new Date().toISOString();
+
     const syncKey =
       String(payload.syncKey || "").trim() ||
       crypto.randomUUID();
@@ -979,8 +1060,7 @@ export async function POST(request: Request) {
         .insert({
           sync_key: syncKey,
           company_id: companyId,
-          local_firm_id:
-            payload.localFirmId ?? null,
+          local_firm_id: localFirmId,
 
           title,
           hazard: String(
@@ -1063,6 +1143,8 @@ export async function POST(request: Request) {
             new Date().toISOString(),
           is_deleted: false,
           deleted_at: null,
+          created_at: nowIso,
+          updated_at: nowIso,
         })
         .select("*")
         .single<FineKinneyRiskRow>();
@@ -1111,8 +1193,7 @@ export async function POST(request: Request) {
       .insert({
         sync_key: syncKey,
         company_id: companyId,
-        local_firm_id:
-          payload.localFirmId ?? null,
+        local_firm_id: localFirmId,
 
         title,
         hazard: String(
@@ -1183,6 +1264,8 @@ export async function POST(request: Request) {
           new Date().toISOString(),
         is_deleted: false,
         deleted_at: null,
+        created_at: nowIso,
+        updated_at: nowIso,
       })
       .select("*")
       .single<MatrixRiskRow>();
@@ -1400,6 +1483,7 @@ export async function PATCH(request: Request) {
           sync_error: null,
           last_synced_at:
             new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq("id", id)
         .eq("is_deleted", false);
@@ -1532,6 +1616,7 @@ export async function PATCH(request: Request) {
         sync_error: null,
         last_synced_at:
           new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .eq("is_deleted", false);
@@ -1668,6 +1753,7 @@ export async function DELETE(request: Request) {
         sync_error: null,
         last_synced_at:
           new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .eq("is_deleted", false);
