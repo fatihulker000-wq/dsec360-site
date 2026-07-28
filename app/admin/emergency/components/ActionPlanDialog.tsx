@@ -689,12 +689,10 @@ export default function ActionPlanDialog({
           </button>
 
           <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              void onSave();
-            }}
+  type="button"
+  onClick={async () => {
+    await Promise.resolve(onSave());
+  }}
             style={{
               minHeight: 43,
               borderRadius: 11,
