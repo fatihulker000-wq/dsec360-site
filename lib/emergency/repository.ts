@@ -15,8 +15,8 @@ import type {
 } from "./types";
 
 const TABLE = {
-  PLAN: "emergency_plans",
-  TEAM: "emergency_support_members",
+  PLAN: "emergency_action_plans",
+  TEAM: "emergency_support_teams",
   DRILL: "emergency_drills",
 } as const;
 
