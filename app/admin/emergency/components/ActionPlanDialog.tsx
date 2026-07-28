@@ -921,6 +921,34 @@ function GeneralTab({
         />
       </label>
 
+<label style={labelStyle}>
+  <span style={labelText}>
+    Geçerlilik Tarihi
+  </span>
+
+  <input
+    type="date"
+    value={millisToDateInput(
+      plan.validUntilMillis
+    )}
+    min={millisToDateInput(
+      plan.planDateMillis
+    )}
+    onChange={(event) => {
+      const millis =
+        dateInputToMillis(
+          event.target.value
+        );
+
+      onChange(
+        "validUntilMillis",
+        millis
+      );
+    }}
+    style={inputStyle}
+  />
+</label>
+
       <label
         style={{
           ...labelStyle,
