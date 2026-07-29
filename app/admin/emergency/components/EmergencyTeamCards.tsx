@@ -19,37 +19,75 @@ type Props = {
 };
 
 const TEAM_ORDER = [
-  "YANGIN",
   "ARAMA_KURTARMA",
-  "TAHLIYE",
-  "TAHLİYE",
-  "ILKYARDIM",
+  "YANGIN",
   "ILK_YARDIM",
   "KORUMA",
-  "HABERLESME",
 ];
 
-const TEAM_LABELS: Record<string, string> = {
-  YANGIN: "Yangınla Mücadele Ekibi",
-  ARAMA_KURTARMA: "Arama ve Kurtarma Ekibi",
-  TAHLIYE: "Tahliye Ekibi",
-  "TAHLİYE": "Tahliye Ekibi",
-  ILKYARDIM: "İlk Yardım Ekibi",
-  ILK_YARDIM: "İlk Yardım Ekibi",
-  KORUMA: "Koruma Ekibi",
-  HABERLESME: "Haberleşme Ekibi",
+const TEAM_LABELS: Record<
+  string,
+  string
+> = {
+  ARAMA_KURTARMA:
+    "Arama, Kurtarma ve Tahliye Ekibi",
+
+  YANGIN:
+    "Yangınla Mücadele Ekibi",
+
+  ILK_YARDIM:
+    "İlk Yardım Ekibi",
+
+  KORUMA:
+    "Koruma Ekibi",
 };
 
-const ROLE_LABELS: Record<string, string> = {
+const ROLE_LABELS: Record<
+  string,
+  string
+> = {
   EKIP_LIDERI: "Ekip Lideri",
   EKIP_UYESI: "Ekip Üyesi",
   YEDEK_UYE: "Yedek Üye",
 };
 
-function normalizeTeamType(value: string) {
-  if (value === "TAHLİYE") return "TAHLIYE";
-  if (value === "ILK_YARDIM") return "ILKYARDIM";
-  return value;
+function normalizeTeamType(
+  value: string
+): string {
+  const normalized = String(value || "")
+    .trim()
+    .toLocaleUpperCase("tr-TR");
+
+  if (
+    normalized === "ARAMA_KURTARMA" ||
+    normalized ===
+      "ARAMA_KURTARMA_TAHLIYE" ||
+    normalized === "TAHLİYE" ||
+    normalized === "TAHLIYE"
+  ) {
+    return "ARAMA_KURTARMA";
+  }
+
+  if (
+    normalized === "YANGIN" ||
+    normalized ===
+      "YANGINLA_MUCADELE"
+  ) {
+    return "YANGIN";
+  }
+
+  if (
+    normalized === "ILKYARDIM" ||
+    normalized === "ILK_YARDIM"
+  ) {
+    return "ILK_YARDIM";
+  }
+
+  if (normalized === "KORUMA") {
+    return "KORUMA";
+  }
+
+  return normalized;
 }
 
 export default function EmergencyTeamCards({
@@ -63,27 +101,23 @@ export default function EmergencyTeamCards({
     (member) => member.isActive
   );
 
-  const grouped = TEAM_ORDER
-    .filter(
-      (type, index, array) =>
-        array.indexOf(type) === index
-    )
-    .map((type) => {
+  const grouped = TEAM_ORDER.map(
+    (type) => {
       const members = activeTeams.filter(
         (member) =>
           normalizeTeamType(
             String(member.teamType)
-          ) === normalizeTeamType(type)
+          ) === type
       );
 
       return {
         type,
         title:
-          TEAM_LABELS[type] ||
-          type,
+          TEAM_LABELS[type] || type,
         members,
       };
-    });
+    }
+  );
 
   return (
     <section
@@ -95,12 +129,14 @@ export default function EmergencyTeamCards({
       <header
         style={{
           borderRadius: 18,
-          border: "1px solid #e5e7eb",
+          border:
+            "1px solid #e5e7eb",
           background: "#ffffff",
           padding: 16,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent:
+            "space-between",
           gap: 12,
           flexWrap: "wrap",
         }}
@@ -121,6 +157,7 @@ export default function EmergencyTeamCards({
               size={19}
               color="#7f1d1d"
             />
+
             Kurumsal Acil Durum Ekip
             Tabloları
           </h3>
@@ -274,7 +311,10 @@ export default function EmergencyTeamCards({
                   </tr>
                 ) : (
                   group.members.map(
-                    (member, index) => (
+                    (
+                      member,
+                      index
+                    ) => (
                       <tr
                         key={member.id}
                         style={{
@@ -305,7 +345,8 @@ export default function EmergencyTeamCards({
                             padding: 12,
                           }}
                         >
-                          {member.duty || "-"}
+                          {member.duty ||
+                            "-"}
                         </td>
 
                         <td
@@ -323,7 +364,9 @@ export default function EmergencyTeamCards({
                           }}
                         >
                           {ROLE_LABELS[
-                            member.teamRole
+                            String(
+                              member.teamRole
+                            )
                           ] ||
                             member.teamRole}
                         </td>
@@ -333,7 +376,8 @@ export default function EmergencyTeamCards({
                             padding: 12,
                           }}
                         >
-                          {member.phone || "-"}
+                          {member.phone ||
+                            "-"}
                         </td>
 
                         <td
@@ -369,6 +413,7 @@ export default function EmergencyTeamCards({
           </div>
 
           <div
+            className="emergencySignatureGrid"
             style={{
               padding: 14,
               display: "grid",
@@ -404,6 +449,14 @@ export default function EmergencyTeamCards({
           </div>
         </article>
       ))}
+
+      <style jsx>{`
+        @media (max-width: 720px) {
+          .emergencySignatureGrid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </section>
   );
 }

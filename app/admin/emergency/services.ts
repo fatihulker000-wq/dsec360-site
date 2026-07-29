@@ -2,6 +2,7 @@ import type {
   EmergencyDrill,
   EmergencyPlan,
   EmergencySupportMember,
+  EmergencyTeamType,
 } from "./types";
 
 type EmergencyApiResponse = {
@@ -17,6 +18,110 @@ type EmergencyApiResponse = {
 const EMERGENCY_API =
   "/api/risk-management/emergency";
 
+/**
+ * Web ve mobil tarafta geçmişte kullanılmış farklı ekip kodlarını
+ * tek bir standart ekip koduna dönüştürür.
+ *
+ * Standart ekip kodları:
+ * - ARAMA_KURTARMA
+ * - YANGIN
+ * - ILK_YARDIM
+ * - KORUMA
+ */
+export function normalizeEmergencyTeamType(
+  value: unknown
+): EmergencyTeamType {
+  const normalized = String(value || "")
+    .trim()
+    .toLocaleUpperCase("tr-TR");
+
+  if (
+    normalized === "ARAMA_KURTARMA" ||
+    normalized ===
+      "ARAMA_KURTARMA_TAHLIYE" ||
+    normalized ===
+      "ARAMA_KURTARMA_TAHLİYE" ||
+    normalized === "TAHLIYE" ||
+    normalized === "TAHLİYE"
+  ) {
+    return "ARAMA_KURTARMA";
+  }
+
+  if (
+    normalized === "YANGIN" ||
+    normalized ===
+      "YANGINLA_MUCADELE" ||
+    normalized ===
+      "YANGINLA_MÜCADELE"
+  ) {
+    return "YANGIN";
+  }
+
+  if (
+    normalized === "ILKYARDIM" ||
+    normalized === "ILK_YARDIM" ||
+    normalized === "İLK_YARDIM"
+  ) {
+    return "ILK_YARDIM";
+  }
+
+  if (
+    normalized === "KORUMA" ||
+    normalized ===
+      "KORUMA_EKIBI" ||
+    normalized ===
+      "KORUMA_EKİBİ" ||
+    normalized === "HABERLESME" ||
+    normalized === "HABERLEŞME"
+  ) {
+    return "KORUMA";
+  }
+
+  /*
+   * Bilinmeyen veya boş ekip kodlarında güvenli varsayılan.
+   * string döndürülmez; her zaman EmergencyTeamType döner.
+   */
+  return "ARAMA_KURTARMA";
+}
+
+function normalizeSupportMember(
+  member: EmergencySupportMember
+): EmergencySupportMember {
+  return {
+    ...member,
+    teamType:
+      normalizeEmergencyTeamType(
+        member.teamType
+      ),
+  };
+}
+
+function normalizeSupportMemberPayload(
+  member: Partial<EmergencySupportMember>
+): Partial<EmergencySupportMember> {
+  /*
+   * Güncelleme sırasında teamType gönderilmemişse
+   * mevcut değerin yanlışlıkla değiştirilmesini önler.
+   */
+  if (
+    member.teamType === undefined ||
+    member.teamType === null ||
+    String(member.teamType).trim() === ""
+  ) {
+    return {
+      ...member,
+    };
+  }
+
+  return {
+    ...member,
+    teamType:
+      normalizeEmergencyTeamType(
+        member.teamType
+      ),
+  };
+}
+
 async function readJson(
   response: Response
 ): Promise<EmergencyApiResponse> {
@@ -28,9 +133,13 @@ async function readJson(
 async function ensureSuccess(
   response: Response
 ): Promise<EmergencyApiResponse> {
-  const json = await readJson(response);
+  const json =
+    await readJson(response);
 
-  if (!response.ok || json.success === false) {
+  if (
+    !response.ok ||
+    json.success === false
+  ) {
     throw new Error(
       json.message ||
         json.error ||
@@ -55,7 +164,8 @@ export async function getEmergencyPlans(
     }
   );
 
-  const json = await ensureSuccess(response);
+  const json =
+    await ensureSuccess(response);
 
   return Array.isArray(json.plans)
     ? json.plans
@@ -64,7 +174,9 @@ export async function getEmergencyPlans(
 
 export async function getSupportTeams(
   firmId: string
-): Promise<EmergencySupportMember[]> {
+): Promise<
+  EmergencySupportMember[]
+> {
   const response = await fetch(
     `${EMERGENCY_API}?firmId=${encodeURIComponent(
       firmId
@@ -76,11 +188,18 @@ export async function getSupportTeams(
     }
   );
 
-  const json = await ensureSuccess(response);
+  const json =
+    await ensureSuccess(response);
 
-  return Array.isArray(json.teams)
+  const teams = Array.isArray(
+    json.teams
+  )
     ? json.teams
     : [];
+
+  return teams.map(
+    normalizeSupportMember
+  );
 }
 
 export async function getEmergencyDrills(
@@ -97,7 +216,8 @@ export async function getEmergencyDrills(
     }
   );
 
-  const json = await ensureSuccess(response);
+  const json =
+    await ensureSuccess(response);
 
   return Array.isArray(json.drills)
     ? json.drills
@@ -113,12 +233,15 @@ export async function saveEmergencyPlan(
       method: plan.id
         ? "PATCH"
         : "POST",
+
       credentials: "include",
       cache: "no-store",
+
       headers: {
         "Content-Type":
           "application/json",
       },
+
       body: JSON.stringify({
         ...plan,
         entityType: "PLAN",
@@ -126,7 +249,8 @@ export async function saveEmergencyPlan(
     }
   );
 
-  const json = await ensureSuccess(response);
+  const json =
+    await ensureSuccess(response);
 
   return json.record as EmergencyPlan;
 }
@@ -151,28 +275,42 @@ export async function deleteEmergencyPlan(
 export async function saveSupportMember(
   member: Partial<EmergencySupportMember>
 ): Promise<EmergencySupportMember> {
+  const normalizedMember =
+    normalizeSupportMemberPayload(
+      member
+    );
+
   const response = await fetch(
     EMERGENCY_API,
     {
       method: member.id
         ? "PATCH"
         : "POST",
+
       credentials: "include",
       cache: "no-store",
+
       headers: {
         "Content-Type":
           "application/json",
       },
+
       body: JSON.stringify({
-        ...member,
+        ...normalizedMember,
         entityType: "TEAM",
       }),
     }
   );
 
-  const json = await ensureSuccess(response);
+  const json =
+    await ensureSuccess(response);
 
-  return json.record as EmergencySupportMember;
+  const savedMember =
+    json.record as EmergencySupportMember;
+
+  return normalizeSupportMember(
+    savedMember
+  );
 }
 
 export async function deleteSupportMember(
@@ -201,12 +339,15 @@ export async function saveEmergencyDrill(
       method: drill.id
         ? "PATCH"
         : "POST",
+
       credentials: "include",
       cache: "no-store",
+
       headers: {
         "Content-Type":
           "application/json",
       },
+
       body: JSON.stringify({
         ...drill,
         entityType: "DRILL",
@@ -214,7 +355,8 @@ export async function saveEmergencyDrill(
     }
   );
 
-  const json = await ensureSuccess(response);
+  const json =
+    await ensureSuccess(response);
 
   return json.record as EmergencyDrill;
 }

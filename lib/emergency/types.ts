@@ -62,11 +62,8 @@ export type EmergencyPlanContent = {
   postEmergencyActions: string;
 
   scenarios: EmergencyScenario[];
-
   contacts: EmergencyPlanContact[];
-
   assemblyAreas: EmergencyAssemblyArea[];
-
   equipment: EmergencyEquipment[];
 
   evacuationSketchUrl: string;
@@ -126,26 +123,52 @@ export type EmergencyPlan = {
   updatedAtMillis: number;
 };
 
+/**
+ * Bundan sonra yeni kayıtlarda kullanılacak standart ekip kodları.
+ */
+export type StandardEmergencyTeamType =
+  | "ARAMA_KURTARMA"
+  | "YANGIN"
+  | "ILK_YARDIM"
+  | "KORUMA";
+
+/**
+ * Mobil veya web tarafında daha önce kullanılmış eski ekip kodları.
+ * Eski kayıtların hata vermeden okunması için korunur.
+ */
+export type LegacyEmergencyTeamType =
+  | "ARAMA_KURTARMA_TAHLIYE"
+  | "ARAMA_KURTARMA_TAHLİYE"
+  | "YANGINLA_MUCADELE"
+  | "YANGINLA_MÜCADELE"
+  | "ILKYARDIM"
+  | "TAHLIYE"
+  | "TAHLİYE"
+  | "HABERLESME"
+  | "KORUMA_EKIBI"
+  | "KORUMA_EKİBİ";
+
+export type EmergencyTeamType =
+  | StandardEmergencyTeamType
+  | LegacyEmergencyTeamType;
+
+export type EmergencyTeamRole =
+  | "EKIP_LIDERI"
+  | "EKIP_UYESI"
+  | "YEDEK_UYE";
+
+export type EmergencySignatureStatus =
+  | "IMZA_BEKLIYOR"
+  | "IMZALANDI";
+
 export type EmergencySupportMember = {
   id: string;
   firmId: string;
 
   employeeId: string | null;
 
-  teamType:
-    | "YANGIN"
-    | "ARAMA_KURTARMA"
-    | "ILKYARDIM"
-    | "ILK_YARDIM"
-    | "KORUMA"
-    | "TAHLIYE"
-    | "TAHLİYE"
-    | "HABERLESME";
-
-  teamRole:
-    | "EKIP_LIDERI"
-    | "EKIP_UYESI"
-    | "YEDEK_UYE";
+  teamType: EmergencyTeamType;
+  teamRole: EmergencyTeamRole;
 
   fullName: string;
   duty: string;
@@ -155,27 +178,29 @@ export type EmergencySupportMember = {
 
   assignedDateMillis: number;
 
-  signatureStatus:
-    | "IMZA_BEKLIYOR"
-    | "IMZALANDI";
-
+  signatureStatus: EmergencySignatureStatus;
   isActive: boolean;
 
   createdAtMillis: number;
   updatedAtMillis: number;
 };
 
+export type EmergencyDrillType =
+  | "YANGIN_TAHLIYE"
+  | "DEPREM"
+  | "KIMYASAL"
+  | "GENEL_TAHLIYE"
+  | "DIGER";
+
+export type EmergencyDrillStatus =
+  | "GEÇERLİ"
+  | "REVIZYON_GEREKLI";
+
 export type EmergencyDrill = {
   id: string;
   firmId: string;
 
-  drillType:
-    | "YANGIN_TAHLIYE"
-    | "DEPREM"
-    | "KIMYASAL"
-    | "GENEL_TAHLIYE"
-    | "DIGER";
-
+  drillType: EmergencyDrillType;
   drillTitle: string;
 
   drillDateMillis: number;
@@ -189,9 +214,7 @@ export type EmergencyDrill = {
   correctiveActions: string;
   responsible: string;
 
-  status:
-    | "GEÇERLİ"
-    | "REVIZYON_GEREKLI";
+  status: EmergencyDrillStatus;
 
   createdAtMillis: number;
   updatedAtMillis: number;

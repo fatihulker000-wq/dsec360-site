@@ -667,11 +667,13 @@ export default function EmergencyWorkspace({
             });
             setShowMemberDialog(true);
           }}
-          onEdit={(member) => {
-            setEditingMember(member);
-            setShowMemberDialog(true);
-          }}
-          onDelete={(member) => void removeMember(member)}
+         onEdit={(member: EmergencySupportMember) => {
+  setEditingMember(member);
+  setShowMemberDialog(true);
+}}
+onDelete={(member: EmergencySupportMember) => {
+  void removeMember(member);
+}}
         />
       ) : null}
 
