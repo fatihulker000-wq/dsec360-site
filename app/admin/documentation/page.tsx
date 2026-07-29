@@ -32,6 +32,14 @@ import {
   useState,
 } from "react";
 
+import {
+  getDocumentationRecords,
+} from "@/lib/documentation/services";
+
+import type {
+  DocumentationRecord,
+} from "@/lib/documentation/types";
+
 type MainTab =
   | "DASHBOARD"
   | "DOCUMENTS"
@@ -66,23 +74,6 @@ type CompaniesResponse = {
   error?: string;
 };
 
-type DocumentationRecord = {
-  id: string;
-  firmId: string;
-  category: DocumentationCategory;
-  title: string;
-  documentNo: string;
-  revisionNo: string;
-  preparedBy: string;
-  approvedBy: string;
-  publishedAtMillis: number | null;
-  validUntilMillis: number | null;
-  status:
-    | "ACTIVE"
-    | "REVISION"
-    | "EXPIRED"
-    | "DRAFT";
-};
 
 type CategoryDefinition = {
   value: DocumentationCategory;
@@ -177,49 +168,6 @@ const CATEGORY_DEFINITIONS: CategoryDefinition[] = [
   },
 ];
 
-const SAMPLE_RECORDS: DocumentationRecord[] = [
-  {
-    id: "doc-1",
-    firmId: "",
-    category: "INSTRUCTIONS",
-    title: "İş Sağlığı ve Güvenliği Politikası",
-    documentNo: "DSEC-POL-001",
-    revisionNo: "R0",
-    preparedBy: "İSG Birimi",
-    approvedBy: "İşveren Vekili",
-    publishedAtMillis: Date.now(),
-    validUntilMillis:
-      Date.now() + 365 * 24 * 60 * 60 * 1000,
-    status: "ACTIVE",
-  },
-  {
-    id: "doc-2",
-    firmId: "",
-    category: "BOARD",
-    title: "İSG Kurul Toplantı Tutanağı",
-    documentNo: "DSEC-KRL-001",
-    revisionNo: "R1",
-    preparedBy: "Kurul Sekreteri",
-    approvedBy: "Kurul Başkanı",
-    publishedAtMillis: Date.now(),
-    validUntilMillis: null,
-    status: "REVISION",
-  },
-  {
-    id: "doc-3",
-    firmId: "",
-    category: "TRAINING",
-    title: "Temel İSG Eğitimi Katılım Formu",
-    documentNo: "DSEC-EGT-001",
-    revisionNo: "R0",
-    preparedBy: "Eğitim Birimi",
-    approvedBy: "İSG Uzmanı",
-    publishedAtMillis: Date.now(),
-    validUntilMillis:
-      Date.now() + 180 * 24 * 60 * 60 * 1000,
-    status: "ACTIVE",
-  },
-];
 
 function formatDate(value?: number | null) {
   if (!value) {
@@ -311,9 +259,7 @@ export default function DocumentationPage() {
   );
 
   const [records, setRecords] =
-    useState<DocumentationRecord[]>(
-      SAMPLE_RECORDS
-    );
+  useState<DocumentationRecord[]>([]);
 
   const [searchText, setSearchText] =
     useState("");
@@ -323,6 +269,11 @@ export default function DocumentationPage() {
 
   const [loading, setLoading] =
     useState(false);
+
+const [
+  loadingDocuments,
+  setLoadingDocuments,
+] = useState(false);
 
   const [error, setError] =
     useState("");
@@ -524,16 +475,58 @@ export default function DocumentationPage() {
       }
     }, []);
 
+const loadDocumentation =
+  useCallback(async () => {
+    if (!selectedCompanyId) {
+      setRecords([]);
+      return;
+    }
+
+    try {
+      setLoadingDocuments(true);
+      setError("");
+
+      const rows =
+        await getDocumentationRecords(
+          selectedCompanyId
+        );
+
+      setRecords(rows);
+    } catch (error) {
+      console.error(
+        "Documentation load error:",
+        error
+      );
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Dokümanlar yüklenemedi."
+      );
+
+      setRecords([]);
+    } finally {
+      setLoadingDocuments(false);
+    }
+  }, [selectedCompanyId]);
+
   useEffect(() => {
     void loadCompanies();
   }, [loadCompanies]);
+
+useEffect(() => {
+  void loadDocumentation();
+}, [loadDocumentation]);
 
   const handleRefresh = async () => {
     try {
       setLoading(true);
       setError("");
 
-      await loadCompanies();
+      await Promise.all([
+  loadCompanies(),
+  loadDocumentation(),
+]);
     } finally {
       setLoading(false);
     }
@@ -1404,6 +1397,26 @@ export default function DocumentationPage() {
               </select>
             </div>
 
+{loadingDocuments && (
+  <div
+    style={{
+      padding: 30,
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 12,
+      color: "#64748b",
+      fontWeight: 700,
+    }}
+  >
+    <Loader2
+      size={20}
+      className="documentationSpin"
+    />
+    Dokümanlar yükleniyor...
+  </div>
+)}
+
             <div
               style={{
                 overflowX: "auto",
@@ -1619,8 +1632,8 @@ export default function DocumentationPage() {
               </table>
             </div>
 
-            {filteredRecords.length ===
-            0 ? (
+            {!loadingDocuments &&
+filteredRecords.length === 0 ? (
               <div
                 style={{
                   minHeight: 190,
