@@ -42,6 +42,14 @@ const mainItems: SidebarItem[] = [
     icon: "🛡",
     desc: "5x5 • Fine-Kinney • DÖF",
   },
+
+  {
+  href: "/admin/documentation",
+  label: "Dokümantasyon",
+  icon: "📁",
+  desc: "Doküman ve revizyon yönetimi",
+},
+
   {
     href: "/admin/permissions",
     label: "Yetki Matrisi V3",

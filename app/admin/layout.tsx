@@ -12,9 +12,10 @@ import {
   Building2,
   ClipboardCheck,
   FileBarChart,
-  MessageSquareText,
-  AlertTriangle,
-  Settings2,
+ MessageSquareText,
+FolderArchive,
+AlertTriangle,
+Settings2,
   Search,
   Bell,
   Sparkles,
@@ -55,6 +56,7 @@ const ACTIVE_LABELS: Record<string, string> = {
   "/admin/ibys": "İBYS Entegrasyon Merkezi",
   "/admin/denetimler": "Denetimler",
   "/admin/employees": "Çalışanlar",
+  "/admin/documentation": "Dokümantasyon Merkezi",
 };
 
 export default function AdminLayout({
@@ -174,6 +176,14 @@ export default function AdminLayout({
         href: "/admin/risk",
         icon: AlertTriangle,
       },
+
+
+{
+  name: "Dokümantasyon",
+  href: "/admin/documentation",
+  icon: FolderArchive,
+},
+
       { name: "Sistem Kullanıcıları", href: "/admin/users", icon: Users },
       {
         name: "Modül ve Yetki Yönetimi V3",
