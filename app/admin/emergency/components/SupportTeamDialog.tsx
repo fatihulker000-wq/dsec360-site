@@ -1,8 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Loader2, Save, Search, UserPlus, Users, X } from "lucide-react";
-import type { EmergencySupportMember } from "../types";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  Loader2,
+  Save,
+  Search,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
+
+import type {
+  EmergencySupportMember,
+} from "../types";
 
 type EmployeeRow = {
   id: string;
@@ -20,8 +35,31 @@ type Props = {
   member: Partial<EmergencySupportMember>;
   onClose: () => void;
   onSave: () => void | Promise<void>;
-  onChange: (field: keyof EmergencySupportMember, value: unknown) => void;
+  onChange: (
+    field: keyof EmergencySupportMember,
+    value: unknown
+  ) => void;
 };
+
+
+const TEAM_OPTIONS = [
+  {
+    value: "ARAMA_KURTARMA",
+    label: "Arama, Kurtarma ve Tahliye",
+  },
+  {
+    value: "YANGIN",
+    label: "Yangınla Mücadele",
+  },
+  {
+    value: "ILK_YARDIM",
+    label: "İlk Yardım",
+  },
+  {
+    value: "KORUMA",
+    label: "Koruma Ekibi",
+  },
+] as const;
 
 const inputStyle = {
   width: "100%",
@@ -30,6 +68,47 @@ const inputStyle = {
   border: "1px solid #dbe3ec",
   padding: "0 12px",
   boxSizing: "border-box" as const,
+  background: "#ffffff",
+  color: "#0f172a",
+};
+
+const normalizeDialogTeamType = (
+  value: unknown
+): string => {
+  const normalized = String(value || "")
+    .trim()
+    .toLocaleUpperCase("tr-TR");
+
+  if (
+    normalized === "ARAMA_KURTARMA" ||
+    normalized ===
+      "ARAMA_KURTARMA_TAHLIYE" ||
+    normalized === "TAHLİYE" ||
+    normalized === "TAHLIYE"
+  ) {
+    return "ARAMA_KURTARMA";
+  }
+
+  if (
+    normalized === "YANGIN" ||
+    normalized ===
+      "YANGINLA_MUCADELE"
+  ) {
+    return "YANGIN";
+  }
+
+  if (
+    normalized === "ILKYARDIM" ||
+    normalized === "ILK_YARDIM"
+  ) {
+    return "ILK_YARDIM";
+  }
+
+  if (normalized === "KORUMA") {
+    return "KORUMA";
+  }
+
+  return "ARAMA_KURTARMA";
 };
 
 export default function SupportTeamDialog({
@@ -40,17 +119,38 @@ export default function SupportTeamDialog({
   onSave,
   onChange,
 }: Props) {
-  const [mode, setMode] = useState<"EMPLOYEE" | "MANUAL">("EMPLOYEE");
-  const [employees, setEmployees] = useState<EmployeeRow[]>([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [mode, setMode] = useState<
+    "EMPLOYEE" | "MANUAL"
+  >("EMPLOYEE");
+
+  const [employees, setEmployees] =
+    useState<EmployeeRow[]>([]);
+
+  const [search, setSearch] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
 
   useEffect(() => {
     if (!open) return;
-    setMode(member.employeeId ? "EMPLOYEE" : "MANUAL");
+
+    setMode(
+      member.employeeId
+        ? "EMPLOYEE"
+        : "MANUAL"
+    );
+
     setSearch("");
-  }, [open, member.id, member.employeeId]);
+    setError("");
+  }, [
+    open,
+    member.id,
+    member.employeeId,
+  ]);
 
   useEffect(() => {
     if (!open || !firmId) return;
@@ -63,87 +163,166 @@ export default function SupportTeamDialog({
         setError("");
 
         const response = await fetch(
-          `/api/admin/employees?firmId=${encodeURIComponent(firmId)}`,
-          { credentials: "include", cache: "no-store" }
+          `/api/admin/employees?firmId=${encodeURIComponent(
+            firmId
+          )}`,
+          {
+            credentials: "include",
+            cache: "no-store",
+          }
         );
 
-        const json = await response.json().catch(() => ({}));
+        const json = await response
+          .json()
+          .catch(() => ({}));
 
         if (!response.ok) {
-          throw new Error(json.error || json.message || "Çalışanlar alınamadı.");
+          throw new Error(
+            json.error ||
+              json.message ||
+              "Çalışanlar alınamadı."
+          );
         }
 
         if (!cancelled) {
+          const rows = Array.isArray(
+            json.data
+          )
+            ? json.data
+            : [];
+
           setEmployees(
-            (Array.isArray(json.data) ? json.data : []).filter(
-              (item: EmployeeRow) => item.active !== false
+            rows.filter(
+              (item: EmployeeRow) =>
+                item.active !== false
             )
           );
         }
       } catch (loadError) {
         if (!cancelled) {
           setError(
-            loadError instanceof Error ? loadError.message : "Çalışanlar alınamadı."
+            loadError instanceof Error
+              ? loadError.message
+              : "Çalışanlar alınamadı."
           );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     void load();
+
     return () => {
       cancelled = true;
     };
   }, [open, firmId]);
 
-  const filteredEmployees = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase("tr-TR");
-    if (!query) return employees;
+  const filteredEmployees =
+    useMemo(() => {
+      const query = search
+        .trim()
+        .toLocaleLowerCase("tr-TR");
 
-    return employees.filter((employee) =>
-      [
-        employee.full_name,
-        employee.job_title,
-        employee.department,
-        employee.registry_no,
-      ]
-        .join(" ")
-        .toLocaleLowerCase("tr-TR")
-        .includes(query)
-    );
-  }, [employees, search]);
+      if (!query) {
+        return employees;
+      }
+
+      return employees.filter(
+        (employee) =>
+          [
+            employee.full_name,
+            employee.job_title,
+            employee.department,
+            employee.registry_no,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLocaleLowerCase("tr-TR")
+            .includes(query)
+      );
+    }, [employees, search]);
 
   if (!open) return null;
 
-  const selectEmployee = (id: string) => {
-    const employee = employees.find((item) => item.id === id);
+  const selectEmployee = (
+    id: string
+  ) => {
+    const employee = employees.find(
+      (item) => item.id === id
+    );
 
     if (!employee) {
       onChange("employeeId", null);
       return;
     }
 
-    onChange("employeeId", employee.id);
-    onChange("fullName", employee.full_name || "");
-    onChange("duty", employee.job_title || "");
-    onChange("department", employee.department || "");
-    onChange("phone", employee.phone || "");
+    onChange(
+      "employeeId",
+      employee.id
+    );
+
+    onChange(
+      "fullName",
+      employee.full_name || ""
+    );
+
+    onChange(
+      "duty",
+      employee.job_title || ""
+    );
+
+    onChange(
+      "department",
+      employee.department || ""
+    );
+
+    onChange(
+      "phone",
+      employee.phone || ""
+    );
   };
 
-  const switchMode = (next: "EMPLOYEE" | "MANUAL") => {
+  const switchMode = (
+    next: "EMPLOYEE" | "MANUAL"
+  ) => {
     setMode(next);
-    if (next === "MANUAL") onChange("employeeId", null);
+
+    if (next === "MANUAL") {
+      onChange("employeeId", null);
+    }
   };
 
-  const label = (title: string, child: React.ReactNode) => (
-    <label style={{ display: "grid", gap: 6 }}>
-      <span style={{ color: "#64748b", fontSize: 12, fontWeight: 850 }}>
+  const label = (
+    title: string,
+    child: React.ReactNode
+  ) => (
+    <label
+      style={{
+        display: "grid",
+        gap: 6,
+      }}
+    >
+      <span
+        style={{
+          color: "#64748b",
+          fontSize: 12,
+          fontWeight: 850,
+        }}
+      >
         {title}
       </span>
+
       {child}
     </label>
   );
+
+  const selectedTeamType =
+    normalizeDialogTeamType(
+      member.teamType
+    );
 
   return (
     <div
@@ -151,7 +330,8 @@ export default function SupportTeamDialog({
         position: "fixed",
         inset: 0,
         zIndex: 110,
-        background: "rgba(15,23,42,.62)",
+        background:
+          "rgba(15,23,42,.62)",
         display: "grid",
         placeItems: "center",
         padding: 18,
@@ -164,67 +344,142 @@ export default function SupportTeamDialog({
           maxHeight: "92vh",
           overflowY: "auto",
           borderRadius: 24,
-          background: "#fff",
+          background: "#ffffff",
           padding: 22,
+          boxShadow:
+            "0 30px 90px rgba(15,23,42,.28)",
         }}
-        onClick={(event) => event.stopPropagation()}
+        onClick={(event) =>
+          event.stopPropagation()
+        }
       >
         <header
           style={{
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent:
+              "space-between",
+            alignItems: "flex-start",
             gap: 12,
             marginBottom: 18,
           }}
         >
           <div>
-            <h2 style={{ margin: 0, display: "flex", gap: 8, alignItems: "center" }}>
-              <UserPlus size={21} /> Destek Ekibi Üyesi
+            <h2
+              style={{
+                margin: 0,
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <UserPlus size={21} />
+              Destek Ekibi Üyesi
             </h2>
-            <p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 13 }}>
-              Firma çalışanından seçin veya manuel kayıt oluşturun.
+
+            <p
+              style={{
+                margin: "5px 0 0",
+                color: "#64748b",
+                fontSize: 13,
+              }}
+            >
+              Firma çalışanından seçin
+              veya manuel kayıt
+              oluşturun.
             </p>
           </div>
 
-          <button type="button" onClick={onClose} style={{ width: 40, height: 40 }}>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Kapat"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 11,
+              border:
+                "1px solid #dbe3ec",
+              background: "#ffffff",
+              display: "inline-grid",
+              placeItems: "center",
+              cursor: "pointer",
+            }}
+          >
             <X size={18} />
           </button>
         </header>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "1fr 1fr",
+            gap: 8,
+            marginBottom: 14,
+          }}
+        >
           <button
             type="button"
-            onClick={() => switchMode("EMPLOYEE")}
+            onClick={() =>
+              switchMode("EMPLOYEE")
+            }
             style={{
               minHeight: 46,
               borderRadius: 12,
-              border: mode === "EMPLOYEE" ? "2px solid #047857" : "1px solid #dbe3ec",
-              background: mode === "EMPLOYEE" ? "#ecfdf5" : "#fff",
+              border:
+                mode === "EMPLOYEE"
+                  ? "2px solid #047857"
+                  : "1px solid #dbe3ec",
+              background:
+                mode === "EMPLOYEE"
+                  ? "#ecfdf5"
+                  : "#ffffff",
               fontWeight: 900,
+              display: "inline-flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: 7,
+              cursor: "pointer",
             }}
           >
-            <Users size={16} /> Firma Çalışanından Seç
+            <Users size={16} />
+            Firma Çalışanından Seç
           </button>
 
           <button
             type="button"
-            onClick={() => switchMode("MANUAL")}
+            onClick={() =>
+              switchMode("MANUAL")
+            }
             style={{
               minHeight: 46,
               borderRadius: 12,
-              border: mode === "MANUAL" ? "2px solid #6b1020" : "1px solid #dbe3ec",
-              background: mode === "MANUAL" ? "#fff1f2" : "#fff",
+              border:
+                mode === "MANUAL"
+                  ? "2px solid #6b1020"
+                  : "1px solid #dbe3ec",
+              background:
+                mode === "MANUAL"
+                  ? "#fff1f2"
+                  : "#ffffff",
               fontWeight: 900,
+              display: "inline-flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: 7,
+              cursor: "pointer",
             }}
           >
-            <UserPlus size={16} /> Manuel Ekle
+            <UserPlus size={16} />
+            Manuel Ekle
           </button>
         </div>
 
         {mode === "EMPLOYEE" ? (
           <section
             style={{
-              border: "1px solid #a7f3d0",
+              border:
+                "1px solid #a7f3d0",
               background: "#f0fdf4",
               borderRadius: 14,
               padding: 12,
@@ -235,13 +490,34 @@ export default function SupportTeamDialog({
           >
             {label(
               "Çalışan Ara",
-              <div style={{ position: "relative" }}>
-                <Search size={16} style={{ position: "absolute", left: 12, top: 14 }} />
+              <div
+                style={{
+                  position: "relative",
+                }}
+              >
+                <Search
+                  size={16}
+                  style={{
+                    position:
+                      "absolute",
+                    left: 12,
+                    top: 14,
+                    color: "#64748b",
+                  }}
+                />
+
                 <input
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) =>
+                    setSearch(
+                      event.target.value
+                    )
+                  }
                   placeholder="Ad, görev, departman veya sicil no"
-                  style={{ ...inputStyle, paddingLeft: 38 }}
+                  style={{
+                    ...inputStyle,
+                    paddingLeft: 38,
+                  }}
                 />
               </div>
             )}
@@ -249,65 +525,155 @@ export default function SupportTeamDialog({
             {label(
               "Firma Çalışanı",
               <select
-                value={member.employeeId ?? ""}
-                onChange={(event) => selectEmployee(event.target.value)}
+                value={
+                  member.employeeId ??
+                  ""
+                }
+                onChange={(event) =>
+                  selectEmployee(
+                    event.target.value
+                  )
+                }
                 disabled={loading}
                 style={inputStyle}
               >
                 <option value="">
-                  {loading ? "Çalışanlar yükleniyor..." : "Çalışan seçin"}
+                  {loading
+                    ? "Çalışanlar yükleniyor..."
+                    : "Çalışan seçin"}
                 </option>
-                {filteredEmployees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.full_name || "İsimsiz çalışan"}
-                    {employee.job_title ? ` · ${employee.job_title}` : ""}
-                  </option>
-                ))}
+
+                {filteredEmployees.map(
+                  (employee) => (
+                    <option
+                      key={employee.id}
+                      value={employee.id}
+                    >
+                      {employee.full_name ||
+                        "İsimsiz çalışan"}
+
+                      {employee.job_title
+                        ? ` · ${employee.job_title}`
+                        : ""}
+                    </option>
+                  )
+                )}
               </select>
             )}
 
-            {loading ? <div><Loader2 size={15} /> Çalışanlar yükleniyor</div> : null}
-            {error ? <div style={{ color: "#b91c1c" }}>{error}</div> : null}
+            {loading ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  color: "#047857",
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+              >
+                <Loader2 size={15} />
+                Çalışanlar yükleniyor
+              </div>
+            ) : null}
+
+            {error ? (
+              <div
+                style={{
+                  color: "#b91c1c",
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+              >
+                {error}
+              </div>
+            ) : null}
           </section>
         ) : null}
 
-        <div className="supportTeamGrid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div
+          className="supportTeamGrid"
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "1fr 1fr",
+            gap: 12,
+          }}
+        >
           {label(
             "Ad Soyad",
             <input
-              value={member.fullName ?? ""}
-              readOnly={mode === "EMPLOYEE"}
-              onChange={(event) => onChange("fullName", event.target.value)}
-              style={inputStyle}
+              value={
+                member.fullName ?? ""
+              }
+              readOnly={
+                mode === "EMPLOYEE"
+              }
+              onChange={(event) =>
+                onChange(
+                  "fullName",
+                  event.target.value
+                )
+              }
+              style={{
+                ...inputStyle,
+                background:
+                  mode === "EMPLOYEE"
+                    ? "#f8fafc"
+                    : "#ffffff",
+              }}
             />
           )}
 
           {label(
             "Ekip Türü",
             <select
-              value={member.teamType ?? "YANGIN"}
-              onChange={(event) => onChange("teamType", event.target.value)}
+              value={selectedTeamType}
+              onChange={(event) =>
+                onChange(
+                  "teamType",
+                  event.target.value
+                )
+              }
               style={inputStyle}
             >
-              <option value="YANGIN">Yangınla Mücadele</option>
-              <option value="ARAMA_KURTARMA">Arama ve Kurtarma</option>
-              <option value="TAHLİYE">Tahliye</option>
-              <option value="ILK_YARDIM">İlk Yardım</option>
-              <option value="KORUMA">Koruma</option>
-              <option value="HABERLESME">Haberleşme</option>
+              {TEAM_OPTIONS.map((team) => (
+                <option
+                  key={team.value}
+                  value={team.value}
+                >
+                  {team.label}
+                </option>
+              ))}
             </select>
           )}
 
           {label(
             "Ekip Rolü",
             <select
-              value={member.teamRole ?? "EKIP_UYESI"}
-              onChange={(event) => onChange("teamRole", event.target.value)}
+              value={
+                member.teamRole ??
+                "EKIP_UYESI"
+              }
+              onChange={(event) =>
+                onChange(
+                  "teamRole",
+                  event.target.value
+                )
+              }
               style={inputStyle}
             >
-              <option value="EKIP_LIDERI">Ekip Lideri</option>
-              <option value="EKIP_UYESI">Ekip Üyesi</option>
-              <option value="YEDEK_UYE">Yedek Üye</option>
+              <option value="EKIP_LIDERI">
+                Ekip Lideri
+              </option>
+
+              <option value="EKIP_UYESI">
+                Ekip Üyesi
+              </option>
+
+              <option value="YEDEK_UYE">
+                Yedek Üye
+              </option>
             </select>
           )}
 
@@ -315,7 +681,12 @@ export default function SupportTeamDialog({
             "Görev / Unvan",
             <input
               value={member.duty ?? ""}
-              onChange={(event) => onChange("duty", event.target.value)}
+              onChange={(event) =>
+                onChange(
+                  "duty",
+                  event.target.value
+                )
+              }
               style={inputStyle}
             />
           )}
@@ -323,8 +694,15 @@ export default function SupportTeamDialog({
           {label(
             "Departman",
             <input
-              value={member.department ?? ""}
-              onChange={(event) => onChange("department", event.target.value)}
+              value={
+                member.department ?? ""
+              }
+              onChange={(event) =>
+                onChange(
+                  "department",
+                  event.target.value
+                )
+              }
               style={inputStyle}
             />
           )}
@@ -332,8 +710,15 @@ export default function SupportTeamDialog({
           {label(
             "Telefon",
             <input
-              value={member.phone ?? ""}
-              onChange={(event) => onChange("phone", event.target.value)}
+              value={
+                member.phone ?? ""
+              }
+              onChange={(event) =>
+                onChange(
+                  "phone",
+                  event.target.value
+                )
+              }
               style={inputStyle}
             />
           )}
@@ -341,8 +726,16 @@ export default function SupportTeamDialog({
           {label(
             "Sertifika Bilgisi",
             <input
-              value={member.certificateInfo ?? ""}
-              onChange={(event) => onChange("certificateInfo", event.target.value)}
+              value={
+                member.certificateInfo ??
+                ""
+              }
+              onChange={(event) =>
+                onChange(
+                  "certificateInfo",
+                  event.target.value
+                )
+              }
               style={inputStyle}
             />
           )}
@@ -353,14 +746,20 @@ export default function SupportTeamDialog({
               type="date"
               value={
                 member.assignedDateMillis
-                  ? new Date(member.assignedDateMillis).toISOString().slice(0, 10)
+                  ? new Date(
+                      member.assignedDateMillis
+                    )
+                      .toISOString()
+                      .slice(0, 10)
                   : ""
               }
               onChange={(event) =>
                 onChange(
                   "assignedDateMillis",
                   event.target.value
-                    ? new Date(`${event.target.value}T00:00:00`).getTime()
+                    ? new Date(
+                        `${event.target.value}T00:00:00`
+                      ).getTime()
                     : Date.now()
                 )
               }
@@ -371,42 +770,112 @@ export default function SupportTeamDialog({
           {label(
             "İmza Durumu",
             <select
-              value={member.signatureStatus ?? "IMZA_BEKLIYOR"}
-              onChange={(event) => onChange("signatureStatus", event.target.value)}
+              value={
+                member.signatureStatus ??
+                "IMZA_BEKLIYOR"
+              }
+              onChange={(event) =>
+                onChange(
+                  "signatureStatus",
+                  event.target.value
+                )
+              }
               style={inputStyle}
             >
-              <option value="IMZA_BEKLIYOR">İmza Bekliyor</option>
-              <option value="IMZALANDI">İmzalandı</option>
+              <option value="IMZA_BEKLIYOR">
+                İmza Bekliyor
+              </option>
+
+              <option value="IMZALANDI">
+                İmzalandı
+              </option>
             </select>
           )}
 
           {label(
             "Kayıt Durumu",
             <select
-              value={member.isActive === false ? "false" : "true"}
-              onChange={(event) => onChange("isActive", event.target.value === "true")}
+              value={
+                member.isActive ===
+                false
+                  ? "false"
+                  : "true"
+              }
+              onChange={(event) =>
+                onChange(
+                  "isActive",
+                  event.target.value ===
+                    "true"
+                )
+              }
               style={inputStyle}
             >
-              <option value="true">Aktif</option>
-              <option value="false">Pasif</option>
+              <option value="true">
+                Aktif
+              </option>
+
+              <option value="false">
+                Pasif
+              </option>
             </select>
           )}
         </div>
 
-        <footer style={{ marginTop: 18, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" onClick={onClose}>İptal</button>
+        <footer
+          style={{
+            marginTop: 18,
+            display: "flex",
+            justifyContent:
+              "flex-end",
+            gap: 8,
+          }}
+        >
           <button
             type="button"
-            onClick={() => void onSave()}
-            style={{ minHeight: 44, background: "#047857", color: "#fff", border: 0, borderRadius: 12, padding: "0 16px", fontWeight: 900 }}
+            onClick={onClose}
+            style={{
+              minHeight: 44,
+              borderRadius: 12,
+              border:
+                "1px solid #dbe3ec",
+              background: "#ffffff",
+              padding: "0 16px",
+              fontWeight: 850,
+              cursor: "pointer",
+            }}
           >
-            <Save size={16} /> Üyeyi Kaydet
+            İptal
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              void onSave()
+            }
+            style={{
+              minHeight: 44,
+              background: "#047857",
+              color: "#ffffff",
+              border: 0,
+              borderRadius: 12,
+              padding: "0 16px",
+              fontWeight: 900,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              cursor: "pointer",
+            }}
+          >
+            <Save size={16} />
+            Üyeyi Kaydet
           </button>
         </footer>
 
         <style jsx>{`
           @media (max-width: 720px) {
-            .supportTeamGrid { grid-template-columns: 1fr !important; }
+            .supportTeamGrid {
+              grid-template-columns: 1fr !important;
+            }
           }
         `}</style>
       </section>
