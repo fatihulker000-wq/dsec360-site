@@ -137,15 +137,15 @@ const CATEGORY_DEFINITIONS: CategoryDefinition[] = [
     icon: <BookOpenCheck size={25} />,
   },
   {
-    value: "BOARD",
-    title: "Kurul Kayıtları",
-    description:
-      "Kararlar, tutanaklar ve katılım listeleri",
-    badge: "Kurul",
-    color: "#ef4444",
-    softColor: "#fef2f2",
-    icon: <Users size={25} />,
-  },
+  value: "BOARD",
+  title: "İSG Kurul Merkezi",
+  description:
+    "Toplantılar, gündemler, katılımcılar, kararlar ve kurul tutanakları",
+  badge: "Kurul",
+  color: "#ef4444",
+  softColor: "#fef2f2",
+  icon: <Users size={25} />,
+},
   {
     value: "EMPLOYEE_REPRESENTATIVE",
     title: "Çalışan Temsilcisi",
@@ -532,12 +532,18 @@ useEffect(() => {
     }
   };
 
-  const openCategory = (
-    category: DocumentationCategory
-  ) => {
-    setSelectedCategory(category);
-    setMainTab("DOCUMENTS");
-  };
+ const openCategory = (
+  category: DocumentationCategory
+) => {
+  if (category === "BOARD") {
+    window.location.href =
+      "/admin/documentation/board";
+    return;
+  }
+
+  setSelectedCategory(category);
+  setMainTab("DOCUMENTS");
+};
 
   const tabs: Array<{
     value: MainTab;
