@@ -126,27 +126,41 @@ export type EmergencyPlan = {
 /**
  * Bundan sonra yeni kayıtlarda kullanılacak standart ekip kodları.
  */
+
+/**
+ * Bundan sonra yeni kayıtlarda kullanılacak standart ekip kodları.
+ */
 export type StandardEmergencyTeamType =
-  | "ARAMA_KURTARMA"
+  | "ISVEREN_VEKILI"
+  | "ACIL_DURUM_KOORDINATORU"
+  | "KORUMA"
+  | "ARAMA_KURTARMA_TAHLIYE"
   | "YANGIN"
   | "ILK_YARDIM"
-  | "KORUMA";
+  | "HABERLESME";
 
 /**
  * Mobil veya web tarafında daha önce kullanılmış eski ekip kodları.
  * Eski kayıtların hata vermeden okunması için korunur.
  */
 export type LegacyEmergencyTeamType =
-  | "ARAMA_KURTARMA_TAHLIYE"
+  | "ISVEREN"
+  | "ARAMA_KURTARMA"
   | "ARAMA_KURTARMA_TAHLİYE"
+  | "KURTARMA_TAHLIYE"
+  | "TAHLIYE"
+  | "TAHLİYE"
+  | "YANGIN_EKIBI"
   | "YANGINLA_MUCADELE"
   | "YANGINLA_MÜCADELE"
   | "ILKYARDIM"
-  | "TAHLIYE"
-  | "TAHLİYE"
-  | "HABERLESME"
+  | "ILK_YARDIM_EKIBI"
   | "KORUMA_EKIBI"
-  | "KORUMA_EKİBİ";
+  | "KORUMA_EKİBİ"
+  | "HABERLESME_EKIBI"
+  | "HABERLEŞME"
+  | "HABERLEŞME_EKİBİ";
+
 
 export type EmergencyTeamType =
   | StandardEmergencyTeamType

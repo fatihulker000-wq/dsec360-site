@@ -19,69 +19,61 @@ const EMERGENCY_API =
   "/api/risk-management/emergency";
 
 /**
- * Web ve mobil tarafta geçmişte kullanılmış farklı ekip kodlarını
+ * Web ve mobil tarafta kullanılmış ekip kodlarını
  * tek bir standart ekip koduna dönüştürür.
- *
- * Standart ekip kodları:
- * - ARAMA_KURTARMA
- * - YANGIN
- * - ILK_YARDIM
- * - KORUMA
  */
 export function normalizeEmergencyTeamType(
   value: unknown
 ): EmergencyTeamType {
-  const normalized = String(value || "")
+  const normalized = String(value ?? "")
     .trim()
-    .toLocaleUpperCase("tr-TR");
+    .toUpperCase()
+    .replaceAll("İ", "I")
+    .replaceAll("Ş", "S")
+    .replaceAll("Ğ", "G")
+    .replaceAll("Ü", "U")
+    .replaceAll("Ö", "O")
+    .replaceAll("Ç", "C");
 
-  if (
-    normalized === "ARAMA_KURTARMA" ||
-    normalized ===
-      "ARAMA_KURTARMA_TAHLIYE" ||
-    normalized ===
-      "ARAMA_KURTARMA_TAHLİYE" ||
-    normalized === "TAHLIYE" ||
-    normalized === "TAHLİYE"
-  ) {
-    return "ARAMA_KURTARMA";
+  switch (normalized) {
+    case "ISVEREN":
+    case "ISVEREN_VEKILI":
+      return "ISVEREN_VEKILI";
+
+    case "ACIL_DURUM_KOORDINATORU":
+      return "ACIL_DURUM_KOORDINATORU";
+
+    case "KORUMA":
+    case "KORUMA_EKIBI":
+      return "KORUMA";
+
+    case "ARAMA_KURTARMA":
+    case "ARAMA_KURTARMA_TAHLIYE":
+    case "KURTARMA_TAHLIYE":
+    case "TAHLIYE":
+      return "ARAMA_KURTARMA_TAHLIYE";
+
+    case "YANGIN":
+    case "YANGIN_EKIBI":
+    case "YANGINLA_MUCADELE":
+      return "YANGIN";
+
+    case "ILKYARDIM":
+    case "ILK_YARDIM":
+    case "ILK_YARDIM_EKIBI":
+      return "ILK_YARDIM";
+
+    case "HABERLESME":
+    case "HABERLESME_EKIBI":
+      return "HABERLESME";
+
+    default:
+      /*
+       * Bilinmeyen bir değeri başka bir ekibe çevirmeyiz.
+       * Yeni kayıt formunun varsayılanı zaten YANGIN'dır.
+       */
+      return "YANGIN";
   }
-
-  if (
-    normalized === "YANGIN" ||
-    normalized ===
-      "YANGINLA_MUCADELE" ||
-    normalized ===
-      "YANGINLA_MÜCADELE"
-  ) {
-    return "YANGIN";
-  }
-
-  if (
-    normalized === "ILKYARDIM" ||
-    normalized === "ILK_YARDIM" ||
-    normalized === "İLK_YARDIM"
-  ) {
-    return "ILK_YARDIM";
-  }
-
-  if (
-    normalized === "KORUMA" ||
-    normalized ===
-      "KORUMA_EKIBI" ||
-    normalized ===
-      "KORUMA_EKİBİ" ||
-    normalized === "HABERLESME" ||
-    normalized === "HABERLEŞME"
-  ) {
-    return "KORUMA";
-  }
-
-  /*
-   * Bilinmeyen veya boş ekip kodlarında güvenli varsayılan.
-   * string döndürülmez; her zaman EmergencyTeamType döner.
-   */
-  return "ARAMA_KURTARMA";
 }
 
 function normalizeSupportMember(
@@ -89,20 +81,15 @@ function normalizeSupportMember(
 ): EmergencySupportMember {
   return {
     ...member,
-    teamType:
-      normalizeEmergencyTeamType(
-        member.teamType
-      ),
+    teamType: normalizeEmergencyTeamType(
+      member.teamType
+    ),
   };
 }
 
 function normalizeSupportMemberPayload(
   member: Partial<EmergencySupportMember>
 ): Partial<EmergencySupportMember> {
-  /*
-   * Güncelleme sırasında teamType gönderilmemişse
-   * mevcut değerin yanlışlıkla değiştirilmesini önler.
-   */
   if (
     member.teamType === undefined ||
     member.teamType === null ||
@@ -115,10 +102,9 @@ function normalizeSupportMemberPayload(
 
   return {
     ...member,
-    teamType:
-      normalizeEmergencyTeamType(
-        member.teamType
-      ),
+    teamType: normalizeEmergencyTeamType(
+      member.teamType
+    ),
   };
 }
 
@@ -133,8 +119,7 @@ async function readJson(
 async function ensureSuccess(
   response: Response
 ): Promise<EmergencyApiResponse> {
-  const json =
-    await readJson(response);
+  const json = await readJson(response);
 
   if (
     !response.ok ||
@@ -164,8 +149,7 @@ export async function getEmergencyPlans(
     }
   );
 
-  const json =
-    await ensureSuccess(response);
+  const json = await ensureSuccess(response);
 
   return Array.isArray(json.plans)
     ? json.plans
@@ -174,9 +158,7 @@ export async function getEmergencyPlans(
 
 export async function getSupportTeams(
   firmId: string
-): Promise<
-  EmergencySupportMember[]
-> {
+): Promise<EmergencySupportMember[]> {
   const response = await fetch(
     `${EMERGENCY_API}?firmId=${encodeURIComponent(
       firmId
@@ -188,18 +170,13 @@ export async function getSupportTeams(
     }
   );
 
-  const json =
-    await ensureSuccess(response);
+  const json = await ensureSuccess(response);
 
-  const teams = Array.isArray(
-    json.teams
-  )
+  const teams = Array.isArray(json.teams)
     ? json.teams
     : [];
 
-  return teams.map(
-    normalizeSupportMember
-  );
+  return teams.map(normalizeSupportMember);
 }
 
 export async function getEmergencyDrills(
@@ -216,8 +193,7 @@ export async function getEmergencyDrills(
     }
   );
 
-  const json =
-    await ensureSuccess(response);
+  const json = await ensureSuccess(response);
 
   return Array.isArray(json.drills)
     ? json.drills
@@ -233,15 +209,12 @@ export async function saveEmergencyPlan(
       method: plan.id
         ? "PATCH"
         : "POST",
-
       credentials: "include",
       cache: "no-store",
-
       headers: {
         "Content-Type":
           "application/json",
       },
-
       body: JSON.stringify({
         ...plan,
         entityType: "PLAN",
@@ -249,8 +222,7 @@ export async function saveEmergencyPlan(
     }
   );
 
-  const json =
-    await ensureSuccess(response);
+  const json = await ensureSuccess(response);
 
   return json.record as EmergencyPlan;
 }
@@ -276,9 +248,7 @@ export async function saveSupportMember(
   member: Partial<EmergencySupportMember>
 ): Promise<EmergencySupportMember> {
   const normalizedMember =
-    normalizeSupportMemberPayload(
-      member
-    );
+    normalizeSupportMemberPayload(member);
 
   const response = await fetch(
     EMERGENCY_API,
@@ -286,15 +256,12 @@ export async function saveSupportMember(
       method: member.id
         ? "PATCH"
         : "POST",
-
       credentials: "include",
       cache: "no-store",
-
       headers: {
         "Content-Type":
           "application/json",
       },
-
       body: JSON.stringify({
         ...normalizedMember,
         entityType: "TEAM",
@@ -302,8 +269,7 @@ export async function saveSupportMember(
     }
   );
 
-  const json =
-    await ensureSuccess(response);
+  const json = await ensureSuccess(response);
 
   const savedMember =
     json.record as EmergencySupportMember;
@@ -339,15 +305,12 @@ export async function saveEmergencyDrill(
       method: drill.id
         ? "PATCH"
         : "POST",
-
       credentials: "include",
       cache: "no-store",
-
       headers: {
         "Content-Type":
           "application/json",
       },
-
       body: JSON.stringify({
         ...drill,
         entityType: "DRILL",
@@ -355,8 +318,7 @@ export async function saveEmergencyDrill(
     }
   );
 
-  const json =
-    await ensureSuccess(response);
+  const json = await ensureSuccess(response);
 
   return json.record as EmergencyDrill;
 }
