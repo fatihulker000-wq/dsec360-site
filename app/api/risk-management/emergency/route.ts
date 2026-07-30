@@ -7,6 +7,15 @@ export const dynamic = "force-dynamic";
 
 type EmergencyEntityType = "PLAN" | "TEAM" | "DRILL";
 
+type EmergencyTeamType =
+  | "ISVEREN_VEKILI"
+  | "ACIL_DURUM_KOORDINATORU"
+  | "KORUMA"
+  | "ARAMA_KURTARMA_TAHLIYE"
+  | "YANGIN"
+  | "ILK_YARDIM"
+  | "HABERLESME";
+
 type AdminContext = {
   allowed: boolean;
   adminRole?: string;
@@ -115,6 +124,64 @@ function normalizeEntityType(value: unknown): EmergencyEntityType {
   if (normalized === "TEAM") return "TEAM";
   if (normalized === "DRILL") return "DRILL";
   return "PLAN";
+}
+
+function normalizeTeamType(value: unknown): EmergencyTeamType {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLocaleUpperCase("tr-TR");
+
+  switch (normalized) {
+    case "ISVEREN_VEKILI":
+    case "İŞVEREN_VEKİLİ":
+    case "ISVEREN":
+    case "İŞVEREN":
+      return "ISVEREN_VEKILI";
+
+    case "ACIL_DURUM_KOORDINATORU":
+    case "ACİL_DURUM_KOORDİNATÖRÜ":
+    case "ACIL_DURUM_KOORDİNATÖRÜ":
+    case "ACİL_DURUM_KOORDINATORU":
+      return "ACIL_DURUM_KOORDINATORU";
+
+    case "KORUMA":
+    case "KORUMA_EKIBI":
+    case "KORUMA_EKİBİ":
+      return "KORUMA";
+
+    case "ARAMA_KURTARMA":
+    case "ARAMA_KURTARMA_TAHLIYE":
+    case "ARAMA_KURTARMA_TAHLİYE":
+    case "KURTARMA_TAHLIYE":
+    case "KURTARMA_TAHLİYE":
+    case "TAHLIYE":
+    case "TAHLİYE":
+      return "ARAMA_KURTARMA_TAHLIYE";
+
+    case "YANGIN":
+    case "YANGIN_EKIBI":
+    case "YANGIN_EKİBİ":
+    case "YANGINLA_MUCADELE":
+    case "YANGINLA_MÜCADELE":
+      return "YANGIN";
+
+    case "ILKYARDIM":
+    case "İLKYARDIM":
+    case "ILK_YARDIM":
+    case "İLK_YARDIM":
+    case "ILK_YARDIM_EKIBI":
+    case "İLK_YARDIM_EKİBİ":
+      return "ILK_YARDIM";
+
+    case "HABERLESME":
+    case "HABERLEŞME":
+    case "HABERLESME_EKIBI":
+    case "HABERLEŞME_EKİBİ":
+      return "HABERLESME";
+
+    default:
+      return "ARAMA_KURTARMA_TAHLIYE";
+  }
 }
 
 function tableForType(type: EmergencyEntityType) {
@@ -289,7 +356,7 @@ function teamRowToRecord(row: Record<string, any>) {
     localFirmId: row.local_firm_id ?? null,
     syncKey: String(row.sync_key || ""),
     employeeId: row.employee_id ?? null,
-    teamType: row.team_type || "YANGIN",
+    teamType: normalizeTeamType(row.team_type),
     teamRole: row.team_role || "EKIP_UYESI",
     fullName: row.full_name || "",
     duty: row.duty || "",
@@ -367,7 +434,7 @@ function buildInsertPayload(
     return {
       ...base,
       employee_id: numberOrNull(payload.employeeId),
-      team_type: cleanText(payload.teamType) || "YANGIN",
+      team_type: normalizeTeamType(payload.teamType),
       team_role: cleanText(payload.teamRole) || "EKIP_UYESI",
       full_name: cleanText(payload.fullName) || "",
       duty: cleanText(payload.duty) || "",
@@ -442,7 +509,7 @@ function buildUpdatePayload(
     return {
       ...common,
       employee_id: numberOrNull(payload.employeeId),
-      team_type: cleanText(payload.teamType) || "YANGIN",
+      team_type: normalizeTeamType(payload.teamType),
       team_role: cleanText(payload.teamRole) || "EKIP_UYESI",
       full_name: cleanText(payload.fullName) || "",
       duty: cleanText(payload.duty) || "",

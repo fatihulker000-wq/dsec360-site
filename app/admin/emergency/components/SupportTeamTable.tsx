@@ -21,10 +21,13 @@ type DangerClass =
   | "COK_TEHLIKELI";
 
 type StandardTeamType =
-  | "ARAMA_KURTARMA"
+  | "ISVEREN_VEKILI"
+  | "ACIL_DURUM_KOORDINATORU"
+  | "KORUMA"
+  | "ARAMA_KURTARMA_TAHLIYE"
   | "YANGIN"
   | "ILK_YARDIM"
-  | "KORUMA";
+  | "HABERLESME";
 
 type Props = {
   data: EmergencySupportMember[];
@@ -44,95 +47,153 @@ type TeamDefinition = {
   type: StandardTeamType;
   title: string;
   description: string;
+  requirementType:
+    | "SINGLE"
+    | "CALCULATED";
 };
 
 const TEAM_DEFINITIONS: TeamDefinition[] = [
   {
-    type: "ARAMA_KURTARMA",
+    type: "ISVEREN_VEKILI",
     title:
-      "Arama, Kurtarma ve Tahliye",
+      "İşveren / İşveren Vekili",
     description:
-      "Acil durumda arama, kurtarma ve güvenli tahliye işlemlerini yürütür.",
+      "Acil durum yönetiminin en üst sorumlusudur ve organizasyonun yürütülmesini sağlar.",
+    requirementType: "SINGLE",
   },
   {
-    type: "YANGIN",
-    title: "Yangınla Mücadele",
+    type:
+      "ACIL_DURUM_KOORDINATORU",
+    title:
+      "Acil Durum Koordinatörü",
     description:
-      "Yangına ilk müdahale ve söndürme çalışmalarını yürütür.",
-  },
-  {
-    type: "ILK_YARDIM",
-    title: "İlk Yardım",
-    description:
-      "Yaralanan veya sağlık sorunu yaşayan kişilere ilk yardım uygular.",
+      "Acil durum ekipleri arasındaki yönetim, iletişim ve koordinasyonu yürütür.",
+    requirementType: "SINGLE",
   },
   {
     type: "KORUMA",
     title: "Koruma Ekibi",
     description:
       "Acil durum alanının güvenliğini sağlar ve izinsiz girişleri engeller.",
+    requirementType: "CALCULATED",
+  },
+  {
+    type:
+      "ARAMA_KURTARMA_TAHLIYE",
+    title:
+      "Arama, Kurtarma ve Tahliye Ekibi",
+    description:
+      "Acil durumda arama, kurtarma ve güvenli tahliye faaliyetlerini yürütür.",
+    requirementType: "CALCULATED",
+  },
+  {
+    type: "YANGIN",
+    title:
+      "Yangınla Mücadele Ekibi",
+    description:
+      "Yangına ilk müdahale ve söndürme çalışmalarını yürütür.",
+    requirementType: "CALCULATED",
+  },
+  {
+    type: "ILK_YARDIM",
+    title: "İlk Yardım Ekibi",
+    description:
+      "Yaralanan veya sağlık sorunu yaşayan kişilere ilk yardım uygular.",
+    requirementType: "CALCULATED",
+  },
+  {
+    type: "HABERLESME",
+    title: "Haberleşme Ekibi",
+    description:
+      "Acil durum sırasında kurum içi ve kurum dışı haberleşme faaliyetlerini yürütür.",
+    requirementType: "SINGLE",
   },
 ];
 
 function normalizeTeamType(
-  value: EmergencyTeamType | string
+  value:
+    | EmergencyTeamType
+    | string
+    | null
+    | undefined
 ): StandardTeamType {
-  const normalized = String(value || "")
+  const normalized = String(
+    value || ""
+  )
     .trim()
     .toLocaleUpperCase("tr-TR");
 
-  if (
-    normalized ===
-      "ARAMA_KURTARMA" ||
-    normalized ===
-      "ARAMA_KURTARMA_TAHLIYE" ||
-    normalized ===
-      "ARAMA_KURTARMA_TAHLİYE" ||
-    normalized === "TAHLIYE" ||
-    normalized === "TAHLİYE"
-  ) {
-    return "ARAMA_KURTARMA";
-  }
+  switch (normalized) {
+    case "ISVEREN_VEKILI":
+    case "İŞVEREN_VEKİLİ":
+    case "ISVEREN":
+    case "İŞVEREN":
+      return "ISVEREN_VEKILI";
 
-  if (
-    normalized === "YANGIN" ||
-    normalized ===
-      "YANGINLA_MUCADELE" ||
-    normalized ===
-      "YANGINLA_MÜCADELE"
-  ) {
-    return "YANGIN";
-  }
+    case "ACIL_DURUM_KOORDINATORU":
+    case "ACİL_DURUM_KOORDİNATÖRÜ":
+    case "ACIL_DURUM_KOORDİNATORU":
+    case "ACIL_DURUM_KOORDINATÖRÜ":
+      return "ACIL_DURUM_KOORDINATORU";
 
-  if (
-    normalized === "ILKYARDIM" ||
-    normalized === "ILK_YARDIM"
-  ) {
-    return "ILK_YARDIM";
-  }
+    case "ARAMA_KURTARMA":
+    case "ARAMA_KURTARMA_TAHLIYE":
+    case "ARAMA_KURTARMA_TAHLİYE":
+    case "KURTARMA_TAHLIYE":
+    case "KURTARMA_TAHLİYE":
+    case "TAHLIYE":
+    case "TAHLİYE":
+      return "ARAMA_KURTARMA_TAHLIYE";
 
-  if (
-    normalized === "KORUMA" ||
-    normalized ===
-      "KORUMA_EKIBI" ||
-    normalized ===
-      "KORUMA_EKİBİ" ||
-    normalized ===
-      "HABERLESME"
-  ) {
-    return "KORUMA";
-  }
+    case "YANGIN":
+    case "YANGIN_EKIBI":
+    case "YANGIN_EKİBİ":
+    case "YANGINLA_MUCADELE":
+    case "YANGINLA_MÜCADELE":
+      return "YANGIN";
 
-  return "ARAMA_KURTARMA";
+    case "ILKYARDIM":
+    case "İLKYARDIM":
+    case "ILK_YARDIM":
+    case "İLK_YARDIM":
+    case "ILK_YARDIM_EKIBI":
+    case "İLK_YARDIM_EKİBİ":
+      return "ILK_YARDIM";
+
+    case "KORUMA":
+    case "KORUMA_EKIBI":
+    case "KORUMA_EKİBİ":
+      return "KORUMA";
+
+    case "HABERLESME":
+    case "HABERLEŞME":
+    case "HABERLESME_EKIBI":
+    case "HABERLEŞME_EKİBİ":
+      return "HABERLESME";
+
+    default:
+      return "ARAMA_KURTARMA_TAHLIYE";
+  }
 }
 
 function getRoleLabel(
-  role:
-    EmergencySupportMember["teamRole"]
+  role: EmergencySupportMember["teamRole"]
 ): string {
-  switch (role) {
+  const normalizedRole = String(
+    role || ""
+  )
+    .trim()
+    .toUpperCase();
+
+  switch (normalizedRole) {
     case "EKIP_LIDERI":
       return "Ekip Lideri";
+
+    case "YARDIMCI_LIDER":
+      return "Yardımcı Lider";
+
+    case "ASIL_UYE":
+      return "Asıl Üye";
 
     case "YEDEK_UYE":
       return "Yedek Üye";
@@ -144,12 +205,28 @@ function getRoleLabel(
 }
 
 function getSignatureLabel(
-  status:
-    EmergencySupportMember["signatureStatus"]
+  status: EmergencySupportMember["signatureStatus"]
 ): string {
-  return status === "IMZALANDI"
-    ? "İmzalandı"
-    : "İmza Bekliyor";
+  const normalizedStatus = String(
+    status || ""
+  )
+    .trim()
+    .toUpperCase();
+
+  switch (normalizedStatus) {
+    case "IMZALANDI":
+      return "İmzalandı";
+
+    case "REDDEDILDI":
+      return "Reddedildi";
+
+    case "GEREKMIYOR":
+      return "İmza Gerekmiyor";
+
+    case "IMZA_BEKLIYOR":
+    default:
+      return "İmza Bekliyor";
+  }
 }
 
 function calculateRequiredMemberCount(
@@ -190,6 +267,20 @@ function calculateRequiredMemberCount(
   );
 }
 
+function getTeamRequiredCount(
+  team: TeamDefinition,
+  calculatedCount: number
+): number {
+  if (
+    team.requirementType ===
+    "SINGLE"
+  ) {
+    return 1;
+  }
+
+  return calculatedCount;
+}
+
 function getDangerClassLabel(
   dangerClass: DangerClass
 ): string {
@@ -215,13 +306,15 @@ export default function SupportTeamTable({
   onEdit,
   onDelete,
 }: Props) {
+  const visibleMembers = data;
+
   const activeMembers =
-    data.filter(
+    visibleMembers.filter(
       (member) =>
         member.isActive !== false
     );
 
-  const requiredMemberCount =
+  const calculatedRequiredCount =
     calculateRequiredMemberCount(
       employeeCount,
       dangerClass
@@ -271,6 +364,7 @@ export default function SupportTeamTable({
             <ShieldCheck
               size={20}
             />
+
             Acil Durum Destek
             Ekipleri
           </h3>
@@ -286,7 +380,9 @@ export default function SupportTeamTable({
             <strong>
               {employeeCount}
             </strong>
+
             {" · "}
+
             Tehlike sınıfı:{" "}
             <strong>
               {getDangerClassLabel(
@@ -332,7 +428,9 @@ export default function SupportTeamTable({
             <Users size={18} />
           }
           title="Toplam Kayıt"
-          value={data.length}
+          value={
+            visibleMembers.length
+          }
         />
 
         <SummaryCard
@@ -365,7 +463,7 @@ export default function SupportTeamTable({
           }
           title="Ekip Başına Asgari"
           value={
-            requiredMemberCount
+            calculatedRequiredCount
           }
         />
       </div>
@@ -382,7 +480,7 @@ export default function SupportTeamTable({
         {TEAM_DEFINITIONS.map(
           (team) => {
             const teamMembers =
-              data.filter(
+              visibleMembers.filter(
                 (member) =>
                   normalizeTeamType(
                     member.teamType
@@ -396,10 +494,16 @@ export default function SupportTeamTable({
                   false
               );
 
+            const requiredCount =
+              getTeamRequiredCount(
+                team,
+                calculatedRequiredCount
+              );
+
             const missingCount =
               Math.max(
                 0,
-                requiredMemberCount -
+                requiredCount -
                   activeTeamMembers.length
               );
 
@@ -520,13 +624,13 @@ export default function SupportTeamTable({
                     <AlertTriangle
                       size={15}
                     />
+
                     En az{" "}
-                    {
-                      requiredMemberCount
-                    }{" "}
-                    aktif üye
+                    {requiredCount}{" "}
+                    aktif kayıt
                     öneriliyor.{" "}
-                    {missingCount} üye
+
+                    {missingCount} kayıt
                     eksik.
                   </div>
                 ) : null}
@@ -561,8 +665,8 @@ export default function SupportTeamTable({
                         fontWeight: 800,
                       }}
                     >
-                      Bu ekip için
-                      henüz üye
+                      Bu bölüm için
+                      henüz kayıt
                       eklenmedi.
                     </div>
                   ) : (
@@ -855,6 +959,7 @@ function MemberRow({
           }}
         >
           <Trash2 size={14} />
+
           {deleting
             ? "Siliniyor"
             : "Sil"}

@@ -44,20 +44,32 @@ type Props = {
 
 const TEAM_OPTIONS = [
   {
-    value: "ARAMA_KURTARMA",
-    label: "Arama, Kurtarma ve Tahliye",
+    value: "ISVEREN_VEKILI",
+    label: "İşveren / İşveren Vekili",
   },
   {
-    value: "YANGIN",
-    label: "Yangınla Mücadele",
-  },
-  {
-    value: "ILK_YARDIM",
-    label: "İlk Yardım",
+    value: "ACIL_DURUM_KOORDINATORU",
+    label: "Acil Durum Koordinatörü",
   },
   {
     value: "KORUMA",
     label: "Koruma Ekibi",
+  },
+  {
+    value: "ARAMA_KURTARMA_TAHLIYE",
+    label: "Arama, Kurtarma ve Tahliye",
+  },
+  {
+    value: "YANGIN",
+    label: "Yangın Söndürme Ekibi",
+  },
+  {
+    value: "ILK_YARDIM",
+    label: "İlk Yardım Ekibi",
+  },
+  {
+    value: "HABERLESME",
+    label: "Haberleşme Ekibi",
   },
 ] as const;
 
@@ -79,36 +91,36 @@ const normalizeDialogTeamType = (
     .trim()
     .toLocaleUpperCase("tr-TR");
 
-  if (
-    normalized === "ARAMA_KURTARMA" ||
-    normalized ===
-      "ARAMA_KURTARMA_TAHLIYE" ||
-    normalized === "TAHLİYE" ||
-    normalized === "TAHLIYE"
-  ) {
-    return "ARAMA_KURTARMA";
-  }
+  switch (normalized) {
+    case "ISVEREN_VEKILI":
+      return "ISVEREN_VEKILI";
 
-  if (
-    normalized === "YANGIN" ||
-    normalized ===
-      "YANGINLA_MUCADELE"
-  ) {
-    return "YANGIN";
-  }
+    case "ACIL_DURUM_KOORDINATORU":
+      return "ACIL_DURUM_KOORDINATORU";
 
-  if (
-    normalized === "ILKYARDIM" ||
-    normalized === "ILK_YARDIM"
-  ) {
-    return "ILK_YARDIM";
-  }
+    case "ARAMA_KURTARMA":
+    case "ARAMA_KURTARMA_TAHLIYE":
+    case "TAHLİYE":
+    case "TAHLIYE":
+      return "ARAMA_KURTARMA_TAHLIYE";
 
-  if (normalized === "KORUMA") {
-    return "KORUMA";
-  }
+    case "YANGIN":
+    case "YANGINLA_MUCADELE":
+      return "YANGIN";
 
-  return "ARAMA_KURTARMA";
+    case "ILKYARDIM":
+    case "ILK_YARDIM":
+      return "ILK_YARDIM";
+
+    case "KORUMA":
+      return "KORUMA";
+
+    case "HABERLESME":
+      return "HABERLESME";
+
+    default:
+      return "ARAMA_KURTARMA_TAHLIYE";
+  }
 };
 
 export default function SupportTeamDialog({

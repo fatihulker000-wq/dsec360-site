@@ -22,7 +22,6 @@ export type RiskLevel =
   | "INTOLERABLE";
 
 export interface RiskRecord {
-
   id: UUID;
 
   firmId: UUID;
@@ -68,11 +67,9 @@ export interface RiskRecord {
   createdAtMillis: number;
 
   updatedAtMillis: number;
-
 }
 
 export interface RiskDashboardTotals {
-
   totalRisk: number;
 
   criticalRisk: number;
@@ -90,7 +87,6 @@ export interface RiskDashboardTotals {
   openDof: number;
 
   closedDof: number;
-
 }
 
 /* =========================================================
@@ -98,7 +94,6 @@ export interface RiskDashboardTotals {
 ========================================================= */
 
 export interface EmergencyPlan {
-
   id: UUID;
 
   firmId: UUID;
@@ -150,24 +145,44 @@ export interface EmergencyPlan {
   createdAtMillis: number;
 
   updatedAtMillis: number;
-
 }
 
 /* =========================================================
    SUPPORT TEAM
 ========================================================= */
 
-export interface EmergencySupportMember {
+export type EmergencyTeamType =
+  | "ISVEREN_VEKILI"
+  | "ACIL_DURUM_KOORDINATORU"
+  | "KORUMA"
+  | "ARAMA_KURTARMA_TAHLIYE"
+  | "YANGIN"
+  | "ILK_YARDIM"
+  | "HABERLESME";
 
+export type EmergencyTeamRole =
+  | "EKIP_LIDERI"
+  | "YARDIMCI_LIDER"
+  | "ASIL_UYE"
+  | "EKIP_UYESI"
+  | "YEDEK_UYE";
+
+export type EmergencySignatureStatus =
+  | "IMZA_BEKLIYOR"
+  | "IMZALANDI"
+  | "REDDEDILDI"
+  | "GEREKMIYOR";
+
+export interface EmergencySupportMember {
   id: UUID;
 
   firmId: UUID;
 
   employeeId: string | null;
 
-  teamType: string;
+  teamType: EmergencyTeamType;
 
-  teamRole: string;
+  teamRole: EmergencyTeamRole;
 
   fullName: string;
 
@@ -181,12 +196,19 @@ export interface EmergencySupportMember {
 
   assignedDateMillis: number;
 
-  signatureStatus: string;
+  signatureStatus: EmergencySignatureStatus;
 
   isActive: boolean;
 
   createdAtMillis: number;
 
+  updatedAtMillis?: number;
+
+  version?: number;
+
+  syncStatus?: string;
+
+  deleted?: boolean;
 }
 
 /* =========================================================
@@ -194,7 +216,6 @@ export interface EmergencySupportMember {
 ========================================================= */
 
 export interface EmergencyDrill {
-
   id: UUID;
 
   firmId: UUID;
@@ -224,7 +245,6 @@ export interface EmergencyDrill {
   createdAtMillis: number;
 
   updatedAtMillis: number;
-
 }
 
 /* =========================================================
@@ -232,7 +252,6 @@ export interface EmergencyDrill {
 ========================================================= */
 
 export interface EmergencyDashboard {
-
   totalPlans: number;
 
   expiredPlans: number;
@@ -244,7 +263,6 @@ export interface EmergencyDashboard {
   totalDrills: number;
 
   upcomingDrills: number;
-
 }
 
 /* =========================================================
@@ -252,7 +270,6 @@ export interface EmergencyDashboard {
 ========================================================= */
 
 export interface RiskFilters {
-
   company: string;
 
   department: string;
@@ -260,7 +277,6 @@ export interface RiskFilters {
   level: string;
 
   search: string;
-
 }
 
 /* =========================================================
