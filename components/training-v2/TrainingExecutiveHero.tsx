@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import styles from "./training.module.css";
+import styles from "./Training.module.css";
 import {
   ShieldCheck,
   BrainCircuit,
@@ -29,13 +29,13 @@ interface HeroAction {
 const quickActions: HeroAction[] = [
   {
     id: "new",
-    label: "Yeni Eğitim",
+    label: "Yeni EÄŸitim",
     icon: <Plus size={18} />,
     color: "#2563EB",
   },
   {
     id: "upload",
-    label: "İçerik Yükle",
+    label: "Ä°Ã§erik YÃ¼kle",
     icon: <Upload size={18} />,
     color: "#9333EA",
   },
@@ -71,7 +71,7 @@ export default function TrainingExecutiveHero({
 
             <GraduationCap size={18} />
 
-            <span>Eğitim Yönetim Merkezi</span>
+            <span>EÄŸitim YÃ¶netim Merkezi</span>
 
           </div>
 
@@ -99,7 +99,7 @@ export default function TrainingExecutiveHero({
 
             <strong>
 
-              {aiEnabled ? "AKTİF" : "PASİF"}
+              {aiEnabled ? "AKTÄ°F" : "PASÄ°F"}
 
             </strong>
 
@@ -147,12 +147,12 @@ export default function TrainingExecutiveHero({
           <div>
 
             <h2 className={styles.scoreTitle}>
-              Eğitim Uygunluk Skoru
+              EÄŸitim Uygunluk Skoru
             </h2>
 
             <p className={styles.scoreDescription}>
-              Eğitim tamamlama, sertifika, içerik ve
-              katılımcı durumuna göre hesaplanır.
+              EÄŸitim tamamlama, sertifika, iÃ§erik ve
+              katÄ±lÄ±mcÄ± durumuna gÃ¶re hesaplanÄ±r.
             </p>
 
             <div className={styles.heroBadges}>
@@ -161,7 +161,7 @@ export default function TrainingExecutiveHero({
 
                 <ShieldCheck size={16} />
 
-                Audit Hazır
+                Audit HazÄ±r
 
               </span>
 
@@ -169,7 +169,7 @@ export default function TrainingExecutiveHero({
 
                 <Activity size={16} />
 
-                IBYS Hazır
+                IBYS HazÄ±r
 
               </span>
 
@@ -179,7 +179,7 @@ export default function TrainingExecutiveHero({
 
         </div>
 
-        {/* Sağ Alan */}
+        {/* SaÄŸ Alan */}
 
         <div className={styles.statsGrid}>
 
@@ -190,7 +190,7 @@ export default function TrainingExecutiveHero({
             <div>
 
               <small>
-                Toplam Eğitim
+                Toplam EÄŸitim
               </small>
 
               <h3>
@@ -208,7 +208,7 @@ export default function TrainingExecutiveHero({
             <div>
 
               <small>
-                Aktif Eğitim
+                Aktif EÄŸitim
               </small>
 
               <h3>
@@ -262,7 +262,7 @@ export default function TrainingExecutiveHero({
             <div>
 
               <small>
-                Katılımcılar
+                KatÄ±lÄ±mcÄ±lar
               </small>
 
               <h3>
@@ -294,7 +294,7 @@ export default function TrainingExecutiveHero({
         </div>
 
       </div>
-            {/* Hızlı İşlemler */}
+            {/* HÄ±zlÄ± Ä°ÅŸlemler */}
 
       <div className={styles.quickActionsSection}>
 
@@ -302,13 +302,13 @@ export default function TrainingExecutiveHero({
 
           <h3>
 
-            Hızlı İşlemler
+            HÄ±zlÄ± Ä°ÅŸlemler
 
           </h3>
 
           <span>
 
-            Eğitim yönetimini hızlandırın
+            EÄŸitim yÃ¶netimini hÄ±zlandÄ±rÄ±n
 
           </span>
 
@@ -360,14 +360,14 @@ export default function TrainingExecutiveHero({
 
         <div className={styles.healthCard}>
 
-          <h4>Eğitim Sağlık Skoru</h4>
+          <h4>EÄŸitim SaÄŸlÄ±k Skoru</h4>
 
           <strong>96 /100</strong>
 
           <small>
 
-            Video • PDF • Sınav • Sertifika
-            yapısı eksiksiz.
+            Video â€¢ PDF â€¢ SÄ±nav â€¢ Sertifika
+            yapÄ±sÄ± eksiksiz.
 
           </small>
 
@@ -375,16 +375,16 @@ export default function TrainingExecutiveHero({
 
         <div className={styles.healthCard}>
 
-          <h4>IBYS Hazırlık</h4>
+          <h4>IBYS HazÄ±rlÄ±k</h4>
 
           <strong>%100</strong>
 
           <small>
 
-            Eğitim kayıtları,
-            sürüm bilgisi,
+            EÄŸitim kayÄ±tlarÄ±,
+            sÃ¼rÃ¼m bilgisi,
             tamamlama verileri
-            hazır.
+            hazÄ±r.
 
           </small>
 
@@ -394,13 +394,13 @@ export default function TrainingExecutiveHero({
 
           <h4>Audit Log</h4>
 
-          <strong>AKTİF</strong>
+          <strong>AKTÄ°F</strong>
 
           <small>
 
-            Tüm kritik eğitim
-            işlemleri kayıt
-            altına alınmaya hazır.
+            TÃ¼m kritik eÄŸitim
+            iÅŸlemleri kayÄ±t
+            altÄ±na alÄ±nmaya hazÄ±r.
 
           </small>
 
@@ -410,7 +410,7 @@ export default function TrainingExecutiveHero({
 
           <h4>DORA Analizi</h4>
 
-          <strong>İYİ</strong>
+          <strong>Ä°YÄ°</strong>
 
           <small>
 
@@ -428,12 +428,12 @@ export default function TrainingExecutiveHero({
 
         <div className={styles.footerLeft}>
 
-          <h4>D-SEC Eğitim Yönetim Merkezi</h4>
+          <h4>D-SEC EÄŸitim YÃ¶netim Merkezi</h4>
 
           <p>
-            Eğitimler, katılımcılar, içerikler, sınavlar,
+            EÄŸitimler, katÄ±lÄ±mcÄ±lar, iÃ§erikler, sÄ±navlar,
             sertifikalar ve kurumsal uyumluluk tek panelden
-            yönetilmektedir.
+            yÃ¶netilmektedir.
           </p>
 
         </div>

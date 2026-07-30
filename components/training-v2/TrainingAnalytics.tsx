@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties } from "react";
-import styles from "./training.module.css";
+import styles from "./Training.module.css";
 
 type DistributionItem = { label: string; value: number };
 
@@ -30,11 +30,11 @@ export default function TrainingAnalytics(props: Props) {
       <div className={styles.sectionHeader}>
         <div>
           <span className={styles.sectionEyebrow}>Training Analytics</span>
-          <h2>Eğitim performans görünümü</h2>
-          <p>Atama, tamamlama ve eğitim türlerini tek ekranda değerlendirin.</p>
+          <h2>EÄŸitim performans gÃ¶rÃ¼nÃ¼mÃ¼</h2>
+          <p>Atama, tamamlama ve eÄŸitim tÃ¼rlerini tek ekranda deÄŸerlendirin.</p>
         </div>
         <div className={styles.sectionCounter}>
-          <span>Toplam Eğitim</span>
+          <span>Toplam EÄŸitim</span>
           <strong>{props.totalTrainings}</strong>
         </div>
       </div>
@@ -42,7 +42,7 @@ export default function TrainingAnalytics(props: Props) {
       <div className={styles.analyticsGrid}>
         <article className={styles.analyticsCard}>
           <div className={styles.analyticsCardHeader}>
-            <div><span>Atama durumu</span><strong>Tamamlama performansı</strong></div>
+            <div><span>Atama durumu</span><strong>Tamamlama performansÄ±</strong></div>
             <em>%{completionRate}</em>
           </div>
 
@@ -52,26 +52,26 @@ export default function TrainingAnalytics(props: Props) {
               style={{ "--training-score": completionRate } as CSSProperties}
             >
               <strong>%{completionRate}</strong>
-              <span>Tamamlandı</span>
+              <span>TamamlandÄ±</span>
             </div>
 
             <div className={styles.analyticsRows}>
               <div><span>Tamamlanan</span><strong>{props.completed}</strong><em>%{completionRate}</em></div>
               <div><span>Devam Eden</span><strong>{props.inProgress}</strong><em>%{progressRate}</em></div>
-              <div><span>Başlamayan</span><strong>{props.notStarted}</strong><em>%{notStartedRate}</em></div>
+              <div><span>BaÅŸlamayan</span><strong>{props.notStarted}</strong><em>%{notStartedRate}</em></div>
             </div>
           </div>
         </article>
 
         <article className={styles.analyticsCard}>
           <div className={styles.analyticsCardHeader}>
-            <div><span>Portföy</span><strong>Eğitim türü dağılımı</strong></div>
-            <em>{props.typeDistribution.length} tür</em>
+            <div><span>PortfÃ¶y</span><strong>EÄŸitim tÃ¼rÃ¼ daÄŸÄ±lÄ±mÄ±</strong></div>
+            <em>{props.typeDistribution.length} tÃ¼r</em>
           </div>
 
           <div className={styles.typeDistribution}>
             {props.typeDistribution.length === 0 ? (
-              <div className={styles.emptyInline}>Eğitim türü verisi bulunmuyor.</div>
+              <div className={styles.emptyInline}>EÄŸitim tÃ¼rÃ¼ verisi bulunmuyor.</div>
             ) : props.typeDistribution.map((item, index) => {
               const rate = props.totalTrainings > 0
                 ? Math.round((item.value / props.totalTrainings) * 100)
@@ -91,3 +91,4 @@ export default function TrainingAnalytics(props: Props) {
     </section>
   );
 }
+
