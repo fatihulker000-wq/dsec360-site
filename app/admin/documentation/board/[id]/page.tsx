@@ -13,6 +13,7 @@ import {
   FileText,
   Loader2,
   Plus,
+  Pencil,
   RefreshCw,
   Save,
   Trash2,
@@ -54,6 +55,7 @@ type ParticipantItem = {
 
 type DecisionItem = {
   id: string;
+  agendaId: string | null;
   decisionNo: string;
   title: string;
   description: string | null;
@@ -80,6 +82,14 @@ type BundleResponse = {
   error?: string;
   message?: string;
 };
+
+type DialogState =
+  | {
+      type: "AGENDA" | "PARTICIPANT" | "DECISION";
+      mode: "CREATE" | "EDIT";
+      record?: AgendaItem | ParticipantItem | DecisionItem;
+    }
+  | null;
 
 type MeetingForm = {
   meetingNo: string;
@@ -188,6 +198,7 @@ function normalizeDecisions(rows: unknown): DecisionItem[] {
       const decisionStatus = clean(row.decisionStatus ?? row.decision_status ?? "OPEN");
       return {
         id: clean(row.id),
+        agendaId: nullable(row.agendaId ?? row.agenda_id),
         decisionNo: clean(row.decisionNo ?? row.decision_no),
         title: clean(row.title),
         description: nullable(row.description),
@@ -216,7 +227,7 @@ export default function BoardMeetingDetailPage() {
   const [agenda, setAgenda] = useState<AgendaItem[]>([]);
   const [participants, setParticipants] = useState<ParticipantItem[]>([]);
   const [decisions, setDecisions] = useState<DecisionItem[]>([]);
-  const [dialog, setDialog] = useState<"AGENDA" | "PARTICIPANT" | "DECISION" | null>(null);
+  const [dialog, setDialog] = useState<DialogState>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -529,21 +540,41 @@ export default function BoardMeetingDetailPage() {
               ) : null}
 
               {tab === "AGENDA" ? (
-                <Section title="Gündem Maddeleri" button="Gündem Ekle" onAdd={() => setDialog("AGENDA")}>
+                <Section title="Gündem Maddeleri" button="Gündem Ekle" onAdd={() =>
+  setDialog({
+    type: "AGENDA",
+    mode: "CREATE",
+  })
+}>
                   {agenda.length === 0 ? <Empty text="Henüz gündem maddesi eklenmedi." /> : agenda.map((item) => (
                     <div key={item.id} className="flex items-start justify-between gap-4 border-t border-slate-100 p-5 first:border-t-0">
                       <div>
                         <h3 className="font-bold text-slate-950">{item.orderNo}. {item.title}</h3>
                         <p className="mt-2 text-sm text-slate-600">{item.description || "Açıklama yok"}</p>
                       </div>
-                      <button type="button" onClick={() => void deleteRecord("agenda", item.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ type: "AGENDA", mode: "EDIT", record: item })}
+                          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                          aria-label="Gündem maddesini düzenle"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button type="button" onClick={() => void deleteRecord("agenda", item.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label="Gündem maddesini sil"><Trash2 className="h-4 w-4" /></button>
+                      </div>
                     </div>
                   ))}
                 </Section>
               ) : null}
 
               {tab === "PARTICIPANTS" ? (
-                <Section title="Katılımcılar" button="Katılımcı Ekle" onAdd={() => setDialog("PARTICIPANT")}>
+                <Section title="Katılımcılar" button="Katılımcı Ekle" onAdd={() =>
+  setDialog({
+    type: "PARTICIPANT",
+    mode: "CREATE",
+  })
+}>
                   {participants.length === 0 ? <Empty text="Henüz katılımcı eklenmedi." /> : (
                     <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
                       {participants.map((item) => (
@@ -553,7 +584,17 @@ export default function BoardMeetingDetailPage() {
                               <UserRound className="h-5 w-5 text-slate-500" />
                               <div><h3 className="font-bold">{item.fullName}</h3><p className="text-xs text-slate-500">{item.title || item.participantRole || "Kurul üyesi"}</p></div>
                             </div>
-                            <button type="button" onClick={() => void deleteRecord("participants", item.id)} className="text-red-600"><Trash2 className="h-4 w-4" /></button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setDialog({ type: "PARTICIPANT", mode: "EDIT", record: item })}
+                                className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                                aria-label="Katılımcıyı düzenle"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button type="button" onClick={() => void deleteRecord("participants", item.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label="Katılımcıyı sil"><Trash2 className="h-4 w-4" /></button>
+                            </div>
                           </div>
                         </article>
                       ))}
@@ -563,7 +604,12 @@ export default function BoardMeetingDetailPage() {
               ) : null}
 
               {tab === "DECISIONS" ? (
-                <Section title="Kurul Kararları" button="Karar Ekle" onAdd={() => setDialog("DECISION")}>
+                <Section title="Kurul Kararları" button="Karar Ekle" onAdd={() =>
+  setDialog({
+    type: "DECISION",
+    mode: "CREATE",
+  })
+}>
                   {decisions.length === 0 ? <Empty text="Henüz karar eklenmedi." /> : decisions.map((item) => (
                     <article key={item.id} className="border-t border-slate-100 p-5 first:border-t-0">
                       <div className="flex items-start justify-between gap-4">
@@ -573,7 +619,17 @@ export default function BoardMeetingDetailPage() {
                           <p className="mt-2 text-sm text-slate-600">{item.description || "Açıklama yok"}</p>
                           <p className="mt-3 text-xs text-slate-500">Sorumlu: {item.responsiblePerson || item.responsibleDepartment || "-"} · Termin: {formatDate(item.dueDateMillis)} · %{item.completionRate}</p>
                         </div>
-                        <button type="button" onClick={() => void deleteRecord("decisions", item.id)} className="text-red-600"><Trash2 className="h-4 w-4" /></button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setDialog({ type: "DECISION", mode: "EDIT", record: item })}
+                            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                            aria-label="Kararı düzenle"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button type="button" onClick={() => void deleteRecord("decisions", item.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label="Kararı sil"><Trash2 className="h-4 w-4" /></button>
+                        </div>
                       </div>
                     </article>
                   ))}
@@ -587,7 +643,19 @@ export default function BoardMeetingDetailPage() {
         </section>
       </div>
 
-      {dialog ? <QuickDialog kind={dialog} meetingId={meetingId} agenda={agenda} saving={saving} setSaving={setSaving} setError={setError} setSuccess={setSuccess} close={() => setDialog(null)} reload={() => loadBundle(true)} /> : null}
+      {dialog ? (
+        <QuickDialog
+          dialog={dialog}
+          meetingId={meetingId}
+          agenda={agenda}
+          saving={saving}
+          setSaving={setSaving}
+          setError={setError}
+          setSuccess={setSuccess}
+          close={() => setDialog(null)}
+          reload={() => loadBundle(true)}
+        />
+      ) : null}
 
       <style jsx global>{`
         .input { height: 44px; width: 100%; border-radius: 12px; border: 1px solid #e2e8f0; background: white; padding: 0 12px; font-size: 14px; color: #1e293b; outline: none; }
@@ -614,7 +682,7 @@ function Placeholder({ icon: Icon, title, text }: { icon: React.ElementType; tit
 }
 
 function QuickDialog({
-  kind,
+  dialog,
   meetingId,
   agenda,
   saving,
@@ -624,7 +692,7 @@ function QuickDialog({
   close,
   reload,
 }: {
-  kind: "AGENDA" | "PARTICIPANT" | "DECISION";
+  dialog: NonNullable<DialogState>;
   meetingId: string;
   agenda: AgendaItem[];
   saving: boolean;
@@ -634,36 +702,130 @@ function QuickDialog({
   close: () => void;
   reload: () => Promise<void>;
 }) {
-  const [values, setValues] = useState<Record<string, string>>({
-    title: "",
-    description: "",
-    fullName: "",
-    decisionNo: "",
-    responsiblePerson: "",
-    dueDate: "",
-    agendaId: "",
-  });
+  const kind = dialog.type;
+  const mode = dialog.mode;
+  const record = dialog.record;
+
+  const agendaRecord = kind === "AGENDA" ? (record as AgendaItem | undefined) : undefined;
+  const participantRecord = kind === "PARTICIPANT" ? (record as ParticipantItem | undefined) : undefined;
+  const decisionRecord = kind === "DECISION" ? (record as DecisionItem | undefined) : undefined;
+
+  const [values, setValues] = useState<Record<string, string>>(() => ({
+    title: agendaRecord?.title ?? decisionRecord?.title ?? "",
+    description: agendaRecord?.description ?? decisionRecord?.description ?? "",
+    fullName: participantRecord?.fullName ?? "",
+    decisionNo: decisionRecord?.decisionNo ?? "",
+    responsiblePerson: decisionRecord?.responsiblePerson ?? "",
+    dueDate: decisionRecord?.dueDateMillis ? dateInput(decisionRecord.dueDateMillis) : "",
+    agendaId: decisionRecord?.agendaId ?? "",
+  }));
+
+  const dialogTitle =
+    kind === "AGENDA"
+      ? mode === "CREATE"
+        ? "Gündem Ekle"
+        : "Gündem Düzenle"
+      : kind === "PARTICIPANT"
+        ? mode === "CREATE"
+          ? "Katılımcı Ekle"
+          : "Katılımcıyı Düzenle"
+        : mode === "CREATE"
+          ? "Karar Ekle"
+          : "Kararı Düzenle";
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
-    try {
-      const url = kind === "AGENDA" ? "/api/admin/documentation/board/agenda" : kind === "PARTICIPANT" ? "/api/admin/documentation/board/participants" : "/api/admin/documentation/board/decisions";
-      const payload = kind === "AGENDA"
-        ? { meetingId, title: values.title, description: nullable(values.description), orderNo: agenda.length + 1, isCompleted: false }
-        : kind === "PARTICIPANT"
-        ? { meetingId, fullName: values.fullName, participantRole: "MEMBER", attendanceStatus: "PRESENT", hasVotingRight: true, signedAtMillis: null }
-        : { meetingId, agendaId: nullable(values.agendaId), decisionNo: values.decisionNo, title: values.title, description: nullable(values.description), responsiblePerson: nullable(values.responsiblePerson), priority: "NORMAL", decisionStatus: "OPEN", dueDateMillis: values.dueDate ? new Date(`${values.dueDate}T23:59:59`).getTime() : null, completionRate: 0, voteResult: "NO_VOTE", yesVoteCount: 0, noVoteCount: 0, abstainVoteCount: 0 };
 
-      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const json = (await response.json().catch(() => ({}))) as { success?: boolean; error?: string; message?: string };
-      if (!response.ok || json.success === false) throw new Error(json.error || json.message || "Kayıt eklenemedi.");
+    try {
+      const baseUrl =
+        kind === "AGENDA"
+          ? "/api/admin/documentation/board/agenda"
+          : kind === "PARTICIPANT"
+            ? "/api/admin/documentation/board/participants"
+            : "/api/admin/documentation/board/decisions";
+
+      if (mode === "EDIT" && !record?.id) {
+        throw new Error("Düzenlenecek kayıt kimliği bulunamadı.");
+      }
+
+      const url = mode === "CREATE" ? baseUrl : `${baseUrl}/${record!.id}`;
+      const method = mode === "CREATE" ? "POST" : "PATCH";
+
+      const payload =
+        kind === "AGENDA"
+          ? {
+              meetingId,
+              title: values.title.trim(),
+              description: nullable(values.description),
+              orderNo: agendaRecord?.orderNo ?? agenda.length + 1,
+              presenter: agendaRecord?.presenter ?? null,
+              durationMinutes: agendaRecord?.durationMinutes ?? null,
+              isCompleted: agendaRecord?.isCompleted ?? false,
+            }
+          : kind === "PARTICIPANT"
+            ? {
+                meetingId,
+                fullName: values.fullName.trim(),
+                title: participantRecord?.title ?? null,
+                department: participantRecord?.department ?? null,
+                participantRole: participantRecord?.participantRole ?? "MEMBER",
+                attendanceStatus: "PRESENT",
+                hasVotingRight: participantRecord?.hasVotingRight ?? true,
+                signedAtMillis: participantRecord?.signedAtMillis ?? null,
+              }
+            : {
+                meetingId,
+                agendaId: nullable(values.agendaId),
+                decisionNo: values.decisionNo.trim(),
+                title: values.title.trim(),
+                description: nullable(values.description),
+                responsiblePerson: nullable(values.responsiblePerson),
+                responsibleDepartment: decisionRecord?.responsibleDepartment ?? null,
+                priority: "NORMAL",
+                decisionStatus: decisionRecord?.decisionStatus ?? "OPEN",
+                dueDateMillis: values.dueDate
+                  ? new Date(`${values.dueDate}T23:59:59`).getTime()
+                  : null,
+                completionRate: decisionRecord?.completionRate ?? 0,
+                voteResult: "NO_VOTE",
+                yesVoteCount: 0,
+                noVoteCount: 0,
+                abstainVoteCount: 0,
+              };
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        message?: string;
+      };
+
+      if (!response.ok || json.success === false) {
+        throw new Error(
+          json.error ||
+            json.message ||
+            (mode === "CREATE" ? "Kayıt eklenemedi." : "Kayıt güncellenemedi.")
+        );
+      }
+
       close();
-      setSuccess("Kayıt başarıyla eklendi.");
+      setSuccess(mode === "CREATE" ? "Kayıt başarıyla eklendi." : "Kayıt başarıyla güncellendi.");
       await reload();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Kayıt eklenemedi.");
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : mode === "CREATE"
+            ? "Kayıt eklenemedi."
+            : "Kayıt güncellenemedi."
+      );
     } finally {
       setSaving(false);
     }
@@ -672,20 +834,102 @@ function QuickDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 p-5"><h2 className="text-xl font-bold">{kind === "AGENDA" ? "Gündem Ekle" : kind === "PARTICIPANT" ? "Katılımcı Ekle" : "Karar Ekle"}</h2><button type="button" onClick={close}><X className="h-5 w-5" /></button></div>
+        <div className="flex items-center justify-between border-b border-slate-200 p-5">
+          <h2 className="text-xl font-bold">{dialogTitle}</h2>
+          <button type="button" onClick={close} className="rounded-lg p-2 hover:bg-slate-100" aria-label="Pencereyi kapat">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
         <form onSubmit={submit} className="space-y-4 p-5">
           {kind === "PARTICIPANT" ? (
-            <Field label="Ad Soyad *"><input required value={values.fullName} onChange={(e) => setValues({ ...values, fullName: e.target.value })} className="input" /></Field>
+            <Field label="Ad Soyad *">
+              <input
+                required
+                value={values.fullName}
+                onChange={(event) => setValues({ ...values, fullName: event.target.value })}
+                className="input"
+              />
+            </Field>
           ) : (
             <>
-              {kind === "DECISION" ? <Field label="Karar No *"><input required value={values.decisionNo} onChange={(e) => setValues({ ...values, decisionNo: e.target.value })} className="input" /></Field> : null}
-              {kind === "DECISION" ? <Field label="Gündem Maddesi"><select value={values.agendaId} onChange={(e) => setValues({ ...values, agendaId: e.target.value })} className="input"><option value="">Bağlantı yok</option>{agenda.map((item) => <option key={item.id} value={item.id}>{item.orderNo}. {item.title}</option>)}</select></Field> : null}
-              <Field label={kind === "AGENDA" ? "Gündem Başlığı *" : "Karar Başlığı *"}><input required value={values.title} onChange={(e) => setValues({ ...values, title: e.target.value })} className="input" /></Field>
-              <Field label="Açıklama"><textarea rows={4} value={values.description} onChange={(e) => setValues({ ...values, description: e.target.value })} className="input min-h-28 py-3" /></Field>
-              {kind === "DECISION" ? <><Field label="Sorumlu Kişi"><input value={values.responsiblePerson} onChange={(e) => setValues({ ...values, responsiblePerson: e.target.value })} className="input" /></Field><Field label="Termin Tarihi"><input type="date" value={values.dueDate} onChange={(e) => setValues({ ...values, dueDate: e.target.value })} className="input" /></Field></> : null}
+              {kind === "DECISION" ? (
+                <Field label="Karar No *">
+                  <input
+                    required
+                    value={values.decisionNo}
+                    onChange={(event) => setValues({ ...values, decisionNo: event.target.value })}
+                    className="input"
+                  />
+                </Field>
+              ) : null}
+
+              {kind === "DECISION" ? (
+                <Field label="Gündem Maddesi">
+                  <select
+                    value={values.agendaId}
+                    onChange={(event) => setValues({ ...values, agendaId: event.target.value })}
+                    className="input"
+                  >
+                    <option value="">Bağlantı yok</option>
+                    {agenda.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.orderNo}. {item.title}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ) : null}
+
+              <Field label={kind === "AGENDA" ? "Gündem Başlığı *" : "Karar Başlığı *"}>
+                <input
+                  required
+                  value={values.title}
+                  onChange={(event) => setValues({ ...values, title: event.target.value })}
+                  className="input"
+                />
+              </Field>
+
+              <Field label="Açıklama">
+                <textarea
+                  rows={4}
+                  value={values.description}
+                  onChange={(event) => setValues({ ...values, description: event.target.value })}
+                  className="input min-h-28 py-3"
+                />
+              </Field>
+
+              {kind === "DECISION" ? (
+                <>
+                  <Field label="Sorumlu Kişi">
+                    <input
+                      value={values.responsiblePerson}
+                      onChange={(event) => setValues({ ...values, responsiblePerson: event.target.value })}
+                      className="input"
+                    />
+                  </Field>
+                  <Field label="Termin Tarihi">
+                    <input
+                      type="date"
+                      value={values.dueDate}
+                      onChange={(event) => setValues({ ...values, dueDate: event.target.value })}
+                      className="input"
+                    />
+                  </Field>
+                </>
+              ) : null}
             </>
           )}
-          <div className="flex justify-end gap-3 border-t border-slate-200 pt-4"><button type="button" onClick={close} className="h-11 rounded-xl border border-slate-200 px-5 text-sm font-semibold">Vazgeç</button><button type="submit" disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Kaydet</button></div>
+
+          <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+            <button type="button" onClick={close} className="h-11 rounded-xl border border-slate-200 px-5 text-sm font-semibold">
+              Vazgeç
+            </button>
+            <button type="submit" disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white disabled:opacity-60">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "CREATE" ? <Plus className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+              {mode === "CREATE" ? "Kaydet" : "Güncelle"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
