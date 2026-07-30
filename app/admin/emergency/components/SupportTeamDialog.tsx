@@ -89,33 +89,44 @@ const normalizeDialogTeamType = (
 ): string => {
   const normalized = String(value || "")
     .trim()
-    .toLocaleUpperCase("tr-TR");
+    .toUpperCase()
+    .replaceAll("İ", "I")
+    .replaceAll("Ş", "S")
+    .replaceAll("Ğ", "G")
+    .replaceAll("Ü", "U")
+    .replaceAll("Ö", "O")
+    .replaceAll("Ç", "C");
 
   switch (normalized) {
     case "ISVEREN_VEKILI":
+    case "ISVEREN":
       return "ISVEREN_VEKILI";
 
     case "ACIL_DURUM_KOORDINATORU":
       return "ACIL_DURUM_KOORDINATORU";
 
+    case "KORUMA":
+    case "KORUMA_EKIBI":
+      return "KORUMA";
+
     case "ARAMA_KURTARMA":
     case "ARAMA_KURTARMA_TAHLIYE":
-    case "TAHLİYE":
+    case "KURTARMA_TAHLIYE":
     case "TAHLIYE":
       return "ARAMA_KURTARMA_TAHLIYE";
 
     case "YANGIN":
+    case "YANGIN_EKIBI":
     case "YANGINLA_MUCADELE":
       return "YANGIN";
 
     case "ILKYARDIM":
     case "ILK_YARDIM":
+    case "ILK_YARDIM_EKIBI":
       return "ILK_YARDIM";
 
-    case "KORUMA":
-      return "KORUMA";
-
     case "HABERLESME":
+    case "HABERLESME_EKIBI":
       return "HABERLESME";
 
     default:
