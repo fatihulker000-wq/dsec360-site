@@ -1,4 +1,10 @@
-* {
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -26,7 +32,7 @@ body {
   min-height: 100vh;
 }
 
-main {
+body > main {
   min-height: calc(100vh - 140px);
 }
 
@@ -1495,9 +1501,6 @@ html, body {
   overflow-x: hidden;
 }
 
-* {
-  max-width: 100%;
-}
 
 img, video, canvas, iframe {
   max-width: 100%;
@@ -1539,16 +1542,6 @@ table {
     grid-template-columns: 1fr !important;
   }
 
-  /* SIDEBAR FULL WIDTH */
-  aside {
-    width: 100% !important;
-    position: relative !important;
-  }
-
-  main {
-    width: 100% !important;
-    margin-left: 0 !important;
-  }
 
   /* NAV FIX */
   .nav-links {
@@ -3430,4 +3423,23 @@ line-height:1.7;
 .dashboardPdfMode input,
 .dashboardPdfMode select {
   display: none !important;
+}
+
+/* ===== D-SEC ADMIN/Tailwind UYUMLULUK DÜZELTMESİ ===== */
+/* Evrensel max-width ve etiket bazlı aside/main !important kuralları kaldırıldı. */
+.admin-layout,
+.admin-layout-main,
+.admin-layout-main > main {
+  min-width: 0;
+}
+
+.admin-layout-main > main {
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (max-width: 900px) {
+  .admin-layout-main > main {
+    margin-left: 0;
+  }
 }
