@@ -129,54 +129,44 @@ function normalizeEntityType(value: unknown): EmergencyEntityType {
 function normalizeTeamType(value: unknown): EmergencyTeamType {
   const normalized = String(value ?? "")
     .trim()
-    .toLocaleUpperCase("tr-TR");
+    .toUpperCase()
+    .replaceAll("İ", "I")
+    .replaceAll("Ş", "S")
+    .replaceAll("Ğ", "G")
+    .replaceAll("Ü", "U")
+    .replaceAll("Ö", "O")
+    .replaceAll("Ç", "C");
 
   switch (normalized) {
     case "ISVEREN_VEKILI":
-    case "İŞVEREN_VEKİLİ":
     case "ISVEREN":
-    case "İŞVEREN":
       return "ISVEREN_VEKILI";
 
     case "ACIL_DURUM_KOORDINATORU":
-    case "ACİL_DURUM_KOORDİNATÖRÜ":
-    case "ACIL_DURUM_KOORDİNATÖRÜ":
-    case "ACİL_DURUM_KOORDINATORU":
       return "ACIL_DURUM_KOORDINATORU";
 
     case "KORUMA":
     case "KORUMA_EKIBI":
-    case "KORUMA_EKİBİ":
       return "KORUMA";
 
     case "ARAMA_KURTARMA":
     case "ARAMA_KURTARMA_TAHLIYE":
-    case "ARAMA_KURTARMA_TAHLİYE":
     case "KURTARMA_TAHLIYE":
-    case "KURTARMA_TAHLİYE":
     case "TAHLIYE":
-    case "TAHLİYE":
       return "ARAMA_KURTARMA_TAHLIYE";
 
     case "YANGIN":
     case "YANGIN_EKIBI":
-    case "YANGIN_EKİBİ":
     case "YANGINLA_MUCADELE":
-    case "YANGINLA_MÜCADELE":
       return "YANGIN";
 
     case "ILKYARDIM":
-    case "İLKYARDIM":
     case "ILK_YARDIM":
-    case "İLK_YARDIM":
     case "ILK_YARDIM_EKIBI":
-    case "İLK_YARDIM_EKİBİ":
       return "ILK_YARDIM";
 
     case "HABERLESME":
-    case "HABERLEŞME":
     case "HABERLESME_EKIBI":
-    case "HABERLEŞME_EKİBİ":
       return "HABERLESME";
 
     default:
