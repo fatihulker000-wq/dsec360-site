@@ -292,6 +292,259 @@ function resolveDashboard(
   };
 }
 
+function findFirmIdInValue(
+  value: unknown,
+  depth = 0
+): string {
+  if (
+    value == null ||
+    depth > 5
+  ) {
+    return "";
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number"
+  ) {
+    const candidate =
+      normalizeText(value);
+
+    return /^\d+$/.test(candidate)
+      ? candidate
+      : "";
+  }
+
+  if (
+    typeof value !== "object"
+  ) {
+    return "";
+  }
+
+  const record =
+    value as ApiRecord;
+
+  const preferredKeys = [
+    "firmId",
+    "firm_id",
+    "activeFirmId",
+    "active_firm_id",
+    "selectedFirmId",
+    "selected_firm_id",
+    "companyId",
+    "company_id",
+    "activeCompanyId",
+    "selectedCompanyId",
+    "id",
+  ];
+
+  for (
+    const key of preferredKeys
+  ) {
+    if (!(key in record)) {
+      continue;
+    }
+
+    const direct =
+      findFirmIdInValue(
+        record[key],
+        depth + 1
+      );
+
+    if (direct) {
+      return direct;
+    }
+  }
+
+  const nestedKeys = [
+    "activeFirm",
+    "selectedFirm",
+    "firm",
+    "company",
+    "activeCompany",
+    "selectedCompany",
+    "data",
+    "state",
+    "value",
+    "current",
+    "profile",
+  ];
+
+  for (
+    const key of nestedKeys
+  ) {
+    if (!(key in record)) {
+      continue;
+    }
+
+    const nested =
+      findFirmIdInValue(
+        record[key],
+        depth + 1
+      );
+
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return "";
+}
+
+function readFirmIdFromStorage(
+  storage: Storage
+): string {
+  const directKeys = [
+    "activeFirmId",
+    "active_firm_id",
+    "selectedFirmId",
+    "selected_firm_id",
+    "firmId",
+    "firm_id",
+    "companyId",
+    "company_id",
+    "activeCompanyId",
+    "selectedCompanyId",
+    "dsec_active_firm_id",
+    "dsec.selectedFirmId",
+    "dsec:selectedFirmId",
+    "dsec_active_company_id",
+  ];
+
+  for (
+    const key of directKeys
+  ) {
+    const raw =
+      storage.getItem(key);
+
+    if (!raw) {
+      continue;
+    }
+
+    const direct =
+      findFirmIdInValue(raw);
+
+    if (direct) {
+      return direct;
+    }
+
+    try {
+      const parsed =
+        JSON.parse(raw);
+
+      const parsedId =
+        findFirmIdInValue(parsed);
+
+      if (parsedId) {
+        return parsedId;
+      }
+    } catch {
+      // Düz metin değer olabilir.
+    }
+  }
+
+  const objectKeys = [
+    "activeFirm",
+    "selectedFirm",
+    "currentFirm",
+    "firm",
+    "activeCompany",
+    "selectedCompany",
+    "currentCompany",
+    "dsec_active_firm",
+    "dsec.selectedFirm",
+    "dsec:selectedFirm",
+    "activeFirmStore",
+    "ActiveFirmStore",
+    "profile",
+    "userProfile",
+  ];
+
+  for (
+    const key of objectKeys
+  ) {
+    const raw =
+      storage.getItem(key);
+
+    if (!raw) {
+      continue;
+    }
+
+    try {
+      const parsed =
+        JSON.parse(raw);
+
+      const value =
+        findFirmIdInValue(parsed);
+
+      if (value) {
+        return value;
+      }
+    } catch {
+      const value =
+        findFirmIdInValue(raw);
+
+      if (value) {
+        return value;
+      }
+    }
+  }
+
+  for (
+    let index = 0;
+    index < storage.length;
+    index += 1
+  ) {
+    const key =
+      storage.key(index);
+
+    if (!key) {
+      continue;
+    }
+
+    const normalizedKey =
+      key.toLocaleLowerCase(
+        "tr-TR"
+      );
+
+    if (
+      !normalizedKey.includes("firm") &&
+      !normalizedKey.includes("company") &&
+      !normalizedKey.includes("firma")
+    ) {
+      continue;
+    }
+
+    const raw =
+      storage.getItem(key);
+
+    if (!raw) {
+      continue;
+    }
+
+    try {
+      const parsed =
+        JSON.parse(raw);
+
+      const value =
+        findFirmIdInValue(parsed);
+
+      if (value) {
+        return value;
+      }
+    } catch {
+      const value =
+        findFirmIdInValue(raw);
+
+      if (value) {
+        return value;
+      }
+    }
+  }
+
+  return "";
+}
+
 function getStoredFirmId(): string {
   if (
     typeof window === "undefined"
@@ -304,72 +557,113 @@ function getStoredFirmId(): string {
       window.location.search
     );
 
-  const queryFirmId =
-    normalizeText(
-      searchParams.get("firmId")
-    );
-
-  if (queryFirmId) {
-    return queryFirmId;
-  }
-
-  const directKeys = [
+  const queryKeys = [
+    "firmId",
+    "firm_id",
     "activeFirmId",
     "selectedFirmId",
-    "firmId",
-    "dsec_active_firm_id",
-    "dsec.selectedFirmId",
+    "companyId",
+    "company_id",
   ];
 
   for (
-    const key of directKeys
+    const key of queryKeys
   ) {
-    const value =
+    const queryFirmId =
       normalizeText(
-        window.localStorage.getItem(
-          key
+        searchParams.get(key)
+      );
+
+    if (queryFirmId) {
+      return queryFirmId;
+    }
+  }
+
+  const localFirmId =
+    readFirmIdFromStorage(
+      window.localStorage
+    );
+
+  if (localFirmId) {
+    return localFirmId;
+  }
+
+  const sessionFirmId =
+    readFirmIdFromStorage(
+      window.sessionStorage
+    );
+
+  if (sessionFirmId) {
+    return sessionFirmId;
+  }
+
+  const cookies =
+    document.cookie
+      .split(";")
+      .map((item) =>
+        item.trim()
+      );
+
+  for (
+    const cookie of cookies
+  ) {
+    const separatorIndex =
+      cookie.indexOf("=");
+
+    if (
+      separatorIndex < 0
+    ) {
+      continue;
+    }
+
+    const key =
+      decodeURIComponent(
+        cookie.slice(
+          0,
+          separatorIndex
         )
+      ).toLocaleLowerCase(
+        "tr-TR"
+      );
+
+    if (
+      !key.includes("firm") &&
+      !key.includes("company") &&
+      !key.includes("firma")
+    ) {
+      continue;
+    }
+
+    const rawValue =
+      decodeURIComponent(
+        cookie.slice(
+          separatorIndex + 1
+        )
+      );
+
+    const value =
+      findFirmIdInValue(
+        rawValue
       );
 
     if (value) {
       return value;
     }
-  }
-
-  const objectKeys = [
-    "activeFirm",
-    "selectedFirm",
-    "dsec_active_firm",
-  ];
-
-  for (
-    const key of objectKeys
-  ) {
-    const raw =
-      window.localStorage.getItem(
-        key
-      );
-
-    if (!raw) {
-      continue;
-    }
 
     try {
       const parsed =
-        JSON.parse(raw) as ApiRecord;
+        JSON.parse(rawValue);
 
-      const value =
-        normalizeText(
-          parsed.id ??
-            parsed.firmId ??
-            parsed.firm_id
+      const parsedId =
+        findFirmIdInValue(
+          parsed
         );
 
-      if (value) {
-        return value;
+      if (parsedId) {
+        return parsedId;
       }
     } catch {
-      // Geçersiz localStorage verisini atla.
+      // JSON olmayan çerez değerini atla.
     }
   }
 
@@ -587,8 +881,23 @@ export default function BoardCenterPage() {
           false;
 
         const firmId =
-          options?.firmId ??
-          activeFirmId;
+          normalizeText(
+            options?.firmId ??
+              activeFirmId
+          );
+
+        if (!firmId) {
+          setMeetings([]);
+          setDashboard(
+            EMPTY_DASHBOARD
+          );
+          setError(
+            "Aktif firma belirlenemedi. Önce üst menüden bir firma seçin. Firma seçiliyse sayfayı yenileyin."
+          );
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
 
         if (silent) {
           setRefreshing(true);
@@ -876,6 +1185,17 @@ export default function BoardCenterPage() {
       );
 
       return;
+    }
+
+    setActiveFirmId(firmId);
+
+    if (
+      typeof window !== "undefined"
+    ) {
+      window.localStorage.setItem(
+        "activeFirmId",
+        firmId
+      );
     }
 
     if (
@@ -1360,7 +1680,7 @@ export default function BoardCenterPage() {
                       (meeting) => (
                         <Link
                           key={meeting.id}
-                          href={`/admin/documentation/board/${meeting.id}`}
+                          href={`/admin/documentation/board/${meeting.id}?firmId=${encodeURIComponent(activeFirmId)}`}
                           className="group block p-5 transition hover:bg-slate-50"
                         >
                           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1499,7 +1819,7 @@ export default function BoardCenterPage() {
                             key={
                               meeting.id
                             }
-                            href={`/admin/documentation/board/${meeting.id}`}
+                            href={`/admin/documentation/board/${meeting.id}?firmId=${encodeURIComponent(activeFirmId)}`}
                             className="block rounded-xl border border-slate-200 p-4 transition hover:border-slate-300 hover:bg-slate-50"
                           >
                             <div className="flex items-start gap-3">
