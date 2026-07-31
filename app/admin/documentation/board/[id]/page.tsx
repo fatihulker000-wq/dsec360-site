@@ -351,6 +351,36 @@ export default function BoardMeetingDetailPage() {
     }
   }
 
+  async function deleteMeeting() {
+    if (!meeting) return;
+
+    const confirmed = window.confirm(
+      `"${meeting.meetingTitle}" toplantısı kalıcı olarak silinsin mi?`
+    );
+
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      await api(`/api/admin/documentation/board/${meeting.id}`, {
+        method: "DELETE",
+      });
+
+      window.location.href = "/admin/documentation/board";
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Toplantı silinemedi."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function deleteRecord(kind: "agenda" | "participants" | "decisions", id: string) {
     if (!window.confirm("Bu kayıt silinsin mi?")) return;
     setSaving(true);
@@ -420,15 +450,35 @@ export default function BoardMeetingDetailPage() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => void loadBundle(true)}
-                disabled={refreshing}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-semibold hover:bg-white/15 disabled:opacity-60"
-              >
-                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Yenile
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void loadBundle(true)}
+                  disabled={refreshing || saving}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-semibold hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {refreshing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  Yenile
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void deleteMeeting()}
+                  disabled={saving || refreshing}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-300/40 bg-red-500/15 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Toplantıyı Sil
+                </button>
+              </div>
             </div>
           </header>
 
@@ -647,6 +697,7 @@ export default function BoardMeetingDetailPage() {
         <QuickDialog
           dialog={dialog}
           meetingId={meetingId}
+          firmId={meeting.firmId}
           agenda={agenda}
           saving={saving}
           setSaving={setSaving}
@@ -684,6 +735,7 @@ function Placeholder({ icon: Icon, title, text }: { icon: React.ElementType; tit
 function QuickDialog({
   dialog,
   meetingId,
+  firmId,
   agenda,
   saving,
   setSaving,
@@ -694,6 +746,7 @@ function QuickDialog({
 }: {
   dialog: NonNullable<DialogState>;
   meetingId: string;
+  firmId: string;
   agenda: AgendaItem[];
   saving: boolean;
   setSaving: (value: boolean) => void;
@@ -756,6 +809,7 @@ function QuickDialog({
       const payload =
         kind === "AGENDA"
           ? {
+              firmId,
               meetingId,
               title: values.title.trim(),
               description: nullable(values.description),
@@ -766,7 +820,8 @@ function QuickDialog({
             }
           : kind === "PARTICIPANT"
             ? {
-                meetingId,
+              firmId,
+              meetingId,
                 fullName: values.fullName.trim(),
                 title: participantRecord?.title ?? null,
                 department: participantRecord?.department ?? null,
@@ -776,6 +831,7 @@ function QuickDialog({
                 signedAtMillis: participantRecord?.signedAtMillis ?? null,
               }
             : {
+                firmId,
                 meetingId,
                 agendaId: nullable(values.agendaId),
                 decisionNo: values.decisionNo.trim(),
