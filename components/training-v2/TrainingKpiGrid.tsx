@@ -13,22 +13,57 @@ type Props = {
 
 export default function TrainingKpiGrid(props: Props) {
   const items = [
-    ["Toplam Ã‡alÄ±ÅŸan", props.totalEmployees, "EÄŸitim kapsamÄ±ndaki Ã§alÄ±ÅŸanlar", "slate"],
-    ["Toplam EÄŸitim", props.totalTrainings, "Aktif eÄŸitim iÃ§erikleri", "purple"],
-    ["Toplam Atama", props.totalAssigned, "Ã‡alÄ±ÅŸan eÄŸitim atamalarÄ±", "blue"],
-    ["Tamamlanan", props.completed, "BaÅŸarÄ±yla biten eÄŸitimler", "green"],
-    ["Devam Eden", props.inProgress, "Aktif eÄŸitim sÃ¼reÃ§leri", "amber"],
-    ["BaÅŸlamayan", props.notStarted, "HenÃ¼z baÅŸlanmayan atamalar", "red"],
+    [
+      "Toplam Çalışan",
+      props.totalEmployees,
+      "Eğitim kapsamındaki çalışanlar",
+      "slate",
+    ],
+    [
+      "Toplam Eğitim",
+      props.totalTrainings,
+      "Aktif eğitim içerikleri",
+      "purple",
+    ],
+    [
+      "Toplam Atama",
+      props.totalAssigned,
+      "Çalışan eğitim atamaları",
+      "blue",
+    ],
+    [
+      "Tamamlanan",
+      props.completed,
+      "Başarıyla biten eğitimler",
+      "green",
+    ],
+    [
+      "Devam Eden",
+      props.inProgress,
+      "Aktif eğitim süreçleri",
+      "amber",
+    ],
+    [
+      "Başlamayan",
+      props.notStarted,
+      "Henüz başlanmayan atamalar",
+      "red",
+    ],
   ] as const;
 
   return (
     <section className={styles.kpiGrid}>
-      {items.map(([title,value,desc,tone]) => (
-        <article key={title} className={`${styles.kpiCard} ${styles[`tone_${tone}`]}`}>
-          <span>{title}</span><strong>{value}</strong><p>{desc}</p><i />
+      {items.map(([title, value, desc, tone]) => (
+        <article
+          key={title}
+          className={`${styles.kpiCard} ${styles[`tone_${tone}`]}`}
+        >
+          <span>{title}</span>
+          <strong>{value}</strong>
+          <p>{desc}</p>
+          <i />
         </article>
       ))}
     </section>
   );
 }
-

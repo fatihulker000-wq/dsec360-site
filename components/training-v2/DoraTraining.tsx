@@ -15,56 +15,129 @@ type Props = {
 };
 
 export default function DoraTraining(props: Props) {
-  const completionRate = props.totalAssigned > 0
-    ? Math.round((props.completed / props.totalAssigned) * 100)
-    : 0;
-  const coverageRate = props.totalEmployees > 0
-    ? Math.min(100, Math.round((props.totalAssigned / props.totalEmployees) * 100))
-    : 0;
+  const completionRate =
+    props.totalAssigned > 0
+      ? Math.round((props.completed / props.totalAssigned) * 100)
+      : 0;
 
-  const priority = props.notStarted > 0
-    ? `${props.notStarted} eÄŸitim atamasÄ± henÃ¼z baÅŸlatÄ±lmadÄ±. Firma ve Ã§alÄ±ÅŸan bazÄ±nda Ã¶nceliklendirin.`
-    : props.missingVideo > 0
-      ? `${props.missingVideo} asenkron eÄŸitimde video iÃ§eriÄŸi eksik gÃ¶rÃ¼nÃ¼yor.`
-      : props.missingFinalExam > 0
-        ? `${props.missingFinalExam} asenkron eÄŸitimde final sÄ±navÄ± tanÄ±mlÄ± deÄŸil.`
-        : "Kritik eÄŸitim iÃ§eriÄŸi aÃ§Ä±ÄŸÄ± gÃ¶rÃ¼nmÃ¼yor; mevcut uyum seviyesini koruyun.";
+  const coverageRate =
+    props.totalEmployees > 0
+      ? Math.min(
+          100,
+          Math.round((props.totalAssigned / props.totalEmployees) * 100)
+        )
+      : 0;
 
-  const confidence = Math.max(80, Math.min(98, 84 + Math.min(10, props.totalTrainings)));
+  const priority =
+    props.notStarted > 0
+      ? `${props.notStarted} eğitim ataması henüz başlatılmadı. Firma ve çalışan bazında önceliklendirin.`
+      : props.missingVideo > 0
+        ? `${props.missingVideo} asenkron eğitimde video içeriği eksik görünüyor.`
+        : props.missingFinalExam > 0
+          ? `${props.missingFinalExam} asenkron eğitimde final sınavı tanımlı değil.`
+          : "Kritik eğitim içeriği açığı görünmüyor; mevcut uyum seviyesini koruyun.";
+
+  const confidence = Math.max(
+    80,
+    Math.min(98, 84 + Math.min(10, props.totalTrainings))
+  );
 
   return (
     <section className={styles.doraSection}>
       <div className={styles.doraHeader}>
         <div className={styles.doraIdentity}>
           <div className={styles.doraIcon}>D</div>
+
           <div>
-            <span className={styles.sectionEyebrow}>DORA Training Intelligence</span>
-            <h2>EÄŸitim yÃ¶netici Ã¶zeti</h2>
-            <p>CanlÄ± eÄŸitim, atama ve iÃ§erik hazÄ±rlÄ±k verilerinden oluÅŸturuldu.</p>
+            <span className={styles.sectionEyebrow}>
+              DORA Training Intelligence
+            </span>
+
+            <h2>Eğitim yönetici özeti</h2>
+
+            <p>
+              Canlı eğitim, atama ve içerik hazırlık verilerinden oluşturuldu.
+            </p>
           </div>
         </div>
-        <div className={styles.aiConfidence}><span>AI GÃ¼veni</span><strong>%{confidence}</strong></div>
+
+        <div className={styles.aiConfidence}>
+          <span>AI Güveni</span>
+          <strong>%{confidence}</strong>
+        </div>
       </div>
 
       <div className={styles.doraGrid}>
         <div className={styles.doraInsights}>
-          <article className={styles.doraGood}><span>Tamamlama</span><strong>%{completionRate}</strong><p>EÄŸitim atamalarÄ±nÄ±n tamamlanma seviyesi.</p></article>
-          <article className={coverageRate >= 80 ? styles.doraGood : styles.doraWarning}><span>Kapsama OranÄ±</span><strong>%{coverageRate}</strong><p>Ã‡alÄ±ÅŸan sayÄ±sÄ±na gÃ¶re atama yoÄŸunluÄŸu.</p></article>
-          <article className={props.missingVideo === 0 ? styles.doraGood : styles.doraWarning}><span>Video AÃ§Ä±ÄŸÄ±</span><strong>{props.missingVideo}</strong><p>Asenkron eÄŸitim video hazÄ±rlÄ±ÄŸÄ±.</p></article>
-          <article className={props.missingFinalExam === 0 ? styles.doraGood : styles.doraWarning}><span>SÄ±nav AÃ§Ä±ÄŸÄ±</span><strong>{props.missingFinalExam}</strong><p>Final sÄ±navÄ± eksik asenkron eÄŸitim.</p></article>
+          <article className={styles.doraGood}>
+            <span>Tamamlama</span>
+            <strong>%{completionRate}</strong>
+            <p>Eğitim atamalarının tamamlanma seviyesi.</p>
+          </article>
+
+          <article
+            className={
+              coverageRate >= 80
+                ? styles.doraGood
+                : styles.doraWarning
+            }
+          >
+            <span>Kapsama Oranı</span>
+            <strong>%{coverageRate}</strong>
+            <p>Çalışan sayısına göre atama yoğunluğu.</p>
+          </article>
+
+          <article
+            className={
+              props.missingVideo === 0
+                ? styles.doraGood
+                : styles.doraWarning
+            }
+          >
+            <span>Video Açığı</span>
+            <strong>{props.missingVideo}</strong>
+            <p>Asenkron eğitim video hazırlığı.</p>
+          </article>
+
+          <article
+            className={
+              props.missingFinalExam === 0
+                ? styles.doraGood
+                : styles.doraWarning
+            }
+          >
+            <span>Sınav Açığı</span>
+            <strong>{props.missingFinalExam}</strong>
+            <p>Final sınavı eksik asenkron eğitim.</p>
+          </article>
         </div>
 
         <aside className={styles.doraPriority}>
-          <span>Ã–ncelikli aksiyon</span>
+          <span>Öncelikli aksiyon</span>
+
           <h3>{priority}</h3>
+
           <div className={styles.doraMeta}>
-            <div><span>EÄŸitim</span><strong>{props.totalTrainings}</strong></div>
-            <div><span>Devam</span><strong>{props.inProgress}</strong></div>
-            <div><span>BaÅŸlamadÄ±</span><strong>{props.notStarted}</strong></div>
+            <div>
+              <span>Eğitim</span>
+              <strong>{props.totalTrainings}</strong>
+            </div>
+
+            <div>
+              <span>Devam</span>
+              <strong>{props.inProgress}</strong>
+            </div>
+
+            <div>
+              <span>Başlamadı</span>
+              <strong>{props.notStarted}</strong>
+            </div>
           </div>
+
           {props.selectedTrainingTitle && (
             <div className={styles.selectedTrainingInfo}>
-              <span>SeÃ§ili eÄŸitim</span><strong>{props.selectedTrainingTitle}</strong>
+              <span>Seçili eğitim</span>
+              <strong>{props.selectedTrainingTitle}</strong>
             </div>
           )}
         </aside>
@@ -72,4 +145,3 @@ export default function DoraTraining(props: Props) {
     </section>
   );
 }
-

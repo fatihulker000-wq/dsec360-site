@@ -1267,3 +1267,327 @@
     border-radius: 19px;
   }
 }
+
+/* =========================================================
+   D-SEC TRAINING V2 — ORTAK TİPOGRAFİ DÜZELTMESİ
+   Bu blok dosyanın EN ALTINDA kalmalıdır.
+========================================================= */
+
+.wrapper,
+.hero,
+.analyticsSection,
+.doraSection,
+.readinessSection,
+.kpiGrid {
+  font-family: var(--dsec-font) !important;
+}
+
+/* HERO ÜST ALANI */
+
+.heroBadge {
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1.35 !important;
+}
+
+.heroTitle {
+  font-size: clamp(38px, 4vw, 54px) !important;
+  font-weight: 900 !important;
+  line-height: 1.08 !important;
+}
+
+.heroSubtitle {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+}
+
+.statusItem span {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.statusItem strong {
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+
+/* UYGUNLUK SKORU */
+
+.scoreTitle {
+  font-size: clamp(25px, 2.2vw, 32px) !important;
+  font-weight: 900 !important;
+  line-height: 1.15 !important;
+}
+
+.scoreDescription {
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  font-weight: 500 !important;
+}
+
+.successBadge,
+.infoBadge {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+/* HERO İSTATİSTİK KARTLARI */
+
+.statCard small {
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.02em !important;
+}
+
+.statCard h3 {
+  font-size: 28px !important;
+  font-weight: 900 !important;
+}
+
+/* HIZLI İŞLEMLER */
+
+.sectionHeader h3 {
+  font-size: 22px !important;
+  font-weight: 900 !important;
+}
+
+.sectionHeader > span {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+.quickActionButton > span {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+/* SAĞLIK / İBYS / DENETİM / DORA KARTLARI */
+
+.healthCard h4 {
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  font-weight: 800 !important;
+}
+
+.healthCard strong {
+  font-size: 26px !important;
+  line-height: 1.1 !important;
+  font-weight: 900 !important;
+}
+
+.healthCard small {
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+  font-weight: 500 !important;
+}
+
+/* HERO ALT BİLGİ */
+
+.footerLeft h4 {
+  font-size: 19px !important;
+  font-weight: 900 !important;
+}
+
+.footerLeft p {
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  font-weight: 500 !important;
+}
+
+.footerBadge {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+/* KPI KARTLARI */
+
+.kpiCard span {
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  font-weight: 800 !important;
+}
+
+.kpiCard strong {
+  font-size: 36px !important;
+  font-weight: 900 !important;
+}
+
+.kpiCard p {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  font-weight: 500 !important;
+}
+
+/* ANALİTİK, DORA VE HAZIRLIK BÖLÜMLERİ */
+
+.sectionEyebrow {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.analyticsSection .sectionHeader h2,
+.readinessSection .sectionHeader h2,
+.doraHeader h2 {
+  font-size: 26px !important;
+  font-weight: 900 !important;
+}
+
+.analyticsSection .sectionHeader p,
+.readinessSection .sectionHeader p,
+.doraHeader p {
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  font-weight: 500 !important;
+}
+
+.sectionCounter span,
+.aiConfidence span {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.sectionCounter strong,
+.aiConfidence strong {
+  font-size: 24px !important;
+}
+
+/* ANALİTİK KARTLARI */
+
+.analyticsCardHeader span {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.analyticsCardHeader strong {
+  font-size: 17px !important;
+}
+
+.analyticsCardHeader em {
+  font-size: 11px !important;
+}
+
+.completionRing strong {
+  font-size: 28px !important;
+}
+
+.completionRing span {
+  font-size: 11px !important;
+}
+
+.analyticsRows span {
+  font-size: 12px !important;
+}
+
+.analyticsRows strong {
+  font-size: 15px !important;
+}
+
+.analyticsRows em {
+  font-size: 11px !important;
+}
+
+.typeRow > div:first-child {
+  font-size: 13px !important;
+}
+
+.emptyInline {
+  font-size: 13px !important;
+}
+
+/* DORA */
+
+.doraInsights article > span,
+.doraPriority > span {
+  font-size: 11px !important;
+}
+
+.doraInsights article > strong {
+  font-size: 28px !important;
+}
+
+.doraInsights article p {
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+}
+
+.doraPriority h3 {
+  font-size: 17px !important;
+}
+
+.doraMeta span,
+.selectedTrainingInfo span {
+  font-size: 11px !important;
+}
+
+.doraMeta strong {
+  font-size: 16px !important;
+}
+
+.selectedTrainingInfo strong {
+  font-size: 14px !important;
+}
+
+/* İÇERİK HAZIRLIK */
+
+.readinessStats span {
+  font-size: 12px !important;
+}
+
+.readinessStats strong {
+  font-size: 26px !important;
+}
+
+.readinessStats em {
+  font-size: 11px !important;
+}
+
+.trainingOverviewTop span {
+  font-size: 11px !important;
+}
+
+.trainingOverviewTop h3 {
+  font-size: 16px !important;
+}
+
+.trainingOverviewTop > strong {
+  font-size: 22px !important;
+}
+
+.trainingOverviewCard > p {
+  font-size: 12px !important;
+}
+
+.contentBadges span {
+  font-size: 10px !important;
+}
+
+.trainingMiniStats {
+  font-size: 11px !important;
+}
+
+/* MOBİL */
+
+@media (max-width: 640px) {
+  .heroTitle {
+    font-size: 32px !important;
+  }
+
+  .scoreTitle {
+    font-size: 25px !important;
+  }
+
+  .statCard small {
+    font-size: 12px !important;
+  }
+
+  .statCard h3 {
+    font-size: 26px !important;
+  }
+
+  .analyticsSection .sectionHeader h2,
+  .readinessSection .sectionHeader h2,
+  .doraHeader h2 {
+    font-size: 23px !important;
+  }
+}
