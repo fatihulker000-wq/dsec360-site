@@ -9,12 +9,15 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  Download,
   ClipboardList,
   FileText,
   Loader2,
   Plus,
+  Printer,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Save,
   Trash2,
   Users,
@@ -30,7 +33,6 @@ import type {
 } from "@/lib/documentation/board/types";
 
 import MeetingParticipantsTab from "../../../../../components/documentation/board/MeetingParticipantsTab";
-import MeetingMinutesArchivePanel from "../../../../../components/documentation/board/MeetingMinutesArchivePanel";
 
 type Row = Record<string, unknown>;
 type Tab = "GENERAL" | "AGENDA" | "PARTICIPANTS" | "DECISIONS" | "MINUTES" | "ARCHIVE";
@@ -219,6 +221,58 @@ function normalizeDecisions(rows: unknown): DecisionItem[] {
     .filter((item) => item.id);
 }
 
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function participantRoleLabel(value?: string | null) {
+  const labels: Record<string, string> = {
+    CHAIRPERSON: "Kurul Başkanı",
+    SECRETARY: "Kurul Sekreteri",
+    MEMBER: "Kurul Üyesi",
+    EMPLOYER_REPRESENTATIVE: "İşveren Vekili",
+    OHS_SPECIALIST: "İş Güvenliği Uzmanı",
+    WORKPLACE_PHYSICIAN: "İşyeri Hekimi",
+    EMPLOYEE_REPRESENTATIVE: "Çalışan Temsilcisi",
+    SUPPORT_PERSONNEL: "Destek Elemanı",
+    GUEST: "Misafir",
+    OTHER: "Diğer",
+  };
+  return value ? labels[value] ?? value : "-";
+}
+
+function decisionStatusLabel(value?: string | null) {
+  const labels: Record<string, string> = {
+    OPEN: "Açık",
+    IN_PROGRESS: "Devam Ediyor",
+    COMPLETED: "Tamamlandı",
+    CANCELLED: "İptal Edildi",
+    DEFERRED: "Ertelendi",
+  };
+
+  return value ? labels[value] ?? value : "-";
+}
+
+function meetingMethodLabel(value?: string | null) {
+  const labels: Record<string, string> = {
+    FACE_TO_FACE: "Yüz Yüze",
+    ONLINE: "Çevrim İçi",
+    HYBRID: "Hibrit",
+  };
+
+  return value ? labels[value] ?? value : "-";
+}
+
+function signatureStatusLabel(signedAtMillis?: number | null) {
+  return signedAtMillis ? "İmzalandı" : "İmza Bekliyor";
+}
+
 export default function BoardMeetingDetailPage() {
   const params = useParams<{ id: string }>();
   const meetingId = clean(params?.id);
@@ -353,14 +407,12 @@ export default function BoardMeetingDetailPage() {
     }
   }
 
-  async function deleteMeeting() {
+
+  async function updateMeetingStatus(
+    status: BoardMeetingStatus,
+    signedMinutesAvailable = meeting?.signedMinutesAvailable ?? false
+  ) {
     if (!meeting) return;
-
-    const confirmed = window.confirm(
-      `"${meeting.meetingTitle}" toplantısı kalıcı olarak silinsin mi?`
-    );
-
-    if (!confirmed) return;
 
     setSaving(true);
     setError("");
@@ -368,19 +420,390 @@ export default function BoardMeetingDetailPage() {
 
     try {
       await api(`/api/admin/documentation/board/${meeting.id}`, {
-        method: "DELETE",
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, signedMinutesAvailable }),
       });
 
-      window.location.href = "/admin/documentation/board";
-    } catch (deleteError) {
+      setSuccess(
+        status === "ARCHIVED"
+          ? "Toplantı Dokümantasyon arşivine aktarıldı."
+          : status === "COMPLETED"
+            ? "Toplantı tamamlandı."
+            : "Toplantı durumu güncellendi."
+      );
+
+      await loadBundle(true);
+    } catch (statusError) {
       setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "Toplantı silinemedi."
+        statusError instanceof Error
+          ? statusError.message
+          : "Toplantı durumu güncellenemedi."
       );
     } finally {
       setSaving(false);
     }
+  }
+
+  function buildMinutesHtml() {
+    const currentMeeting = meeting;
+
+    if (!currentMeeting) {
+      return "";
+    }
+
+    const agendaRows = agenda.length
+      ? agenda
+          .map(
+            (item, index) => `
+              <tr>
+                <td class="center">${index + 1}</td>
+                <td><strong>${escapeHtml(item.title)}</strong></td>
+                <td>${escapeHtml(item.description || "-")}</td>
+                <td>${escapeHtml(item.presenter || "-")}</td>
+                <td class="center">${item.isCompleted ? "Tamamlandı" : "Görüşülecek"}</td>
+              </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="5" class="empty">Gündem kaydı bulunmuyor.</td></tr>`;
+
+    const participantRows = participants.length
+      ? participants
+          .map(
+            (item, index) => `
+              <tr>
+                <td class="center">${index + 1}</td>
+                <td><strong>${escapeHtml(item.fullName)}</strong></td>
+                <td>${escapeHtml(item.title || "-")}</td>
+                <td>${escapeHtml(item.department || "-")}</td>
+                <td>${escapeHtml(participantRoleLabel(item.participantRole))}</td>
+                <td class="center">${item.hasVotingRight ? "Var" : "Yok"}</td>
+                <td class="center">${escapeHtml(signatureStatusLabel(item.signedAtMillis))}</td>
+                <td class="signature"></td>
+              </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="8" class="empty">Katılımcı kaydı bulunmuyor.</td></tr>`;
+
+    const decisionRows = decisions.length
+      ? decisions
+          .map(
+            (item) => `
+              <tr>
+                <td class="center"><strong>${escapeHtml(item.decisionNo || "-")}</strong></td>
+                <td><strong>${escapeHtml(item.title)}</strong></td>
+                <td>${escapeHtml(item.description || "-")}</td>
+                <td>${escapeHtml(item.responsiblePerson || item.responsibleDepartment || "-")}</td>
+                <td class="center">${escapeHtml(formatDate(item.dueDateMillis))}</td>
+                <td class="center">${escapeHtml(decisionStatusLabel(item.decisionStatus))}</td>
+                <td class="center">%${item.completionRate}</td>
+              </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="7" class="empty">Karar kaydı bulunmuyor.</td></tr>`;
+
+    return `<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(currentMeeting.meetingNo)} - İSG Kurul Toplantı Tutanağı</title>
+<style>
+  @page { size: A4; margin: 13mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #172033;
+    font-size: 10px;
+    line-height: 1.42;
+    background: #ffffff;
+  }
+  .document {
+    width: 100%;
+    border: 1.5px solid #26354f;
+  }
+  .brand-header {
+    display: grid;
+    grid-template-columns: 105px 1fr 130px;
+    align-items: stretch;
+    border-bottom: 1.5px solid #26354f;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #991b1b;
+    color: #fff;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1px;
+  }
+  .title-area {
+    padding: 13px 15px;
+    text-align: center;
+  }
+  .title-area h1 {
+    margin: 0;
+    font-size: 17px;
+    letter-spacing: .35px;
+    color: #172033;
+  }
+  .title-area p {
+    margin: 5px 0 0;
+    color: #64748b;
+    font-size: 9px;
+  }
+  .doc-meta {
+    border-left: 1px solid #94a3b8;
+    display: grid;
+    grid-template-rows: repeat(3, 1fr);
+  }
+  .doc-meta div {
+    padding: 5px 7px;
+    border-bottom: 1px solid #cbd5e1;
+  }
+  .doc-meta div:last-child { border-bottom: 0; }
+  .doc-meta b {
+    display: block;
+    font-size: 8px;
+    color: #64748b;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .content { padding: 12px; }
+  .section-title {
+    margin: 15px 0 7px;
+    padding: 7px 9px;
+    background: #26354f;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .25px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  th, td {
+    border: 1px solid #94a3b8;
+    padding: 6px;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  th {
+    background: #e9eef5;
+    color: #26354f;
+    font-size: 8.5px;
+    text-transform: uppercase;
+    text-align: left;
+  }
+  .info td.label {
+    width: 18%;
+    background: #f1f5f9;
+    font-weight: 700;
+    color: #334155;
+  }
+  .center { text-align: center; vertical-align: middle; }
+  .empty { text-align: center; color: #64748b; padding: 14px; }
+  .signature { height: 38px; min-width: 70px; }
+  .approval {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .approval-box {
+    min-height: 82px;
+    border: 1px solid #94a3b8;
+    padding: 8px;
+    text-align: center;
+  }
+  .approval-box b { display: block; margin-bottom: 25px; }
+  .footer {
+    margin-top: 13px;
+    padding-top: 7px;
+    border-top: 1px solid #cbd5e1;
+    display: flex;
+    justify-content: space-between;
+    color: #64748b;
+    font-size: 8px;
+  }
+  .no-print {
+    margin-bottom: 12px;
+    text-align: right;
+  }
+  button {
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 8px;
+    background: #172033;
+    color: white;
+    cursor: pointer;
+  }
+  @media print {
+    .no-print { display: none; }
+    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="no-print"><button onclick="window.print()">PDF Olarak Kaydet / Yazdır</button></div>
+
+<div class="document">
+  <div class="brand-header">
+    <div class="brand">D-SEC</div>
+    <div class="title-area">
+      <h1>İŞ SAĞLIĞI VE GÜVENLİĞİ KURUL TOPLANTI TUTANAĞI</h1>
+      <p>Dijital Sağlık · Emniyet · Çevre Yönetim Sistemi</p>
+    </div>
+    <div class="doc-meta">
+      <div><b>Doküman No</b>İSG-KRL-TUT-01</div>
+      <div><b>Toplantı No</b>${escapeHtml(currentMeeting.meetingNo)}</div>
+      <div><b>Sayfa</b>1 / 1</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <table class="info">
+      <tr>
+        <td class="label">Toplantı Başlığı</td>
+        <td colspan="3"><strong>${escapeHtml(currentMeeting.meetingTitle)}</strong></td>
+      </tr>
+      <tr>
+        <td class="label">Toplantı Tarihi</td>
+        <td>${escapeHtml(formatDate(currentMeeting.meetingDateMillis))}</td>
+        <td class="label">Toplantı Saati</td>
+        <td>${escapeHtml(currentMeeting.startTime || "-")} ${currentMeeting.endTime ? `– ${escapeHtml(currentMeeting.endTime)}` : ""}</td>
+      </tr>
+      <tr>
+        <td class="label">Toplantı Yeri</td>
+        <td>${escapeHtml(currentMeeting.location || "-")}</td>
+        <td class="label">Toplantı Yöntemi</td>
+        <td>${escapeHtml(meetingMethodLabel(currentMeeting.meetingMethod))}</td>
+      </tr>
+      <tr>
+        <td class="label">Kurul Başkanı</td>
+        <td>${escapeHtml(currentMeeting.chairperson || "-")}</td>
+        <td class="label">Kurul Sekreteri</td>
+        <td>${escapeHtml(currentMeeting.secretary || "-")}</td>
+      </tr>
+      <tr>
+        <td class="label">Toplantı Durumu</td>
+        <td>${escapeHtml(STATUS_LABELS[currentMeeting.status])}</td>
+        <td class="label">Toplantı Yeter Sayısı</td>
+        <td>${currentMeeting.quorumReached ? "Sağlandı" : "Sağlanmadı / Kontrol Edilecek"}</td>
+      </tr>
+      <tr>
+        <td class="label">Açıklama</td>
+        <td colspan="3">${escapeHtml(currentMeeting.description || "-")}</td>
+      </tr>
+    </table>
+
+    <div class="section-title">1. GÜNDEM MADDELERİ</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:5%">No</th>
+          <th style="width:24%">Gündem Başlığı</th>
+          <th>Açıklama / Görüşülen Konu</th>
+          <th style="width:15%">Sunum Yapan</th>
+          <th style="width:12%">Durum</th>
+        </tr>
+      </thead>
+      <tbody>${agendaRows}</tbody>
+    </table>
+
+    <div class="section-title">2. KATILIMCI LİSTESİ VE İMZALAR</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:4%">No</th>
+          <th style="width:15%">Ad Soyad</th>
+          <th style="width:13%">Unvan</th>
+          <th style="width:12%">Birim</th>
+          <th style="width:16%">Kurul Görevi</th>
+          <th style="width:7%">Oy Hakkı</th>
+          <th style="width:11%">İmza Durumu</th>
+          <th style="width:14%">İmza</th>
+        </tr>
+      </thead>
+      <tbody>${participantRows}</tbody>
+    </table>
+
+    <div class="section-title">3. KURUL KARARLARI VE AKSİYON TAKİBİ</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:8%">Karar No</th>
+          <th style="width:16%">Karar Başlığı</th>
+          <th>Karar / Açıklama</th>
+          <th style="width:15%">Sorumlu</th>
+          <th style="width:12%">Termin</th>
+          <th style="width:11%">Durum</th>
+          <th style="width:9%">Tamamlanma</th>
+        </tr>
+      </thead>
+      <tbody>${decisionRows}</tbody>
+    </table>
+
+    <div class="approval">
+      <div class="approval-box">
+        <b>Kurul Başkanı</b>
+        ${escapeHtml(currentMeeting.chairperson || "Ad Soyad / İmza")}
+      </div>
+      <div class="approval-box">
+        <b>Kurul Sekreteri</b>
+        ${escapeHtml(currentMeeting.secretary || "Ad Soyad / İmza")}
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>D-SEC360 üzerinden elektronik olarak oluşturulmuştur.</span>
+      <span>Oluşturma: ${escapeHtml(new Date().toLocaleString("tr-TR"))}</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>`;
+  }
+
+  function printMinutes() {
+    const printWindow = window.open("", "_blank", "width=1100,height=800");
+    if (!printWindow) {
+      setError("Yazdırma penceresi açılamadı. Tarayıcı açılır pencere iznini kontrol edin.");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(buildMinutesHtml());
+    printWindow.document.close();
+    printWindow.focus();
+  }
+
+  function downloadMinutesHtml() {
+    if (!meeting) {
+      setError("Toplantı bilgisi bulunamadı.");
+      return;
+    }
+
+    const blob = new Blob([buildMinutesHtml()], {
+      type: "text/html;charset=utf-8",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `${meeting.meetingNo.replaceAll(
+      "/",
+      "-"
+    )}-isg-kurul-tutanagi.html`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
   }
 
   async function deleteRecord(kind: "agenda" | "participants" | "decisions", id: string) {
@@ -452,35 +875,15 @@ export default function BoardMeetingDetailPage() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => void loadBundle(true)}
-                  disabled={refreshing || saving}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-semibold hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {refreshing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  Yenile
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => void deleteMeeting()}
-                  disabled={saving || refreshing}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-300/40 bg-red-500/15 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                  Toplantıyı Sil
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => void loadBundle(true)}
+                disabled={refreshing}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-semibold hover:bg-white/15 disabled:opacity-60"
+              >
+                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Yenile
+              </button>
             </div>
           </header>
 
@@ -662,25 +1065,101 @@ export default function BoardMeetingDetailPage() {
               ) : null}
 
               {tab === "MINUTES" ? (
-                <MeetingMinutesArchivePanel
-                  mode="MINUTES"
-                  meeting={meeting}
-                  agenda={agenda}
-                  participants={participants}
-                  decisions={decisions}
-                  onChanged={() => loadBundle(true)}
-                />
+                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <div className="flex flex-col gap-4 border-b border-slate-200 p-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-950">Tutanak ve PDF Merkezi</h2>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Toplantı, gündem, katılımcı ve karar kayıtlarından otomatik tutanak oluşturulur.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={downloadMinutesHtml} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        <Download className="h-4 w-4" /> Tutanak Dosyası
+                      </button>
+                      <button type="button" onClick={printMinutes} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800">
+                        <Printer className="h-4 w-4" /> PDF / Yazdır
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <div className="mx-auto max-w-5xl rounded-2xl border border-slate-300 bg-white p-6 shadow-sm">
+                      <h3 className="text-center text-xl font-black text-slate-950">
+                        İŞ SAĞLIĞI VE GÜVENLİĞİ KURUL TOPLANTI TUTANAĞI
+                      </h3>
+                      <div className="mt-6 grid overflow-hidden rounded-xl border border-slate-200 sm:grid-cols-2">
+                        {[
+                          ["Toplantı No", meeting.meetingNo],
+                          ["Tarih", formatDate(meeting.meetingDateMillis)],
+                          ["Başlık", meeting.meetingTitle],
+                          ["Saat", `${meeting.startTime || "-"}${meeting.endTime ? ` – ${meeting.endTime}` : ""}`],
+                          ["Yer", meeting.location || "-"],
+                          ["Kurul Başkanı", meeting.chairperson || "-"],
+                          ["Sekreter", meeting.secretary || "-"],
+                          ["Durum", STATUS_LABELS[meeting.status]],
+                        ].map(([label, value]) => (
+                          <div key={label} className="border-b border-slate-200 p-3 odd:border-r">
+                            <div className="text-xs font-semibold uppercase text-slate-500">{label}</div>
+                            <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                        <article className="rounded-xl bg-slate-50 p-4"><div className="text-xs font-semibold uppercase text-slate-500">Gündem</div><div className="mt-2 text-2xl font-bold">{agenda.length}</div></article>
+                        <article className="rounded-xl bg-slate-50 p-4"><div className="text-xs font-semibold uppercase text-slate-500">Katılımcı</div><div className="mt-2 text-2xl font-bold">{participants.length}</div></article>
+                        <article className="rounded-xl bg-slate-50 p-4"><div className="text-xs font-semibold uppercase text-slate-500">Karar</div><div className="mt-2 text-2xl font-bold">{decisions.length}</div></article>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               ) : null}
 
               {tab === "ARCHIVE" ? (
-                <MeetingMinutesArchivePanel
-                  mode="ARCHIVE"
-                  meeting={meeting}
-                  agenda={agenda}
-                  participants={participants}
-                  decisions={decisions}
-                  onChanged={() => loadBundle(true)}
-                />
+                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                  <div className="border-b border-slate-200 p-5">
+                    <h2 className="text-lg font-bold text-slate-950">Kurul Arşivi</h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Tamamlanan toplantıyı ve oluşturulan tutanağı Dokümantasyon arşivine aktarın.
+                    </p>
+                  </div>
+                  <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+                    <div className="rounded-2xl border border-slate-200 p-5">
+                      <h3 className="font-bold text-slate-950">{meeting.meetingTitle}</h3>
+                      <p className="mt-1 text-sm text-slate-500">{meeting.meetingNo} · {formatDate(meeting.meetingDateMillis)}</p>
+                      <span className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{STATUS_LABELS[meeting.status]}</span>
+                      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-500">Gündem</div><div className="mt-1 text-xl font-bold">{agenda.length}</div></div>
+                        <div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-500">Katılımcı</div><div className="mt-1 text-xl font-bold">{participants.length}</div></div>
+                        <div className="rounded-xl bg-slate-50 p-4"><div className="text-xs text-slate-500">Karar</div><div className="mt-1 text-xl font-bold">{decisions.length}</div></div>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                      <h3 className="font-bold text-slate-950">Arşiv İşlemleri</h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-500">
+                        Arşivlenen toplantı ana listede korunur ve geçmiş kayıtları silinmez.
+                      </p>
+                      <div className="mt-5 space-y-3">
+                        {meeting.status !== "COMPLETED" && meeting.status !== "ARCHIVED" ? (
+                          <button type="button" onClick={() => void updateMeetingStatus("COMPLETED", true)} disabled={saving} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60">
+                            <CheckCircle2 className="h-4 w-4" /> Toplantıyı Tamamla
+                          </button>
+                        ) : null}
+                        {meeting.status !== "ARCHIVED" ? (
+                          <button type="button" onClick={() => void updateMeetingStatus("ARCHIVED", true)} disabled={saving} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
+                            <Archive className="h-4 w-4" /> Dokümantasyon Arşivine Aktar
+                          </button>
+                        ) : (
+                          <button type="button" onClick={() => void updateMeetingStatus("COMPLETED", true)} disabled={saving} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60">
+                            <RotateCcw className="h-4 w-4" /> Arşivden Çıkar
+                          </button>
+                        )}
+                        <button type="button" onClick={printMinutes} className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                          <Printer className="h-4 w-4" /> Arşiv Tutanak Çıktısı
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               ) : null}
             </div>
           </div>
@@ -720,10 +1199,6 @@ function Section({ title, button, onAdd, children }: { title: string; button: st
 
 function Empty({ text }: { text: string }) {
   return <div className="flex min-h-56 flex-col items-center justify-center p-8 text-center"><ClipboardList className="h-10 w-10 text-slate-400" /><p className="mt-3 text-sm text-slate-500">{text}</p></div>;
-}
-
-function Placeholder({ icon: Icon, title, text }: { icon: React.ElementType; title: string; text: string }) {
-  return <section className="flex min-h-80 flex-col items-center justify-center rounded-2xl border border-slate-200 p-8 text-center"><Icon className="h-10 w-10 text-slate-500" /><h2 className="mt-4 text-xl font-bold">{title}</h2><p className="mt-2 max-w-xl text-sm text-slate-500">{text}</p></section>;
 }
 
 function QuickDialog({
