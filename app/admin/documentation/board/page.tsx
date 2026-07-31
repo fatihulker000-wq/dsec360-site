@@ -1014,16 +1014,15 @@ export default function BoardCenterPage() {
     );
 
   useEffect(() => {
-    const firmId =
-      getStoredFirmId();
+    let cancelled = false;
 
-    setActiveFirmId(firmId);
+    const initializeBoard = async () => {
+      setLoading(true);
+      setError("");
 
-    setForm(
-      createInitialForm(firmId)
-    );
+      let resolvedFirmId = getStoredFirmId();
+      let resolvedFirmName = "Seçili Firma";
 
-    const loadFirmName = async () => {
       try {
         const response = await fetch("/api/admin/me", {
           method: "GET",
@@ -1033,28 +1032,62 @@ export default function BoardCenterPage() {
 
         const json = await response.json().catch(() => ({}));
 
-        const firmName = normalizeText(
-          json?.user?.company_name ??
-            json?.user?.companyName ??
-            json?.user?.firm_name ??
-            json?.user?.firmName ??
-            json?.user?.company?.name ??
-            json?.user?.firm?.name
-        );
+        resolvedFirmId =
+          resolvedFirmId ||
+          normalizeText(
+            json?.user?.firmId ??
+              json?.user?.firm_id ??
+              json?.user?.companyId ??
+              json?.user?.company_id ??
+              json?.user?.activeFirmId ??
+              json?.user?.active_firm_id ??
+              json?.user?.selectedFirmId ??
+              json?.user?.selected_firm_id ??
+              json?.user?.company?.id ??
+              json?.user?.firm?.id ??
+              json?.firmId ??
+              json?.firm_id ??
+              json?.companyId ??
+              json?.company_id
+          );
 
-        if (firmName) {
-          setActiveFirmName(firmName);
-        }
+        resolvedFirmName =
+          normalizeText(
+            json?.user?.company_name ??
+              json?.user?.companyName ??
+              json?.user?.firm_name ??
+              json?.user?.firmName ??
+              json?.user?.company?.name ??
+              json?.user?.firm?.name ??
+              json?.companyName ??
+              json?.firmName
+          ) || "Seçili Firma";
       } catch {
-        // Firma unvanı alınamazsa seçili firma etiketi gösterilir.
+        // Oturum bilgisinden firma alınamazsa tarayıcıdaki seçim kullanılır.
       }
+
+      if (cancelled) {
+        return;
+      }
+
+      setActiveFirmId(resolvedFirmId);
+      setActiveFirmName(resolvedFirmName);
+      setForm(createInitialForm(resolvedFirmId));
+
+      if (resolvedFirmId && typeof window !== "undefined") {
+        window.localStorage.setItem("activeFirmId", resolvedFirmId);
+      }
+
+      await loadData({
+        firmId: resolvedFirmId,
+      });
     };
 
-    void loadFirmName();
+    void initializeBoard();
 
-    void loadData({
-      firmId,
-    });
+    return () => {
+      cancelled = true;
+    };
   }, [loadData]);
 
   useEffect(() => {
@@ -1218,7 +1251,7 @@ export default function BoardCenterPage() {
 
     if (!firmId) {
       setFormError(
-        "Aktif firma belirlenemedi. Firma ID alanını doldurun veya firma seçimi yapın."
+        "Aktif firma belirlenemedi. Üst menüden firma seçip sayfayı yenileyin."
       );
 
       return;
