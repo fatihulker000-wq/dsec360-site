@@ -17,7 +17,6 @@ import {
   RefreshCw,
   Save,
   Trash2,
-  UserRound,
   Users,
   Vote,
   X,
@@ -29,6 +28,8 @@ import type {
   BoardMeetingStatus,
   BoardMeetingType,
 } from "@/lib/documentation/board/types";
+
+import MeetingParticipantsTab from "../../../../../components/documentation/board/MeetingParticipantsTab";
 
 type Row = Record<string, unknown>;
 type Tab = "GENERAL" | "AGENDA" | "PARTICIPANTS" | "DECISIONS" | "MINUTES" | "ARCHIVE";
@@ -85,7 +86,7 @@ type BundleResponse = {
 
 type DialogState =
   | {
-      type: "AGENDA" | "PARTICIPANT" | "DECISION";
+      type: "AGENDA" | "DECISION";
       mode: "CREATE" | "EDIT";
       record?: AgendaItem | ParticipantItem | DecisionItem;
     }
@@ -619,38 +620,11 @@ export default function BoardMeetingDetailPage() {
               ) : null}
 
               {tab === "PARTICIPANTS" ? (
-                <Section title="Katılımcılar" button="Katılımcı Ekle" onAdd={() =>
-  setDialog({
-    type: "PARTICIPANT",
-    mode: "CREATE",
-  })
-}>
-                  {participants.length === 0 ? <Empty text="Henüz katılımcı eklenmedi." /> : (
-                    <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
-                      {participants.map((item) => (
-                        <article key={item.id} className="rounded-2xl border border-slate-200 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex gap-3">
-                              <UserRound className="h-5 w-5 text-slate-500" />
-                              <div><h3 className="font-bold">{item.fullName}</h3><p className="text-xs text-slate-500">{item.title || item.participantRole || "Kurul üyesi"}</p></div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => setDialog({ type: "PARTICIPANT", mode: "EDIT", record: item })}
-                                className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
-                                aria-label="Katılımcıyı düzenle"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button type="button" onClick={() => void deleteRecord("participants", item.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label="Katılımcıyı sil"><Trash2 className="h-4 w-4" /></button>
-                            </div>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </Section>
+                <MeetingParticipantsTab
+                  meetingId={meeting.id}
+                  firmId={meeting.firmId}
+                  onChanged={() => loadBundle(true)}
+                />
               ) : null}
 
               {tab === "DECISIONS" ? (
@@ -760,13 +734,11 @@ function QuickDialog({
   const record = dialog.record;
 
   const agendaRecord = kind === "AGENDA" ? (record as AgendaItem | undefined) : undefined;
-  const participantRecord = kind === "PARTICIPANT" ? (record as ParticipantItem | undefined) : undefined;
   const decisionRecord = kind === "DECISION" ? (record as DecisionItem | undefined) : undefined;
 
   const [values, setValues] = useState<Record<string, string>>(() => ({
     title: agendaRecord?.title ?? decisionRecord?.title ?? "",
     description: agendaRecord?.description ?? decisionRecord?.description ?? "",
-    fullName: participantRecord?.fullName ?? "",
     decisionNo: decisionRecord?.decisionNo ?? "",
     responsiblePerson: decisionRecord?.responsiblePerson ?? "",
     dueDate: decisionRecord?.dueDateMillis ? dateInput(decisionRecord.dueDateMillis) : "",
@@ -778,13 +750,9 @@ function QuickDialog({
       ? mode === "CREATE"
         ? "Gündem Ekle"
         : "Gündem Düzenle"
-      : kind === "PARTICIPANT"
-        ? mode === "CREATE"
-          ? "Katılımcı Ekle"
-          : "Katılımcıyı Düzenle"
-        : mode === "CREATE"
-          ? "Karar Ekle"
-          : "Kararı Düzenle";
+      : mode === "CREATE"
+        ? "Karar Ekle"
+        : "Kararı Düzenle";
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -795,9 +763,7 @@ function QuickDialog({
       const baseUrl =
         kind === "AGENDA"
           ? "/api/admin/documentation/board/agenda"
-          : kind === "PARTICIPANT"
-            ? "/api/admin/documentation/board/participants"
-            : "/api/admin/documentation/board/decisions";
+          : "/api/admin/documentation/board/decisions";
 
       if (mode === "EDIT" && !record?.id) {
         throw new Error("Düzenlenecek kayıt kimliği bulunamadı.");
@@ -818,38 +784,26 @@ function QuickDialog({
               durationMinutes: agendaRecord?.durationMinutes ?? null,
               isCompleted: agendaRecord?.isCompleted ?? false,
             }
-          : kind === "PARTICIPANT"
-            ? {
+          : {
               firmId,
               meetingId,
-                fullName: values.fullName.trim(),
-                title: participantRecord?.title ?? null,
-                department: participantRecord?.department ?? null,
-                participantRole: participantRecord?.participantRole ?? "MEMBER",
-                attendanceStatus: "PRESENT",
-                hasVotingRight: participantRecord?.hasVotingRight ?? true,
-                signedAtMillis: participantRecord?.signedAtMillis ?? null,
-              }
-            : {
-                firmId,
-                meetingId,
-                agendaId: nullable(values.agendaId),
-                decisionNo: values.decisionNo.trim(),
-                title: values.title.trim(),
-                description: nullable(values.description),
-                responsiblePerson: nullable(values.responsiblePerson),
-                responsibleDepartment: decisionRecord?.responsibleDepartment ?? null,
-                priority: "NORMAL",
-                decisionStatus: decisionRecord?.decisionStatus ?? "OPEN",
-                dueDateMillis: values.dueDate
-                  ? new Date(`${values.dueDate}T23:59:59`).getTime()
-                  : null,
-                completionRate: decisionRecord?.completionRate ?? 0,
-                voteResult: "NO_VOTE",
-                yesVoteCount: 0,
-                noVoteCount: 0,
-                abstainVoteCount: 0,
-              };
+              agendaId: nullable(values.agendaId),
+              decisionNo: values.decisionNo.trim(),
+              title: values.title.trim(),
+              description: nullable(values.description),
+              responsiblePerson: nullable(values.responsiblePerson),
+              responsibleDepartment: decisionRecord?.responsibleDepartment ?? null,
+              priority: "NORMAL",
+              decisionStatus: decisionRecord?.decisionStatus ?? "OPEN",
+              dueDateMillis: values.dueDate
+                ? new Date(`${values.dueDate}T23:59:59`).getTime()
+                : null,
+              completionRate: decisionRecord?.completionRate ?? 0,
+              voteResult: "NO_VOTE",
+              yesVoteCount: 0,
+              noVoteCount: 0,
+              abstainVoteCount: 0,
+            };
 
       const response = await fetch(url, {
         method,
@@ -898,17 +852,7 @@ function QuickDialog({
         </div>
 
         <form onSubmit={submit} className="space-y-4 p-5">
-          {kind === "PARTICIPANT" ? (
-            <Field label="Ad Soyad *">
-              <input
-                required
-                value={values.fullName}
-                onChange={(event) => setValues({ ...values, fullName: event.target.value })}
-                className="input"
-              />
-            </Field>
-          ) : (
-            <>
+          <>
               {kind === "DECISION" ? (
                 <Field label="Karar No *">
                   <input
@@ -975,7 +919,6 @@ function QuickDialog({
                 </>
               ) : null}
             </>
-          )}
 
           <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
             <button type="button" onClick={close} className="h-11 rounded-xl border border-slate-200 px-5 text-sm font-semibold">
