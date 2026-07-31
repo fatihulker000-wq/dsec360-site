@@ -38,6 +38,19 @@ import type {
 
 type ApiRecord = Record<string, unknown>;
 
+type AdminMeResponse = {
+  success?: boolean;
+  user?: {
+    role?: string;
+    company_id?: string | number | null;
+    companyId?: string | number | null;
+    firm_id?: string | number | null;
+    firmId?: string | number | null;
+  };
+  error?: string;
+  message?: string;
+};
+
 type MeetingListResponse = {
   success?: boolean;
   meetings?: BoardMeeting[];
@@ -547,29 +560,128 @@ function readFirmIdFromStorage(
 }
 
 function getStoredFirmId(): string {
-  if (typeof window === "undefined") return "";
-
-  // Yeni ActiveFirmStore
-  const activeFirm =
-    localStorage.getItem("activeFirm") ??
-    sessionStorage.getItem("activeFirm");
-
-  if (activeFirm) {
-    try {
-      const parsed = JSON.parse(activeFirm);
-
-      if (parsed?.id) return String(parsed.id);
-      if (parsed?.firmId) return String(parsed.firmId);
-      if (parsed?.webId) return String(parsed.webId);
-    } catch {}
+  if (
+    typeof window === "undefined"
+  ) {
+    return "";
   }
 
-  // Eski sistem uyumluluğu
-  return (
-    localStorage.getItem("activeFirmId") ??
-    sessionStorage.getItem("activeFirmId") ??
-    ""
-  );
+  const searchParams =
+    new URLSearchParams(
+      window.location.search
+    );
+
+  const queryKeys = [
+    "firmId",
+    "firm_id",
+    "activeFirmId",
+    "selectedFirmId",
+    "companyId",
+    "company_id",
+  ];
+
+  for (
+    const key of queryKeys
+  ) {
+    const queryFirmId =
+      normalizeText(
+        searchParams.get(key)
+      );
+
+    if (queryFirmId) {
+      return queryFirmId;
+    }
+  }
+
+  const localFirmId =
+    readFirmIdFromStorage(
+      window.localStorage
+    );
+
+  if (localFirmId) {
+    return localFirmId;
+  }
+
+  const sessionFirmId =
+    readFirmIdFromStorage(
+      window.sessionStorage
+    );
+
+  if (sessionFirmId) {
+    return sessionFirmId;
+  }
+
+  const cookies =
+    document.cookie
+      .split(";")
+      .map((item) =>
+        item.trim()
+      );
+
+  for (
+    const cookie of cookies
+  ) {
+    const separatorIndex =
+      cookie.indexOf("=");
+
+    if (
+      separatorIndex < 0
+    ) {
+      continue;
+    }
+
+    const key =
+      decodeURIComponent(
+        cookie.slice(
+          0,
+          separatorIndex
+        )
+      ).toLocaleLowerCase(
+        "tr-TR"
+      );
+
+    if (
+      !key.includes("firm") &&
+      !key.includes("company") &&
+      !key.includes("firma")
+    ) {
+      continue;
+    }
+
+    const rawValue =
+      decodeURIComponent(
+        cookie.slice(
+          separatorIndex + 1
+        )
+      );
+
+    const value =
+      findFirmIdInValue(
+        rawValue
+      );
+
+    if (value) {
+      return value;
+    }
+
+    try {
+      const parsed =
+        JSON.parse(rawValue);
+
+      const parsedId =
+        findFirmIdInValue(
+          parsed
+        );
+
+      if (parsedId) {
+        return parsedId;
+      }
+    } catch {
+      // JSON olmayan çerez değerini atla.
+    }
+  }
+
+  return "";
 }
 
 function dateInputToMillis(
@@ -908,19 +1020,83 @@ export default function BoardCenterPage() {
     );
 
   useEffect(() => {
-    const firmId =
-      getStoredFirmId();
+    let cancelled = false;
 
-    setActiveFirmId(firmId);
+    async function loadActiveFirm() {
+      setLoading(true);
+      setError("");
 
-    setForm(
-      createInitialForm(firmId)
-    );
+      try {
+        const response = await fetch("/api/admin/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
 
-    void loadData({
-      firmId,
-    });
-  }, [loadData]);
+        const json =
+          (await response.json().catch(() => ({}))) as AdminMeResponse;
+
+        if (!response.ok) {
+          throw new Error(
+            json.error ||
+              json.message ||
+              "Oturum bilgisi alınamadı."
+          );
+        }
+
+        const firmId = normalizeText(
+          json.user?.company_id ??
+            json.user?.companyId ??
+            json.user?.firm_id ??
+            json.user?.firmId ??
+            getStoredFirmId()
+        );
+
+        if (cancelled) return;
+
+        if (!firmId) {
+          setActiveFirmId("");
+          setForm(createInitialForm(""));
+          setMeetings([]);
+          setDashboard(EMPTY_DASHBOARD);
+          setError(
+            "Oturuma bağlı firma bilgisi bulunamadı. Kullanıcı kaydındaki company_id alanını kontrol edin."
+          );
+          setLoading(false);
+          return;
+        }
+
+        setActiveFirmId(firmId);
+        setForm(createInitialForm(firmId));
+
+        await loadData({
+          firmId,
+        });
+      } catch (loadFirmError) {
+        if (cancelled) return;
+
+        console.error(
+          "Aktif firma yükleme hatası:",
+          loadFirmError
+        );
+
+        setMeetings([]);
+        setDashboard(EMPTY_DASHBOARD);
+        setError(
+          loadFirmError instanceof Error
+            ? loadFirmError.message
+            : "Aktif firma bilgisi alınamadı."
+        );
+        setLoading(false);
+      }
+    }
+
+    void loadActiveFirm();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!successMessage) {
