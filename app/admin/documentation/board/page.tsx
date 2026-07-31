@@ -20,9 +20,11 @@ import {
   FileText,
   Loader2,
   Plus,
+  Pencil,
   RefreshCw,
   Search,
   ShieldCheck,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -1235,6 +1237,78 @@ export default function BoardCenterPage() {
     }));
   }
 
+  async function handleDeleteMeeting(
+    meeting: BoardMeeting
+  ) {
+    const confirmed =
+      window.confirm(
+        `"${meeting.meetingTitle}" toplantısı silinsin mi?\n\nBu işlem toplantıyı listeden kaldırır.`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const response =
+        await fetch(
+          `/api/admin/documentation/board/${encodeURIComponent(
+            meeting.id
+          )}`,
+          {
+            method: "DELETE",
+            cache: "no-store",
+          }
+        );
+
+      const responseJson =
+        (await response
+          .json()
+          .catch(() => ({}))) as {
+          success?: boolean;
+          error?: string;
+          message?: string;
+        };
+
+      if (
+        !response.ok ||
+        responseJson.success === false
+      ) {
+        throw new Error(
+          responseJson.error ||
+            responseJson.message ||
+            "Toplantı silinemedi."
+        );
+      }
+
+      setSuccessMessage(
+        "Kurul toplantısı başarıyla silindi."
+      );
+
+      await loadData({
+        silent: true,
+        firmId: activeFirmId,
+      });
+    } catch (deleteError) {
+      console.error(
+        "Kurul toplantısı silme hatası:",
+        deleteError
+      );
+
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Toplantı silinemedi."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleCreateMeeting(
     event: React.FormEvent<HTMLFormElement>
   ) {
@@ -1752,13 +1826,15 @@ export default function BoardCenterPage() {
                   <div className="divide-y divide-slate-100">
                     {filteredMeetings.map(
                       (meeting) => (
-                        <Link
+                        <article
                           key={meeting.id}
-                          href={`/admin/documentation/board/${meeting.id}?firmId=${encodeURIComponent(activeFirmId)}`}
-                          className="group block p-5 transition hover:bg-slate-50"
+                          className="group p-5 transition hover:bg-slate-50"
                         >
                           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="min-w-0">
+                            <Link
+                              href={`/admin/documentation/board/${meeting.id}?firmId=${encodeURIComponent(activeFirmId)}`}
+                              className="min-w-0 flex-1"
+                            >
                               <div className="flex flex-wrap items-center gap-2">
                                 <span
                                   className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(
@@ -1767,38 +1843,31 @@ export default function BoardCenterPage() {
                                 >
                                   {
                                     MEETING_STATUS_LABELS[
-                                      meeting
-                                        .status
+                                      meeting.status
                                     ]
                                   }
                                 </span>
 
                                 <span className="text-xs font-semibold text-slate-500">
-                                  {
-                                    meeting.meetingNo
-                                  }
+                                  {meeting.meetingNo}
                                 </span>
 
                                 <span className="text-xs text-slate-400">
                                   {
                                     MEETING_TYPE_LABELS[
-                                      meeting
-                                        .meetingType
+                                      meeting.meetingType
                                     ]
                                   }
                                 </span>
                               </div>
 
                               <h3 className="mt-3 truncate text-base font-bold text-slate-950 group-hover:text-slate-700">
-                                {
-                                  meeting.meetingTitle
-                                }
+                                {meeting.meetingTitle}
                               </h3>
 
                               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
                                 <span className="inline-flex items-center gap-1.5">
                                   <CalendarDays className="h-4 w-4" />
-
                                   {formatDate(
                                     meeting.meetingDateMillis
                                   )}
@@ -1806,25 +1875,18 @@ export default function BoardCenterPage() {
 
                                 <span className="inline-flex items-center gap-1.5">
                                   <Clock3 className="h-4 w-4" />
-
-                                  {formatTimeRange(
-                                    meeting
-                                  )}
+                                  {formatTimeRange(meeting)}
                                 </span>
 
                                 <span className="inline-flex items-center gap-1.5">
                                   <Users className="h-4 w-4" />
-
-                                  {
-                                    meeting.participantCount
-                                  }{" "}
-                                  katılımcı
+                                  {meeting.participantCount} katılımcı
                                 </span>
                               </div>
-                            </div>
+                            </Link>
 
-                            <div className="flex shrink-0 items-center justify-between gap-5 lg:justify-end">
-                              <div className="text-right">
+                            <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+                              <div className="mr-2 text-right">
                                 <p
                                   className={`text-sm font-semibold ${
                                     meeting.openDecisionCount >
@@ -1833,25 +1895,54 @@ export default function BoardCenterPage() {
                                       : "text-slate-600"
                                   }`}
                                 >
-                                  {priorityLabel(
-                                    meeting
-                                  )}
+                                  {priorityLabel(meeting)}
                                 </p>
 
                                 <p className="mt-1 text-xs text-slate-400">
                                   {
                                     MEETING_METHOD_LABELS[
-                                      meeting
-                                        .meetingMethod
+                                      meeting.meetingMethod
                                     ]
                                   }
                                 </p>
                               </div>
 
-                              <ChevronRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-1 group-hover:text-slate-700" />
+                              <Link
+                                href={`/admin/documentation/board/${meeting.id}?firmId=${encodeURIComponent(activeFirmId)}`}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Düzenle
+                              </Link>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleDeleteMeeting(
+                                    meeting
+                                  )
+                                }
+                                disabled={saving}
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {saving ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                                Sil
+                              </button>
+
+                              <Link
+                                href={`/admin/documentation/board/${meeting.id}?firmId=${encodeURIComponent(activeFirmId)}`}
+                                aria-label="Toplantı detayını aç"
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                              >
+                                <ChevronRight className="h-5 w-5" />
+                              </Link>
                             </div>
                           </div>
-                        </Link>
+                        </article>
                       )
                     )}
                   </div>
