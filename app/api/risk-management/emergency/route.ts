@@ -664,12 +664,56 @@ export async function POST(request: Request) {
     const nowIso = new Date().toISOString();
     const syncKey = String(payload.syncKey || "").trim() || crypto.randomUUID();
     const supabase = getSupabase();
-    const table = tableForType(entityType);
-    const { data, error } = await supabase
-      .from(table)
-      .insert(buildInsertPayload(entityType, payload, companyId, localFirmId, syncKey, nowIso))
+    
+
+const insertPayload = buildInsertPayload(
+  entityType,
+  payload,
+  companyId,
+  localFirmId,
+  syncKey,
+  nowIso,
+);
+
+let data: any = null;
+let error: any = null;
+
+switch (entityType) {
+  case "TEAM": {
+    const result = await supabase
+      .from("emergency_support_teams")
+      .insert(insertPayload as any)
       .select("*")
       .single();
+
+    data = result.data;
+    error = result.error;
+    break;
+  }
+
+  case "DRILL": {
+    const result = await supabase
+      .from("emergency_drills")
+      .insert(insertPayload as any)
+      .select("*")
+      .single();
+
+    data = result.data;
+    error = result.error;
+    break;
+  }
+
+  default: {
+    const result = await supabase
+      .from("emergency_action_plans")
+     .insert(insertPayload as any)
+      .select("*")
+      .single();
+
+    data = result.data;
+    error = result.error;
+  }
+}
     if (error || !data) {
       return NextResponse.json(
         { success: false, message: "Acil durum kaydı oluşturulamadı.", detail: error?.message },
