@@ -547,128 +547,29 @@ function readFirmIdFromStorage(
 }
 
 function getStoredFirmId(): string {
-  if (
-    typeof window === "undefined"
-  ) {
-    return "";
-  }
+  if (typeof window === "undefined") return "";
 
-  const searchParams =
-    new URLSearchParams(
-      window.location.search
-    );
+  // Yeni ActiveFirmStore
+  const activeFirm =
+    localStorage.getItem("activeFirm") ??
+    sessionStorage.getItem("activeFirm");
 
-  const queryKeys = [
-    "firmId",
-    "firm_id",
-    "activeFirmId",
-    "selectedFirmId",
-    "companyId",
-    "company_id",
-  ];
-
-  for (
-    const key of queryKeys
-  ) {
-    const queryFirmId =
-      normalizeText(
-        searchParams.get(key)
-      );
-
-    if (queryFirmId) {
-      return queryFirmId;
-    }
-  }
-
-  const localFirmId =
-    readFirmIdFromStorage(
-      window.localStorage
-    );
-
-  if (localFirmId) {
-    return localFirmId;
-  }
-
-  const sessionFirmId =
-    readFirmIdFromStorage(
-      window.sessionStorage
-    );
-
-  if (sessionFirmId) {
-    return sessionFirmId;
-  }
-
-  const cookies =
-    document.cookie
-      .split(";")
-      .map((item) =>
-        item.trim()
-      );
-
-  for (
-    const cookie of cookies
-  ) {
-    const separatorIndex =
-      cookie.indexOf("=");
-
-    if (
-      separatorIndex < 0
-    ) {
-      continue;
-    }
-
-    const key =
-      decodeURIComponent(
-        cookie.slice(
-          0,
-          separatorIndex
-        )
-      ).toLocaleLowerCase(
-        "tr-TR"
-      );
-
-    if (
-      !key.includes("firm") &&
-      !key.includes("company") &&
-      !key.includes("firma")
-    ) {
-      continue;
-    }
-
-    const rawValue =
-      decodeURIComponent(
-        cookie.slice(
-          separatorIndex + 1
-        )
-      );
-
-    const value =
-      findFirmIdInValue(
-        rawValue
-      );
-
-    if (value) {
-      return value;
-    }
-
+  if (activeFirm) {
     try {
-      const parsed =
-        JSON.parse(rawValue);
+      const parsed = JSON.parse(activeFirm);
 
-      const parsedId =
-        findFirmIdInValue(
-          parsed
-        );
-
-      if (parsedId) {
-        return parsedId;
-      }
-    } catch {
-      // JSON olmayan çerez değerini atla.
-    }
+      if (parsed?.id) return String(parsed.id);
+      if (parsed?.firmId) return String(parsed.firmId);
+      if (parsed?.webId) return String(parsed.webId);
+    } catch {}
   }
 
-  return "";
+  // Eski sistem uyumluluğu
+  return (
+    localStorage.getItem("activeFirmId") ??
+    sessionStorage.getItem("activeFirmId") ??
+    ""
+  );
 }
 
 function dateInputToMillis(
