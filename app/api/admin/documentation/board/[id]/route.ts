@@ -1223,7 +1223,23 @@ export async function DELETE(
 
     const supabase =
       createSupabaseAdmin();
+// Toplantıya bağlı tüm kayıtları da pasife çek
+await Promise.all([
+  supabase
+    .from("documentation_board_participants")
+    .delete()
+    .eq("meeting_id", id),
 
+  supabase
+    .from("documentation_board_decisions")
+    .delete()
+    .eq("meeting_id", id),
+
+  supabase
+    .from("documentation_board_agenda")
+    .delete()
+    .eq("meeting_id", id),
+]);
     const {
       data,
       error,
