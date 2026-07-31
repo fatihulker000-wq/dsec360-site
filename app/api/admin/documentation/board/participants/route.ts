@@ -689,10 +689,6 @@ export async function POST(
             "is_active",
             true
           )
-          .eq(
-            "is_deleted",
-            false
-          )
           .in(
             "id",
             uniqueIds
@@ -718,7 +714,7 @@ export async function POST(
         boardMembers.length === 0
       ) {
         return jsonError(
-          "Eklenebilecek aktif kurul üyesi bulunamadı.",
+          "Seçilen kurul üyeleri bulunamadı veya aktif değil.",
           404
         );
       }
