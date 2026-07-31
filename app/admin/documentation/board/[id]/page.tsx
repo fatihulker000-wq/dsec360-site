@@ -30,6 +30,7 @@ import type {
 } from "@/lib/documentation/board/types";
 
 import MeetingParticipantsTab from "../../../../../components/documentation/board/MeetingParticipantsTab";
+import MeetingMinutesArchivePanel from "../../../../../components/documentation/board/MeetingMinutesArchivePanel";
 
 type Row = Record<string, unknown>;
 type Tab = "GENERAL" | "AGENDA" | "PARTICIPANTS" | "DECISIONS" | "MINUTES" | "ARCHIVE";
@@ -660,8 +661,27 @@ export default function BoardMeetingDetailPage() {
                 </Section>
               ) : null}
 
-              {tab === "MINUTES" ? <Placeholder icon={FileText} title="Tutanak ve PDF Merkezi" text="Toplantı tutanağı, katılım listesi ve karar listesi PDF çıktıları buraya bağlanacak." /> : null}
-              {tab === "ARCHIVE" ? <Placeholder icon={Archive} title="Kurul Arşivi" text="Tamamlanan toplantılar ve imzalı belgeler Dokümantasyon arşivine buradan aktarılacak." /> : null}
+              {tab === "MINUTES" ? (
+                <MeetingMinutesArchivePanel
+                  mode="MINUTES"
+                  meeting={meeting}
+                  agenda={agenda}
+                  participants={participants}
+                  decisions={decisions}
+                  onChanged={() => loadBundle(true)}
+                />
+              ) : null}
+
+              {tab === "ARCHIVE" ? (
+                <MeetingMinutesArchivePanel
+                  mode="ARCHIVE"
+                  meeting={meeting}
+                  agenda={agenda}
+                  participants={participants}
+                  decisions={decisions}
+                  onChanged={() => loadBundle(true)}
+                />
+              ) : null}
             </div>
           </div>
         </section>
