@@ -7,81 +7,39 @@ import {
   createClient,
 } from "@supabase/supabase-js";
 
-import {
-  mapBoardParticipant,
-  mapBoardParticipants,
-  mapBoardParticipantToDatabase,
-} from "@/lib/documentation/board/mapper";
-
-import type {
-  BoardAttendanceStatus,
-  BoardParticipantRole,
-  BoardParticipantSavePayload,
-  BoardSignatureStatus,
-} from "@/lib/documentation/board/types";
-
-export const dynamic =
-  "force-dynamic";
-
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-export const runtime =
-  "nodejs";
+export const runtime = "nodejs";
 
 const supabaseUrl =
   process.env.SUPABASE_URL ||
-  process.env
-    .NEXT_PUBLIC_SUPABASE_URL;
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 const supabaseServiceRoleKey =
-  process.env
-    .SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const BOARD_PARTICIPANTS_TABLE =
+const PARTICIPANTS_TABLE =
   "documentation_board_participants";
 
-const BOARD_MEETINGS_TABLE =
+const MEETINGS_TABLE =
   "documentation_board_meetings";
+
+const BOARD_MEMBERS_TABLE =
+  "documentation_board_members";
 
 type UnknownRecord =
   Record<string, unknown>;
 
-type MeetingReference = {
-  id: string;
-  firmId: string;
-  isDeleted: boolean;
-};
+type AttendanceStatus =
+  | "INVITED"
+  | "ATTENDED"
+  | "ABSENT"
+  | "EXCUSED"
+  | "ONLINE";
 
-const PARTICIPANT_ROLES:
-  BoardParticipantRole[] = [
-    "CHAIRPERSON",
-    "SECRETARY",
-    "MEMBER",
-    "EMPLOYER_REPRESENTATIVE",
-    "OHS_SPECIALIST",
-    "WORKPLACE_PHYSICIAN",
-    "EMPLOYEE_REPRESENTATIVE",
-    "SUPPORT_PERSONNEL",
-    "GUEST",
-    "OTHER",
-  ];
-
-const ATTENDANCE_STATUSES:
-  BoardAttendanceStatus[] = [
-    "INVITED",
-    "ATTENDED",
-    "ABSENT",
-    "EXCUSED",
-    "ONLINE",
-  ];
-
-const SIGNATURE_STATUSES:
-  BoardSignatureStatus[] = [
-    "NOT_REQUIRED",
-    "NOT_SIGNED",
-    "SIGNED",
-    "DIGITALLY_SIGNED",
-  ];
+type ParticipantSource =
+  | "BOARD_MEMBER"
+  | "MANUAL";
 
 function createSupabaseAdmin() {
   if (!supabaseUrl) {
@@ -137,11 +95,8 @@ function jsonError(
     {
       success: false,
       error: message,
-
       ...(details !== undefined
-        ? {
-            details,
-          }
+        ? { details }
         : {}),
     },
     {
@@ -171,173 +126,241 @@ function normalizeOptionalText(
   return normalized || null;
 }
 
-function normalizeInteger(
+function normalizeBoolean(
   value: unknown,
-  fallback = 0
-): number {
-  const normalized =
-    Number(value);
-
+  fallback = false
+): boolean {
   if (
-    !Number.isFinite(
-      normalized
-    )
+    typeof value === "boolean"
   ) {
-    return fallback;
+    return value;
   }
 
-  return Math.trunc(
-    normalized
-  );
-}
-
-function normalizeNullableInteger(
-  value: unknown
-): number | null {
   if (
-    value === undefined ||
-    value === null ||
-    value === ""
+    typeof value === "number"
   ) {
-    return null;
+    return value !== 0;
   }
 
-  const normalized =
-    Number(value);
-
   if (
-    !Number.isFinite(
-      normalized
-    )
+    typeof value === "string"
   ) {
-    return null;
-  }
-
-  return Math.trunc(
-    normalized
-  );
-}
-
-function normalizePositiveMillis(
-  value: unknown
-): number | null {
-  if (
-    value === undefined ||
-    value === null ||
-    value === ""
-  ) {
-    return null;
-  }
-
-  const normalized =
-    Number(value);
-
-  if (
-    !Number.isFinite(
-      normalized
-    ) ||
-    normalized <= 0
-  ) {
-    return null;
-  }
-
-  return Math.trunc(
-    normalized
-  );
-}
-
-function sanitizeSearchValue(
-  value: string
-): string {
-  return value
-    .replace(
-      /[%_,().]/g,
-      " "
-    )
-    .replace(
-      /\s+/g,
-      " "
-    )
-    .trim()
-    .slice(0, 100);
-}
-
-function removeUndefinedValues(
-  input: Record<
-    string,
-    unknown
-  >
-): Record<
-  string,
-  unknown
-> {
-  return Object.fromEntries(
-    Object.entries(
-      input
-    ).filter(
-      (
-        [, value]
-      ) =>
-        value !==
-        undefined
-    )
-  );
-}
-
-function normalizeParticipantRole(
-  value: unknown
-): BoardParticipantRole {
-  const normalized =
-    normalizeText(
+    const normalized =
       value
-    ).toUpperCase();
+        .trim()
+        .toLocaleLowerCase(
+          "tr-TR"
+        );
 
-  return PARTICIPANT_ROLES.includes(
-    normalized as BoardParticipantRole
-  )
-    ? (
-        normalized as BoardParticipantRole
-      )
-    : "MEMBER";
+    if (
+      [
+        "true",
+        "1",
+        "yes",
+        "evet",
+        "var",
+        "aktif",
+      ].includes(normalized)
+    ) {
+      return true;
+    }
+
+    if (
+      [
+        "false",
+        "0",
+        "no",
+        "hayır",
+        "hayir",
+        "yok",
+        "pasif",
+      ].includes(normalized)
+    ) {
+      return false;
+    }
+  }
+
+  return fallback;
 }
 
 function normalizeAttendanceStatus(
   value: unknown
-): BoardAttendanceStatus {
+): AttendanceStatus {
   const normalized =
-    normalizeText(
-      value
-    ).toUpperCase();
+    normalizeText(value)
+      .toUpperCase();
 
-  return ATTENDANCE_STATUSES.includes(
-    normalized as BoardAttendanceStatus
-  )
-    ? (
-        normalized as BoardAttendanceStatus
-      )
-    : "INVITED";
+  /*
+   * Ön yüzde NOT_ATTENDED,
+   * veritabanında ABSENT kullanılır.
+   */
+  if (
+    normalized ===
+    "NOT_ATTENDED"
+  ) {
+    return "ABSENT";
+  }
+
+  if (
+    [
+      "INVITED",
+      "ATTENDED",
+      "ABSENT",
+      "EXCUSED",
+      "ONLINE",
+    ].includes(normalized)
+  ) {
+    return normalized as AttendanceStatus;
+  }
+
+  return "INVITED";
 }
 
-function normalizeSignatureStatus(
+function mapAttendanceForClient(
   value: unknown
-): BoardSignatureStatus {
+): string {
   const normalized =
-    normalizeText(
-      value
-    ).toUpperCase();
+    normalizeText(value)
+      .toUpperCase();
 
-  return SIGNATURE_STATUSES.includes(
-    normalized as BoardSignatureStatus
-  )
-    ? (
-        normalized as BoardSignatureStatus
-      )
-    : "NOT_SIGNED";
+  return normalized === "ABSENT"
+    ? "NOT_ATTENDED"
+    : normalized || "INVITED";
+}
+
+function normalizeParticipantSource(
+  value: unknown
+): ParticipantSource {
+  return normalizeText(value)
+    .toUpperCase() === "BOARD_MEMBER"
+    ? "BOARD_MEMBER"
+    : "MANUAL";
+}
+
+function generateSyncKey(
+  prefix: string
+): string {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function mapParticipant(
+  row: UnknownRecord
+) {
+  return {
+    id: normalizeText(row.id),
+
+    meetingId:
+      normalizeText(
+        row.meeting_id
+      ),
+
+    firmId:
+      normalizeText(
+        row.firm_id
+      ),
+
+    boardMemberId:
+      normalizeOptionalText(
+        row.board_member_id
+      ),
+
+    participantSource:
+      normalizeParticipantSource(
+        row.participant_source
+      ),
+
+    employeeId:
+      normalizeOptionalText(
+        row.employee_id
+      ),
+
+    fullName:
+      normalizeText(
+        row.full_name
+      ),
+
+    organizationName:
+      normalizeOptionalText(
+        row.organization_name
+      ),
+
+    title:
+      normalizeOptionalText(
+        row.title
+      ),
+
+    department:
+      normalizeOptionalText(
+        row.department
+      ),
+
+    participantRole:
+      normalizeOptionalText(
+        row.participant_role
+      ),
+
+    phone:
+      normalizeOptionalText(
+        row.phone
+      ),
+
+    email:
+      normalizeOptionalText(
+        row.email
+      ),
+
+    attendanceStatus:
+      mapAttendanceForClient(
+        row.attendance_status
+      ),
+
+    hasVotingRight:
+      normalizeBoolean(
+        row.has_voting_right,
+        false
+      ),
+
+    signatureStatus:
+      normalizeText(
+        row.signature_status
+      ) || "NOT_SIGNED",
+
+    signedAtMillis:
+      row.signed_at_millis == null
+        ? null
+        : Number(
+            row.signed_at_millis
+          ),
+
+    notes:
+      normalizeOptionalText(
+        row.notes
+      ),
+
+    isDeleted:
+      normalizeBoolean(
+        row.is_deleted,
+        false
+      ),
+
+    createdAtMillis:
+      Number(
+        row.created_at_millis ??
+          0
+      ),
+
+    updatedAtMillis:
+      Number(
+        row.updated_at_millis ??
+          0
+      ),
+  };
 }
 
 async function loadMeeting(
-  meetingId: string
-): Promise<MeetingReference | null> {
+  meetingId: string,
+  firmId: string
+) {
   const supabase =
     createSupabaseAdmin();
 
@@ -347,7 +370,7 @@ async function loadMeeting(
   } =
     await supabase
       .from(
-        BOARD_MEETINGS_TABLE
+        MEETINGS_TABLE
       )
       .select(
         "id, firm_id, is_deleted"
@@ -355,6 +378,10 @@ async function loadMeeting(
       .eq(
         "id",
         meetingId
+      )
+      .eq(
+        "firm_id",
+        firmId
       )
       .maybeSingle();
 
@@ -380,207 +407,9 @@ async function loadMeeting(
       ),
 
     isDeleted:
-      Boolean(
-        data.is_deleted
-      ),
-  };
-}
-
-function buildParticipantPayload(
-  body: UnknownRecord
-): BoardParticipantSavePayload {
-  const meetingId =
-    normalizeText(
-      body.meetingId ??
-        body.meeting_id
-    );
-
-  const firmId =
-    normalizeText(
-      body.firmId ??
-        body.firm_id
-    );
-
-  const fullName =
-    normalizeText(
-      body.fullName ??
-        body.full_name
-    );
-
-  if (!meetingId) {
-    throw new Error(
-      "Toplantı bilgisi zorunludur."
-    );
-  }
-
-  if (!firmId) {
-    throw new Error(
-      "Firma bilgisi zorunludur."
-    );
-  }
-
-  if (!fullName) {
-    throw new Error(
-      "Katılımcının adı ve soyadı zorunludur."
-    );
-  }
-
-  const attendanceStatus =
-    normalizeAttendanceStatus(
-      body.attendanceStatus ??
-        body.attendance_status ??
-        "INVITED"
-    );
-
-  let signatureStatus =
-    normalizeSignatureStatus(
-      body.signatureStatus ??
-        body.signature_status ??
-        "NOT_SIGNED"
-    );
-
-  let signedAtMillis =
-    normalizePositiveMillis(
-      body.signedAtMillis ??
-        body.signed_at_millis
-    );
-
-  /*
-   * İmza gerekmiyorsa imza tarihi tutulmaz.
-   */
-  if (
-    signatureStatus ===
-    "NOT_REQUIRED"
-  ) {
-    signedAtMillis =
-      null;
-  }
-
-  /*
-   * İmzalandı denilmiş fakat tarih gönderilmemişse
-   * mevcut zaman imza tarihi olarak kaydedilir.
-   */
-  if (
-    (
-      signatureStatus ===
-        "SIGNED" ||
-      signatureStatus ===
-        "DIGITALLY_SIGNED"
-    ) &&
-    !signedAtMillis
-  ) {
-    signedAtMillis =
-      Date.now();
-  }
-
-  /*
-   * Katılmayan kişilerin imzası gerekli kabul edilmez.
-   */
-  if (
-    attendanceStatus ===
-      "ABSENT" ||
-    attendanceStatus ===
-      "EXCUSED"
-  ) {
-    signatureStatus =
-      "NOT_REQUIRED";
-
-    signedAtMillis =
-      null;
-  }
-
-  return {
-    id:
-      normalizeOptionalText(
-        body.id
-      ) ??
-      undefined,
-
-    meetingId,
-
-    firmId,
-
-    localFirmId:
-      normalizeNullableInteger(
-        body.localFirmId ??
-          body.local_firm_id
-      ),
-
-    syncKey:
-      normalizeOptionalText(
-        body.syncKey ??
-          body.sync_key
-      ) ??
-      crypto.randomUUID(),
-
-    employeeId:
-      normalizeOptionalText(
-        body.employeeId ??
-          body.employee_id
-      ),
-
-    employeeLocalId:
-      normalizeNullableInteger(
-        body.employeeLocalId ??
-          body.employee_local_id
-      ),
-
-    fullName,
-
-    title:
-      normalizeOptionalText(
-        body.title
-      ),
-
-    department:
-      normalizeOptionalText(
-        body.department
-      ),
-
-    participantRole:
-      normalizeParticipantRole(
-        body.participantRole ??
-          body.participant_role ??
-          "MEMBER"
-      ),
-
-    attendanceStatus,
-
-    signatureStatus,
-
-    signedAtMillis,
-
-    email:
-      normalizeOptionalText(
-        body.email
-      ),
-
-    phone:
-      normalizeOptionalText(
-        body.phone
-      ),
-
-    notes:
-      normalizeOptionalText(
-        body.notes
-      ),
-
-    source:
-      (
-        normalizeText(
-          body.source ??
-            "WEB"
-        ) ||
-        "WEB"
-      ) as BoardParticipantSavePayload["source"],
-
-    version:
-      Math.max(
-        1,
-        normalizeInteger(
-          body.version,
-          1
-        )
+      normalizeBoolean(
+        data.is_deleted,
+        false
       ),
   };
 }
@@ -588,83 +417,29 @@ function buildParticipantPayload(
 /**
  * GET
  *
- * Toplantıya ait katılımcıları listeler.
+ * Toplantının katılımcılarını getirir.
  *
- * Örnek:
- *
- * /api/admin/documentation/board/participants?meetingId=...
- *
- * Filtreler:
- *
- * firmId=...
- * role=MEMBER
- * attendanceStatus=ATTENDED
- * signatureStatus=NOT_SIGNED
- * search=ahmet
- * includeDeleted=true
+ * /api/admin/documentation/board/participants
+ *   ?meetingId=...
+ *   &firmId=...
  */
 export async function GET(
   request: NextRequest
 ) {
   try {
-    const searchParams =
-      request.nextUrl
-        .searchParams;
-
     const meetingId =
       normalizeText(
-        searchParams.get(
-          "meetingId"
-        )
+        request.nextUrl
+          .searchParams
+          .get("meetingId")
       );
 
     const firmId =
       normalizeText(
-        searchParams.get(
-          "firmId"
-        )
+        request.nextUrl
+          .searchParams
+          .get("firmId")
       );
-
-    const participantRole =
-      normalizeText(
-        searchParams.get(
-          "role"
-        ) ??
-          searchParams.get(
-            "participantRole"
-          )
-      ).toUpperCase();
-
-    const attendanceStatus =
-      normalizeText(
-        searchParams.get(
-          "attendanceStatus"
-        )
-      ).toUpperCase();
-
-    const signatureStatus =
-      normalizeText(
-        searchParams.get(
-          "signatureStatus"
-        )
-      ).toUpperCase();
-
-    const search =
-      sanitizeSearchValue(
-        normalizeText(
-          searchParams.get(
-            "search"
-          )
-        )
-      );
-
-    const includeDeleted =
-      normalizeText(
-        searchParams.get(
-          "includeDeleted"
-        )
-      ).toLowerCase() ===
-      "true";
 
     if (!meetingId) {
       return jsonError(
@@ -673,9 +448,17 @@ export async function GET(
       );
     }
 
+    if (!firmId) {
+      return jsonError(
+        "firmId parametresi zorunludur.",
+        400
+      );
+    }
+
     const meeting =
       await loadMeeting(
-        meetingId
+        meetingId,
+        firmId
       );
 
     if (!meeting) {
@@ -685,69 +468,23 @@ export async function GET(
       );
     }
 
-    if (
-      meeting.isDeleted
-    ) {
+    if (meeting.isDeleted) {
       return jsonError(
         "Silinmiş kurul toplantısının katılımcıları görüntülenemez.",
         410
       );
     }
 
-    if (
-      firmId &&
-      firmId !==
-        meeting.firmId
-    ) {
-      return jsonError(
-        "Firma bilgisi toplantıyla eşleşmiyor.",
-        400
-      );
-    }
-
-    if (
-      participantRole &&
-      !PARTICIPANT_ROLES.includes(
-        participantRole as BoardParticipantRole
-      )
-    ) {
-      return jsonError(
-        "Geçersiz katılımcı rolü.",
-        400
-      );
-    }
-
-    if (
-      attendanceStatus &&
-      !ATTENDANCE_STATUSES.includes(
-        attendanceStatus as BoardAttendanceStatus
-      )
-    ) {
-      return jsonError(
-        "Geçersiz katılım durumu.",
-        400
-      );
-    }
-
-    if (
-      signatureStatus &&
-      !SIGNATURE_STATUSES.includes(
-        signatureStatus as BoardSignatureStatus
-      )
-    ) {
-      return jsonError(
-        "Geçersiz imza durumu.",
-        400
-      );
-    }
-
     const supabase =
       createSupabaseAdmin();
 
-    let query =
-      supabase
+    const {
+      data,
+      error,
+    } =
+      await supabase
         .from(
-          BOARD_PARTICIPANTS_TABLE
+          PARTICIPANTS_TABLE
         )
         .select("*")
         .eq(
@@ -756,79 +493,11 @@ export async function GET(
         )
         .eq(
           "firm_id",
-          meeting.firmId
-        );
-
-    if (
-      !includeDeleted
-    ) {
-      query =
-        query.eq(
+          firmId
+        )
+        .eq(
           "is_deleted",
           false
-        );
-    }
-
-    if (
-      participantRole
-    ) {
-      query =
-        query.eq(
-          "participant_role",
-          participantRole
-        );
-    }
-
-    if (
-      attendanceStatus
-    ) {
-      query =
-        query.eq(
-          "attendance_status",
-          attendanceStatus
-        );
-    }
-
-    if (
-      signatureStatus
-    ) {
-      query =
-        query.eq(
-          "signature_status",
-          signatureStatus
-        );
-    }
-
-    if (search) {
-      query =
-        query.or(
-          [
-            `full_name.ilike.%${search}%`,
-            `title.ilike.%${search}%`,
-            `department.ilike.%${search}%`,
-            `email.ilike.%${search}%`,
-            `phone.ilike.%${search}%`,
-            `notes.ilike.%${search}%`,
-          ].join(",")
-        );
-    }
-
-    const {
-      data,
-      error,
-    } =
-      await query
-        .order(
-          "participant_role",
-          {
-            ascending: true,
-          }
-        )
-        .order(
-          "full_name",
-          {
-            ascending: true,
-          }
         )
         .order(
           "created_at_millis",
@@ -851,96 +520,21 @@ export async function GET(
     }
 
     const participants =
-      includeDeleted
-        ? (
-            data ?? []
-          ).map(
-            mapBoardParticipant
+      (data ?? []).map(
+        (row) =>
+          mapParticipant(
+            row as UnknownRecord
           )
-        : mapBoardParticipants(
-            data ?? []
-          );
-
-    const attendedCount =
-      participants.filter(
-        (participant) =>
-          participant.attendanceStatus ===
-            "ATTENDED" ||
-          participant.attendanceStatus ===
-            "ONLINE"
-      ).length;
-
-    const absentCount =
-      participants.filter(
-        (participant) =>
-          participant.attendanceStatus ===
-            "ABSENT" ||
-          participant.attendanceStatus ===
-            "EXCUSED"
-      ).length;
-
-    const invitedCount =
-      participants.filter(
-        (participant) =>
-          participant.attendanceStatus ===
-          "INVITED"
-      ).length;
-
-    const unsignedCount =
-      participants.filter(
-        (participant) =>
-          (
-            participant.attendanceStatus ===
-              "ATTENDED" ||
-            participant.attendanceStatus ===
-              "ONLINE"
-          ) &&
-          participant.signatureStatus ===
-            "NOT_SIGNED"
-      ).length;
-
-    const signedCount =
-      participants.filter(
-        (participant) =>
-          participant.signatureStatus ===
-            "SIGNED" ||
-          participant.signatureStatus ===
-            "DIGITALLY_SIGNED"
-      ).length;
+      );
 
     return jsonSuccess({
       participants,
-
-      data:
-        participants,
-
+      data: participants,
+      records: participants,
       meetingId,
-
-      firmId:
-        meeting.firmId,
-
+      firmId,
       count:
         participants.length,
-
-      counts: {
-        total:
-          participants.length,
-
-        invited:
-          invitedCount,
-
-        attended:
-          attendedCount,
-
-        absent:
-          absentCount,
-
-        signed:
-          signedCount,
-
-        unsigned:
-          unsignedCount,
-      },
     });
   } catch (error) {
     console.error(
@@ -960,7 +554,10 @@ export async function GET(
 /**
  * POST
  *
- * Yeni kurul katılımcısı oluşturur.
+ * Desteklenen işlemler:
+ *
+ * action = ADD_BOARD_MEMBERS
+ * action = ADD_MANUAL
  */
 export async function POST(
   request: NextRequest
@@ -979,26 +576,41 @@ export async function POST(
       );
     }
 
-    let payload:
-      BoardParticipantSavePayload;
+    const action =
+      normalizeText(
+        body.action
+      ).toUpperCase();
 
-    try {
-      payload =
-        buildParticipantPayload(
-          body
-        );
-    } catch (error) {
+    const meetingId =
+      normalizeText(
+        body.meetingId ??
+          body.meeting_id
+      );
+
+    const firmId =
+      normalizeText(
+        body.firmId ??
+          body.firm_id
+      );
+
+    if (!meetingId) {
       return jsonError(
-        error instanceof Error
-          ? error.message
-          : "Katılımcı bilgileri geçersiz.",
+        "Toplantı bilgisi zorunludur.",
+        400
+      );
+    }
+
+    if (!firmId) {
+      return jsonError(
+        "Firma bilgisi zorunludur.",
         400
       );
     }
 
     const meeting =
       await loadMeeting(
-        payload.meetingId
+        meetingId,
+        firmId
       );
 
     if (!meeting) {
@@ -1008,281 +620,649 @@ export async function POST(
       );
     }
 
-    if (
-      meeting.isDeleted
-    ) {
+    if (meeting.isDeleted) {
       return jsonError(
         "Silinmiş kurul toplantısına katılımcı eklenemez.",
         409
       );
     }
 
-    if (
-      meeting.firmId !==
-      payload.firmId
-    ) {
-      return jsonError(
-        "Katılımcının firma bilgisi toplantıyla eşleşmiyor.",
-        400
-      );
-    }
-
     const supabase =
       createSupabaseAdmin();
 
+    const now =
+      Date.now();
+
     /*
-     * Aynı çalışan kaydı aynı toplantıya
-     * ikinci kez eklenemez.
+     * Kurul üyelerinden toplu ekleme
      */
     if (
-      payload.employeeId
+      action ===
+      "ADD_BOARD_MEMBERS"
     ) {
+      const boardMemberIds =
+        Array.isArray(
+          body.boardMemberIds
+        )
+          ? body.boardMemberIds
+              .map(
+                (value) =>
+                  normalizeText(
+                    value
+                  )
+              )
+              .filter(Boolean)
+          : [];
+
+      const uniqueIds =
+        Array.from(
+          new Set(
+            boardMemberIds
+          )
+        );
+
+      if (
+        uniqueIds.length === 0
+      ) {
+        return jsonError(
+          "En az bir kurul üyesi seçilmelidir.",
+          400
+        );
+      }
+
       const {
         data:
-          duplicateEmployeeRows,
+          boardMembers,
         error:
-          duplicateEmployeeError,
+          boardMemberError,
       } =
         await supabase
           .from(
-            BOARD_PARTICIPANTS_TABLE
+            BOARD_MEMBERS_TABLE
           )
-          .select(
-            "id, employee_id, full_name"
+          .select("*")
+          .eq(
+            "firm_id",
+            firmId
           )
           .eq(
-            "meeting_id",
-            payload.meetingId
-          )
-          .eq(
-            "employee_id",
-            payload.employeeId
+            "is_active",
+            true
           )
           .eq(
             "is_deleted",
             false
           )
-          .limit(1);
+          .in(
+            "id",
+            uniqueIds
+          );
 
       if (
-        duplicateEmployeeError
+        boardMemberError
       ) {
         console.error(
-          "Katılımcı çalışan kontrolü yapılamadı:",
-          duplicateEmployeeError
+          "Kurul üyeleri alınamadı:",
+          boardMemberError
         );
 
         return jsonError(
-          "Katılımcı çalışan kaydı kontrol edilemedi.",
+          "Seçilen kurul üyeleri alınamadı.",
           500,
-          duplicateEmployeeError.message
+          boardMemberError.message
         );
       }
 
       if (
-        duplicateEmployeeRows &&
-        duplicateEmployeeRows.length >
-          0
+        !boardMembers ||
+        boardMembers.length === 0
       ) {
         return jsonError(
-          "Bu çalışan toplantıya daha önce eklenmiş.",
-          409
+          "Eklenebilecek aktif kurul üyesi bulunamadı.",
+          404
         );
       }
-    } else {
-      /*
-       * Çalışan ID yoksa aynı ad ve e-posta kombinasyonu
-       * üzerinden mükerrerlik kontrol edilir.
-       */
+
+      const {
+        data:
+          existingRows,
+        error:
+          existingError,
+      } =
+        await supabase
+          .from(
+            PARTICIPANTS_TABLE
+          )
+          .select(
+            "board_member_id"
+          )
+          .eq(
+            "meeting_id",
+            meetingId
+          )
+          .eq(
+            "firm_id",
+            firmId
+          )
+          .eq(
+            "is_deleted",
+            false
+          )
+          .in(
+            "board_member_id",
+            uniqueIds
+          );
+
+      if (existingError) {
+        console.error(
+          "Mevcut katılımcılar kontrol edilemedi:",
+          existingError
+        );
+
+        return jsonError(
+          "Mevcut katılımcılar kontrol edilemedi.",
+          500,
+          existingError.message
+        );
+      }
+
+      const existingIds =
+        new Set(
+          (existingRows ?? [])
+            .map(
+              (row) =>
+                normalizeText(
+                  row.board_member_id
+                )
+            )
+            .filter(Boolean)
+        );
+
+      const attendanceStatus =
+        normalizeAttendanceStatus(
+          body.attendanceStatus ??
+            body.attendance_status
+        );
+
+      const rows =
+        boardMembers
+          .filter(
+            (member) =>
+              !existingIds.has(
+                normalizeText(
+                  member.id
+                )
+              )
+          )
+          .map(
+            (member) => ({
+              meeting_id:
+                meetingId,
+
+              firm_id:
+                firmId,
+
+              board_member_id:
+                member.id,
+
+              participant_source:
+                "BOARD_MEMBER",
+
+              employee_id:
+                member.employee_id ??
+                null,
+
+              full_name:
+                normalizeText(
+                  member.full_name
+                ),
+
+              organization_name:
+                member.organization_name ??
+                null,
+
+              title:
+                member.title ??
+                null,
+
+              department:
+                member.department ??
+                null,
+
+              participant_role:
+                normalizeText(
+                  member.board_role
+                ) || "MEMBER",
+
+              attendance_status:
+                attendanceStatus,
+
+              signature_status:
+                attendanceStatus ===
+                  "ABSENT" ||
+                attendanceStatus ===
+                  "EXCUSED"
+                  ? "NOT_REQUIRED"
+                  : "NOT_SIGNED",
+
+              signed_at_millis:
+                null,
+
+              email:
+                member.email ??
+                null,
+
+              phone:
+                member.phone ??
+                null,
+
+              notes:
+                member.notes ??
+                null,
+
+              has_voting_right:
+                normalizeBoolean(
+                  member.has_voting_right,
+                  true
+                ),
+
+              source:
+                "WEB",
+
+              sync_key:
+                generateSyncKey(
+                  "board-participant"
+                ),
+
+              version:
+                1,
+
+              is_deleted:
+                false,
+
+              deleted_at_millis:
+                null,
+
+              created_at_millis:
+                now,
+
+              updated_at_millis:
+                now,
+
+              sync_status:
+                "SYNCED",
+
+              sync_error:
+                null,
+
+              last_synced_at_millis:
+                now,
+            })
+          );
+
+      if (
+        rows.length === 0
+      ) {
+        return jsonSuccess({
+          message:
+            "Seçilen kurul üyelerinin tamamı toplantıda zaten kayıtlı.",
+
+          insertedCount:
+            0,
+
+          skippedCount:
+            uniqueIds.length,
+
+          participants:
+            [],
+        });
+      }
+
+      const {
+        data:
+          insertedRows,
+        error:
+          insertError,
+      } =
+        await supabase
+          .from(
+            PARTICIPANTS_TABLE
+          )
+          .insert(rows)
+          .select("*");
+
+      if (insertError) {
+        console.error(
+          "Kurul üyeleri toplantıya eklenemedi:",
+          insertError
+        );
+
+        if (
+          insertError.code ===
+          "23505"
+        ) {
+          return jsonError(
+            "Seçilen kurul üyelerinden biri toplantıya daha önce eklenmiş.",
+            409,
+            insertError.message
+          );
+        }
+
+        return jsonError(
+          "Kurul üyeleri toplantıya eklenemedi.",
+          500,
+          insertError.message
+        );
+      }
+
+      const participants =
+        (insertedRows ?? []).map(
+          (row) =>
+            mapParticipant(
+              row as UnknownRecord
+            )
+        );
+
+      return jsonSuccess(
+        {
+          message:
+            "Kurul üyeleri toplantıya başarıyla eklendi.",
+
+          insertedCount:
+            participants.length,
+
+          skippedCount:
+            uniqueIds.length -
+            participants.length,
+
+          participants,
+
+          data:
+            participants,
+        },
+        201
+      );
+    }
+
+    /*
+     * Manuel katılımcı ekleme
+     */
+    if (
+      action === "ADD_MANUAL" ||
+      !action
+    ) {
+      const fullName =
+        normalizeText(
+          body.fullName ??
+            body.full_name
+        );
+
+      if (!fullName) {
+        return jsonError(
+          "Katılımcının adı ve soyadı zorunludur.",
+          400
+        );
+      }
+
+      const email =
+        normalizeOptionalText(
+          body.email
+        );
+
       let duplicateQuery =
         supabase
           .from(
-            BOARD_PARTICIPANTS_TABLE
+            PARTICIPANTS_TABLE
           )
           .select(
             "id, full_name, email"
           )
           .eq(
             "meeting_id",
-            payload.meetingId
+            meetingId
           )
-          .ilike(
-            "full_name",
-            payload.fullName
+          .eq(
+            "firm_id",
+            firmId
           )
           .eq(
             "is_deleted",
             false
+          )
+          .ilike(
+            "full_name",
+            fullName
           );
 
-      if (
-        payload.email
-      ) {
+      if (email) {
         duplicateQuery =
           duplicateQuery.ilike(
             "email",
-            payload.email
+            email
           );
       }
 
       const {
         data:
-          duplicateNameRows,
+          duplicateRows,
         error:
-          duplicateNameError,
+          duplicateError,
       } =
         await duplicateQuery
           .limit(1);
 
-      if (
-        duplicateNameError
-      ) {
-        console.error(
-          "Katılımcı mükerrerlik kontrolü yapılamadı:",
-          duplicateNameError
-        );
-
+      if (duplicateError) {
         return jsonError(
-          "Katılımcı kaydı kontrol edilemedi.",
+          "Katılımcı mükerrerlik kontrolü yapılamadı.",
           500,
-          duplicateNameError.message
+          duplicateError.message
         );
       }
 
       if (
-        duplicateNameRows &&
-        duplicateNameRows.length >
-          0
+        duplicateRows &&
+        duplicateRows.length > 0
       ) {
         return jsonError(
           "Bu katılımcı toplantıya daha önce eklenmiş.",
           409
         );
       }
-    }
 
-    const databaseRecord =
-      removeUndefinedValues(
-        mapBoardParticipantToDatabase(
-          payload
-        )
-      );
+      const attendanceStatus =
+        normalizeAttendanceStatus(
+          body.attendanceStatus ??
+            body.attendance_status
+        );
 
-    const now =
-      Date.now();
+      const participantSource =
+        normalizeParticipantSource(
+          body.participantSource ??
+            body.participant_source
+        );
 
-    /*
-     * Sistem alanları BoardParticipantSavePayload
-     * içerisine eklenmez. Doğrudan veritabanı
-     * kaydına yazılır.
-     */
-    databaseRecord.created_at_millis =
-      now;
+      const row = {
+        meeting_id:
+          meetingId,
 
-    databaseRecord.updated_at_millis =
-      now;
+        firm_id:
+          firmId,
 
-    databaseRecord.sync_status =
-      "SYNCED";
+        board_member_id:
+          null,
 
-    databaseRecord.sync_error =
-      null;
+        participant_source:
+          participantSource ===
+          "BOARD_MEMBER"
+            ? "MANUAL"
+            : participantSource,
 
-    databaseRecord.last_synced_at_millis =
-      now;
+        employee_id:
+          null,
 
-    databaseRecord.is_deleted =
-      false;
+        full_name:
+          fullName,
 
-    databaseRecord.deleted_at_millis =
-      null;
+        organization_name:
+          normalizeOptionalText(
+            body.organizationName ??
+              body.organization_name
+          ),
 
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from(
-          BOARD_PARTICIPANTS_TABLE
-        )
-        .insert(
-          databaseRecord
-        )
-        .select("*")
-        .single();
+        title:
+          normalizeOptionalText(
+            body.title
+          ),
 
-    if (error) {
-      console.error(
-        "Kurul katılımcısı oluşturulamadı:",
-        error
-      );
+        department:
+          normalizeOptionalText(
+            body.department
+          ),
 
-      if (
-        error.code ===
-        "23505"
-      ) {
+        participant_role:
+          normalizeOptionalText(
+            body.participantRole ??
+              body.participant_role
+          ) || "GUEST",
+
+        attendance_status:
+          attendanceStatus,
+
+        signature_status:
+          attendanceStatus ===
+            "ABSENT" ||
+          attendanceStatus ===
+            "EXCUSED"
+            ? "NOT_REQUIRED"
+            : "NOT_SIGNED",
+
+        signed_at_millis:
+          null,
+
+        email,
+
+        phone:
+          normalizeOptionalText(
+            body.phone
+          ),
+
+        notes:
+          normalizeOptionalText(
+            body.notes
+          ),
+
+        has_voting_right:
+          normalizeBoolean(
+            body.hasVotingRight ??
+              body.has_voting_right,
+            false
+          ),
+
+        source:
+          "WEB",
+
+        sync_key:
+          generateSyncKey(
+            "manual-participant"
+          ),
+
+        version:
+          1,
+
+        is_deleted:
+          false,
+
+        deleted_at_millis:
+          null,
+
+        created_at_millis:
+          now,
+
+        updated_at_millis:
+          now,
+
+        sync_status:
+          "SYNCED",
+
+        sync_error:
+          null,
+
+        last_synced_at_millis:
+          now,
+      };
+
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            PARTICIPANTS_TABLE
+          )
+          .insert(row)
+          .select("*")
+          .single();
+
+      if (error) {
+        console.error(
+          "Manuel katılımcı eklenemedi:",
+          error
+        );
+
+        if (
+          error.code ===
+          "23505"
+        ) {
+          return jsonError(
+            "Bu katılımcı toplantıya daha önce eklenmiş.",
+            409,
+            error.message
+          );
+        }
+
+        if (
+          error.code ===
+          "23514"
+        ) {
+          return jsonError(
+            "Katılım durumu veya katılımcı rolü geçersiz.",
+            400,
+            error.message
+          );
+        }
+
         return jsonError(
-          "Aynı çalışan veya senkronizasyon anahtarıyla katılımcı kaydı zaten mevcut.",
-          409,
+          "Manuel katılımcı eklenemedi.",
+          500,
           error.message
         );
       }
 
-      if (
-        error.code ===
-        "23503"
-      ) {
-        return jsonError(
-          "Toplantı, firma veya çalışan bilgisi geçersiz.",
-          400,
-          error.message
+      const participant =
+        mapParticipant(
+          data as UnknownRecord
         );
-      }
 
-      if (
-        error.code ===
-        "23514"
-      ) {
-        return jsonError(
-          "Katılımcı rolü, katılım durumu veya imza durumu geçersiz.",
-          400,
-          error.message
-        );
-      }
+      return jsonSuccess(
+        {
+          message:
+            "Manuel katılımcı başarıyla eklendi.",
 
-      return jsonError(
-        "Kurul katılımcısı oluşturulamadı.",
-        500,
-        error.message
-      );
-    }
-
-    if (!data) {
-      return jsonError(
-        "Katılımcı oluşturuldu ancak kayıt bilgisi alınamadı.",
-        500
-      );
-    }
-
-    const participant =
-      mapBoardParticipant(
-        data
-      );
-
-    return jsonSuccess(
-      {
-        message:
-          "Kurul katılımcısı başarıyla oluşturuldu.",
-
-        participant,
-
-        record:
           participant,
 
-        data:
-          participant,
-      },
-      201
+          record:
+            participant,
+
+          data:
+            participant,
+        },
+        201
+      );
+    }
+
+    return jsonError(
+      "Geçersiz katılımcı işlemi.",
+      400
     );
   } catch (error) {
     console.error(
@@ -1293,7 +1273,7 @@ export async function POST(
     return jsonError(
       error instanceof Error
         ? error.message
-        : "Kurul katılımcısı oluşturulurken beklenmeyen bir hata oluştu.",
+        : "Kurul katılımcısı kaydedilirken beklenmeyen bir hata oluştu.",
       500
     );
   }
