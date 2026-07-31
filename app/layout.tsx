@@ -1,7 +1,21 @@
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
+
 import "./globals.css";
 import AppChrome from "../components/AppChrome";
 
-export const metadata = {
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-inter",
+  fallback: [
+    "Segoe UI",
+    "Arial",
+    "sans-serif",
+  ],
+});
+
+export const metadata: Metadata = {
   title: "D-SEC360 | İSG Eğitim, Denetim ve Kurumsal Yönetim Platformu",
   description:
     "D-SEC360; iş güvenliği eğitimleri, dijital denetim, sağlık takibi, ÇBS yönetimi ve kurumsal raporlama süreçlerini tek platformda birleştiren modern İSG yönetim sistemidir.",
@@ -19,19 +33,19 @@ export const metadata = {
   ],
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="tr">
-      <body>
+    <html lang="tr" className={inter.variable}>
+      <body className={inter.className}>
         <AppChrome>{children}</AppChrome>
       </body>
     </html>

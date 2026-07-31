@@ -2,30 +2,146 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================
+   D-SEC360 GLOBAL TASARIM VE TİPOGRAFİ SİSTEMİ
+========================================================= */
+
+:root {
+  /* Font */
+  --dsec-font:
+    var(--font-inter),
+    Inter,
+    "Segoe UI",
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  /* Renkler */
+  --dsec-page-bg: #f7f8fb;
+  --dsec-surface: #ffffff;
+  --dsec-surface-soft: #f9fafb;
+
+  --dsec-text: #18212f;
+  --dsec-text-secondary: #4b5563;
+  --dsec-text-muted: #6b7280;
+
+  --dsec-border: #e5e7eb;
+  --dsec-border-soft: #eef2f7;
+
+  --dsec-primary: #c62828;
+  --dsec-primary-dark: #7f1d1d;
+  --dsec-primary-soft: #fff1f2;
+
+  /* Yazı boyutları */
+  --dsec-font-page-title: clamp(32px, 3vw, 44px);
+  --dsec-font-hero-title: clamp(38px, 4vw, 56px);
+  --dsec-font-section-title: clamp(24px, 2vw, 30px);
+  --dsec-font-subsection-title: 21px;
+  --dsec-font-card-title: 18px;
+  --dsec-font-body: 15px;
+  --dsec-font-small: 13px;
+  --dsec-font-caption: 12px;
+
+  /* Font ağırlıkları */
+  --dsec-weight-normal: 400;
+  --dsec-weight-medium: 500;
+  --dsec-weight-semibold: 600;
+  --dsec-weight-bold: 700;
+  --dsec-weight-extrabold: 800;
+  --dsec-weight-black: 900;
+
+  /* Satır yükseklikleri */
+  --dsec-line-heading: 1.15;
+  --dsec-line-body: 1.6;
+
+  /* Ölçüler */
+  --dsec-radius-sm: 10px;
+  --dsec-radius-md: 14px;
+  --dsec-radius-lg: 18px;
+  --dsec-radius-xl: 24px;
+
+  --dsec-shadow-sm: 0 4px 14px rgba(15, 23, 42, 0.05);
+  --dsec-shadow-md: 0 12px 32px rgba(15, 23, 42, 0.07);
+  --dsec-shadow-lg: 0 22px 54px rgba(15, 23, 42, 0.12);
+}
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
-html,
+html {
+  margin: 0;
+  padding: 0;
+  font-family: var(--dsec-font);
+  background: var(--dsec-page-bg);
+  color: var(--dsec-text);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
   margin: 0;
   padding: 0;
-  font-family: Arial, Helvetica, sans-serif;
-  background: #fff7f8;
-  color: #1f2937;
+  min-height: 100vh;
+  font-family: var(--dsec-font);
+  font-size: var(--dsec-font-body);
+  line-height: var(--dsec-line-body);
+  background: var(--dsec-page-bg);
+  color: var(--dsec-text);
+}
+
+body,
+button,
+input,
+select,
+textarea,
+table {
+  font-family: var(--dsec-font);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  letter-spacing: normal;
+}
+
+input,
+select,
+textarea {
+  font-size: 14px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  font-family: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: inherit;
+  line-height: var(--dsec-line-heading);
 }
 
 a {
   color: inherit;
   text-decoration: none;
-}
-
-button,
-input,
-textarea {
-  font: inherit;
 }
 
 body {
@@ -3504,5 +3620,171 @@ iframe {
 
   .admin-ai-button {
     flex: 1;
+  }
+}
+/* =========================================================
+   D-SEC360 ORTAK MODÜL ŞABLONU
+========================================================= */
+
+.dsec-module-page {
+  width: 100%;
+  min-height: 100%;
+  padding: clamp(18px, 2vw, 28px);
+  background: var(--dsec-page-bg);
+  color: var(--dsec-text);
+  font-family: var(--dsec-font);
+}
+
+.dsec-module-container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.dsec-module-header {
+  margin-bottom: 26px;
+}
+
+.dsec-module-title {
+  margin: 0;
+  color: var(--dsec-text);
+  font-family: var(--dsec-font);
+  font-size: var(--dsec-font-page-title);
+  font-weight: var(--dsec-weight-extrabold);
+  line-height: var(--dsec-line-heading);
+  letter-spacing: -0.035em;
+}
+
+.dsec-module-subtitle {
+  margin: 10px 0 0;
+  color: var(--dsec-text-muted);
+  font-size: 16px;
+  font-weight: var(--dsec-weight-normal);
+  line-height: var(--dsec-line-body);
+}
+
+.dsec-section-header {
+  margin-bottom: 18px;
+}
+
+.dsec-section-title {
+  margin: 0;
+  color: var(--dsec-text);
+  font-size: var(--dsec-font-section-title);
+  font-weight: var(--dsec-weight-extrabold);
+  line-height: var(--dsec-line-heading);
+  letter-spacing: -0.025em;
+}
+
+.dsec-section-description {
+  margin: 8px 0 0;
+  color: var(--dsec-text-muted);
+  font-size: var(--dsec-font-body);
+  line-height: var(--dsec-line-body);
+}
+
+.dsec-card {
+  border: 1px solid var(--dsec-border);
+  border-radius: var(--dsec-radius-lg);
+  background: var(--dsec-surface);
+  padding: clamp(18px, 2vw, 24px);
+  box-shadow: var(--dsec-shadow-md);
+}
+
+.dsec-card-title {
+  margin: 0;
+  color: var(--dsec-text);
+  font-size: var(--dsec-font-card-title);
+  font-weight: var(--dsec-weight-bold);
+  line-height: 1.35;
+}
+
+.dsec-card-description {
+  margin: 8px 0 0;
+  color: var(--dsec-text-muted);
+  font-size: var(--dsec-font-body);
+  line-height: var(--dsec-line-body);
+}
+
+.dsec-kpi-label {
+  color: var(--dsec-text-secondary);
+  font-size: 14px;
+  font-weight: var(--dsec-weight-bold);
+  line-height: 1.4;
+}
+
+.dsec-kpi-value {
+  margin-top: 8px;
+  color: var(--dsec-text);
+  font-size: clamp(30px, 3vw, 42px);
+  font-weight: var(--dsec-weight-extrabold);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.dsec-button {
+  min-height: 44px;
+  border-radius: var(--dsec-radius-md);
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: var(--dsec-weight-bold);
+}
+
+.dsec-input,
+.dsec-select,
+.dsec-textarea {
+  width: 100%;
+  border: 1px solid var(--dsec-border);
+  border-radius: var(--dsec-radius-md);
+  background: var(--dsec-surface);
+  color: var(--dsec-text);
+  font-size: 14px;
+}
+
+.dsec-input,
+.dsec-select {
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.dsec-textarea {
+  min-height: 120px;
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+.dsec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.dsec-table th {
+  color: var(--dsec-text-secondary);
+  font-size: 13px;
+  font-weight: var(--dsec-weight-extrabold);
+  text-align: left;
+}
+
+.dsec-table td {
+  color: var(--dsec-text);
+  font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .dsec-module-page {
+    padding: 16px;
+  }
+
+  .dsec-module-title {
+    font-size: clamp(28px, 7vw, 36px);
+  }
+
+  .dsec-module-subtitle {
+    font-size: 14px;
+  }
+
+  .dsec-section-title {
+    font-size: clamp(22px, 5vw, 27px);
   }
 }
