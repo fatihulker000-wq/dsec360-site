@@ -27,6 +27,8 @@ import {
   X,
 } from "lucide-react";
 
+import BoardMembersPanel from "../../../../components/documentation/board/BoardMembersPanel";
+
 import type {
   BoardDashboard,
   BoardMeeting,
@@ -37,19 +39,6 @@ import type {
 } from "@/lib/documentation/board/types";
 
 type ApiRecord = Record<string, unknown>;
-
-type AdminMeResponse = {
-  success?: boolean;
-  user?: {
-    role?: string;
-    company_id?: string | number | null;
-    companyId?: string | number | null;
-    firm_id?: string | number | null;
-    firmId?: string | number | null;
-  };
-  error?: string;
-  message?: string;
-};
 
 type MeetingListResponse = {
   success?: boolean;
@@ -829,6 +818,11 @@ export default function BoardCenterPage() {
   ] = useState("");
 
   const [
+    activeFirmName,
+    setActiveFirmName,
+  ] = useState("Seçili Firma");
+
+  const [
     search,
     setSearch,
   ] = useState("");
@@ -1020,12 +1014,16 @@ export default function BoardCenterPage() {
     );
 
   useEffect(() => {
-    let cancelled = false;
+    const firmId =
+      getStoredFirmId();
 
-    async function loadActiveFirm() {
-      setLoading(true);
-      setError("");
+    setActiveFirmId(firmId);
 
+    setForm(
+      createInitialForm(firmId)
+    );
+
+    const loadFirmName = async () => {
       try {
         const response = await fetch("/api/admin/me", {
           method: "GET",
@@ -1033,70 +1031,31 @@ export default function BoardCenterPage() {
           cache: "no-store",
         });
 
-        const json =
-          (await response.json().catch(() => ({}))) as AdminMeResponse;
+        const json = await response.json().catch(() => ({}));
 
-        if (!response.ok) {
-          throw new Error(
-            json.error ||
-              json.message ||
-              "Oturum bilgisi alınamadı."
-          );
+        const firmName = normalizeText(
+          json?.user?.company_name ??
+            json?.user?.companyName ??
+            json?.user?.firm_name ??
+            json?.user?.firmName ??
+            json?.user?.company?.name ??
+            json?.user?.firm?.name
+        );
+
+        if (firmName) {
+          setActiveFirmName(firmName);
         }
-
-        const firmId = normalizeText(
-          json.user?.company_id ??
-            json.user?.companyId ??
-            json.user?.firm_id ??
-            json.user?.firmId ??
-            getStoredFirmId()
-        );
-
-        if (cancelled) return;
-
-        if (!firmId) {
-          setActiveFirmId("");
-          setForm(createInitialForm(""));
-          setMeetings([]);
-          setDashboard(EMPTY_DASHBOARD);
-          setError(
-            "Oturuma bağlı firma bilgisi bulunamadı. Kullanıcı kaydındaki company_id alanını kontrol edin."
-          );
-          setLoading(false);
-          return;
-        }
-
-        setActiveFirmId(firmId);
-        setForm(createInitialForm(firmId));
-
-        await loadData({
-          firmId,
-        });
-      } catch (loadFirmError) {
-        if (cancelled) return;
-
-        console.error(
-          "Aktif firma yükleme hatası:",
-          loadFirmError
-        );
-
-        setMeetings([]);
-        setDashboard(EMPTY_DASHBOARD);
-        setError(
-          loadFirmError instanceof Error
-            ? loadFirmError.message
-            : "Aktif firma bilgisi alınamadı."
-        );
-        setLoading(false);
+      } catch {
+        // Firma unvanı alınamazsa seçili firma etiketi gösterilir.
       }
-    }
-
-    void loadActiveFirm();
-
-    return () => {
-      cancelled = true;
     };
-  }, []);
+
+    void loadFirmName();
+
+    void loadData({
+      firmId,
+    });
+  }, [loadData]);
 
   useEffect(() => {
     if (!successMessage) {
@@ -1643,6 +1602,10 @@ export default function BoardCenterPage() {
               )}
             </div>
 
+            {activeFirmId ? (
+              <BoardMembersPanel firmId={activeFirmId} />
+            ) : null}
+
             <div className="mt-7 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
               <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-200 p-5">
@@ -2099,19 +2062,19 @@ export default function BoardCenterPage() {
 
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold text-slate-700">
-                    Firma ID *
+                    Firma
                   </span>
 
                   <input
+                    value={activeFirmName}
+                    readOnly
+                    className="h-11 w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-700"
+                  />
+
+                  <input
+                    type="hidden"
                     value={form.firmId}
-                    onChange={(event) =>
-                      updateForm(
-                        "firmId",
-                        event.target.value
-                      )
-                    }
-                    placeholder="Aktif firma ID"
-                    className="h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
+                    readOnly
                   />
                 </label>
 
