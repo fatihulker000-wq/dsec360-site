@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Archive,
   ArrowLeft,
+  ArrowRightCircle,
   CalendarDays,
   CheckCircle2,
   Download,
@@ -120,6 +121,13 @@ const STATUS_LABELS: Record<BoardMeetingStatus, string> = {
   CANCELLED: "İptal Edildi",
   ARCHIVED: "Arşivlendi",
 };
+
+const DECISION_STATUS_OPTIONS = [
+  { value: "OPEN", label: "Açık" },
+  { value: "IN_PROGRESS", label: "Devam Ediyor" },
+  { value: "COMPLETED", label: "Tamamlandı" },
+  { value: "CANCELLED", label: "İptal Edildi" },
+] as const;
 
 const clean = (value: unknown) => String(value ?? "").trim();
 const num = (value: unknown, fallback = 0) => {
@@ -310,8 +318,36 @@ export default function BoardMeetingDetailPage() {
 
         setMeeting(source.meeting);
         setAgenda(normalizeAgenda(source.agenda));
-        setParticipants(normalizeParticipants(source.participants));
         setDecisions(normalizeDecisions(source.decisions));
+
+        const participantResponse = await fetch(
+          `/api/admin/documentation/board/participants?meetingId=${encodeURIComponent(
+            meetingId
+          )}&firmId=${encodeURIComponent(source.meeting.firmId)}`,
+          { cache: "no-store" }
+        );
+
+        const participantJson = (await participantResponse.json().catch(() => ({}))) as {
+          success?: boolean;
+          participants?: unknown[];
+          data?: unknown[];
+          error?: string;
+          message?: string;
+        };
+
+        if (!participantResponse.ok || participantJson.success === false) {
+          throw new Error(
+            participantJson.error ||
+              participantJson.message ||
+              "Katılımcılar alınamadı."
+          );
+        }
+
+        setParticipants(
+          normalizeParticipants(
+            participantJson.participants ?? participantJson.data ?? source.participants
+          )
+        );
         setForm({
           meetingNo: source.meeting.meetingNo,
           meetingTitle: source.meeting.meetingTitle,
@@ -806,6 +842,146 @@ export default function BoardMeetingDetailPage() {
     URL.revokeObjectURL(url);
   }
 
+  async function quickUpdateDecision(
+    decision: DecisionItem,
+    decisionStatus: string,
+    completionRate?: number
+  ) {
+    setSaving(true);
+    setError("");
+
+    const normalizedRate =
+      decisionStatus === "COMPLETED"
+        ? 100
+        : Math.max(0, Math.min(100, completionRate ?? decision.completionRate));
+
+    try {
+      await api(`/api/admin/documentation/board/decisions/${decision.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decisionStatus,
+          completionRate: normalizedRate,
+        }),
+      });
+
+      setSuccess(
+        decisionStatus === "COMPLETED"
+          ? "Karar kapatıldı ve tamamlanma oranı %100 yapıldı."
+          : "Karar durumu güncellendi."
+      );
+      await loadBundle(true);
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "Karar güncellenemedi."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function carryDecisionToNextMeeting(decision: DecisionItem) {
+    if (!meeting) return;
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(
+        `/api/admin/documentation/board?firmId=${encodeURIComponent(
+          meeting.firmId
+        )}`,
+        { cache: "no-store" }
+      );
+
+      const json = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        meetings?: BoardMeeting[];
+        data?: BoardMeeting[];
+        error?: string;
+        message?: string;
+      };
+
+      if (!response.ok || json.success === false) {
+        throw new Error(json.error || json.message || "Toplantılar alınamadı.");
+      }
+
+      const meetings = Array.isArray(json.meetings)
+        ? json.meetings
+        : Array.isArray(json.data)
+          ? json.data
+          : [];
+
+      const nextMeeting = meetings
+        .filter(
+          (item) =>
+            item.id !== meeting.id &&
+            item.meetingDateMillis > meeting.meetingDateMillis &&
+            !["COMPLETED", "CANCELLED", "ARCHIVED"].includes(item.status)
+        )
+        .sort((a, b) => a.meetingDateMillis - b.meetingDateMillis)[0];
+
+      if (!nextMeeting) {
+        throw new Error(
+          "Bu firmaya ait ileri tarihli planlı bir kurul toplantısı bulunamadı. Önce yeni toplantı oluşturun."
+        );
+      }
+
+      const agendaResponse = await fetch(
+        "/api/admin/documentation/board/agenda",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firmId: meeting.firmId,
+            meetingId: nextMeeting.id,
+            title: `Önceki Karar Takibi: ${decision.decisionNo} - ${decision.title}`,
+            description: [
+              decision.description,
+              `Kaynak toplantı: ${meeting.meetingNo}`,
+              `Sorumlu: ${decision.responsiblePerson || decision.responsibleDepartment || "-"}`,
+              `Termin: ${formatDate(decision.dueDateMillis)}`,
+              `Mevcut tamamlanma: %${decision.completionRate}`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            orderNo: 1,
+            presenter: decision.responsiblePerson || null,
+            durationMinutes: 10,
+            isCompleted: false,
+          }),
+        }
+      );
+
+      const agendaJson = (await agendaResponse.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+        message?: string;
+      };
+
+      if (!agendaResponse.ok || agendaJson.success === false) {
+        throw new Error(
+          agendaJson.error || agendaJson.message || "Karar sonraki toplantıya aktarılamadı."
+        );
+      }
+
+      setSuccess(
+        `Karar, ${nextMeeting.meetingNo} numaralı toplantıya gündem maddesi olarak aktarıldı.`
+      );
+    } catch (carryError) {
+      setError(
+        carryError instanceof Error
+          ? carryError.message
+          : "Karar sonraki toplantıya aktarılamadı."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function deleteRecord(kind: "agenda" | "participants" | "decisions", id: string) {
     if (!window.confirm("Bu kayıt silinsin mi?")) return;
     setSaving(true);
@@ -1032,35 +1208,133 @@ export default function BoardMeetingDetailPage() {
               ) : null}
 
               {tab === "DECISIONS" ? (
-                <Section title="Kurul Kararları" button="Karar Ekle" onAdd={() =>
-  setDialog({
-    type: "DECISION",
-    mode: "CREATE",
-  })
-}>
-                  {decisions.length === 0 ? <Empty text="Henüz karar eklenmedi." /> : decisions.map((item) => (
-                    <article key={item.id} className="border-t border-slate-100 p-5 first:border-t-0">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex gap-2"><strong>{item.decisionNo}</strong>{item.isOverdue ? <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">Gecikti</span> : null}</div>
-                          <h3 className="mt-2 font-bold">{item.title}</h3>
-                          <p className="mt-2 text-sm text-slate-600">{item.description || "Açıklama yok"}</p>
-                          <p className="mt-3 text-xs text-slate-500">Sorumlu: {item.responsiblePerson || item.responsibleDepartment || "-"} · Termin: {formatDate(item.dueDateMillis)} · %{item.completionRate}</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setDialog({ type: "DECISION", mode: "EDIT", record: item })}
-                            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
-                            aria-label="Kararı düzenle"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button type="button" onClick={() => void deleteRecord("decisions", item.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label="Kararı sil"><Trash2 className="h-4 w-4" /></button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
+                <Section
+                  title="Kurul Kararları"
+                  button="Karar Ekle"
+                  onAdd={() =>
+                    setDialog({
+                      type: "DECISION",
+                      mode: "CREATE",
+                    })
+                  }
+                >
+                  {decisions.length === 0 ? (
+                    <Empty text="Henüz karar eklenmedi." />
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {decisions.map((item) => (
+                        <article key={item.id} className="p-5">
+                          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <strong>{item.decisionNo}</strong>
+                                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                  item.decisionStatus === "COMPLETED"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : item.decisionStatus === "CANCELLED"
+                                      ? "bg-slate-100 text-slate-600"
+                                      : item.isOverdue
+                                        ? "bg-red-50 text-red-700"
+                                        : "bg-amber-50 text-amber-700"
+                                }`}>
+                                  {decisionStatusLabel(item.decisionStatus)}
+                                </span>
+                                {item.isOverdue ? (
+                                  <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                                    Gecikti
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <h3 className="mt-2 font-bold text-slate-950">{item.title}</h3>
+                              <p className="mt-2 text-sm text-slate-600">
+                                {item.description || "Açıklama yok"}
+                              </p>
+
+                              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                  <div className="text-xs text-slate-500">Sorumlu</div>
+                                  <div className="mt-1 text-sm font-semibold text-slate-800">
+                                    {item.responsiblePerson || item.responsibleDepartment || "-"}
+                                  </div>
+                                </div>
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                  <div className="text-xs text-slate-500">Termin</div>
+                                  <div className="mt-1 text-sm font-semibold text-slate-800">
+                                    {formatDate(item.dueDateMillis)}
+                                  </div>
+                                </div>
+                                <div className="rounded-xl bg-slate-50 p-3">
+                                  <div className="text-xs text-slate-500">Tamamlanma</div>
+                                  <div className="mt-1 text-sm font-semibold text-slate-800">
+                                    %{item.completionRate}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className="h-full rounded-full bg-slate-900"
+                                  style={{ width: `${Math.max(0, Math.min(100, item.completionRate))}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 xl:max-w-[340px] xl:justify-end">
+                              {!["COMPLETED", "CANCELLED"].includes(item.decisionStatus) ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => void quickUpdateDecision(item, "IN_PROGRESS")}
+                                    disabled={saving}
+                                    className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                                  >
+                                    Devam Ediyor
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void quickUpdateDecision(item, "COMPLETED", 100)}
+                                    disabled={saving}
+                                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                  >
+                                    Kararı Kapat
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void carryDecisionToNextMeeting(item)}
+                                    disabled={saving}
+                                    className="inline-flex items-center gap-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                                  >
+                                    <ArrowRightCircle className="h-4 w-4" />
+                                    Sonraki Toplantıya Aktar
+                                  </button>
+                                </>
+                              ) : null}
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDialog({ type: "DECISION", mode: "EDIT", record: item })
+                                }
+                                className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                                aria-label="Kararı düzenle"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void deleteRecord("decisions", item.id)}
+                                className="rounded-lg p-2 text-red-600 hover:bg-red-50"
+                                aria-label="Kararı sil"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
                 </Section>
               ) : null}
 
@@ -1238,6 +1512,8 @@ function QuickDialog({
     responsiblePerson: decisionRecord?.responsiblePerson ?? "",
     dueDate: decisionRecord?.dueDateMillis ? dateInput(decisionRecord.dueDateMillis) : "",
     agendaId: decisionRecord?.agendaId ?? "",
+    decisionStatus: decisionRecord?.decisionStatus ?? "OPEN",
+    completionRate: String(decisionRecord?.completionRate ?? 0),
   }));
 
   const dialogTitle =
@@ -1289,11 +1565,14 @@ function QuickDialog({
               responsiblePerson: nullable(values.responsiblePerson),
               responsibleDepartment: decisionRecord?.responsibleDepartment ?? null,
               priority: "NORMAL",
-              decisionStatus: decisionRecord?.decisionStatus ?? "OPEN",
+              decisionStatus: values.decisionStatus || "OPEN",
               dueDateMillis: values.dueDate
                 ? new Date(`${values.dueDate}T23:59:59`).getTime()
                 : null,
-              completionRate: decisionRecord?.completionRate ?? 0,
+              completionRate:
+                values.decisionStatus === "COMPLETED"
+                  ? 100
+                  : Math.max(0, Math.min(100, num(values.completionRate, 0))),
               voteResult: "NO_VOTE",
               yesVoteCount: 0,
               noVoteCount: 0,
@@ -1409,6 +1688,43 @@ function QuickDialog({
                       value={values.dueDate}
                       onChange={(event) => setValues({ ...values, dueDate: event.target.value })}
                       className="input"
+                    />
+                  </Field>
+
+                  <Field label="Karar Durumu">
+                    <select
+                      value={values.decisionStatus}
+                      onChange={(event) => {
+                        const nextStatus = event.target.value;
+                        setValues({
+                          ...values,
+                          decisionStatus: nextStatus,
+                          completionRate:
+                            nextStatus === "COMPLETED" ? "100" : values.completionRate,
+                        });
+                      }}
+                      className="input"
+                    >
+                      {DECISION_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <Field label="Tamamlanma Oranı (%)">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={values.completionRate}
+                      disabled={values.decisionStatus === "COMPLETED"}
+                      onChange={(event) =>
+                        setValues({ ...values, completionRate: event.target.value })
+                      }
+                      className="input disabled:bg-slate-100"
                     />
                   </Field>
                 </>
