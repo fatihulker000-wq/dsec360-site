@@ -190,10 +190,6 @@ function normalizeAttendanceStatus(
     normalizeText(value)
       .toUpperCase();
 
-  /*
-   * Ön yüzde NOT_ATTENDED,
-   * veritabanında ABSENT kullanılır.
-   */
   if (
     normalized ===
     "NOT_ATTENDED"
@@ -247,16 +243,35 @@ function mapParticipant(
   row: UnknownRecord
 ) {
   return {
-    id: normalizeText(row.id),
+    id: normalizeText(
+      row.id ??
+        row.remote_id
+    ),
+
+    remoteId:
+      normalizeText(
+        row.remote_id ??
+          row.id
+      ),
 
     meetingId:
       normalizeText(
         row.meeting_id
       ),
 
+    meetingSyncKey:
+      normalizeOptionalText(
+        row.meeting_sync_key
+      ),
+
     firmId:
       normalizeText(
         row.firm_id
+      ),
+
+    webFirmId:
+      normalizeOptionalText(
+        row.web_firm_id
       ),
 
     boardMemberId:
@@ -337,6 +352,16 @@ function mapParticipant(
         row.notes
       ),
 
+    syncKey:
+      normalizeText(
+        row.sync_key
+      ),
+
+    syncStatus:
+      normalizeText(
+        row.sync_status
+      ) || "SYNCED",
+
     isDeleted:
       normalizeBoolean(
         row.is_deleted,
@@ -373,7 +398,7 @@ async function loadMeeting(
         MEETINGS_TABLE
       )
       .select(
-        "id, firm_id, is_deleted"
+        "id, remote_id, sync_key, firm_id, web_firm_id, is_deleted"
       )
       .eq(
         "id",
@@ -401,9 +426,25 @@ async function loadMeeting(
         data.id
       ),
 
+    remoteId:
+      normalizeText(
+        data.remote_id ??
+          data.id
+      ),
+
+    syncKey:
+      normalizeText(
+        data.sync_key
+      ),
+
     firmId:
       normalizeText(
         data.firm_id
+      ),
+
+    webFirmId:
+      normalizeOptionalText(
+        data.web_firm_id
       ),
 
     isDeleted:
@@ -414,15 +455,6 @@ async function loadMeeting(
   };
 }
 
-/**
- * GET
- *
- * Toplantının katılımcılarını getirir.
- *
- * /api/admin/documentation/board/participants
- *   ?meetingId=...
- *   &firmId=...
- */
 export async function GET(
   request: NextRequest
 ) {
@@ -551,14 +583,6 @@ export async function GET(
   }
 }
 
-/**
- * POST
- *
- * Desteklenen işlemler:
- *
- * action = ADD_BOARD_MEMBERS
- * action = ADD_MANUAL
- */
 export async function POST(
   request: NextRequest
 ) {
@@ -633,9 +657,6 @@ export async function POST(
     const now =
       Date.now();
 
-    /*
-     * Kurul üyelerinden toplu ekleme
-     */
     if (
       action ===
       "ADD_BOARD_MEMBERS"
@@ -750,11 +771,6 @@ export async function POST(
           );
 
       if (existingError) {
-        console.error(
-          "Mevcut katılımcılar kontrol edilemedi:",
-          existingError
-        );
-
         return jsonError(
           "Mevcut katılımcılar kontrol edilemedi.",
           500,
@@ -791,109 +807,127 @@ export async function POST(
               )
           )
           .map(
-            (member) => ({
-              meeting_id:
-                meetingId,
+            (member) => {
+              const recordId =
+                crypto.randomUUID();
 
-              firm_id:
-                firmId,
+              return {
+                id:
+                  recordId,
 
-              board_member_id:
-                member.id,
+                remote_id:
+                  recordId,
 
-              participant_source:
-                "BOARD_MEMBER",
+                meeting_id:
+                  meetingId,
 
-              employee_id:
-                member.employee_id ??
-                null,
+                meeting_sync_key:
+                  meeting.syncKey,
 
-              full_name:
-                normalizeText(
-                  member.full_name
-                ),
+                firm_id:
+                  firmId,
 
-              organization_name:
-                member.organization_name ??
-                null,
+                web_firm_id:
+                  meeting.webFirmId ??
+                  firmId,
 
-              title:
-                member.title ??
-                null,
+                board_member_id:
+                  member.id,
 
-              department:
-                member.department ??
-                null,
+                participant_source:
+                  "BOARD_MEMBER",
 
-              participant_role:
-                normalizeText(
-                  member.board_role
-                ) || "MEMBER",
+                employee_id:
+                  member.employee_id ??
+                  null,
 
-              attendance_status:
-                attendanceStatus,
+                full_name:
+                  normalizeText(
+                    member.full_name
+                  ),
 
-              signature_status:
-                attendanceStatus ===
-                  "ABSENT" ||
-                attendanceStatus ===
-                  "EXCUSED"
-                  ? "NOT_REQUIRED"
-                  : "NOT_SIGNED",
+                organization_name:
+                  member.organization_name ??
+                  null,
 
-              signed_at_millis:
-                null,
+                title:
+                  member.title ??
+                  null,
 
-              email:
-                member.email ??
-                null,
+                department:
+                  member.department ??
+                  null,
 
-              phone:
-                member.phone ??
-                null,
+                participant_role:
+                  normalizeText(
+                    member.board_role
+                  ) || "MEMBER",
 
-              notes:
-                member.notes ??
-                null,
+                attendance_status:
+                  attendanceStatus,
 
-              has_voting_right:
-                normalizeBoolean(
-                  member.has_voting_right,
-                  true
-                ),
+                signature_status:
+                  attendanceStatus ===
+                    "ABSENT" ||
+                  attendanceStatus ===
+                    "EXCUSED"
+                    ? "NOT_REQUIRED"
+                    : "NOT_SIGNED",
 
-              source:
-                "WEB",
+                signed_at_millis:
+                  null,
 
-              sync_key:
-                generateSyncKey(
-                  "board-participant"
-                ),
+                email:
+                  member.email ??
+                  null,
 
-              version:
-                1,
+                phone:
+                  member.phone ??
+                  null,
 
-              is_deleted:
-                false,
+                notes:
+                  member.notes ??
+                  null,
 
-              deleted_at_millis:
-                null,
+                has_voting_right:
+                  normalizeBoolean(
+                    member.has_voting_right,
+                    true
+                  ),
 
-              created_at_millis:
-                now,
+                source:
+                  "WEB",
 
-              updated_at_millis:
-                now,
+                sync_key:
+                  generateSyncKey(
+                    "board-participant"
+                  ),
 
-              sync_status:
-                "SYNCED",
+                version:
+                  1,
 
-              sync_error:
-                null,
+                is_deleted:
+                  false,
 
-              last_synced_at_millis:
-                now,
-            })
+                deleted_at_millis:
+                  null,
+
+                created_at_millis:
+                  now,
+
+                updated_at_millis:
+                  now,
+
+                sync_status:
+                  "SYNCED",
+
+                sync_error:
+                  null,
+
+                last_synced_at_millis:
+                  now,
+              };
+            }
           );
 
       if (
@@ -944,6 +978,17 @@ export async function POST(
           );
         }
 
+        if (
+          insertError.code ===
+          "23514"
+        ) {
+          return jsonError(
+            "Katılım durumu, imza durumu veya katılımcı rolü geçersiz.",
+            400,
+            insertError.message
+          );
+        }
+
         return jsonError(
           "Kurul üyeleri toplantıya eklenemedi.",
           500,
@@ -980,9 +1025,6 @@ export async function POST(
       );
     }
 
-    /*
-     * Manuel katılımcı ekleme
-     */
     if (
       action === "ADD_MANUAL" ||
       !action
@@ -1071,27 +1113,34 @@ export async function POST(
             body.attendance_status
         );
 
-      const participantSource =
-        normalizeParticipantSource(
-          body.participantSource ??
-            body.participant_source
-        );
+      const recordId =
+        crypto.randomUUID();
 
       const row = {
+        id:
+          recordId,
+
+        remote_id:
+          recordId,
+
         meeting_id:
           meetingId,
 
+        meeting_sync_key:
+          meeting.syncKey,
+
         firm_id:
+          firmId,
+
+        web_firm_id:
+          meeting.webFirmId ??
           firmId,
 
         board_member_id:
           null,
 
         participant_source:
-          participantSource ===
-          "BOARD_MEMBER"
-            ? "MANUAL"
-            : participantSource,
+          "MANUAL",
 
         employee_id:
           null,
@@ -1221,7 +1270,7 @@ export async function POST(
           "23514"
         ) {
           return jsonError(
-            "Katılım durumu veya katılımcı rolü geçersiz.",
+            "Katılım durumu, imza durumu veya katılımcı rolü geçersiz.",
             400,
             error.message
           );
