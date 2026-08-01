@@ -532,12 +532,21 @@ useEffect(() => {
     }
   };
 
- const openCategory = (
+const openCategory = (
   category: DocumentationCategory
 ) => {
   if (category === "BOARD") {
     window.location.href =
       "/admin/documentation/board";
+    return;
+  }
+
+  if (
+    category ===
+    "EMPLOYEE_REPRESENTATIVE"
+  ) {
+    window.location.href =
+      "/admin/documentation/employee-representatives";
     return;
   }
 
