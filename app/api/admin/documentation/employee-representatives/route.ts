@@ -450,8 +450,8 @@ async function getScopedEmployee(
     await supabase
       .from(EMPLOYEES_TABLE)
       .select(
-        "id, firm_id, full_name, department, job_title, registry_no, active, exit_date"
-      )
+  "id, firm_id, full_name, job_title, registry_no, active, exit_date"
+)
       .eq(
         "id",
         employeeId
@@ -1138,9 +1138,7 @@ function buildInsertPayload(
       ) || "",
 
     department:
-      clean(
-        employee.department
-      ),
+  null,
 
     job_title:
       clean(
@@ -1496,9 +1494,7 @@ function buildUpdatePayload(
       ) || "";
 
     payload.department =
-      clean(
-        employee.department
-      );
+      null,
 
     payload.job_title =
       clean(
@@ -1656,8 +1652,8 @@ export async function GET(
             EMPLOYEES_TABLE
           )
           .select(
-            "id, firm_id, full_name, department, job_title, registry_no, active, exit_date"
-          )
+  "id, firm_id, full_name, job_title, registry_no, active, exit_date"
+)
           .eq(
             "firm_id",
             firmId
