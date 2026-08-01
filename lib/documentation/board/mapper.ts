@@ -2125,10 +2125,16 @@ export function mapBoardMeetingToDatabase(
 ): Record<string, unknown> {
   const now = Date.now();
 
+  const remoteId =
+    record.id ||
+    crypto.randomUUID();
+
   return {
     id:
-      record.id ||
-      undefined,
+      remoteId,
+
+    remote_id:
+      remoteId,
 
     firm_id:
       record.firmId,
@@ -2139,8 +2145,7 @@ export function mapBoardMeetingToDatabase(
 
     sync_key:
       record.syncKey ||
-      record.id ||
-      undefined,
+      remoteId,
 
     meeting_no:
       record.meetingNo?.trim() ||
@@ -2283,10 +2288,16 @@ export function mapBoardAgendaToDatabase(
 ): Record<string, unknown> {
   const now = Date.now();
 
+  const remoteId =
+    record.id ||
+    crypto.randomUUID();
+
   return {
     id:
-      record.id ||
-      undefined,
+      remoteId,
+
+    remote_id:
+      remoteId,
 
     meeting_id:
       record.meetingId,
@@ -2300,8 +2311,7 @@ export function mapBoardAgendaToDatabase(
 
     sync_key:
       record.syncKey ||
-      record.id ||
-      undefined,
+      remoteId,
 
     item_no:
       Math.max(
@@ -2417,10 +2427,16 @@ export function mapBoardParticipantToDatabase(
 ): Record<string, unknown> {
   const now = Date.now();
 
+  const remoteId =
+    record.id ||
+    crypto.randomUUID();
+
   return {
     id:
-      record.id ||
-      undefined,
+      remoteId,
+
+    remote_id:
+      remoteId,
 
     meeting_id:
       record.meetingId,
@@ -2434,8 +2450,7 @@ export function mapBoardParticipantToDatabase(
 
     sync_key:
       record.syncKey ||
-      record.id ||
-      undefined,
+      remoteId,
 
     employee_id:
       record.employeeId?.trim() ||
@@ -2558,10 +2573,16 @@ export function mapBoardDecisionToDatabase(
 ): Record<string, unknown> {
   const now = Date.now();
 
+  const remoteId =
+    record.id ||
+    crypto.randomUUID();
+
   return {
     id:
-      record.id ||
-      undefined,
+      remoteId,
+
+    remote_id:
+      remoteId,
 
     meeting_id:
       record.meetingId,
@@ -2579,8 +2600,7 @@ export function mapBoardDecisionToDatabase(
 
     sync_key:
       record.syncKey ||
-      record.id ||
-      undefined,
+      remoteId,
 
     decision_no:
       record.decisionNo?.trim() ||

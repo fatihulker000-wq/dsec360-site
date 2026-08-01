@@ -838,6 +838,18 @@ export async function POST(
         )
       );
 
+const remoteId =
+    crypto.randomUUID();
+
+databaseRecord.id ??=
+    remoteId;
+
+databaseRecord.remote_id ??=
+    remoteId;
+
+databaseRecord.sync_key ??=
+    crypto.randomUUID();
+
     /*
      * Bu sayaçlar katılımcı ve karar tablolarındaki
      * trigger fonksiyonları tarafından yönetilir.
