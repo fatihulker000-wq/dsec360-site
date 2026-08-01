@@ -1468,7 +1468,7 @@ function Field({ label, wide, children }: { label: string; wide?: boolean; child
 }
 
 function Section({ title, button, onAdd, children }: { title: string; button: string; onAdd: () => void; children: React.ReactNode }) {
-  return <section className="overflow-hidden rounded-2xl border border-slate-200"><div className="flex items-center justify-between border-b border-slate-200 p-5"><h2 className="text-lg font-bold">{title}</h2><button type="button" onClick={onAdd} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white"><Plus className="h-4 w-4" />{button}</button></div>{children}</section>;
+  return <section className="overflow-hidden rounded-2xl border border-slate-200"><div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white p-5"><h2 className="text-lg font-bold">{title}</h2><button type="button" onClick={onAdd} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white"><Plus className="h-4 w-4" />{button}</button></div>{children}</section>;
 }
 
 function Empty({ text }: { text: string }) {
@@ -1616,8 +1616,8 @@ function QuickDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 p-5">
           <h2 className="text-xl font-bold">{dialogTitle}</h2>
           <button type="button" onClick={close} className="rounded-lg p-2 hover:bg-slate-100" aria-label="Pencereyi kapat">
@@ -1625,8 +1625,11 @@ function QuickDialog({
           </button>
         </div>
 
-        <form onSubmit={submit} className="space-y-4 p-5">
-          <>
+        <form
+          onSubmit={submit}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
               {kind === "DECISION" ? (
                 <Field label="Karar No *">
                   <input
@@ -1729,15 +1732,35 @@ function QuickDialog({
                   </Field>
                 </>
               ) : null}
-            </>
+          </div>
 
-          <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
-            <button type="button" onClick={close} className="h-11 rounded-xl border border-slate-200 px-5 text-sm font-semibold">
+          <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-slate-200 bg-white p-5 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={close}
+              disabled={saving}
+              className="h-11 rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
               Vazgeç
             </button>
-            <button type="submit" disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white disabled:opacity-60">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "CREATE" ? <Plus className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-              {mode === "CREATE" ? "Kaydet" : "Güncelle"}
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : mode === "CREATE" ? (
+                <Plus className="h-4 w-4" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {saving
+                ? "Kaydediliyor..."
+                : mode === "CREATE"
+                  ? "Kaydet"
+                  : "Güncelle"}
             </button>
           </div>
         </form>
