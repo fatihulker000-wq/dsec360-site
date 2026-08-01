@@ -9,11 +9,15 @@ import {
   CalendarClock,
   CheckCircle2,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
+  Save,
   ShieldAlert,
+  Trash2,
   UserCheck,
   Users,
+  X,
 } from "lucide-react";
 
 import {
@@ -107,6 +111,43 @@ type ApiResponse = {
   };
   error?: string;
   message?: string;
+};
+
+type RepresentativeForm = {
+  employeeId: string;
+  representativeType:
+    | "PRIMARY"
+    | "SUBSTITUTE";
+  determinationMethod:
+    | "ELECTION"
+    | "APPOINTMENT"
+    | "AUTHORIZED_UNION";
+  isHeadRepresentative: boolean;
+  selectionDate: string;
+  dutyStartDate: string;
+  dutyEndDate: string;
+  workplaceSection: string;
+  shiftName: string;
+  unionName: string;
+  electionReferenceNo: string;
+  appointmentReferenceNo: string;
+  note: string;
+};
+
+const emptyRepresentativeForm: RepresentativeForm = {
+  employeeId: "",
+  representativeType: "PRIMARY",
+  determinationMethod: "ELECTION",
+  isHeadRepresentative: false,
+  selectionDate: "",
+  dutyStartDate: new Date().toISOString().slice(0, 10),
+  dutyEndDate: "",
+  workplaceSection: "",
+  shiftName: "",
+  unionName: "",
+  electionReferenceNo: "",
+  appointmentReferenceNo: "",
+  note: "",
 };
 
 function statusMeta(
@@ -321,6 +362,28 @@ export default function EmployeeRepresentativesPage() {
 
   const [readOnly, setReadOnly] =
     useState(false);
+
+  const [modalOpen, setModalOpen] =
+    useState(false);
+
+  const [
+    editingRepresentative,
+    setEditingRepresentative,
+  ] =
+    useState<RepresentativeItem | null>(
+      null
+    );
+
+  const [form, setForm] =
+    useState<RepresentativeForm>(
+      emptyRepresentativeForm
+    );
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [success, setSuccess] =
+    useState("");
 
   const loadData =
     useCallback(
@@ -605,6 +668,316 @@ export default function EmployeeRepresentativesPage() {
     },
   ];
 
+
+
+  const openCreateModal = () => {
+    setEditingRepresentative(
+      null
+    );
+
+    setForm({
+      ...emptyRepresentativeForm,
+      dutyStartDate:
+        new Date()
+          .toISOString()
+          .slice(0, 10),
+    });
+
+    setModalOpen(true);
+    setError("");
+  };
+
+  const openEditModal = (
+    item: RepresentativeItem
+  ) => {
+    setEditingRepresentative(
+      item
+    );
+
+    setForm({
+      employeeId:
+        item.employeeId || "",
+
+      representativeType:
+        item.representativeType,
+
+      determinationMethod:
+        item.determinationMethod,
+
+      isHeadRepresentative:
+        item.isHeadRepresentative,
+
+      selectionDate:
+        item.selectionDate || "",
+
+      dutyStartDate:
+        item.dutyStartDate || "",
+
+      dutyEndDate:
+        item.dutyEndDate || "",
+
+      workplaceSection:
+        item.workplaceSection || "",
+
+      shiftName:
+        item.shiftName || "",
+
+      unionName: "",
+
+      electionReferenceNo:
+        "",
+
+      appointmentReferenceNo:
+        "",
+
+      note:
+        item.note || "",
+    });
+
+    setModalOpen(true);
+    setError("");
+  };
+
+  const saveRepresentative =
+    async () => {
+      if (!selectedCompanyId) {
+        setError(
+          "Önce firma seçmelisiniz."
+        );
+        return;
+      }
+
+      if (!form.employeeId) {
+        setError(
+          "Çalışan seçimi zorunludur."
+        );
+        return;
+      }
+
+      if (!form.dutyStartDate) {
+        setError(
+          "Görev başlangıç tarihi zorunludur."
+        );
+        return;
+      }
+
+      if (
+        form.dutyEndDate &&
+        form.dutyEndDate <
+          form.dutyStartDate
+      ) {
+        setError(
+          "Görev bitiş tarihi başlangıç tarihinden önce olamaz."
+        );
+        return;
+      }
+
+      try {
+        setSaving(true);
+        setError("");
+        setSuccess("");
+
+        const response =
+          await fetch(
+            "/api/admin/documentation/employee-representatives",
+            {
+              method:
+                editingRepresentative
+                  ? "PUT"
+                  : "POST",
+
+              credentials:
+                "include",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify({
+                  ...(editingRepresentative
+                    ? {
+                        id:
+                          editingRepresentative.id,
+                      }
+                    : {}),
+
+                  firmId:
+                    selectedCompanyId,
+
+                  employeeId:
+                    form.employeeId,
+
+                  representativeType:
+                    form.representativeType,
+
+                  determinationMethod:
+                    form.determinationMethod,
+
+                  isHeadRepresentative:
+                    form.representativeType ===
+                    "PRIMARY"
+                      ? form.isHeadRepresentative
+                      : false,
+
+                  selectionDate:
+                    form.selectionDate ||
+                    null,
+
+                  dutyStartDate:
+                    form.dutyStartDate,
+
+                  dutyEndDate:
+                    form.dutyEndDate ||
+                    null,
+
+                  workplaceSection:
+                    form.workplaceSection ||
+                    null,
+
+                  shiftName:
+                    form.shiftName ||
+                    null,
+
+                  unionName:
+                    form.unionName ||
+                    null,
+
+                  electionReferenceNo:
+                    form.electionReferenceNo ||
+                    null,
+
+                  appointmentReferenceNo:
+                    form.appointmentReferenceNo ||
+                    null,
+
+                  note:
+                    form.note ||
+                    null,
+
+                  status:
+                    "ACTIVE",
+                }),
+            }
+          );
+
+        const json =
+          await response
+            .json()
+            .catch(() => ({}));
+
+        if (
+          !response.ok ||
+          json?.success === false
+        ) {
+          throw new Error(
+            json?.error ||
+              json?.message ||
+              "Çalışan temsilcisi kaydedilemedi."
+          );
+        }
+
+        setModalOpen(false);
+        setEditingRepresentative(
+          null
+        );
+        setForm(
+          emptyRepresentativeForm
+        );
+
+        setSuccess(
+          editingRepresentative
+            ? "Çalışan temsilcisi güncellendi."
+            : "Çalışan temsilcisi eklendi."
+        );
+
+        await loadData(
+          selectedCompanyId,
+          true
+        );
+      } catch (
+        saveError
+      ) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "Çalışan temsilcisi kaydedilemedi."
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  const deleteRepresentative =
+    async (
+      item: RepresentativeItem
+    ) => {
+      if (
+        !window.confirm(
+          `${item.employeeName} çalışan temsilcisi kaydı silinsin mi?`
+        )
+      ) {
+        return;
+      }
+
+      try {
+        setSaving(true);
+        setError("");
+        setSuccess("");
+
+        const response =
+          await fetch(
+            `/api/admin/documentation/employee-representatives?id=${encodeURIComponent(
+              item.id
+            )}`,
+            {
+              method:
+                "DELETE",
+
+              credentials:
+                "include",
+            }
+          );
+
+        const json =
+          await response
+            .json()
+            .catch(() => ({}));
+
+        if (
+          !response.ok ||
+          json?.success === false
+        ) {
+          throw new Error(
+            json?.error ||
+              json?.message ||
+              "Çalışan temsilcisi silinemedi."
+          );
+        }
+
+        setSuccess(
+          "Çalışan temsilcisi kaydı silindi."
+        );
+
+        await loadData(
+          selectedCompanyId,
+          true
+        );
+      } catch (
+        deleteError
+      ) {
+        setError(
+          deleteError instanceof Error
+            ? deleteError.message
+            : "Çalışan temsilcisi silinemedi."
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+
   return (
     <main
       style={{
@@ -791,10 +1164,8 @@ export default function EmployeeRepresentativesPage() {
               {!readOnly ? (
                 <button
                   type="button"
-                  onClick={() =>
-                    alert(
-                      "Paket 3 ile temsilci ekleme ekranı bağlanacak."
-                    )
+                  onClick={
+                    openCreateModal
                   }
                   style={{
                     minHeight: 44,
@@ -949,6 +1320,30 @@ export default function EmployeeRepresentativesPage() {
             </select>
           </label>
         </section>
+
+        {success ? (
+          <section
+            style={{
+              borderRadius: 16,
+              border:
+                "1px solid #a7f3d0",
+              background:
+                "#ecfdf5",
+              color: "#047857",
+              padding: 14,
+              display: "flex",
+              alignItems:
+                "center",
+              gap: 9,
+              fontWeight: 800,
+            }}
+          >
+            <CheckCircle2
+              size={18}
+            />
+            {success}
+          </section>
+        ) : null}
 
         {error ? (
           <section
@@ -1254,6 +1649,7 @@ export default function EmployeeRepresentativesPage() {
                         "Başlangıç",
                         "Bitiş",
                         "Durum",
+                        "İşlemler",
                       ].map(
                         (header) => (
                           <th
@@ -1452,6 +1848,105 @@ export default function EmployeeRepresentativesPage() {
                                 )}
                               </span>
                             </td>
+
+                            <td
+                              style={{
+                                padding:
+                                  "13px 11px",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display:
+                                    "flex",
+                                  gap: 6,
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openEditModal(
+                                      item
+                                    )
+                                  }
+                                  disabled={
+                                    readOnly ||
+                                    saving
+                                  }
+                                  style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 10,
+                                    border:
+                                      "1px solid #dbeafe",
+                                    background:
+                                      "#eff6ff",
+                                    color:
+                                      "#1d4ed8",
+                                    display:
+                                      "grid",
+                                    placeItems:
+                                      "center",
+                                    cursor:
+                                      readOnly ||
+                                      saving
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    opacity:
+                                      readOnly
+                                        ? 0.5
+                                        : 1,
+                                  }}
+                                  aria-label="Temsilciyi düzenle"
+                                >
+                                  <Pencil
+                                    size={15}
+                                  />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void deleteRepresentative(
+                                      item
+                                    )
+                                  }
+                                  disabled={
+                                    readOnly ||
+                                    saving
+                                  }
+                                  style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 10,
+                                    border:
+                                      "1px solid #fecaca",
+                                    background:
+                                      "#fef2f2",
+                                    color:
+                                      "#b91c1c",
+                                    display:
+                                      "grid",
+                                    placeItems:
+                                      "center",
+                                    cursor:
+                                      readOnly ||
+                                      saving
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    opacity:
+                                      readOnly
+                                        ? 0.5
+                                        : 1,
+                                  }}
+                                  aria-label="Temsilciyi sil"
+                                >
+                                  <Trash2
+                                    size={15}
+                                  />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         );
                       }
@@ -1498,10 +1993,11 @@ export default function EmployeeRepresentativesPage() {
                         fontSize: 13,
                       }}
                     >
-                      Paket 3 ile ekleme,
-                      düzenleme ve silme
-                      işlemleri
-                      bağlanacak.
+                      Yukarıdaki
+                      “Temsilci Ekle”
+                      düğmesiyle ilk
+                      kaydı
+                      oluşturabilirsiniz.
                     </div>
                   </div>
                 </div>
@@ -1510,6 +2006,627 @@ export default function EmployeeRepresentativesPage() {
           </>
         )}
       </div>
+
+      {modalOpen ? (
+        <div
+          onClick={() => {
+            if (!saving) {
+              setModalOpen(false);
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 20000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            background:
+              "rgba(15,23,42,.68)",
+            backdropFilter:
+              "blur(4px)",
+          }}
+        >
+          <div
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+            style={{
+              width:
+                "min(900px,100%)",
+              maxHeight: "92vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection:
+                "column",
+              borderRadius: 26,
+              background: "#fff",
+              boxShadow:
+                "0 32px 90px rgba(0,0,0,.28)",
+            }}
+          >
+            <div
+              style={{
+                flex: "0 0 auto",
+                display: "flex",
+                alignItems:
+                  "center",
+                justifyContent:
+                  "space-between",
+                gap: 12,
+                padding: 20,
+                borderBottom:
+                  "1px solid #e2e8f0",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color:
+                      "#1d4ed8",
+                    fontSize: 12,
+                    fontWeight: 900,
+                  }}
+                >
+                  Çalışan Temsilcisi
+                </div>
+
+                <h2
+                  style={{
+                    margin:
+                      "5px 0 0",
+                    color:
+                      "#0f172a",
+                    fontSize: 23,
+                    fontWeight: 950,
+                  }}
+                >
+                  {editingRepresentative
+                    ? "Temsilciyi Düzenle"
+                    : "Yeni Temsilci Ekle"}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setModalOpen(false)
+                }
+                disabled={saving}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  border:
+                    "1px solid #e2e8f0",
+                  background: "#fff",
+                  display: "grid",
+                  placeItems:
+                    "center",
+                  cursor:
+                    saving
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div
+              style={{
+                minHeight: 0,
+                flex: "1 1 auto",
+                overflowY: "auto",
+                padding: 20,
+              }}
+            >
+              <div
+                className="representativeFormGrid"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "repeat(2,minmax(0,1fr))",
+                  gap: 14,
+                }}
+              >
+                <label
+                  style={{
+                    display: "grid",
+                    gap: 6,
+                    gridColumn:
+                      "1 / -1",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 850,
+                      color: "#475569",
+                    }}
+                  >
+                    Çalışan *
+                  </span>
+
+                  <select
+                    value={
+                      form.employeeId
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setForm({
+                        ...form,
+                        employeeId:
+                          event.target
+                            .value,
+                      })
+                    }
+                    disabled={
+                      Boolean(
+                        editingRepresentative
+                      )
+                    }
+                    style={inputStyle}
+                  >
+                    <option value="">
+                      Çalışan seçiniz
+                    </option>
+
+                    {employees.map(
+                      (employee) => (
+                        <option
+                          key={
+                            employee.id
+                          }
+                          value={
+                            employee.id
+                          }
+                        >
+                          {
+                            employee.full_name
+                          }
+                          {employee.department
+                            ? ` · ${employee.department}`
+                            : ""}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+
+                <FormField
+                  label="Temsilci Türü"
+                >
+                  <select
+                    value={
+                      form.representativeType
+                    }
+                    onChange={(
+                      event
+                    ) => {
+                      const value =
+                        event.target
+                          .value as
+                          | "PRIMARY"
+                          | "SUBSTITUTE";
+
+                      setForm({
+                        ...form,
+                        representativeType:
+                          value,
+                        isHeadRepresentative:
+                          value ===
+                          "PRIMARY"
+                            ? form.isHeadRepresentative
+                            : false,
+                      });
+                    }}
+                    style={inputStyle}
+                  >
+                    <option value="PRIMARY">
+                      Asıl
+                    </option>
+
+                    <option value="SUBSTITUTE">
+                      Yedek
+                    </option>
+                  </select>
+                </FormField>
+
+                <FormField
+                  label="Belirlenme Yöntemi"
+                >
+                  <select
+                    value={
+                      form.determinationMethod
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setForm({
+                        ...form,
+                        determinationMethod:
+                          event.target
+                            .value as RepresentativeForm["determinationMethod"],
+                      })
+                    }
+                    style={inputStyle}
+                  >
+                    <option value="ELECTION">
+                      Seçim
+                    </option>
+
+                    <option value="APPOINTMENT">
+                      Atama
+                    </option>
+
+                    <option value="AUTHORIZED_UNION">
+                      Yetkili Sendika
+                    </option>
+                  </select>
+                </FormField>
+
+                <FormField
+                  label="Seçim Tarihi"
+                >
+                  <input
+                    type="date"
+                    value={
+                      form.selectionDate
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setForm({
+                        ...form,
+                        selectionDate:
+                          event.target
+                            .value,
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Görev Başlangıcı *"
+                >
+                  <input
+                    type="date"
+                    value={
+                      form.dutyStartDate
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setForm({
+                        ...form,
+                        dutyStartDate:
+                          event.target
+                            .value,
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Görev Bitişi"
+                >
+                  <input
+                    type="date"
+                    value={
+                      form.dutyEndDate
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setForm({
+                        ...form,
+                        dutyEndDate:
+                          event.target
+                            .value,
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </FormField>
+
+                <FormField
+                  label="İşyeri Bölümü"
+                >
+                  <input
+                    value={
+                      form.workplaceSection
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setForm({
+                        ...form,
+                        workplaceSection:
+                          event.target
+                            .value,
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </FormField>
+
+                <FormField
+                  label="Vardiya"
+                >
+                  <input
+                    value={
+                      form.shiftName
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setForm({
+                        ...form,
+                        shiftName:
+                          event.target
+                            .value,
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </FormField>
+
+                {form.determinationMethod ===
+                "AUTHORIZED_UNION" ? (
+                  <FormField
+                    label="Yetkili Sendika"
+                  >
+                    <input
+                      value={
+                        form.unionName
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setForm({
+                          ...form,
+                          unionName:
+                            event.target
+                              .value,
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                  </FormField>
+                ) : null}
+
+                {form.determinationMethod ===
+                "ELECTION" ? (
+                  <FormField
+                    label="Seçim Referans No"
+                  >
+                    <input
+                      value={
+                        form.electionReferenceNo
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setForm({
+                          ...form,
+                          electionReferenceNo:
+                            event.target
+                              .value,
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                  </FormField>
+                ) : null}
+
+                {form.determinationMethod ===
+                "APPOINTMENT" ? (
+                  <FormField
+                    label="Atama Referans No"
+                  >
+                    <input
+                      value={
+                        form.appointmentReferenceNo
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setForm({
+                          ...form,
+                          appointmentReferenceNo:
+                            event.target
+                              .value,
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                  </FormField>
+                ) : null}
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems:
+                      "center",
+                    gap: 10,
+                    minHeight: 46,
+                    borderRadius: 13,
+                    border:
+                      "1px solid #dbeafe",
+                    padding:
+                      "0 13px",
+                    background:
+                      form.representativeType ===
+                      "PRIMARY"
+                        ? "#eff6ff"
+                        : "#f8fafc",
+                    color:
+                      "#334155",
+                    fontWeight: 850,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={
+                      form.isHeadRepresentative
+                    }
+                    disabled={
+                      form.representativeType !==
+                      "PRIMARY"
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setForm({
+                        ...form,
+                        isHeadRepresentative:
+                          event.target
+                            .checked,
+                      })
+                    }
+                  />
+
+                  Baş Temsilci
+                </label>
+
+                <label
+                  style={{
+                    display: "grid",
+                    gap: 6,
+                    gridColumn:
+                      "1 / -1",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 850,
+                      color: "#475569",
+                    }}
+                  >
+                    Not
+                  </span>
+
+                  <textarea
+                    rows={4}
+                    value={
+                      form.note
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setForm({
+                        ...form,
+                        note:
+                          event.target
+                            .value,
+                      })
+                    }
+                    style={{
+                      ...inputStyle,
+                      minHeight: 110,
+                      resize:
+                        "vertical",
+                      paddingTop: 12,
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div
+              style={{
+                flex: "0 0 auto",
+                display: "flex",
+                justifyContent:
+                  "flex-end",
+                gap: 10,
+                padding: 18,
+                borderTop:
+                  "1px solid #e2e8f0",
+                background: "#fff",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setModalOpen(false)
+                }
+                disabled={saving}
+                style={{
+                  minHeight: 43,
+                  borderRadius: 13,
+                  border:
+                    "1px solid #cbd5e1",
+                  background: "#fff",
+                  color: "#475569",
+                  padding:
+                    "0 16px",
+                  fontWeight: 850,
+                  cursor:
+                    saving
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                Vazgeç
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void saveRepresentative()
+                }
+                disabled={saving}
+                style={{
+                  minHeight: 43,
+                  borderRadius: 13,
+                  border: 0,
+                  background:
+                    saving
+                      ? "#93c5fd"
+                      : "#1d4ed8",
+                  color: "#fff",
+                  padding:
+                    "0 17px",
+                  display:
+                    "inline-flex",
+                  alignItems:
+                    "center",
+                  gap: 8,
+                  fontWeight: 900,
+                  cursor:
+                    saving
+                      ? "wait"
+                      : "pointer",
+                }}
+              >
+                {saving ? (
+                  <Loader2
+                    size={17}
+                    className="representativeSpin"
+                  />
+                ) : (
+                  <Save
+                    size={17}
+                  />
+                )}
+
+                {saving
+                  ? "Kaydediliyor..."
+                  : editingRepresentative
+                    ? "Güncelle"
+                    : "Kaydet"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <style jsx>{`
         .representativeSpin {
@@ -1545,3 +2662,46 @@ export default function EmployeeRepresentativesPage() {
     </main>
   );
 }
+
+function FormField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      style={{
+        display: "grid",
+        gap: 6,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 850,
+          color: "#475569",
+        }}
+      >
+        {label}
+      </span>
+
+      {children}
+    </label>
+  );
+}
+
+const inputStyle:
+  React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  minHeight: 44,
+  borderRadius: 13,
+  border: "1px solid #dbeafe",
+  background: "#fff",
+  color: "#0f172a",
+  padding: "0 12px",
+  outline: "none",
+  fontSize: 14,
+};
