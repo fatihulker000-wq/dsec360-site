@@ -550,6 +550,12 @@ const openCategory = (
     return;
   }
 
+  if (category === "PERIODIC_CONTROL") {
+    window.location.href =
+      "/admin/documentation/periodic-controls";
+    return;
+  }
+
   setSelectedCategory(category);
   setMainTab("DOCUMENTS");
 };
