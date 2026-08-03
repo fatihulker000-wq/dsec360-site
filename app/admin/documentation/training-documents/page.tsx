@@ -2288,14 +2288,61 @@ function DocumentArchive({
                 />
               </Cell>
               <Cell>
-                <DocumentLink
-                  value={item.attendanceUri}
-                />
+                {archiveFiles.some(
+                  (file) =>
+                    file.document_type ===
+                      "ATTENDANCE_SIGNED" &&
+                    file.session_key ===
+                      sessionKey(item)
+                ) ? (
+                  <span
+                    style={{
+                      color: "#15803d",
+                      fontWeight: 850,
+                    }}
+                  >
+                    ✓ Kayıtlı
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      color: "#94a3b8",
+                      fontWeight: 700,
+                    }}
+                  >
+                    -
+                  </span>
+                )}
               </Cell>
+
               <Cell>
-                <DocumentLink
-                  value={item.certificateUri}
-                />
+                {archiveFiles.some(
+                  (file) =>
+                    file.document_type ===
+                      "CERTIFICATE_SIGNED" &&
+                    file.session_key ===
+                      sessionKey(item) &&
+                    file.employee_remote_id ===
+                      item.employeeRemoteId
+                ) ? (
+                  <span
+                    style={{
+                      color: "#15803d",
+                      fontWeight: 850,
+                    }}
+                  >
+                    ✓ Kayıtlı
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      color: "#94a3b8",
+                      fontWeight: 700,
+                    }}
+                  >
+                    -
+                  </span>
+                )}
               </Cell>
             </tr>
           ))}
