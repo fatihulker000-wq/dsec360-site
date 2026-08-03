@@ -213,35 +213,47 @@ function formatDate(millis?: number | null): string {
 }
 
 function statusInfo(status: string, nextDueMillis: number | null) {
+  const normalized = String(status || "").trim().toUpperCase();
+
   if (!nextDueMillis) {
     return {
       key: "MISSING",
       label: "Eksik",
-      color: "#b45309",
+      color: "#92400e",
       background: "#fffbeb",
       border: "#fde68a",
+      priority: 1,
     };
   }
 
-  if (nextDueMillis < Date.now()) {
+  const today = new Date();
+  const due = new Date(nextDueMillis);
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+
+  const daysRemaining = Math.ceil(
+    (due.getTime() - today.getTime()) / 86400000
+  );
+
+  if (daysRemaining < 0) {
     return {
       key: "EXPIRED",
-      label: "Süresi Geçti",
-      color: "#b91c1c",
-      background: "#fef2f2",
-      border: "#fecaca",
+      label: "Kritik / Süresi Geçti",
+      color: "#7f1d1d",
+      background: "#fee2e2",
+      border: "#fca5a5",
+      priority: 0,
     };
   }
 
-  const normalized = String(status || "").trim().toUpperCase();
-
-  if (normalized === "UYGUN_DEGIL") {
+  if (normalized === "UYGUN_DEGIL" || normalized === "UYGUN DEĞİL") {
     return {
       key: "NOT_SUITABLE",
       label: "Uygun Değil",
-      color: "#b91c1c",
+      color: "#991b1b",
       background: "#fef2f2",
       border: "#fecaca",
+      priority: 1,
     };
   }
 
@@ -249,9 +261,43 @@ function statusInfo(status: string, nextDueMillis: number | null) {
     return {
       key: "MISSING",
       label: "Eksik",
-      color: "#b45309",
+      color: "#92400e",
       background: "#fffbeb",
       border: "#fde68a",
+      priority: 1,
+    };
+  }
+
+  if (daysRemaining <= 7) {
+    return {
+      key: "DUE_7",
+      label: "7 Gün İçinde",
+      color: "#b91c1c",
+      background: "#fef2f2",
+      border: "#fecaca",
+      priority: 2,
+    };
+  }
+
+  if (daysRemaining <= 15) {
+    return {
+      key: "DUE_15",
+      label: "15 Gün İçinde",
+      color: "#c2410c",
+      background: "#fff7ed",
+      border: "#fed7aa",
+      priority: 3,
+    };
+  }
+
+  if (daysRemaining <= 30) {
+    return {
+      key: "DUE_30",
+      label: "30 Gün İçinde",
+      color: "#a16207",
+      background: "#fefce8",
+      border: "#fde68a",
+      priority: 4,
     };
   }
 
@@ -261,6 +307,7 @@ function statusInfo(status: string, nextDueMillis: number | null) {
     color: "#047857",
     background: "#ecfdf5",
     border: "#a7f3d0",
+    priority: 5,
   };
 }
 
@@ -281,6 +328,30 @@ function remainingTime(nextDueMillis: number | null): string {
   return rest === 0
     ? `${months} ay kaldı`
     : `${months} ay ${rest} gün kaldı`;
+}
+
+function urgencyPriority(
+  status: string,
+  nextDueMillis: number | null
+): number {
+  return statusInfo(status, nextDueMillis).priority;
+}
+
+function sortByUrgency<T extends {
+  status: string;
+  next_due_millis: number | null;
+}>(records: T[]): T[] {
+  return [...records].sort((first, second) => {
+    const priorityDifference =
+      urgencyPriority(first.status, first.next_due_millis) -
+      urgencyPriority(second.status, second.next_due_millis);
+
+    if (priorityDifference !== 0) return priorityDifference;
+
+    const firstDate = first.next_due_millis ?? Number.MAX_SAFE_INTEGER;
+    const secondDate = second.next_due_millis ?? Number.MAX_SAFE_INTEGER;
+    return firstDate - secondDate;
+  });
 }
 
 const fieldStyle: React.CSSProperties = {
@@ -652,60 +723,66 @@ export default function PeriodicControlsPage() {
 
   const normalizedSearch = searchText.trim().toLocaleLowerCase("tr-TR");
 
-  const filteredEquipments = useMemo(
-    () =>
-      !normalizedSearch
-        ? equipments
-        : equipments.filter((item) =>
-            [
-              item.equipment_name,
-              item.equipment_type,
-              item.serial_no,
-              item.location,
-              item.report_no,
-              item.note,
-            ]
-              .join(" ")
-              .toLocaleLowerCase("tr-TR")
-              .includes(normalizedSearch)
-          ),
-    [equipments, normalizedSearch]
-  );
+  const filteredEquipments = useMemo(() => {
+    const rows = !normalizedSearch
+      ? equipments
+      : equipments.filter((item) =>
+          [
+            item.equipment_name,
+            item.equipment_type,
+            item.serial_no,
+            item.location,
+            item.report_no,
+            item.note,
+          ]
+            .join(" ")
+            .toLocaleLowerCase("tr-TR")
+            .includes(normalizedSearch)
+        );
 
-  const filteredMeasurements = useMemo(
-    () =>
-      !normalizedSearch
-        ? measurements
-        : measurements.filter((item) =>
-            [
-              item.measurement_type,
-              item.area_name,
-              item.measured_by,
-              item.report_no,
-              item.result_summary,
-              item.note,
-            ]
-              .join(" ")
-              .toLocaleLowerCase("tr-TR")
-              .includes(normalizedSearch)
-          ),
-    [measurements, normalizedSearch]
-  );
+    return sortByUrgency(rows);
+  }, [equipments, normalizedSearch]);
+
+  const filteredMeasurements = useMemo(() => {
+    const rows = !normalizedSearch
+      ? measurements
+      : measurements.filter((item) =>
+          [
+            item.measurement_type,
+            item.area_name,
+            item.measured_by,
+            item.report_no,
+            item.result_summary,
+            item.note,
+          ]
+            .join(" ")
+            .toLocaleLowerCase("tr-TR")
+            .includes(normalizedSearch)
+        );
+
+    return sortByUrgency(rows);
+  }, [measurements, normalizedSearch]);
 
   const warningEquipments = useMemo(
     () =>
-      equipments.filter(
-        (item) =>
-          statusInfo(item.status, item.next_due_millis).key !== "SUITABLE"
+      sortByUrgency(
+        equipments.filter(
+          (item) =>
+            statusInfo(item.status, item.next_due_millis).key !==
+            "SUITABLE"
+        )
       ),
     [equipments]
   );
 
   const warningMeasurements = useMemo(
     () =>
-      measurements.filter(
-        (item) =>
-          statusInfo(item.status, item.next_due_millis).key !== "SUITABLE"
+      sortByUrgency(
+        measurements.filter(
+          (item) =>
+            statusInfo(item.status, item.next_due_millis).key !==
+            "SUITABLE"
+        )
       ),
     [measurements]
   );
@@ -722,25 +799,23 @@ export default function PeriodicControlsPage() {
       })),
     ];
 
-    const dueLimit = Date.now() + 30 * 86400000;
+    const countByKey = (key: string) =>
+      all.filter(
+        (item) => statusInfo(item.status, item.nextDue).key === key
+      ).length;
 
     return {
       equipmentCount: equipments.length,
       measurementCount: measurements.length,
-      suitableCount: all.filter(
-        (item) => statusInfo(item.status, item.nextDue).key === "SUITABLE"
-      ).length,
+      suitableCount: countByKey("SUITABLE"),
+      expiredCount: countByKey("EXPIRED"),
+      due7Count: countByKey("DUE_7"),
+      due15Count: countByKey("DUE_15"),
+      due30Count: countByKey("DUE_30"),
+      otherWarningCount:
+        countByKey("MISSING") + countByKey("NOT_SUITABLE"),
       warningCount: all.filter(
         (item) => statusInfo(item.status, item.nextDue).key !== "SUITABLE"
-      ).length,
-      expiredCount: all.filter(
-        (item) => statusInfo(item.status, item.nextDue).key === "EXPIRED"
-      ).length,
-      dueSoonCount: all.filter(
-        (item) =>
-          item.nextDue !== null &&
-          item.nextDue >= Date.now() &&
-          item.nextDue <= dueLimit
       ).length,
     };
   }, [equipments, measurements]);
@@ -862,24 +937,34 @@ export default function PeriodicControlsPage() {
                 <TestTube2 key="m" size={17} />,
               ],
               [
+                "Kritik",
+                metrics.expiredCount,
+                <AlertTriangle key="k" size={17} />,
+              ],
+              [
+                "7 Gün",
+                metrics.due7Count,
+                <CalendarClock key="7" size={17} />,
+              ],
+              [
+                "15 Gün",
+                metrics.due15Count,
+                <CalendarClock key="15" size={17} />,
+              ],
+              [
+                "30 Gün",
+                metrics.due30Count,
+                <Gauge key="30" size={17} />,
+              ],
+              [
+                "Diğer Uyarı",
+                metrics.otherWarningCount,
+                <AlertTriangle key="d" size={17} />,
+              ],
+              [
                 "Uygun",
                 metrics.suitableCount,
                 <CheckCircle2 key="u" size={17} />,
-              ],
-              [
-                "Uyarı",
-                metrics.warningCount,
-                <AlertTriangle key="w" size={17} />,
-              ],
-              [
-                "Süresi Geçen",
-                metrics.expiredCount,
-                <CalendarClock key="x" size={17} />,
-              ],
-              [
-                "30 Gün İçinde",
-                metrics.dueSoonCount,
-                <Gauge key="g" size={17} />,
               ],
             ].map(([label, value, icon]) => (
               <div
@@ -974,6 +1059,48 @@ export default function PeriodicControlsPage() {
               ))}
             </select>
           </label>
+        </section>
+
+        <section
+          style={{
+            borderRadius: 18,
+            border: "1px solid #e5e7eb",
+            background: "#ffffff",
+            padding: 14,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div style={{ color: "#0f172a", fontWeight: 900, fontSize: 14 }}>
+            Yaklaşan Süre Uyarı Seviyeleri
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {[
+              ["Süresi Geçti / Kritik", "#7f1d1d", "#fee2e2", "#fca5a5"],
+              ["7 Gün İçinde", "#b91c1c", "#fef2f2", "#fecaca"],
+              ["15 Gün İçinde", "#c2410c", "#fff7ed", "#fed7aa"],
+              ["30 Gün İçinde", "#a16207", "#fefce8", "#fde68a"],
+              ["Uygun", "#047857", "#ecfdf5", "#a7f3d0"],
+            ].map(([label, color, background, border]) => (
+              <span
+                key={label}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  minHeight: 30,
+                  borderRadius: 999,
+                  padding: "0 10px",
+                  color,
+                  background,
+                  border: `1px solid ${border}`,
+                  fontSize: 12,
+                  fontWeight: 900,
+                }}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
         </section>
 
         <section className="contentCard">
@@ -1288,7 +1415,7 @@ export default function PeriodicControlsPage() {
         .periodicHeroGrid {
           margin-top: 22px;
           display: grid;
-          grid-template-columns: repeat(6, minmax(0, 1fr));
+          grid-template-columns: repeat(8, minmax(0, 1fr));
           gap: 10px;
         }
         .toolbar,
@@ -1371,9 +1498,15 @@ export default function PeriodicControlsPage() {
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 13px;
         }
-        @media (max-width: 1200px) {
+        @media (max-width: 1350px) {
           .periodicHeroGrid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 900px) {
+          .periodicHeroGrid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
         @media (max-width: 700px) {
