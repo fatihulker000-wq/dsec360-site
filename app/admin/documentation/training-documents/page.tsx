@@ -16,6 +16,7 @@ import {
   Printer,
   RefreshCw,
   Search,
+  Upload,
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -37,6 +38,7 @@ type TrainingRecord = {
   employeeRemoteId: string;
   employeeName: string;
   employeeRegistryNo: string;
+  employeeJobTitle?: string;
   trainingTitle: string;
   trainingType: string;
   deliveryMode: string;
@@ -66,6 +68,21 @@ type CertificateRecord = {
   issueDate: number | null;
   validUntil: number | null;
   remoteFileUrl: string;
+};
+
+type ArchiveFile = {
+  id: string;
+  firm_id: string;
+  document_type:
+    | "TRAINING_DOCUMENT"
+    | "ATTENDANCE_SIGNED"
+    | "CERTIFICATE_SIGNED";
+  session_key: string | null;
+  employee_remote_id: string | null;
+  training_title: string;
+  file_name: string;
+  public_url: string;
+  updated_at: string;
 };
 
 type TrainingSession = {
@@ -222,6 +239,8 @@ export default function TrainingDocumentsPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
+  const [archiveFiles, setArchiveFiles] = useState<ArchiveFile[]>([]);
+  const [uploadingKey, setUploadingKey] = useState("");
 
   const [tab, setTab] = useState<ActiveTab>("DASHBOARD");
   const [employeeId, setEmployeeId] = useState("");
@@ -366,6 +385,37 @@ export default function TrainingDocumentsPage() {
     }
   }, [companyId]);
 
+  const loadArchiveFiles = useCallback(async () => {
+    if (!companyId) {
+      setArchiveFiles([]);
+      return;
+    }
+
+    const response = await fetch(
+      `/api/admin/documentation/training-documents/archive-files?firmId=${encodeURIComponent(
+        companyId
+      )}`,
+      {
+        credentials: "include",
+        cache: "no-store",
+      }
+    );
+
+    const json = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        json.detail ||
+          json.error ||
+          "Arşiv belgeleri alınamadı."
+      );
+    }
+
+    setArchiveFiles(
+      Array.isArray(json.files) ? json.files : []
+    );
+  }, [companyId]);
+
   useEffect(() => {
     void loadCompanies();
   }, [loadCompanies]);
@@ -374,6 +424,16 @@ export default function TrainingDocumentsPage() {
     void loadRecords();
   }, [loadRecords]);
 
+  useEffect(() => {
+    void loadArchiveFiles().catch((loadError) => {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Arşiv belgeleri yüklenemedi."
+      );
+    });
+  }, [loadArchiveFiles]);
+
   const refresh = async () => {
     try {
       setRefreshing(true);
@@ -381,6 +441,7 @@ export default function TrainingDocumentsPage() {
       await Promise.all([
         loadCompanies(),
         loadRecords(),
+        loadArchiveFiles(),
       ]);
     } finally {
       setRefreshing(false);
@@ -630,6 +691,76 @@ export default function TrainingDocumentsPage() {
       )
     );
 
+  const uploadArchiveFile = async ({
+    file,
+    documentType,
+    session,
+    employeeRemoteId = "",
+  }: {
+    file: File;
+    documentType:
+      | "ATTENDANCE_SIGNED"
+      | "CERTIFICATE_SIGNED";
+    session: TrainingSession;
+    employeeRemoteId?: string;
+  }) => {
+    const key = [
+      documentType,
+      session.key,
+      employeeRemoteId,
+    ].join("|");
+
+    try {
+      setUploadingKey(key);
+      setError("");
+
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("firmId", companyId);
+      formData.set("documentType", documentType);
+      formData.set("sessionKey", session.key);
+      formData.set(
+        "employeeRemoteId",
+        employeeRemoteId
+      );
+      formData.set(
+        "trainingTitle",
+        session.trainingTitle
+      );
+
+      const response = await fetch(
+        "/api/admin/documentation/training-documents/archive-files",
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        }
+      );
+
+      const json = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          json.detail ||
+            json.error ||
+            "Belge yüklenemedi."
+        );
+      }
+
+      await loadArchiveFiles();
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Belge yüklenemedi."
+      );
+    } finally {
+      setUploadingKey("");
+    }
+  };
+
   const printSession = (
     session: TrainingSession
   ) => {
@@ -836,7 +967,7 @@ export default function TrainingDocumentsPage() {
               active={
                 tab === "CERTIFICATES"
               }
-              label={`Sertifikalar (${filteredCertificates.length})`}
+              label={`Sertifikalar (${filteredTrainings.filter((item) => item.completed).length})`}
               onClick={() =>
                 setTab("CERTIFICATES")
               }
@@ -1062,16 +1193,21 @@ raporlama ve çıktı alma işlemleri yapılır.
             <DocumentArchive
               records={filteredTrainings}
               sessions={sessions}
+              archiveFiles={archiveFiles}
+              uploadingKey={uploadingKey}
               onPrintSession={printSession}
+              onUpload={uploadArchiveFile}
             />
           ) : null}
 
           {!loading &&
           tab === "CERTIFICATES" ? (
-            <CertificateTable
-              records={
-                filteredCertificates
-              }
+            <CertificateArchive
+              sessions={sessions}
+              archiveFiles={archiveFiles}
+              companyId={companyId}
+              uploadingKey={uploadingKey}
+              onUpload={uploadArchiveFile}
             />
           ) : null}
 
@@ -1180,6 +1316,49 @@ raporlama ve çıktı alma işlemleri yapılır.
 .documentAction:hover {
   background: #dbeafe;
 }
+
+        .archiveActions {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+
+        .archiveButton {
+          min-height: 38px;
+          border-radius: 10px;
+          border: 1px solid #cbd5e1;
+          padding: 0 12px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          background: #f8fafc;
+          color: #334155;
+          font-size: 12px;
+          font-weight: 850;
+          text-decoration: none;
+          cursor: pointer;
+        }
+
+        .archiveButton.primary {
+          border-color: #fecaca;
+          background: #7f1d1d;
+          color: #ffffff;
+        }
+
+        .archiveButton.upload {
+          border-color: #fed7aa;
+          background: #fff7ed;
+          color: #9a3412;
+        }
+
+        .archiveButton.success {
+          border-color: #bbf7d0;
+          background: #f0fdf4;
+          color: #166534;
+        }
 
         .heroGrid {
           margin-top: 22px;
@@ -1880,19 +2059,46 @@ function ParticipantTable({
 function DocumentArchive({
   records,
   sessions,
+  archiveFiles,
+  uploadingKey,
   onPrintSession,
+  onUpload,
 }: {
   records: TrainingRecord[];
   sessions: TrainingSession[];
+  archiveFiles: ArchiveFile[];
+  uploadingKey: string;
   onPrintSession: (
     session: TrainingSession
   ) => void;
+  onUpload: (args: {
+    file: File;
+    documentType:
+      | "ATTENDANCE_SIGNED"
+      | "CERTIFICATE_SIGNED";
+    session: TrainingSession;
+    employeeRemoteId?: string;
+  }) => Promise<void>;
 }) {
   if (!records.length) {
     return (
       <Empty text="Eğitim dokümanı veya katılım kaydı bulunamadı." />
     );
   }
+
+  const signedAttendanceCount =
+    archiveFiles.filter(
+      (file) =>
+        file.document_type ===
+        "ATTENDANCE_SIGNED"
+    ).length;
+
+  const signedCertificateCount =
+    archiveFiles.filter(
+      (file) =>
+        file.document_type ===
+        "CERTIFICATE_SIGNED"
+    ).length;
 
   return (
     <div
@@ -1903,90 +2109,131 @@ function DocumentArchive({
     >
       <section>
         <SectionTitle
-          title="Oturum Çıktıları"
-          subtitle="Her oturum için yazdırılabilir katılım formu ve katılımcı listesi."
+          title="Oturum Katılım Formları"
+          subtitle="Her eğitim oturumu için tüm katılımcıları içeren formu oluşturun ve imzalı nüshasını arşivleyin."
         />
 
         <div
           style={{
             display: "grid",
-            gap: 10,
+            gap: 12,
           }}
         >
-          {sessions.map((session) => (
-            <div
-              key={session.key}
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 15,
-                padding: 13,
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                justifyContent:
-                  "space-between",
-                gap: 10,
-              }}
-            >
-              <div>
-                <strong>
-                  {session.trainingTitle}
-                </strong>
+          {sessions.map((session) => {
+            const signedFile =
+              archiveFiles.find(
+                (file) =>
+                  file.document_type ===
+                    "ATTENDANCE_SIGNED" &&
+                  file.session_key === session.key
+              );
 
-                <div
-                  style={{
-                    marginTop: 4,
-                    color: "#64748b",
-                    fontSize: 12,
-                  }}
-                >
-                  {formatDate(
-                    session.trainingDate
-                  )}{" "}
-                  • {session.participantCount}{" "}
-                  katılımcı
-                </div>
-              </div>
+            const uploadKey = [
+              "ATTENDANCE_SIGNED",
+              session.key,
+              "",
+            ].join("|");
 
-              <button
-                type="button"
-                onClick={() =>
-                  onPrintSession(session)
-                }
+            return (
+              <article
+                key={session.key}
                 style={{
-                  minHeight: 37,
-                  borderRadius: 10,
                   border:
-                    "1px solid #bfdbfe",
-                  background: "#eff6ff",
-                  color: "#1d4ed8",
-                  padding: "0 11px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontWeight: 850,
-                  cursor: "pointer",
+                    "1px solid #e2e8f0",
+                  borderRadius: 17,
+                  padding: 15,
+                  background: "#fff",
                 }}
               >
-                <Printer size={15} />
-                Katılım Formu
-              </button>
-            </div>
-          ))}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    justifyContent:
+                      "space-between",
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <strong>
+                      {session.trainingTitle}
+                    </strong>
+
+                    <div
+                      style={{
+                        marginTop: 5,
+                        color: "#64748b",
+                        fontSize: 12,
+                      }}
+                    >
+                      {formatDate(
+                        session.trainingDate
+                      )}{" "}
+                      • {session.participantCount}{" "}
+                      katılımcı
+                    </div>
+                  </div>
+
+                  <div className="archiveActions">
+                    <button
+                      type="button"
+                      className="archiveButton primary"
+                      onClick={() =>
+                        onPrintSession(session)
+                      }
+                    >
+                      <Printer size={15} />
+                      Katılım Formu Oluştur
+                    </button>
+
+                    <FileUploadButton
+                      label={
+                        signedFile
+                          ? "İmzalı Formu Değiştir"
+                          : "İmzalı Form Yükle"
+                      }
+                      loading={
+                        uploadingKey === uploadKey
+                      }
+                      onFile={(file) =>
+                        onUpload({
+                          file,
+                          documentType:
+                            "ATTENDANCE_SIGNED",
+                          session,
+                        })
+                      }
+                    />
+
+                    {signedFile ? (
+                      <a
+                        className="archiveButton success"
+                        href={signedFile.public_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        İmzalı Formu Aç
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
 
       <section>
         <SectionTitle
-          title="Yüklenen Eğitim Belgeleri"
-          subtitle="Eğitim dokümanı, katılım formu ve eğitim kaydına bağlı sertifika dosyaları."
+          title="Belge Muhafaza Durumu"
+          subtitle="Oluşturulan çıktılar ile imzalanıp sisteme geri yüklenen nihai nüshaların durumu."
         />
 
         <div
           style={{
             display: "grid",
             gridTemplateColumns:
-              "repeat(auto-fit,minmax(180px,1fr))",
+              "repeat(auto-fit,minmax(190px,1fr))",
             gap: 14,
             marginBottom: 18,
           }}
@@ -2002,22 +2249,14 @@ function DocumentArchive({
           />
 
           <SummaryCard
-            title="Katılım Formu"
-            value={
-              records.filter(
-                (item) => item.attendanceUri
-              ).length
-            }
+            title="İmzalı Katılım Formu"
+            value={signedAttendanceCount}
             color="#16a34a"
           />
 
           <SummaryCard
-            title="Sertifika"
-            value={
-              records.filter(
-                (item) => item.certificateUri
-              ).length
-            }
+            title="İmzalı Sertifika"
+            value={signedCertificateCount}
             color="#92400e"
           />
         </div>
@@ -2027,8 +2266,8 @@ function DocumentArchive({
             "Çalışan",
             "Eğitim",
             "Eğitim Dokümanı",
-            "Katılım Formu",
-            "Sertifika Dosyası",
+            "Kayıtlı Katılım Formu",
+            "Kayıtlı Sertifika",
           ]}
         >
           {records.map((item) => (
@@ -2042,23 +2281,17 @@ function DocumentArchive({
               <StrongCell>
                 {item.employeeName}
               </StrongCell>
-
-              <Cell>
-                {item.trainingTitle}
-              </Cell>
-
+              <Cell>{item.trainingTitle}</Cell>
               <Cell>
                 <DocumentLink
                   value={item.documentUri}
                 />
               </Cell>
-
               <Cell>
                 <DocumentLink
                   value={item.attendanceUri}
                 />
               </Cell>
-
               <Cell>
                 <DocumentLink
                   value={item.certificateUri}
@@ -2068,6 +2301,239 @@ function DocumentArchive({
           ))}
         </Table>
       </section>
+    </div>
+  );
+}
+
+function FileUploadButton({
+  label,
+  loading,
+  onFile,
+}: {
+  label: string;
+  loading: boolean;
+  onFile: (file: File) => void;
+}) {
+  return (
+    <label
+      className="archiveButton upload"
+      style={{
+        opacity: loading ? 0.65 : 1,
+        pointerEvents: loading
+          ? "none"
+          : "auto",
+      }}
+    >
+      {loading ? (
+        <Loader2
+          size={15}
+          className="spin"
+        />
+      ) : (
+        <Upload size={15} />
+      )}
+
+      {loading ? "Yükleniyor..." : label}
+
+      <input
+        type="file"
+        hidden
+        accept=".pdf,.png,.jpg,.jpeg"
+        onChange={(event) => {
+          const file =
+            event.currentTarget.files?.[0];
+
+          if (file) {
+            onFile(file);
+          }
+
+          event.currentTarget.value = "";
+        }}
+      />
+    </label>
+  );
+}
+
+function CertificateArchive({
+  sessions,
+  archiveFiles,
+  companyId,
+  uploadingKey,
+  onUpload,
+}: {
+  sessions: TrainingSession[];
+  archiveFiles: ArchiveFile[];
+  companyId: string;
+  uploadingKey: string;
+  onUpload: (args: {
+    file: File;
+    documentType:
+      | "ATTENDANCE_SIGNED"
+      | "CERTIFICATE_SIGNED";
+    session: TrainingSession;
+    employeeRemoteId?: string;
+  }) => Promise<void>;
+}) {
+  const completedRows = sessions.flatMap(
+    (session) =>
+      session.records
+        .filter((record) => record.completed)
+        .map((record) => ({
+          session,
+          record,
+        }))
+  );
+
+  if (!completedRows.length) {
+    return (
+      <Empty text="Belge oluşturulabilecek tamamlanmış eğitim kaydı bulunamadı." />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      <SectionTitle
+        title="Çalışan Eğitim Belgeleri"
+        subtitle="Her tamamlanmış eğitim için çalışan adına ayrı belge oluşturun; imzalı nihai nüshayı aynı satırdan yükleyin."
+      />
+
+      {completedRows.map(
+        ({ session, record }) => {
+          const signedFile =
+            archiveFiles.find(
+              (file) =>
+                file.document_type ===
+                  "CERTIFICATE_SIGNED" &&
+                file.session_key ===
+                  session.key &&
+                file.employee_remote_id ===
+                  record.employeeRemoteId
+            );
+
+          const uploadKey = [
+            "CERTIFICATE_SIGNED",
+            session.key,
+            record.employeeRemoteId,
+          ].join("|");
+
+          const certificateQuery =
+            new URLSearchParams({
+              firmId: companyId,
+              sessionKey: session.key,
+              employeeRemoteId:
+                record.employeeRemoteId,
+            });
+
+          return (
+            <article
+              key={`${session.key}-${record.id}`}
+              style={{
+                border:
+                  "1px solid #e2e8f0",
+                borderRadius: 18,
+                padding: 16,
+                background: "#fff",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent:
+                    "space-between",
+                  gap: 14,
+                }}
+              >
+                <div>
+                  <h3
+                    style={{
+                      margin: 0,
+                      color: "#0f172a",
+                    }}
+                  >
+                    {record.employeeName}
+                  </h3>
+
+                  <div
+                    style={{
+                      marginTop: 5,
+                      color: "#64748b",
+                      fontSize: 13,
+                    }}
+                  >
+                    {session.trainingTitle}
+                    {" • "}
+                    {formatDate(
+                      session.trainingDate
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 5,
+                      color: "#475569",
+                      fontSize: 12,
+                    }}
+                  >
+                    Sicil:{" "}
+                    {record.employeeRegistryNo ||
+                      "-"}
+                  </div>
+                </div>
+
+                <div className="archiveActions">
+                  <a
+                    className="archiveButton primary"
+                    href={`/api/admin/documentation/training-documents/certificate?${certificateQuery.toString()}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Award size={15} />
+                    Belge Oluştur
+                  </a>
+
+                  <FileUploadButton
+                    label={
+                      signedFile
+                        ? "İmzalı Belgeyi Değiştir"
+                        : "İmzalı Belge Yükle"
+                    }
+                    loading={
+                      uploadingKey === uploadKey
+                    }
+                    onFile={(file) =>
+                      onUpload({
+                        file,
+                        documentType:
+                          "CERTIFICATE_SIGNED",
+                        session,
+                        employeeRemoteId:
+                          record.employeeRemoteId,
+                      })
+                    }
+                  />
+
+                  {signedFile ? (
+                    <a
+                      className="archiveButton success"
+                      href={signedFile.public_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      İmzalı Belgeyi Aç
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            </article>
+          );
+        }
+      )}
     </div>
   );
 }

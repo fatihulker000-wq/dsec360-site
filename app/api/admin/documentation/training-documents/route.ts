@@ -255,6 +255,10 @@ export async function GET(req: Request) {
             employee?.registryNo ||
             "",
 
+          employeeJobTitle:
+            employee?.jobTitle ||
+            "",
+
           trainingTitle:
             clean(
               row.title ??
