@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CheckCircle2,
   Edit3,
+  FileDown,
   Gauge,
   Loader2,
   Plus,
@@ -373,6 +374,22 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 800,
 };
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function printableStatus(
+  status: string,
+  nextDueMillis: number | null
+): string {
+  return statusInfo(status, nextDueMillis).label;
+}
+
 export default function PeriodicControlsPage() {
   const [companies, setCompanies] = useState<CompanyItem[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
@@ -501,6 +518,417 @@ export default function PeriodicControlsPage() {
     } finally {
       setRefreshing(false);
     }
+  };
+
+
+  const createPdfReport = () => {
+    if (!selectedCompanyId || !selectedCompany) {
+      setError("PDF raporu için firma seçmelisiniz.");
+      return;
+    }
+
+    const reportWindow = window.open("", "_blank", "width=1200,height=900");
+
+    if (!reportWindow) {
+      setError(
+        "PDF penceresi açılamadı. Tarayıcı açılır pencere iznini kontrol edin."
+      );
+      return;
+    }
+
+    const generatedAt = new Intl.DateTimeFormat("tr-TR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date());
+
+    const equipmentRows = sortByUrgency(equipments)
+      .map((item, index) => {
+        const info = statusInfo(item.status, item.next_due_millis);
+
+        return `
+          <tr>
+            <td>${index + 1}</td>
+            <td><strong>${escapeHtml(item.equipment_name)}</strong></td>
+            <td>${escapeHtml(item.equipment_type || "-")}</td>
+            <td>${escapeHtml(item.serial_no || "-")}</td>
+            <td>${escapeHtml(item.location || "-")}</td>
+            <td>${item.legal_period_months || 12} ay</td>
+            <td>${formatDate(item.last_control_millis)}</td>
+            <td>${formatDate(item.next_due_millis)}</td>
+            <td>${escapeHtml(remainingTime(item.next_due_millis))}</td>
+            <td>${escapeHtml(item.report_no || "-")}</td>
+            <td>
+              <span class="status" style="color:${info.color};background:${info.background};border-color:${info.border}">
+                ${escapeHtml(info.label)}
+              </span>
+            </td>
+            <td>${escapeHtml(item.note || "-")}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const measurementRows = sortByUrgency(measurements)
+      .map((item, index) => {
+        const info = statusInfo(item.status, item.next_due_millis);
+
+        return `
+          <tr>
+            <td>${index + 1}</td>
+            <td><strong>${escapeHtml(item.measurement_type)}</strong></td>
+            <td>${escapeHtml(item.area_name || "-")}</td>
+            <td>${formatDate(item.measurement_date_millis)}</td>
+            <td>${formatDate(item.next_due_millis)}</td>
+            <td>${item.legal_period_months || 12} ay</td>
+            <td>${escapeHtml(item.measured_by || "-")}</td>
+            <td>${escapeHtml(item.report_no || "-")}</td>
+            <td>${escapeHtml(item.result_summary || "-")}</td>
+            <td>${escapeHtml(remainingTime(item.next_due_millis))}</td>
+            <td>
+              <span class="status" style="color:${info.color};background:${info.background};border-color:${info.border}">
+                ${escapeHtml(info.label)}
+              </span>
+            </td>
+            <td>${escapeHtml(item.note || "-")}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const criticalRecords = [
+      ...equipments.map((item) => ({
+        title: item.equipment_name,
+        detail: `${item.equipment_type || "Ekipman"} / ${
+          item.location || "Konum belirtilmedi"
+        }`,
+        status: item.status,
+        due: item.next_due_millis,
+      })),
+      ...measurements.map((item) => ({
+        title: item.measurement_type,
+        detail: `${item.area_name || "Alan belirtilmedi"} / ${
+          item.measured_by || "Ölçümü yapan belirtilmedi"
+        }`,
+        status: item.status,
+        due: item.next_due_millis,
+      })),
+    ]
+      .filter(
+        (item) => statusInfo(item.status, item.due).key !== "SUITABLE"
+      )
+      .sort(
+        (first, second) =>
+          urgencyPriority(first.status, first.due) -
+            urgencyPriority(second.status, second.due) ||
+          (first.due ?? Number.MAX_SAFE_INTEGER) -
+            (second.due ?? Number.MAX_SAFE_INTEGER)
+      )
+      .map((item) => {
+        const info = statusInfo(item.status, item.due);
+        return `
+          <div class="warning-row">
+            <div>
+              <strong>${escapeHtml(item.title)}</strong>
+              <div class="muted">${escapeHtml(item.detail)}</div>
+            </div>
+            <div class="warning-right">
+              <span class="status" style="color:${info.color};background:${info.background};border-color:${info.border}">
+                ${escapeHtml(info.label)}
+              </span>
+              <div class="remaining">${escapeHtml(
+                remainingTime(item.due)
+              )}</div>
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    const html = `<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>Periyodik Kontrol Durum Raporu</title>
+  <style>
+    @page { size: A4 landscape; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #172033;
+      background: #ffffff;
+      font-size: 10px;
+    }
+    .report { width: 100%; }
+    .hero {
+      border-radius: 18px;
+      padding: 22px;
+      color: #ffffff;
+      background: linear-gradient(135deg,#5f0f1b 0%,#991b1b 52%,#d97706 100%);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .hero h1 { margin: 0; font-size: 25px; }
+    .hero p { margin: 8px 0 0; color: rgba(255,255,255,.88); }
+    .report-meta {
+      margin-top: 15px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .meta-card {
+      border-radius: 10px;
+      padding: 9px 11px;
+      background: rgba(255,255,255,.13);
+      border: 1px solid rgba(255,255,255,.18);
+    }
+    .meta-card small { display: block; color: rgba(255,255,255,.73); }
+    .meta-card strong { display: block; margin-top: 4px; font-size: 12px; }
+    .metrics {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0,1fr));
+      gap: 7px;
+    }
+    .metric {
+      border-radius: 10px;
+      padding: 10px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .metric span { display: block; color: #64748b; font-size: 9px; }
+    .metric strong { display: block; margin-top: 4px; font-size: 18px; }
+    .section { margin-top: 16px; break-inside: avoid-page; }
+    .section h2 {
+      margin: 0 0 8px;
+      padding-bottom: 7px;
+      border-bottom: 2px solid #7f1d1d;
+      font-size: 16px;
+      color: #7f1d1d;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    th, td {
+      border: 1px solid #dbe3ec;
+      padding: 6px;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+    th {
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 8.5px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    tr { break-inside: avoid; }
+    .status {
+      display: inline-block;
+      border: 1px solid;
+      border-radius: 999px;
+      padding: 3px 6px;
+      font-size: 8.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .warning-list { display: grid; gap: 6px; }
+    .warning-row {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      break-inside: avoid;
+    }
+    .warning-right { text-align: right; }
+    .remaining { margin-top: 4px; font-weight: 700; }
+    .muted { margin-top: 3px; color: #64748b; }
+    .empty {
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 16px;
+      color: #64748b;
+      text-align: center;
+    }
+    .signatures {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      break-inside: avoid;
+    }
+    .signature {
+      min-height: 85px;
+      border-top: 1px solid #94a3b8;
+      padding-top: 7px;
+      text-align: center;
+      color: #475569;
+    }
+    .footer {
+      margin-top: 18px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 8px;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+    }
+    .screen-actions {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 10px 0;
+      background: #ffffff;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .screen-actions button {
+      border: 0;
+      border-radius: 9px;
+      padding: 10px 14px;
+      color: #ffffff;
+      background: #7f1d1d;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    @media print {
+      .screen-actions { display: none; }
+      .section { break-inside: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="screen-actions">
+    <button onclick="window.print()">PDF Olarak Kaydet / Yazdır</button>
+  </div>
+
+  <main class="report">
+    <section class="hero">
+      <h1>D-SEC Periyodik Kontrol ve Ortam Ölçümleri Durum Raporu</h1>
+      <p>İş ekipmanları, ortam ölçümleri, kritik süreler ve yaklaşan kontroller</p>
+
+      <div class="report-meta">
+        <div class="meta-card">
+          <small>Firma</small>
+          <strong>${escapeHtml(selectedCompany.name)}</strong>
+        </div>
+        <div class="meta-card">
+          <small>Rapor Tarihi</small>
+          <strong>${escapeHtml(generatedAt)}</strong>
+        </div>
+        <div class="meta-card">
+          <small>Rapor Kapsamı</small>
+          <strong>Tüm Periyodik Kontrol ve Ölçüm Kayıtları</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="metrics">
+      <div class="metric"><span>Ekipman</span><strong>${metrics.equipmentCount}</strong></div>
+      <div class="metric"><span>Ölçüm</span><strong>${metrics.measurementCount}</strong></div>
+      <div class="metric"><span>Kritik</span><strong>${metrics.expiredCount}</strong></div>
+      <div class="metric"><span>7 Gün</span><strong>${metrics.due7Count}</strong></div>
+      <div class="metric"><span>15 Gün</span><strong>${metrics.due15Count}</strong></div>
+      <div class="metric"><span>30 Gün</span><strong>${metrics.due30Count}</strong></div>
+      <div class="metric"><span>Diğer Uyarı</span><strong>${metrics.otherWarningCount}</strong></div>
+      <div class="metric"><span>Uygun</span><strong>${metrics.suitableCount}</strong></div>
+    </section>
+
+    <section class="section">
+      <h2>1. Kritik ve Yaklaşan Süre Uyarıları</h2>
+      <div class="warning-list">
+        ${
+          criticalRecords ||
+          '<div class="empty">Kritik veya yaklaşan süre uyarısı bulunmuyor.</div>'
+        }
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>2. İş Ekipmanları Periyodik Kontrol Kayıtları</h2>
+      ${
+        equipmentRows
+          ? `<table>
+              <thead>
+                <tr>
+                  <th>No</th><th>Ekipman</th><th>Tür</th><th>Seri No</th>
+                  <th>Konum</th><th>Periyot</th><th>Son Kontrol</th>
+                  <th>Sonraki Kontrol</th><th>Kalan Süre</th><th>Rapor No</th>
+                  <th>Durum</th><th>Not</th>
+                </tr>
+              </thead>
+              <tbody>${equipmentRows}</tbody>
+            </table>`
+          : '<div class="empty">İş ekipmanı kaydı bulunmuyor.</div>'
+      }
+    </section>
+
+    <section class="section">
+      <h2>3. Ortam Ölçümü Kayıtları</h2>
+      ${
+        measurementRows
+          ? `<table>
+              <thead>
+                <tr>
+                  <th>No</th><th>Ölçüm Türü</th><th>Alan / Bölüm</th>
+                  <th>Ölçüm Tarihi</th><th>Sonraki Ölçüm</th><th>Periyot</th>
+                  <th>Ölçümü Yapan</th><th>Rapor No</th><th>Sonuç Özeti</th>
+                  <th>Kalan Süre</th><th>Durum</th><th>Not</th>
+                </tr>
+              </thead>
+              <tbody>${measurementRows}</tbody>
+            </table>`
+          : '<div class="empty">Ortam ölçümü kaydı bulunmuyor.</div>'
+      }
+    </section>
+
+    <section class="section">
+      <h2>4. Genel Değerlendirme</h2>
+      <p>
+        Bu raporda toplam <strong>${metrics.equipmentCount}</strong> iş ekipmanı
+        ve <strong>${metrics.measurementCount}</strong> ortam ölçümü kaydı
+        değerlendirilmiştir. Kritik veya süresi geçmiş kayıt sayısı
+        <strong>${metrics.expiredCount}</strong>, 30 gün içinde işlem gerektiren
+        toplam kayıt sayısı
+        <strong>${
+          metrics.due7Count + metrics.due15Count + metrics.due30Count
+        }</strong> olarak belirlenmiştir.
+      </p>
+      <p>
+        Süresi geçmiş, eksik veya uygun olmayan kayıtlar için gerekli kontrol,
+        ölçüm ve düzeltici işlemlerin gecikmeden planlanması önerilir.
+      </p>
+    </section>
+
+    <section class="signatures">
+      <div class="signature">Hazırlayan<br /><strong>İSG Uzmanı</strong></div>
+      <div class="signature">Kontrol Eden<br /><strong>İşyeri Yetkilisi</strong></div>
+      <div class="signature">Onaylayan<br /><strong>İşveren / İşveren Vekili</strong></div>
+    </section>
+
+    <footer class="footer">
+      <span>D-SEC Dijital Sağlık • Emniyet • Çevre</span>
+      <span>${escapeHtml(selectedCompany.name)}</span>
+    </footer>
+  </main>
+
+  <script>
+    window.addEventListener("load", function () {
+      window.setTimeout(function () { window.print(); }, 350);
+    });
+  </script>
+</body>
+</html>`;
+
+    reportWindow.document.open();
+    reportWindow.document.write(html);
+    reportWindow.document.close();
   };
 
   const openNewEquipment = () => {
@@ -1130,6 +1558,15 @@ export default function PeriodicControlsPage() {
                 />
               </label>
 
+              <button
+                className="secondaryReportButton"
+                onClick={createPdfReport}
+                type="button"
+              >
+                <FileDown size={17} />
+                PDF Durum Raporu
+              </button>
+
               {activeTab === "EQUIPMENTS" ? (
                 <button className="primaryButton" onClick={openNewEquipment}>
                   <Plus size={17} />
@@ -1477,6 +1914,19 @@ export default function PeriodicControlsPage() {
           border-radius: 12px;
           background: #7f1d1d;
           color: #ffffff;
+          padding: 0 15px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+        .secondaryReportButton {
+          min-height: 43px;
+          border: 1px solid #b45309;
+          border-radius: 12px;
+          background: #fffbeb;
+          color: #92400e;
           padding: 0 15px;
           display: inline-flex;
           align-items: center;
