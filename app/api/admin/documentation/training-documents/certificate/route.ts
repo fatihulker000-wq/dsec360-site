@@ -30,6 +30,8 @@ type ArchiveResponse = {
   detail?: string;
 };
 
+type CompanyRow = Record<string, unknown>;
+
 function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
@@ -48,7 +50,9 @@ function formatDate(value: number | null): string {
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) return "-";
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
 
   return new Intl.DateTimeFormat("tr-TR", {
     day: "2-digit",
@@ -68,40 +72,144 @@ function sessionKey(record: TrainingRecord): string {
 }
 
 function durationLabel(minutes: number): string {
-  if (!minutes) return "-";
+  if (!minutes || minutes <= 0) return "-";
 
   const hours = Math.floor(minutes / 60);
   const remaining = minutes % 60;
 
   return [
-    hours ? `${hours} saat` : "",
-    remaining ? `${remaining} dakika` : "",
+    hours > 0 ? `${hours} saat` : "",
+    remaining > 0 ? `${remaining} dakika` : "",
   ]
     .filter(Boolean)
     .join(" ");
 }
 
-function modeLabel(value: string): string {
-  const normalized = clean(value).toUpperCase();
+function trainingModeFlags(value: string) {
+  const normalized = clean(value)
+    .toLocaleUpperCase("tr-TR");
 
-  if (normalized === "ASENKRON") {
-    return "Uzaktan / Asenkron";
-  }
+  const isRemote =
+    normalized.includes("ASENKRON") ||
+    normalized.includes("SENKRON") ||
+    normalized.includes("UZAKTAN");
 
-  if (normalized === "SENKRON") {
-    return "Uzaktan / Senkron";
-  }
+  const isFaceToFace =
+    normalized.includes("ORGUN") ||
+    normalized.includes("ÖRGÜN") ||
+    normalized.includes("YUZ_YUZE") ||
+    normalized.includes("YÜZ_YÜZE");
 
-  return clean(value) || "Yüz yüze";
+  return {
+    remote: isRemote,
+    faceToFace: isFaceToFace || !isRemote,
+  };
+}
+
+function checkbox(checked: boolean): string {
+  return checked ? "☒" : "☐";
+}
+
+function certificateNo(
+  firmId: string,
+  employeeRemoteId: string,
+  trainingDate: number | null
+): string {
+  const year = new Date(
+    trainingDate || Date.now()
+  ).getFullYear();
+
+  const firmPart =
+    firmId.replace(/[^a-zA-Z0-9]/g, "")
+      .slice(-6)
+      .toUpperCase() || "FIRMA";
+
+  const employeePart =
+    employeeRemoteId
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(-6)
+      .toUpperCase() || "CALISAN";
+
+  const datePart = String(
+    trainingDate || Date.now()
+  ).slice(-8);
+
+  return `DSEC-${year}-${firmPart}-${employeePart}-${datePart}-EGT`;
+}
+
+const topics = [
+  {
+    group: "1. Genel konular",
+    rows: [
+      "a) Çalışma mevzuatı ile ilgili bilgiler",
+      "b) Çalışanların yasal hak ve sorumlulukları",
+      "c) İşyeri temizliği ve düzeni",
+      "ç) İş kazası ve meslek hastalığından doğan hukuki sonuçlar",
+    ],
+  },
+  {
+    group: "2. Sağlık konuları",
+    rows: [
+      "a) Meslek hastalıklarının sebepleri",
+      "b) Hastalıktan korunma prensipleri ve korunma tekniklerinin uygulanması",
+      "c) Biyolojik ve psikososyal risk etmenleri",
+      "ç) İlkyardım",
+      "d) Bağımlılık yapıcı maddelerin zararları ve teknoloji bağımlılığı",
+    ],
+  },
+  {
+    group: "3. Teknik konular",
+    rows: [
+      "a) Kimyasal, fiziksel ve ergonomik risk etmenleri",
+      "b) Elle kaldırma ve taşıma",
+      "c) Parlama, patlama",
+      "ç) Yangın ve yangından korunma",
+      "d) İş ekipmanlarının güvenli kullanımı",
+      "e) Ekranlı araçlarla çalışma",
+      "f) Elektrik, tehlikeleri, riskleri ve önlemleri",
+      "g) İş kazalarının sebepleri ve korunma prensipleri ile tekniklerinin uygulanması",
+      "ğ) Sağlık ve güvenlik işaretleri",
+      "h) Kişisel koruyucu donanım kullanımı",
+      "ı) İş sağlığı ve güvenliği genel kuralları ve güvenlik kültürü",
+      "i) Acil durumlar, tahliye ve kurtarma",
+    ],
+  },
+];
+
+function topicRowsHtml(): string {
+  return topics
+    .map(
+      (section) => `
+        <tr class="group-row">
+          <td colspan="2">${escapeHtml(section.group)}</td>
+        </tr>
+        ${section.rows
+          .map(
+            (row) => `
+              <tr>
+                <td>${escapeHtml(row)}</td>
+                <td class="duration-cell"></td>
+              </tr>
+            `
+          )
+          .join("")}
+      `
+    )
+    .join("");
 }
 
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const firmId = clean(url.searchParams.get("firmId"));
+
+    const firmId = clean(
+      url.searchParams.get("firmId")
+    );
+
     const requestedSessionKey = clean(
       url.searchParams.get("sessionKey")
     );
+
     const employeeRemoteId = clean(
       url.searchParams.get("employeeRemoteId")
     );
@@ -137,7 +245,9 @@ export async function GET(req: Request) {
     );
 
     const archiveJson: ArchiveResponse =
-      await archiveResponse.json().catch(() => ({}));
+      await archiveResponse
+        .json()
+        .catch(() => ({}));
 
     if (!archiveResponse.ok) {
       throw new Error(
@@ -153,15 +263,18 @@ export async function GET(req: Request) {
         : []
     ).find(
       (item) =>
-        sessionKey(item) === requestedSessionKey &&
-        item.employeeRemoteId === employeeRemoteId
+        sessionKey(item) ===
+          requestedSessionKey &&
+        item.employeeRemoteId ===
+          employeeRemoteId
     );
 
     if (!record) {
       return NextResponse.json(
         {
           success: false,
-          error: "Çalışan eğitim kaydı bulunamadı.",
+          error:
+            "Çalışan eğitim kaydı bulunamadı.",
         },
         { status: 404 }
       );
@@ -187,7 +300,7 @@ export async function GET(req: Request) {
         ? companyJson.data
         : []
     ).find(
-      (item: Record<string, unknown>) =>
+      (item: CompanyRow) =>
         clean(item.id) === firmId
     );
 
@@ -197,131 +310,508 @@ export async function GET(req: Request) {
       clean(company?.company_name) ||
       "İşyeri";
 
-    const isBasic =
-      /temel|isg|iş sağlığı/i.test(
-        record.trainingTitle
-      );
+    const employerName =
+      clean(company?.employer_name) ||
+      clean(company?.employerName) ||
+      clean(company?.authorized_person) ||
+      clean(company?.authorizedPerson) ||
+      "";
 
-    const documentTitle = isBasic
-      ? "TEMEL EĞİTİM BELGESİ"
-      : "EĞİTİM BELGESİ";
+    const mode = trainingModeFlags(
+      record.deliveryMode
+    );
 
-    const certificateNo = [
-      "DSEC",
-      firmId.slice(-6),
-      employeeRemoteId.slice(-6),
-      String(record.trainingDate || Date.now()).slice(-8),
+    const certificateId = certificateNo(
+      firmId,
+      employeeRemoteId,
+      record.trainingDate
+    );
+
+    const employeeDisplay = [
+      record.employeeName,
+      record.employeeJobTitle,
     ]
-      .join("-")
-      .toUpperCase();
+      .filter(Boolean)
+      .join(" - ");
+
+    const trainerDisplay = [
+      record.trainerName,
+      record.trainerRole,
+    ]
+      .filter(Boolean)
+      .join(" - ");
+
+    const issuerDisplay =
+      record.trainerOrg ||
+      trainerDisplay ||
+      "İşyerinde görevli iş güvenliği uzmanı ve işyeri hekimi";
+
+    const trainingType =
+      clean(record.trainingType)
+        .toLocaleUpperCase("tr-TR");
+
+    const isRepeat =
+      trainingType.includes("TEKRAR") ||
+      trainingType.includes("YENILEME") ||
+      trainingType.includes("YENİLEME");
 
     const html = `<!doctype html>
 <html lang="tr">
 <head>
-<meta charset="utf-8" />
-<title>${escapeHtml(documentTitle)}</title>
-<style>
-*{box-sizing:border-box}
-body{margin:0;background:#eef2f7;color:#111827;font-family:Arial,sans-serif}
-.toolbar{position:sticky;top:0;z-index:5;padding:12px;text-align:center;background:#111827}
-.toolbar button{border:0;border-radius:9px;padding:10px 18px;font-weight:800;cursor:pointer}
-.page{width:297mm;min-height:210mm;margin:18px auto;padding:12mm;background:white;box-shadow:0 14px 45px rgba(15,23,42,.15)}
-.frame{min-height:184mm;border:4px double #7f1d1d;padding:10mm;position:relative}
-.brand{text-align:center;color:#7f1d1d;font-size:24px;font-weight:950}
-.title{text-align:center;margin:16px 0 4px;font-size:30px;color:#7f1d1d;letter-spacing:1px}
-.subtitle{text-align:center;color:#64748b;font-size:13px}
-.lead{text-align:center;margin:22px auto 10px;max-width:900px;font-size:16px;line-height:1.7}
-.employee{text-align:center;margin:12px 0;font-size:30px;font-weight:950}
-.job{text-align:center;color:#475569;font-size:15px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:24px}
-.box{border:1px solid #94a3b8;border-radius:8px;padding:9px;min-height:58px;font-size:12px}
-.box strong{display:block;color:#7f1d1d;margin-bottom:5px;font-size:10px;text-transform:uppercase}
-.subjects{margin-top:20px;border-collapse:collapse;width:100%}
-.subjects th,.subjects td{border:1px solid #94a3b8;padding:7px;font-size:11px}
-.subjects th{background:#f8fafc;color:#334155}
-.signatures{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin-top:35px;text-align:center}
-.sign{border-top:1px solid #334155;padding-top:8px;font-size:11px;line-height:1.55}
-.no{position:absolute;right:10mm;bottom:7mm;color:#64748b;font-size:10px}
-.note{position:absolute;left:10mm;bottom:7mm;color:#64748b;font-size:9px}
-@page{size:A4 landscape;margin:6mm}
-@media print{
- body{background:white}
- .toolbar{display:none}
- .page{width:auto;min-height:auto;margin:0;padding:0;box-shadow:none}
-}
-</style>
+  <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  />
+
+  <title>Temel Eğitim Belgesi</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: #eceff3;
+      color: #111;
+      font-family:
+        "Times New Roman",
+        Times,
+        serif;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 11px;
+      background: #111827;
+    }
+
+    .toolbar button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 16px;
+      background: #fff;
+      color: #111827;
+      font-family: Arial, sans-serif;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .sheet {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 16px auto;
+      padding: 14mm 13mm 12mm;
+      background: #fff;
+      box-shadow:
+        0 12px 35px
+        rgba(15, 23, 42, 0.14);
+      page-break-after: always;
+      position: relative;
+    }
+
+    .sheet:last-child {
+      page-break-after: auto;
+    }
+
+    .appendix-title {
+      margin: 0 0 2mm;
+      font-size: 16pt;
+      font-weight: 700;
+    }
+
+    .face-label {
+      margin-bottom: 8mm;
+      font-size: 10pt;
+    }
+
+    .document-title {
+      margin: 0 0 11mm;
+      font-size: 14pt;
+      font-weight: 700;
+    }
+
+    .official-text {
+      font-size: 11.5pt;
+      line-height: 1.45;
+    }
+
+    .official-text p {
+      margin: 0 0 7mm;
+    }
+
+    .indent-line {
+      padding-left: 17mm;
+    }
+
+    .field-list {
+      margin-top: 14mm;
+      font-size: 11.5pt;
+      line-height: 1.55;
+    }
+
+    .field-list div {
+      min-height: 6mm;
+    }
+
+    .signature-block {
+      margin-top: 11mm;
+      font-size: 11.5pt;
+      line-height: 1.5;
+    }
+
+    .signature-space {
+      display: inline-block;
+      min-width: 75mm;
+      border-bottom:
+        1px dotted #555;
+    }
+
+    .certificate-no {
+      position: absolute;
+      right: 13mm;
+      bottom: 10mm;
+      font-size: 9pt;
+    }
+
+    .document-note {
+      position: absolute;
+      left: 13mm;
+      bottom: 10mm;
+      max-width: 125mm;
+      font-size: 8.5pt;
+      font-style: italic;
+    }
+
+    .topics-title-row {
+      display: grid;
+      grid-template-columns: 1fr 34mm;
+      border:
+        1px solid #111;
+      border-bottom: 0;
+      font-size: 10pt;
+      font-weight: 700;
+    }
+
+    .topics-title-row div {
+      padding: 2mm 2.5mm;
+      border-right:
+        1px solid #111;
+    }
+
+    .topics-title-row div:last-child {
+      border-right: 0;
+      text-align: center;
+    }
+
+    .topics-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 8.5pt;
+      line-height: 1.08;
+    }
+
+    .topics-table td {
+      border: 1px solid #111;
+      padding: 1.15mm 2mm;
+      vertical-align: top;
+    }
+
+    .topics-table .duration-cell {
+      width: 34mm;
+      text-align: center;
+    }
+
+    .topics-table .group-row td {
+      padding-top: 1.3mm;
+      padding-bottom: 1.3mm;
+      background: #f3f3f3;
+      font-weight: 700;
+    }
+
+    .risk-title {
+      font-weight: 700;
+      background: #f3f3f3;
+    }
+
+    .risk-option {
+      line-height: 1.22;
+    }
+
+    .footnote {
+      margin-top: 3mm;
+      font-size: 8.5pt;
+      font-style: italic;
+      line-height: 1.25;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    @media print {
+      html,
+      body {
+        background: #fff;
+      }
+
+      .toolbar {
+        display: none;
+      }
+
+      .sheet {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
 </head>
+
 <body>
-<div class="toolbar">
-<button onclick="window.print()">Yazdır / PDF Kaydet</button>
-</div>
-<main class="page">
-<section class="frame">
-<div class="brand">D-SEC</div>
-<h1 class="title">${escapeHtml(documentTitle)}</h1>
-<div class="subtitle">İş Sağlığı ve Güvenliği Eğitim Belgesi</div>
+  <div class="toolbar">
+    <button onclick="window.print()">
+      Yazdır / İki Sayfa PDF Kaydet
+    </button>
 
-<p class="lead">
-<strong>${escapeHtml(companyName)}</strong> işyerinde çalışan
-aşağıda bilgileri bulunan kişinin belirtilen eğitimi
-tamamladığı kayıt altına alınmıştır.
-</p>
+    <button onclick="window.close()">
+      Kapat
+    </button>
+  </div>
 
-<div class="employee">${escapeHtml(record.employeeName)}</div>
-<div class="job">
-Sicil No: ${escapeHtml(record.employeeRegistryNo || "-")}
-</div>
+  <!-- SAYFA 1 / ÖN YÜZ -->
+  <section class="sheet">
+    <h1 class="appendix-title">
+      Ek-2 TEMEL EĞİTİM BELGESİ
+    </h1>
 
-<section class="grid">
-<div class="box"><strong>Eğitimin Adı</strong>${escapeHtml(record.trainingTitle)}</div>
-<div class="box"><strong>Eğitim Tarihi</strong>${escapeHtml(formatDate(record.trainingDate))}</div>
-<div class="box"><strong>Belge Düzenlenme Tarihi</strong>${escapeHtml(formatDate(Date.now()))}</div>
-<div class="box"><strong>Toplam Süre</strong>${escapeHtml(durationLabel(record.durationMinutes))}</div>
-<div class="box"><strong>Eğitim Şekli</strong>${escapeHtml(modeLabel(record.deliveryMode))}</div>
-<div class="box"><strong>Eğitimi Veren</strong>${escapeHtml(record.trainerName || "-")}</div>
-<div class="box"><strong>Eğitici Unvanı</strong>${escapeHtml(record.trainerRole || "-")}</div>
-<div class="box"><strong>Eğitici Kurumu</strong>${escapeHtml(record.trainerOrg || "-")}</div>
-<div class="box"><strong>Eğitim Yeri</strong>${escapeHtml(record.trainingPlace || "-")}</div>
-</section>
+    <div class="face-label">
+      (ÖN YÜZ)
+    </div>
 
-<table class="subjects">
-<thead>
-<tr>
-<th>Konu Grubu</th>
-<th>Eğitim Konusu</th>
-<th>Süre</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>${isBasic ? "Temel İSG Eğitimi" : "İşe / İşyerine Özgü Eğitim"}</td>
-<td>${escapeHtml(record.trainingTitle)}</td>
-<td>${escapeHtml(durationLabel(record.durationMinutes))}</td>
-</tr>
-</tbody>
-</table>
+    <h2 class="document-title">
+      TEMEL EĞİTİM BELGESİ
+    </h2>
 
-<section class="signatures">
-<div class="sign">
-<strong>EĞİTİCİ</strong><br/>
-${escapeHtml(record.trainerName || "Ad Soyad")}<br/>
-${escapeHtml(record.trainerRole || "Unvan")}<br/><br/>
-İmza
-</div>
-<div class="sign">
-<strong>İŞVEREN / İŞVEREN VEKİLİ</strong><br/>
-Ad Soyad<br/>
-Unvan<br/><br/>
-İmza / Kaşe
-</div>
-</section>
+    <div class="official-text">
+      <p>İşbu belge,</p>
 
-<div class="note">
-İmzalanan belge çalışanın özlük dosyasında muhafaza edilmelidir.
-</div>
-<div class="no">Belge No: ${escapeHtml(certificateNo)}</div>
-</section>
-</main>
+      <p>
+        <strong>${escapeHtml(
+          employeeDisplay || record.employeeName
+        )}</strong>
+        (çalışanın adı, soyadı ve unvanı) adına
+      </p>
+
+      <p class="indent-line">
+        Çalışanların İş Sağlığı ve Güvenliği
+        Eğitimlerinin Usul ve Esasları Hakkında
+        Yönetmelik kapsamında
+        <strong>${escapeHtml(
+          issuerDisplay
+        )}</strong>
+        (Eğitimi veren kişi/kurum/kuruluş)
+        tarafından
+        <strong>${escapeHtml(
+          formatDate(record.trainingDate)
+        )}</strong>
+        tarihinde gerçekleştirilen temel eğitim
+        sonunda düzenlenmiştir.
+      </p>
+    </div>
+
+    <div class="field-list">
+      <div>
+        Belge düzenlenme tarihi:
+        <strong>${escapeHtml(
+          formatDate(Date.now())
+        )}</strong>
+      </div>
+
+      <div>
+        Eğitimin süresi:
+        <strong>${escapeHtml(
+          durationLabel(record.durationMinutes)
+        )}</strong>
+      </div>
+
+      <div>
+        Eğitimin türü:
+        İlk defa verilen temel eğitim
+        ${checkbox(!isRepeat)}
+      </div>
+
+      <div class="indent-line">
+        Tekrar verilen temel eğitim
+        ${checkbox(isRepeat)}
+      </div>
+
+      <div>
+        Eğitimin şekli:
+        Uzaktan
+        ${checkbox(mode.remote)}
+        (Başlık
+        ${mode.remote
+          ? escapeHtml(record.trainingTitle)
+          : "………………"}
+        )
+      </div>
+
+      <div class="indent-line">
+        Yüz yüze
+        ${checkbox(mode.faceToFace)}
+        (Başlık
+        ${mode.faceToFace
+          ? escapeHtml(record.trainingTitle)
+          : "………………"}
+        )
+      </div>
+
+      <div>
+        Eğiticilerin adı soyadı ve unvanı:
+        <strong>${escapeHtml(
+          trainerDisplay || "-"
+        )}</strong>
+      </div>
+
+      <div>
+        Eğiticilerin imzası:
+        <span class="signature-space"></span>
+      </div>
+    </div>
+
+    <div class="signature-block">
+      <div>
+        Çalışanın işyerinin unvanı:
+        <strong>${escapeHtml(companyName)}</strong>
+      </div>
+
+      <div>
+        İşverenin/işveren vekilinin adı soyadı:
+        <strong>${escapeHtml(
+          employerName || "-"
+        )}</strong>
+      </div>
+
+      <div>
+        İşveren/işveren vekilinin imzası:
+        <span class="signature-space"></span>
+      </div>
+    </div>
+
+    <div class="document-note">
+      Bu belge, Çalışanların İş Sağlığı ve
+      Güvenliği Eğitimlerinin Usul ve Esasları
+      Hakkında Yönetmelik Ek-2 örneğine göre
+      düzenlenmiştir.
+    </div>
+
+    <div class="certificate-no">
+      Belge No:
+      ${escapeHtml(certificateId)}
+    </div>
+  </section>
+
+  <!-- SAYFA 2 / ARKA YÜZ -->
+  <section class="sheet">
+    <h1 class="appendix-title">
+      Ek-2 TEMEL EĞİTİM BELGESİ
+    </h1>
+
+    <div class="face-label">
+      (ARKA YÜZ)
+    </div>
+
+    <div class="topics-title-row">
+      <div>EĞİTİM KONULARI</div>
+      <div>SÜRE</div>
+    </div>
+
+    <table class="topics-table">
+      <tbody>
+        ${topicRowsHtml()}
+
+        <tr class="risk-title">
+          <td colspan="2">
+            4. İşe ve işyerine özgü riskler ve
+            risk değerlendirmesine dayalı konular
+            (Tehlikeli ve Çok Tehlikeli Sınıf) /
+            Faaliyetin Genel Riskleri
+            (Az Tehlikeli Sınıf)
+          </td>
+        </tr>
+
+        <tr>
+          <td class="risk-option">
+            a) (Tehlikeli veya Çok Tehlikeli
+            Sınıf) İşyerinin acil durum planı,
+            risk değerlendirmesi dokümanı,
+            bulunması halinde patlamadan korunma
+            dokümanı ve iş sağlığı ve güvenliği
+            mevzuatı kapsamında hazırlanan diğer
+            dokümanlarda belirlenmiş olan hususlar
+            ile işyerine ve işe özgü hususları
+            içeren yüksekte çalışma, kapalı ortamda
+            çalışma, yangın, radyasyon riskinin
+            bulunduğu ortamlarda çalışma, kaynakla
+            çalışma, özel risk taşıyan ekipman ile
+            çalışma, kanserojen veya mutajen
+            maddelerle, kimyasal veya biyolojik
+            etkenlerle çalışma ve benzeri konular
+            ☐
+          </td>
+          <td class="duration-cell"></td>
+        </tr>
+
+        <tr>
+          <td class="risk-option">
+            b) (Az Tehlikeli Sınıf) Faaliyetin
+            genel tehlike ve riskleri
+            (yüksekte çalışma, yüksekten düşme,
+            kapalı ortamda çalışma, yangın,
+            özel risk taşıyan ekipmanla çalışma
+            gibi) ☐
+          </td>
+          <td class="duration-cell"></td>
+        </tr>
+
+        <tr>
+          <td>
+            İlave / işe ve işyerine özgü konu:
+            ${escapeHtml(record.trainingTitle)}
+          </td>
+          <td class="duration-cell">
+            ${escapeHtml(
+              durationLabel(record.durationMinutes)
+            )}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footnote">
+      * İşveren, Ek-2’de yer alan temel eğitimin
+      dördüncü konu başlığını tehlike sınıfına
+      uygun şekilde a) veya b) seçeneğini işaretler
+      ve varsa ilave konuları da ekler.
+    </div>
+
+    <div class="certificate-no">
+      Belge No:
+      ${escapeHtml(certificateId)}
+    </div>
+  </section>
 </body>
 </html>`;
 
@@ -330,14 +820,16 @@ Unvan<br/><br/>
       headers: {
         "Content-Type":
           "text/html; charset=utf-8",
-        "Cache-Control": "no-store",
+        "Cache-Control":
+          "no-store, no-cache, must-revalidate",
       },
     });
   } catch (error) {
     return NextResponse.json(
       {
         success: false,
-        error: "Eğitim belgesi oluşturulamadı.",
+        error:
+          "Temel eğitim belgesi oluşturulamadı.",
         detail:
           error instanceof Error
             ? error.message
