@@ -633,97 +633,29 @@ export default function TrainingDocumentsPage() {
   const printSession = (
     session: TrainingSession
   ) => {
-    const popup = window.open(
-      "",
-      "_blank",
-      "width=1100,height=800"
-    );
-
-    if (!popup) {
+    if (!companyId) {
       setError(
-        "Yazdırma penceresi açılamadı. Tarayıcı açılır pencere iznini kontrol edin."
+        "Katılım formu için önce firma seçilmelidir."
       );
       return;
     }
 
-    const participantRows =
-      session.records
-        .map(
-          (item, index) => `
-            <tr>
-              <td>${index + 1}</td>
-              <td>${escapeHtml(item.employeeName)}</td>
-              <td>${escapeHtml(item.employeeRegistryNo || "-")}</td>
-              <td>${item.completed ? "Tamamlandı" : "Bekliyor"}</td>
-              <td></td>
-            </tr>
-          `
-        )
-        .join("");
+    const query = new URLSearchParams({
+      firmId: companyId,
+      sessionKey: session.key,
+    });
 
-    popup.document.write(`
-      <!doctype html>
-      <html lang="tr">
-        <head>
-          <meta charset="utf-8" />
-          <title>Eğitim Oturumu Katılım Formu</title>
-          <style>
-            body { font-family: Arial, sans-serif; color: #111827; margin: 32px; }
-            h1 { margin: 0 0 8px; font-size: 24px; }
-            .muted { color: #64748b; margin-bottom: 24px; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin-bottom: 24px; }
-            .box { border: 1px solid #cbd5e1; padding: 9px 11px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th, td { border: 1px solid #94a3b8; padding: 8px; text-align: left; font-size: 12px; }
-            th { background: #f1f5f9; }
-            .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 35px; margin-top: 70px; text-align: center; }
-            @media print { button { display: none; } }
-          </style>
-        </head>
-        <body>
-          <h1>Eğitim Oturumu ve Katılım Formu</h1>
-          <div class="muted">${escapeHtml(selectedCompany?.name || "Firma")}</div>
+    const popup = window.open(
+      `/api/admin/documentation/training-documents/attendance-form?${query.toString()}`,
+      "_blank",
+      "width=1200,height=900"
+    );
 
-          <div class="grid">
-            <div class="box"><strong>Eğitim:</strong> ${escapeHtml(session.trainingTitle)}</div>
-            <div class="box"><strong>Tarih:</strong> ${formatDate(session.trainingDate)}</div>
-            <div class="box"><strong>Saat:</strong> ${escapeHtml(session.trainingTimeText || "-")}</div>
-            <div class="box"><strong>Süre:</strong> ${session.durationMinutes || 0} dakika</div>
-            <div class="box"><strong>Eğitmen:</strong> ${escapeHtml(session.trainerName || "-")}</div>
-            <div class="box"><strong>Unvan:</strong> ${escapeHtml(session.trainerRole || "-")}</div>
-            <div class="box"><strong>Kurum:</strong> ${escapeHtml(session.trainerOrg || "-")}</div>
-            <div class="box"><strong>Yer:</strong> ${escapeHtml(session.trainingPlace || "-")}</div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>No</th>
-                <th>Çalışan</th>
-                <th>Sicil No</th>
-                <th>Durum</th>
-                <th>İmza</th>
-              </tr>
-            </thead>
-            <tbody>${participantRows}</tbody>
-          </table>
-
-          <div class="signatures">
-            <div>Eğitmen<br /><br />İmza</div>
-            <div>İSG Uzmanı<br /><br />İmza</div>
-            <div>İşveren / Vekili<br /><br />İmza</div>
-          </div>
-
-          <script>
-            window.onload = function () {
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `);
-
-    popup.document.close();
+    if (!popup) {
+      setError(
+        "Katılım formu penceresi açılamadı. Tarayıcı açılır pencere iznini kontrol edin."
+      );
+    }
   };
 
   return (
