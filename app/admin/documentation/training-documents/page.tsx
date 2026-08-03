@@ -147,7 +147,8 @@ function validity(value: number | null) {
   target.setHours(0, 0, 0, 0);
 
   const days = Math.ceil(
-    (target.getTime() - today.getTime()) / 86400000
+    (target.getTime() - today.getTime()) /
+      86400000
   );
 
   if (days < 0) {
@@ -160,13 +161,33 @@ function validity(value: number | null) {
     };
   }
 
-  if (days <= 40) {
+  if (days <= 7) {
     return {
       key: "EXPIRING",
       label: `${days} Gün Kaldı`,
-      color: "#c2410c",
+      color: "#991b1b",
+      background: "#fef2f2",
+      border: "#fca5a5",
+    };
+  }
+
+  if (days <= 15) {
+    return {
+      key: "EXPIRING",
+      label: `${days} Gün Kaldı`,
+      color: "#b45309",
       background: "#fff7ed",
-      border: "#fed7aa",
+      border: "#fdba74",
+    };
+  }
+
+  if (days <= 30) {
+    return {
+      key: "EXPIRING",
+      label: `${days} Gün Kaldı`,
+      color: "#a16207",
+      background: "#fefce8",
+      border: "#fde047",
     };
   }
 
@@ -734,16 +755,24 @@ export default function TrainingDocumentsPage() {
               <h1>Eğitim Arşivi</h1>
 
               <p>
-                Eğitimler modülünde oluşan oturum,
-                katılımcı, katılım formu,
-                eğitim dokümanı ve sertifika
-                kayıtlarını salt okunur olarak
-                görüntüleyin ve çıktı alın.
-              </p>
+  Eğitimler modülünde oluşturulan eğitim oturumları,
+  katılımcılar, katılım kayıtları, katılım formları,
+  eğitim dokümanları ve sertifikalar bu merkezde
+  arşivlenmektedir.
+
+  <br />
+  <br />
+
+  Bu ekran yalnızca görüntüleme, raporlama,
+  belge inceleme ve çıktı alma amacıyla kullanılır.
+  Veri girişi ve düzenleme işlemleri Eğitimler
+  Modülü üzerinden yapılmaktadır.
+</p>
             </div>
 
             <button
               className="refreshButton"
+              
               onClick={() => void refresh()}
               disabled={refreshing}
             >
@@ -757,6 +786,20 @@ export default function TrainingDocumentsPage() {
               )}
               Yenile
             </button>
+            <div
+    style={{
+        marginTop:12,
+        textAlign:"right",
+        fontSize:12,
+        opacity:.85
+    }}
+>
+    <div>Son Senkron</div>
+
+    <strong>
+        {new Date().toLocaleString("tr-TR")}
+    </strong>
+</div>
           </div>
 
           <div className="heroGrid">
@@ -919,12 +962,38 @@ export default function TrainingDocumentsPage() {
               Salt okunur eğitim arşivi
             </strong>
 
-            <div>
-              Veri girişi, düzenleme ve silme
-              Eğitimler modülünden yapılır. Bu
-              ekran arşivleme, izleme, belge
-              görüntüleme ve çıktı alma içindir.
-            </div>
+             <div>
+
+Bu ekran Eğitimler Modülünde oluşturulan;
+
+<br/><br/>
+
+✓ Eğitim Oturumları
+
+<br/>
+
+✓ Katılımcılar
+
+<br/>
+
+✓ Katılım Formları
+
+<br/>
+
+✓ Eğitim Dokümanları
+
+<br/>
+
+✓ Sertifikalar
+
+<br/><br/>
+
+kayıtlarının arşiv ekranıdır.
+
+Buradan yalnızca görüntüleme,
+raporlama ve çıktı alma işlemleri yapılır.
+
+</div>
           </div>
         </section>
 
@@ -1121,19 +1190,34 @@ export default function TrainingDocumentsPage() {
           line-height: 1.6;
         }
 
-        .backButton,
-        .refreshButton {
-          border: 0;
-          color: white;
-          background: rgba(255, 255, 255, 0.13);
-          border-radius: 999px;
-          padding: 9px 13px;
-          display: inline-flex;
-          gap: 7px;
-          align-items: center;
-          font-weight: 850;
-          cursor: pointer;
-        }
+       .backButton,
+.refreshButton {
+  border: 0;
+  color: white;
+  background: rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  padding: 9px 13px;
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.docButton {
+  border: none;
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: #7f1d1d;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.docButton:hover {
+  background: #991b1b;
+}
 
         .heroGrid {
           margin-top: 22px;
@@ -1395,7 +1479,101 @@ function DashboardArea({
         gap: 22,
       }}
     >
+     
+     <section
+    style={{
+        border: "1px solid #dbeafe",
+        background: "#eff6ff",
+        borderRadius: 18,
+        padding: 18,
+    }}
+>
+    <h2
+        style={{
+            margin: 0,
+            color: "#1e3a8a",
+        }}
+    >
+        Eğitim Doküman Merkezi
+    </h2>
+
+    <p
+        style={{
+            marginTop: 10,
+            color: "#475569",
+            lineHeight: 1.7,
+        }}
+    >
+        Bu ekran Eğitimler Modülünde oluşturulan
+        eğitim kayıtlarının arşividir.
+
+        <br /><br />
+
+        Buradan;
+
+        <br />
+
+        • Eğitim Oturumları
+
+        <br />
+
+        • Katılımcılar
+
+        <br />
+
+        • Katılım Formları
+
+        <br />
+
+        • Eğitim Dokümanları
+
+        <br />
+
+        • Sertifikalar
+
+        <br />
+
+        görüntülenebilir ve çıktıları alınabilir.
+    </p>
+</section>
       <section>
+
+<div
+    style={{
+        display: "grid",
+        gridTemplateColumns:
+            "repeat(auto-fit,minmax(220px,1fr))",
+        gap: 15,
+        marginBottom: 10,
+    }}
+>
+
+    <SummaryCard
+        title="Toplam Oturum"
+        value={sessions.length}
+        color="#7f1d1d"
+    />
+
+    <SummaryCard
+        title="Toplam Sertifika"
+        value={certificates.length}
+        color="#065f46"
+    />
+
+    <SummaryCard
+        title="PDF Çıktıları"
+        value={sessions.length}
+        color="#1d4ed8"
+    />
+
+    <SummaryCard
+        title="Aktif Arşiv"
+        value={sessions.length + certificates.length}
+        color="#92400e"
+    />
+
+</div>
+
         <SectionTitle
           title="Son Eğitim Oturumları"
           subtitle="Katılımcı listesi ve çıktı işlemleriyle birlikte son oturumlar."
@@ -1443,6 +1621,9 @@ function SessionArchive({
         gap: 12,
       }}
     >
+
+
+        
       {sessions.map((session) => (
         <article
           key={session.key}
@@ -1774,8 +1955,7 @@ function DocumentArchive({
             <div
               key={session.key}
               style={{
-                border:
-                  "1px solid #e2e8f0",
+                border: "1px solid #e2e8f0",
                 borderRadius: 15,
                 padding: 13,
                 display: "flex",
@@ -1790,6 +1970,7 @@ function DocumentArchive({
                 <strong>
                   {session.trainingTitle}
                 </strong>
+
                 <div
                   style={{
                     marginTop: 4,
@@ -1839,6 +2020,46 @@ function DocumentArchive({
           subtitle="Eğitim dokümanı, katılım formu ve eğitim kaydına bağlı sertifika dosyaları."
         />
 
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit,minmax(180px,1fr))",
+            gap: 14,
+            marginBottom: 18,
+          }}
+        >
+          <SummaryCard
+            title="Eğitim Dokümanı"
+            value={
+              records.filter(
+                (item) => item.documentUri
+              ).length
+            }
+            color="#2563eb"
+          />
+
+          <SummaryCard
+            title="Katılım Formu"
+            value={
+              records.filter(
+                (item) => item.attendanceUri
+              ).length
+            }
+            color="#16a34a"
+          />
+
+          <SummaryCard
+            title="Sertifika"
+            value={
+              records.filter(
+                (item) => item.certificateUri
+              ).length
+            }
+            color="#92400e"
+          />
+        </div>
+
         <Table
           headers={[
             "Çalışan",
@@ -1859,19 +2080,23 @@ function DocumentArchive({
               <StrongCell>
                 {item.employeeName}
               </StrongCell>
+
               <Cell>
                 {item.trainingTitle}
               </Cell>
+
               <Cell>
                 <DocumentLink
                   value={item.documentUri}
                 />
               </Cell>
+
               <Cell>
                 <DocumentLink
                   value={item.attendanceUri}
                 />
               </Cell>
+
               <Cell>
                 <DocumentLink
                   value={item.certificateUri}
@@ -2014,10 +2239,95 @@ function WarningArea({
   trainings: TrainingRecord[];
   certificates: CertificateRecord[];
 }) {
-  if (
-    !trainings.length &&
-    !certificates.length
-  ) {
+  const allWarnings = [
+    ...trainings.map((item) => ({
+      id: `training-${item.id}`,
+      title: item.trainingTitle,
+      subtitle: `${item.employeeName} • Eğitim Katılımı`,
+      validUntil: item.validUntil,
+    })),
+
+    ...certificates.map((item) => ({
+      id: `certificate-${item.id}`,
+      title: item.trainingTitle,
+      subtitle: `${item.employeeName} • Sertifika ${
+        item.certificateNo || ""
+      }`,
+      validUntil: item.validUntil,
+    })),
+  ];
+
+  const expiredCount = allWarnings.filter(
+    (item) =>
+      validity(item.validUntil).key ===
+      "EXPIRED"
+  ).length;
+
+  const sevenDayCount = allWarnings.filter(
+    (item) => {
+      if (!item.validUntil) return false;
+
+      const today = new Date();
+      const target = new Date(
+        item.validUntil
+      );
+
+      today.setHours(0, 0, 0, 0);
+      target.setHours(0, 0, 0, 0);
+
+      const days = Math.ceil(
+        (target.getTime() -
+          today.getTime()) /
+          86400000
+      );
+
+      return days >= 0 && days <= 7;
+    }
+  ).length;
+
+  const fifteenDayCount =
+    allWarnings.filter((item) => {
+      if (!item.validUntil) return false;
+
+      const today = new Date();
+      const target = new Date(
+        item.validUntil
+      );
+
+      today.setHours(0, 0, 0, 0);
+      target.setHours(0, 0, 0, 0);
+
+      const days = Math.ceil(
+        (target.getTime() -
+          today.getTime()) /
+          86400000
+      );
+
+      return days > 7 && days <= 15;
+    }).length;
+
+  const thirtyDayCount =
+    allWarnings.filter((item) => {
+      if (!item.validUntil) return false;
+
+      const today = new Date();
+      const target = new Date(
+        item.validUntil
+      );
+
+      today.setHours(0, 0, 0, 0);
+      target.setHours(0, 0, 0, 0);
+
+      const days = Math.ceil(
+        (target.getTime() -
+          today.getTime()) /
+          86400000
+      );
+
+      return days > 15 && days <= 30;
+    }).length;
+
+  if (!allWarnings.length) {
     return (
       <Empty text="Aktif süre uyarısı bulunmuyor." />
     );
@@ -2027,26 +2337,75 @@ function WarningArea({
     <div
       style={{
         display: "grid",
-        gap: 12,
+        gap: 18,
       }}
     >
-      {trainings.map((item) => (
-        <Warning
-          key={`training-${item.id}`}
-          title={item.trainingTitle}
-          subtitle={`${item.employeeName} • Eğitim Katılımı`}
-          date={item.validUntil}
+      <section>
+        <SectionTitle
+          title="Süre Uyarıları"
+          subtitle="Eğitim ve sertifika geçerlilik sürelerini kritik eşiklere göre takip edin."
         />
-      ))}
 
-      {certificates.map((item) => (
-        <Warning
-          key={`certificate-${item.id}`}
-          title={item.trainingTitle}
-          subtitle={`${item.employeeName} • Sertifika ${item.certificateNo || ""}`}
-          date={item.validUntil}
-        />
-      ))}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit,minmax(200px,1fr))",
+            gap: 14,
+          }}
+        >
+          <SummaryCard
+            title="Süresi Geçen"
+            value={expiredCount}
+            color="#b91c1c"
+          />
+
+          <SummaryCard
+            title="7 Gün İçinde"
+            value={sevenDayCount}
+            color="#991b1b"
+          />
+
+          <SummaryCard
+            title="15 Gün İçinde"
+            value={fifteenDayCount}
+            color="#d97706"
+          />
+
+          <SummaryCard
+            title="30 Gün İçinde"
+            value={thirtyDayCount}
+            color="#ca8a04"
+          />
+        </div>
+      </section>
+
+      <section
+        style={{
+          display: "grid",
+          gap: 12,
+        }}
+      >
+        {trainings.map((item) => (
+          <Warning
+            key={`training-${item.id}`}
+            title={item.trainingTitle}
+            subtitle={`${item.employeeName} • Eğitim Katılımı`}
+            date={item.validUntil}
+          />
+        ))}
+
+        {certificates.map((item) => (
+          <Warning
+            key={`certificate-${item.id}`}
+            title={item.trainingTitle}
+            subtitle={`${item.employeeName} • Sertifika ${
+              item.certificateNo || ""
+            }`}
+            date={item.validUntil}
+          />
+        ))}
+      </section>
     </div>
   );
 }
@@ -2073,28 +2432,35 @@ function Warning({
         flexWrap: "wrap",
         justifyContent:
           "space-between",
+        alignItems: "center",
         gap: 12,
+        boxShadow:
+          "0 8px 20px rgba(15,23,42,.05)",
       }}
     >
       <div>
         <strong>{title}</strong>
+
         <div
           style={{
+            marginTop: 5,
             color: "#64748b",
-            marginTop: 4,
+            fontSize: 13,
           }}
         >
           {subtitle}
         </div>
+
         <div
           style={{
+            marginTop: 7,
             color: state.color,
-            marginTop: 6,
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 850,
           }}
         >
-          Geçerlilik: {formatDate(date)}
+          Son Geçerlilik Tarihi:{" "}
+          {formatDate(date)}
         </div>
       </div>
 
@@ -2249,6 +2615,54 @@ function StrongCell({
       {children}
     </td>
   );
+}
+
+function SummaryCard({
+    title,
+    value,
+    color,
+}:{
+    title:string;
+    value:number;
+    color:string;
+}){
+
+    return(
+
+        <div
+            style={{
+                borderRadius:18,
+                background:"#fff",
+                border:`2px solid ${color}`,
+                padding:18,
+            }}
+        >
+
+            <div
+                style={{
+                    color:"#64748b",
+                    fontWeight:700,
+                    fontSize:13,
+                }}
+            >
+                {title}
+            </div>
+
+            <div
+                style={{
+                    marginTop:10,
+                    fontSize:32,
+                    color,
+                    fontWeight:900,
+                }}
+            >
+                {value}
+            </div>
+
+        </div>
+
+    )
+
 }
 
 function Empty({
