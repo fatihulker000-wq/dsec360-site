@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Edit3,
   FileDown,
+  FileSpreadsheet,
   Gauge,
   Loader2,
   Plus,
@@ -388,6 +389,30 @@ function printableStatus(
   nextDueMillis: number | null
 ): string {
   return statusInfo(status, nextDueMillis).label;
+}
+
+function escapeXml(value: unknown): string {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function excelCell(
+  value: unknown,
+  styleId = "Cell",
+  type: "String" | "Number" = "String"
+): string {
+  const normalized =
+    type === "Number"
+      ? Number.isFinite(Number(value))
+        ? String(Number(value))
+        : "0"
+      : escapeXml(value);
+
+  return `<Cell ss:StyleID="${styleId}"><Data ss:Type="${type}">${normalized}</Data></Cell>`;
 }
 
 export default function PeriodicControlsPage() {
@@ -929,6 +954,213 @@ export default function PeriodicControlsPage() {
     reportWindow.document.open();
     reportWindow.document.write(html);
     reportWindow.document.close();
+  };
+
+  const createExcelReport = () => {
+    if (!selectedCompanyId || !selectedCompany) {
+      setError("Excel raporu için firma seçmelisiniz.");
+      return;
+    }
+
+    setError("");
+
+    const generatedAt = new Intl.DateTimeFormat("tr-TR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date());
+
+    const equipmentHeader = [
+      "Sıra",
+      "Ekipman",
+      "Tür",
+      "Seri No",
+      "Konum / Bölüm",
+      "Yasal Periyot (Ay)",
+      "Son Kontrol",
+      "Sonraki Kontrol",
+      "Kalan Süre",
+      "Rapor No",
+      "Durum",
+      "Not",
+    ];
+
+    const measurementHeader = [
+      "Sıra",
+      "Ölçüm Türü",
+      "Alan / Bölüm",
+      "Ölçüm Tarihi",
+      "Sonraki Ölçüm",
+      "Periyot (Ay)",
+      "Ölçümü Yapan",
+      "Rapor No",
+      "Sonuç Özeti",
+      "Kalan Süre",
+      "Durum",
+      "Not",
+    ];
+
+    const equipmentRows = sortByUrgency(equipments)
+      .map((item, index) => {
+        const info = statusInfo(item.status, item.next_due_millis);
+        const statusStyle =
+          info.key === "EXPIRED"
+            ? "Critical"
+            : info.key === "DUE_7"
+              ? "RedWarning"
+              : info.key === "DUE_15"
+                ? "OrangeWarning"
+                : info.key === "DUE_30"
+                  ? "YellowWarning"
+                  : info.key === "SUITABLE"
+                    ? "Suitable"
+                    : "Warning";
+
+        return `<Row>
+          ${excelCell(index + 1, "Cell", "Number")}
+          ${excelCell(item.equipment_name)}
+          ${excelCell(item.equipment_type || "-")}
+          ${excelCell(item.serial_no || "-")}
+          ${excelCell(item.location || "-")}
+          ${excelCell(item.legal_period_months || 12, "Cell", "Number")}
+          ${excelCell(formatDate(item.last_control_millis))}
+          ${excelCell(formatDate(item.next_due_millis))}
+          ${excelCell(remainingTime(item.next_due_millis))}
+          ${excelCell(item.report_no || "-")}
+          ${excelCell(info.label, statusStyle)}
+          ${excelCell(item.note || "-")}
+        </Row>`;
+      })
+      .join("");
+
+    const measurementRows = sortByUrgency(measurements)
+      .map((item, index) => {
+        const info = statusInfo(item.status, item.next_due_millis);
+        const statusStyle =
+          info.key === "EXPIRED"
+            ? "Critical"
+            : info.key === "DUE_7"
+              ? "RedWarning"
+              : info.key === "DUE_15"
+                ? "OrangeWarning"
+                : info.key === "DUE_30"
+                  ? "YellowWarning"
+                  : info.key === "SUITABLE"
+                    ? "Suitable"
+                    : "Warning";
+
+        return `<Row>
+          ${excelCell(index + 1, "Cell", "Number")}
+          ${excelCell(item.measurement_type)}
+          ${excelCell(item.area_name || "-")}
+          ${excelCell(formatDate(item.measurement_date_millis))}
+          ${excelCell(formatDate(item.next_due_millis))}
+          ${excelCell(item.legal_period_months || 12, "Cell", "Number")}
+          ${excelCell(item.measured_by || "-")}
+          ${excelCell(item.report_no || "-")}
+          ${excelCell(item.result_summary || "-")}
+          ${excelCell(remainingTime(item.next_due_millis))}
+          ${excelCell(info.label, statusStyle)}
+          ${excelCell(item.note || "-")}
+        </Row>`;
+      })
+      .join("");
+
+    const summaryRows = [
+      ["Firma", selectedCompany.name],
+      ["Rapor Tarihi", generatedAt],
+      ["Toplam İş Ekipmanı", metrics.equipmentCount],
+      ["Toplam Ortam Ölçümü", metrics.measurementCount],
+      ["Kritik / Süresi Geçen", metrics.expiredCount],
+      ["7 Gün İçinde", metrics.due7Count],
+      ["15 Gün İçinde", metrics.due15Count],
+      ["30 Gün İçinde", metrics.due30Count],
+      ["Diğer Uyarı", metrics.otherWarningCount],
+      ["Uygun", metrics.suitableCount],
+    ]
+      .map(
+        ([label, value]) =>
+          `<Row>${excelCell(label, "SummaryLabel")}${excelCell(value, "SummaryValue")}</Row>`
+      )
+      .join("");
+
+    const workbook = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Author>D-SEC</Author>
+  <Company>D-SEC</Company>
+  <Title>Periyodik Kontrol ve Ortam Ölçümleri</Title>
+  <Created>${new Date().toISOString()}</Created>
+ </DocumentProperties>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="11"/>
+  </Style>
+  <Style ss:ID="Cell"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/></Borders></Style>
+  <Style ss:ID="Title"><Font ss:Bold="1" ss:Size="16" ss:Color="#FFFFFF"/><Interior ss:Color="#7F1D1D" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+  <Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#991B1B" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:WrapText="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#7F1D1D"/></Borders></Style>
+  <Style ss:ID="SummaryLabel"><Font ss:Bold="1"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/></Borders></Style>
+  <Style ss:ID="SummaryValue"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/></Borders></Style>
+  <Style ss:ID="Critical"><Font ss:Bold="1" ss:Color="#7F1D1D"/><Interior ss:Color="#FEE2E2" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="RedWarning"><Font ss:Bold="1" ss:Color="#B91C1C"/><Interior ss:Color="#FEF2F2" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="OrangeWarning"><Font ss:Bold="1" ss:Color="#C2410C"/><Interior ss:Color="#FFF7ED" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="YellowWarning"><Font ss:Bold="1" ss:Color="#A16207"/><Interior ss:Color="#FEFCE8" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="Warning"><Font ss:Bold="1" ss:Color="#92400E"/><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="Suitable"><Font ss:Bold="1" ss:Color="#047857"/><Interior ss:Color="#ECFDF5" ss:Pattern="Solid"/></Style>
+ </Styles>
+ <Worksheet ss:Name="Genel Özet">
+  <Table>
+   <Column ss:Width="190"/><Column ss:Width="220"/>
+   <Row ss:Height="28"><Cell ss:MergeAcross="1" ss:StyleID="Title"><Data ss:Type="String">D-SEC PERİYODİK KONTROL DURUM RAPORU</Data></Cell></Row>
+   ${summaryRows}
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><Selected/><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane></WorksheetOptions>
+ </Worksheet>
+ <Worksheet ss:Name="İş Ekipmanları">
+  <Table>
+   ${equipmentHeader.map(() => '<Column ss:AutoFitWidth="1" ss:Width="105"/>').join("")}
+   <Row ss:Height="28"><Cell ss:MergeAcross="11" ss:StyleID="Title"><Data ss:Type="String">${escapeXml(selectedCompany.name)} - İş Ekipmanları</Data></Cell></Row>
+   <Row>${equipmentHeader.map((header) => excelCell(header, "Header")).join("")}</Row>
+   ${equipmentRows || `<Row><Cell ss:MergeAcross="11"><Data ss:Type="String">Kayıt bulunmuyor.</Data></Cell></Row>`}
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>2</SplitHorizontal><TopRowBottomPane>2</TopRowBottomPane><AutoFilter x:Range="R2C1:R2C12"/></WorksheetOptions>
+ </Worksheet>
+ <Worksheet ss:Name="Ortam Ölçümleri">
+  <Table>
+   ${measurementHeader.map(() => '<Column ss:AutoFitWidth="1" ss:Width="105"/>').join("")}
+   <Row ss:Height="28"><Cell ss:MergeAcross="11" ss:StyleID="Title"><Data ss:Type="String">${escapeXml(selectedCompany.name)} - Ortam Ölçümleri</Data></Cell></Row>
+   <Row>${measurementHeader.map((header) => excelCell(header, "Header")).join("")}</Row>
+   ${measurementRows || `<Row><Cell ss:MergeAcross="11"><Data ss:Type="String">Kayıt bulunmuyor.</Data></Cell></Row>`}
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>2</SplitHorizontal><TopRowBottomPane>2</TopRowBottomPane><AutoFilter x:Range="R2C1:R2C12"/></WorksheetOptions>
+ </Worksheet>
+</Workbook>`;
+
+    const blob = new Blob([workbook], {
+      type: "application/vnd.ms-excel;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const safeCompanyName = selectedCompany.name
+      .replace(/[^a-zA-Z0-9çÇğĞıİöÖşŞüÜ_-]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    anchor.href = url;
+    anchor.download = `Periyodik_Kontrol_${safeCompanyName || "Firma"}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.xls`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   };
 
   const openNewEquipment = () => {
@@ -1567,6 +1799,15 @@ export default function PeriodicControlsPage() {
                 PDF Durum Raporu
               </button>
 
+              <button
+                className="excelReportButton"
+                onClick={createExcelReport}
+                type="button"
+              >
+                <FileSpreadsheet size={17} />
+                Excel Aktar
+              </button>
+
               {activeTab === "EQUIPMENTS" ? (
                 <button className="primaryButton" onClick={openNewEquipment}>
                   <Plus size={17} />
@@ -1927,6 +2168,20 @@ export default function PeriodicControlsPage() {
           border-radius: 12px;
           background: #fffbeb;
           color: #92400e;
+          padding: 0 15px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .excelReportButton {
+          min-height: 43px;
+          border: 1px solid #bbf7d0;
+          border-radius: 12px;
+          background: #ecfdf5;
+          color: #047857;
           padding: 0 15px;
           display: inline-flex;
           align-items: center;
