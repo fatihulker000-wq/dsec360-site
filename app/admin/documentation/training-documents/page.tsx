@@ -5,10 +5,12 @@ import {
   ArrowLeft,
   Award,
   Building2,
-  CalendarDays,
   CheckCircle2,
   ClipboardList,
   FileText,
+  Download,
+  ExternalLink,
+  Share2,
   GraduationCap,
   Loader2,
   Printer,
@@ -230,6 +232,7 @@ export default function TrainingDocumentsPage() {
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [error, setError] = useState("");
 
   const loadCompanies = useCallback(async () => {
@@ -346,6 +349,8 @@ export default function TrainingDocumentsPage() {
           ? json.certificates
           : []
       );
+
+      setLastSyncedAt(new Date());
     } catch (loadError) {
       setEmployees([]);
       setTrainings([]);
@@ -770,36 +775,32 @@ export default function TrainingDocumentsPage() {
 </p>
             </div>
 
-            <button
-              className="refreshButton"
-              
-              onClick={() => void refresh()}
-              disabled={refreshing}
-            >
-              {refreshing ? (
-                <Loader2
-                  size={17}
-                  className="spin"
-                />
-              ) : (
-                <RefreshCw size={17} />
-              )}
-              Yenile
-            </button>
-            <div
-    style={{
-        marginTop:12,
-        textAlign:"right",
-        fontSize:12,
-        opacity:.85
-    }}
->
-    <div>Son Senkron</div>
+            <div className="syncBox">
+              <button
+                className="refreshButton"
+                onClick={() => void refresh()}
+                disabled={refreshing}
+              >
+                {refreshing ? (
+                  <Loader2
+                    size={17}
+                    className="spin"
+                  />
+                ) : (
+                  <RefreshCw size={17} />
+                )}
+                Yenile
+              </button>
 
-    <strong>
-        {new Date().toLocaleString("tr-TR")}
-    </strong>
-</div>
+              <div className="syncText">
+                <span>Son Senkron</span>
+                <strong>
+                  {lastSyncedAt
+                    ? lastSyncedAt.toLocaleString("tr-TR")
+                    : "Henüz yapılmadı"}
+                </strong>
+              </div>
+            </div>
           </div>
 
           <div className="heroGrid">
@@ -1064,7 +1065,7 @@ raporlama ve çıktı alma işlemleri yapılır.
               Geçerli
             </option>
             <option value="EXPIRING">
-              40 Gün İçinde
+              30 Gün İçinde
             </option>
             <option value="EXPIRED">
               Süresi Doldu
@@ -1204,19 +1205,48 @@ raporlama ve çıktı alma işlemleri yapılır.
   cursor: pointer;
 }
 
-.docButton {
-  border: none;
-  padding: 7px 12px;
-  border-radius: 9px;
-  background: #7f1d1d;
-  color: white;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
+.syncBox {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
 }
 
-.docButton:hover {
-  background: #991b1b;
+.syncText {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.syncText strong {
+  color: white;
+  font-size: 12px;
+}
+
+.documentActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.documentAction {
+  border: 1px solid #dbeafe;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.documentAction:hover {
+  background: #dbeafe;
 }
 
         .heroGrid {
@@ -2119,32 +2149,74 @@ function DocumentLink({
     return <span>-</span>;
   }
 
-  if (isWebUrl(value)) {
+  if (!isWebUrl(value)) {
     return (
-      <a
-        href={value}
-        target="_blank"
-        rel="noreferrer"
+      <span
+        title={value}
         style={{
-          color: "#1d4ed8",
-          fontWeight: 850,
+          color: "#b45309",
+          fontWeight: 800,
         }}
       >
-        Görüntüle
-      </a>
+        App cihazında
+      </span>
     );
   }
 
+  const shareDocument = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Eğitim Belgesi",
+          url: value,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(value);
+      window.alert("Belge bağlantısı panoya kopyalandı.");
+    } catch (shareError) {
+      if (
+        shareError instanceof DOMException &&
+        shareError.name === "AbortError"
+      ) {
+        return;
+      }
+
+      window.alert("Belge bağlantısı paylaşılamadı.");
+    }
+  };
+
   return (
-    <span
-      title={value}
-      style={{
-        color: "#b45309",
-        fontWeight: 800,
-      }}
-    >
-      App cihazında
-    </span>
+    <div className="documentActions">
+      <a
+        className="documentAction"
+        href={value}
+        target="_blank"
+        rel="noreferrer"
+      >
+        <ExternalLink size={14} />
+        Görüntüle
+      </a>
+
+      <a
+        className="documentAction"
+        href={value}
+        download
+      >
+        <Download size={14} />
+        İndir
+      </a>
+
+      <button
+        type="button"
+        className="documentAction"
+        onClick={() => void shareDocument()}
+      >
+        <Share2 size={14} />
+        Paylaş
+      </button>
+    </div>
   );
 }
 
@@ -2209,21 +2281,9 @@ function CertificateTable({
               <Badge state={state} />
             </Cell>
             <Cell>
-              {item.remoteFileUrl ? (
-                <a
-                  href={item.remoteFileUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    color: "#1d4ed8",
-                    fontWeight: 850,
-                  }}
-                >
-                  Görüntüle
-                </a>
-              ) : (
-                "-"
-              )}
+              <DocumentLink
+                value={item.remoteFileUrl}
+              />
             </Cell>
           </tr>
         );
