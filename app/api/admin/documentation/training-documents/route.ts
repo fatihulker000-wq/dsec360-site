@@ -1,29 +1,73 @@
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const MOBILE_API_KEY = "dsec_mobile_123";
+
 type JsonRecord = Record<string, unknown>;
+
+function getSupabase() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error(
+      "SUPABASE_URL veya SUPABASE_SERVICE_ROLE_KEY tanımlı değil."
+    );
+  }
+
+  return createClient(
+    supabaseUrl,
+    serviceRoleKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  );
+}
 
 function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function numberValue(value: unknown): number | null {
-  if (value === null || value === undefined || value === "" || value === "null") {
+function numberValue(
+  value: unknown
+): number | null {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    value === "null"
+  ) {
     return null;
   }
 
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : null;
 }
 
-function booleanValue(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
+function booleanValue(
+  value: unknown
+): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
 
-  const normalized = clean(value).toLowerCase();
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  const normalized =
+    clean(value).toLowerCase();
+
   return (
     normalized === "true" ||
     normalized === "1" ||
@@ -31,11 +75,14 @@ function booleanValue(value: unknown): boolean {
   );
 }
 
-function arrayOf(value: unknown): JsonRecord[] {
+function arrayOf(
+  value: unknown
+): JsonRecord[] {
   return Array.isArray(value)
     ? value.filter(
         (item): item is JsonRecord =>
-          !!item && typeof item === "object"
+          !!item &&
+          typeof item === "object"
       )
     : [];
 }
@@ -44,16 +91,22 @@ async function fetchMobileApi(
   origin: string,
   path: string
 ): Promise<JsonRecord> {
-  const response = await fetch(`${origin}${path}`, {
-    method: "GET",
-    cache: "no-store",
-    headers: {
-      "x-api-key": MOBILE_API_KEY,
-      Accept: "application/json",
-    },
-  });
+  const response = await fetch(
+    `${origin}${path}`,
+    {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        "x-api-key": MOBILE_API_KEY,
+        Accept: "application/json",
+      },
+    }
+  );
 
-  const json = await response.json().catch(() => ({}));
+  const json =
+    await response
+      .json()
+      .catch(() => ({}));
 
   if (!response.ok) {
     throw new Error(
@@ -69,51 +122,101 @@ async function fetchMobileApi(
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const firmId = clean(url.searchParams.get("firmId"));
+
+    const firmId = clean(
+      url.searchParams.get("firmId")
+    );
 
     if (!firmId) {
       return NextResponse.json(
-        { success: false, error: "firmId zorunlu." },
-        { status: 400 }
+        {
+          success: false,
+          error: "firmId zorunlu.",
+        },
+        {
+          status: 400,
+        }
       );
     }
 
+    const supabase = getSupabase();
     const origin = url.origin;
-    const query = encodeURIComponent(firmId);
+    const encodedFirmId =
+      encodeURIComponent(firmId);
 
-    const [employeeJson, trainingJson, certificateJson] =
-      await Promise.all([
-        fetchMobileApi(
-          origin,
-          `/api/mobile/employees/sync?firmId=${query}`
-        ),
-        fetchMobileApi(
-          origin,
-          `/api/mobile/training/sync?firmId=${query}`
-        ),
-        fetchMobileApi(
-          origin,
-          `/api/mobile/certificates/sync?firmId=${query}`
-        ),
-      ]);
+    /*
+     * Çalışanlar doğrudan Supabase'den alınır.
+     * Artık olmayan /api/mobile/employees/sync
+     * endpoint'i kullanılmaz.
+     */
+    const [
+      employeeResult,
+      trainingJson,
+      certificateJson,
+    ] = await Promise.all([
+      supabase
+        .from("employees")
+        .select(
+          `
+          id,
+          full_name,
+          registry_no,
+          job_title,
+          active,
+          firm_id
+          `
+        )
+        .eq("firm_id", firmId)
+        .eq("active", true)
+        .order("full_name", {
+          ascending: true,
+        }),
 
-    const employees = arrayOf(employeeJson.data).map((row) => ({
+      fetchMobileApi(
+        origin,
+        `/api/mobile/training/sync?firmId=${encodedFirmId}`
+      ),
+
+      fetchMobileApi(
+        origin,
+        `/api/mobile/certificates/sync?firmId=${encodedFirmId}`
+      ),
+    ]);
+
+    if (employeeResult.error) {
+      throw new Error(
+        `Çalışanlar alınamadı: ${employeeResult.error.message}`
+      );
+    }
+
+    const employees = (
+      Array.isArray(employeeResult.data)
+        ? employeeResult.data
+        : []
+    ).map((row) => ({
       id: clean(row.id),
+
       fullName:
         clean(row.full_name) ||
-        clean(row.fullName) ||
         "Çalışan",
+
       registryNo:
-        clean(row.registry_no) ||
-        clean(row.registryNo),
+        clean(row.registry_no),
+
       jobTitle:
-        clean(row.job_title) ||
-        clean(row.jobTitle),
+        clean(row.job_title),
     }));
 
     const employeeMap = new Map(
-      employees.map((item) => [item.id, item])
+      employees.map((employee) => [
+        employee.id,
+        employee,
+      ])
     );
+
+    /* =====================================================
+       EĞİTİM KATILIMLARI
+       ===================================================== */
 
     const trainingRows = arrayOf(
       trainingJson.data ??
@@ -121,97 +224,7 @@ export async function GET(req: Request) {
         trainingJson.assignments
     );
 
-    const trainings = trainingRows.map((row, index) => {
-      const employeeRemoteId = clean(
-        row.employee_remote_id ??
-          row.employeeRemoteId
-      );
-      const employee = employeeMap.get(employeeRemoteId);
-
-      const documentUri = clean(
-        row.document_uri ?? row.documentUri
-      );
-      const attendanceUri = clean(
-        row.attendance_uri ?? row.attendanceUri
-      );
-      const certificateUri = clean(
-        row.certificate_uri ?? row.certificateUri
-      );
-
-      return {
-        id:
-          clean(
-            row.assignment_id ??
-              row.id ??
-              row.remote_id
-          ) || `training-${index}`,
-        employeeRemoteId,
-        employeeName:
-          employee?.fullName ||
-          clean(row.employee_name) ||
-          clean(row.employeeName) ||
-          "Çalışan",
-        employeeRegistryNo:
-          employee?.registryNo || "",
-        trainingTitle:
-          clean(
-            row.title ??
-              row.training_title ??
-              row.trainingTitle
-          ) || "Eğitim",
-        trainingType:
-          clean(
-            row.type ??
-              row.training_type ??
-              row.trainingType
-          ),
-        trainingDate:
-          numberValue(
-            row.training_date ??
-              row.trainingDate ??
-              row.completed_at_millis
-          ),
-        validUntil:
-          numberValue(
-            row.valid_until ??
-              row.validUntil
-          ),
-        trainerName:
-          clean(
-            row.trainer_name ??
-              row.trainerName
-          ),
-        trainingPlace:
-          clean(
-            row.training_place ??
-              row.trainingPlace
-          ),
-        durationMinutes:
-          Number(
-            row.duration_minutes ??
-              row.durationMinutes ??
-              0
-          ) || 0,
-        completed:
-          booleanValue(
-            row.completed ??
-              row.status
-          ),
-        hasDocument:
-          Boolean(
-            documentUri ||
-              attendanceUri ||
-              certificateUri
-          ),
-      };
-    });
-
-    const certificateRows = arrayOf(
-      certificateJson.data ??
-        certificateJson.certificates
-    );
-
-    const certificates = certificateRows
+    const trainings = trainingRows
       .filter(
         (row) =>
           !booleanValue(
@@ -221,53 +234,206 @@ export async function GET(req: Request) {
           )
       )
       .map((row, index) => {
-        const employeeRemoteId = clean(
-          row.employee_remote_id ??
-            row.employeeRemoteId
-        );
-        const employee = employeeMap.get(employeeRemoteId);
+        const employeeRemoteId =
+          clean(
+            row.employee_remote_id ??
+              row.employeeRemoteId
+          );
+
+        const employee =
+          employeeMap.get(
+            employeeRemoteId
+          );
+
+        const documentUri =
+          clean(
+            row.document_uri ??
+              row.documentUri
+          );
+
+        const attendanceUri =
+          clean(
+            row.attendance_uri ??
+              row.attendanceUri
+          );
+
+        const certificateUri =
+          clean(
+            row.certificate_uri ??
+              row.certificateUri
+          );
 
         return {
           id:
-            clean(row.id ?? row.remote_id) ||
-            `certificate-${index}`,
+            clean(
+              row.assignment_id ??
+                row.id ??
+                row.remote_id ??
+                row.remoteId
+            ) ||
+            `training-${index}`,
+
           employeeRemoteId,
+
           employeeName:
             employee?.fullName ||
             clean(row.employee_name) ||
             clean(row.employeeName) ||
             "Çalışan",
+
           employeeRegistryNo:
-            employee?.registryNo || "",
+            employee?.registryNo ||
+            "",
+
           trainingTitle:
             clean(
-              row.training_title ??
+              row.title ??
+                row.training_title ??
                 row.trainingTitle
-            ) || "Eğitim Sertifikası",
-          certificateNo:
+            ) ||
+            "Eğitim",
+
+          trainingType:
             clean(
-              row.certificate_no ??
-                row.certificateNo
+              row.type ??
+                row.training_type ??
+                row.trainingType
             ),
-          issueDate:
+
+          trainingDate:
             numberValue(
-              row.issue_date ??
-                row.issueDate
+              row.training_date ??
+                row.trainingDate ??
+                row.completed_at_millis ??
+                row.completedAt
             ),
+
           validUntil:
             numberValue(
               row.valid_until ??
                 row.validUntil
             ),
-          remoteFileUrl:
+
+          trainerName:
             clean(
-              row.remote_file_url ??
-                row.remoteFileUrl ??
-                row.file_url ??
-                row.fileUrl
+              row.trainer_name ??
+                row.trainerName
+            ),
+
+          trainingPlace:
+            clean(
+              row.training_place ??
+                row.trainingPlace
+            ),
+
+          durationMinutes:
+            Number(
+              row.duration_minutes ??
+                row.durationMinutes ??
+                0
+            ) || 0,
+
+          completed:
+            booleanValue(
+              row.completed ??
+                row.status
+            ),
+
+          hasDocument:
+            Boolean(
+              documentUri ||
+                attendanceUri ||
+                certificateUri
             ),
         };
       });
+
+    /* =====================================================
+       SERTİFİKALAR
+       ===================================================== */
+
+    const certificateRows = arrayOf(
+      certificateJson.data ??
+        certificateJson.certificates
+    );
+
+    const certificates =
+      certificateRows
+        .filter(
+          (row) =>
+            !booleanValue(
+              row.deleted ??
+                row.is_deleted ??
+                row.isDeleted
+            )
+        )
+        .map((row, index) => {
+          const employeeRemoteId =
+            clean(
+              row.employee_remote_id ??
+                row.employeeRemoteId
+            );
+
+          const employee =
+            employeeMap.get(
+              employeeRemoteId
+            );
+
+          return {
+            id:
+              clean(
+                row.id ??
+                  row.remote_id ??
+                  row.remoteId
+              ) ||
+              `certificate-${index}`,
+
+            employeeRemoteId,
+
+            employeeName:
+              employee?.fullName ||
+              clean(row.employee_name) ||
+              clean(row.employeeName) ||
+              "Çalışan",
+
+            employeeRegistryNo:
+              employee?.registryNo ||
+              "",
+
+            trainingTitle:
+              clean(
+                row.training_title ??
+                  row.trainingTitle
+              ) ||
+              "Eğitim Sertifikası",
+
+            certificateNo:
+              clean(
+                row.certificate_no ??
+                  row.certificateNo
+              ),
+
+            issueDate:
+              numberValue(
+                row.issue_date ??
+                  row.issueDate
+              ),
+
+            validUntil:
+              numberValue(
+                row.valid_until ??
+                  row.validUntil
+              ),
+
+            remoteFileUrl:
+              clean(
+                row.remote_file_url ??
+                  row.remoteFileUrl ??
+                  row.file_url ??
+                  row.fileUrl
+              ),
+          };
+        });
 
     return NextResponse.json({
       success: true,
@@ -280,13 +446,16 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: "Eğitim dokümanları alınamadı.",
+        error:
+          "Eğitim dokümanları alınamadı.",
         detail:
           error instanceof Error
             ? error.message
             : String(error),
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
