@@ -535,6 +535,12 @@ useEffect(() => {
 const openCategory = (
   category: DocumentationCategory
 ) => {
+  if (category === "TRAINING") {
+    window.location.href =
+      "/admin/documentation/training-documents";
+    return;
+  }
+
   if (category === "BOARD") {
     window.location.href =
       "/admin/documentation/board";
