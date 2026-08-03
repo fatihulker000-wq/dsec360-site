@@ -144,11 +144,6 @@ export async function GET(req: Request) {
     const encodedFirmId =
       encodeURIComponent(firmId);
 
-    /*
-     * Çalışanlar doğrudan Supabase'den alınır.
-     * Artık olmayan /api/mobile/employees/sync
-     * endpoint'i kullanılmaz.
-     */
     const [
       employeeResult,
       trainingJson,
@@ -195,14 +190,11 @@ export async function GET(req: Request) {
         : []
     ).map((row) => ({
       id: clean(row.id),
-
       fullName:
         clean(row.full_name) ||
         "Çalışan",
-
       registryNo:
         clean(row.registry_no),
-
       jobTitle:
         clean(row.job_title),
     }));
@@ -213,10 +205,6 @@ export async function GET(req: Request) {
         employee,
       ])
     );
-
-    /* =====================================================
-       EĞİTİM KATILIMLARI
-       ===================================================== */
 
     const trainingRows = arrayOf(
       trainingJson.data ??
@@ -243,24 +231,6 @@ export async function GET(req: Request) {
         const employee =
           employeeMap.get(
             employeeRemoteId
-          );
-
-        const documentUri =
-          clean(
-            row.document_uri ??
-              row.documentUri
-          );
-
-        const attendanceUri =
-          clean(
-            row.attendance_uri ??
-              row.attendanceUri
-          );
-
-        const certificateUri =
-          clean(
-            row.certificate_uri ??
-              row.certificateUri
           );
 
         return {
@@ -300,6 +270,12 @@ export async function GET(req: Request) {
                 row.trainingType
             ),
 
+          deliveryMode:
+            clean(
+              row.delivery_mode ??
+                row.deliveryMode
+            ),
+
           trainingDate:
             numberValue(
               row.training_date ??
@@ -314,16 +290,10 @@ export async function GET(req: Request) {
                 row.validUntil
             ),
 
-          trainerName:
+          trainingTimeText:
             clean(
-              row.trainer_name ??
-                row.trainerName
-            ),
-
-          trainingPlace:
-            clean(
-              row.training_place ??
-                row.trainingPlace
+              row.training_time_text ??
+                row.trainingTimeText
             ),
 
           durationMinutes:
@@ -333,24 +303,67 @@ export async function GET(req: Request) {
                 0
             ) || 0,
 
+          trainerName:
+            clean(
+              row.trainer_name ??
+                row.trainerName
+            ),
+
+          trainerRole:
+            clean(
+              row.trainer_role ??
+                row.trainerRole
+            ),
+
+          trainerOrg:
+            clean(
+              row.trainer_org ??
+                row.trainerOrg
+            ),
+
+          trainingPlace:
+            clean(
+              row.training_place ??
+                row.trainingPlace
+            ),
+
+          onlineUrl:
+            clean(
+              row.online_url ??
+                row.onlineUrl
+            ),
+
+          completionNote:
+            clean(
+              row.completion_note ??
+                row.completionNote
+            ),
+
           completed:
             booleanValue(
               row.completed ??
                 row.status
             ),
 
-          hasDocument:
-            Boolean(
-              documentUri ||
-                attendanceUri ||
-                certificateUri
+          documentUri:
+            clean(
+              row.document_uri ??
+                row.documentUri
+            ),
+
+          attendanceUri:
+            clean(
+              row.attendance_uri ??
+                row.attendanceUri
+            ),
+
+          certificateUri:
+            clean(
+              row.certificate_uri ??
+                row.certificateUri
             ),
         };
       });
-
-    /* =====================================================
-       SERTİFİKALAR
-       ===================================================== */
 
     const certificateRows = arrayOf(
       certificateJson.data ??
@@ -447,7 +460,7 @@ export async function GET(req: Request) {
       {
         success: false,
         error:
-          "Eğitim dokümanları alınamadı.",
+          "Eğitim arşivi alınamadı.",
         detail:
           error instanceof Error
             ? error.message

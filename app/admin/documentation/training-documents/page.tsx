@@ -5,18 +5,31 @@ import {
   ArrowLeft,
   Award,
   Building2,
+  CalendarDays,
   CheckCircle2,
+  ClipboardList,
   FileText,
   GraduationCap,
   Loader2,
+  Printer,
   RefreshCw,
   Search,
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type Company = { id: string; name: string };
-type Employee = { id: string; fullName: string; registryNo: string; jobTitle: string };
+type Company = {
+  id: string;
+  name: string;
+};
+
+type Employee = {
+  id: string;
+  fullName: string;
+  registryNo: string;
+  jobTitle: string;
+};
+
 type TrainingRecord = {
   id: string;
   employeeRemoteId: string;
@@ -24,14 +37,23 @@ type TrainingRecord = {
   employeeRegistryNo: string;
   trainingTitle: string;
   trainingType: string;
+  deliveryMode: string;
   trainingDate: number | null;
   validUntil: number | null;
-  trainerName: string;
-  trainingPlace: string;
+  trainingTimeText: string;
   durationMinutes: number;
+  trainerName: string;
+  trainerRole: string;
+  trainerOrg: string;
+  trainingPlace: string;
+  onlineUrl: string;
+  completionNote: string;
   completed: boolean;
-  hasDocument: boolean;
+  documentUri: string;
+  attendanceUri: string;
+  certificateUri: string;
 };
+
 type CertificateRecord = {
   id: string;
   employeeRemoteId: string;
@@ -43,6 +65,26 @@ type CertificateRecord = {
   validUntil: number | null;
   remoteFileUrl: string;
 };
+
+type TrainingSession = {
+  key: string;
+  trainingTitle: string;
+  trainingType: string;
+  deliveryMode: string;
+  trainingDate: number | null;
+  validUntil: number | null;
+  trainingTimeText: string;
+  durationMinutes: number;
+  trainerName: string;
+  trainerRole: string;
+  trainerOrg: string;
+  trainingPlace: string;
+  onlineUrl: string;
+  participantCount: number;
+  completedCount: number;
+  records: TrainingRecord[];
+};
+
 type ApiResponse = {
   success?: boolean;
   employees?: Employee[];
@@ -51,23 +93,35 @@ type ApiResponse = {
   error?: string;
   detail?: string;
 };
+
 type CompaniesResponse = {
   data?: Array<{
     id?: string | number | null;
     name?: string | null;
     title?: string | null;
     company_name?: string | null;
-    is_active?: boolean | null;
   }>;
   error?: string;
   message?: string;
 };
-type ActiveTab = "DASHBOARD" | "TRAININGS" | "CERTIFICATES" | "WARNINGS";
+
+type ActiveTab =
+  | "DASHBOARD"
+  | "SESSIONS"
+  | "PARTICIPANTS"
+  | "DOCUMENTS"
+  | "CERTIFICATES"
+  | "WARNINGS";
 
 function formatDate(value: number | null): string {
   if (!value) return "-";
+
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
   return new Intl.DateTimeFormat("tr-TR", {
     day: "2-digit",
     month: "2-digit",
@@ -77,24 +131,66 @@ function formatDate(value: number | null): string {
 
 function validity(value: number | null) {
   if (!value) {
-    return { key: "NO_DATE", label: "Tarih Yok", color: "#475569", bg: "#f8fafc", border: "#cbd5e1" };
+    return {
+      key: "NO_DATE",
+      label: "Tarih Yok",
+      color: "#475569",
+      background: "#f8fafc",
+      border: "#cbd5e1",
+    };
   }
 
   const today = new Date();
   const target = new Date(value);
+
   today.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
-  const days = Math.ceil((target.getTime() - today.getTime()) / 86400000);
+
+  const days = Math.ceil(
+    (target.getTime() - today.getTime()) / 86400000
+  );
 
   if (days < 0) {
-    return { key: "EXPIRED", label: "Süresi Doldu", color: "#991b1b", bg: "#fef2f2", border: "#fecaca" };
+    return {
+      key: "EXPIRED",
+      label: "Süresi Doldu",
+      color: "#991b1b",
+      background: "#fef2f2",
+      border: "#fecaca",
+    };
   }
 
   if (days <= 40) {
-    return { key: "EXPIRING", label: `${days} Gün Kaldı`, color: "#c2410c", bg: "#fff7ed", border: "#fed7aa" };
+    return {
+      key: "EXPIRING",
+      label: `${days} Gün Kaldı`,
+      color: "#c2410c",
+      background: "#fff7ed",
+      border: "#fed7aa",
+    };
   }
 
-  return { key: "VALID", label: "Geçerli", color: "#047857", bg: "#ecfdf5", border: "#a7f3d0" };
+  return {
+    key: "VALID",
+    label: "Geçerli",
+    color: "#047857",
+    background: "#ecfdf5",
+    border: "#a7f3d0",
+  };
+}
+
+function isWebUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
+function sessionKey(record: TrainingRecord): string {
+  return [
+    record.trainingTitle.trim(),
+    record.trainingDate ?? 0,
+    record.trainingTimeText.trim(),
+    record.trainerName.trim(),
+    record.trainingPlace.trim(),
+  ].join("|");
 }
 
 export default function TrainingDocumentsPage() {
@@ -103,11 +199,13 @@ export default function TrainingDocumentsPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
+
   const [tab, setTab] = useState<ActiveTab>("DASHBOARD");
   const [employeeId, setEmployeeId] = useState("");
   const [trainingTitle, setTrainingTitle] = useState("");
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
+
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -116,28 +214,60 @@ export default function TrainingDocumentsPage() {
   const loadCompanies = useCallback(async () => {
     try {
       setLoadingCompanies(true);
+      setError("");
+
       const response = await fetch("/api/admin/companies", {
         credentials: "include",
         cache: "no-store",
       });
-      const json: CompaniesResponse = await response.json().catch(() => ({}));
+
+      const json: CompaniesResponse =
+        await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(json.error || json.message || "Firmalar alınamadı.");
+        throw new Error(
+          json.error ||
+            json.message ||
+            "Firmalar alınamadı."
+        );
       }
 
-      const rows = (Array.isArray(json.data) ? json.data : [])
-        .map((item): Company => ({
-          id: String(item.id || "").trim(),
-          name: String(item.name || item.title || item.company_name || "").trim(),
-        }))
+      const rows = (
+        Array.isArray(json.data)
+          ? json.data
+          : []
+      )
+        .map(
+          (item): Company => ({
+            id: String(item.id || "").trim(),
+            name: String(
+              item.name ||
+                item.title ||
+                item.company_name ||
+                ""
+            ).trim(),
+          })
+        )
         .filter((item) => item.id && item.name)
-        .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+        .sort((first, second) =>
+          first.name.localeCompare(second.name, "tr")
+        );
 
       setCompanies(rows);
-      setCompanyId((current) => current || rows[0]?.id || "");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Firmalar yüklenemedi.");
+      setCompanyId(
+        (current) =>
+          current ||
+          rows[0]?.id ||
+          ""
+      );
+    } catch (loadError) {
+      setCompanies([]);
+
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Firmalar yüklenemedi."
+      );
     } finally {
       setLoadingCompanies(false);
     }
@@ -155,286 +285,1088 @@ export default function TrainingDocumentsPage() {
       setLoading(true);
       setError("");
 
-      const query = new URLSearchParams({ firmId: companyId });
+      const query = new URLSearchParams({
+        firmId: companyId,
+      });
+
       const response = await fetch(
         `/api/admin/documentation/training-documents?${query.toString()}`,
-        { credentials: "include", cache: "no-store" }
+        {
+          credentials: "include",
+          cache: "no-store",
+        }
       );
-      const json: ApiResponse = await response.json().catch(() => ({}));
+
+      const json: ApiResponse =
+        await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(json.detail || json.error || "Kayıtlar alınamadı.");
+        throw new Error(
+          json.detail ||
+            json.error ||
+            "Eğitim arşivi alınamadı."
+        );
       }
 
-      setEmployees(Array.isArray(json.employees) ? json.employees : []);
-      setTrainings(Array.isArray(json.trainings) ? json.trainings : []);
-      setCertificates(Array.isArray(json.certificates) ? json.certificates : []);
-    } catch (e) {
+      setEmployees(
+        Array.isArray(json.employees)
+          ? json.employees
+          : []
+      );
+
+      setTrainings(
+        Array.isArray(json.trainings)
+          ? json.trainings
+          : []
+      );
+
+      setCertificates(
+        Array.isArray(json.certificates)
+          ? json.certificates
+          : []
+      );
+    } catch (loadError) {
       setEmployees([]);
       setTrainings([]);
       setCertificates([]);
-      setError(e instanceof Error ? e.message : "Kayıtlar yüklenemedi.");
+
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Eğitim arşivi yüklenemedi."
+      );
     } finally {
       setLoading(false);
     }
   }, [companyId]);
 
-  useEffect(() => void loadCompanies(), [loadCompanies]);
-  useEffect(() => void loadRecords(), [loadRecords]);
+  useEffect(() => {
+    void loadCompanies();
+  }, [loadCompanies]);
+
+  useEffect(() => {
+    void loadRecords();
+  }, [loadRecords]);
 
   const refresh = async () => {
     try {
       setRefreshing(true);
-      await Promise.all([loadCompanies(), loadRecords()]);
+
+      await Promise.all([
+        loadCompanies(),
+        loadRecords(),
+      ]);
     } finally {
       setRefreshing(false);
     }
   };
 
+  const selectedCompany =
+    companies.find(
+      (item) => item.id === companyId
+    ) || null;
+
+  const normalizedSearch =
+    search.trim().toLocaleLowerCase("tr-TR");
+
   const titles = useMemo(
     () =>
       Array.from(
         new Set([
-          ...trainings.map((item) => item.trainingTitle),
-          ...certificates.map((item) => item.trainingTitle),
+          ...trainings.map(
+            (item) => item.trainingTitle
+          ),
+          ...certificates.map(
+            (item) => item.trainingTitle
+          ),
         ])
       )
         .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, "tr")),
+        .sort((first, second) =>
+          first.localeCompare(second, "tr")
+        ),
     [trainings, certificates]
   );
-
-  const normalizedSearch = search.trim().toLocaleLowerCase("tr-TR");
 
   const filteredTrainings = useMemo(
     () =>
       trainings.filter((item) => {
         const state = validity(item.validUntil);
+
+        const matchesEmployee =
+          !employeeId ||
+          item.employeeRemoteId === employeeId;
+
+        const matchesTraining =
+          !trainingTitle ||
+          item.trainingTitle === trainingTitle;
+
+        const matchesStatus =
+          !status ||
+          (status === "COMPLETED" &&
+            item.completed) ||
+          (status === "PENDING" &&
+            !item.completed) ||
+          state.key === status;
+
+        const matchesSearch =
+          !normalizedSearch ||
+          [
+            item.employeeName,
+            item.employeeRegistryNo,
+            item.trainingTitle,
+            item.trainingType,
+            item.trainerName,
+            item.trainingPlace,
+          ]
+            .join(" ")
+            .toLocaleLowerCase("tr-TR")
+            .includes(normalizedSearch);
+
         return (
-          (!employeeId || item.employeeRemoteId === employeeId) &&
-          (!trainingTitle || item.trainingTitle === trainingTitle) &&
-          (!status ||
-            (status === "COMPLETED" && item.completed) ||
-            (status === "PENDING" && !item.completed) ||
-            state.key === status) &&
-          (!normalizedSearch ||
-            [
-              item.employeeName,
-              item.employeeRegistryNo,
-              item.trainingTitle,
-              item.trainingType,
-              item.trainerName,
-              item.trainingPlace,
-            ]
-              .join(" ")
-              .toLocaleLowerCase("tr-TR")
-              .includes(normalizedSearch))
+          matchesEmployee &&
+          matchesTraining &&
+          matchesStatus &&
+          matchesSearch
         );
       }),
-    [trainings, employeeId, trainingTitle, status, normalizedSearch]
+    [
+      trainings,
+      employeeId,
+      trainingTitle,
+      status,
+      normalizedSearch,
+    ]
   );
 
   const filteredCertificates = useMemo(
     () =>
       certificates.filter((item) => {
         const state = validity(item.validUntil);
+
+        const matchesEmployee =
+          !employeeId ||
+          item.employeeRemoteId === employeeId;
+
+        const matchesTraining =
+          !trainingTitle ||
+          item.trainingTitle === trainingTitle;
+
+        const matchesStatus =
+          !status ||
+          state.key === status;
+
+        const matchesSearch =
+          !normalizedSearch ||
+          [
+            item.employeeName,
+            item.employeeRegistryNo,
+            item.trainingTitle,
+            item.certificateNo,
+          ]
+            .join(" ")
+            .toLocaleLowerCase("tr-TR")
+            .includes(normalizedSearch);
+
         return (
-          (!employeeId || item.employeeRemoteId === employeeId) &&
-          (!trainingTitle || item.trainingTitle === trainingTitle) &&
-          (!status || state.key === status) &&
-          (!normalizedSearch ||
-            [
-              item.employeeName,
-              item.employeeRegistryNo,
-              item.trainingTitle,
-              item.certificateNo,
-            ]
-              .join(" ")
-              .toLocaleLowerCase("tr-TR")
-              .includes(normalizedSearch))
+          matchesEmployee &&
+          matchesTraining &&
+          matchesStatus &&
+          matchesSearch
         );
       }),
-    [certificates, employeeId, trainingTitle, status, normalizedSearch]
+    [
+      certificates,
+      employeeId,
+      trainingTitle,
+      status,
+      normalizedSearch,
+    ]
   );
 
+  const sessions = useMemo(() => {
+    const groups = new Map<string, TrainingRecord[]>();
+
+    filteredTrainings.forEach((record) => {
+      const key = sessionKey(record);
+      const rows = groups.get(key) || [];
+      rows.push(record);
+      groups.set(key, rows);
+    });
+
+    return Array.from(groups.entries())
+      .map(([key, records]): TrainingSession => {
+        const first = records[0];
+
+        return {
+          key,
+          trainingTitle: first.trainingTitle,
+          trainingType: first.trainingType,
+          deliveryMode: first.deliveryMode,
+          trainingDate: first.trainingDate,
+          validUntil: first.validUntil,
+          trainingTimeText: first.trainingTimeText,
+          durationMinutes: first.durationMinutes,
+          trainerName: first.trainerName,
+          trainerRole: first.trainerRole,
+          trainerOrg: first.trainerOrg,
+          trainingPlace: first.trainingPlace,
+          onlineUrl: first.onlineUrl,
+          participantCount: records.length,
+          completedCount: records.filter(
+            (item) => item.completed
+          ).length,
+          records: [...records].sort(
+            (firstRecord, secondRecord) =>
+              firstRecord.employeeName.localeCompare(
+                secondRecord.employeeName,
+                "tr"
+              )
+          ),
+        };
+      })
+      .sort(
+        (first, second) =>
+          (second.trainingDate || 0) -
+          (first.trainingDate || 0)
+      );
+  }, [filteredTrainings]);
+
   const metrics = useMemo(() => {
-    const completed = trainings.filter((item) => item.completed).length;
+    const participantIds =
+      new Set(
+        trainings.map(
+          (item) => item.employeeRemoteId
+        )
+      );
+
+    const attendanceFormCount =
+      trainings.filter(
+        (item) => item.attendanceUri
+      ).length;
+
+    const trainingDocumentCount =
+      trainings.filter(
+        (item) => item.documentUri
+      ).length;
+
     const expired =
-      trainings.filter((item) => validity(item.validUntil).key === "EXPIRED").length +
-      certificates.filter((item) => validity(item.validUntil).key === "EXPIRED").length;
+      trainings.filter(
+        (item) =>
+          validity(item.validUntil).key ===
+          "EXPIRED"
+      ).length +
+      certificates.filter(
+        (item) =>
+          validity(item.validUntil).key ===
+          "EXPIRED"
+      ).length;
+
     const expiring =
-      trainings.filter((item) => validity(item.validUntil).key === "EXPIRING").length +
-      certificates.filter((item) => validity(item.validUntil).key === "EXPIRING").length;
+      trainings.filter(
+        (item) =>
+          validity(item.validUntil).key ===
+          "EXPIRING"
+      ).length +
+      certificates.filter(
+        (item) =>
+          validity(item.validUntil).key ===
+          "EXPIRING"
+      ).length;
 
     return {
-      training: trainings.length,
-      completed,
-      pending: trainings.length - completed,
-      certificate: certificates.length,
+      sessionCount: new Set(
+        trainings.map(sessionKey)
+      ).size,
+      participantCount:
+        participantIds.size,
+      attendanceCount: trainings.length,
+      attendanceFormCount,
+      trainingDocumentCount,
+      certificateCount:
+        certificates.length,
       expired,
       expiring,
-      files:
-        trainings.filter((item) => item.hasDocument).length +
-        certificates.filter((item) => item.remoteFileUrl).length,
     };
   }, [trainings, certificates]);
 
-  const warningsTrainings = filteredTrainings.filter((item) =>
-    ["EXPIRED", "EXPIRING"].includes(validity(item.validUntil).key)
-  );
-  const warningsCertificates = filteredCertificates.filter((item) =>
-    ["EXPIRED", "EXPIRING"].includes(validity(item.validUntil).key)
-  );
+  const warningTrainings =
+    filteredTrainings.filter((item) =>
+      ["EXPIRED", "EXPIRING"].includes(
+        validity(item.validUntil).key
+      )
+    );
+
+  const warningCertificates =
+    filteredCertificates.filter((item) =>
+      ["EXPIRED", "EXPIRING"].includes(
+        validity(item.validUntil).key
+      )
+    );
+
+  const printSession = (
+    session: TrainingSession
+  ) => {
+    const popup = window.open(
+      "",
+      "_blank",
+      "width=1100,height=800"
+    );
+
+    if (!popup) {
+      setError(
+        "Yazdırma penceresi açılamadı. Tarayıcı açılır pencere iznini kontrol edin."
+      );
+      return;
+    }
+
+    const participantRows =
+      session.records
+        .map(
+          (item, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${escapeHtml(item.employeeName)}</td>
+              <td>${escapeHtml(item.employeeRegistryNo || "-")}</td>
+              <td>${item.completed ? "Tamamlandı" : "Bekliyor"}</td>
+              <td></td>
+            </tr>
+          `
+        )
+        .join("");
+
+    popup.document.write(`
+      <!doctype html>
+      <html lang="tr">
+        <head>
+          <meta charset="utf-8" />
+          <title>Eğitim Oturumu Katılım Formu</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #111827; margin: 32px; }
+            h1 { margin: 0 0 8px; font-size: 24px; }
+            .muted { color: #64748b; margin-bottom: 24px; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; margin-bottom: 24px; }
+            .box { border: 1px solid #cbd5e1; padding: 9px 11px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            th, td { border: 1px solid #94a3b8; padding: 8px; text-align: left; font-size: 12px; }
+            th { background: #f1f5f9; }
+            .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 35px; margin-top: 70px; text-align: center; }
+            @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <h1>Eğitim Oturumu ve Katılım Formu</h1>
+          <div class="muted">${escapeHtml(selectedCompany?.name || "Firma")}</div>
+
+          <div class="grid">
+            <div class="box"><strong>Eğitim:</strong> ${escapeHtml(session.trainingTitle)}</div>
+            <div class="box"><strong>Tarih:</strong> ${formatDate(session.trainingDate)}</div>
+            <div class="box"><strong>Saat:</strong> ${escapeHtml(session.trainingTimeText || "-")}</div>
+            <div class="box"><strong>Süre:</strong> ${session.durationMinutes || 0} dakika</div>
+            <div class="box"><strong>Eğitmen:</strong> ${escapeHtml(session.trainerName || "-")}</div>
+            <div class="box"><strong>Unvan:</strong> ${escapeHtml(session.trainerRole || "-")}</div>
+            <div class="box"><strong>Kurum:</strong> ${escapeHtml(session.trainerOrg || "-")}</div>
+            <div class="box"><strong>Yer:</strong> ${escapeHtml(session.trainingPlace || "-")}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Çalışan</th>
+                <th>Sicil No</th>
+                <th>Durum</th>
+                <th>İmza</th>
+              </tr>
+            </thead>
+            <tbody>${participantRows}</tbody>
+          </table>
+
+          <div class="signatures">
+            <div>Eğitmen<br /><br />İmza</div>
+            <div>İSG Uzmanı<br /><br />İmza</div>
+            <div>İşveren / Vekili<br /><br />İmza</div>
+          </div>
+
+          <script>
+            window.onload = function () {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+
+    popup.document.close();
+  };
 
   return (
-    <main style={{ minHeight: "100vh", padding: 24, background: "linear-gradient(180deg,#f8fafc,#fff7ed)" }}>
-      <div style={{ maxWidth: 1540, margin: "0 auto", display: "grid", gap: 18 }}>
+    <main
+      style={{
+        minHeight: "100vh",
+        padding: 24,
+        background:
+          "linear-gradient(180deg,#f8fafc 0%,#fff7ed 100%)",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1540,
+          margin: "0 auto",
+          display: "grid",
+          gap: 18,
+        }}
+      >
         <section className="hero">
           <div className="heroTop">
             <div>
-              <button className="backButton" onClick={() => (window.location.href = "/admin/documentation")}>
+              <button
+                className="backButton"
+                onClick={() => {
+                  window.location.href =
+                    "/admin/documentation";
+                }}
+              >
                 <ArrowLeft size={16} />
                 Dokümantasyona Dön
               </button>
-              <h1>Eğitim Dokümanları</h1>
-              <p>Eğitim katılımlarını, sertifikaları ve belge geçerliliklerini firma bazında yönetin.</p>
+
+              <h1>Eğitim Arşivi</h1>
+
+              <p>
+                Eğitimler modülünde oluşan oturum,
+                katılımcı, katılım formu,
+                eğitim dokümanı ve sertifika
+                kayıtlarını salt okunur olarak
+                görüntüleyin ve çıktı alın.
+              </p>
             </div>
 
-            <button className="refreshButton" onClick={() => void refresh()} disabled={refreshing}>
-              {refreshing ? <Loader2 size={17} className="spin" /> : <RefreshCw size={17} />}
+            <button
+              className="refreshButton"
+              onClick={() => void refresh()}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <Loader2
+                  size={17}
+                  className="spin"
+                />
+              ) : (
+                <RefreshCw size={17} />
+              )}
               Yenile
             </button>
           </div>
 
           <div className="heroGrid">
-            <Metric title="Toplam Eğitim" value={metrics.training} icon={<GraduationCap size={18} />} />
-            <Metric title="Tamamlanan" value={metrics.completed} icon={<CheckCircle2 size={18} />} />
-            <Metric title="Bekleyen" value={metrics.pending} icon={<Users size={18} />} />
-            <Metric title="Sertifika" value={metrics.certificate} icon={<Award size={18} />} />
-            <Metric title="Süresi Dolan" value={metrics.expired} icon={<AlertTriangle size={18} />} />
-            <Metric title="40 Gün İçinde" value={metrics.expiring} icon={<FileText size={18} />} />
-            <Metric title="Dosyalı Kayıt" value={metrics.files} icon={<FileText size={18} />} />
+            <Metric
+              title="Eğitim Oturumu"
+              value={metrics.sessionCount}
+              icon={
+                <GraduationCap size={18} />
+              }
+            />
+
+            <Metric
+              title="Katılımcı"
+              value={metrics.participantCount}
+              icon={<Users size={18} />}
+            />
+
+            <Metric
+              title="Katılım Kaydı"
+              value={metrics.attendanceCount}
+              icon={
+                <ClipboardList size={18} />
+              }
+            />
+
+            <Metric
+              title="Katılım Formu"
+              value={metrics.attendanceFormCount}
+              icon={<FileText size={18} />}
+            />
+
+            <Metric
+              title="Eğitim Dokümanı"
+              value={metrics.trainingDocumentCount}
+              icon={<FileText size={18} />}
+            />
+
+            <Metric
+              title="Sertifika"
+              value={metrics.certificateCount}
+              icon={<Award size={18} />}
+            />
+
+            <Metric
+              title="Süre Uyarısı"
+              value={
+                metrics.expired +
+                metrics.expiring
+              }
+              icon={
+                <AlertTriangle size={18} />
+              }
+            />
           </div>
         </section>
 
-        {error ? <div className="error"><AlertTriangle size={18} />{error}</div> : null}
+        {error ? (
+          <section className="error">
+            <AlertTriangle size={18} />
+            {error}
+          </section>
+        ) : null}
 
         <section className="toolbar">
           <div className="tabs">
-            <Tab active={tab === "DASHBOARD"} label="Dashboard" onClick={() => setTab("DASHBOARD")} />
-            <Tab active={tab === "TRAININGS"} label={`Katılımlar (${trainings.length})`} onClick={() => setTab("TRAININGS")} />
-            <Tab active={tab === "CERTIFICATES"} label={`Sertifikalar (${certificates.length})`} onClick={() => setTab("CERTIFICATES")} />
-            <Tab active={tab === "WARNINGS"} label={`Süre Uyarıları (${metrics.expired + metrics.expiring})`} onClick={() => setTab("WARNINGS")} />
+            <Tab
+              active={tab === "DASHBOARD"}
+              label="Dashboard"
+              onClick={() =>
+                setTab("DASHBOARD")
+              }
+            />
+
+            <Tab
+              active={tab === "SESSIONS"}
+              label={`Oturumlar (${sessions.length})`}
+              onClick={() =>
+                setTab("SESSIONS")
+              }
+            />
+
+            <Tab
+              active={
+                tab === "PARTICIPANTS"
+              }
+              label={`Katılımcılar (${filteredTrainings.length})`}
+              onClick={() =>
+                setTab("PARTICIPANTS")
+              }
+            />
+
+            <Tab
+              active={tab === "DOCUMENTS"}
+              label="Formlar ve Dokümanlar"
+              onClick={() =>
+                setTab("DOCUMENTS")
+              }
+            />
+
+            <Tab
+              active={
+                tab === "CERTIFICATES"
+              }
+              label={`Sertifikalar (${filteredCertificates.length})`}
+              onClick={() =>
+                setTab("CERTIFICATES")
+              }
+            />
+
+            <Tab
+              active={tab === "WARNINGS"}
+              label={`Süre Uyarıları (${
+                warningTrainings.length +
+                warningCertificates.length
+              })`}
+              onClick={() =>
+                setTab("WARNINGS")
+              }
+            />
           </div>
 
           <label className="company">
             <Building2 size={16} />
+
             <select
               value={companyId}
               disabled={loadingCompanies}
               onChange={(event) => {
-                setCompanyId(event.target.value);
+                setCompanyId(
+                  event.target.value
+                );
                 setEmployeeId("");
                 setTrainingTitle("");
                 setStatus("");
               }}
             >
-              {companies.length === 0 ? <option value="">Firma bulunamadı</option> : null}
-              {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              {companies.length === 0 ? (
+                <option value="">
+                  Firma bulunamadı
+                </option>
+              ) : null}
+
+              {companies.map((item) => (
+                <option
+                  key={item.id}
+                  value={item.id}
+                >
+                  {item.name}
+                </option>
+              ))}
             </select>
           </label>
         </section>
 
+        <section className="archiveInfo">
+          <CheckCircle2 size={19} />
+
+          <div>
+            <strong>
+              Salt okunur eğitim arşivi
+            </strong>
+
+            <div>
+              Veri girişi, düzenleme ve silme
+              Eğitimler modülünden yapılır. Bu
+              ekran arşivleme, izleme, belge
+              görüntüleme ve çıktı alma içindir.
+            </div>
+          </div>
+        </section>
+
         <section className="filters">
-          <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
-            <option value="">Tüm Çalışanlar</option>
+          <select
+            value={employeeId}
+            onChange={(event) =>
+              setEmployeeId(
+                event.target.value
+              )
+            }
+          >
+            <option value="">
+              Tüm Çalışanlar
+            </option>
+
             {employees.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.fullName}{item.registryNo ? ` • ${item.registryNo}` : ""}
+              <option
+                key={item.id}
+                value={item.id}
+              >
+                {item.fullName}
+                {item.registryNo
+                  ? ` • ${item.registryNo}`
+                  : ""}
               </option>
             ))}
           </select>
 
-          <select value={trainingTitle} onChange={(event) => setTrainingTitle(event.target.value)}>
-            <option value="">Tüm Eğitimler</option>
-            {titles.map((item) => <option key={item} value={item}>{item}</option>)}
+          <select
+            value={trainingTitle}
+            onChange={(event) =>
+              setTrainingTitle(
+                event.target.value
+              )
+            }
+          >
+            <option value="">
+              Tüm Eğitimler
+            </option>
+
+            {titles.map((item) => (
+              <option
+                key={item}
+                value={item}
+              >
+                {item}
+              </option>
+            ))}
           </select>
 
-          <select value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option value="">Tüm Durumlar</option>
-            <option value="COMPLETED">Tamamlandı</option>
-            <option value="PENDING">Bekliyor</option>
-            <option value="VALID">Geçerli</option>
-            <option value="EXPIRING">40 Gün İçinde</option>
-            <option value="EXPIRED">Süresi Doldu</option>
-            <option value="NO_DATE">Tarih Yok</option>
+          <select
+            value={status}
+            onChange={(event) =>
+              setStatus(event.target.value)
+            }
+          >
+            <option value="">
+              Tüm Durumlar
+            </option>
+            <option value="COMPLETED">
+              Tamamlandı
+            </option>
+            <option value="PENDING">
+              Bekliyor
+            </option>
+            <option value="VALID">
+              Geçerli
+            </option>
+            <option value="EXPIRING">
+              40 Gün İçinde
+            </option>
+            <option value="EXPIRED">
+              Süresi Doldu
+            </option>
+            <option value="NO_DATE">
+              Tarih Yok
+            </option>
           </select>
 
           <label className="search">
             <Search size={16} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Kayıt ara..." />
+
+            <input
+              value={search}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+              placeholder="Çalışan, eğitim veya belge ara..."
+            />
           </label>
         </section>
 
         <section className="content">
-          {loading ? <div className="loading"><Loader2 size={22} className="spin" />Kayıtlar yükleniyor...</div> : null}
-
-          {!loading && tab === "DASHBOARD" ? (
-            <div style={{ display: "grid", gap: 20 }}>
-              <SectionTitle title="Son Eğitim Katılımları" />
-              <TrainingTable records={filteredTrainings.slice(0, 8)} />
-              <SectionTitle title="Son Sertifikalar" />
-              <CertificateTable records={filteredCertificates.slice(0, 8)} />
+          {loading ? (
+            <div className="loading">
+              <Loader2
+                size={22}
+                className="spin"
+              />
+              Eğitim arşivi yükleniyor...
             </div>
           ) : null}
 
-          {!loading && tab === "TRAININGS" ? <TrainingTable records={filteredTrainings} /> : null}
-          {!loading && tab === "CERTIFICATES" ? <CertificateTable records={filteredCertificates} /> : null}
-          {!loading && tab === "WARNINGS" ? (
-            <WarningArea trainings={warningsTrainings} certificates={warningsCertificates} />
+          {!loading &&
+          tab === "DASHBOARD" ? (
+            <DashboardArea
+              sessions={sessions}
+              certificates={
+                filteredCertificates
+              }
+              onPrintSession={printSession}
+            />
+          ) : null}
+
+          {!loading &&
+          tab === "SESSIONS" ? (
+            <SessionArchive
+              sessions={sessions}
+              onPrint={printSession}
+            />
+          ) : null}
+
+          {!loading &&
+          tab === "PARTICIPANTS" ? (
+            <ParticipantTable
+              records={filteredTrainings}
+            />
+          ) : null}
+
+          {!loading &&
+          tab === "DOCUMENTS" ? (
+            <DocumentArchive
+              records={filteredTrainings}
+              sessions={sessions}
+              onPrintSession={printSession}
+            />
+          ) : null}
+
+          {!loading &&
+          tab === "CERTIFICATES" ? (
+            <CertificateTable
+              records={
+                filteredCertificates
+              }
+            />
+          ) : null}
+
+          {!loading &&
+          tab === "WARNINGS" ? (
+            <WarningArea
+              trainings={warningTrainings}
+              certificates={
+                warningCertificates
+              }
+            />
           ) : null}
         </section>
       </div>
 
       <style jsx>{`
-        .hero{border-radius:28px;padding:25px;color:white;background:linear-gradient(135deg,#5f0f1b,#991b1b 48%,#d97706);box-shadow:0 24px 60px rgba(127,29,29,.22)}
-        .heroTop,.toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center}
-        .hero h1{font-size:34px;margin:17px 0 0;font-weight:950}.hero p{color:rgba(255,255,255,.86)}
-        .backButton,.refreshButton{border:0;color:white;background:rgba(255,255,255,.13);border-radius:999px;padding:9px 13px;display:inline-flex;gap:7px;align-items:center;font-weight:850;cursor:pointer}
-        .heroGrid{margin-top:22px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
-        .toolbar,.filters,.content{border:1px solid #e5e7eb;background:white;border-radius:20px;padding:13px;box-shadow:0 10px 28px rgba(15,23,42,.04)}
-        .tabs{display:flex;flex-wrap:wrap;gap:8px}.company,.search{min-height:43px;border:1px solid #dbe3ec;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 11px}
-        .company{min-width:300px}.company select,.search input{width:100%;border:0;outline:0;background:transparent}
-        .filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(260px,1.2fr);gap:10px}.filters select{min-height:43px;border:1px solid #dbe3ec;border-radius:12px;padding:0 11px;background:white}
-        .error{border:1px solid #fecaca;background:#fef2f2;color:#b91c1c;border-radius:16px;padding:14px;display:flex;gap:9px;font-weight:800}
-        .loading{min-height:230px;display:flex;justify-content:center;align-items:center;gap:10px;color:#64748b;font-weight:800}
-        .spin{animation:spin .9s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-        @media(max-width:1350px){.heroGrid{grid-template-columns:repeat(4,1fr)}.filters{grid-template-columns:repeat(2,1fr)}}
-        @media(max-width:760px){main{padding:12px!important}.heroGrid,.filters{grid-template-columns:1fr}.company{width:100%;min-width:0}}
+        .hero {
+          border-radius: 28px;
+          padding: 25px;
+          color: white;
+          background: linear-gradient(
+            135deg,
+            #5f0f1b,
+            #991b1b 48%,
+            #d97706
+          );
+          box-shadow: 0 24px 60px
+            rgba(127, 29, 29, 0.22);
+        }
+
+        .heroTop,
+        .toolbar {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: space-between;
+          gap: 16px;
+          align-items: center;
+        }
+
+        .hero h1 {
+          font-size: 34px;
+          margin: 17px 0 0;
+          font-weight: 950;
+        }
+
+        .hero p {
+          max-width: 900px;
+          color: rgba(255, 255, 255, 0.86);
+          line-height: 1.6;
+        }
+
+        .backButton,
+        .refreshButton {
+          border: 0;
+          color: white;
+          background: rgba(255, 255, 255, 0.13);
+          border-radius: 999px;
+          padding: 9px 13px;
+          display: inline-flex;
+          gap: 7px;
+          align-items: center;
+          font-weight: 850;
+          cursor: pointer;
+        }
+
+        .heroGrid {
+          margin-top: 22px;
+          display: grid;
+          grid-template-columns: repeat(
+            7,
+            minmax(0, 1fr)
+          );
+          gap: 10px;
+        }
+
+        .toolbar,
+        .filters,
+        .content,
+        .archiveInfo {
+          border: 1px solid #e5e7eb;
+          background: white;
+          border-radius: 20px;
+          padding: 13px;
+          box-shadow: 0 10px 28px
+            rgba(15, 23, 42, 0.04);
+        }
+
+        .tabs {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .company,
+        .search {
+          min-height: 43px;
+          border: 1px solid #dbe3ec;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0 11px;
+        }
+
+        .company {
+          min-width: 300px;
+        }
+
+        .company select,
+        .search input {
+          width: 100%;
+          border: 0;
+          outline: 0;
+          background: transparent;
+        }
+
+        .archiveInfo {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          color: #166534;
+          background: #f0fdf4;
+          border-color: #bbf7d0;
+          line-height: 1.55;
+        }
+
+        .archiveInfo div div {
+          margin-top: 3px;
+          color: #475569;
+          font-size: 13px;
+        }
+
+        .filters {
+          display: grid;
+          grid-template-columns:
+            repeat(3, minmax(0, 1fr))
+            minmax(260px, 1.2fr);
+          gap: 10px;
+        }
+
+        .filters select {
+          min-height: 43px;
+          border: 1px solid #dbe3ec;
+          border-radius: 12px;
+          padding: 0 11px;
+          background: white;
+        }
+
+        .error {
+          border: 1px solid #fecaca;
+          background: #fef2f2;
+          color: #b91c1c;
+          border-radius: 16px;
+          padding: 14px;
+          display: flex;
+          gap: 9px;
+          font-weight: 800;
+        }
+
+        .loading {
+          min-height: 230px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 10px;
+          color: #64748b;
+          font-weight: 800;
+        }
+
+        .spin {
+          animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @media (max-width: 1350px) {
+          .heroGrid {
+            grid-template-columns: repeat(
+              4,
+              1fr
+            );
+          }
+
+          .filters {
+            grid-template-columns: repeat(
+              2,
+              1fr
+            );
+          }
+        }
+
+        @media (max-width: 760px) {
+          main {
+            padding: 12px !important;
+          }
+
+          .heroGrid,
+          .filters {
+            grid-template-columns: 1fr;
+          }
+
+          .company {
+            width: 100%;
+            min-width: 0;
+          }
+        }
       `}</style>
     </main>
   );
 }
 
-function Metric({ title, value, icon }: { title: string; value: number; icon: React.ReactNode }) {
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function Metric({
+  title,
+  value,
+  icon,
+}: {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+}) {
   return (
-    <div style={{ borderRadius: 17, padding: 15, background: "rgba(255,255,255,.12)", border: "1px solid rgba(255,255,255,.12)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 7, color: "rgba(255,255,255,.78)", fontSize: 12, fontWeight: 800 }}>{icon}{title}</div>
-      <div style={{ marginTop: 7, fontSize: 25, fontWeight: 950 }}>{value}</div>
+    <div
+      style={{
+        borderRadius: 17,
+        padding: 15,
+        background:
+          "rgba(255,255,255,.12)",
+        border:
+          "1px solid rgba(255,255,255,.12)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          color:
+            "rgba(255,255,255,.78)",
+          fontSize: 12,
+          fontWeight: 800,
+        }}
+      >
+        {icon}
+        {title}
+      </div>
+
+      <div
+        style={{
+          marginTop: 7,
+          fontSize: 25,
+          fontWeight: 950,
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
 
-function Tab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+function Tab({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <button
+      type="button"
       onClick={onClick}
       style={{
         minHeight: 43,
         borderRadius: 12,
-        border: active ? "1px solid #7f1d1d" : "1px solid transparent",
-        background: active ? "#7f1d1d" : "#f8fafc",
-        color: active ? "white" : "#475569",
+        border: active
+          ? "1px solid #7f1d1d"
+          : "1px solid transparent",
+        background: active
+          ? "#7f1d1d"
+          : "#f8fafc",
+        color: active
+          ? "white"
+          : "#475569",
         padding: "0 15px",
         fontWeight: 900,
         cursor: "pointer",
@@ -445,97 +1377,917 @@ function Tab({ active, label, onClick }: { active: boolean; label: string; onCli
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
-  return <h2 style={{ margin: 0, color: "#0f172a" }}>{title}</h2>;
-}
-
-function TrainingTable({ records }: { records: TrainingRecord[] }) {
-  if (!records.length) return <Empty text="Eğitim katılım kaydı bulunamadı." />;
-
+function DashboardArea({
+  sessions,
+  certificates,
+  onPrintSession,
+}: {
+  sessions: TrainingSession[];
+  certificates: CertificateRecord[];
+  onPrintSession: (
+    session: TrainingSession
+  ) => void;
+}) {
   return (
-    <Table headers={["Çalışan","Eğitim","Tür","Tarih","Geçerlilik","Eğitmen","Yer","Süre","Durum","Doküman"]}>
-      {records.map((item) => {
-        const state = validity(item.validUntil);
-        return (
-          <tr key={item.id} style={{ borderBottom: "1px solid #eef2f7" }}>
-            <StrongCell>{item.employeeName}<small>{item.employeeRegistryNo || "-"}</small></StrongCell>
-            <Cell>{item.trainingTitle}</Cell><Cell>{item.trainingType || "-"}</Cell>
-            <Cell>{formatDate(item.trainingDate)}</Cell><Cell>{formatDate(item.validUntil)}<Badge state={state} /></Cell>
-            <Cell>{item.trainerName || "-"}</Cell><Cell>{item.trainingPlace || "-"}</Cell>
-            <Cell>{item.durationMinutes ? `${item.durationMinutes} dk` : "-"}</Cell>
-            <Cell>{item.completed ? "Tamamlandı" : "Bekliyor"}</Cell><Cell>{item.hasDocument ? "Var" : "-"}</Cell>
-          </tr>
-        );
-      })}
-    </Table>
-  );
-}
+    <div
+      style={{
+        display: "grid",
+        gap: 22,
+      }}
+    >
+      <section>
+        <SectionTitle
+          title="Son Eğitim Oturumları"
+          subtitle="Katılımcı listesi ve çıktı işlemleriyle birlikte son oturumlar."
+        />
 
-function CertificateTable({ records }: { records: CertificateRecord[] }) {
-  if (!records.length) return <Empty text="Sertifika kaydı bulunamadı." />;
+        <SessionArchive
+          sessions={sessions.slice(0, 6)}
+          onPrint={onPrintSession}
+        />
+      </section>
 
-  return (
-    <Table headers={["Çalışan","Eğitim","Sertifika No","Düzenlenme","Geçerlilik","Durum","Dosya"]}>
-      {records.map((item) => {
-        const state = validity(item.validUntil);
-        return (
-          <tr key={item.id} style={{ borderBottom: "1px solid #eef2f7" }}>
-            <StrongCell>{item.employeeName}<small>{item.employeeRegistryNo || "-"}</small></StrongCell>
-            <Cell>{item.trainingTitle}</Cell><Cell>{item.certificateNo || "-"}</Cell>
-            <Cell>{formatDate(item.issueDate)}</Cell><Cell>{formatDate(item.validUntil)}</Cell>
-            <Cell><Badge state={state} /></Cell>
-            <Cell>{item.remoteFileUrl ? <a href={item.remoteFileUrl} target="_blank" rel="noreferrer">Görüntüle</a> : "-"}</Cell>
-          </tr>
-        );
-      })}
-    </Table>
-  );
-}
+      <section>
+        <SectionTitle
+          title="Son Sertifikalar"
+          subtitle="Çalışan bazlı sertifika arşivi."
+        />
 
-function WarningArea({ trainings, certificates }: { trainings: TrainingRecord[]; certificates: CertificateRecord[] }) {
-  if (!trainings.length && !certificates.length) return <Empty text="Aktif süre uyarısı bulunmuyor." />;
-
-  return (
-    <div style={{ display: "grid", gap: 12 }}>
-      {trainings.map((item) => <Warning key={`t-${item.id}`} title={item.trainingTitle} subtitle={`${item.employeeName} • Eğitim Katılımı`} date={item.validUntil} />)}
-      {certificates.map((item) => <Warning key={`c-${item.id}`} title={item.trainingTitle} subtitle={`${item.employeeName} • Sertifika ${item.certificateNo || ""}`} date={item.validUntil} />)}
+        <CertificateTable
+          records={certificates.slice(0, 8)}
+        />
+      </section>
     </div>
   );
 }
 
-function Warning({ title, subtitle, date }: { title: string; subtitle: string; date: number | null }) {
-  const state = validity(date);
+function SessionArchive({
+  sessions,
+  onPrint,
+}: {
+  sessions: TrainingSession[];
+  onPrint: (
+    session: TrainingSession
+  ) => void;
+}) {
+  if (!sessions.length) {
+    return (
+      <Empty text="Eğitim oturumu bulunamadı." />
+    );
+  }
+
   return (
-    <div style={{ borderRadius: 18, border: `1px solid ${state.border}`, background: state.bg, padding: 15, display: "flex", justifyContent: "space-between", gap: 12 }}>
-      <div><strong>{title}</strong><div style={{ color: "#64748b", marginTop: 4 }}>{subtitle}</div><div style={{ color: state.color, marginTop: 6 }}>Geçerlilik: {formatDate(date)}</div></div>
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      {sessions.map((session) => (
+        <article
+          key={session.key}
+          style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: 18,
+            padding: 16,
+            background: "#ffffff",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent:
+                "space-between",
+              gap: 14,
+            }}
+          >
+            <div>
+              <h3
+                style={{
+                  margin: 0,
+                  color: "#0f172a",
+                }}
+              >
+                {session.trainingTitle}
+              </h3>
+
+              <div
+                style={{
+                  marginTop: 6,
+                  color: "#64748b",
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                }}
+              >
+                {formatDate(
+                  session.trainingDate
+                )}
+                {" • "}
+                {session.trainingTimeText ||
+                  "Saat belirtilmedi"}
+                {" • "}
+                {session.trainingPlace ||
+                  "Yer belirtilmedi"}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 6,
+                  color: "#475569",
+                  fontSize: 13,
+                }}
+              >
+                Eğitmen:{" "}
+                <strong>
+                  {session.trainerName ||
+                    "-"}
+                </strong>
+                {session.trainerRole
+                  ? ` • ${session.trainerRole}`
+                  : ""}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                onPrint(session)
+              }
+              style={{
+                minHeight: 40,
+                borderRadius: 11,
+                border:
+                  "1px solid #bfdbfe",
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                padding: "0 13px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                fontWeight: 850,
+                cursor: "pointer",
+              }}
+            >
+              <Printer size={16} />
+              Katılım Formu / PDF
+            </button>
+          </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <Pill
+              label={`Katılımcı: ${session.participantCount}`}
+            />
+            <Pill
+              label={`Tamamlayan: ${session.completedCount}`}
+            />
+            <Pill
+              label={`Süre: ${session.durationMinutes || 0} dk`}
+            />
+            <Pill
+              label={
+                session.trainingType ||
+                "Tür belirtilmedi"
+              }
+            />
+          </div>
+
+          <details
+            style={{
+              marginTop: 14,
+              borderTop:
+                "1px solid #eef2f7",
+              paddingTop: 12,
+            }}
+          >
+            <summary
+              style={{
+                cursor: "pointer",
+                color: "#7f1d1d",
+                fontWeight: 850,
+              }}
+            >
+              Katılımcıları Göster
+            </summary>
+
+            <div
+              style={{
+                marginTop: 10,
+                overflowX: "auto",
+              }}
+            >
+              <table
+                style={{
+                  width: "100%",
+                  minWidth: 650,
+                  borderCollapse:
+                    "collapse",
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      background: "#f8fafc",
+                    }}
+                  >
+                    {[
+                      "Çalışan",
+                      "Sicil",
+                      "Durum",
+                      "Geçerlilik",
+                    ].map((header) => (
+                      <th
+                        key={header}
+                        style={headerStyle}
+                      >
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {session.records.map(
+                    (record) => (
+                      <tr
+                        key={record.id}
+                        style={{
+                          borderBottom:
+                            "1px solid #eef2f7",
+                        }}
+                      >
+                        <StrongCell>
+                          {
+                            record.employeeName
+                          }
+                        </StrongCell>
+                        <Cell>
+                          {record.employeeRegistryNo ||
+                            "-"}
+                        </Cell>
+                        <Cell>
+                          {record.completed
+                            ? "Tamamlandı"
+                            : "Bekliyor"}
+                        </Cell>
+                        <Cell>
+                          {formatDate(
+                            record.validUntil
+                          )}
+                        </Cell>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ParticipantTable({
+  records,
+}: {
+  records: TrainingRecord[];
+}) {
+  if (!records.length) {
+    return (
+      <Empty text="Katılımcı kaydı bulunamadı." />
+    );
+  }
+
+  return (
+    <Table
+      headers={[
+        "Çalışan",
+        "Eğitim",
+        "Tarih",
+        "Eğitmen",
+        "Yer",
+        "Süre",
+        "Durum",
+        "Geçerlilik",
+      ]}
+    >
+      {records.map((item) => {
+        const state = validity(
+          item.validUntil
+        );
+
+        return (
+          <tr
+            key={item.id}
+            style={{
+              borderBottom:
+                "1px solid #eef2f7",
+            }}
+          >
+            <StrongCell>
+              {item.employeeName}
+              <small>
+                {item.employeeRegistryNo ||
+                  "-"}
+              </small>
+            </StrongCell>
+
+            <Cell>
+              {item.trainingTitle}
+            </Cell>
+            <Cell>
+              {formatDate(
+                item.trainingDate
+              )}
+            </Cell>
+            <Cell>
+              {item.trainerName || "-"}
+            </Cell>
+            <Cell>
+              {item.trainingPlace || "-"}
+            </Cell>
+            <Cell>
+              {item.durationMinutes
+                ? `${item.durationMinutes} dk`
+                : "-"}
+            </Cell>
+            <Cell>
+              {item.completed
+                ? "Tamamlandı"
+                : "Bekliyor"}
+            </Cell>
+            <Cell>
+              <Badge state={state} />
+            </Cell>
+          </tr>
+        );
+      })}
+    </Table>
+  );
+}
+
+function DocumentArchive({
+  records,
+  sessions,
+  onPrintSession,
+}: {
+  records: TrainingRecord[];
+  sessions: TrainingSession[];
+  onPrintSession: (
+    session: TrainingSession
+  ) => void;
+}) {
+  if (!records.length) {
+    return (
+      <Empty text="Eğitim dokümanı veya katılım kaydı bulunamadı." />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 18,
+      }}
+    >
+      <section>
+        <SectionTitle
+          title="Oturum Çıktıları"
+          subtitle="Her oturum için yazdırılabilir katılım formu ve katılımcı listesi."
+        />
+
+        <div
+          style={{
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          {sessions.map((session) => (
+            <div
+              key={session.key}
+              style={{
+                border:
+                  "1px solid #e2e8f0",
+                borderRadius: 15,
+                padding: 13,
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent:
+                  "space-between",
+                gap: 10,
+              }}
+            >
+              <div>
+                <strong>
+                  {session.trainingTitle}
+                </strong>
+                <div
+                  style={{
+                    marginTop: 4,
+                    color: "#64748b",
+                    fontSize: 12,
+                  }}
+                >
+                  {formatDate(
+                    session.trainingDate
+                  )}{" "}
+                  • {session.participantCount}{" "}
+                  katılımcı
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onPrintSession(session)
+                }
+                style={{
+                  minHeight: 37,
+                  borderRadius: 10,
+                  border:
+                    "1px solid #bfdbfe",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  padding: "0 11px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontWeight: 850,
+                  cursor: "pointer",
+                }}
+              >
+                <Printer size={15} />
+                Katılım Formu
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle
+          title="Yüklenen Eğitim Belgeleri"
+          subtitle="Eğitim dokümanı, katılım formu ve eğitim kaydına bağlı sertifika dosyaları."
+        />
+
+        <Table
+          headers={[
+            "Çalışan",
+            "Eğitim",
+            "Eğitim Dokümanı",
+            "Katılım Formu",
+            "Sertifika Dosyası",
+          ]}
+        >
+          {records.map((item) => (
+            <tr
+              key={item.id}
+              style={{
+                borderBottom:
+                  "1px solid #eef2f7",
+              }}
+            >
+              <StrongCell>
+                {item.employeeName}
+              </StrongCell>
+              <Cell>
+                {item.trainingTitle}
+              </Cell>
+              <Cell>
+                <DocumentLink
+                  value={item.documentUri}
+                />
+              </Cell>
+              <Cell>
+                <DocumentLink
+                  value={item.attendanceUri}
+                />
+              </Cell>
+              <Cell>
+                <DocumentLink
+                  value={item.certificateUri}
+                />
+              </Cell>
+            </tr>
+          ))}
+        </Table>
+      </section>
+    </div>
+  );
+}
+
+function DocumentLink({
+  value,
+}: {
+  value: string;
+}) {
+  if (!value) {
+    return <span>-</span>;
+  }
+
+  if (isWebUrl(value)) {
+    return (
+      <a
+        href={value}
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          color: "#1d4ed8",
+          fontWeight: 850,
+        }}
+      >
+        Görüntüle
+      </a>
+    );
+  }
+
+  return (
+    <span
+      title={value}
+      style={{
+        color: "#b45309",
+        fontWeight: 800,
+      }}
+    >
+      App cihazında
+    </span>
+  );
+}
+
+function CertificateTable({
+  records,
+}: {
+  records: CertificateRecord[];
+}) {
+  if (!records.length) {
+    return (
+      <Empty text="Sertifika kaydı bulunamadı." />
+    );
+  }
+
+  return (
+    <Table
+      headers={[
+        "Çalışan",
+        "Eğitim",
+        "Sertifika No",
+        "Düzenlenme",
+        "Geçerlilik",
+        "Durum",
+        "Dosya",
+      ]}
+    >
+      {records.map((item) => {
+        const state = validity(
+          item.validUntil
+        );
+
+        return (
+          <tr
+            key={item.id}
+            style={{
+              borderBottom:
+                "1px solid #eef2f7",
+            }}
+          >
+            <StrongCell>
+              {item.employeeName}
+              <small>
+                {item.employeeRegistryNo ||
+                  "-"}
+              </small>
+            </StrongCell>
+            <Cell>
+              {item.trainingTitle}
+            </Cell>
+            <Cell>
+              {item.certificateNo || "-"}
+            </Cell>
+            <Cell>
+              {formatDate(item.issueDate)}
+            </Cell>
+            <Cell>
+              {formatDate(
+                item.validUntil
+              )}
+            </Cell>
+            <Cell>
+              <Badge state={state} />
+            </Cell>
+            <Cell>
+              {item.remoteFileUrl ? (
+                <a
+                  href={item.remoteFileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    color: "#1d4ed8",
+                    fontWeight: 850,
+                  }}
+                >
+                  Görüntüle
+                </a>
+              ) : (
+                "-"
+              )}
+            </Cell>
+          </tr>
+        );
+      })}
+    </Table>
+  );
+}
+
+function WarningArea({
+  trainings,
+  certificates,
+}: {
+  trainings: TrainingRecord[];
+  certificates: CertificateRecord[];
+}) {
+  if (
+    !trainings.length &&
+    !certificates.length
+  ) {
+    return (
+      <Empty text="Aktif süre uyarısı bulunmuyor." />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      {trainings.map((item) => (
+        <Warning
+          key={`training-${item.id}`}
+          title={item.trainingTitle}
+          subtitle={`${item.employeeName} • Eğitim Katılımı`}
+          date={item.validUntil}
+        />
+      ))}
+
+      {certificates.map((item) => (
+        <Warning
+          key={`certificate-${item.id}`}
+          title={item.trainingTitle}
+          subtitle={`${item.employeeName} • Sertifika ${item.certificateNo || ""}`}
+          date={item.validUntil}
+        />
+      ))}
+    </div>
+  );
+}
+
+function Warning({
+  title,
+  subtitle,
+  date,
+}: {
+  title: string;
+  subtitle: string;
+  date: number | null;
+}) {
+  const state = validity(date);
+
+  return (
+    <div
+      style={{
+        borderRadius: 18,
+        border: `1px solid ${state.border}`,
+        background: state.background,
+        padding: 15,
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent:
+          "space-between",
+        gap: 12,
+      }}
+    >
+      <div>
+        <strong>{title}</strong>
+        <div
+          style={{
+            color: "#64748b",
+            marginTop: 4,
+          }}
+        >
+          {subtitle}
+        </div>
+        <div
+          style={{
+            color: state.color,
+            marginTop: 6,
+            fontSize: 12,
+            fontWeight: 850,
+          }}
+        >
+          Geçerlilik: {formatDate(date)}
+        </div>
+      </div>
+
       <Badge state={state} />
     </div>
   );
 }
 
-function Badge({ state }: { state: ReturnType<typeof validity> }) {
-  return <span style={{ display: "inline-flex", marginTop: 4, borderRadius: 999, padding: "5px 8px", color: state.color, background: state.bg, border: `1px solid ${state.border}`, fontSize: 11, fontWeight: 900 }}>{state.label}</span>;
+function Badge({
+  state,
+}: {
+  state: ReturnType<typeof validity>;
+}) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        marginTop: 4,
+        borderRadius: 999,
+        padding: "5px 8px",
+        color: state.color,
+        background: state.background,
+        border: `1px solid ${state.border}`,
+        fontSize: 11,
+        fontWeight: 900,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {state.label}
+    </span>
+  );
 }
 
-function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
+function Pill({
+  label,
+}: {
+  label: string;
+}) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", minWidth: 1000, borderCollapse: "collapse" }}>
-        <thead><tr style={{ background: "#f8fafc" }}>{headers.map((item) => <th key={item} style={{ padding: "12px 10px", textAlign: "left", color: "#475569", fontSize: 12 }}>{item}</th>)}</tr></thead>
+    <span
+      style={{
+        borderRadius: 999,
+        padding: "6px 9px",
+        color: "#475569",
+        background: "#f8fafc",
+        border: "1px solid #e2e8f0",
+        fontSize: 11,
+        fontWeight: 850,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function SectionTitle({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div
+      style={{
+        marginBottom: 13,
+      }}
+    >
+      <h2
+        style={{
+          margin: 0,
+          color: "#0f172a",
+        }}
+      >
+        {title}
+      </h2>
+
+      <p
+        style={{
+          margin: "5px 0 0",
+          color: "#64748b",
+        }}
+      >
+        {subtitle}
+      </p>
+    </div>
+  );
+}
+
+function Table({
+  headers,
+  children,
+}: {
+  headers: string[];
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        overflowX: "auto",
+      }}
+    >
+      <table
+        style={{
+          width: "100%",
+          minWidth: 1000,
+          borderCollapse: "collapse",
+        }}
+      >
+        <thead>
+          <tr
+            style={{
+              background: "#f8fafc",
+            }}
+          >
+            {headers.map((item) => (
+              <th
+                key={item}
+                style={headerStyle}
+              >
+                {item}
+              </th>
+            ))}
+          </tr>
+        </thead>
+
         <tbody>{children}</tbody>
       </table>
     </div>
   );
 }
 
-function Cell({ children }: { children: React.ReactNode }) {
-  return <td style={{ padding: "13px 10px", color: "#475569", fontSize: 13 }}>{children}</td>;
+function Cell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <td style={cellStyle}>
+      {children}
+    </td>
+  );
 }
 
-function StrongCell({ children }: { children: React.ReactNode }) {
-  return <td style={{ padding: "13px 10px", color: "#0f172a", fontSize: 13, fontWeight: 900 }}>{children}</td>;
+function StrongCell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <td style={strongCellStyle}>
+      {children}
+    </td>
+  );
 }
 
-function Empty({ text }: { text: string }) {
-  return <div style={{ minHeight: 220, display: "grid", placeItems: "center", color: "#64748b", fontWeight: 850 }}>{text}</div>;
+function Empty({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div
+      style={{
+        minHeight: 220,
+        display: "grid",
+        placeItems: "center",
+        color: "#64748b",
+        fontWeight: 850,
+        textAlign: "center",
+      }}
+    >
+      {text}
+    </div>
+  );
 }
+
+const headerStyle: React.CSSProperties = {
+  padding: "12px 10px",
+  textAlign: "left",
+  color: "#475569",
+  fontSize: 12,
+  fontWeight: 900,
+};
+
+const cellStyle: React.CSSProperties = {
+  padding: "13px 10px",
+  color: "#475569",
+  fontSize: 13,
+};
+
+const strongCellStyle: React.CSSProperties = {
+  ...cellStyle,
+  color: "#0f172a",
+  fontWeight: 900,
+};
