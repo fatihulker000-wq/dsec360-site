@@ -731,7 +731,7 @@ export default function TrainingDocumentsPage() {
                 Dokümantasyona Dön
               </button>
 
-              <h1>Eğitim Arşivi</h1>
+              <h1>FATİH TEST 999</h1>
 
               <p>
                 Eğitimler modülünde oluşan oturum,
