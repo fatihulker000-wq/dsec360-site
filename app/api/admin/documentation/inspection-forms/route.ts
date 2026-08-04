@@ -170,13 +170,72 @@ export async function POST(req: Request) {
       : [];
 
     if (items.length) {
-      const { error } = await db.from("inspection_form_items").insert(items);
-      if (error) throw new Error(error.message);
+      const { data: insertedItems, error } =
+        await db
+          .from("inspection_form_items")
+          .insert(items)
+          .select("id");
+
+      if (error) {
+        await db
+          .from("inspection_forms")
+          .delete()
+          .eq("id", form.id);
+
+        throw new Error(error.message);
+      }
+
+      if (
+        !Array.isArray(insertedItems) ||
+        insertedItems.length !== items.length
+      ) {
+        await db
+          .from("inspection_forms")
+          .delete()
+          .eq("id", form.id);
+
+        throw new Error(
+          `Toplu madde kaydı doğrulanamadı. Beklenen: ${items.length}, kaydedilen: ${
+            Array.isArray(insertedItems)
+              ? insertedItems.length
+              : 0
+          }`
+        );
+      }
     }
 
-    await snapshot(form.id, "Form oluşturuldu.", clean(body.preparedBy));
+    const { count: savedItemCount, error: countError } =
+      await db
+        .from("inspection_form_items")
+        .select("id", {
+          count: "exact",
+          head: true,
+        })
+        .eq("form_id", form.id);
 
-    return NextResponse.json({ success: true, formId: form.id });
+    if (countError) {
+      throw new Error(countError.message);
+    }
+
+    await db
+      .from("inspection_forms")
+      .update({
+        item_count: savedItemCount ?? 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", form.id);
+
+    await snapshot(
+      form.id,
+      "Form oluşturuldu.",
+      clean(body.preparedBy)
+    );
+
+    return NextResponse.json({
+      success: true,
+      formId: form.id,
+      itemCount: savedItemCount ?? 0,
+    });
   } catch (error) {
     return NextResponse.json(
       {
@@ -255,11 +314,63 @@ export async function PUT(req: Request) {
       }));
 
       if (items.length) {
-        const { error: insertError } = await db
+        const {
+          data: insertedItems,
+          error: insertError,
+        } = await db
           .from("inspection_form_items")
-          .insert(items);
-        if (insertError) throw new Error(insertError.message);
+          .insert(items)
+          .select("id");
+
+        if (insertError) {
+          throw new Error(
+            insertError.message
+          );
+        }
+
+        if (
+          !Array.isArray(insertedItems) ||
+          insertedItems.length !==
+            items.length
+        ) {
+          throw new Error(
+            `Toplu madde güncellemesi doğrulanamadı. Beklenen: ${items.length}, kaydedilen: ${
+              Array.isArray(
+                insertedItems
+              )
+                ? insertedItems.length
+                : 0
+            }`
+          );
+        }
       }
+
+      const {
+        count: savedItemCount,
+        error: countError,
+      } = await db
+        .from("inspection_form_items")
+        .select("id", {
+          count: "exact",
+          head: true,
+        })
+        .eq("form_id", id);
+
+      if (countError) {
+        throw new Error(
+          countError.message
+        );
+      }
+
+      await db
+        .from("inspection_forms")
+        .update({
+          item_count:
+            savedItemCount ?? 0,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("id", id);
     }
 
     await snapshot(

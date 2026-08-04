@@ -511,52 +511,200 @@ export default function InspectionFormsPage() {
   };
 
   const importBulk = () => {
-    const imported: FormItem[] = bulkText
-      .split("\n")
+    const rawRows = bulkText
+      .split(/\r?\n/)
       .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line, index) => {
-        const c = line.split("|").map((value) => value.trim());
-        const risk = (c[5] || "MEDIUM").toUpperCase();
+      .filter(Boolean);
 
-        return {
-          orderNo: index + 1,
-          title: c[0] || "",
-          question: c[1] || c[0] || "",
-          expectedCondition: c[2] || "",
-          requiredAction: c[3] || "",
-          legalReference: c[4] || "",
-          riskLevel: ["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(risk)
-            ? (risk as FormItem["riskLevel"])
-            : "MEDIUM",
-          photoRequired: ["EVET", "TRUE", "1"].includes(
-            (c[6] || "").toLocaleUpperCase("tr-TR")
-          ),
-          explanationRequired: ["EVET", "TRUE", "1"].includes(
-            (c[7] || "").toLocaleUpperCase("tr-TR")
-          ),
-          actionRequired: ["EVET", "TRUE", "1"].includes(
-            (c[8] || "").toLocaleUpperCase("tr-TR")
-          ),
-          score: Number(c[9] || 0),
-          weight: Number(c[10] || 1),
-        };
-      });
+    if (!rawRows.length) {
+      setError(
+        "Toplu aktarım alanında madde bulunamadı."
+      );
+      return;
+    }
+
+    const parseColumns = (
+      line: string
+    ): string[] => {
+      if (line.includes("|")) {
+        return line
+          .split("|")
+          .map((value) => value.trim());
+      }
+
+      if (line.includes("\t")) {
+        return line
+          .split("\t")
+          .map((value) => value.trim());
+      }
+
+      if (line.includes(";")) {
+        return line
+          .split(";")
+          .map((value) => value.trim());
+      }
+
+      return [line];
+    };
+
+    const normalizeRisk = (
+      value: string
+    ): FormItem["riskLevel"] => {
+      const risk = value
+        .trim()
+        .toLocaleUpperCase("tr-TR");
+
+      const riskMap: Record<
+        string,
+        FormItem["riskLevel"]
+      > = {
+        LOW: "LOW",
+        DÜŞÜK: "LOW",
+        DUSUK: "LOW",
+        MEDIUM: "MEDIUM",
+        ORTA: "MEDIUM",
+        HIGH: "HIGH",
+        YÜKSEK: "HIGH",
+        YUKSEK: "HIGH",
+        CRITICAL: "CRITICAL",
+        KRİTİK: "CRITICAL",
+        KRITIK: "CRITICAL",
+      };
+
+      return riskMap[risk] || "MEDIUM";
+    };
+
+    const toBoolean = (
+      value: string
+    ): boolean =>
+      [
+        "EVET",
+        "TRUE",
+        "1",
+        "YES",
+        "X",
+      ].includes(
+        value
+          .trim()
+          .toLocaleUpperCase("tr-TR")
+      );
+
+    const firstColumns =
+      parseColumns(rawRows[0]);
+
+    const firstText = firstColumns
+      .join(" ")
+      .toLocaleLowerCase("tr-TR");
+
+    const hasHeader =
+      firstText.includes("başlık") &&
+      (
+        firstText.includes("soru") ||
+        firstText.includes("önlem")
+      );
+
+    const dataRows = hasHeader
+      ? rawRows.slice(1)
+      : rawRows;
+
+    const imported: FormItem[] =
+      dataRows
+        .map((line, index) => {
+          const columns =
+            parseColumns(line);
+
+          const title =
+            columns[0] || "";
+
+          const question =
+            columns[1] ||
+            columns[0] ||
+            "";
+
+          if (
+            !title.trim() &&
+            !question.trim()
+          ) {
+            return null;
+          }
+
+          return {
+            orderNo: index + 1,
+            title,
+            question,
+            expectedCondition:
+              columns[2] || "",
+            requiredAction:
+              columns[3] || "",
+            legalReference:
+              columns[4] || "",
+            riskLevel:
+              normalizeRisk(
+                columns[5] || "MEDIUM"
+              ),
+            photoRequired:
+              toBoolean(
+                columns[6] || ""
+              ),
+            explanationRequired:
+              toBoolean(
+                columns[7] || ""
+              ),
+            actionRequired:
+              toBoolean(
+                columns[8] || ""
+              ),
+            score:
+              Number(
+                String(
+                  columns[9] || "0"
+                ).replace(",", ".")
+              ) || 0,
+            weight:
+              Number(
+                String(
+                  columns[10] || "1"
+                ).replace(",", ".")
+              ) || 1,
+          } satisfies FormItem;
+        })
+        .filter(
+          (
+            item
+          ): item is FormItem =>
+            item !== null
+        );
+
+    if (!imported.length) {
+      setError(
+        "Aktarılabilecek geçerli denetim maddesi bulunamadı."
+      );
+      return;
+    }
 
     setEditor((current) => {
-      const existing = current.items.filter(
-        (item) => item.title.trim() || item.question.trim()
-      );
+      const existing =
+        current.items.filter(
+          (item) =>
+            item.title.trim() ||
+            item.question.trim()
+        );
 
       return {
         ...current,
-        items: [...existing, ...imported].map((item, index) => ({
-          ...item,
-          orderNo: index + 1,
-        })),
+        items: [
+          ...existing,
+          ...imported,
+        ].map(
+          (item, index) => ({
+            ...item,
+            orderNo: index + 1,
+          })
+        ),
       };
     });
 
+    setError("");
     setBulkText("");
     setBulkOpen(false);
   };
