@@ -120,7 +120,6 @@ type Editor = {
   title: string;
   code: string;
   category: string;
-  formType: InspectionForm["form_type"];
   auditModes: AuditMode[];
   description: string;
   status: InspectionForm["status"];
@@ -151,7 +150,6 @@ const newEditor = (firmId = ""): Editor => ({
   title: "",
   code: "",
   category: "GENEL",
-  formType: "STANDARD",
   auditModes: [
     "CLASSIC",
     "PHOTO",
@@ -174,7 +172,6 @@ function formToEditor(form: InspectionForm): Editor {
     title: form.title,
     code: form.code,
     category: form.category,
-    formType: form.form_type,
     auditModes:
       Array.isArray(form.audit_modes) &&
       form.audit_modes.length
@@ -250,7 +247,6 @@ export default function InspectionFormsPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editor, setEditor] = useState<Editor>(newEditor());
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -398,11 +394,11 @@ export default function InspectionFormsPage() {
 
       return (
         (!q || text.includes(q)) &&
-        (!statusFilter || form.status === statusFilter) &&
-        (!typeFilter || form.form_type === typeFilter)
+        (!statusFilter ||
+          form.status === statusFilter)
       );
     });
-  }, [forms, search, statusFilter, typeFilter]);
+  }, [forms, search, statusFilter]);
 
   const filteredReports =
     useMemo(() => {
@@ -654,6 +650,15 @@ export default function InspectionFormsPage() {
       if (!editor.auditModes.length) {
         throw new Error(
           "En az bir denetim çeşidi seçilmelidir."
+        );
+      }
+
+      if (
+        editor.visibility === "FIRM" &&
+        !editor.firmId
+      ) {
+        throw new Error(
+          "Firma bazlı form için firma seçilmelidir."
         );
       }
 
@@ -961,7 +966,13 @@ export default function InspectionFormsPage() {
           <button
             className="whiteButton"
             onClick={() => {
-              setEditor(newEditor(companyId));
+              setEditor(
+  newEditor(
+    companyId ||
+      companies[0]?.id ||
+      ""
+  )
+);
               setEditorOpen(true);
             }}
           >
@@ -1047,14 +1058,6 @@ export default function InspectionFormsPage() {
           <option value="PUBLISHED">Yayında</option>
           <option value="REVISION">Revizyonda</option>
           <option value="PASSIVE">Pasif</option>
-        </select>
-
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-          <option value="">Tüm Türler</option>
-          <option value="STANDARD">Standart</option>
-          <option value="PHOTO">Fotoğraflı</option>
-          <option value="SCORING">Puanlamalı</option>
-          <option value="ELMERI">Elmeri</option>
         </select>
 
         <label className="search">
@@ -1480,32 +1483,22 @@ export default function InspectionFormsPage() {
                     setEditor((c) => ({ ...c, title: value }))
                   }
                 />
-                <Field
-                  label="Form Kodu"
-                  value={editor.code}
-                  onChange={(value) => setEditor((c) => ({ ...c, code: value }))}
-                />
+                <div className="field">
+                  <span>Form Kodu</span>
+                  <input
+                    value={
+                      editor.code ||
+                      "Kaydedildiğinde otomatik oluşturulur"
+                    }
+                    readOnly
+                    disabled
+                  />
+                </div>
                 <Field
                   label="Kategori"
                   value={editor.category}
                   onChange={(value) =>
                     setEditor((c) => ({ ...c, category: value }))
-                  }
-                />
-                <SelectField
-                  label="Form Türü"
-                  value={editor.formType}
-                  options={[
-                    ["STANDARD", "Standart"],
-                    ["PHOTO", "Fotoğraflı"],
-                    ["SCORING", "Puanlamalı"],
-                    ["ELMERI", "Elmeri"],
-                  ]}
-                  onChange={(value) =>
-                    setEditor((c) => ({
-                      ...c,
-                      formType: value as Editor["formType"],
-                    }))
                   }
                 />
                 <div className="wide auditModeSelector">
@@ -1575,20 +1568,114 @@ export default function InspectionFormsPage() {
                   </div>
                 </div>
 
-                <SelectField
-                  label="Görünürlük"
-                  value={editor.visibility}
-                  options={[
-                    ["FIRM", "Seçili Firma"],
-                    ["GLOBAL", "Tüm Firmalar"],
-                  ]}
-                  onChange={(value) =>
-                    setEditor((c) => ({
-                      ...c,
-                      visibility: value as Editor["visibility"],
-                    }))
-                  }
-                />
+                <div className="wide visibilitySelector">
+                  <div className="auditModeHeader">
+                    <span>Görünürlük</span>
+                    <small>
+                      Tüm firmalar veya yalnızca
+                      seçilen firma için yayınlayın.
+                    </small>
+                  </div>
+
+                  <div className="visibilityGrid">
+                    <label
+                      className={`auditModeOption ${
+                        editor.visibility ===
+                        "GLOBAL"
+                          ? "selected"
+                          : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="visibility"
+                        checked={
+                          editor.visibility ===
+                          "GLOBAL"
+                        }
+                        onChange={() =>
+                          setEditor(
+                            (current) => ({
+                              ...current,
+                              visibility:
+                                "GLOBAL",
+                              firmId: "",
+                            })
+                          )
+                        }
+                      />
+                      <span>Tüm Firmalar</span>
+                    </label>
+
+                    <label
+                      className={`auditModeOption ${
+                        editor.visibility ===
+                        "FIRM"
+                          ? "selected"
+                          : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="visibility"
+                        checked={
+                          editor.visibility ===
+                          "FIRM"
+                        }
+                        onChange={() =>
+                          setEditor(
+                            (current) => ({
+                              ...current,
+                              visibility:
+                                "FIRM",
+                              firmId:
+                                current.firmId ||
+                                companyId ||
+                                companies[0]
+                                  ?.id ||
+                                "",
+                            })
+                          )
+                        }
+                      />
+                      <span>Firma Bazlı</span>
+                    </label>
+                  </div>
+
+                  {editor.visibility ===
+                  "FIRM" ? (
+                    <label className="field firmPicker">
+                      <span>Firma</span>
+                      <select
+                        value={editor.firmId}
+                        onChange={(event) =>
+                          setEditor(
+                            (current) => ({
+                              ...current,
+                              firmId:
+                                event.target.value,
+                            })
+                          )
+                        }
+                      >
+                        <option value="">
+                          Firma seçin
+                        </option>
+
+                        {companies.map(
+                          (company) => (
+                            <option
+                              key={company.id}
+                              value={company.id}
+                            >
+                              {company.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+                  ) : null}
+                </div>
                 <SelectField
                   label="Durum"
                   value={editor.status}
@@ -2169,6 +2256,55 @@ export default function InspectionFormsPage() {
           font-weight: 800;
         }
 
+        .visibilitySelector {
+          display: grid;
+          gap: 12px;
+          padding: 14px;
+          border: 1px solid #e5e7eb;
+          border-radius: 14px;
+          background: #f8fafc;
+        }
+
+        .visibilityGrid {
+          display: grid;
+          grid-template-columns:
+            repeat(2,minmax(0,1fr));
+          gap: 8px;
+        }
+
+        .firmPicker {
+          display: grid;
+          gap: 6px;
+        }
+
+        .firmPicker select {
+          width: 100%;
+          min-height: 44px;
+          padding: 0 12px;
+          border: 1px solid #cbd5e1;
+          border-radius: 11px;
+          background: #ffffff;
+          color: #172033;
+        }
+
+        .formModeBadges {
+          grid-column: 1 / -1;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 6px;
+        }
+
+        .formModeBadges span {
+          padding: 5px 8px;
+          border-radius: 999px;
+          color: #7f1d1d;
+          background: #fff1f2;
+          border: 1px solid #fecdd3;
+          font-size: 10px;
+          font-weight: 900;
+        }
+
         .auditModeSelector {
           display: grid;
           gap: 10px;
@@ -2434,7 +2570,7 @@ export default function InspectionFormsPage() {
         .spin { animation:spin .9s linear infinite; }
         @keyframes spin { to { transform:rotate(360deg); } }
         @media(max-width:1100px){ .metrics{grid-template-columns:repeat(3,1fr)} .toolbar{grid-template-columns:1fr 1fr} }
-        @media(max-width:720px){ .page{padding:12px} .auditModeGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
+        @media(max-width:720px){ .page{padding:12px} .auditModeGrid,.visibilityGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
       `}</style>
     </main>
   );

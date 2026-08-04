@@ -93,6 +93,31 @@ function normalizeItem(item: ItemInput, index: number) {
   };
 }
 
+async function nextFormCode(): Promise<string> {
+  const db = supabase();
+
+  const { data, error } =
+    await db.rpc(
+      "next_inspection_form_code"
+    );
+
+  if (error) {
+    throw new Error(
+      `Form kodu üretilemedi: ${error.message}`
+    );
+  }
+
+  const code = clean(data);
+
+  if (!code) {
+    throw new Error(
+      "Form kodu üretilemedi."
+    );
+  }
+
+  return code;
+}
+
 async function snapshot(formId: string, note: string, by: string) {
   const db = supabase();
   const [formResult, itemResult] = await Promise.all([
@@ -142,7 +167,62 @@ export async function GET(req: Request) {
     const { data, error } = await query;
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ success: true, forms: data ?? [] });
+    const forms =
+      Array.isArray(data)
+        ? data
+        : [];
+
+    const formIds =
+      forms
+        .map((form: any) =>
+          clean(form.id)
+        )
+        .filter(Boolean);
+
+    const usageMap =
+      new Map<string, number>();
+
+    if (formIds.length) {
+      const { data: usageRows } =
+        await db
+          .from(
+            "inspection_report_archive"
+          )
+          .select("form_id")
+          .in("form_id", formIds);
+
+      (
+        Array.isArray(usageRows)
+          ? usageRows
+          : []
+      ).forEach((row: any) => {
+        const formId =
+          clean(row.form_id);
+
+        if (!formId) return;
+
+        usageMap.set(
+          formId,
+          (
+            usageMap.get(formId) ||
+            0
+          ) + 1
+        );
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      forms: forms.map(
+        (form: any) => ({
+          ...form,
+          usage_count:
+            usageMap.get(
+              clean(form.id)
+            ) || 0,
+        })
+      ),
+    });
   } catch (error) {
     return NextResponse.json(
       {
@@ -170,24 +250,47 @@ export async function POST(req: Request) {
       ? "GLOBAL"
       : "FIRM";
     const status = clean(body.status).toUpperCase();
-    const formType = clean(body.formType).toUpperCase();
     const auditModes =
       normalizeAuditModes(
         body.auditModes
       );
+
+    const selectedFirmId =
+      clean(body.firmId);
+
+    if (
+      visibility === "FIRM" &&
+      !selectedFirmId
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Firma bazlı form için firma seçilmelidir.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const generatedCode =
+      await nextFormCode();
+
     const db = supabase();
 
     const { data: form, error: formError } = await db
       .from("inspection_forms")
       .insert({
-        firm_id: visibility === "GLOBAL" ? null : clean(body.firmId) || null,
+        firm_id:
+          visibility === "GLOBAL"
+            ? null
+            : selectedFirmId,
         visibility,
         title,
-        code: clean(body.code),
-        category: clean(body.category) || "GENEL",
-        form_type: ["STANDARD", "PHOTO", "SCORING", "ELMERI"].includes(formType)
-          ? formType
-          : "STANDARD",
+        code: generatedCode,
+        category:
+          clean(body.category) ||
+          "GENEL",
+        form_type: "STANDARD",
         description: clean(body.description),
         audit_modes: auditModes,
         status: ["DRAFT", "PUBLISHED", "REVISION", "PASSIVE"].includes(status)
@@ -310,25 +413,48 @@ export async function PUT(req: Request) {
     const visibility = clean(body.visibility).toUpperCase() === "GLOBAL"
       ? "GLOBAL"
       : "FIRM";
-    const status = clean(body.status).toUpperCase();
-    const formType = clean(body.formType).toUpperCase();
+    const status =
+      clean(body.status).toUpperCase();
+
     const auditModes =
       normalizeAuditModes(
         body.auditModes ??
           current.audit_modes
       );
 
+    const selectedFirmId =
+      clean(body.firmId);
+
+    if (
+      visibility === "FIRM" &&
+      !selectedFirmId
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Firma bazlı form için firma seçilmelidir.",
+        },
+        { status: 400 }
+      );
+    }
+
     const { error: updateError } = await db
       .from("inspection_forms")
       .update({
-        firm_id: visibility === "GLOBAL" ? null : clean(body.firmId) || null,
+        firm_id:
+          visibility === "GLOBAL"
+            ? null
+            : selectedFirmId,
         visibility,
-        title: clean(body.title) || current.title,
-        code: clean(body.code),
-        category: clean(body.category) || "GENEL",
-        form_type: ["STANDARD", "PHOTO", "SCORING", "ELMERI"].includes(formType)
-          ? formType
-          : current.form_type,
+        title:
+          clean(body.title) ||
+          current.title,
+        code: current.code,
+        category:
+          clean(body.category) ||
+          "GENEL",
+        form_type: "STANDARD",
         description: clean(body.description),
         audit_modes: auditModes,
         status: ["DRAFT", "PUBLISHED", "REVISION", "PASSIVE"].includes(status)
@@ -460,12 +586,16 @@ export async function PATCH(req: Request) {
         .single();
       if (error) throw new Error(error.message);
 
+      const copyCode =
+        await nextFormCode();
+
       const { data: copy, error: copyError } = await db
         .from("inspection_forms")
         .insert({
           firm_id: source.firm_id,
           visibility: source.visibility,
           title: `${source.title} - Kopya`,
+          code: copyCode,
           category: source.category,
           form_type: source.form_type,
           audit_modes:
