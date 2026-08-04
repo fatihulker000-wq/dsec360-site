@@ -355,28 +355,80 @@ export async function POST(req: Request) {
 
     const supabase = getSupabase();
 
-    const { data, error } =
-      await supabase
+    const {
+      data: existing,
+      error: findError,
+    } = await supabase
+      .from(
+        "inspection_report_archive"
+      )
+      .select("id")
+      .eq(
+        "inspection_remote_id",
+        inspectionRemoteId
+      )
+      .maybeSingle();
+
+    if (findError) {
+      throw new Error(
+        findError.message
+      );
+    }
+
+    let data:
+      Record<string, unknown>;
+
+    if (existing?.id) {
+      const {
+        data: updated,
+        error: updateError,
+      } = await supabase
         .from(
           "inspection_report_archive"
         )
-        .upsert(payload, {
-          onConflict:
-            "inspection_remote_id",
-        })
+        .update(payload)
+        .eq("id", existing.id)
         .select("*")
         .single();
 
-    if (error) {
-      throw new Error(error.message);
+      if (updateError) {
+        throw new Error(
+          updateError.message
+        );
+      }
+
+      data = updated;
+    } else {
+      const {
+        data: inserted,
+        error: insertError,
+      } = await supabase
+        .from(
+          "inspection_report_archive"
+        )
+        .insert(payload)
+        .select("*")
+        .single();
+
+      if (insertError) {
+        throw new Error(
+          insertError.message
+        );
+      }
+
+      data = inserted;
     }
 
     return NextResponse.json({
       success: true,
-      reportId: data.id,
+      reportId:
+        clean(data.id),
       inspectionRemoteId:
-        data.inspection_remote_id,
-      updatedAt: data.updated_at,
+        clean(
+          data.inspection_remote_id
+        ),
+      updatedAt:
+        clean(data.updated_at),
     });
   } catch (error) {
     return NextResponse.json(
