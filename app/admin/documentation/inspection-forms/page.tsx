@@ -20,6 +20,10 @@ import {
   Trash2,
   Upload,
   X,
+  BarChart3,
+  CalendarDays,
+  Download,
+  UserRound,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -71,6 +75,35 @@ type InspectionForm = {
     score: number;
     weight: number;
   }>;
+};
+
+type InspectionReport = {
+  id: string;
+  firm_id: string;
+  form_id: string | null;
+  inspection_remote_id: string | null;
+  form_title: string;
+  inspector_name: string;
+  inspection_date: string | null;
+  compliance_rate: number | null;
+  total_item_count: number;
+  compliant_count: number;
+  partial_count: number;
+  non_compliant_count: number;
+  critical_count: number;
+  report_status: string;
+  generated_pdf_url: string | null;
+  signed_pdf_url: string | null;
+  created_at: string;
+  updated_at: string;
+  form?: {
+    id: string;
+    title: string;
+    code: string;
+    category: string;
+    form_type: string;
+    version_no: number;
+  } | null;
 };
 
 type Editor = {
@@ -181,6 +214,14 @@ export default function InspectionFormsPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [preview, setPreview] = useState<InspectionForm | null>(null);
+  const [activeTab, setActiveTab] =
+    useState<"FORMS" | "REPORTS">("FORMS");
+  const [reports, setReports] =
+    useState<InspectionReport[]>([]);
+  const [reportsLoading, setReportsLoading] =
+    useState(false);
+  const [reportSearch, setReportSearch] =
+    useState("");
 
   const loadCompanies = useCallback(async () => {
     const response = await fetch("/api/admin/companies", {
@@ -244,6 +285,62 @@ export default function InspectionFormsPage() {
     void loadForms();
   }, [loadForms]);
 
+  const loadReports =
+    useCallback(async () => {
+      try {
+        setReportsLoading(true);
+
+        const query =
+          new URLSearchParams();
+
+        if (companyId) {
+          query.set(
+            "firmId",
+            companyId
+          );
+        }
+
+        const response = await fetch(
+          `/api/admin/documentation/inspection-reports?${query.toString()}`,
+          {
+            credentials: "include",
+            cache: "no-store",
+          }
+        );
+
+        const json = await response
+          .json()
+          .catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            json.detail ||
+              json.error ||
+              "Denetim raporları alınamadı."
+          );
+        }
+
+        setReports(
+          Array.isArray(json.reports)
+            ? json.reports
+            : []
+        );
+      } catch (reportError) {
+        setReports([]);
+        setError(
+          reportError instanceof Error
+            ? reportError.message
+            : "Denetim raporları yüklenemedi."
+        );
+      } finally {
+        setReportsLoading(false);
+      }
+    }, [companyId]);
+
+  useEffect(() => {
+    void loadReports();
+  }, [loadReports]);
+
   const filteredForms = useMemo(() => {
     const q = search.trim().toLocaleLowerCase("tr-TR");
 
@@ -265,6 +362,28 @@ export default function InspectionFormsPage() {
     });
   }, [forms, search, statusFilter, typeFilter]);
 
+  const filteredReports =
+    useMemo(() => {
+      const query = reportSearch
+        .trim()
+        .toLocaleLowerCase("tr-TR");
+
+      if (!query) {
+        return reports;
+      }
+
+      return reports.filter((report) =>
+        [
+          report.form_title,
+          report.inspector_name,
+          report.report_status,
+        ]
+          .join(" ")
+          .toLocaleLowerCase("tr-TR")
+          .includes(query)
+      );
+    }, [reports, reportSearch]);
+
   const metrics = useMemo(
     () => ({
       total: forms.length,
@@ -273,8 +392,13 @@ export default function InspectionFormsPage() {
       revision: forms.filter((f) => f.status === "REVISION").length,
       passive: forms.filter((f) => f.status === "PASSIVE").length,
       items: forms.reduce((sum, f) => sum + Number(f.item_count || 0), 0),
+      reports: reports.length,
+      signedReports: reports.filter(
+        (report) =>
+          !!report.signed_pdf_url
+      ).length,
     }),
-    [forms]
+    [forms, reports]
   );
 
   const updateItem = (index: number, patch: Partial<FormItem>) => {
@@ -492,7 +616,41 @@ export default function InspectionFormsPage() {
         </section>
       ) : null}
 
-      <section className="toolbar">
+      <section className="moduleTabs">
+        <button
+          className={
+            activeTab === "FORMS"
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            setActiveTab("FORMS")
+          }
+        >
+          <ClipboardCheck size={17} />
+          Form Kütüphanesi
+          <span>{forms.length}</span>
+        </button>
+
+        <button
+          className={
+            activeTab === "REPORTS"
+              ? "active"
+              : ""
+          }
+          onClick={() =>
+            setActiveTab("REPORTS")
+          }
+        >
+          <Archive size={17} />
+          Denetim Raporları
+          <span>{reports.length}</span>
+        </button>
+      </section>
+
+      {activeTab === "FORMS" ? (
+        <>
+          <section className="toolbar">
         <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
           {companies.map((company) => (
             <option key={company.id} value={company.id}>
@@ -628,7 +786,241 @@ export default function InspectionFormsPage() {
             </article>
           ))}
         </div>
-      </section>
+          </section>
+        </>
+      ) : (
+        <>
+          <section className="reportToolbar">
+            <label className="search">
+              <Search size={16} />
+              <input
+                value={reportSearch}
+                onChange={(event) =>
+                  setReportSearch(
+                    event.target.value
+                  )
+                }
+                placeholder="Rapor, form veya denetçi ara..."
+              />
+            </label>
+
+            <button
+              onClick={() =>
+                void loadReports()
+              }
+            >
+              <RefreshCw size={16} />
+              Raporları Yenile
+            </button>
+          </section>
+
+          <section className="reportSummary">
+            <MetricLight
+              title="Toplam Rapor"
+              value={metrics.reports}
+              icon={<Archive size={18} />}
+            />
+
+            <MetricLight
+              title="İmzalı Rapor"
+              value={metrics.signedReports}
+              icon={
+                <CheckCircle2 size={18} />
+              }
+            />
+
+            <MetricLight
+              title="İmza Bekleyen"
+              value={
+                metrics.reports -
+                metrics.signedReports
+              }
+              icon={
+                <AlertTriangle size={18} />
+              }
+            />
+          </section>
+
+          <section className="reportArchive">
+            <div className="sectionTitle">
+              <div>
+                <h2>
+                  Denetim Sonuç Raporları
+                </h2>
+
+                <p>
+                  Tamamlanan saha
+                  denetimlerinin sonuç ve
+                  PDF arşivi.
+                </p>
+              </div>
+
+              <strong>
+                {filteredReports.length} rapor
+              </strong>
+            </div>
+
+            {reportsLoading ? (
+              <div className="empty">
+                <Loader2
+                  className="spin"
+                />
+                Denetim raporları
+                yükleniyor...
+              </div>
+            ) : null}
+
+            {!reportsLoading &&
+            !filteredReports.length ? (
+              <div className="empty">
+                <Archive size={42} />
+                Henüz tamamlanmış denetim
+                raporu bulunmuyor.
+              </div>
+            ) : null}
+
+            <div className="reportGrid">
+              {filteredReports.map(
+                (report) => (
+                  <article
+                    key={report.id}
+                    className="reportCard"
+                  >
+                    <div className="reportTop">
+                      <div>
+                        <h3>
+                          {report.form_title}
+                        </h3>
+
+                        <p>
+                          {report.form?.code ||
+                            "Form kodu yok"}
+                        </p>
+                      </div>
+
+                      <span
+                        className={
+                          report.signed_pdf_url
+                            ? "reportStatus signed"
+                            : "reportStatus pending"
+                        }
+                      >
+                        {report.signed_pdf_url
+                          ? "İmzalı"
+                          : "İmza Bekliyor"}
+                      </span>
+                    </div>
+
+                    <div className="reportFacts">
+                      <span>
+                        <CalendarDays size={15} />
+                        {report.inspection_date
+                          ? new Date(
+                              report.inspection_date
+                            ).toLocaleDateString(
+                              "tr-TR"
+                            )
+                          : "-"}
+                      </span>
+
+                      <span>
+                        <UserRound size={15} />
+                        {report.inspector_name ||
+                          "Denetçi belirtilmedi"}
+                      </span>
+
+                      <span>
+                        <ClipboardCheck size={15} />
+                        {
+                          report.total_item_count
+                        }{" "}
+                        madde
+                      </span>
+
+                      <span>
+                        <BarChart3 size={15} />
+                        {report.compliance_rate ==
+                        null
+                          ? "-"
+                          : `%${Number(
+                              report.compliance_rate
+                            ).toFixed(1)}`}
+                      </span>
+                    </div>
+
+                    <div className="resultNumbers">
+                      <span className="ok">
+                        Uygun
+                        <b>
+                          {
+                            report.compliant_count
+                          }
+                        </b>
+                      </span>
+
+                      <span className="partial">
+                        Kısmen
+                        <b>
+                          {report.partial_count}
+                        </b>
+                      </span>
+
+                      <span className="bad">
+                        Uygunsuz
+                        <b>
+                          {
+                            report.non_compliant_count
+                          }
+                        </b>
+                      </span>
+
+                      <span className="critical">
+                        Kritik
+                        <b>
+                          {report.critical_count}
+                        </b>
+                      </span>
+                    </div>
+
+                    <div className="reportActions">
+                      {report.generated_pdf_url ? (
+                        <a
+                          href={
+                            report.generated_pdf_url
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Eye size={16} />
+                          Raporu Aç
+                        </a>
+                      ) : (
+                        <span>
+                          PDF henüz
+                          oluşturulmadı
+                        </span>
+                      )}
+
+                      {report.signed_pdf_url ? (
+                        <a
+                          href={
+                            report.signed_pdf_url
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Download size={16} />
+                          İmzalı Rapor
+                        </a>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              )}
+            </div>
+          </section>
+        </>
+      )}
 
       {editorOpen ? (
         <div className="backdrop">
@@ -1010,6 +1402,213 @@ export default function InspectionFormsPage() {
         .actions .publish { color:#047857; background:#ecfdf5; }
         .actions .delete { color:#b91c1c; background:#fef2f2; }
         .empty { min-height:240px; display:grid; place-items:center; align-content:center; gap:9px; color:#64748b; }
+        .moduleTabs {
+          max-width: 1540px;
+          margin: 0 auto 18px;
+          display: flex;
+          gap: 9px;
+        }
+
+        .moduleTabs button {
+          min-height: 44px;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 0 14px;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          color: #475569;
+          background: #ffffff;
+          font-weight: 850;
+        }
+
+        .moduleTabs button.active {
+          border-color: #7f1d1d;
+          color: #ffffff;
+          background: #7f1d1d;
+        }
+
+        .moduleTabs span {
+          min-width: 24px;
+          border-radius: 999px;
+          padding: 3px 7px;
+          background: rgba(148,163,184,.18);
+          text-align: center;
+          font-size: 11px;
+        }
+
+        .reportToolbar,
+        .reportSummary,
+        .reportArchive {
+          max-width: 1540px;
+          margin: 0 auto 18px;
+        }
+
+        .reportToolbar {
+          border: 1px solid #e5e7eb;
+          border-radius: 18px;
+          padding: 12px;
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 10px;
+          background: #ffffff;
+        }
+
+        .reportToolbar button {
+          min-height: 42px;
+          border: 1px solid #fecaca;
+          border-radius: 11px;
+          padding: 0 13px;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          color: #7f1d1d;
+          background: #fff;
+          font-weight: 850;
+        }
+
+        .reportSummary {
+          display: grid;
+          grid-template-columns: repeat(3,1fr);
+          gap: 12px;
+        }
+
+        .reportArchive {
+          border: 1px solid #e5e7eb;
+          border-radius: 21px;
+          padding: 18px;
+          background: #ffffff;
+        }
+
+        .reportGrid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill,minmax(330px,1fr));
+          gap: 14px;
+        }
+
+        .reportCard {
+          border: 1px solid #e2e8f0;
+          border-radius: 18px;
+          padding: 15px;
+          background: #fff;
+        }
+
+        .reportTop {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 10px;
+        }
+
+        .reportTop h3 {
+          margin: 0;
+        }
+
+        .reportTop p {
+          margin: 4px 0 0;
+          color: #64748b;
+          font-size: 12px;
+        }
+
+        .reportStatus {
+          border-radius: 999px;
+          padding: 6px 9px;
+          font-size: 11px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+
+        .reportStatus.signed {
+          color: #047857;
+          background: #ecfdf5;
+        }
+
+        .reportStatus.pending {
+          color: #92400e;
+          background: #fffbeb;
+        }
+
+        .reportFacts {
+          margin-top: 13px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+
+        .reportFacts span {
+          border-radius: 10px;
+          padding: 8px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          color: #475569;
+          background: #f8fafc;
+          font-size: 12px;
+        }
+
+        .resultNumbers {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: repeat(4,1fr);
+          gap: 6px;
+        }
+
+        .resultNumbers span {
+          border-radius: 9px;
+          padding: 7px;
+          display: grid;
+          gap: 4px;
+          font-size: 10px;
+          text-align: center;
+        }
+
+        .resultNumbers b {
+          font-size: 16px;
+        }
+
+        .resultNumbers .ok {
+          color: #047857;
+          background: #ecfdf5;
+        }
+
+        .resultNumbers .partial {
+          color: #a16207;
+          background: #fefce8;
+        }
+
+        .resultNumbers .bad {
+          color: #b91c1c;
+          background: #fef2f2;
+        }
+
+        .resultNumbers .critical {
+          color: #7f1d1d;
+          background: #fee2e2;
+        }
+
+        .reportActions {
+          margin-top: 13px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .reportActions a,
+        .reportActions > span {
+          min-height: 37px;
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          padding: 0 10px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          color: #7f1d1d;
+          background: #fff7ed;
+          font-size: 12px;
+          font-weight: 850;
+          text-decoration: none;
+        }
+
         .backdrop { position:fixed; inset:0; z-index:1000; padding:20px; display:grid; place-items:center; background:rgba(15,23,42,.62); backdrop-filter:blur(5px); }
         .modal { width:min(1400px,96vw); max-height:94vh; overflow:hidden; border-radius:22px; display:grid; grid-template-rows:auto minmax(0,1fr) auto; background:#f8fafc; box-shadow:0 28px 90px rgba(15,23,42,.28); }
         .bulkModal { width:min(950px,96vw); }
@@ -1045,7 +1644,7 @@ export default function InspectionFormsPage() {
         .spin { animation:spin .9s linear infinite; }
         @keyframes spin { to { transform:rotate(360deg); } }
         @media(max-width:1100px){ .metrics{grid-template-columns:repeat(3,1fr)} .toolbar{grid-template-columns:1fr 1fr} }
-        @media(max-width:720px){ .page{padding:12px} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
+        @media(max-width:720px){ .page{padding:12px} .reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
       `}</style>
     </main>
   );
@@ -1083,6 +1682,53 @@ function Metric({
         {title}
       </div>
       <strong style={{ display: "block", marginTop: 7, fontSize: 24 }}>
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function MetricLight({
+  title,
+  value,
+  icon,
+}: {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        border:
+          "1px solid #e2e8f0",
+        borderRadius: 16,
+        padding: 14,
+        background: "#ffffff",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          gap: 7,
+          alignItems: "center",
+          color: "#64748b",
+          fontSize: 11,
+          fontWeight: 850,
+        }}
+      >
+        {icon}
+        {title}
+      </div>
+
+      <strong
+        style={{
+          display: "block",
+          marginTop: 8,
+          color: "#172033",
+          fontSize: 25,
+        }}
+      >
         {value}
       </strong>
     </div>
