@@ -80,6 +80,7 @@ export async function GET(req: Request) {
         code,
         category,
         form_type,
+        audit_modes,
         description,
         version_no,
         status,
@@ -138,6 +139,21 @@ export async function GET(req: Request) {
       code: clean(form.code),
       category: clean(form.category),
       formType: clean(form.form_type),
+      auditModes:
+        Array.isArray(
+          form.audit_modes
+        ) &&
+        form.audit_modes.length
+          ? form.audit_modes
+              .map((item: unknown) =>
+                clean(item).toUpperCase()
+              )
+          : [
+              "CLASSIC",
+              "PHOTO",
+              "SCORING",
+              "ELMERI",
+            ],
       description: clean(form.description),
       versionNo: Number(form.version_no || 1),
       status: clean(form.status),

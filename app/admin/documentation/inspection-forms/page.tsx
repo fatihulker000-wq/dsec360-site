@@ -29,6 +29,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Company = { id: string; name: string };
 
+type AuditMode =
+  | "CLASSIC"
+  | "PHOTO"
+  | "SCORING"
+  | "ELMERI";
+
 type FormItem = {
   orderNo: number;
   title: string;
@@ -52,6 +58,7 @@ type InspectionForm = {
   code: string;
   category: string;
   form_type: "STANDARD" | "PHOTO" | "SCORING" | "ELMERI";
+  audit_modes: AuditMode[];
   description: string;
   version_no: number;
   status: "DRAFT" | "PUBLISHED" | "REVISION" | "PASSIVE";
@@ -114,6 +121,7 @@ type Editor = {
   code: string;
   category: string;
   formType: InspectionForm["form_type"];
+  auditModes: AuditMode[];
   description: string;
   status: InspectionForm["status"];
   preparedBy: string;
@@ -144,6 +152,12 @@ const newEditor = (firmId = ""): Editor => ({
   code: "",
   category: "GENEL",
   formType: "STANDARD",
+  auditModes: [
+    "CLASSIC",
+    "PHOTO",
+    "SCORING",
+    "ELMERI",
+  ],
   description: "",
   status: "DRAFT",
   preparedBy: "",
@@ -161,6 +175,16 @@ function formToEditor(form: InspectionForm): Editor {
     code: form.code,
     category: form.category,
     formType: form.form_type,
+    auditModes:
+      Array.isArray(form.audit_modes) &&
+      form.audit_modes.length
+        ? form.audit_modes
+        : [
+            "CLASSIC",
+            "PHOTO",
+            "SCORING",
+            "ELMERI",
+          ],
     description: form.description,
     status: form.status,
     preparedBy: form.prepared_by,
@@ -191,6 +215,24 @@ const statusText: Record<InspectionForm["status"], string> = {
   REVISION: "Revizyonda",
   PASSIVE: "Pasif",
 };
+
+const auditModeText: Record<
+  AuditMode,
+  string
+> = {
+  CLASSIC: "Klasik Denetim",
+  PHOTO: "Fotoğraflı Denetim",
+  SCORING: "Puanlamalı Denetim",
+  ELMERI: "ELMERI Denetimi",
+};
+
+const auditModeOptions:
+  AuditMode[] = [
+    "CLASSIC",
+    "PHOTO",
+    "SCORING",
+    "ELMERI",
+  ];
 
 const typeText: Record<InspectionForm["form_type"], string> = {
   STANDARD: "Standart",
@@ -603,7 +645,17 @@ export default function InspectionFormsPage() {
       setSaving(true);
       setError("");
 
-      if (!editor.title.trim()) throw new Error("Form adı zorunludur.");
+      if (!editor.title.trim()) {
+        throw new Error(
+          "Form adı zorunludur."
+        );
+      }
+
+      if (!editor.auditModes.length) {
+        throw new Error(
+          "En az bir denetim çeşidi seçilmelidir."
+        );
+      }
 
       const items = editor.items
         .filter((item) => item.title.trim() || item.question.trim())
@@ -1456,6 +1508,73 @@ export default function InspectionFormsPage() {
                     }))
                   }
                 />
+                <div className="wide auditModeSelector">
+                  <div className="auditModeHeader">
+                    <span>
+                      Kullanılacağı Denetim Çeşitleri
+                    </span>
+                    <small>
+                      Aynı form birden fazla denetim
+                      çeşidinde kullanılabilir.
+                    </small>
+                  </div>
+
+                  <div className="auditModeGrid">
+                    {auditModeOptions.map(
+                      (auditMode) => {
+                        const checked =
+                          editor.auditModes.includes(
+                            auditMode
+                          );
+
+                        return (
+                          <label
+                            className={`auditModeOption ${
+                              checked
+                                ? "selected"
+                                : ""
+                            }`}
+                            key={auditMode}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setEditor(
+                                  (current) => ({
+                                    ...current,
+                                    auditModes:
+                                      checked
+                                        ? current.auditModes.filter(
+                                            (
+                                              item
+                                            ) =>
+                                              item !==
+                                              auditMode
+                                          )
+                                        : [
+                                            ...current.auditModes,
+                                            auditMode,
+                                          ],
+                                  })
+                                )
+                              }
+                            />
+
+                            <span>
+                              {
+                                auditModeText[
+                                  auditMode
+                                ]
+                              }
+                            </span>
+                          </label>
+                        );
+                      }
+                    )}
+                  </div>
+                </div>
+
                 <SelectField
                   label="Görünürlük"
                   value={editor.visibility}
@@ -2050,6 +2169,66 @@ export default function InspectionFormsPage() {
           font-weight: 800;
         }
 
+        .auditModeSelector {
+          display: grid;
+          gap: 10px;
+          padding: 14px;
+          border: 1px solid #e5e7eb;
+          border-radius: 14px;
+          background: #f8fafc;
+        }
+
+        .auditModeHeader {
+          display: grid;
+          gap: 4px;
+        }
+
+        .auditModeHeader > span {
+          color: #172033;
+          font-size: 13px;
+          font-weight: 900;
+        }
+
+        .auditModeHeader small {
+          color: #64748b;
+          font-size: 11px;
+          line-height: 1.5;
+        }
+
+        .auditModeGrid {
+          display: grid;
+          grid-template-columns:
+            repeat(2,minmax(0,1fr));
+          gap: 8px;
+        }
+
+        .auditModeOption {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          min-height: 44px;
+          padding: 10px 12px;
+          border: 1px solid #dbe2ea;
+          border-radius: 12px;
+          background: #ffffff;
+          color: #475569;
+          font-size: 12px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .auditModeOption.selected {
+          border-color: #991b1b;
+          color: #7f1d1d;
+          background: #fff1f2;
+        }
+
+        .auditModeOption input {
+          width: 17px;
+          height: 17px;
+          accent-color: #991b1b;
+        }
+
         .reportArchive {
           max-width: 1540px;
           margin: 0 auto 18px;
@@ -2255,7 +2434,7 @@ export default function InspectionFormsPage() {
         .spin { animation:spin .9s linear infinite; }
         @keyframes spin { to { transform:rotate(360deg); } }
         @media(max-width:1100px){ .metrics{grid-template-columns:repeat(3,1fr)} .toolbar{grid-template-columns:1fr 1fr} }
-        @media(max-width:720px){ .page{padding:12px} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
+        @media(max-width:720px){ .page{padding:12px} .auditModeGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
       `}</style>
     </main>
   );

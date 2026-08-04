@@ -38,6 +38,41 @@ const bool = (v: unknown) =>
     ? v
     : ["1", "true", "evet"].includes(clean(v).toLocaleLowerCase("tr-TR"));
 
+const ALLOWED_AUDIT_MODES = [
+  "CLASSIC",
+  "PHOTO",
+  "SCORING",
+  "ELMERI",
+] as const;
+
+function normalizeAuditModes(
+  value: unknown
+): string[] {
+  const source = Array.isArray(value)
+    ? value
+    : [];
+
+  const normalized = Array.from(
+    new Set(
+      source
+        .map((item) =>
+          clean(item).toUpperCase()
+        )
+        .filter((item) =>
+          ALLOWED_AUDIT_MODES.includes(
+            item as (
+              typeof ALLOWED_AUDIT_MODES
+            )[number]
+          )
+        )
+    )
+  );
+
+  return normalized.length
+    ? normalized
+    : ["CLASSIC"];
+}
+
 function normalizeItem(item: ItemInput, index: number) {
   const risk = clean(item.riskLevel).toUpperCase();
   return {
@@ -136,6 +171,10 @@ export async function POST(req: Request) {
       : "FIRM";
     const status = clean(body.status).toUpperCase();
     const formType = clean(body.formType).toUpperCase();
+    const auditModes =
+      normalizeAuditModes(
+        body.auditModes
+      );
     const db = supabase();
 
     const { data: form, error: formError } = await db
@@ -150,6 +189,7 @@ export async function POST(req: Request) {
           ? formType
           : "STANDARD",
         description: clean(body.description),
+        audit_modes: auditModes,
         status: ["DRAFT", "PUBLISHED", "REVISION", "PASSIVE"].includes(status)
           ? status
           : "DRAFT",
@@ -272,6 +312,11 @@ export async function PUT(req: Request) {
       : "FIRM";
     const status = clean(body.status).toUpperCase();
     const formType = clean(body.formType).toUpperCase();
+    const auditModes =
+      normalizeAuditModes(
+        body.auditModes ??
+          current.audit_modes
+      );
 
     const { error: updateError } = await db
       .from("inspection_forms")
@@ -285,6 +330,7 @@ export async function PUT(req: Request) {
           ? formType
           : current.form_type,
         description: clean(body.description),
+        audit_modes: auditModes,
         status: ["DRAFT", "PUBLISHED", "REVISION", "PASSIVE"].includes(status)
           ? status
           : current.status,
@@ -422,6 +468,18 @@ export async function PATCH(req: Request) {
           title: `${source.title} - Kopya`,
           category: source.category,
           form_type: source.form_type,
+          audit_modes:
+            Array.isArray(
+              source.audit_modes
+            ) &&
+            source.audit_modes.length
+              ? source.audit_modes
+              : [
+                  "CLASSIC",
+                  "PHOTO",
+                  "SCORING",
+                  "ELMERI",
+                ],
           description: source.description,
           status: "DRAFT",
           prepared_by: clean(body.preparedBy),
