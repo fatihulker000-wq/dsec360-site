@@ -59,9 +59,17 @@ export async function GET(req: Request) {
       );
     }
 
+    const scope = clean(
+      url.searchParams.get("scope")
+    ).toLowerCase();
+
+    const includeAllStatuses =
+      scope === "library" ||
+      scope === "documentation";
+
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("inspection_forms")
       .select(
         `
@@ -99,13 +107,24 @@ export async function GET(req: Request) {
         `
       )
       .eq("deleted", false)
-      .eq("status", "PUBLISHED")
       .or(
         `firm_id.eq.${firmId},visibility.eq.GLOBAL`
-      )
-      .order("updated_at", {
-        ascending: false,
-      });
+      );
+
+    if (!includeAllStatuses) {
+      query = query.eq(
+        "status",
+        "PUBLISHED"
+      );
+    }
+
+    const { data, error } =
+      await query.order(
+        "updated_at",
+        {
+          ascending: false,
+        }
+      );
 
     if (error) {
       throw new Error(error.message);
@@ -179,6 +198,10 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       firmId,
+      scope:
+        includeAllStatuses
+          ? "LIBRARY"
+          : "PUBLISHED",
       count: forms.length,
       forms,
     });

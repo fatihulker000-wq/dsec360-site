@@ -1229,10 +1229,37 @@ export default function InspectionFormsPage() {
 
             {!reportsLoading &&
             !filteredReports.length ? (
-              <div className="empty">
-                <Archive size={42} />
-                Henüz tamamlanmış denetim
-                raporu bulunmuyor.
+              <div className="corporateEmptyArchive">
+                <div className="corporateEmptyIcon">
+                  <Archive size={32} />
+                </div>
+
+                <div>
+                  <h3>
+                    Denetim arşivi henüz boş
+                  </h3>
+
+                  <p>
+                    App üzerinde tamamlanan
+                    denetimler otomatik olarak
+                    bu kurumsal arşive aktarılır.
+                    PDF veya imzalı belge
+                    eklendiğinde belge durumu da
+                    burada izlenir.
+                  </p>
+
+                  <div className="emptyArchiveSteps">
+                    <span>
+                      1. Web formunu yayınla
+                    </span>
+                    <span>
+                      2. App'te denetimi tamamla
+                    </span>
+                    <span>
+                      3. Arşiv kaydını görüntüle
+                    </span>
+                  </div>
+                </div>
               </div>
             ) : null}
 
@@ -1962,6 +1989,65 @@ export default function InspectionFormsPage() {
           color: #94a3b8;
           font-size: 12px;
           text-align: center;
+        }
+
+        .corporateEmptyArchive {
+          min-height: 220px;
+          display: grid;
+          grid-template-columns:
+            72px minmax(0,1fr);
+          gap: 18px;
+          align-items: start;
+          padding: 28px;
+          border: 1px dashed #cbd5e1;
+          border-radius: 18px;
+          background:
+            linear-gradient(
+              135deg,
+              #ffffff,
+              #f8fafc
+            );
+        }
+
+        .corporateEmptyIcon {
+          width: 64px;
+          height: 64px;
+          display: grid;
+          place-items: center;
+          border-radius: 16px;
+          color: #7f1d1d;
+          background: #fff1f2;
+          border: 1px solid #fecdd3;
+        }
+
+        .corporateEmptyArchive h3 {
+          margin: 0;
+          color: #172033;
+          font-size: 18px;
+        }
+
+        .corporateEmptyArchive p {
+          max-width: 760px;
+          margin: 8px 0 16px;
+          color: #64748b;
+          font-size: 13px;
+          line-height: 1.7;
+        }
+
+        .emptyArchiveSteps {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .emptyArchiveSteps span {
+          padding: 7px 10px;
+          border-radius: 999px;
+          color: #7f1d1d;
+          background: #fff7ed;
+          border: 1px solid #fed7aa;
+          font-size: 11px;
+          font-weight: 800;
         }
 
         .reportArchive {
