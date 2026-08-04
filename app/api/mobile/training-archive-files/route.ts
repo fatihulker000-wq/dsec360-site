@@ -61,40 +61,106 @@ export async function GET(req: Request) {
 
     const supabase = getSupabase();
 
-    const { data, error } = await supabase
-      .from("training_archive_files")
-      .select(
-        `
-        id,
-        firm_id,
-        document_type,
-        session_key,
-        employee_remote_id,
-        training_title,
-        file_name,
-        public_url,
-        mime_type,
-        file_size,
-        updated_at
-        `
-      )
-      .eq("firm_id", firmId)
-      .in("document_type", [
-        "TRAINING_DOCUMENT",
-        "ATTENDANCE_SIGNED",
-        "CERTIFICATE_SIGNED",
-      ])
-      .order("updated_at", {
-        ascending: false,
-      });
+    const [
+      archiveResult,
+      employeeResult,
+    ] = await Promise.all([
+      supabase
+        .from("training_archive_files")
+        .select(
+          `
+          id,
+          firm_id,
+          document_type,
+          session_key,
+          employee_remote_id,
+          training_title,
+          file_name,
+          public_url,
+          mime_type,
+          file_size,
+          updated_at
+          `
+        )
+        .eq("firm_id", firmId)
+        .in("document_type", [
+          "TRAINING_DOCUMENT",
+          "ATTENDANCE_SIGNED",
+          "CERTIFICATE_SIGNED",
+        ])
+        .order("updated_at", {
+          ascending: false,
+        }),
 
-    if (error) {
-      throw new Error(error.message);
+      supabase
+        .from("employees")
+        .select(
+          `
+          id,
+          full_name,
+          registry_no
+          `
+        )
+        .eq("firm_id", firmId),
+    ]);
+
+    if (archiveResult.error) {
+      throw new Error(
+        archiveResult.error.message
+      );
     }
+
+    if (employeeResult.error) {
+      throw new Error(
+        employeeResult.error.message
+      );
+    }
+
+    const employeeMap = new Map(
+      (employeeResult.data ?? []).map(
+        (employee) => [
+          clean(employee.id),
+          {
+            employeeName:
+              clean(employee.full_name),
+            employeeRegistryNo:
+              clean(employee.registry_no),
+          },
+        ]
+      )
+    );
+
+    const rows = (archiveResult.data ?? []).map(
+      (row) => {
+        const employee =
+          employeeMap.get(
+            clean(row.employee_remote_id)
+          );
+
+        const sessionParts =
+          clean(row.session_key).split("|");
+
+        const trainingDate = Number(
+          sessionParts[1] || 0
+        );
+
+        return {
+          ...row,
+          employee_name:
+            employee?.employeeName || "",
+          employee_registry_no:
+            employee?.employeeRegistryNo || "",
+          training_date:
+            Number.isFinite(trainingDate)
+              ? trainingDate
+              : 0,
+        };
+      }
+    );
 
     return NextResponse.json({
       success: true,
-      data: data ?? [],
+      data: rows,
     });
   } catch (error) {
     return NextResponse.json(
