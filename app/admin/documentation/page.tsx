@@ -541,6 +541,12 @@ const openCategory = (
     return;
   }
 
+  if (category === "INSPECTION") {
+    window.location.href =
+      "/admin/documentation/inspection-forms";
+    return;
+  }
+
   if (category === "BOARD") {
     window.location.href =
       "/admin/documentation/board";
