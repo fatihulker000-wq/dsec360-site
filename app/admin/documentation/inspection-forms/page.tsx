@@ -1,0 +1,1191 @@
+"use client";
+
+import {
+  AlertTriangle,
+  Archive,
+  CheckCircle2,
+  ClipboardCheck,
+  Copy,
+  Edit3,
+  Eye,
+  FilePlus2,
+  FileText,
+  Layers3,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Save,
+  Search,
+  Send,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+type Company = { id: string; name: string };
+
+type FormItem = {
+  orderNo: number;
+  title: string;
+  question: string;
+  expectedCondition: string;
+  requiredAction: string;
+  legalReference: string;
+  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  photoRequired: boolean;
+  explanationRequired: boolean;
+  actionRequired: boolean;
+  score: number;
+  weight: number;
+};
+
+type InspectionForm = {
+  id: string;
+  firm_id: string | null;
+  visibility: "GLOBAL" | "FIRM";
+  title: string;
+  code: string;
+  category: string;
+  form_type: "STANDARD" | "PHOTO" | "SCORING" | "ELMERI";
+  description: string;
+  version_no: number;
+  status: "DRAFT" | "PUBLISHED" | "REVISION" | "PASSIVE";
+  prepared_by: string;
+  approved_by: string;
+  item_count: number;
+  usage_count: number;
+  updated_at: string;
+  items?: Array<{
+    id: string;
+    order_no: number;
+    title: string;
+    question: string;
+    expected_condition: string;
+    required_action: string;
+    legal_reference: string;
+    risk_level: FormItem["riskLevel"];
+    photo_required: boolean;
+    explanation_required: boolean;
+    action_required: boolean;
+    score: number;
+    weight: number;
+  }>;
+};
+
+type Editor = {
+  id?: string;
+  firmId: string;
+  visibility: "GLOBAL" | "FIRM";
+  title: string;
+  code: string;
+  category: string;
+  formType: InspectionForm["form_type"];
+  description: string;
+  status: InspectionForm["status"];
+  preparedBy: string;
+  approvedBy: string;
+  changeNote: string;
+  items: FormItem[];
+};
+
+const newItem = (orderNo: number): FormItem => ({
+  orderNo,
+  title: "",
+  question: "",
+  expectedCondition: "",
+  requiredAction: "",
+  legalReference: "",
+  riskLevel: "MEDIUM",
+  photoRequired: false,
+  explanationRequired: false,
+  actionRequired: false,
+  score: 0,
+  weight: 1,
+});
+
+const newEditor = (firmId = ""): Editor => ({
+  firmId,
+  visibility: "FIRM",
+  title: "",
+  code: "",
+  category: "GENEL",
+  formType: "STANDARD",
+  description: "",
+  status: "DRAFT",
+  preparedBy: "",
+  approvedBy: "",
+  changeNote: "",
+  items: [newItem(1)],
+});
+
+function formToEditor(form: InspectionForm): Editor {
+  return {
+    id: form.id,
+    firmId: form.firm_id || "",
+    visibility: form.visibility,
+    title: form.title,
+    code: form.code,
+    category: form.category,
+    formType: form.form_type,
+    description: form.description,
+    status: form.status,
+    preparedBy: form.prepared_by,
+    approvedBy: form.approved_by,
+    changeNote: "",
+    items: (form.items || [])
+      .sort((a, b) => a.order_no - b.order_no)
+      .map((item) => ({
+        orderNo: item.order_no,
+        title: item.title,
+        question: item.question,
+        expectedCondition: item.expected_condition,
+        requiredAction: item.required_action,
+        legalReference: item.legal_reference,
+        riskLevel: item.risk_level,
+        photoRequired: item.photo_required,
+        explanationRequired: item.explanation_required,
+        actionRequired: item.action_required,
+        score: Number(item.score || 0),
+        weight: Number(item.weight || 1),
+      })),
+  };
+}
+
+const statusText: Record<InspectionForm["status"], string> = {
+  DRAFT: "Taslak",
+  PUBLISHED: "Yayında",
+  REVISION: "Revizyonda",
+  PASSIVE: "Pasif",
+};
+
+const typeText: Record<InspectionForm["form_type"], string> = {
+  STANDARD: "Standart",
+  PHOTO: "Fotoğraflı",
+  SCORING: "Puanlamalı",
+  ELMERI: "Elmeri",
+};
+
+export default function InspectionFormsPage() {
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companyId, setCompanyId] = useState("");
+  const [forms, setForms] = useState<InspectionForm[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editor, setEditor] = useState<Editor>(newEditor());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [preview, setPreview] = useState<InspectionForm | null>(null);
+
+  const loadCompanies = useCallback(async () => {
+    const response = await fetch("/api/admin/companies", {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.error || "Firmalar alınamadı.");
+
+    const rows = (Array.isArray(json.data) ? json.data : [])
+      .map((item: any) => ({
+        id: String(item.id || ""),
+        name: String(item.name || item.title || item.company_name || ""),
+      }))
+      .filter((item: Company) => item.id && item.name);
+
+    setCompanies(rows);
+    setCompanyId((current) => current || rows[0]?.id || "");
+  }, []);
+
+  const loadForms = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const query = new URLSearchParams();
+      if (companyId) query.set("firmId", companyId);
+
+      const response = await fetch(
+        `/api/admin/documentation/inspection-forms?${query.toString()}`,
+        { credentials: "include", cache: "no-store" }
+      );
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          json.detail || json.error || "Denetim formları alınamadı."
+        );
+      }
+
+      setForms(Array.isArray(json.forms) ? json.forms : []);
+    } catch (loadError) {
+      setForms([]);
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Denetim formları yüklenemedi."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    void loadCompanies().catch((e) =>
+      setError(e instanceof Error ? e.message : "Firmalar alınamadı.")
+    );
+  }, [loadCompanies]);
+
+  useEffect(() => {
+    void loadForms();
+  }, [loadForms]);
+
+  const filteredForms = useMemo(() => {
+    const q = search.trim().toLocaleLowerCase("tr-TR");
+
+    return forms.filter((form) => {
+      const text = [
+        form.title,
+        form.code,
+        form.category,
+        form.description,
+      ]
+        .join(" ")
+        .toLocaleLowerCase("tr-TR");
+
+      return (
+        (!q || text.includes(q)) &&
+        (!statusFilter || form.status === statusFilter) &&
+        (!typeFilter || form.form_type === typeFilter)
+      );
+    });
+  }, [forms, search, statusFilter, typeFilter]);
+
+  const metrics = useMemo(
+    () => ({
+      total: forms.length,
+      published: forms.filter((f) => f.status === "PUBLISHED").length,
+      draft: forms.filter((f) => f.status === "DRAFT").length,
+      revision: forms.filter((f) => f.status === "REVISION").length,
+      passive: forms.filter((f) => f.status === "PASSIVE").length,
+      items: forms.reduce((sum, f) => sum + Number(f.item_count || 0), 0),
+    }),
+    [forms]
+  );
+
+  const updateItem = (index: number, patch: Partial<FormItem>) => {
+    setEditor((current) => ({
+      ...current,
+      items: current.items.map((item, i) =>
+        i === index ? { ...item, ...patch } : item
+      ),
+    }));
+  };
+
+  const removeItem = (index: number) => {
+    setEditor((current) => ({
+      ...current,
+      items: current.items
+        .filter((_, i) => i !== index)
+        .map((item, i) => ({ ...item, orderNo: i + 1 })),
+    }));
+  };
+
+  const saveForm = async (publish: boolean) => {
+    try {
+      setSaving(true);
+      setError("");
+
+      if (!editor.title.trim()) throw new Error("Form adı zorunludur.");
+
+      const items = editor.items
+        .filter((item) => item.title.trim() || item.question.trim())
+        .map((item, index) => ({ ...item, orderNo: index + 1 }));
+
+      if (!items.length) throw new Error("En az bir madde ekleyin.");
+
+      const response = await fetch(
+        "/api/admin/documentation/inspection-forms",
+        {
+          method: editor.id ? "PUT" : "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...editor,
+            firmId:
+              editor.visibility === "GLOBAL"
+                ? ""
+                : editor.firmId || companyId,
+            status: publish ? "PUBLISHED" : editor.status,
+            items,
+          }),
+        }
+      );
+
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(json.detail || json.error || "Form kaydedilemedi.");
+      }
+
+      setEditorOpen(false);
+      await loadForms();
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : "Form kaydedilemedi."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const action = async (id: string, actionName: string) => {
+    try {
+      const response = await fetch(
+        "/api/admin/documentation/inspection-forms",
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, action: actionName }),
+        }
+      );
+
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(json.detail || json.error || "İşlem başarısız.");
+      }
+
+      await loadForms();
+    } catch (actionError) {
+      setError(
+        actionError instanceof Error ? actionError.message : "İşlem başarısız."
+      );
+    }
+  };
+
+  const deleteForm = async (form: InspectionForm) => {
+    if (!window.confirm(`"${form.title}" formu silinsin mi?`)) return;
+
+    const response = await fetch(
+      `/api/admin/documentation/inspection-forms?id=${encodeURIComponent(
+        form.id
+      )}`,
+      { method: "DELETE", credentials: "include" }
+    );
+
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(json.detail || json.error || "Form silinemedi.");
+      return;
+    }
+
+    await loadForms();
+  };
+
+  const importBulk = () => {
+    const imported: FormItem[] = bulkText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line, index) => {
+        const c = line.split("|").map((value) => value.trim());
+        const risk = (c[5] || "MEDIUM").toUpperCase();
+
+        return {
+          orderNo: index + 1,
+          title: c[0] || "",
+          question: c[1] || c[0] || "",
+          expectedCondition: c[2] || "",
+          requiredAction: c[3] || "",
+          legalReference: c[4] || "",
+          riskLevel: ["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(risk)
+            ? (risk as FormItem["riskLevel"])
+            : "MEDIUM",
+          photoRequired: ["EVET", "TRUE", "1"].includes(
+            (c[6] || "").toLocaleUpperCase("tr-TR")
+          ),
+          explanationRequired: ["EVET", "TRUE", "1"].includes(
+            (c[7] || "").toLocaleUpperCase("tr-TR")
+          ),
+          actionRequired: ["EVET", "TRUE", "1"].includes(
+            (c[8] || "").toLocaleUpperCase("tr-TR")
+          ),
+          score: Number(c[9] || 0),
+          weight: Number(c[10] || 1),
+        };
+      });
+
+    setEditor((current) => {
+      const existing = current.items.filter(
+        (item) => item.title.trim() || item.question.trim()
+      );
+
+      return {
+        ...current,
+        items: [...existing, ...imported].map((item, index) => ({
+          ...item,
+          orderNo: index + 1,
+        })),
+      };
+    });
+
+    setBulkText("");
+    setBulkOpen(false);
+  };
+
+  return (
+    <main className="page">
+      <section className="hero">
+        <div>
+          <small>D-SEC DENETİM ALTYAPISI</small>
+          <h1>Denetim Form Merkezi</h1>
+          <p>
+            Denetimlerde kullanılacak formları oluşturun, tek tek veya toplu
+            madde ekleyin, yayınlayın ve Denetim Modülünde kullanıma açın.
+          </p>
+        </div>
+
+        <div className="heroButtons">
+          <button onClick={() => void loadForms()}>
+            <RefreshCw size={17} />
+            Yenile
+          </button>
+
+          <button
+            className="whiteButton"
+            onClick={() => {
+              setEditor(newEditor(companyId));
+              setEditorOpen(true);
+            }}
+          >
+            <FilePlus2 size={17} />
+            Yeni Form
+          </button>
+        </div>
+
+        <div className="metrics">
+          <Metric title="Toplam Form" value={metrics.total} icon={<Layers3 />} />
+          <Metric
+            title="Yayında"
+            value={metrics.published}
+            icon={<CheckCircle2 />}
+          />
+          <Metric title="Taslak" value={metrics.draft} icon={<FileText />} />
+          <Metric title="Revizyonda" value={metrics.revision} icon={<Edit3 />} />
+          <Metric title="Pasif" value={metrics.passive} icon={<Archive />} />
+          <Metric
+            title="Toplam Madde"
+            value={metrics.items}
+            icon={<ClipboardCheck />}
+          />
+        </div>
+      </section>
+
+      {error ? (
+        <section className="error">
+          <AlertTriangle size={18} />
+          {error}
+        </section>
+      ) : null}
+
+      <section className="toolbar">
+        <select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+          {companies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {company.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="">Tüm Durumlar</option>
+          <option value="DRAFT">Taslak</option>
+          <option value="PUBLISHED">Yayında</option>
+          <option value="REVISION">Revizyonda</option>
+          <option value="PASSIVE">Pasif</option>
+        </select>
+
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+          <option value="">Tüm Türler</option>
+          <option value="STANDARD">Standart</option>
+          <option value="PHOTO">Fotoğraflı</option>
+          <option value="SCORING">Puanlamalı</option>
+          <option value="ELMERI">Elmeri</option>
+        </select>
+
+        <label className="search">
+          <Search size={16} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Form ara..."
+          />
+        </label>
+      </section>
+
+      <section className="library">
+        <div className="sectionTitle">
+          <div>
+            <h2>Form Kütüphanesi</h2>
+            <p>Yayınlanan formlar app ve denetim modülünde kullanılabilir.</p>
+          </div>
+          <strong>{filteredForms.length} form</strong>
+        </div>
+
+        {loading ? (
+          <div className="empty">
+            <Loader2 className="spin" />
+            Denetim formları yükleniyor...
+          </div>
+        ) : null}
+
+        {!loading && !filteredForms.length ? (
+          <div className="empty">
+            <ClipboardCheck size={42} />
+            Henüz form bulunmuyor.
+          </div>
+        ) : null}
+
+        <div className="grid">
+          {filteredForms.map((form) => (
+            <article className="card" key={form.id}>
+              <div className="cardTop">
+                <span className={`badge ${form.status.toLowerCase()}`}>
+                  {statusText[form.status]}
+                </span>
+                <span>v{form.version_no}</span>
+              </div>
+
+              <h3>{form.title}</h3>
+              <p>{form.description || "Açıklama girilmemiş."}</p>
+
+              <div className="facts">
+                <span>
+                  <b>Kod</b>
+                  {form.code || "-"}
+                </span>
+                <span>
+                  <b>Tür</b>
+                  {typeText[form.form_type]}
+                </span>
+                <span>
+                  <b>Kategori</b>
+                  {form.category}
+                </span>
+                <span>
+                  <b>Madde</b>
+                  {form.item_count}
+                </span>
+              </div>
+
+              <div className="actions">
+                <button onClick={() => setPreview(form)} title="Önizle">
+                  <Eye size={16} />
+                </button>
+                <button
+                  onClick={() => {
+                    setEditor(formToEditor(form));
+                    setEditorOpen(true);
+                  }}
+                  title="Düzenle"
+                >
+                  <Edit3 size={16} />
+                </button>
+                <button onClick={() => void action(form.id, "COPY")} title="Kopyala">
+                  <Copy size={16} />
+                </button>
+                {form.status !== "PUBLISHED" ? (
+                  <button
+                    className="publish"
+                    onClick={() => void action(form.id, "PUBLISH")}
+                    title="Yayınla"
+                  >
+                    <Send size={16} />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => void action(form.id, "PASSIVE")}
+                    title="Pasife Al"
+                  >
+                    <Archive size={16} />
+                  </button>
+                )}
+                <button
+                  className="delete"
+                  onClick={() => void deleteForm(form)}
+                  title="Sil"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {editorOpen ? (
+        <div className="backdrop">
+          <section className="modal editorModal">
+            <header>
+              <div>
+                <h2>{editor.id ? "Formu Düzenle" : "Yeni Denetim Formu"}</h2>
+                <p>Tek form altında çoklu madde oluşturun.</p>
+              </div>
+              <button onClick={() => setEditorOpen(false)}>
+                <X size={20} />
+              </button>
+            </header>
+
+            <div className="modalBody">
+              <div className="identity">
+                <Field
+                  label="Form Adı"
+                  value={editor.title}
+                  onChange={(value) =>
+                    setEditor((c) => ({ ...c, title: value }))
+                  }
+                />
+                <Field
+                  label="Form Kodu"
+                  value={editor.code}
+                  onChange={(value) => setEditor((c) => ({ ...c, code: value }))}
+                />
+                <Field
+                  label="Kategori"
+                  value={editor.category}
+                  onChange={(value) =>
+                    setEditor((c) => ({ ...c, category: value }))
+                  }
+                />
+                <SelectField
+                  label="Form Türü"
+                  value={editor.formType}
+                  options={[
+                    ["STANDARD", "Standart"],
+                    ["PHOTO", "Fotoğraflı"],
+                    ["SCORING", "Puanlamalı"],
+                    ["ELMERI", "Elmeri"],
+                  ]}
+                  onChange={(value) =>
+                    setEditor((c) => ({
+                      ...c,
+                      formType: value as Editor["formType"],
+                    }))
+                  }
+                />
+                <SelectField
+                  label="Görünürlük"
+                  value={editor.visibility}
+                  options={[
+                    ["FIRM", "Seçili Firma"],
+                    ["GLOBAL", "Tüm Firmalar"],
+                  ]}
+                  onChange={(value) =>
+                    setEditor((c) => ({
+                      ...c,
+                      visibility: value as Editor["visibility"],
+                    }))
+                  }
+                />
+                <SelectField
+                  label="Durum"
+                  value={editor.status}
+                  options={[
+                    ["DRAFT", "Taslak"],
+                    ["PUBLISHED", "Yayında"],
+                    ["REVISION", "Revizyonda"],
+                    ["PASSIVE", "Pasif"],
+                  ]}
+                  onChange={(value) =>
+                    setEditor((c) => ({
+                      ...c,
+                      status: value as Editor["status"],
+                    }))
+                  }
+                />
+                <Field
+                  label="Hazırlayan"
+                  value={editor.preparedBy}
+                  onChange={(value) =>
+                    setEditor((c) => ({ ...c, preparedBy: value }))
+                  }
+                />
+                <Field
+                  label="Onaylayan"
+                  value={editor.approvedBy}
+                  onChange={(value) =>
+                    setEditor((c) => ({ ...c, approvedBy: value }))
+                  }
+                />
+
+                <label className="wide">
+                  <span>Form Açıklaması</span>
+                  <textarea
+                    value={editor.description}
+                    onChange={(e) =>
+                      setEditor((c) => ({ ...c, description: e.target.value }))
+                    }
+                  />
+                </label>
+
+                {editor.id ? (
+                  <label className="wide">
+                    <span>Revizyon Notu</span>
+                    <textarea
+                      value={editor.changeNote}
+                      onChange={(e) =>
+                        setEditor((c) => ({ ...c, changeNote: e.target.value }))
+                      }
+                    />
+                  </label>
+                ) : null}
+              </div>
+
+              <div className="itemsHeader">
+                <div>
+                  <h3>Denetim Maddeleri</h3>
+                  <p>Soru, mevcut/standart durum, önlem ve mevzuat.</p>
+                </div>
+                <div>
+                  <button onClick={() => setBulkOpen(true)}>
+                    <Upload size={16} />
+                    Toplu Aktar
+                  </button>
+                  <button
+                    className="dark"
+                    onClick={() =>
+                      setEditor((c) => ({
+                        ...c,
+                        items: [...c.items, newItem(c.items.length + 1)],
+                      }))
+                    }
+                  >
+                    <Plus size={16} />
+                    Tek Madde Ekle
+                  </button>
+                </div>
+              </div>
+
+              <div className="itemList">
+                {editor.items.map((item, index) => (
+                  <article className="itemCard" key={index}>
+                    <header>
+                      <strong>Madde {index + 1}</strong>
+                      <button onClick={() => removeItem(index)}>
+                        <Trash2 size={15} />
+                      </button>
+                    </header>
+
+                    <div className="itemGrid">
+                      <Field
+                        label="Madde Başlığı"
+                        value={item.title}
+                        onChange={(value) => updateItem(index, { title: value })}
+                      />
+
+                      <SelectField
+                        label="Risk Seviyesi"
+                        value={item.riskLevel}
+                        options={[
+                          ["LOW", "Düşük"],
+                          ["MEDIUM", "Orta"],
+                          ["HIGH", "Yüksek"],
+                          ["CRITICAL", "Kritik"],
+                        ]}
+                        onChange={(value) =>
+                          updateItem(index, {
+                            riskLevel: value as FormItem["riskLevel"],
+                          })
+                        }
+                      />
+
+                      <TextArea
+                        label="Denetim Sorusu"
+                        value={item.question}
+                        onChange={(value) =>
+                          updateItem(index, { question: value })
+                        }
+                      />
+                      <TextArea
+                        label="Beklenen / Standart Durum"
+                        value={item.expectedCondition}
+                        onChange={(value) =>
+                          updateItem(index, { expectedCondition: value })
+                        }
+                      />
+                      <TextArea
+                        label="Alınması Gereken Önlemler"
+                        value={item.requiredAction}
+                        onChange={(value) =>
+                          updateItem(index, { requiredAction: value })
+                        }
+                      />
+                      <TextArea
+                        label="Mevzuat Dayanağı"
+                        value={item.legalReference}
+                        onChange={(value) =>
+                          updateItem(index, { legalReference: value })
+                        }
+                      />
+
+                      <NumberField
+                        label="Puan"
+                        value={item.score}
+                        onChange={(value) => updateItem(index, { score: value })}
+                      />
+                      <NumberField
+                        label="Ağırlık"
+                        value={item.weight}
+                        onChange={(value) => updateItem(index, { weight: value })}
+                      />
+                    </div>
+
+                    <div className="checks">
+                      <CheckField
+                        label="Fotoğraf Zorunlu"
+                        checked={item.photoRequired}
+                        onChange={(value) =>
+                          updateItem(index, { photoRequired: value })
+                        }
+                      />
+                      <CheckField
+                        label="Açıklama Zorunlu"
+                        checked={item.explanationRequired}
+                        onChange={(value) =>
+                          updateItem(index, { explanationRequired: value })
+                        }
+                      />
+                      <CheckField
+                        label="Aksiyon Gerektirir"
+                        checked={item.actionRequired}
+                        onChange={(value) =>
+                          updateItem(index, { actionRequired: value })
+                        }
+                      />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <footer>
+              <button onClick={() => setEditorOpen(false)}>Vazgeç</button>
+              <button disabled={saving} onClick={() => void saveForm(false)}>
+                <Save size={16} />
+                Taslak Kaydet
+              </button>
+              <button
+                className="dark"
+                disabled={saving}
+                onClick={() => void saveForm(true)}
+              >
+                {saving ? <Loader2 className="spin" size={16} /> : <Send size={16} />}
+                Kaydet ve Yayınla
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {bulkOpen ? (
+        <div className="backdrop">
+          <section className="modal bulkModal">
+            <header>
+              <div>
+                <h2>Toplu Madde Aktar</h2>
+                <p>Her satır bir denetim maddesidir.</p>
+              </div>
+              <button onClick={() => setBulkOpen(false)}>
+                <X size={20} />
+              </button>
+            </header>
+
+            <div className="bulkBody">
+              <code>
+                Başlık | Soru | Beklenen Durum | Önlem | Mevzuat | Risk |
+                Fotoğraf | Açıklama | Aksiyon | Puan | Ağırlık
+              </code>
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                placeholder="Yangın Tüpü | Tüplerin kontrolü güncel mi? | Erişilebilir ve kontrolü geçerli olmalıdır. | Kontrolü geçmiş tüpler yenilenmelidir. | BYKHY | HIGH | EVET | EVET | EVET | 10 | 1"
+              />
+            </div>
+
+            <footer>
+              <button onClick={() => setBulkOpen(false)}>Vazgeç</button>
+              <button className="dark" onClick={importBulk}>
+                <Upload size={16} />
+                Maddeleri Aktar
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {preview ? (
+        <div className="backdrop">
+          <section className="modal previewModal">
+            <header>
+              <div>
+                <h2>{preview.title}</h2>
+                <p>{preview.item_count} denetim maddesi</p>
+              </div>
+              <button onClick={() => setPreview(null)}>
+                <X size={20} />
+              </button>
+            </header>
+
+            <div className="previewBody">
+              {(preview.items || [])
+                .sort((a, b) => a.order_no - b.order_no)
+                .map((item, index) => (
+                  <article key={item.id}>
+                    <strong>
+                      {index + 1}. {item.title || "Denetim Maddesi"}
+                    </strong>
+                    <h4>{item.question}</h4>
+                    <p>
+                      <b>Beklenen Durum:</b>{" "}
+                      {item.expected_condition || "-"}
+                    </p>
+                    <p>
+                      <b>Alınması Gereken Önlem:</b>{" "}
+                      {item.required_action || "-"}
+                    </p>
+                    <p>
+                      <b>Mevzuat:</b> {item.legal_reference || "-"}
+                    </p>
+                  </article>
+                ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      <style jsx>{`
+        * { box-sizing: border-box; }
+        .page { min-height:100vh; padding:24px; background:linear-gradient(180deg,#f8fafc,#fff7ed); color:#172033; }
+        .hero,.toolbar,.library { max-width:1540px; margin:0 auto 18px; }
+        .hero { position:relative; border-radius:28px; padding:27px; color:#fff; background:linear-gradient(135deg,#5f0f1b,#991b1b 52%,#d97706); box-shadow:0 22px 58px rgba(127,29,29,.2); }
+        .hero h1 { margin:7px 0 10px; font-size:34px; }
+        .hero p { max-width:850px; color:rgba(255,255,255,.84); line-height:1.6; }
+        .heroButtons { position:absolute; right:27px; top:27px; display:flex; gap:9px; }
+        button { font:inherit; cursor:pointer; }
+        .heroButtons button,.itemsHeader button,.modal footer button { min-height:40px; border:1px solid rgba(255,255,255,.25); border-radius:11px; padding:0 13px; display:inline-flex; align-items:center; gap:7px; font-weight:800; background:rgba(255,255,255,.12); color:#fff; }
+        .heroButtons .whiteButton { background:#fff; color:#7f1d1d; }
+        .metrics { margin-top:22px; display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
+        .error { max-width:1540px; margin:0 auto 18px; padding:13px; border:1px solid #fecaca; border-radius:14px; display:flex; gap:8px; color:#991b1b; background:#fef2f2; font-weight:800; }
+        .toolbar { padding:13px; border:1px solid #e5e7eb; border-radius:19px; display:grid; grid-template-columns:repeat(3,1fr) 1.2fr; gap:10px; background:#fff; }
+        select,input,textarea { width:100%; border:1px solid #dbe3ec; border-radius:10px; padding:10px; background:#fff; outline:none; }
+        textarea { min-height:82px; resize:vertical; }
+        .search { display:flex; align-items:center; gap:7px; border:1px solid #dbe3ec; border-radius:10px; padding:0 10px; }
+        .search input { border:0; padding-left:0; }
+        .library { padding:18px; border:1px solid #e5e7eb; border-radius:21px; background:#fff; box-shadow:0 10px 30px rgba(15,23,42,.05); }
+        .sectionTitle { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+        .sectionTitle h2 { margin:0; }
+        .sectionTitle p { margin:5px 0 0; color:#64748b; }
+        .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+        .card { padding:16px; border:1px solid #e2e8f0; border-radius:18px; background:#fff; }
+        .cardTop { display:flex; justify-content:space-between; align-items:center; color:#64748b; font-size:12px; }
+        .badge { padding:5px 8px; border-radius:999px; font-weight:900; }
+        .badge.draft { color:#92400e; background:#fffbeb; }
+        .badge.published { color:#047857; background:#ecfdf5; }
+        .badge.revision { color:#1d4ed8; background:#eff6ff; }
+        .badge.passive { color:#64748b; background:#f1f5f9; }
+        .card h3 { margin:12px 0 7px; }
+        .card p { min-height:42px; color:#64748b; font-size:13px; }
+        .facts { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .facts span { padding:8px; border-radius:10px; display:grid; gap:3px; background:#f8fafc; font-size:12px; }
+        .facts b { color:#64748b; font-size:10px; text-transform:uppercase; }
+        .actions { margin-top:12px; display:flex; gap:7px; }
+        .actions button,.modal header>button,.itemCard header button { width:37px; height:37px; border:1px solid #e2e8f0; border-radius:9px; display:grid; place-items:center; background:#f8fafc; color:#475569; }
+        .actions .publish { color:#047857; background:#ecfdf5; }
+        .actions .delete { color:#b91c1c; background:#fef2f2; }
+        .empty { min-height:240px; display:grid; place-items:center; align-content:center; gap:9px; color:#64748b; }
+        .backdrop { position:fixed; inset:0; z-index:1000; padding:20px; display:grid; place-items:center; background:rgba(15,23,42,.62); backdrop-filter:blur(5px); }
+        .modal { width:min(1400px,96vw); max-height:94vh; overflow:hidden; border-radius:22px; display:grid; grid-template-rows:auto minmax(0,1fr) auto; background:#f8fafc; box-shadow:0 28px 90px rgba(15,23,42,.28); }
+        .bulkModal { width:min(950px,96vw); }
+        .previewModal { width:min(1000px,96vw); grid-template-rows:auto minmax(0,1fr); }
+        .modal header,.modal footer { padding:15px 17px; display:flex; justify-content:space-between; align-items:center; gap:10px; background:#fff; border-bottom:1px solid #e2e8f0; }
+        .modal header h2 { margin:0; }
+        .modal header p { margin:4px 0 0; color:#64748b; }
+        .modalBody,.previewBody { overflow-y:auto; padding:17px; }
+        .identity,.itemGrid { display:grid; grid-template-columns:1fr 1fr; gap:11px; }
+        .identity label,.itemGrid label { display:grid; gap:6px; color:#64748b; font-size:12px; font-weight:800; }
+        .wide { grid-column:1/-1; }
+        .itemsHeader { margin:22px 0 12px; display:flex; justify-content:space-between; align-items:center; }
+        .itemsHeader h3 { margin:0; }
+        .itemsHeader p { margin:4px 0 0; color:#64748b; }
+        .itemsHeader>div:last-child { display:flex; gap:8px; }
+        .itemsHeader button,.modal footer button { color:#7f1d1d; background:#fff; border-color:#fecaca; }
+        .itemsHeader .dark,.modal footer .dark { color:#fff; background:#7f1d1d; }
+        .itemList { display:grid; gap:12px; }
+        .itemCard { border:1px solid #e2e8f0; border-radius:17px; overflow:hidden; background:#fff; }
+        .itemCard header { padding:10px 13px; display:flex; justify-content:space-between; align-items:center; background:#fff7ed; border-bottom:1px solid #fed7aa; }
+        .itemGrid { padding:13px; }
+        .checks { padding:11px 13px; border-top:1px solid #eef2f7; display:flex; flex-wrap:wrap; gap:14px; }
+        .checks label { display:flex; gap:7px; align-items:center; color:#475569; font-size:12px; font-weight:800; }
+        .checks input { width:auto; }
+        .modal footer { justify-content:flex-end; border-top:1px solid #e2e8f0; border-bottom:0; }
+        .bulkBody { padding:17px; overflow-y:auto; }
+        .bulkBody code { display:block; padding:11px; border-radius:11px; color:#1e3a8a; background:#eff6ff; line-height:1.5; }
+        .bulkBody textarea { min-height:380px; margin-top:13px; font-family:monospace; }
+        .previewBody { display:grid; gap:11px; }
+        .previewBody article { padding:13px; border:1px solid #e2e8f0; border-radius:14px; background:#fff; }
+        .previewBody h4 { margin:8px 0; }
+        .previewBody p { margin:6px 0; color:#475569; font-size:13px; }
+        .spin { animation:spin .9s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        @media(max-width:1100px){ .metrics{grid-template-columns:repeat(3,1fr)} .toolbar{grid-template-columns:1fr 1fr} }
+        @media(max-width:720px){ .page{padding:12px} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
+      `}</style>
+    </main>
+  );
+}
+
+function Metric({
+  title,
+  value,
+  icon,
+}: {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        padding: 13,
+        borderRadius: 15,
+        background: "rgba(255,255,255,.12)",
+        border: "1px solid rgba(255,255,255,.13)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          color: "rgba(255,255,255,.78)",
+          fontSize: 11,
+          fontWeight: 850,
+        }}
+      >
+        {icon}
+        {title}
+      </div>
+      <strong style={{ display: "block", marginTop: 7, fontSize: 24 }}>
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="wide">
+      <span>{label}</span>
+      <textarea value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value || 0))}
+      />
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<[string, string]>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function CheckField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
+  );
+}
