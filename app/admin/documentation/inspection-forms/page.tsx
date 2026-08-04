@@ -384,6 +384,185 @@ export default function InspectionFormsPage() {
       );
     }, [reports, reportSearch]);
 
+  const archiveCharts =
+    useMemo(() => {
+      const now = new Date();
+
+      const monthRows = Array.from(
+        { length: 6 },
+        (_, index) => {
+          const date = new Date(
+            now.getFullYear(),
+            now.getMonth() -
+              (5 - index),
+            1
+          );
+
+          return {
+            key: `${date.getFullYear()}-${String(
+              date.getMonth() + 1
+            ).padStart(2, "0")}`,
+            label: date.toLocaleDateString(
+              "tr-TR",
+              {
+                month: "short",
+                year: "2-digit",
+              }
+            ),
+            count: 0,
+          };
+        }
+      );
+
+      const monthMap = new Map(
+        monthRows.map((row) => [
+          row.key,
+          row,
+        ])
+      );
+
+      reports.forEach((report) => {
+        const rawDate =
+          report.inspection_date ||
+          report.created_at;
+
+        if (!rawDate) return;
+
+        const date = new Date(rawDate);
+
+        if (
+          Number.isNaN(
+            date.getTime()
+          )
+        ) {
+          return;
+        }
+
+        const key =
+          `${date.getFullYear()}-${String(
+            date.getMonth() + 1
+          ).padStart(2, "0")}`;
+
+        const row =
+          monthMap.get(key);
+
+        if (row) {
+          row.count += 1;
+        }
+      });
+
+      const categoryCounts =
+        new Map<string, number>();
+
+      reports.forEach((report) => {
+        const category =
+          report.form?.category
+            ?.trim() ||
+          report.form_title
+            ?.trim() ||
+          "Diğer";
+
+        categoryCounts.set(
+          category,
+          (
+            categoryCounts.get(
+              category
+            ) || 0
+          ) + 1
+        );
+      });
+
+      const categories =
+        Array.from(
+          categoryCounts.entries()
+        )
+          .map(
+            ([label, count]) => ({
+              label,
+              count,
+            })
+          )
+          .sort(
+            (first, second) =>
+              second.count -
+              first.count
+          )
+          .slice(0, 6);
+
+      const formCounts =
+        new Map<string, number>();
+
+      reports.forEach((report) => {
+        const title =
+          report.form_title
+            ?.trim() ||
+          "Adsız Form";
+
+        formCounts.set(
+          title,
+          (
+            formCounts.get(title) ||
+            0
+          ) + 1
+        );
+      });
+
+      const mostUsedForms =
+        Array.from(
+          formCounts.entries()
+        )
+          .map(
+            ([label, count]) => ({
+              label,
+              count,
+            })
+          )
+          .sort(
+            (first, second) =>
+              second.count -
+              first.count
+          )
+          .slice(0, 5);
+
+      const signed =
+        reports.filter(
+          (report) =>
+            !!report.signed_pdf_url
+        ).length;
+
+      const generatedOnly =
+        reports.filter(
+          (report) =>
+            !report.signed_pdf_url &&
+            !!report.generated_pdf_url
+        ).length;
+
+      const withoutPdf =
+        reports.length -
+        signed -
+        generatedOnly;
+
+      return {
+        months: monthRows,
+        categories,
+        mostUsedForms,
+        documentStatus: [
+          {
+            label: "İmzalı",
+            count: signed,
+          },
+          {
+            label: "PDF Var",
+            count: generatedOnly,
+          },
+          {
+            label: "Belge Bekliyor",
+            count: withoutPdf,
+          },
+        ],
+      };
+    }, [reports]);
+
   const metrics = useMemo(
     () => ({
       total: forms.length,
@@ -989,6 +1168,36 @@ export default function InspectionFormsPage() {
             />
           </section>
 
+          <section className="archiveCharts">
+            <ArchiveBarChart
+              title="Son 6 Ayda Arşivlenen Denetimler"
+              description="Tamamlanıp doküman arşivine aktarılan denetim sayısı."
+              rows={archiveCharts.months}
+            />
+
+            <ArchiveBarChart
+              title="Denetim Türü Dağılımı"
+              description="Arşivde en fazla bulunan form türleri ve kategorileri."
+              rows={archiveCharts.categories}
+            />
+
+            <ArchiveDonutChart
+              title="Doküman Durumu"
+              description="İmzalı, PDF bulunan ve belge bekleyen arşiv kayıtları."
+              rows={
+                archiveCharts.documentStatus
+              }
+            />
+
+            <ArchiveBarChart
+              title="En Çok Kullanılan Formlar"
+              description="Tamamlanan denetimlerde en sık kullanılan form şablonları."
+              rows={
+                archiveCharts.mostUsedForms
+              }
+            />
+          </section>
+
           <section className="reportArchive">
             <div className="sectionTitle">
               <div>
@@ -1587,6 +1796,174 @@ export default function InspectionFormsPage() {
 
         .reportToolbar,
         .reportSummary,
+        .archiveCharts {
+          max-width: 1540px;
+          margin: 0 auto 18px;
+          display: grid;
+          grid-template-columns:
+            repeat(2,minmax(0,1fr));
+          gap: 14px;
+        }
+
+        .archiveChart {
+          border: 1px solid #e5e7eb;
+          border-radius: 18px;
+          padding: 16px;
+          background: #ffffff;
+        }
+
+        .archiveChartHeader h3 {
+          margin: 0;
+          color: #172033;
+          font-size: 16px;
+        }
+
+        .archiveChartHeader p {
+          margin: 5px 0 0;
+          color: #64748b;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .barChartRows {
+          margin-top: 16px;
+          display: grid;
+          gap: 10px;
+        }
+
+        .barChartRow {
+          display: grid;
+          grid-template-columns:
+            minmax(110px,1.2fr)
+            minmax(140px,3fr)
+            38px;
+          gap: 10px;
+          align-items: center;
+        }
+
+        .barChartLabel {
+          color: #475569;
+          font-size: 12px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .barChartTrack {
+          height: 10px;
+          border-radius: 999px;
+          overflow: hidden;
+          background: #f1f5f9;
+        }
+
+        .barChartFill {
+          height: 100%;
+          min-width: 0;
+          border-radius: inherit;
+          background:
+            linear-gradient(
+              90deg,
+              #7f1d1d,
+              #d97706
+            );
+        }
+
+        .barChartValue {
+          color: #172033;
+          font-size: 12px;
+          font-weight: 900;
+          text-align: right;
+        }
+
+        .donutLayout {
+          margin-top: 16px;
+          display: grid;
+          grid-template-columns:
+            150px 1fr;
+          gap: 18px;
+          align-items: center;
+        }
+
+        .donutVisual {
+          position: relative;
+          width: 140px;
+          height: 140px;
+          margin: 0 auto;
+        }
+
+        .donutVisual svg {
+          width: 100%;
+          height: 100%;
+          transform: rotate(-90deg);
+        }
+
+        .donutBase {
+          fill: none;
+          stroke: #f1f5f9;
+          stroke-width: 14;
+        }
+
+        .donutSegment {
+          fill: none;
+          stroke-width: 14;
+          stroke-linecap: butt;
+          transition:
+            stroke-dasharray .25s ease;
+        }
+
+        .donutCenter {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          pointer-events: none;
+        }
+
+        .donutCenter strong {
+          color: #172033;
+          font-size: 25px;
+        }
+
+        .donutCenter span {
+          color: #64748b;
+          font-size: 11px;
+        }
+
+        .donutLegend {
+          display: grid;
+          gap: 10px;
+        }
+
+        .donutLegendRow {
+          display: grid;
+          grid-template-columns:
+            11px 1fr auto;
+          gap: 8px;
+          align-items: center;
+          color: #475569;
+          font-size: 12px;
+        }
+
+        .donutLegendDot {
+          width: 11px;
+          height: 11px;
+          border-radius: 999px;
+        }
+
+        .donutLegendRow strong {
+          color: #172033;
+        }
+
+        .archiveChartEmpty {
+          min-height: 145px;
+          display: grid;
+          place-items: center;
+          color: #94a3b8;
+          font-size: 12px;
+          text-align: center;
+        }
+
         .reportArchive {
           max-width: 1540px;
           margin: 0 auto 18px;
@@ -1792,7 +2169,7 @@ export default function InspectionFormsPage() {
         .spin { animation:spin .9s linear infinite; }
         @keyframes spin { to { transform:rotate(360deg); } }
         @media(max-width:1100px){ .metrics{grid-template-columns:repeat(3,1fr)} .toolbar{grid-template-columns:1fr 1fr} }
-        @media(max-width:720px){ .page{padding:12px} .reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
+        @media(max-width:720px){ .page{padding:12px} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
       `}</style>
     </main>
   );
@@ -1833,6 +2210,206 @@ function Metric({
         {value}
       </strong>
     </div>
+  );
+}
+
+function ArchiveBarChart({
+  title,
+  description,
+  rows,
+}: {
+  title: string;
+  description: string;
+  rows: Array<{
+    label: string;
+    count: number;
+  }>;
+}) {
+  const maximum = Math.max(
+    1,
+    ...rows.map(
+      (row) => row.count
+    )
+  );
+
+  return (
+    <article className="archiveChart">
+      <div className="archiveChartHeader">
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="archiveChartEmpty">
+          Grafik için henüz arşiv
+          kaydı bulunmuyor.
+        </div>
+      ) : (
+        <div className="barChartRows">
+          {rows.map((row) => (
+            <div
+              className="barChartRow"
+              key={row.label}
+              title={`${row.label}: ${row.count}`}
+            >
+              <span className="barChartLabel">
+                {row.label}
+              </span>
+
+              <div
+                className="barChartTrack"
+                aria-label={`${row.label}: ${row.count}`}
+              >
+                <div
+                  className="barChartFill"
+                  style={{
+                    width: `${
+                      (row.count /
+                        maximum) *
+                      100
+                    }%`,
+                  }}
+                />
+              </div>
+
+              <strong className="barChartValue">
+                {row.count}
+              </strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function ArchiveDonutChart({
+  title,
+  description,
+  rows,
+}: {
+  title: string;
+  description: string;
+  rows: Array<{
+    label: string;
+    count: number;
+  }>;
+}) {
+  const total = rows.reduce(
+    (sum, row) =>
+      sum + row.count,
+    0
+  );
+
+  const palette = [
+    "#047857",
+    "#d97706",
+    "#94a3b8",
+  ];
+
+  let offset = 0;
+
+  return (
+    <article className="archiveChart">
+      <div className="archiveChartHeader">
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+
+      {total === 0 ? (
+        <div className="archiveChartEmpty">
+          Doküman durumu için henüz
+          kayıt bulunmuyor.
+        </div>
+      ) : (
+        <div className="donutLayout">
+          <div className="donutVisual">
+            <svg
+              viewBox="0 0 120 120"
+              role="img"
+              aria-label={`Toplam ${total} arşiv kaydı`}
+            >
+              <circle
+                className="donutBase"
+                cx="60"
+                cy="60"
+                r="46"
+              />
+
+              {rows.map(
+                (row, index) => {
+                  const percentage =
+                    row.count / total;
+
+                  const length =
+                    percentage * 289;
+
+                  const currentOffset =
+                    offset;
+
+                  offset += length;
+
+                  return (
+                    <circle
+                      key={row.label}
+                      className="donutSegment"
+                      cx="60"
+                      cy="60"
+                      r="46"
+                      stroke={
+                        palette[
+                          index %
+                            palette.length
+                        ]
+                      }
+                      strokeDasharray={`${length} ${
+                        289 - length
+                      }`}
+                      strokeDashoffset={
+                        -currentOffset
+                      }
+                    />
+                  );
+                }
+              )}
+            </svg>
+
+            <div className="donutCenter">
+              <strong>{total}</strong>
+              <span>Arşiv Kaydı</span>
+            </div>
+          </div>
+
+          <div className="donutLegend">
+            {rows.map(
+              (row, index) => (
+                <div
+                  className="donutLegendRow"
+                  key={row.label}
+                >
+                  <span
+                    className="donutLegendDot"
+                    style={{
+                      background:
+                        palette[
+                          index %
+                            palette.length
+                        ],
+                    }}
+                  />
+
+                  <span>{row.label}</span>
+
+                  <strong>
+                    {row.count}
+                  </strong>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
+    </article>
   );
 }
 
