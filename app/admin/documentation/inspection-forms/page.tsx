@@ -349,6 +349,47 @@ function complianceClass(rate: number | null): string {
   return "critical";
 }
 
+
+function escapePdfHtml(
+  value: unknown
+): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function pdfResultLabel(
+  value: unknown
+): string {
+  const key = String(value ?? "")
+    .trim()
+    .toLocaleUpperCase("tr-TR");
+
+  if (key.includes("UYGUNSUZ")) {
+    return "Uygunsuz";
+  }
+
+  if (key.includes("KISMEN")) {
+    return "Kısmen Uygun";
+  }
+
+  if (key === "UYGUN") {
+    return "Uygun";
+  }
+
+  if (
+    key.includes("KAPSAM") ||
+    key === "N/A"
+  ) {
+    return "Kapsam Dışı";
+  }
+
+  return key || "-";
+}
+
 export default function InspectionFormsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyId, setCompanyId] = useState("");
@@ -372,40 +413,6 @@ export default function InspectionFormsPage() {
   const [reportSearch, setReportSearch] =
     useState("");
 
-  const [printReportId, setPrintReportId] =
-    useState<string | null>(null);
-
-  useEffect(() => {
-    const handlePrintMessage = (
-      event: MessageEvent
-    ) => {
-      if (
-        event.origin !==
-        window.location.origin
-      ) {
-        return;
-      }
-
-      if (
-        event.data?.type ===
-        "DSEC_INSPECTION_PRINT_FINISHED"
-      ) {
-        setPrintReportId(null);
-      }
-    };
-
-    window.addEventListener(
-      "message",
-      handlePrintMessage
-    );
-
-    return () => {
-      window.removeEventListener(
-        "message",
-        handlePrintMessage
-      );
-    };
-  }, []);
 
   const loadCompanies = useCallback(async () => {
     const response = await fetch("/api/admin/companies", {
@@ -524,6 +531,872 @@ export default function InspectionFormsPage() {
   useEffect(() => {
     void loadReports();
   }, [loadReports]);
+
+  const createPdfDirectly =
+    useCallback(
+      async (
+        reportId: string
+      ) => {
+        /*
+         * Pencereyi kullanıcı tıklaması sırasında hemen aç.
+         * Böylece tarayıcı popup engeline takılmaz.
+         */
+        const printWindow =
+          window.open(
+            "",
+            "_blank",
+            "width=1100,height=850"
+          );
+
+        if (!printWindow) {
+          setError(
+            "PDF penceresi açılamadı. Tarayıcı açılır pencere iznini kontrol edin."
+          );
+          return;
+        }
+
+        printWindow.document.open();
+        printWindow.document.write(`
+          <!doctype html>
+          <html lang="tr">
+            <head>
+              <meta charset="utf-8" />
+              <title>Rapor hazırlanıyor</title>
+            </head>
+            <body
+              style="
+                margin:0;
+                padding:40px;
+                font-family:Arial,Helvetica,sans-serif;
+                color:#172033;
+                background:#fff;
+              "
+            >
+              D-SEC denetim raporu hazırlanıyor...
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+
+        try {
+          const response =
+            await fetch(
+              `/api/admin/documentation/inspection-reports?id=${encodeURIComponent(
+                reportId
+              )}`,
+              {
+                credentials:
+                  "include",
+                cache:
+                  "no-store",
+              }
+            );
+
+          const json =
+            await response
+              .json()
+              .catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(
+              json.detail ||
+                json.error ||
+                "Rapor alınamadı."
+            );
+          }
+
+          const report:
+            InspectionReport | null =
+            Array.isArray(
+              json.reports
+            )
+              ? json.reports[0] ||
+                null
+              : null;
+
+          if (!report) {
+            throw new Error(
+              "Rapor bulunamadı."
+            );
+          }
+
+          const title =
+            reportDisplayTitle(
+              report
+            );
+
+          const code =
+            reportDisplayCode(
+              report
+            );
+
+          const date =
+            reportDate(report);
+
+          const rateNumber =
+            report.compliance_rate ==
+            null
+              ? null
+              : Number(
+                  report.compliance_rate
+                );
+
+          const rateText =
+            rateNumber == null
+              ? "-"
+              : `%${rateNumber.toFixed(
+                  1
+                )}`;
+
+          const answers =
+            Array.isArray(
+              report.result_json
+                ?.answers
+            )
+              ? report.result_json!
+                  .answers!
+              : [];
+
+          const rows =
+            answers.length
+              ? answers
+                  .map(
+                    (
+                      answer,
+                      index
+                    ) => `
+                    <tr>
+                      <td>${index + 1}</td>
+                      <td>
+                        <strong>
+                          ${escapePdfHtml(
+                            answer.itemTitle ||
+                              answer.question ||
+                              "-"
+                          )}
+                        </strong>
+                      </td>
+                      <td>
+                        ${escapePdfHtml(
+                          pdfResultLabel(
+                            answer.result
+                          )
+                        )}
+                      </td>
+                      <td>
+                        ${escapePdfHtml(
+                          answer.currentCondition ||
+                            answer.explanation ||
+                            "-"
+                        )}
+                      </td>
+                      <td>
+                        ${escapePdfHtml(
+                          answer.requiredAction ||
+                            "-"
+                        )}
+                      </td>
+                      <td>
+                        ${escapePdfHtml(
+                          answer.legalReference ||
+                            "-"
+                        )}
+                      </td>
+                    </tr>
+                  `
+                  )
+                  .join("")
+              : `
+                <tr>
+                  <td colspan="6">
+                    Madde ayrıntısı bulunamadı.
+                  </td>
+                </tr>
+              `;
+
+          const html = `
+            <!doctype html>
+            <html lang="tr">
+              <head>
+                <meta charset="utf-8" />
+                <meta
+                  name="viewport"
+                  content="width=device-width,initial-scale=1"
+                />
+                <title>
+                  ${escapePdfHtml(
+                    title
+                  )} - D-SEC Denetim Raporu
+                </title>
+
+                <style>
+                  *{
+                    box-sizing:border-box
+                  }
+
+                  html,
+                  body{
+                    margin:0;
+                    padding:0;
+                    color:#172033;
+                    background:#fff;
+                    font-family:
+                      Arial,
+                      Helvetica,
+                      sans-serif
+                  }
+
+                  body{
+                    width:100%;
+                  }
+
+                  .document{
+                    width:100%;
+                    margin:0;
+                    background:#fff
+                  }
+
+                  .hero{
+                    padding:24px 28px;
+                    color:#fff;
+                    background:
+                      linear-gradient(
+                        120deg,
+                        #651117,
+                        #a92228 58%,
+                        #e08118
+                      )
+                  }
+
+                  .brand{
+                    font-size:10px;
+                    font-weight:900;
+                    letter-spacing:1px
+                  }
+
+                  h1{
+                    margin:17px 0 8px;
+                    font-size:28px;
+                    line-height:1.08
+                  }
+
+                  .formTitle{
+                    margin:0;
+                    font-size:16px;
+                    font-weight:800
+                  }
+
+                  .purpose{
+                    display:block;
+                    margin-top:5px;
+                    font-size:9px;
+                    opacity:.8
+                  }
+
+                  .tags{
+                    display:flex;
+                    flex-wrap:wrap;
+                    gap:6px;
+                    margin-top:16px
+                  }
+
+                  .tags span{
+                    padding:5px 8px;
+                    border:1px solid
+                      rgba(
+                        255,
+                        255,
+                        255,
+                        .28
+                      );
+                    border-radius:999px;
+                    background:
+                      rgba(
+                        255,
+                        255,
+                        255,
+                        .12
+                      );
+                    font-size:8px;
+                    font-weight:800
+                  }
+
+                  .identity{
+                    display:grid;
+                    grid-template-columns:
+                      repeat(
+                        4,
+                        minmax(
+                          0,
+                          1fr
+                        )
+                      );
+                    gap:8px;
+                    padding:14px 18px
+                  }
+
+                  .info{
+                    padding:10px;
+                    border:1px solid
+                      #e5e8ed;
+                    border-radius:10px;
+                    background:#fbfcfe
+                  }
+
+                  .info small{
+                    display:block;
+                    color:#7b8798;
+                    font-size:7px;
+                    font-weight:800;
+                    text-transform:
+                      uppercase
+                  }
+
+                  .info strong{
+                    display:block;
+                    margin-top:4px;
+                    font-size:10px
+                  }
+
+                  .score{
+                    margin:0 18px;
+                    padding:13px;
+                    border:1px solid
+                      #e5e8ed;
+                    border-radius:11px;
+                    background:#f7f8fa
+                  }
+
+                  .scoreTop{
+                    display:flex;
+                    align-items:center;
+                    justify-content:
+                      space-between
+                  }
+
+                  .scoreTop span{
+                    font-size:9px;
+                    font-weight:800
+                  }
+
+                  .scoreTop strong{
+                    font-size:22px
+                  }
+
+                  .track{
+                    height:7px;
+                    margin-top:8px;
+                    overflow:hidden;
+                    border-radius:999px;
+                    background:#dfe3e8
+                  }
+
+                  .track i{
+                    display:block;
+                    width:${
+                      rateNumber == null
+                        ? 0
+                        : Math.max(
+                            0,
+                            Math.min(
+                              100,
+                              rateNumber
+                            )
+                          )
+                    }%;
+                    height:100%;
+                    background:
+                      linear-gradient(
+                        90deg,
+                        #8f1d22,
+                        #e48619
+                      )
+                  }
+
+                  .kpis{
+                    display:grid;
+                    grid-template-columns:
+                      repeat(
+                        4,
+                        minmax(
+                          0,
+                          1fr
+                        )
+                      );
+                    gap:8px;
+                    padding:
+                      11px
+                      18px
+                      15px
+                  }
+
+                  .kpi{
+                    padding:10px;
+                    border-radius:10px
+                  }
+
+                  .kpi small{
+                    display:block;
+                    font-size:7px;
+                    font-weight:800
+                  }
+
+                  .kpi strong{
+                    display:block;
+                    margin-top:3px;
+                    font-size:18px
+                  }
+
+                  .ok{
+                    color:#16753b;
+                    background:#eaf8ef
+                  }
+
+                  .partial{
+                    color:#9a6500;
+                    background:#fff6df
+                  }
+
+                  .bad{
+                    color:#b42318;
+                    background:#ffeded
+                  }
+
+                  .neutral{
+                    color:#475467;
+                    background:#edf1f5
+                  }
+
+                  .section{
+                    padding:
+                      3px
+                      18px
+                      14px
+                  }
+
+                  .section h2{
+                    margin:0 0 9px;
+                    font-size:14px
+                  }
+
+                  table{
+                    width:100%;
+                    border-collapse:
+                      collapse;
+                    table-layout:fixed;
+                    font-size:7px
+                  }
+
+                  th{
+                    padding:5px;
+                    color:#475467;
+                    background:#f4f5f7;
+                    text-align:left
+                  }
+
+                  td{
+                    padding:5px;
+                    border-top:1px solid
+                      #edf0f3;
+                    vertical-align:top;
+                    line-height:1.35;
+                    word-break:break-word
+                  }
+
+                  thead{
+                    display:
+                      table-header-group
+                  }
+
+                  tr{
+                    break-inside:avoid;
+                    page-break-inside:
+                      avoid
+                  }
+
+                  .notes{
+                    margin:
+                      0
+                      18px
+                      14px;
+                    padding:11px;
+                    border:1px solid
+                      #e5e8ed;
+                    border-radius:10px;
+                    background:#fafbfc
+                  }
+
+                  .notes h2{
+                    margin:0 0 7px;
+                    font-size:14px
+                  }
+
+                  .notes p{
+                    margin:0;
+                    color:#475467;
+                    font-size:8px;
+                    line-height:1.5
+                  }
+
+                  footer{
+                    display:flex;
+                    justify-content:
+                      space-between;
+                    padding:12px 18px;
+                    border-top:1px solid
+                      #eaecf0;
+                    color:#667085;
+                    font-size:7px
+                  }
+
+                  footer strong{
+                    color:#8f1d22;
+                    font-size:12px
+                  }
+
+                  @page{
+                    size:A4 portrait;
+                    margin:8mm
+                  }
+
+                  @media print{
+                    html,
+                    body{
+                      display:block;
+                      width:auto;
+                      min-height:0;
+                      overflow:visible
+                    }
+
+                    .document{
+                      display:block;
+                      width:100%;
+                      overflow:visible
+                    }
+
+                    .hero,
+                    .kpi,
+                    .track i{
+                      -webkit-print-color-adjust:
+                        exact;
+                      print-color-adjust:
+                        exact
+                    }
+                  }
+                </style>
+              </head>
+
+              <body>
+                <article class="document">
+                  <header class="hero">
+                    <div class="brand">
+                      D-SEC • DOKÜMANTASYON MODÜLÜ
+                    </div>
+
+                    <h1>
+                      İş Sağlığı ve Güvenliği
+                      <br />
+                      Denetim Sonuç Raporu
+                    </h1>
+
+                    <p class="formTitle">
+                      ${escapePdfHtml(
+                        title
+                      )}
+                    </p>
+
+                    <small class="purpose">
+                      Denetim Sonuç Arşivi
+                    </small>
+
+                    <div class="tags">
+                      <span>
+                        ${escapePdfHtml(
+                          reportModeLabel(
+                            report
+                          )
+                        )}
+                      </span>
+
+                      <span>
+                        ${escapePdfHtml(
+                          code
+                        )}
+                      </span>
+
+                      <span>
+                        ${escapePdfHtml(
+                          date
+                        )}
+                      </span>
+                    </div>
+                  </header>
+
+                  <section class="identity">
+                    <div class="info">
+                      <small>
+                        Denetçi
+                      </small>
+
+                      <strong>
+                        ${escapePdfHtml(
+                          report.inspector_name ||
+                            "Belirtilmedi"
+                        )}
+                      </strong>
+                    </div>
+
+                    <div class="info">
+                      <small>
+                        Lokasyon
+                      </small>
+
+                      <strong>
+                        ${escapePdfHtml(
+                          report.result_json
+                            ?.location ||
+                            "Belirtilmedi"
+                        )}
+                      </strong>
+                    </div>
+
+                    <div class="info">
+                      <small>
+                        Tamamlanma
+                      </small>
+
+                      <strong>
+                        ${escapePdfHtml(
+                          date
+                        )}
+                      </strong>
+                    </div>
+
+                    <div class="info">
+                      <small>
+                        Toplam Madde
+                      </small>
+
+                      <strong>
+                        ${report.total_item_count}
+                      </strong>
+                    </div>
+                  </section>
+
+                  <section class="score">
+                    <div class="scoreTop">
+                      <span>
+                        Genel Uyum Skoru
+                      </span>
+
+                      <strong>
+                        ${escapePdfHtml(
+                          rateText
+                        )}
+                      </strong>
+                    </div>
+
+                    <div class="track">
+                      <i></i>
+                    </div>
+                  </section>
+
+                  <section class="kpis">
+                    <div class="kpi ok">
+                      <small>
+                        Uygun
+                      </small>
+                      <strong>
+                        ${report.compliant_count}
+                      </strong>
+                    </div>
+
+                    <div class="kpi partial">
+                      <small>
+                        Kısmen Uygun
+                      </small>
+                      <strong>
+                        ${report.partial_count}
+                      </strong>
+                    </div>
+
+                    <div class="kpi bad">
+                      <small>
+                        Uygunsuz
+                      </small>
+                      <strong>
+                        ${report.non_compliant_count}
+                      </strong>
+                    </div>
+
+                    <div class="kpi neutral">
+                      <small>
+                        Kapsam Dışı
+                      </small>
+                      <strong>
+                        ${
+                          report.not_applicable_count ||
+                          0
+                        }
+                      </strong>
+                    </div>
+                  </section>
+
+                  <section class="section">
+                    <h2>
+                      Denetim Bulguları
+                    </h2>
+
+                    <table>
+                      <thead>
+                        <tr>
+                          <th
+                            style="width:4%"
+                          >
+                            No
+                          </th>
+                          <th
+                            style="width:25%"
+                          >
+                            Denetim Maddesi
+                          </th>
+                          <th
+                            style="width:10%"
+                          >
+                            Sonuç
+                          </th>
+                          <th
+                            style="width:22%"
+                          >
+                            Mevcut Durum /
+                            Açıklama
+                          </th>
+                          <th
+                            style="width:22%"
+                          >
+                            Önerilen Önlem
+                          </th>
+                          <th
+                            style="width:17%"
+                          >
+                            Mevzuat
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        ${rows}
+                      </tbody>
+                    </table>
+                  </section>
+
+                  <section class="notes">
+                    <h2>
+                      Genel Değerlendirme
+                    </h2>
+
+                    <p>
+                      ${escapePdfHtml(
+                        report.result_json
+                          ?.generalNote ||
+                          "Denetim sonuçlarının ilgili sorumlularca değerlendirilmesi ve uygunsuzluklar için takip planı oluşturulması önerilir."
+                      )}
+                    </p>
+                  </section>
+
+                  <footer>
+                    <div>
+                      <strong>
+                        D-SEC
+                      </strong>
+                      <br />
+                      Dijital Sağlık • Emniyet • Çevre
+                    </div>
+
+                    <div>
+                      Rapor ID:
+                      ${escapePdfHtml(
+                        report.id
+                      )}
+                    </div>
+                  </footer>
+                </article>
+              </body>
+            </html>
+          `;
+
+          printWindow.document.open();
+          printWindow.document.write(
+            html
+          );
+          printWindow.document.close();
+
+          const startPrint =
+            async () => {
+              if (
+                printWindow.document
+                  .fonts?.ready
+              ) {
+                await printWindow
+                  .document
+                  .fonts
+                  .ready;
+              }
+
+              await new Promise<void>(
+                (resolve) => {
+                  printWindow
+                    .requestAnimationFrame(
+                      () => {
+                        printWindow
+                          .requestAnimationFrame(
+                            () => {
+                              resolve();
+                            }
+                          );
+                      }
+                    );
+                }
+              );
+
+              printWindow.focus();
+
+              window.setTimeout(
+                () => {
+                  printWindow.print();
+                },
+                700
+              );
+            };
+
+          if (
+            printWindow.document
+              .readyState ===
+            "complete"
+          ) {
+            void startPrint();
+          } else {
+            printWindow
+              .addEventListener(
+                "load",
+                () => {
+                  void startPrint();
+                },
+                { once: true }
+              );
+          }
+        } catch (pdfError) {
+          printWindow.close();
+
+          setError(
+            pdfError instanceof Error
+              ? pdfError.message
+              : "PDF raporu oluşturulamadı."
+          );
+        }
+      },
+      []
+    );
 
   const filteredForms = useMemo(() => {
     const q = search.trim().toLocaleLowerCase("tr-TR");
@@ -1621,7 +2494,7 @@ export default function InspectionFormsPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          setPrintReportId(
+                          void createPdfDirectly(
                             report.id
                           )
                         }
@@ -1649,13 +2522,6 @@ export default function InspectionFormsPage() {
         </>
       )}
 
-      {printReportId ? (
-        <iframe
-          title="Denetim PDF Yazdırma"
-          src={`/admin/documentation/inspection-reports/${printReportId}?print=1`}
-          className="printFrame"
-        />
-      ) : null}
 
       {editorOpen ? (
         <div className="backdrop">
@@ -2867,18 +3733,6 @@ export default function InspectionFormsPage() {
         .archiveStatusTrack { height:12px;background:#eceff3;border-radius:999px;overflow:hidden; }
         .archiveStatusTrack i { display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#7b1b20,#dc7e18); }
         .archiveStatusRow b { text-align:right;color:#101828; }
-
-        .printFrame{
-          position:fixed;
-          top:0;
-          left:-10000px;
-          width:210mm;
-          height:297mm;
-          border:0;
-          background:#fff;
-          opacity:.01;
-          pointer-events:none;
-        }
 
         .archiveIdentityStrip{
           display:grid;
