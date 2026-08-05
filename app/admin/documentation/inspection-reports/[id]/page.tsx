@@ -32,6 +32,8 @@ type AnswerRow = {
 type Report = {
   id: string;
   form_title: string;
+  display_form_title?: string;
+  display_form_code?: string;
   inspection_name?: string;
   inspector_name: string;
   inspection_date?: string | null;
@@ -63,6 +65,28 @@ type Report = {
 function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
+
+function cleanFormName(value: unknown): string {
+  return clean(value)
+    .replace(/WEB[\s_-]*STANDARD/gi, "")
+    .replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
+      ""
+    )
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function displayTitle(report: Report): string {
+  return (
+    clean(report.display_form_title) ||
+    cleanFormName(report.inspection_name) ||
+    cleanFormName(report.form_title) ||
+    "Denetim Formu"
+  );
+}
+
 
 function resultLabel(value: string): string {
   const key = value.toUpperCase();
@@ -109,10 +133,55 @@ export default function InspectionReportDetailPage() {
   }, [params.id]);
 
   useEffect(() => {
-    if (report && searchParams.get("print") === "1") {
-      const timer = window.setTimeout(() => window.print(), 500);
-      return () => window.clearTimeout(timer);
+    if (
+      !report ||
+      searchParams.get("print") !== "1"
+    ) {
+      return;
     }
+
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const prepareAndPrint = async () => {
+      document.title = `${displayTitle(report)} - D-SEC Denetim Raporu`;
+
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
+      await Promise.all(
+        Array.from(document.images).map(
+          (image) =>
+            image.complete
+              ? Promise.resolve()
+              : new Promise<void>((resolve) => {
+                  image.addEventListener("load", () => resolve(), { once: true });
+                  image.addEventListener("error", () => resolve(), { once: true });
+                })
+        )
+      );
+
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => resolve())
+        )
+      );
+
+      if (!cancelled) {
+        timer = window.setTimeout(
+          () => window.print(),
+          900
+        );
+      }
+    };
+
+    void prepareAndPrint();
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
   }, [report, searchParams]);
 
   const answers = useMemo(
@@ -139,7 +208,7 @@ export default function InspectionReportDetailPage() {
     <main className="reportPage">
       <div className="screenActions noPrint">
         <button onClick={() => window.close()}><ArrowLeft size={17}/> Geri</button>
-        <button className="printBtn" onClick={() => window.print()}><Printer size={17}/> PDF Oluştur / Yazdır</button>
+        <button className="printBtn" onClick={() => window.print()}><Printer size={17}/> PDF Raporu Oluştur</button>
         {report.signed_pdf_url ? (
           <a href={report.signed_pdf_url} target="_blank" rel="noreferrer"><Download size={17}/> İmzalı Belge</a>
         ) : null}
@@ -149,10 +218,10 @@ export default function InspectionReportDetailPage() {
         <header className="hero">
           <div className="brandLine"><ShieldCheck size={28}/><span>D-SEC DENETİM YÖNETİMİ</span></div>
           <h1>İş Sağlığı ve Güvenliği<br/>Denetim Sonuç Raporu</h1>
-          <p>{report.inspection_name || report.form_title}</p>
+          <p>{displayTitle(report)}</p>
           <div className="heroTags">
             <span>{modeLabel(clean(report.result_json?.auditMode))}</span>
-            <span>{report.form?.code || "Arşiv Kaydı"}</span>
+            <span>{report.form?.code || report.display_form_code || "Arşiv Kaydı"}</span>
             <span>v{report.form?.version_no || 1}</span>
             <span>{date}</span>
           </div>
@@ -217,7 +286,7 @@ export default function InspectionReportDetailPage() {
       <style jsx global>{`
         *{box-sizing:border-box} body{margin:0;background:#eef1f5;color:#172033;font-family:Arial,Helvetica,sans-serif}.reportPage{padding:28px}.screenActions{max-width:1180px;margin:0 auto 16px;display:flex;justify-content:flex-end;gap:9px}.screenActions button,.screenActions a{display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:0 14px;border-radius:11px;border:1px solid #d0d5dd;background:#fff;color:#344054;font-weight:800;text-decoration:none;cursor:pointer}.screenActions .printBtn{background:#8f1d22;color:#fff;border-color:#8f1d22}.document{max-width:1180px;margin:auto;background:#fff;border-radius:26px;overflow:hidden;box-shadow:0 24px 70px rgba(15,23,42,.12)}.hero{padding:40px 46px;color:#fff;background:linear-gradient(120deg,#651117,#a92228 58%,#e08118);position:relative}.brandLine{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:900;letter-spacing:1px}.hero h1{font-size:42px;line-height:1.04;margin:22px 0 12px;letter-spacing:-1.4px}.hero p{font-size:17px;opacity:.9}.heroTags{display:flex;flex-wrap:wrap;gap:8px;margin-top:25px}.heroTags span{padding:8px 12px;border:1px solid rgba(255,255,255,.25);border-radius:999px;background:rgba(255,255,255,.12);font-size:11px;font-weight:850}.identityGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:24px 34px}.info{display:grid;grid-template-columns:35px 1fr;gap:8px;padding:15px;border:1px solid #e8ebf0;border-radius:15px;background:#fbfcfe}.info svg{color:#961f24}.info small{display:block;color:#7b8798;font-size:10px;font-weight:850;text-transform:uppercase}.info b{display:block;margin-top:4px}.scoreSection{margin:0 34px;padding:19px;border-radius:17px;background:#f6f7f9;border:1px solid #e7e9ee}.scoreMain{display:flex;align-items:center;gap:12px}.scoreMain svg{color:#971e23}.scoreMain div{display:flex;align-items:baseline;justify-content:space-between;width:100%}.scoreMain small{font-weight:850;color:#667085}.scoreMain strong{font-size:31px}.scoreTrack{height:10px;margin-top:13px;border-radius:999px;background:#dfe3e8;overflow:hidden}.scoreTrack i{display:block;height:100%;background:linear-gradient(90deg,#9a1f24,#e48619);border-radius:inherit}.kpiGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:18px 34px 28px}.kpi{padding:16px;border-radius:15px;display:flex;align-items:center;gap:12px}.kpi svg{width:25px;height:25px}.kpi small{display:block;font-weight:850}.kpi strong{font-size:25px}.kpi.ok{background:#eaf8ef;color:#16753b}.kpi.partial{background:#fff6df;color:#9a6500}.kpi.bad{background:#ffeded;color:#b42318}.kpi.neutral{background:#edf1f5;color:#475467}.sectionBlock{padding:6px 34px 28px}.sectionHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}.sectionHead h2,.notes h2{margin:0;font-size:21px}.sectionHead span{padding:6px 10px;border-radius:999px;background:#f1f3f6;font-size:11px;font-weight:850}.tableWrap{overflow:auto;border:1px solid #e5e8ed;border-radius:15px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f4f5f7;color:#475467;text-align:left;padding:12px}td{padding:12px;border-top:1px solid #edf0f3;vertical-align:top;line-height:1.45}tbody tr:nth-child(even){background:#fcfcfd}.resultChip{display:inline-flex;padding:5px 8px;border-radius:999px;background:#eef1f5;font-weight:850;white-space:nowrap}.resultChip.uygun{background:#e8f7ee;color:#16723a}.resultChip.kismen{background:#fff4d8;color:#966200}.resultChip.uygunsuz{background:#ffe7e7;color:#b42318}.notes{margin:0 34px 30px;padding:20px;border:1px solid #e5e8ed;border-radius:16px;background:#fafbfc}.notes p{line-height:1.7;color:#475467}footer{display:flex;justify-content:space-between;align-items:flex-end;padding:22px 34px;border-top:1px solid #eaecf0;color:#667085;font-size:11px}footer div{display:flex;flex-direction:column}footer b{font-size:17px;color:#8f1d22}.emptyFindings{padding:35px;border:1px dashed #d0d5dd;border-radius:14px;text-align:center;color:#667085}.statePage{padding:80px;text-align:center;font-size:20px}.statePage.error{color:#b42318}
         @media(max-width:800px){.reportPage{padding:0}.document{border-radius:0}.identityGrid,.kpiGrid{grid-template-columns:repeat(2,1fr);padding-left:16px;padding-right:16px}.hero{padding:28px 20px}.hero h1{font-size:31px}.scoreSection,.notes{margin-left:16px;margin-right:16px}.sectionBlock{padding-left:16px;padding-right:16px}.screenActions{padding:10px;margin:0;flex-wrap:wrap}}
-        @media print{body{background:#fff}.reportPage{padding:0}.document{max-width:none;border-radius:0;box-shadow:none}.noPrint{display:none!important}.hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}.kpi,.scoreTrack i,.resultChip{-webkit-print-color-adjust:exact;print-color-adjust:exact}table{font-size:9px}th,td{padding:7px}.sectionBlock{break-inside:auto}tr{break-inside:avoid}.document{width:100%}}
+        @page{size:A4 portrait;margin:10mm}@media print{html,body{width:210mm!important;min-height:297mm!important;background:#fff!important}body{margin:0!important}.reportPage{width:100%!important;padding:0!important;background:#fff!important}.document{display:block!important;width:100%!important;max-width:none!important;min-height:277mm!important;border-radius:0!important;box-shadow:none!important;overflow:visible!important}.noPrint{display:none!important}.hero,.kpi,.scoreTrack i,.resultChip{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.hero{padding:24px 28px!important}.hero h1{font-size:29px!important}.identityGrid{padding:14px 20px!important;gap:8px!important}.scoreSection{margin:0 20px!important}.kpiGrid{padding:12px 20px 18px!important;gap:8px!important}.sectionBlock{padding:4px 20px 18px!important;break-inside:auto!important}.notes{margin:0 20px 18px!important}table{font-size:8px!important;table-layout:fixed!important}th,td{padding:6px!important;word-break:break-word!important}thead{display:table-header-group!important}tr{break-inside:avoid!important;page-break-inside:avoid!important}footer{padding:16px 20px!important}.statePage{display:none!important}}
       `}</style>
     </main>
   );

@@ -88,9 +88,101 @@ export async function GET(req: Request) {
       throw new Error(error.message);
     }
 
+    const reports = Array.isArray(data)
+      ? data
+      : [];
+
+    const uuidPattern =
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+
+    const unresolvedFormIds = Array.from(
+      new Set(
+        reports
+          .filter((report: any) => !report.form)
+          .map((report: any) => {
+            const direct = clean(
+              report.form_remote_id ||
+                report.form_id
+            );
+
+            if (direct) return direct;
+
+            const source = [
+              report.form_title,
+              report.inspection_name,
+              report.inspection_remote_id,
+            ]
+              .map(clean)
+              .join(" ");
+
+            return source.match(uuidPattern)?.[0] || "";
+          })
+          .filter(Boolean)
+      )
+    );
+
+    const resolvedFormMap =
+      new Map<string, any>();
+
+    if (unresolvedFormIds.length) {
+      const { data: resolvedForms } =
+        await supabase
+          .from("inspection_forms")
+          .select(
+            "id,title,code,category,form_type,version_no"
+          )
+          .in("id", unresolvedFormIds);
+
+      (resolvedForms || []).forEach(
+        (form: any) => {
+          resolvedFormMap.set(
+            clean(form.id),
+            form
+          );
+        }
+      );
+    }
+
+    const enrichedReports = reports.map(
+      (report: any) => {
+        const source = [
+          report.form_remote_id,
+          report.form_id,
+          report.form_title,
+          report.inspection_name,
+          report.inspection_remote_id,
+        ]
+          .map(clean)
+          .join(" ");
+
+        const resolvedId =
+          clean(report.form_remote_id) ||
+          clean(report.form_id) ||
+          source.match(uuidPattern)?.[0] ||
+          "";
+
+        const resolvedForm =
+          report.form ||
+          resolvedFormMap.get(resolvedId) ||
+          null;
+
+        return {
+          ...report,
+          form: resolvedForm,
+          display_form_title:
+            clean(resolvedForm?.title) ||
+            clean(report.form_title) ||
+            "Denetim Formu",
+          display_form_code:
+            clean(resolvedForm?.code) ||
+            "Arşiv Kaydı",
+        };
+      }
+    );
+
     return NextResponse.json({
       success: true,
-      reports: data ?? [],
+      reports: enrichedReports,
     });
   } catch (error) {
     return NextResponse.json(

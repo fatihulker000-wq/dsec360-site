@@ -95,6 +95,9 @@ type InspectionReport = {
   form_id: string | null;
   inspection_remote_id: string | null;
   form_title: string;
+  display_form_title?: string;
+  display_form_code?: string;
+  form_remote_id?: string | null;
   inspector_name: string;
   inspection_date: string | null;
   compliance_rate: number | null;
@@ -265,6 +268,48 @@ const typeText: Record<InspectionForm["form_type"], string> = {
   ELMERI: "Elmeri",
 };
 
+
+function cleanReportFormName(
+  value: unknown
+): string {
+  const text = String(value ?? "")
+    .replace(/WEB[\s_-]*STANDARD/gi, "")
+    .replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
+      ""
+    )
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text;
+}
+
+function reportDisplayTitle(
+  report: InspectionReport
+): string {
+  return (
+    report.form?.title?.trim() ||
+    report.display_form_title?.trim() ||
+    cleanReportFormName(
+      report.inspection_name
+    ) ||
+    cleanReportFormName(
+      report.form_title
+    ) ||
+    "Denetim Formu"
+  );
+}
+
+function reportDisplayCode(
+  report: InspectionReport
+): string {
+  return (
+    report.form?.code?.trim() ||
+    report.display_form_code?.trim() ||
+    "Arşiv Kaydı"
+  );
+}
 
 function reportModeLabel(report: InspectionReport): string {
   const raw = String(
@@ -473,7 +518,8 @@ export default function InspectionFormsPage() {
 
       return reports.filter((report) =>
         [
-          report.form_title,
+          reportDisplayTitle(report),
+          reportDisplayCode(report),
           report.inspector_name,
           report.report_status,
         ]
@@ -557,8 +603,7 @@ export default function InspectionFormsPage() {
         const category =
           report.form?.category
             ?.trim() ||
-          report.form_title
-            ?.trim() ||
+          reportDisplayTitle(report) ||
           "Diğer";
 
         categoryCounts.set(
@@ -593,8 +638,7 @@ export default function InspectionFormsPage() {
 
       reports.forEach((report) => {
         const title =
-          report.form_title
-            ?.trim() ||
+          reportDisplayTitle(report) ||
           "Adsız Form";
 
         formCounts.set(
@@ -1284,6 +1328,15 @@ export default function InspectionFormsPage() {
             />
           </section>
 
+          <section className="archiveOverviewHeader">
+            <div>
+              <span>DENETİM ARŞİVİ ANALİZİ</span>
+              <h2>Arşiv ve Belge Durumu</h2>
+              <p>Gerçekleştirilen denetimlerin kullanım, belge ve zaman dağılımını tek ekranda izleyin.</p>
+            </div>
+            <strong>{reports.length} arşiv kaydı</strong>
+          </section>
+
           <section className="archiveCharts">
             <ArchiveBarChart
               title="Son 6 Ayda Arşivlenen Denetimler"
@@ -1395,14 +1448,14 @@ export default function InspectionFormsPage() {
                       <div>
                         <div className="reportEyebrow">
                           <span>{reportModeLabel(report)}</span>
-                          <span>{report.form?.code || "Arşiv Kaydı"}</span>
+                          <span>{reportDisplayCode(report)}</span>
                         </div>
 
                         <h3>
-                          {report.inspection_name || report.form_title}
+                          {reportDisplayTitle(report)}
                         </h3>
 
-                        <p>{report.form_title}</p>
+                        <p>{reportDisplayCode(report)} • {reportModeLabel(report)}</p>
                       </div>
 
                       <span
@@ -1504,7 +1557,7 @@ export default function InspectionFormsPage() {
                         rel="noreferrer"
                       >
                         <Printer size={16} />
-                        PDF Oluştur
+                        PDF Raporu Oluştur
                       </a>
 
                       {report.signed_pdf_url ? (
@@ -2634,7 +2687,11 @@ export default function InspectionFormsPage() {
         .previewBody p { margin:6px 0; color:#475569; font-size:13px; }
         .spin { animation:spin .9s linear infinite; }
         @keyframes spin { to { transform:rotate(360deg); } }
-        @media(max-width:1100px){ .metrics{grid-template-columns:repeat(3,1fr)} .toolbar{grid-template-columns:1fr 1fr} }
+        
+        .archiveOverviewHeader{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin:24px 0 14px;padding:22px 24px;border:1px solid #eadfe0;border-radius:20px;background:linear-gradient(135deg,#fff 0%,#fff8f4 100%);box-shadow:0 10px 30px rgba(84,24,28,.06)}
+        .archiveOverviewHeader span{font-size:10px;letter-spacing:1.4px;font-weight:950;color:#9b2026}.archiveOverviewHeader h2{margin:5px 0 5px;font-size:25px;color:#182033}.archiveOverviewHeader p{margin:0;color:#667085;font-size:13px}.archiveOverviewHeader strong{padding:10px 14px;border-radius:999px;background:#8f1d22;color:#fff;white-space:nowrap;font-size:12px}
+        .archiveCharts{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:16px!important;align-items:stretch}.archiveCharts>section,.archiveCharts>div{min-height:250px;border:1px solid #e6e8ed!important;border-radius:20px!important;background:#fff!important;box-shadow:0 12px 35px rgba(15,23,42,.06)!important;padding:20px!important;overflow:hidden}.archiveCharts h3{font-size:17px!important;color:#182033!important;margin-bottom:4px!important}.archiveCharts p{color:#7b8492!important;font-size:12px!important;line-height:1.5!important}.archiveCharts svg{max-height:180px!important}.professionalReports{gap:18px!important}.corporateReportCard{border-radius:22px!important;box-shadow:0 16px 40px rgba(15,23,42,.08)!important}.corporateReportTop h3{font-size:21px!important;line-height:1.25!important}.corporateReportTop p{font-size:11px!important;color:#7a8494!important;letter-spacing:.3px!important}
+@media(max-width:1100px){ .metrics{grid-template-columns:repeat(3,1fr)} .toolbar{grid-template-columns:1fr 1fr} }
 
         .professionalReports {
           grid-template-columns: repeat(2,minmax(0,1fr));
