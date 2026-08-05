@@ -375,6 +375,38 @@ export default function InspectionFormsPage() {
   const [printReportId, setPrintReportId] =
     useState<string | null>(null);
 
+  useEffect(() => {
+    const handlePrintMessage = (
+      event: MessageEvent
+    ) => {
+      if (
+        event.origin !==
+        window.location.origin
+      ) {
+        return;
+      }
+
+      if (
+        event.data?.type ===
+        "DSEC_INSPECTION_PRINT_FINISHED"
+      ) {
+        setPrintReportId(null);
+      }
+    };
+
+    window.addEventListener(
+      "message",
+      handlePrintMessage
+    );
+
+    return () => {
+      window.removeEventListener(
+        "message",
+        handlePrintMessage
+      );
+    };
+  }, []);
+
   const loadCompanies = useCallback(async () => {
     const response = await fetch("/api/admin/companies", {
       credentials: "include",
@@ -1622,16 +1654,6 @@ export default function InspectionFormsPage() {
           title="Denetim PDF Yazdırma"
           src={`/admin/documentation/inspection-reports/${printReportId}?print=1`}
           className="printFrame"
-          onLoad={() => {
-            window.setTimeout(
-              () => {
-                setPrintReportId(
-                  null
-                );
-              },
-              2500
-            );
-          }}
         />
       ) : null}
 
@@ -2848,12 +2870,13 @@ export default function InspectionFormsPage() {
 
         .printFrame{
           position:fixed;
-          width:1px;
-          height:1px;
-          right:0;
-          bottom:0;
+          top:0;
+          left:-10000px;
+          width:210mm;
+          height:297mm;
           border:0;
-          opacity:0;
+          background:#fff;
+          opacity:.01;
           pointer-events:none;
         }
 
