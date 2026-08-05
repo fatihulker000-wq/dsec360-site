@@ -41,6 +41,7 @@ function getSupabase() {
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
+
     const firmId = clean(
       url.searchParams.get("firmId")
     );
@@ -52,20 +53,10 @@ export async function GET(req: Request) {
     const supabase = getSupabase();
 
     let query = supabase
-      .from("inspection_report_archive")
-      .select(
-        `
-        *,
-        form:inspection_forms(
-          id,
-          title,
-          code,
-          category,
-          form_type,
-          version_no
-        )
-        `
+      .from(
+        "inspection_report_archive"
       )
+      .select("*")
       .order("inspection_date", {
         ascending: false,
         nullsFirst: false,
@@ -75,114 +66,179 @@ export async function GET(req: Request) {
       });
 
     if (firmId) {
-      query = query.eq("firm_id", firmId);
-    }
-
-    if (reportId) {
-      query = query.eq("id", reportId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const reports = Array.isArray(data)
-      ? data
-      : [];
-
-    const uuidPattern =
-      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
-
-    const unresolvedFormIds = Array.from(
-      new Set(
-        reports
-          .filter((report: any) => !report.form)
-          .map((report: any) => {
-            const direct = clean(
-              report.form_remote_id ||
-                report.form_id
-            );
-
-            if (direct) return direct;
-
-            const source = [
-              report.form_title,
-              report.inspection_name,
-              report.inspection_remote_id,
-            ]
-              .map(clean)
-              .join(" ");
-
-            return source.match(uuidPattern)?.[0] || "";
-          })
-          .filter(Boolean)
-      )
-    );
-
-    const resolvedFormMap =
-      new Map<string, any>();
-
-    if (unresolvedFormIds.length) {
-      const { data: resolvedForms } =
-        await supabase
-          .from("inspection_forms")
-          .select(
-            "id,title,code,category,form_type,version_no"
-          )
-          .in("id", unresolvedFormIds);
-
-      (resolvedForms || []).forEach(
-        (form: any) => {
-          resolvedFormMap.set(
-            clean(form.id),
-            form
-          );
-        }
+      query = query.eq(
+        "firm_id",
+        firmId
       );
     }
 
-    const enrichedReports = reports.map(
-      (report: any) => {
-        const source = [
-          report.form_remote_id,
+    if (reportId) {
+      query = query.eq(
+        "id",
+        reportId
+      );
+    }
+
+    const {
+      data: reportRows,
+      error: reportsError,
+    } = await query;
+
+    if (reportsError) {
+      throw new Error(
+        reportsError.message
+      );
+    }
+
+    const reports =
+      Array.isArray(reportRows)
+        ? reportRows
+        : [];
+
+    const {
+      data: formRows,
+      error: formsError,
+    } = await supabase
+      .from("inspection_forms")
+      .select(
+        "id,title,code,category,form_type,version_no"
+      );
+
+    if (formsError) {
+      throw new Error(
+        formsError.message
+      );
+    }
+
+    const forms =
+      Array.isArray(formRows)
+        ? formRows
+        : [];
+
+    const compact = (
+      value: unknown
+    ): string =>
+      clean(value)
+        .toLocaleLowerCase("tr-TR")
+        .replace(/[^a-z0-9]/g, "");
+
+    const readable = (
+      value: unknown
+    ): string =>
+      clean(value)
+        .replace(
+          /WEB[\s_-]*STANDARD/gi,
+          ""
+        )
+        .replace(
+          /[0-9a-f]{32}/gi,
+          ""
+        )
+        .replace(
+          /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+          ""
+        )
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const formMap =
+      new Map<string, any>();
+
+    forms.forEach((form: any) => {
+      [
+        clean(form.id),
+        compact(form.id),
+        clean(form.code),
+        compact(form.code),
+      ]
+        .filter(Boolean)
+        .forEach((key) => {
+          formMap.set(key, form);
+        });
+    });
+
+    const enrichedReports =
+      reports.map((report: any) => {
+        const candidates = [
           report.form_id,
+          report.form_remote_id,
           report.form_title,
           report.inspection_name,
           report.inspection_remote_id,
-        ]
-          .map(clean)
-          .join(" ");
+        ];
 
-        const resolvedId =
-          clean(report.form_remote_id) ||
-          clean(report.form_id) ||
-          source.match(uuidPattern)?.[0] ||
-          "";
-
-        const resolvedForm =
-          report.form ||
-          resolvedFormMap.get(resolvedId) ||
+        let resolvedForm:
+          Record<string, unknown> | null =
           null;
+
+        for (const candidate of candidates) {
+          const direct =
+            clean(candidate);
+
+          const compactCandidate =
+            compact(candidate);
+
+          resolvedForm =
+            formMap.get(direct) ||
+            formMap.get(
+              compactCandidate
+            ) ||
+            null;
+
+          if (resolvedForm) {
+            break;
+          }
+
+          for (const form of forms) {
+            const compactFormId =
+              compact(form.id);
+
+            if (
+              compactFormId &&
+              compactCandidate.includes(
+                compactFormId
+              )
+            ) {
+              resolvedForm = form;
+              break;
+            }
+          }
+
+          if (resolvedForm) {
+            break;
+          }
+        }
+
+        const fallbackTitle =
+          readable(
+            report.inspection_name
+          ) ||
+          readable(
+            report.form_title
+          ) ||
+          "Denetim Formu";
 
         return {
           ...report,
           form: resolvedForm,
           display_form_title:
-            clean(resolvedForm?.title) ||
-            clean(report.form_title) ||
-            "Denetim Formu",
+            clean(
+              resolvedForm?.title
+            ) ||
+            fallbackTitle,
           display_form_code:
-            clean(resolvedForm?.code) ||
+            clean(
+              resolvedForm?.code
+            ) ||
             "Arşiv Kaydı",
         };
-      }
-    );
+      });
 
     return NextResponse.json({
       success: true,
-      reports: enrichedReports,
+      reports:
+        enrichedReports,
     });
   } catch (error) {
     return NextResponse.json(
@@ -200,10 +256,6 @@ export async function GET(req: Request) {
   }
 }
 
-/**
- * Denetim Modülü tamamlanan bir denetimi
- * arşive gönderirken bu POST işlemini kullanır.
- */
 export async function POST(req: Request) {
   try {
     const body = await req.json();

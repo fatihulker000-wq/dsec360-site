@@ -272,17 +272,22 @@ const typeText: Record<InspectionForm["form_type"], string> = {
 function cleanReportFormName(
   value: unknown
 ): string {
-  const text = String(value ?? "")
-    .replace(/WEB[\s_-]*STANDARD/gi, "")
+  return String(value ?? "")
     .replace(
-      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
+      /WEB[\s_-]*STANDARD/gi,
+      ""
+    )
+    .replace(
+      /[0-9a-f]{32}/gi,
+      ""
+    )
+    .replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
       ""
     )
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-
-  return text;
 }
 
 function reportDisplayTitle(
@@ -1331,8 +1336,8 @@ export default function InspectionFormsPage() {
           <section className="archiveOverviewHeader">
             <div>
               <span>DENETİM ARŞİVİ ANALİZİ</span>
-              <h2>Arşiv ve Belge Durumu</h2>
-              <p>Gerçekleştirilen denetimlerin kullanım, belge ve zaman dağılımını tek ekranda izleyin.</p>
+              <h2>Denetim Doküman Arşivi</h2>
+              <p>Tamamlanan denetimlere ait sonuç belgelerini, gerçek form adlarını ve PDF durumlarını kurumsal arşiv düzeninde izleyin.</p>
             </div>
             <strong>{reports.length} arşiv kaydı</strong>
           </section>
@@ -1475,6 +1480,33 @@ export default function InspectionFormsPage() {
                       </span>
                     </div>
 
+                    <div className="archiveIdentityStrip">
+                      <div>
+                        <small>Doküman Adı</small>
+                        <strong>
+                          {reportDisplayTitle(report)}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <small>Belge Kodu</small>
+                        <strong>
+                          {reportDisplayCode(report)}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <small>Arşiv Durumu</small>
+                        <strong>
+                          {report.signed_pdf_url
+                            ? "İmzalı Belge"
+                            : report.generated_pdf_url
+                              ? "PDF Hazır"
+                              : "Sonuç Kaydı"}
+                        </strong>
+                      </div>
+                    </div>
+
                     <div className="reportMetaGrid">
                       <span>
                         <CalendarDays size={16} />
@@ -1552,12 +1584,12 @@ export default function InspectionFormsPage() {
                       </a>
 
                       <a
-                        href={`/admin/documentation/inspection-reports/${report.id}?print=1`}
+                        href={`/admin/documentation/inspection-reports/${report.id}`}
                         target="_blank"
                         rel="noreferrer"
                       >
                         <Printer size={16} />
-                        PDF Raporu Oluştur
+                        PDF Raporunu Aç
                       </a>
 
                       {report.signed_pdf_url ? (
@@ -2790,7 +2822,128 @@ export default function InspectionFormsPage() {
         .archiveStatusTrack i { display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#7b1b20,#dc7e18); }
         .archiveStatusRow b { text-align:right;color:#101828; }
 
-        @media(max-width:720px){ .page{padding:12px} .professionalReports,.reportMetaGrid,.corporateResults{grid-template-columns:1fr 1fr}  .auditModeGrid,.visibilityGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
+        .archiveIdentityStrip{
+          display:grid;
+          grid-template-columns:2fr 1fr 1fr;
+          gap:10px;
+          margin:14px 0;
+          padding:13px;
+          border:1px solid #e8eaf0;
+          border-radius:15px;
+          background:linear-gradient(
+            135deg,
+            #fbfcfe,
+            #fff8f5
+          );
+        }
+
+        .archiveIdentityStrip>div{
+          min-width:0;
+          padding-right:10px;
+          border-right:1px solid #e6e8ed;
+        }
+
+        .archiveIdentityStrip>div:last-child{
+          padding-right:0;
+          border-right:0;
+        }
+
+        .archiveIdentityStrip small{
+          display:block;
+          margin-bottom:5px;
+          color:#8a94a5;
+          font-size:9px;
+          font-weight:900;
+          letter-spacing:.5px;
+          text-transform:uppercase;
+        }
+
+        .archiveIdentityStrip strong{
+          display:block;
+          overflow:hidden;
+          color:#202738;
+          font-size:12px;
+          line-height:1.35;
+          text-overflow:ellipsis;
+        }
+
+        .corporateReportCard{
+          position:relative;
+          border:1px solid #e7e9ee!important;
+          background:
+            radial-gradient(
+              circle at 100% 0,
+              rgba(223,124,29,.08),
+              transparent 30%
+            ),
+            #fff!important;
+        }
+
+        .corporateReportTop{
+          padding-bottom:13px;
+          border-bottom:1px solid #edf0f3;
+        }
+
+        .corporateReportTop h3{
+          max-width:620px;
+          color:#182033!important;
+          font-size:23px!important;
+          letter-spacing:-.35px;
+        }
+
+        .reportEyebrow{
+          margin-bottom:8px;
+        }
+
+        .reportEyebrow span:first-child{
+          color:#fff!important;
+          background:#8f1d22!important;
+        }
+
+        .reportEyebrow span:last-child{
+          color:#5f6979!important;
+          background:#f5f6f8!important;
+          border:1px solid #e3e6eb;
+        }
+
+        .compliancePanel{
+          border:1px solid #e7e9ee;
+          background:#fafbfc!important;
+        }
+
+        .corporateReportActions{
+          padding-top:14px;
+          border-top:1px solid #edf0f3;
+        }
+
+        .corporateReportActions a{
+          min-height:42px;
+          border-radius:11px!important;
+          font-weight:850!important;
+        }
+
+        .corporateReportActions .primaryReportAction{
+          color:#fff!important;
+          background:#8f1d22!important;
+          border-color:#8f1d22!important;
+        }
+
+        .archiveCharts>section,
+        .archiveCharts>div{
+          min-height:230px!important;
+          background:
+            linear-gradient(
+              180deg,
+              #fff,
+              #fbfcfe
+            )!important;
+        }
+
+        .archiveOverviewHeader{
+          border-left:5px solid #8f1d22!important;
+        }
+
+        @media(max-width:720px){ .page{padding:12px} .professionalReports,.reportMetaGrid,.corporateResults,.archiveIdentityStrip{grid-template-columns:1fr}  .auditModeGrid,.visibilityGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
       `}</style>
     </main>
   );
