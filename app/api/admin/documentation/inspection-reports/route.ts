@@ -45,6 +45,10 @@ export async function GET(req: Request) {
       url.searchParams.get("firmId")
     );
 
+    const reportId = clean(
+      url.searchParams.get("id")
+    );
+
     const supabase = getSupabase();
 
     let query = supabase
@@ -72,6 +76,10 @@ export async function GET(req: Request) {
 
     if (firmId) {
       query = query.eq("firm_id", firmId);
+    }
+
+    if (reportId) {
+      query = query.eq("id", reportId);
     }
 
     const { data, error } = await query;

@@ -24,6 +24,11 @@ import {
   CalendarDays,
   Download,
   UserRound,
+  ExternalLink,
+  Printer,
+  ShieldCheck,
+  MapPin,
+  Gauge,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -98,6 +103,28 @@ type InspectionReport = {
   partial_count: number;
   non_compliant_count: number;
   critical_count: number;
+  not_applicable_count?: number;
+  inspection_name?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  result_json?: {
+    answers?: Array<{
+      itemId?: string;
+      itemTitle?: string;
+      question?: string;
+      result?: string;
+      currentCondition?: string;
+      explanation?: string;
+      requiredAction?: string;
+      legalReference?: string;
+      riskLevel?: string;
+    }>;
+    auditMode?: string;
+    reportNo?: string;
+    location?: string;
+    responsible?: string;
+    generalNote?: string;
+  } | null;
   report_status: string;
   generated_pdf_url: string | null;
   signed_pdf_url: string | null;
@@ -237,6 +264,40 @@ const typeText: Record<InspectionForm["form_type"], string> = {
   SCORING: "Puanlamalı",
   ELMERI: "Elmeri",
 };
+
+
+function reportModeLabel(report: InspectionReport): string {
+  const raw = String(
+    report.result_json?.auditMode ||
+      report.form?.form_type ||
+      "CLASSIC"
+  ).toUpperCase();
+
+  if (raw.includes("PUAN") || raw.includes("SCOR")) return "Puanlamalı";
+  if (raw.includes("FOTO") || raw.includes("PHOTO")) return "Fotoğraflı";
+  if (raw.includes("ELMERI")) return "ELMERI";
+  return "Klasik";
+}
+
+function reportDate(report: InspectionReport): string {
+  const raw = report.completed_at || report.inspection_date || report.created_at;
+  if (!raw) return "-";
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime())
+    ? "-"
+    : date.toLocaleDateString("tr-TR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+}
+
+function complianceClass(rate: number | null): string {
+  if (rate == null) return "neutral";
+  if (rate >= 90) return "excellent";
+  if (rate >= 75) return "good";
+  return "critical";
+}
 
 export default function InspectionFormsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -1236,12 +1297,10 @@ export default function InspectionFormsPage() {
               rows={archiveCharts.categories}
             />
 
-            <ArchiveDonutChart
+            <ArchiveStatusChart
               title="Doküman Durumu"
               description="İmzalı, PDF bulunan ve belge bekleyen arşiv kayıtları."
-              rows={
-                archiveCharts.documentStatus
-              }
+              rows={archiveCharts.documentStatus}
             />
 
             <ArchiveBarChart
@@ -1318,144 +1377,150 @@ export default function InspectionFormsPage() {
               </div>
             ) : null}
 
-            <div className="reportGrid">
-              {filteredReports.map(
-                (report) => (
+            <div className="reportGrid professionalReports">
+              {filteredReports.map((report) => {
+                const rate =
+                  report.compliance_rate == null
+                    ? null
+                    : Number(report.compliance_rate);
+
+                return (
                   <article
                     key={report.id}
-                    className="reportCard"
+                    className={`reportCard corporateReportCard ${complianceClass(rate)}`}
                   >
-                    <div className="reportTop">
+                    <div className="reportAccent" />
+
+                    <div className="reportTop corporateReportTop">
                       <div>
+                        <div className="reportEyebrow">
+                          <span>{reportModeLabel(report)}</span>
+                          <span>{report.form?.code || "Arşiv Kaydı"}</span>
+                        </div>
+
                         <h3>
-                          {report.form_title}
+                          {report.inspection_name || report.form_title}
                         </h3>
 
-                        <p>
-                          {report.form?.code ||
-                            "Form kodu yok"}
-                        </p>
+                        <p>{report.form_title}</p>
                       </div>
 
                       <span
                         className={
                           report.signed_pdf_url
                             ? "reportStatus signed"
-                            : "reportStatus pending"
+                            : report.generated_pdf_url
+                              ? "reportStatus generated"
+                              : "reportStatus pending"
                         }
                       >
                         {report.signed_pdf_url
                           ? "İmzalı"
-                          : "İmza Bekliyor"}
+                          : report.generated_pdf_url
+                            ? "PDF Hazır"
+                            : "Arşivlendi"}
                       </span>
                     </div>
 
-                    <div className="reportFacts">
+                    <div className="reportMetaGrid">
                       <span>
-                        <CalendarDays size={15} />
-                        {report.inspection_date
-                          ? new Date(
-                              report.inspection_date
-                            ).toLocaleDateString(
-                              "tr-TR"
-                            )
-                          : "-"}
+                        <CalendarDays size={16} />
+                        <small>Tamamlanma</small>
+                        <b>{reportDate(report)}</b>
                       </span>
 
                       <span>
-                        <UserRound size={15} />
-                        {report.inspector_name ||
-                          "Denetçi belirtilmedi"}
+                        <UserRound size={16} />
+                        <small>Denetçi</small>
+                        <b>{report.inspector_name || "Belirtilmedi"}</b>
                       </span>
 
                       <span>
-                        <ClipboardCheck size={15} />
-                        {
-                          report.total_item_count
-                        }{" "}
-                        madde
+                        <MapPin size={16} />
+                        <small>Lokasyon</small>
+                        <b>{report.result_json?.location || "Belirtilmedi"}</b>
                       </span>
 
                       <span>
-                        <BarChart3 size={15} />
-                        {report.compliance_rate ==
-                        null
-                          ? "-"
-                          : `%${Number(
-                              report.compliance_rate
-                            ).toFixed(1)}`}
+                        <ClipboardCheck size={16} />
+                        <small>Toplam Madde</small>
+                        <b>{report.total_item_count}</b>
                       </span>
                     </div>
 
-                    <div className="resultNumbers">
-                      <span className="ok">
-                        Uygun
-                        <b>
-                          {
-                            report.compliant_count
-                          }
-                        </b>
-                      </span>
-
-                      <span className="partial">
-                        Kısmen
-                        <b>
-                          {report.partial_count}
-                        </b>
-                      </span>
-
-                      <span className="bad">
-                        Uygunsuz
-                        <b>
-                          {
-                            report.non_compliant_count
-                          }
-                        </b>
-                      </span>
-
-                      <span className="critical">
-                        Kritik
-                        <b>
-                          {report.critical_count}
-                        </b>
-                      </span>
-                    </div>
-
-                    <div className="reportActions">
-                      {report.generated_pdf_url ? (
-                        <a
-                          href={
-                            report.generated_pdf_url
-                          }
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <Eye size={16} />
-                          Raporu Aç
-                        </a>
-                      ) : (
+                    <div className="compliancePanel">
+                      <div>
+                        <Gauge size={20} />
                         <span>
-                          PDF henüz
-                          oluşturulmadı
+                          <small>Genel Uyum Skoru</small>
+                          <strong>
+                            {rate == null ? "-" : `%${rate.toFixed(1)}`}
+                          </strong>
                         </span>
-                      )}
+                      </div>
+
+                      <div className="complianceTrack">
+                        <i
+                          style={{
+                            width: `${Math.max(0, Math.min(100, rate || 0))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="resultNumbers corporateResults">
+                      <span className="ok">
+                        <small>Uygun</small>
+                        <b>{report.compliant_count}</b>
+                      </span>
+                      <span className="partial">
+                        <small>Kısmen</small>
+                        <b>{report.partial_count}</b>
+                      </span>
+                      <span className="bad">
+                        <small>Uygunsuz</small>
+                        <b>{report.non_compliant_count}</b>
+                      </span>
+                      <span className="critical">
+                        <small>Kritik</small>
+                        <b>{report.critical_count}</b>
+                      </span>
+                    </div>
+
+                    <div className="reportActions corporateReportActions">
+                      <a
+                        className="primaryReportAction"
+                        href={`/admin/documentation/inspection-reports/${report.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink size={16} />
+                        Kurumsal Raporu Aç
+                      </a>
+
+                      <a
+                        href={`/admin/documentation/inspection-reports/${report.id}?print=1`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Printer size={16} />
+                        PDF Oluştur
+                      </a>
 
                       {report.signed_pdf_url ? (
                         <a
-                          href={
-                            report.signed_pdf_url
-                          }
+                          href={report.signed_pdf_url}
                           target="_blank"
                           rel="noreferrer"
                         >
                           <Download size={16} />
-                          İmzalı Rapor
+                          İmzalı Belge
                         </a>
                       ) : null}
                     </div>
                   </article>
-                )
-              )}
+                );
+              })}
             </div>
           </section>
         </>
@@ -2570,7 +2635,105 @@ export default function InspectionFormsPage() {
         .spin { animation:spin .9s linear infinite; }
         @keyframes spin { to { transform:rotate(360deg); } }
         @media(max-width:1100px){ .metrics{grid-template-columns:repeat(3,1fr)} .toolbar{grid-template-columns:1fr 1fr} }
-        @media(max-width:720px){ .page{padding:12px} .auditModeGrid,.visibilityGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
+
+        .professionalReports {
+          grid-template-columns: repeat(2,minmax(0,1fr));
+          gap: 18px;
+        }
+
+        .corporateReportCard {
+          position: relative;
+          overflow: hidden;
+          border: 1px solid #e7e9ee;
+          border-radius: 22px;
+          padding: 22px;
+          background: linear-gradient(180deg,#fff 0%,#fbfcfe 100%);
+          box-shadow: 0 16px 40px rgba(15,23,42,.08);
+        }
+
+        .reportAccent {
+          position: absolute;
+          inset: 0 auto 0 0;
+          width: 5px;
+          background: #9b1c22;
+        }
+
+        .corporateReportCard.excellent .reportAccent { background:#159447; }
+        .corporateReportCard.good .reportAccent { background:#d58a09; }
+        .corporateReportCard.critical .reportAccent { background:#c62828; }
+
+        .corporateReportTop {
+          align-items:flex-start;
+          gap:16px;
+          margin-bottom:18px;
+        }
+
+        .corporateReportTop h3 {
+          margin:7px 0 3px;
+          font-size:20px;
+          letter-spacing:-.3px;
+          color:#111827;
+        }
+
+        .corporateReportTop p { margin:0;color:#697386;font-size:13px; }
+
+        .reportEyebrow { display:flex;flex-wrap:wrap;gap:7px; }
+        .reportEyebrow span {
+          padding:5px 9px;border-radius:999px;background:#f3f4f6;
+          color:#4b5563;font-size:10px;font-weight:900;text-transform:uppercase;
+          letter-spacing:.45px;
+        }
+
+        .reportStatus.generated { background:#e8f1ff;color:#2459a7; }
+
+        .reportMetaGrid {
+          display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;
+        }
+        .reportMetaGrid>span {
+          display:grid;grid-template-columns:22px 1fr;column-gap:7px;
+          padding:12px;border:1px solid #edf0f4;border-radius:13px;background:#fff;
+        }
+        .reportMetaGrid svg { grid-row:1/3;color:#9b1c22;margin-top:2px; }
+        .reportMetaGrid small { color:#8490a2;font-size:10px;font-weight:800;text-transform:uppercase; }
+        .reportMetaGrid b { color:#1f2937;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+
+        .compliancePanel {
+          margin-top:14px;padding:14px;border-radius:15px;background:#f7f8fa;
+          border:1px solid #eaedf1;
+        }
+        .compliancePanel>div:first-child { display:flex;align-items:center;gap:10px; }
+        .compliancePanel svg { color:#9b1c22; }
+        .compliancePanel span { display:flex;align-items:baseline;justify-content:space-between;gap:12px;width:100%; }
+        .compliancePanel small { color:#667085;font-weight:800; }
+        .compliancePanel strong { font-size:23px;color:#111827; }
+        .complianceTrack { height:8px;margin-top:10px;background:#e4e7ec;border-radius:999px;overflow:hidden; }
+        .complianceTrack i { display:block;height:100%;background:linear-gradient(90deg,#9b1c22,#e87919);border-radius:inherit; }
+        .excellent .complianceTrack i { background:linear-gradient(90deg,#16894a,#4fc47d); }
+        .good .complianceTrack i { background:linear-gradient(90deg,#c57a05,#f2b84b); }
+
+        .corporateResults { grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px; }
+        .corporateResults span { display:flex;flex-direction:column;align-items:flex-start;padding:11px;border-radius:12px; }
+        .corporateResults small { font-size:10px;text-transform:uppercase;font-weight:800; }
+        .corporateResults b { font-size:22px; }
+
+        .corporateReportActions { margin-top:17px;display:flex;flex-wrap:wrap;gap:8px; }
+        .corporateReportActions a {
+          display:inline-flex;align-items:center;justify-content:center;gap:7px;
+          min-height:40px;padding:0 13px;border:1px solid #d8dde5;border-radius:11px;
+          color:#344054;background:#fff;text-decoration:none;font-size:12px;font-weight:850;
+        }
+        .corporateReportActions .primaryReportAction {
+          color:#fff;background:#8f1d22;border-color:#8f1d22;box-shadow:0 8px 20px rgba(143,29,34,.18);
+        }
+
+        .archiveStatusChart { display:grid;gap:12px; }
+        .archiveStatusRow { display:grid;grid-template-columns:120px 1fr 34px;gap:10px;align-items:center; }
+        .archiveStatusRow span { color:#475467;font-size:12px;font-weight:750; }
+        .archiveStatusTrack { height:12px;background:#eceff3;border-radius:999px;overflow:hidden; }
+        .archiveStatusTrack i { display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#7b1b20,#dc7e18); }
+        .archiveStatusRow b { text-align:right;color:#101828; }
+
+        @media(max-width:720px){ .page{padding:12px} .professionalReports,.reportMetaGrid,.corporateResults{grid-template-columns:1fr 1fr}  .auditModeGrid,.visibilityGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
       `}</style>
     </main>
   );
@@ -2680,6 +2843,40 @@ function ArchiveBarChart({
           ))}
         </div>
       )}
+    </article>
+  );
+}
+
+
+function ArchiveStatusChart({
+  title,
+  description,
+  rows,
+}: {
+  title: string;
+  description: string;
+  rows: Array<{ label: string; count: number }>;
+}) {
+  const max = Math.max(1, ...rows.map((row) => row.count));
+
+  return (
+    <article className="archiveChart">
+      <div className="archiveChartHeader">
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+
+      <div className="archiveStatusChart">
+        {rows.map((row) => (
+          <div className="archiveStatusRow" key={row.label}>
+            <span>{row.label}</span>
+            <div className="archiveStatusTrack">
+              <i style={{ width: `${(row.count / max) * 100}%` }} />
+            </div>
+            <b>{row.count}</b>
+          </div>
+        ))}
+      </div>
     </article>
   );
 }
