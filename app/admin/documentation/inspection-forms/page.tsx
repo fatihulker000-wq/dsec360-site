@@ -372,6 +372,9 @@ export default function InspectionFormsPage() {
   const [reportSearch, setReportSearch] =
     useState("");
 
+  const [printReportId, setPrintReportId] =
+    useState<string | null>(null);
+
   const loadCompanies = useCallback(async () => {
     const response = await fetch("/api/admin/companies", {
       credentials: "include",
@@ -1583,14 +1586,17 @@ export default function InspectionFormsPage() {
                         Kurumsal Raporu Aç
                       </a>
 
-                      <a
-                        href={`/admin/documentation/inspection-reports/${report.id}`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPrintReportId(
+                            report.id
+                          )
+                        }
                       >
                         <Printer size={16} />
-                        PDF Raporunu Aç
-                      </a>
+                        PDF Oluştur
+                      </button>
 
                       {report.signed_pdf_url ? (
                         <a
@@ -1610,6 +1616,24 @@ export default function InspectionFormsPage() {
           </section>
         </>
       )}
+
+      {printReportId ? (
+        <iframe
+          title="Denetim PDF Yazdırma"
+          src={`/admin/documentation/inspection-reports/${printReportId}?print=1`}
+          className="printFrame"
+          onLoad={() => {
+            window.setTimeout(
+              () => {
+                setPrintReportId(
+                  null
+                );
+              },
+              2500
+            );
+          }}
+        />
+      ) : null}
 
       {editorOpen ? (
         <div className="backdrop">
@@ -2822,6 +2846,17 @@ export default function InspectionFormsPage() {
         .archiveStatusTrack i { display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#7b1b20,#dc7e18); }
         .archiveStatusRow b { text-align:right;color:#101828; }
 
+        .printFrame{
+          position:fixed;
+          width:1px;
+          height:1px;
+          right:0;
+          bottom:0;
+          border:0;
+          opacity:0;
+          pointer-events:none;
+        }
+
         .archiveIdentityStrip{
           display:grid;
           grid-template-columns:2fr 1fr 1fr;
@@ -2916,10 +2951,12 @@ export default function InspectionFormsPage() {
           border-top:1px solid #edf0f3;
         }
 
-        .corporateReportActions a{
+        .corporateReportActions a,.corporateReportActions button{
           min-height:42px;
           border-radius:11px!important;
           font-weight:850!important;
+          cursor:pointer;
+          font-family:inherit;
         }
 
         .corporateReportActions .primaryReportAction{

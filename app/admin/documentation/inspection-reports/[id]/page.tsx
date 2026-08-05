@@ -15,7 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 type AnswerRow = {
   itemId?: string;
@@ -108,6 +108,7 @@ function modeLabel(value: string): string {
 
 export default function InspectionReportDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -505,6 +506,86 @@ export default function InspectionReportDetailPage() {
       );
     }
   };
+
+  useEffect(() => {
+    if (
+      !report ||
+      searchParams.get("print") !== "1"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer:
+      number | undefined;
+
+    const printWhenReady =
+      async () => {
+        if (document.fonts?.ready) {
+          await document.fonts.ready;
+        }
+
+        await Promise.all(
+          Array.from(
+            document.images
+          ).map((image) =>
+            image.complete
+              ? Promise.resolve()
+              : new Promise<void>(
+                  (resolve) => {
+                    image.addEventListener(
+                      "load",
+                      () => resolve(),
+                      { once: true }
+                    );
+
+                    image.addEventListener(
+                      "error",
+                      () => resolve(),
+                      { once: true }
+                    );
+                  }
+                )
+          )
+        );
+
+        await new Promise<void>(
+          (resolve) => {
+            requestAnimationFrame(
+              () => {
+                requestAnimationFrame(
+                  () => {
+                    resolve();
+                  }
+                );
+              }
+            );
+          }
+        );
+
+        if (!cancelled) {
+          timer =
+            window.setTimeout(
+              () => {
+                window.print();
+              },
+              500
+            );
+        }
+      };
+
+    void printWhenReady();
+
+    return () => {
+      cancelled = true;
+
+      if (timer) {
+        window.clearTimeout(
+          timer
+        );
+      }
+    };
+  }, [report, searchParams]);
 
   const answers = useMemo(
     () => (Array.isArray(report?.result_json?.answers) ? report!.result_json!.answers! : []),
