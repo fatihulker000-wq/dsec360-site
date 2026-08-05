@@ -3101,10 +3101,139 @@ export default function InspectionFormsPage() {
         }
 
         .archiveChart {
+          position: relative;
+          min-height: 270px;
+          overflow: hidden;
           border: 1px solid #e5e7eb;
-          border-radius: 18px;
-          padding: 16px;
-          background: #ffffff;
+          border-radius: 22px;
+          padding: 20px;
+          background:
+            radial-gradient(
+              circle at 100% 0,
+              rgba(143,29,34,.07),
+              transparent 34%
+            ),
+            linear-gradient(
+              180deg,
+              #ffffff,
+              #fbfcfe
+            );
+          box-shadow:
+            0 14px 38px
+            rgba(15,23,42,.07);
+          transition:
+            transform .2s ease,
+            box-shadow .2s ease;
+        }
+
+        .archiveChart:hover {
+          transform: translateY(-2px);
+          box-shadow:
+            0 18px 44px
+            rgba(15,23,42,.11);
+        }
+
+        .archiveChart::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 4px;
+          background:
+            linear-gradient(
+              90deg,
+              #8f1d22,
+              #d97706
+            );
+        }
+
+        .archiveChartHeader {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 18px;
+        }
+
+        .archiveChartTitleLine {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          min-width: 0;
+        }
+
+        .archiveChartIcon {
+          width: 42px;
+          height: 42px;
+          flex: 0 0 42px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 13px;
+          color: #ffffff;
+          background:
+            linear-gradient(
+              135deg,
+              #7f1d1d,
+              #b4232a
+            );
+          box-shadow:
+            0 9px 20px
+            rgba(127,29,29,.18);
+        }
+
+        .typeChart .archiveChartIcon {
+          background:
+            linear-gradient(
+              135deg,
+              #b45309,
+              #e58a18
+            );
+        }
+
+        .usageChart .archiveChartIcon {
+          background:
+            linear-gradient(
+              135deg,
+              #334155,
+              #64748b
+            );
+        }
+
+        .statusChart .archiveChartIcon {
+          background:
+            linear-gradient(
+              135deg,
+              #6d28d9,
+              #8b5cf6
+            );
+        }
+
+        .archiveChartTotal {
+          min-width: 68px;
+          padding: 9px 12px;
+          border: 1px solid #e9e4e3;
+          border-radius: 14px;
+          background: rgba(255,255,255,.86);
+          text-align: center;
+        }
+
+        .archiveChartTotal small {
+          display: block;
+          color: #8b95a5;
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: .55px;
+          text-transform: uppercase;
+        }
+
+        .archiveChartTotal strong {
+          display: block;
+          margin-top: 3px;
+          color: #172033;
+          font-size: 22px;
+          line-height: 1;
         }
 
         .archiveChartHeader h3 {
@@ -3121,34 +3250,52 @@ export default function InspectionFormsPage() {
         }
 
         .barChartRows {
-          margin-top: 16px;
+          margin-top: 8px;
           display: grid;
-          gap: 10px;
+          gap: 13px;
         }
 
         .barChartRow {
           display: grid;
           grid-template-columns:
-            minmax(110px,1.2fr)
-            minmax(140px,3fr)
-            38px;
-          gap: 10px;
+            minmax(135px,1.3fr)
+            minmax(150px,3fr)
+            42px;
+          gap: 12px;
           align-items: center;
         }
 
+        .barChartLabelBlock {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .barChartLabelBlock small {
+          flex: 0 0 auto;
+          color: #98a2b3;
+          font-size: 9px;
+          font-weight: 900;
+        }
+
         .barChartLabel {
-          color: #475569;
+          color: #344054;
           font-size: 12px;
+          font-weight: 800;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
         }
 
         .barChartTrack {
-          height: 10px;
+          height: 12px;
+          padding: 2px;
+          border: 1px solid #e7eaf0;
           border-radius: 999px;
           overflow: hidden;
-          background: #f1f5f9;
+          background: #f3f5f8;
         }
 
         .barChartFill {
@@ -3158,9 +3305,40 @@ export default function InspectionFormsPage() {
           background:
             linear-gradient(
               90deg,
-              #7f1d1d,
+              #8f1d22,
               #d97706
             );
+          box-shadow:
+            0 2px 8px
+            rgba(143,29,34,.2);
+        }
+
+        .typeChart .barChartFill {
+          background:
+            linear-gradient(
+              90deg,
+              #b45309,
+              #f59e0b
+            );
+        }
+
+        .usageChart .barChartFill {
+          background:
+            linear-gradient(
+              90deg,
+              #334155,
+              #64748b
+            );
+        }
+
+        .barChartValue {
+          min-width: 36px;
+          padding: 6px 8px;
+          border-radius: 10px;
+          color: #172033;
+          background: #f4f6f8;
+          text-align: center;
+          font-size: 12px;
         }
 
         .barChartValue {
@@ -3632,6 +3810,101 @@ export default function InspectionFormsPage() {
         .spin { animation:spin .9s linear infinite; }
         @keyframes spin { to { transform:rotate(360deg); } }
         
+        .archiveStatusCards {
+          display: grid;
+          grid-template-columns:
+            repeat(3,minmax(0,1fr));
+          gap: 11px;
+          margin-top: 12px;
+        }
+
+        .archiveStatusCard {
+          padding: 14px;
+          border: 1px solid #e7eaf0;
+          border-radius: 16px;
+          background: #ffffff;
+        }
+
+        .archiveStatusCard > div:first-child {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .archiveStatusCard span {
+          color: #475467;
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .archiveStatusCard small {
+          color: #98a2b3;
+          font-size: 9px;
+          font-weight: 900;
+        }
+
+        .archiveStatusCard strong {
+          display: block;
+          margin: 10px 0;
+          color: #172033;
+          font-size: 27px;
+          line-height: 1;
+        }
+
+        .archiveStatusTrack {
+          height: 7px;
+          overflow: hidden;
+          border-radius: 999px;
+          background: #eef1f5;
+        }
+
+        .archiveStatusTrack i {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: #8f1d22;
+        }
+
+        .statusTone1 {
+          background:
+            linear-gradient(
+              180deg,
+              #f1fbf5,
+              #ffffff
+            );
+        }
+
+        .statusTone1 .archiveStatusTrack i {
+          background: #16834a;
+        }
+
+        .statusTone2 {
+          background:
+            linear-gradient(
+              180deg,
+              #fff8e8,
+              #ffffff
+            );
+        }
+
+        .statusTone2 .archiveStatusTrack i {
+          background: #d97706;
+        }
+
+        .statusTone3 {
+          background:
+            linear-gradient(
+              180deg,
+              #fff1f1,
+              #ffffff
+            );
+        }
+
+        .statusTone3 .archiveStatusTrack i {
+          background: #b42318;
+        }
+
         .archiveOverviewHeader{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin:24px 0 14px;padding:22px 24px;border:1px solid #eadfe0;border-radius:20px;background:linear-gradient(135deg,#fff 0%,#fff8f4 100%);box-shadow:0 10px 30px rgba(84,24,28,.06)}
         .archiveOverviewHeader span{font-size:10px;letter-spacing:1.4px;font-weight:950;color:#9b2026}.archiveOverviewHeader h2{margin:5px 0 5px;font-size:25px;color:#182033}.archiveOverviewHeader p{margin:0;color:#667085;font-size:13px}.archiveOverviewHeader strong{padding:10px 14px;border-radius:999px;background:#8f1d22;color:#fff;white-space:nowrap;font-size:12px}
         .archiveCharts{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:16px!important;align-items:stretch}.archiveCharts>section,.archiveCharts>div{min-height:250px;border:1px solid #e6e8ed!important;border-radius:20px!important;background:#fff!important;box-shadow:0 12px 35px rgba(15,23,42,.06)!important;padding:20px!important;overflow:hidden}.archiveCharts h3{font-size:17px!important;color:#182033!important;margin-bottom:4px!important}.archiveCharts p{color:#7b8492!important;font-size:12px!important;line-height:1.5!important}.archiveCharts svg{max-height:180px!important}.professionalReports{gap:18px!important}.corporateReportCard{border-radius:22px!important;box-shadow:0 16px 40px rgba(15,23,42,.08)!important}.corporateReportTop h3{font-size:21px!important;line-height:1.25!important}.corporateReportTop p{font-size:11px!important;color:#7a8494!important;letter-spacing:.3px!important}
@@ -3857,7 +4130,7 @@ export default function InspectionFormsPage() {
           border-left:5px solid #8f1d22!important;
         }
 
-        @media(max-width:720px){ .page{padding:12px} .professionalReports,.reportMetaGrid,.corporateResults,.archiveIdentityStrip{grid-template-columns:1fr}  .auditModeGrid,.visibilityGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(90px,1fr) minmax(90px,2fr) 32px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
+        @media(max-width:720px){ .page{padding:12px} .professionalReports,.reportMetaGrid,.corporateResults,.archiveIdentityStrip{grid-template-columns:1fr}  .auditModeGrid,.visibilityGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers,.archiveStatusCards{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(110px,1.2fr) minmax(90px,2fr) 38px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
       `}</style>
     </main>
   );
@@ -3920,11 +4193,61 @@ function ArchiveBarChart({
     )
   );
 
+  const total = rows.reduce(
+    (sum, row) =>
+      sum + row.count,
+    0
+  );
+
+  const isTrend =
+    title
+      .toLocaleLowerCase("tr-TR")
+      .includes("6 ay");
+
+  const isType =
+    title
+      .toLocaleLowerCase("tr-TR")
+      .includes("türü");
+
+  const isUsage =
+    title
+      .toLocaleLowerCase("tr-TR")
+      .includes("kullanılan");
+
   return (
-    <article className="archiveChart">
+    <article
+      className={`archiveChart ${
+        isTrend
+          ? "trendChart"
+          : isType
+            ? "typeChart"
+            : isUsage
+              ? "usageChart"
+              : ""
+      }`}
+    >
       <div className="archiveChartHeader">
-        <h3>{title}</h3>
-        <p>{description}</p>
+        <div className="archiveChartTitleLine">
+          <span className="archiveChartIcon">
+            {isTrend ? (
+              <BarChart3 size={19} />
+            ) : isType ? (
+              <Layers3 size={19} />
+            ) : (
+              <ClipboardCheck size={19} />
+            )}
+          </span>
+
+          <div>
+            <h3>{title}</h3>
+            <p>{description}</p>
+          </div>
+        </div>
+
+        <div className="archiveChartTotal">
+          <small>Toplam</small>
+          <strong>{total}</strong>
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -3934,37 +4257,56 @@ function ArchiveBarChart({
         </div>
       ) : (
         <div className="barChartRows">
-          {rows.map((row) => (
-            <div
-              className="barChartRow"
-              key={row.label}
-              title={`${row.label}: ${row.count}`}
-            >
-              <span className="barChartLabel">
-                {row.label}
-              </span>
+          {rows.map((row) => {
+            const percentage =
+              total > 0
+                ? Math.round(
+                    (
+                      row.count /
+                      total
+                    ) * 100
+                  )
+                : 0;
 
+            return (
               <div
-                className="barChartTrack"
-                aria-label={`${row.label}: ${row.count}`}
+                className="barChartRow"
+                key={row.label}
+                title={`${row.label}: ${row.count}`}
               >
-                <div
-                  className="barChartFill"
-                  style={{
-                    width: `${
-                      (row.count /
-                        maximum) *
-                      100
-                    }%`,
-                  }}
-                />
-              </div>
+                <div className="barChartLabelBlock">
+                  <span className="barChartLabel">
+                    {row.label}
+                  </span>
 
-              <strong className="barChartValue">
-                {row.count}
-              </strong>
-            </div>
-          ))}
+                  <small>
+                    %{percentage}
+                  </small>
+                </div>
+
+                <div
+                  className="barChartTrack"
+                  aria-label={`${row.label}: ${row.count}`}
+                >
+                  <div
+                    className="barChartFill"
+                    style={{
+                      width: `${
+                        (
+                          row.count /
+                          maximum
+                        ) * 100
+                      }%`,
+                    }}
+                  />
+                </div>
+
+                <strong className="barChartValue">
+                  {row.count}
+                </strong>
+              </div>
+            );
+          })}
         </div>
       )}
     </article>
@@ -3979,27 +4321,76 @@ function ArchiveStatusChart({
 }: {
   title: string;
   description: string;
-  rows: Array<{ label: string; count: number }>;
+  rows: Array<{
+    label: string;
+    count: number;
+  }>;
 }) {
-  const max = Math.max(1, ...rows.map((row) => row.count));
+  const total = rows.reduce(
+    (sum, row) =>
+      sum + row.count,
+    0
+  );
 
   return (
-    <article className="archiveChart">
+    <article className="archiveChart statusChart">
       <div className="archiveChartHeader">
-        <h3>{title}</h3>
-        <p>{description}</p>
+        <div className="archiveChartTitleLine">
+          <span className="archiveChartIcon">
+            <FileText size={19} />
+          </span>
+
+          <div>
+            <h3>{title}</h3>
+            <p>{description}</p>
+          </div>
+        </div>
+
+        <div className="archiveChartTotal">
+          <small>Belge</small>
+          <strong>{total}</strong>
+        </div>
       </div>
 
-      <div className="archiveStatusChart">
-        {rows.map((row) => (
-          <div className="archiveStatusRow" key={row.label}>
-            <span>{row.label}</span>
-            <div className="archiveStatusTrack">
-              <i style={{ width: `${(row.count / max) * 100}%` }} />
+      <div className="archiveStatusCards">
+        {rows.map((row, index) => {
+          const percentage =
+            total > 0
+              ? Math.round(
+                  (
+                    row.count /
+                    total
+                  ) * 100
+                )
+              : 0;
+
+          return (
+            <div
+              className={`archiveStatusCard statusTone${index + 1}`}
+              key={row.label}
+            >
+              <div>
+                <span>{row.label}</span>
+                <small>
+                  %{percentage}
+                </small>
+              </div>
+
+              <strong>
+                {row.count}
+              </strong>
+
+              <div className="archiveStatusTrack">
+                <i
+                  style={{
+                    width:
+                      `${percentage}%`,
+                  }}
+                />
+              </div>
             </div>
-            <b>{row.count}</b>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </article>
   );
