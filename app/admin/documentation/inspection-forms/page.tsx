@@ -2250,31 +2250,41 @@ export default function InspectionFormsPage() {
             <strong>{reports.length} arşiv kaydı</strong>
           </section>
 
-          <section className="archiveCharts">
-            <ArchiveBarChart
+          <section className="archiveMatrix">
+            <ArchiveTablePanel
               title="Son 6 Ayda Arşivlenen Denetimler"
-              description="Tamamlanıp doküman arşivine aktarılan denetim sayısı."
+              description="Tamamlanıp doküman arşivine aktarılan denetimlerin aylık dağılımı."
+              icon={<BarChart3 size={19} />}
+              firstColumn="Dönem"
               rows={archiveCharts.months}
+              tone="burgundy"
             />
 
-            <ArchiveBarChart
+            <ArchiveTablePanel
               title="Denetim Türü Dağılımı"
-              description="Arşivde en fazla bulunan form türleri ve kategorileri."
+              description="Arşivde yer alan denetimlerin kategori ve tür bazlı dağılımı."
+              icon={<Layers3 size={19} />}
+              firstColumn="Denetim Türü"
               rows={archiveCharts.categories}
+              tone="orange"
             />
 
-            <ArchiveStatusChart
+            <ArchiveTablePanel
               title="Doküman Durumu"
-              description="İmzalı, PDF bulunan ve belge bekleyen arşiv kayıtları."
+              description="PDF, imza ve belge bekleme durumlarının güncel özeti."
+              icon={<FileText size={19} />}
+              firstColumn="Doküman Durumu"
               rows={archiveCharts.documentStatus}
+              tone="purple"
             />
 
-            <ArchiveBarChart
+            <ArchiveTablePanel
               title="En Çok Kullanılan Formlar"
               description="Tamamlanan denetimlerde en sık kullanılan form şablonları."
-              rows={
-                archiveCharts.mostUsedForms
-              }
+              icon={<ClipboardCheck size={19} />}
+              firstColumn="Form Adı"
+              rows={archiveCharts.mostUsedForms}
+              tone="slate"
             />
           </section>
 
@@ -3098,6 +3108,360 @@ export default function InspectionFormsPage() {
           grid-template-columns:
             repeat(2,minmax(0,1fr));
           gap: 14px;
+        }
+
+        .archiveMatrix{
+          display:grid;
+          grid-template-columns:
+            repeat(2,minmax(0,1fr));
+          gap:18px;
+          margin-top:16px;
+        }
+
+        .archiveTablePanel{
+          position:relative;
+          overflow:hidden;
+          border:1px solid #e4e7ec;
+          border-radius:22px;
+          background:#ffffff;
+          box-shadow:
+            0 12px 34px
+            rgba(16,24,40,.07);
+        }
+
+        .archiveTablePanel::before{
+          content:"";
+          position:absolute;
+          top:0;
+          left:0;
+          right:0;
+          height:4px;
+          background:
+            linear-gradient(
+              90deg,
+              #8f1d22,
+              #bf2b31
+            );
+        }
+
+        .archiveTablePanel.orange::before{
+          background:
+            linear-gradient(
+              90deg,
+              #b45309,
+              #f59e0b
+            );
+        }
+
+        .archiveTablePanel.purple::before{
+          background:
+            linear-gradient(
+              90deg,
+              #6d28d9,
+              #9f67ff
+            );
+        }
+
+        .archiveTablePanel.slate::before{
+          background:
+            linear-gradient(
+              90deg,
+              #334155,
+              #64748b
+            );
+        }
+
+        .archiveTablePanelHeader{
+          display:flex;
+          align-items:flex-start;
+          justify-content:space-between;
+          gap:18px;
+          padding:22px 22px 17px;
+          border-bottom:1px solid #eaecf0;
+          background:
+            linear-gradient(
+              180deg,
+              #ffffff,
+              #fbfcfe
+            );
+        }
+
+        .archiveTablePanelTitle{
+          display:flex;
+          align-items:flex-start;
+          gap:13px;
+          min-width:0;
+        }
+
+        .archiveTablePanelIcon{
+          width:44px;
+          height:44px;
+          flex:0 0 44px;
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          border-radius:14px;
+          color:#ffffff;
+          background:
+            linear-gradient(
+              135deg,
+              #7f1d1d,
+              #b4232a
+            );
+          box-shadow:
+            0 9px 20px
+            rgba(127,29,29,.2);
+        }
+
+        .orange .archiveTablePanelIcon{
+          background:
+            linear-gradient(
+              135deg,
+              #b45309,
+              #e88c18
+            );
+        }
+
+        .purple .archiveTablePanelIcon{
+          background:
+            linear-gradient(
+              135deg,
+              #6d28d9,
+              #8b5cf6
+            );
+        }
+
+        .slate .archiveTablePanelIcon{
+          background:
+            linear-gradient(
+              135deg,
+              #334155,
+              #64748b
+            );
+        }
+
+        .archiveTablePanelTitle h3{
+          margin:1px 0 5px;
+          color:#182033;
+          font-size:17px;
+          font-weight:900;
+          letter-spacing:-.2px;
+        }
+
+        .archiveTablePanelTitle p{
+          max-width:440px;
+          margin:0;
+          color:#7a8494;
+          font-size:12px;
+          line-height:1.5;
+        }
+
+        .archiveTablePanelTotal{
+          min-width:72px;
+          padding:9px 12px;
+          border:1px solid #e5e7eb;
+          border-radius:14px;
+          background:#ffffff;
+          text-align:center;
+        }
+
+        .archiveTablePanelTotal small{
+          display:block;
+          color:#98a2b3;
+          font-size:9px;
+          font-weight:900;
+          letter-spacing:.6px;
+          text-transform:uppercase;
+        }
+
+        .archiveTablePanelTotal strong{
+          display:block;
+          margin-top:3px;
+          color:#172033;
+          font-size:22px;
+          line-height:1;
+        }
+
+        .archiveDataTableWrap{
+          padding:0 16px 17px;
+          overflow-x:auto;
+        }
+
+        .archiveDataTable{
+          width:100%;
+          border-collapse:separate;
+          border-spacing:0;
+          color:#344054;
+          font-size:12px;
+        }
+
+        .archiveDataTable thead th{
+          padding:12px 13px;
+          border-bottom:1px solid #dfe3e8;
+          color:#667085;
+          background:#f7f8fa;
+          text-align:left;
+          font-size:9px;
+          font-weight:950;
+          letter-spacing:.55px;
+          text-transform:uppercase;
+          white-space:nowrap;
+        }
+
+        .archiveDataTable thead th:first-child{
+          border-top-left-radius:11px;
+        }
+
+        .archiveDataTable thead th:last-child{
+          border-top-right-radius:11px;
+        }
+
+        .archiveDataTable tbody td{
+          padding:12px 13px;
+          border-bottom:1px solid #eef0f3;
+          background:#ffffff;
+          vertical-align:middle;
+        }
+
+        .archiveDataTable tbody tr:hover td{
+          background:#fbfcfe;
+        }
+
+        .archiveDataTable tbody td:nth-child(2),
+        .archiveDataTable tbody td:nth-child(3){
+          width:74px;
+          text-align:center;
+          white-space:nowrap;
+        }
+
+        .archiveDataTable tbody td:last-child{
+          width:36%;
+          min-width:130px;
+        }
+
+        .archiveRowLabel{
+          display:flex;
+          align-items:center;
+          gap:9px;
+          color:#283244;
+          font-weight:800;
+          line-height:1.35;
+        }
+
+        .archiveRowLabel i{
+          width:9px;
+          height:9px;
+          flex:0 0 9px;
+          border-radius:50%;
+          background:#8f1d22;
+          box-shadow:
+            0 0 0 4px
+            rgba(143,29,34,.08);
+        }
+
+        .orange .archiveRowLabel i{
+          background:#d97706;
+          box-shadow:
+            0 0 0 4px
+            rgba(217,119,6,.09);
+        }
+
+        .purple .archiveRowLabel i{
+          background:#7c3aed;
+          box-shadow:
+            0 0 0 4px
+            rgba(124,58,237,.09);
+        }
+
+        .slate .archiveRowLabel i{
+          background:#475569;
+          box-shadow:
+            0 0 0 4px
+            rgba(71,85,105,.09);
+        }
+
+        .archiveInlineProgress{
+          height:8px;
+          overflow:hidden;
+          border-radius:999px;
+          background:#edf0f4;
+        }
+
+        .archiveInlineProgress i{
+          display:block;
+          height:100%;
+          min-width:0;
+          border-radius:inherit;
+          background:
+            linear-gradient(
+              90deg,
+              #8f1d22,
+              #c6383e
+            );
+        }
+
+        .orange .archiveInlineProgress i{
+          background:
+            linear-gradient(
+              90deg,
+              #c2620a,
+              #f59e0b
+            );
+        }
+
+        .purple .archiveInlineProgress i{
+          background:
+            linear-gradient(
+              90deg,
+              #6d28d9,
+              #9f67ff
+            );
+        }
+
+        .slate .archiveInlineProgress i{
+          background:
+            linear-gradient(
+              90deg,
+              #334155,
+              #64748b
+            );
+        }
+
+        .archiveDataTable tfoot td{
+          padding:12px 13px;
+          color:#ffffff;
+          background:#7f1d1d;
+          font-size:11px;
+          font-weight:900;
+        }
+
+        .orange .archiveDataTable tfoot td{
+          background:#a85008;
+        }
+
+        .purple .archiveDataTable tfoot td{
+          background:#5b21b6;
+        }
+
+        .slate .archiveDataTable tfoot td{
+          background:#334155;
+        }
+
+        .archiveDataTable tfoot td:first-child{
+          border-bottom-left-radius:11px;
+        }
+
+        .archiveDataTable tfoot td:last-child{
+          border-bottom-right-radius:11px;
+        }
+
+        .archiveInlineProgress.total{
+          background:rgba(255,255,255,.22);
+        }
+
+        .archiveInlineProgress.total i{
+          background:#ffffff;
+          opacity:.9;
         }
 
         .archiveChart {
@@ -4130,7 +4494,7 @@ export default function InspectionFormsPage() {
           border-left:5px solid #8f1d22!important;
         }
 
-        @media(max-width:720px){ .page{padding:12px} .professionalReports,.reportMetaGrid,.corporateResults,.archiveIdentityStrip{grid-template-columns:1fr}  .auditModeGrid,.visibilityGrid{grid-template-columns:1fr} .archiveCharts,.reportSummary,.reportFacts,.resultNumbers,.archiveStatusCards{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(110px,1.2fr) minmax(90px,2fr) 38px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
+        @media(max-width:720px){ .page{padding:12px} .professionalReports,.reportMetaGrid,.corporateResults,.archiveIdentityStrip{grid-template-columns:1fr}  .auditModeGrid,.visibilityGrid{grid-template-columns:1fr} .archiveCharts,.archiveMatrix,.reportSummary,.reportFacts,.resultNumbers,.archiveStatusCards{grid-template-columns:1fr} .donutLayout{grid-template-columns:1fr} .barChartRow{grid-template-columns:minmax(110px,1.2fr) minmax(90px,2fr) 38px} .reportToolbar{grid-template-columns:1fr} .heroButtons{position:static;margin-top:15px} .metrics,.toolbar,.identity,.itemGrid{grid-template-columns:1fr} .itemsHeader{align-items:stretch;flex-direction:column} .itemsHeader>div:last-child{flex-direction:column} }
       `}</style>
     </main>
   );
@@ -4171,6 +4535,140 @@ function Metric({
         {value}
       </strong>
     </div>
+  );
+}
+
+function ArchiveTablePanel({
+  title,
+  description,
+  icon,
+  firstColumn,
+  rows,
+  tone,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  firstColumn: string;
+  rows: Array<{
+    label: string;
+    count: number;
+  }>;
+  tone:
+    | "burgundy"
+    | "orange"
+    | "purple"
+    | "slate";
+}) {
+  const total = rows.reduce(
+    (sum, row) =>
+      sum + row.count,
+    0
+  );
+
+  return (
+    <article
+      className={`archiveTablePanel ${tone}`}
+    >
+      <header className="archiveTablePanelHeader">
+        <div className="archiveTablePanelTitle">
+          <span className="archiveTablePanelIcon">
+            {icon}
+          </span>
+
+          <div>
+            <h3>{title}</h3>
+            <p>{description}</p>
+          </div>
+        </div>
+
+        <div className="archiveTablePanelTotal">
+          <small>Toplam</small>
+          <strong>{total}</strong>
+        </div>
+      </header>
+
+      <div className="archiveDataTableWrap">
+        <table className="archiveDataTable">
+          <thead>
+            <tr>
+              <th>{firstColumn}</th>
+              <th>Adet</th>
+              <th>Oran</th>
+              <th>Dağılım</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {rows.map((row) => {
+              const percentage =
+                total > 0
+                  ? Math.round(
+                      (
+                        row.count /
+                        total
+                      ) * 100
+                    )
+                  : 0;
+
+              return (
+                <tr key={row.label}>
+                  <td>
+                    <span className="archiveRowLabel">
+                      <i />
+                      {row.label}
+                    </span>
+                  </td>
+
+                  <td>
+                    <strong>
+                      {row.count}
+                    </strong>
+                  </td>
+
+                  <td>
+                    %{percentage}
+                  </td>
+
+                  <td>
+                    <div className="archiveInlineProgress">
+                      <i
+                        style={{
+                          width:
+                            `${percentage}%`,
+                        }}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+
+          <tfoot>
+            <tr>
+              <td>TOPLAM</td>
+              <td>{total}</td>
+              <td>
+                %{total > 0 ? 100 : 0}
+              </td>
+              <td>
+                <div className="archiveInlineProgress total">
+                  <i
+                    style={{
+                      width:
+                        total > 0
+                          ? "100%"
+                          : "0%",
+                    }}
+                  />
+                </div>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </article>
   );
 }
 
