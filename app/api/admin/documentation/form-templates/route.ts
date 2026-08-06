@@ -4,40 +4,57 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-function clean(value: unknown) {
+function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-/* -------------------------------------------------- */
-/* LIST */
-/* -------------------------------------------------- */
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error(
+      "SUPABASE_URL veya SUPABASE_SERVICE_ROLE_KEY tanımlı değil."
+    );
+  }
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
 
+    const id = clean(searchParams.get("id"));
     const companyId = clean(searchParams.get("companyId"));
     const category = clean(searchParams.get("category"));
     const status = clean(searchParams.get("status"));
 
-    let query = supabase
+    let query = getSupabase()
       .from("form_template_library")
       .select("*")
       .eq("is_deleted", false)
-      .order("category")
-      .order("short_title")
-      .order("title");
+      .order("category", { ascending: true })
+      .order("short_title", {
+        ascending: true,
+        nullsFirst: false,
+      })
+      .order("title", { ascending: true });
+
+    if (id) {
+      query = query.eq("id", id);
+    }
 
     if (companyId) {
       query = query.or(
         `company_id.is.null,company_id.eq.${companyId}`
       );
-    } else {
+    } else if (!id) {
       query = query.is("company_id", null);
     }
 
@@ -51,256 +68,379 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const records = data ?? [];
 
     return NextResponse.json({
       success: true,
-      records: data ?? [],
+      records,
+      record:
+        id && records.length > 0
+          ? records[0]
+          : null,
     });
-  } catch (e) {
+  } catch (error) {
     return NextResponse.json(
       {
         success: false,
-        error: e instanceof Error ? e.message : String(e),
+        error:
+          "Form şablonları alınamadı.",
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 }
     );
   }
 }
 
-/* -------------------------------------------------- */
-/* CREATE */
-/* -------------------------------------------------- */
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
+    const templateCode = clean(
+      body.templateCode
+    ).toUpperCase();
+
+    const title = clean(body.title);
+    const shortTitle = clean(
+      body.shortTitle
+    );
+
+    if (!templateCode) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Şablon kodu zorunludur.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!title) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Form başlığı zorunludur.",
+        },
+        { status: 400 }
+      );
+    }
+
     const payload = {
-      company_id: body.companyId || null,
+      company_id:
+        clean(body.companyId) || null,
 
-      template_code: body.templateCode,
-      title: body.title,
-      short_title: body.shortTitle,
+      template_code: templateCode,
+      title,
+      short_title:
+        shortTitle || title,
 
-      category: body.category,
-      form_type: body.formType,
+      category:
+        clean(body.category) || "OTHER",
+
+      form_type:
+        clean(body.formType) || "STANDARD",
 
       source_module: "DOCUMENTATION",
-      target_module: body.targetModule,
 
-      description: body.description,
-      legal_basis: body.legalBasis,
+      target_module:
+        clean(body.targetModule) || null,
 
-      version_no: body.versionNo ?? 1,
-      revision_no: body.revisionNo ?? 0,
+      description:
+        clean(body.description) || null,
 
-      schema_json: body.schemaJson ?? {},
-      sections_json: body.sectionsJson ?? [],
-      fields_json: body.fieldsJson ?? [],
+      legal_basis:
+        clean(body.legalBasis) || null,
 
-      status: body.status ?? "PUBLISHED",
+      version_no:
+        Number(body.versionNo || 1),
 
-      is_system: false,
+      revision_no:
+        Number(body.revisionNo || 0),
+
+      schema_json:
+        body.schemaJson &&
+        typeof body.schemaJson === "object" &&
+        !Array.isArray(body.schemaJson)
+          ? body.schemaJson
+          : {},
+
+      sections_json:
+        Array.isArray(body.sectionsJson)
+          ? body.sectionsJson
+          : [],
+
+      fields_json:
+        Array.isArray(body.fieldsJson)
+          ? body.fieldsJson
+          : [],
+
+      status:
+        clean(body.status) || "PUBLISHED",
+
+      is_system: Boolean(body.isSystem),
       is_active: true,
       is_deleted: false,
 
-      created_by: body.createdBy ?? null,
-      updated_by: body.createdBy ?? null,
+      created_by:
+        clean(body.createdBy) || null,
 
-      published_at: new Date().toISOString()
+      updated_by:
+        clean(body.createdBy) || null,
+
+      published_at:
+        clean(body.status) === "DRAFT"
+          ? null
+          : new Date().toISOString(),
+
+      updated_at:
+        new Date().toISOString(),
     };
 
     const { data, error } =
-      await supabase
+      await getSupabase()
         .from("form_template_library")
         .insert(payload)
         .select("*")
         .single();
 
-    if (error) throw error;
+    if (error) {
+      throw new Error(error.message);
+    }
 
     return NextResponse.json({
       success: true,
       record: data,
     });
-
-  } catch (e) {
-
+  } catch (error) {
     return NextResponse.json(
       {
         success: false,
-        error: e instanceof Error ? e.message : String(e),
+        error:
+          "Form şablonu oluşturulamadı.",
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
 
-/* -------------------------------------------------- */
-/* UPDATE */
-/* -------------------------------------------------- */
-
 export async function PATCH(req: NextRequest) {
-
   try {
-
     const body = await req.json();
-
     const id = clean(body.id);
 
     if (!id) {
-
       return NextResponse.json(
         {
           success: false,
-          error: "ID bulunamadı."
+          error: "Şablon ID bulunamadı.",
         },
-        {
-          status:400
-        }
+        { status: 400 }
       );
+    }
 
+    const update: Record<string, unknown> = {
+      updated_at:
+        new Date().toISOString(),
+    };
+
+    if (body.title !== undefined) {
+      update.title = clean(body.title);
+    }
+
+    if (body.shortTitle !== undefined) {
+      update.short_title =
+        clean(body.shortTitle);
+    }
+
+    if (body.category !== undefined) {
+      update.category =
+        clean(body.category);
+    }
+
+    if (body.formType !== undefined) {
+      update.form_type =
+        clean(body.formType);
+    }
+
+    if (body.targetModule !== undefined) {
+      update.target_module =
+        clean(body.targetModule) || null;
+    }
+
+    if (body.description !== undefined) {
+      update.description =
+        clean(body.description) || null;
+    }
+
+    if (body.legalBasis !== undefined) {
+      update.legal_basis =
+        clean(body.legalBasis) || null;
+    }
+
+    if (body.versionNo !== undefined) {
+      update.version_no =
+        Number(body.versionNo || 1);
+    }
+
+    if (body.revisionNo !== undefined) {
+      update.revision_no =
+        Number(body.revisionNo || 0);
+    }
+
+    if (
+      body.schemaJson !== undefined &&
+      body.schemaJson &&
+      typeof body.schemaJson === "object" &&
+      !Array.isArray(body.schemaJson)
+    ) {
+      update.schema_json =
+        body.schemaJson;
+    }
+
+    if (body.sectionsJson !== undefined) {
+      update.sections_json =
+        Array.isArray(body.sectionsJson)
+          ? body.sectionsJson
+          : [];
+    }
+
+    if (body.fieldsJson !== undefined) {
+      update.fields_json =
+        Array.isArray(body.fieldsJson)
+          ? body.fieldsJson
+          : [];
+    }
+
+    if (body.status !== undefined) {
+      const nextStatus =
+        clean(body.status) || "DRAFT";
+
+      update.status = nextStatus;
+
+      if (nextStatus === "PUBLISHED") {
+        update.published_at =
+          new Date().toISOString();
+      }
+    }
+
+    if (body.updatedBy !== undefined) {
+      update.updated_by =
+        clean(body.updatedBy) || null;
     }
 
     const { data, error } =
-      await supabase
+      await getSupabase()
         .from("form_template_library")
-        .update({
-
-          title: body.title,
-          short_title: body.shortTitle,
-
-          description: body.description,
-
-          legal_basis: body.legalBasis,
-
-          category: body.category,
-
-          form_type: body.formType,
-
-          target_module: body.targetModule,
-
-          revision_no: body.revisionNo,
-
-          schema_json: body.schemaJson,
-
-          sections_json: body.sectionsJson,
-
-          fields_json: body.fieldsJson,
-
-          status: body.status,
-
-          updated_by: body.updatedBy ?? null,
-
-          updated_at: new Date().toISOString()
-
-        })
+        .update(update)
         .eq("id", id)
         .select("*")
         .single();
 
-    if (error) throw error;
+    if (error) {
+      throw new Error(error.message);
+    }
 
     return NextResponse.json({
-
-      success:true,
-
-      record:data
-
+      success: true,
+      record: data,
     });
-
-  } catch(e){
-
+  } catch (error) {
     return NextResponse.json(
       {
-
-        success:false,
-
-        error:e instanceof Error
-          ? e.message
-          : String(e)
-
+        success: false,
+        error:
+          "Form şablonu güncellenemedi.",
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
-      {
-        status:500
-      }
+      { status: 500 }
     );
-
   }
-
 }
 
-/* -------------------------------------------------- */
-/* DELETE (SOFT) */
-/* -------------------------------------------------- */
-
 export async function DELETE(req: NextRequest) {
-
   try {
-
     const { searchParams } =
       new URL(req.url);
 
-    const id =
-      clean(searchParams.get("id"));
+    const id = clean(
+      searchParams.get("id")
+    );
 
-    if (!id){
-
+    if (!id) {
       return NextResponse.json(
         {
-          success:false,
-          error:"ID bulunamadı."
+          success: false,
+          error: "Şablon ID bulunamadı.",
         },
-        {
-          status:400
-        }
+        { status: 400 }
       );
+    }
 
+    const { data: existing, error: readError } =
+      await getSupabase()
+        .from("form_template_library")
+        .select("id,is_system")
+        .eq("id", id)
+        .single();
+
+    if (readError) {
+      throw new Error(readError.message);
+    }
+
+    if (existing?.is_system) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Sistem şablonları silinemez.",
+        },
+        { status: 400 }
+      );
     }
 
     const { error } =
-      await supabase
+      await getSupabase()
         .from("form_template_library")
         .update({
-
-          is_deleted:true,
-
-          is_active:false,
-
-          updated_at:new Date().toISOString()
-
+          is_deleted: true,
+          is_active: false,
+          updated_at:
+            new Date().toISOString(),
         })
-        .eq("id",id);
+        .eq("id", id);
 
-    if(error)
-      throw error;
+    if (error) {
+      throw new Error(error.message);
+    }
 
     return NextResponse.json({
-
-      success:true
-
+      success: true,
     });
-
-  } catch(e){
-
+  } catch (error) {
     return NextResponse.json(
       {
-
-        success:false,
-
-        error:e instanceof Error
-          ? e.message
-          : String(e)
-
+        success: false,
+        error:
+          "Form şablonu silinemedi.",
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
-      {
-        status:500
-      }
+      { status: 500 }
     );
-
   }
-
 }
