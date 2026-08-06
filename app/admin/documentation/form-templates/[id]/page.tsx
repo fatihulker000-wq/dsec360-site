@@ -292,13 +292,20 @@ export default function Ek2OfficialFormPage() {
           </header>
 
           <table className="officialTable workplaceTable">
+            <colgroup>
+              <col className="topLabelColumn" />
+              <col className="topValueColumn" />
+              <col className="topPhotoColumn" />
+            </colgroup>
+
             <tbody>
               <tr>
                 <th colSpan={2}>
                   İŞYERİNİN
                 </th>
+
                 <td
-                  rowSpan={7}
+                  rowSpan={12}
                   className="photoOuter"
                 >
                   <div className="photoBox">
@@ -306,49 +313,22 @@ export default function Ek2OfficialFormPage() {
                   </div>
                 </td>
               </tr>
-              <tr>
-                <td className="labelCell">
-                  Ünvanı
-                </td>
-                <td />
-              </tr>
-              <tr>
-                <td className="labelCell">
-                  SGK Sicil No.
-                </td>
-                <td />
-              </tr>
-              <tr>
-                <td className="labelCell">
-                  Adresi
-                </td>
-                <td />
-              </tr>
-              <tr>
-                <td className="labelCell">
-                  Tel ve faks
-                </td>
-                <td />
-              </tr>
-              <tr>
-                <td className="labelCell">
-                  E-Posta
-                </td>
-                <td />
-              </tr>
+
+              <TopRow label="Ünvanı" />
+              <TopRow label="SGK Sicil No." />
+              <TopRow label="Adresi" />
+              <TopRow label="Tel ve faks" />
+              <TopRow label="E-Posta" />
+
               <tr>
                 <td
                   colSpan={2}
                   className="consentCell"
                 >
                   <p>
-                    İşe giriş/periyodik
-                    muayene olmayı kabul
-                    ettiğimi ve muayene
-                    sırasında verdiğim
-                    bilgilerin doğru ve
-                    eksiksiz olduğunu
-                    beyan ederim.
+                    İşe giriş/periyodik muayene olmayı kabul ettiğimi ve
+                    muayene sırasında verdiğim bilgilerin doğru ve eksiksiz
+                    olduğunu beyan ederim.
                   </p>
 
                   <div className="signatureText">
@@ -358,19 +338,25 @@ export default function Ek2OfficialFormPage() {
                   </div>
                 </td>
               </tr>
+
+              <tr>
+                <th
+                  colSpan={2}
+                  className="workerHeading"
+                >
+                  İŞÇİNİN
+                </th>
+              </tr>
+
+              <TopRow label="Adı ve soyadı" />
+              <TopRow label="T.C.Kimlik No" />
+              <TopRow label="Doğum Yeri ve Tarihi" />
+              <TopRow label="Cinsiyeti" />
             </tbody>
           </table>
 
-          <div className="workerDivider">
-            İŞÇİNİN
-          </div>
-
-          <table className="officialTable workerTable">
+          <table className="officialTable workerTable workerContinuation">
             <tbody>
-              <SimpleRow label="Adı ve soyadı" />
-              <SimpleRow label="T.C.Kimlik No" />
-              <SimpleRow label="Doğum Yeri ve Tarihi" />
-              <SimpleRow label="Cinsiyeti" />
               <SimpleRow label="Eğitim durumu" />
 
               <tr>
@@ -967,6 +953,7 @@ export default function Ek2OfficialFormPage() {
           width: 100%;
           overflow-x: auto;
           padding: 18px;
+          scroll-behavior: smooth;
           border: 1px solid #cbd5e1;
           border-radius: 18px;
           background: #d7dce2;
@@ -1048,24 +1035,26 @@ export default function Ek2OfficialFormPage() {
           margin-top: 12px;
         }
 
-        .workplaceTable td:first-child,
-        .workplaceTable th:first-child {
-          width: 18%;
+        .topLabelColumn {
+          width: 19%;
         }
 
-        .workplaceTable td:nth-child(2) {
-          width: 58%;
+        .topValueColumn {
+          width: 57%;
+        }
+
+        .topPhotoColumn {
+          width: 24%;
         }
 
         .workplaceTable .photoOuter {
-          width: 24%;
           padding: 0;
-          position: relative;
+          vertical-align: middle;
         }
 
         .photoBox {
-          width: 60%;
-          height: 32mm;
+          width: 61%;
+          height: 36mm;
           margin: 0 auto;
           border: 1px solid #333;
           display: grid;
@@ -1077,18 +1066,21 @@ export default function Ek2OfficialFormPage() {
           white-space: nowrap;
         }
 
+        .workplaceTable tr:not(:first-child) td {
+          height: 18px;
+        }
+
         .consentCell {
-          height: 39mm;
+          height: 31mm !important;
           vertical-align: top !important;
           text-align: center;
-          padding-top: 7px !important;
+          padding: 7px 12px 4px !important;
         }
 
         .consentCell p {
-          margin:
-            0 auto 14px;
-          max-width: 95%;
-          line-height: 1.18;
+          margin: 0 auto 12px;
+          max-width: 96%;
+          line-height: 1.2;
         }
 
         .signatureText {
@@ -1096,22 +1088,18 @@ export default function Ek2OfficialFormPage() {
           line-height: 1.1;
         }
 
-        .workerDivider {
-          width: 76%;
-          margin-top: -27mm;
-          margin-bottom: 0;
-          padding: 3px 7px 1px;
-          border-top:
-            2px dashed #333;
-          border-left:
-            1px dotted #555;
-          border-right:
-            1px dotted #555;
-          font-weight: 700;
+        .workerHeading {
+          border-top: 2px dashed #333 !important;
+          padding-top: 4px !important;
+          padding-bottom: 2px !important;
         }
 
         .workerTable {
           width: 100%;
+        }
+
+        .workerContinuation {
+          margin-top: 0;
         }
 
         .workerTable td:first-child {
@@ -1402,6 +1390,21 @@ export default function Ek2OfficialFormPage() {
         }
       `}</style>
     </main>
+  );
+}
+
+function TopRow({
+  label,
+}: {
+  label: string;
+}) {
+  return (
+    <tr>
+      <td className="labelCell">
+        {label}
+      </td>
+      <td />
+    </tr>
   );
 }
 
