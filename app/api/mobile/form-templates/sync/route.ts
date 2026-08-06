@@ -102,31 +102,32 @@ function normalizeTemplate(
       row.company_id,
 
     templateCode:
-      row.template_code,
+  clean(row.template_code),
 
-    title:
-      row.title,
+title:
+  clean(row.title),
 
-    shortTitle:
-      row.short_title ?? "",
+shortTitle:
+  clean(row.short_title),
 
-    category:
-      row.category,
+category:
+  clean(row.category).toUpperCase(),
 
-    formType:
-      row.form_type,
+formType:
+  clean(row.form_type) || "STANDARD",
 
-    sourceModule:
-      row.source_module,
+sourceModule:
+  clean(row.source_module) ||
+  "DOCUMENTATION",
 
-    targetModule:
-      row.target_module ?? "",
+targetModule:
+  clean(row.target_module).toUpperCase(),
 
     description:
-      row.description ?? "",
+  clean(row.description),
 
-    legalBasis:
-      row.legal_basis ?? "",
+legalBasis:
+  clean(row.legal_basis),
 
     versionNo:
       Number(
@@ -197,7 +198,7 @@ function normalizeTemplate(
  *
  * GET /api/mobile/form-templates/sync?companyId=UUID&category=EK2
  *
- * GET /api/mobile/form-templates/sync?templateCode=EK2_ISE_GIRIS
+ * GET /api/mobile/form-templates/sync?templateCode=EK2_ISE_GIRIS_PERIYODIK
  */
 export async function GET(
   request: Request
