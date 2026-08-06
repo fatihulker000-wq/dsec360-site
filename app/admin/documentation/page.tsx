@@ -547,11 +547,17 @@ const openCategory = (
     return;
   }
 
-if (category === "RISK") {
-  window.location.href =
-    "/admin/documentation/risk-documents";
-  return;
-}
+  if (category === "RISK") {
+    window.location.href =
+      "/admin/documentation/risk-documents";
+    return;
+  }
+
+  if (category === "FORMS") {
+    window.location.href =
+      "/admin/documentation/form-templates";
+    return;
+  }
 
   if (category === "BOARD") {
     window.location.href =
@@ -858,11 +864,15 @@ if (category === "RISK") {
                 <button
                   key={tab.value}
                   type="button"
-                  onClick={() =>
-                    setMainTab(
-                      tab.value
-                    )
-                  }
+                  onClick={() => {
+                    if (tab.value === "FORMS") {
+                      window.location.href =
+                        "/admin/documentation/form-templates";
+                      return;
+                    }
+
+                    setMainTab(tab.value);
+                  }}
                   style={{
                     minHeight: 43,
                     borderRadius: 12,
