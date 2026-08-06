@@ -961,9 +961,9 @@ export default function Ek2OfficialFormPage() {
 
         .paper {
           width: 210mm;
-          height: 297mm;
-          min-height: 297mm;
-          max-height: 297mm;
+          height: 296mm;
+          min-height: 296mm;
+          max-height: 296mm;
           overflow: hidden;
           margin: 0 auto 18px;
           padding:
@@ -982,7 +982,17 @@ export default function Ek2OfficialFormPage() {
             "Times New Roman",
             Times,
             serif;
-          font-size: 8.7pt;
+          font-size: 9.25pt;
+        }
+
+        .pageOne {
+          padding-top: 8mm;
+          padding-bottom: 6mm;
+        }
+
+        .pageTwo {
+          padding-top: 7mm;
+          padding-bottom: 6mm;
         }
 
         .paper:last-child {
@@ -991,7 +1001,7 @@ export default function Ek2OfficialFormPage() {
 
         .documentHeader {
           position: relative;
-          min-height: 32px;
+          min-height: 38px;
           display: flex;
           align-items: flex-start;
           justify-content: center;
@@ -999,7 +1009,7 @@ export default function Ek2OfficialFormPage() {
 
         .documentHeader h2 {
           margin: 0;
-          font-size: 12.2pt;
+          font-size: 13.2pt;
           line-height: 1.15;
           text-align: center;
           font-weight: 700;
@@ -1009,7 +1019,7 @@ export default function Ek2OfficialFormPage() {
           position: absolute;
           right: 15%;
           top: 1px;
-          font-size: 9.3pt;
+          font-size: 12pt;
         }
 
         .officialTable {
@@ -1022,9 +1032,9 @@ export default function Ek2OfficialFormPage() {
         .officialTable td,
         .officialTable th {
           border: 1px dotted #555;
-          padding: 1px 5px;
-          min-height: 14px;
-          line-height: 1;
+          padding: 1.4px 5px;
+          min-height: 15px;
+          line-height: 1.04;
           vertical-align: middle;
           font-weight: 400;
         }
@@ -1057,7 +1067,7 @@ export default function Ek2OfficialFormPage() {
 
         .photoBox {
           width: 61%;
-          height: 30mm;
+          height: 34mm;
           margin: 0 auto;
           border: 1px solid #333;
           display: grid;
@@ -1070,11 +1080,11 @@ export default function Ek2OfficialFormPage() {
         }
 
         .workplaceTable tr:not(:first-child) td {
-          height: 14px;
+          height: 15.5px;
         }
 
         .consentCell {
-          height: 24mm !important;
+          height: 28mm !important;
           vertical-align: top !important;
           text-align: center;
           padding: 4px 8px 2px !important;
@@ -1122,7 +1132,7 @@ export default function Ek2OfficialFormPage() {
         }
 
         .workerTable tr {
-          height: 14px;
+          height: 15.5px;
         }
 
         .smallLabel {
@@ -1149,7 +1159,7 @@ export default function Ek2OfficialFormPage() {
         }
 
         .workHistoryTable tbody td {
-          height: 14px;
+          height: 16px;
           text-align: left;
         }
 
@@ -1174,7 +1184,7 @@ export default function Ek2OfficialFormPage() {
         }
 
         .familyBlank td {
-          height: 13px;
+          height: 20px;
         }
 
         .anamnesisTable td:first-child {
@@ -1189,7 +1199,7 @@ export default function Ek2OfficialFormPage() {
 
         .anamnesisTable td,
         .anamnesisTable th {
-          height: 13px;
+          height: 15.5px;
         }
 
         .questionHeader td:first-child {
@@ -1217,7 +1227,7 @@ export default function Ek2OfficialFormPage() {
         }
 
         .detailedQuestions td {
-          height: 19px;
+          height: 23px;
         }
 
         .detailQuestionText {
@@ -1225,7 +1235,7 @@ export default function Ek2OfficialFormPage() {
         }
 
         .habitTable td {
-          height: 13px;
+          height: 17px;
         }
 
         .habitTable td:nth-child(1) {
@@ -1253,7 +1263,7 @@ export default function Ek2OfficialFormPage() {
 
         .physicalTable td,
         .laboratoryTable td {
-          height: 13px;
+          height: 16px;
         }
 
         .examNested {
@@ -1278,13 +1288,13 @@ export default function Ek2OfficialFormPage() {
         }
 
         .opinionSection {
-          margin-top: 4px;
-          font-size: 8.7pt;
+          margin-top: 6px;
+          font-size: 9.1pt;
         }
 
         .opinionSection h3 {
-          margin: 0 0 5px;
-          font-size: 9pt;
+          margin: 0 0 7px;
+          font-size: 9.5pt;
         }
 
         .opinionLine {
@@ -1293,7 +1303,7 @@ export default function Ek2OfficialFormPage() {
             22px 1fr auto;
           align-items: end;
           gap: 3px;
-          margin: 6px 0;
+          margin: 8px 0;
         }
 
         .opinionLine span {
@@ -1303,19 +1313,19 @@ export default function Ek2OfficialFormPage() {
         }
 
         .opinionLine b {
-          font-size: 8.4pt;
+          font-size: 8.8pt;
           white-space: nowrap;
         }
 
         .opinionNote {
-          margin: 4px 0 0;
-          font-size: 7.2pt;
+          margin: 6px 0 0;
+          font-size: 7.7pt;
           font-style: italic;
           line-height: 1.2;
         }
 
         .dateLine {
-          margin-top: 8px;
+          margin-top: 11px;
           text-align: right;
           padding-right: 8%;
           font-weight: 700;
@@ -1353,8 +1363,11 @@ export default function Ek2OfficialFormPage() {
 
           #official-ek2-form {
             position: absolute !important;
-            inset: 0 !important;
-            width: 100% !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 210mm !important;
+            height: auto !important;
+            min-height: 0 !important;
             overflow: visible !important;
             padding: 0 !important;
             border: 0 !important;
@@ -1363,23 +1376,30 @@ export default function Ek2OfficialFormPage() {
 
           .paper {
             width: 210mm !important;
-            height: 297mm !important;
-            min-height: 297mm !important;
-            max-height: 297mm !important;
+            height: 296mm !important;
+            min-height: 296mm !important;
+            max-height: 296mm !important;
             overflow: hidden !important;
             margin: 0 !important;
-            padding:
-              8mm 8mm 7mm !important;
             box-shadow: none !important;
             break-inside: avoid !important;
             page-break-inside: avoid !important;
+          }
+
+          .pageOne {
+            display: block !important;
+            padding:
+              8mm 8mm 6mm !important;
             break-after: page !important;
             page-break-after: always !important;
           }
 
-          .pageOne,
           .pageTwo {
             display: block !important;
+            padding:
+              7mm 8mm 6mm !important;
+            break-after: auto !important;
+            page-break-after: auto !important;
           }
 
           .officialTable,
@@ -1387,11 +1407,6 @@ export default function Ek2OfficialFormPage() {
           .officialTable tr {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
-          }
-
-          .paper:last-child {
-            break-after: auto;
-            page-break-after: auto;
           }
 
           .noPrint {
