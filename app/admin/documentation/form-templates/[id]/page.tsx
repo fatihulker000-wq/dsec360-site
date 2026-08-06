@@ -2,18 +2,13 @@
 
 import {
   ArrowLeft,
-  CheckCircle2,
-  ClipboardList,
   Download,
   Eye,
-  FileText,
   Loader2,
-  Save,
-  ShieldCheck,
+  Printer,
 } from "lucide-react";
 import {
   useEffect,
-  useMemo,
   useState,
 } from "react";
 import {
@@ -22,37 +17,14 @@ import {
   useSearchParams,
 } from "next/navigation";
 
-type TemplateSection = {
-  id: string;
-  title: string;
-  order: number;
-  columns?: number;
-};
-
-type TemplateField = {
-  id: string;
-  sectionId: string;
-  label: string;
-  type: string;
-  required?: boolean;
-  order: number;
-  colSpan?: number;
-  options?: string[];
-};
-
 type FormTemplate = {
   id: string;
   template_code: string;
   title: string;
   short_title: string | null;
-  description: string | null;
-  legal_basis: string | null;
   version_no: number;
   revision_no: number;
   status: string;
-  schema_json: Record<string, unknown> | null;
-  sections_json: TemplateSection[] | null;
-  fields_json: TemplateField[] | null;
 };
 
 type ApiResponse = {
@@ -66,260 +38,24 @@ function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function typeLabel(type: string): string {
-  const map: Record<string, string> = {
-    TEXT: "Metin",
-    TEXTAREA: "Uzun Metin",
-    EMAIL: "E-Posta",
-    PHONE: "Telefon",
-    NATIONAL_ID: "T.C. Kimlik",
-    NUMBER: "Sayı",
-    DECIMAL: "Ondalıklı Sayı",
-    DATE: "Tarih",
-    RADIO: "Tek Seçim",
-    YES_NO: "Evet / Hayır",
-    YES_NO_NOTE: "Evet / Hayır + Açıklama",
-    PHOTO: "Fotoğraf",
-    SIGNATURE: "İmza",
-    INFO: "Bilgilendirme",
-    CALCULATED: "Hesaplanan Alan",
-    SMOKING_HISTORY: "Sigara Öyküsü",
-    ALCOHOL_HISTORY: "Alkol Öyküsü",
-    FITNESS_STATEMENT: "Uygunluk Kanaati",
-    CONDITIONAL_FITNESS_STATEMENT:
-      "Şartlı Uygunluk Kanaati",
-  };
-
-  return map[type] || type;
-}
-
-function FieldPreview({
-  field,
-}: {
-  field: TemplateField;
-}) {
-  if (field.type === "INFO") {
-    return (
-      <div
-        style={{
-          border:
-            "1px solid #cbd5e1",
-          padding: 10,
-          fontSize: 11,
-          lineHeight: 1.5,
-          background: "#f8fafc",
-        }}
-      >
-        {field.label}
-      </div>
-    );
-  }
-
-  if (field.type === "PHOTO") {
-    return (
-      <div
-        style={{
-          border:
-            "1px solid #0f172a",
-          minHeight: 115,
-          display: "grid",
-          placeItems: "center",
-          fontSize: 11,
-          fontWeight: 800,
-        }}
-      >
-        Fotoğraf
-      </div>
-    );
-  }
-
-  if (
-    field.type === "YES_NO" ||
-    field.type === "RADIO"
-  ) {
-    const options =
-      field.options?.length
-        ? field.options
-        : ["Hayır", "Evet"];
-
-    return (
-      <div style={{ display: "grid", gap: 5 }}>
-        <div style={styles.fieldLabel}>
-          {field.label}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 14,
-            minHeight: 24,
-            alignItems: "center",
-          }}
-        >
-          {options.map((option) => (
-            <span
-              key={option}
-              style={{
-                display:
-                  "inline-flex",
-                alignItems:
-                  "center",
-                gap: 5,
-                fontSize: 11,
-              }}
-            >
-              <span
-                style={{
-                  width: 11,
-                  height: 11,
-                  border:
-                    "1px solid #0f172a",
-                }}
-              />
-              {option}
-            </span>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (field.type === "YES_NO_NOTE") {
-    return (
-      <div style={{ display: "grid", gap: 5 }}>
-        <div style={styles.fieldLabel}>
-          {field.label}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 15,
-            fontSize: 11,
-          }}
-        >
-          <span>□ Hayır</span>
-          <span>□ Evet</span>
-        </div>
-
-        <div style={styles.lineArea} />
-      </div>
-    );
-  }
-
-  if (
-    field.type === "SIGNATURE"
-  ) {
-    return (
-      <div style={{ display: "grid", gap: 5 }}>
-        <div style={styles.fieldLabel}>
-          {field.label}
-        </div>
-
-        <div
-          style={{
-            minHeight: 70,
-            border:
-              "1px solid #0f172a",
-          }}
-        />
-      </div>
-    );
-  }
-
-  if (
-    field.type === "TEXTAREA" ||
-    field.type ===
-      "SMOKING_HISTORY" ||
-    field.type ===
-      "ALCOHOL_HISTORY" ||
-    field.type ===
-      "FITNESS_STATEMENT" ||
-    field.type ===
-      "CONDITIONAL_FITNESS_STATEMENT"
-  ) {
-    return (
-      <div style={{ display: "grid", gap: 5 }}>
-        <div style={styles.fieldLabel}>
-          {field.label}
-        </div>
-        <div style={styles.textArea} />
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: "grid", gap: 5 }}>
-      <div style={styles.fieldLabel}>
-        {field.label}
-        {field.required ? " *" : ""}
-      </div>
-      <div style={styles.singleLine} />
-    </div>
-  );
-}
-
-export default function FormTemplateDesignerPage() {
+export default function Ek2OfficialFormPage() {
   const router = useRouter();
+  const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const params = useParams<{
-    id: string;
-  }>();
 
   const id = clean(params?.id);
-  const mode = clean(searchParams.get("mode")).toLowerCase();
-  const isPreviewMode = mode === "preview";
-  const isDownloadMode = mode === "download";
-  const isReadOnlyMode = isPreviewMode || isDownloadMode;
+  const mode = clean(
+    searchParams.get("mode")
+  );
 
   const [record, setRecord] =
-    useState<FormTemplate | null>(
-      null
-    );
+    useState<FormTemplate | null>(null);
 
   const [loading, setLoading] =
     useState(true);
 
-  const [saving, setSaving] =
-    useState(false);
-
   const [error, setError] =
     useState("");
-
-  const [message, setMessage] =
-    useState("");
-
-  const [selectedSectionId, setSelectedSectionId] =
-    useState("");
-
-  const sections = useMemo(
-    () =>
-      Array.isArray(
-        record?.sections_json
-      )
-        ? [...record.sections_json].sort(
-            (a, b) =>
-              Number(a.order || 0) -
-              Number(b.order || 0)
-          )
-        : [],
-    [record]
-  );
-
-  const fields = useMemo(
-    () =>
-      Array.isArray(
-        record?.fields_json
-      )
-        ? [...record.fields_json].sort(
-            (a, b) =>
-              Number(a.order || 0) -
-              Number(b.order || 0)
-          )
-        : [],
-    [record]
-  );
 
   useEffect(() => {
     if (!id) {
@@ -368,18 +104,6 @@ export default function FormTemplateDesignerPage() {
         }
 
         setRecord(json.record);
-
-        const firstSection =
-          Array.isArray(
-            json.record.sections_json
-          )
-            ? json.record
-                .sections_json[0]
-            : null;
-
-        setSelectedSectionId(
-          firstSection?.id || ""
-        );
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -394,8 +118,9 @@ export default function FormTemplateDesignerPage() {
     void load();
   }, [id]);
 
-  const handleDownloadBlankForm = () => {
-    const oldTitle = document.title;
+  const printBlankForm = () => {
+    const previousTitle =
+      document.title;
 
     document.title =
       "Ek-2_Ise_Giris_Periyodik_Muayene_Formu";
@@ -404,143 +129,52 @@ export default function FormTemplateDesignerPage() {
       window.print();
 
       window.setTimeout(() => {
-        document.title = oldTitle;
+        document.title =
+          previousTitle;
       }, 600);
-    }, 250);
+    }, 150);
   };
 
   useEffect(() => {
     if (
       loading ||
       !record ||
-      !isDownloadMode
+      mode !== "download"
     ) {
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      handleDownloadBlankForm();
-    }, 650);
+    const timer =
+      window.setTimeout(
+        printBlankForm,
+        600
+      );
 
-    return () => {
+    return () =>
       window.clearTimeout(timer);
-    };
-  }, [loading, record, isDownloadMode]);
-
-  const saveTemplate = async (
-    status?: string
-  ) => {
-    if (!record) return;
-
-    try {
-      setSaving(true);
-      setError("");
-      setMessage("");
-
-      const response = await fetch(
-        "/api/admin/documentation/form-templates",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Accept:
-              "application/json",
-          },
-          body: JSON.stringify({
-            id: record.id,
-            title: record.title,
-            shortTitle:
-              record.short_title,
-            description:
-              record.description,
-            legalBasis:
-              record.legal_basis,
-            versionNo:
-              record.version_no,
-            revisionNo:
-              record.revision_no,
-            schemaJson:
-              record.schema_json || {},
-            sectionsJson: sections,
-            fieldsJson: fields,
-            status:
-              status ||
-              record.status,
-          }),
-        }
-      );
-
-      const json =
-        (await response
-          .json()
-          .catch(() => ({}))) as ApiResponse;
-
-      if (!response.ok || !json.success) {
-        throw new Error(
-          json.detail ||
-            json.error ||
-            "Form şablonu kaydedilemedi."
-        );
-      }
-
-      if (json.record) {
-        setRecord(json.record);
-      }
-
-      setMessage(
-        status === "PUBLISHED"
-          ? "Ek-2 şablonu yayımlandı."
-          : "Ek-2 şablonu kaydedildi."
-      );
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Form şablonu kaydedilemedi."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+  }, [loading, record, mode]);
 
   if (loading) {
     return (
-      <main style={styles.loading}>
+      <main className="loadingPage">
         <Loader2
-          size={34}
-          className="designerSpin"
+          size={32}
+          className="spin"
         />
         <strong>
-          Ek-2 şablonu hazırlanıyor...
+          Ek-2 formu hazırlanıyor...
         </strong>
-
-        <style jsx>{`
-          .designerSpin {
-            animation: designer-spin
-              0.9s linear infinite;
-          }
-
-          @keyframes designer-spin {
-            to {
-              transform: rotate(
-                360deg
-              );
-            }
-          }
-        `}</style>
       </main>
     );
   }
 
   if (error || !record) {
     return (
-      <main style={styles.page}>
-        <section style={styles.errorCard}>
+      <main className="errorPage">
+        <section className="errorCard">
           <h1>
-            Form şablonu açılamadı
+            Ek-2 formu açılamadı
           </h1>
-
           <p>{error}</p>
 
           <button
@@ -550,7 +184,6 @@ export default function FormTemplateDesignerPage() {
                 "/admin/documentation/form-templates"
               )
             }
-            style={styles.primaryButton}
           >
             Form Şablonlarına Dön
           </button>
@@ -559,474 +192,1198 @@ export default function FormTemplateDesignerPage() {
     );
   }
 
+  const previewOnly =
+    mode === "preview" ||
+    mode === "download";
+
   return (
-    <main style={styles.page}>
-      <div style={styles.container}>
-        <div
-          className="noPrint"
-          style={styles.toolbar}
+    <main className="page">
+      <div className="toolbar noPrint">
+        <button
+          type="button"
+          className="secondaryButton"
+          onClick={() =>
+            router.push(
+              "/admin/documentation/form-templates"
+            )
+          }
         >
+          <ArrowLeft size={17} />
+          Form Şablonları
+        </button>
+
+        <div className="toolbarActions">
           <button
             type="button"
+            className="secondaryButton"
             onClick={() =>
-              router.push(
-                "/admin/documentation/form-templates"
-              )
+              document
+                .getElementById(
+                  "official-ek2-form"
+                )
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                })
             }
-            style={styles.secondaryButton}
           >
-            <ArrowLeft size={17} />
-            Form Şablonları
+            <Eye size={17} />
+            Görüntüle
           </button>
 
-          <div style={styles.buttonRow}>
-            <button
-              type="button"
-              onClick={() => {
-                document
-                  .getElementById("ek2-print-root")
-                  ?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                  });
-              }}
-              style={styles.secondaryButton}
-            >
-              <Eye size={17} />
-              Formu Görüntüle
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownloadBlankForm}
-              style={styles.secondaryButton}
-            >
-              <Download size={17} />
-              Boş Formu İndir
-            </button>
-
-            {!isReadOnlyMode ? (
-              <>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() =>
-                    void saveTemplate()
-                  }
-                  style={styles.secondaryButton}
-                >
-                  {saving ? (
-                    <Loader2
-                      size={16}
-                      className="designerSpin"
-                    />
-                  ) : (
-                    <Save size={16} />
-                  )}
-                  Kaydet
-                </button>
-
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() =>
-                    void saveTemplate(
-                      "PUBLISHED"
-                    )
-                  }
-                  style={styles.primaryButton}
-                >
-                  <ShieldCheck size={17} />
-                  Yayınla
-                </button>
-              </>
-            ) : null}
-          </div>
+          <button
+            type="button"
+            className="primaryButton"
+            onClick={printBlankForm}
+          >
+            <Download size={17} />
+            Boş Formu İndir
+          </button>
         </div>
+      </div>
 
-        {error ? (
-          <div style={styles.errorMessage}>
-            {error}
-          </div>
-        ) : null}
-
-        {message ? (
-          <div style={styles.successMessage}>
-            <CheckCircle2 size={17} />
-            {message}
-          </div>
-        ) : null}
-
-        <section style={styles.hero}>
+      {!previewOnly ? (
+        <section className="intro noPrint">
           <div>
-            <div style={styles.heroBadge}>
-              <FileText size={16} />
-              {isReadOnlyMode
-                ? "Boş Form Önizleme"
-                : "Form Tasarım Merkezi"}
+            <div className="introBadge">
+              Resmî Ek-2 Şablonu
             </div>
 
-            <h1 style={styles.heroTitle}>
-              {record.short_title ||
-                record.title}
+            <h1>
+              İŞE GİRİŞ / PERİYODİK
+              MUAYENE FORMU
             </h1>
 
-            <p style={styles.heroText}>
-              Aynı Ek-2 formu işe giriş
-              muayenesinde ve yasal
-              periyotlarda yapılan
-              periyodik muayenelerde
+            <p>
+              Gönderdiğiniz resmî formun
+              iki sayfalık tablo düzeni
+              korunmuştur. Aynı boş form
+              hem işe giriş hem de
+              periyodik muayenede
               kullanılır.
             </p>
           </div>
 
-          <div style={styles.heroMeta}>
-            <span style={styles.heroChip}>
+          <div className="introMeta">
+            <span>
               {record.template_code}
             </span>
-
-            <span style={styles.heroChip}>
+            <span>
               v{record.version_no}
             </span>
-
-            <span style={styles.heroChip}>
+            <span>
               Rev. {record.revision_no}
-            </span>
-
-            <span style={styles.heroChip}>
-              {record.status}
             </span>
           </div>
         </section>
+      ) : null}
 
-        <div
-          className="designerLayout"
-          style={{
-            ...styles.designerLayout,
-            gridTemplateColumns: isReadOnlyMode
-              ? "minmax(0,1fr)"
-              : "230px minmax(0,1fr) 250px",
-          }}
-        >
-          <aside
-            className="noPrint"
-            style={{
-              ...styles.leftPanel,
-              display: isReadOnlyMode
-                ? "none"
-                : "grid",
-            }}
-          >
-            <div style={styles.panelTitle}>
-              <ClipboardList size={17} />
-              Form Bölümleri
-            </div>
+      <section
+        id="official-ek2-form"
+        className="formArea"
+      >
+        <div className="paper pageOne">
+          <header className="documentHeader">
+            <h2>
+              İŞE GİRİŞ / PERİYODİK
+              MUAYENE FORMU
+            </h2>
+            <strong>Ek-2</strong>
+          </header>
 
-            <div
-              style={{
-                display: "grid",
-                gap: 7,
-              }}
-            >
-              {sections.map(
-                (section, index) => {
-                  const active =
-                    selectedSectionId ===
-                    section.id;
-
-                  return (
-                    <button
-                      key={section.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedSectionId(
-                          section.id
-                        );
-
-                        document
-                          .getElementById(
-                            `section-${section.id}`
-                          )
-                          ?.scrollIntoView({
-                            behavior: "smooth",
-                            block: "start",
-                          });
-                      }}
-                      style={{
-                        borderRadius: 12,
-                        border: active
-                          ? "1px solid #7f1d1d"
-                          : "1px solid #e5e7eb",
-                        background: active
-                          ? "#fff1f2"
-                          : "#ffffff",
-                        color: active
-                          ? "#9f1239"
-                          : "#475569",
-                        padding: 11,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 9,
-                        textAlign: "left",
-                        fontWeight: 850,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 999,
-                          display: "grid",
-                          placeItems: "center",
-                          background: active
-                            ? "#9f1239"
-                            : "#f1f5f9",
-                          color: active
-                            ? "#ffffff"
-                            : "#64748b",
-                          fontSize: 10,
-                          fontWeight: 900,
-                        }}
-                      >
-                        {index + 1}
-                      </span>
-
-                      {section.title}
-                    </button>
-                  );
-                }
-              )}
-            </div>
-          </aside>
-
-          <section
-            id="ek2-print-root"
-            style={styles.previewArea}
-          >
-            <div style={styles.a4Page}>
-              <header style={styles.formHeader}>
-                <div>
-                  <div style={styles.formOldTitle}>
-                    Ağır ve Tehlikeli
-                    İşlerde Çalışacaklara
-                    Ait Sağlık Raporu
-                    Örneği
+          <table className="officialTable workplaceTable">
+            <tbody>
+              <tr>
+                <th colSpan={2}>
+                  İŞYERİNİN
+                </th>
+                <td
+                  rowSpan={7}
+                  className="photoOuter"
+                >
+                  <div className="photoBox">
+                    Fotoğraf
                   </div>
+                </td>
+              </tr>
+              <tr>
+                <td className="labelCell">
+                  Ünvanı
+                </td>
+                <td />
+              </tr>
+              <tr>
+                <td className="labelCell">
+                  SGK Sicil No.
+                </td>
+                <td />
+              </tr>
+              <tr>
+                <td className="labelCell">
+                  Adresi
+                </td>
+                <td />
+              </tr>
+              <tr>
+                <td className="labelCell">
+                  Tel ve faks
+                </td>
+                <td />
+              </tr>
+              <tr>
+                <td className="labelCell">
+                  E-Posta
+                </td>
+                <td />
+              </tr>
+              <tr>
+                <td
+                  colSpan={2}
+                  className="consentCell"
+                >
+                  <p>
+                    İşe giriş/periyodik
+                    muayene olmayı kabul
+                    ettiğimi ve muayene
+                    sırasında verdiğim
+                    bilgilerin doğru ve
+                    eksiksiz olduğunu
+                    beyan ederim.
+                  </p>
 
-                  <h2 style={styles.formTitle}>
-                    İŞE GİRİŞ / PERİYODİK
-                    MUAYENE FORMU
-                  </h2>
-                </div>
+                  <div className="signatureText">
+                    Çalışanın Adı Soyadı
+                    <br />
+                    İMZA
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
-                <div style={styles.ek2Badge}>
-                  Ek-2
-                </div>
-              </header>
+          <div className="workerDivider">
+            İŞÇİNİN
+          </div>
 
-              <div style={styles.usageRow}>
-                <span>
-                  □ İşe Giriş Muayenesi
-                </span>
-                <span>
-                  □ Periyodik Muayene
-                </span>
-              </div>
+          <table className="officialTable workerTable">
+            <tbody>
+              <SimpleRow label="Adı ve soyadı" />
+              <SimpleRow label="T.C.Kimlik No" />
+              <SimpleRow label="Doğum Yeri ve Tarihi" />
+              <SimpleRow label="Cinsiyeti" />
+              <SimpleRow label="Eğitim durumu" />
 
-              {sections.map((section) => {
-                const sectionFields =
-                  fields.filter(
-                    (field) =>
-                      field.sectionId ===
-                      section.id
-                  );
+              <tr>
+                <td className="labelCell">
+                  Medeni durumu
+                </td>
+                <td />
+                <td className="smallLabel">
+                  Çocuk sayısı
+                </td>
+                <td />
+              </tr>
 
-                return (
-                  <section
-                    key={section.id}
-                    id={`section-${section.id}`}
-                    style={styles.formSection}
-                  >
-                    <div
-                      style={
-                        styles.formSectionTitle
-                      }
-                    >
-                      {section.title}
-                    </div>
+              <SimpleRow label="Ev Adresi" />
+              <SimpleRow label="Tel No." />
+              <SimpleRow label="Mesleği" />
+              <SimpleRow label="Yaptığı iş (Ayrıntılı olarak tanımlanacaktır.)" />
+              <SimpleRow label="Çalıştığı bölüm" />
+            </tbody>
+          </table>
 
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          section.columns === 1
-                            ? "1fr"
-                            : section.columns === 3
-                            ? "repeat(3,minmax(0,1fr))"
-                            : section.columns === 4
-                            ? "repeat(4,minmax(0,1fr))"
-                            : "repeat(2,minmax(0,1fr))",
-                        gap: 0,
-                      }}
-                    >
-                      {sectionFields.map(
-                        (field) => (
-                          <div
-                            key={field.id}
-                            style={{
-                              gridColumn:
-                                field.colSpan === 2
-                                  ? "1 / -1"
-                                  : undefined,
-                              borderRight:
-                                "1px solid #0f172a",
-                              borderBottom:
-                                "1px solid #0f172a",
-                              padding: 8,
-                              minHeight: 48,
-                            }}
-                          >
-                            <FieldPreview
-                              field={field}
-                            />
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </section>
-                );
-              })}
+          <table className="officialTable workHistoryTable">
+            <thead>
+              <tr>
+                <td className="historyTitle">
+                  Daha önce çalıştığı
+                  yerler
+                  <br />
+                  <small>
+                    (Bu günden geçmişe
+                    doğru)
+                  </small>
+                </td>
+                <td>İşkolu</td>
+                <td>Yaptığı iş</td>
+                <td>
+                  Giriş-çıkış tarihi
+                </td>
+              </tr>
+            </thead>
+            <tbody>
+              {[1, 2, 3].map(
+                (number) => (
+                  <tr key={number}>
+                    <td>{number}.</td>
+                    <td />
+                    <td />
+                    <td />
+                  </tr>
+                )
+              )}
+            </tbody>
+          </table>
 
-              <footer style={styles.formFooter}>
-                <div>
-                  Şablon Kodu:{" "}
-                  {record.template_code}
-                </div>
+          <table className="officialTable historyTable">
+            <tbody>
+              <tr>
+                <th colSpan={2}>
+                  Özgeçmişi
+                </th>
+              </tr>
+              <SimpleRow label="Kan grubu" />
+              <SimpleRow label="Konjenital/kronik hastalık" />
+              <tr>
+                <td className="labelCell">
+                  Bağışıklama
+                </td>
+                <td />
+              </tr>
+              <SimpleRow
+                label="- Tetanoz"
+                nested
+              />
+              <SimpleRow
+                label="- Hepatit"
+                nested
+              />
+              <SimpleRow
+                label="- Diğer"
+                nested
+              />
+            </tbody>
+          </table>
 
-                <div>
-                  Versiyon:{" "}
-                  {record.version_no} /
-                  Revizyon:{" "}
-                  {record.revision_no}
-                </div>
-              </footer>
+          <table className="officialTable familyTable">
+            <tbody>
+              <tr>
+                <th colSpan={4}>
+                  Soygeçmişi
+                </th>
+              </tr>
+              <tr>
+                <td>Anne</td>
+                <td>Baba</td>
+                <td>Kardeş</td>
+                <td>Çocuk</td>
+              </tr>
+              <tr className="familyBlank">
+                <td />
+                <td />
+                <td />
+                <td />
+              </tr>
+            </tbody>
+          </table>
+
+          <table className="officialTable anamnesisTable">
+            <tbody>
+              <tr>
+                <th colSpan={3}>
+                  TIBBİ ANAMNEZ
+                </th>
+              </tr>
+
+              <QuestionHeader
+                text="1. Aşağıdaki yakınmalardan herhangi birini yaşadınız mı?"
+              />
+
+              {[
+                "Balgamlı öksürük",
+                "Nefes darlığı",
+                "Göğüs ağrısı",
+                "Çarpıntı",
+                "Sırt ağrısı",
+                "İshal veya kabızlık",
+                "Eklemlerde ağrı",
+              ].map((item) => (
+                <YesNoRow
+                  key={item}
+                  label={`- ${item}`}
+                />
+              ))}
+
+              <QuestionHeader
+                text="2. Aşağıdaki hastalıklardan herhangi birini geçirdiniz mi?"
+              />
+
+              {[
+                "Kalp hastalığı",
+                "Şeker hastalığı",
+                "Böbrek rahatsızlığı",
+              ].map((item) => (
+                <YesNoRow
+                  key={item}
+                  label={`- ${item}`}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="paper pageTwo">
+          <table className="officialTable anamnesisTable secondAnamnesis">
+            <tbody>
+              {[
+                "Sarılık",
+                "Mide veya on iki parmak ülseri",
+                "İşitme kaybı",
+                "Görme bozukluğu",
+                "Sinir sistemi hastalığı",
+                "Deri hastalığı",
+                "Besin zehirlenmesi",
+              ].map((item) => (
+                <YesNoRow
+                  key={item}
+                  label={`- ${item}`}
+                />
+              ))}
+            </tbody>
+          </table>
+
+          <table className="officialTable detailedQuestions">
+            <tbody>
+              <DetailQuestion
+                no="3."
+                question="Hastanede yattınız mı?"
+                detail="Evet ise tanı ?"
+              />
+              <DetailQuestion
+                no="4."
+                question="Ameliyat geçirdiniz mi?"
+                detail="Evet ise neden ?"
+              />
+              <DetailQuestion
+                no="5."
+                question="İş kazası geçirdiniz mi?"
+                detail="Evet ise ne oldu ?"
+              />
+              <DetailQuestion
+                no="6."
+                question="Meslek Hastalıkları şüphesi ile ilgili tetkik ve muayeneye tabi tutuldunuz mu?"
+                detail="Evet ise sonuç ?"
+              />
+              <DetailQuestion
+                no="7."
+                question="Maluliyet aldınız mı?"
+                detail="Evet ise nedir ve oranı ?"
+              />
+              <DetailQuestion
+                no="8."
+                question="Şu anda herhangi bir tedavi görüyor musunuz?"
+                detail="Evet ise nedir ?"
+              />
+            </tbody>
+          </table>
+
+          <table className="officialTable habitTable">
+            <tbody>
+              <tr>
+                <td
+                  rowSpan={3}
+                  className="habitQuestion"
+                >
+                  9. Sigara içiyor
+                  musunuz?
+                </td>
+                <td>Hayır</td>
+                <td colSpan={3} />
+              </tr>
+              <tr>
+                <td>Bırakmış</td>
+                <td>
+                  ..........ay/yıl önce
+                </td>
+                <td>
+                  .............ay/yıl
+                  içmiş
+                </td>
+                <td>
+                  ...........adet/gün
+                  içmiş
+                </td>
+              </tr>
+              <tr>
+                <td>Evet</td>
+                <td>
+                  ..........yıldır
+                </td>
+                <td>
+                  ..............adet/gün
+                </td>
+                <td />
+              </tr>
+
+              <tr>
+                <td
+                  rowSpan={3}
+                  className="habitQuestion"
+                >
+                  10. Alkol alıyor
+                  musunuz?
+                </td>
+                <td>Hayır</td>
+                <td colSpan={3} />
+              </tr>
+              <tr>
+                <td>Bırakmış</td>
+                <td>
+                  ..............yıl önce
+                </td>
+                <td>
+                  ..............yıl içmiş
+                </td>
+                <td>
+                  ................sıklıkla
+                  içmiş
+                </td>
+              </tr>
+              <tr>
+                <td>Evet</td>
+                <td>
+                  ..........yıldır
+                </td>
+                <td>
+                  ..............sıklıkla
+                </td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
+
+          <table className="officialTable physicalTable">
+            <tbody>
+              <tr>
+                <th colSpan={2}>
+                  FİZİK MUAYENE SONUÇLARI
+                </th>
+              </tr>
+
+              <ExamRow label="a) Duyu organları" />
+              <ExamRow label="   - Göz" nested />
+              <ExamRow label="   - Kulak-Burun-Boğaz" nested />
+              <ExamRow label="   - Deri" nested />
+              <ExamRow label="b) Kardiyovasküler sistem muayenesi" />
+              <ExamRow label="c) Solunum sistemi muayenesi" />
+              <ExamRow label="d) Sindirim sistemi muayenesi" />
+              <ExamRow label="e) Ürogenital sistem muayenesi" />
+              <ExamRow label="f) Kas-iskelet sistemi muayenesi" />
+              <ExamRow label="g) Nörolojik muayene" />
+              <ExamRow label="Ğ) Psikiyatrik muayene" />
+              <ExamRow label="h) Diğer" />
+
+              <tr>
+                <td className="vitalLabel">
+                  -TA :
+                </td>
+                <td>
+                  <span className="vitalSpace">
+                    /
+                  </span>
+                  mm-Hg
+                </td>
+              </tr>
+              <tr>
+                <td className="vitalLabel">
+                  -Nb :
+                </td>
+                <td>
+                  <span className="vitalSpace">
+                    /
+                  </span>
+                  dk.
+                </td>
+              </tr>
+              <tr>
+                <td className="vitalLabel">
+                  -Boy:
+                </td>
+                <td className="vitalComposite">
+                  <span>Kilo:</span>
+                  <span>
+                    Vücut Kitle İndeksi :
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table className="officialTable laboratoryTable">
+            <tbody>
+              <tr>
+                <th colSpan={2}>
+                  LABORATUVAR BULGULARI
+                </th>
+              </tr>
+              <ExamRow label="a) Biyolojik analizler" />
+              <ExamRow label="- Kan" nested />
+              <ExamRow label="- İdrar" nested />
+              <ExamRow label="b) Radyolojik analizler" />
+              <ExamRow label="c) Fizyolojik analizler" />
+              <ExamRow label="- Odyometre" nested />
+              <ExamRow label="- SFT" nested />
+              <ExamRow label="d) Psikolojik testler" />
+              <ExamRow label="e) Diğer" />
+            </tbody>
+          </table>
+
+          <section className="opinionSection">
+            <h3>
+              KANAAT VE SONUÇ * :
+            </h3>
+
+            <p className="opinionLine">
+              <strong>1-</strong>
+              <span />
+              <b>
+                işinde bedenen ve ruhen
+                çalışmaya elverişlidir.
+              </b>
+            </p>
+
+            <p className="opinionLine">
+              <strong>2-</strong>
+              <span />
+              <b>
+                şartı ile çalışmaya
+                elverişlidir
+              </b>
+            </p>
+
+            <p className="opinionNote">
+              (*Yapılan muayene sonucunda
+              çalışanın gece veya vardiyalı
+              çalışma koşullarında çalışıp
+              çalışamayacağı ile vücut
+              sağlığını ve bütünlüğünü
+              tamamlayıcı uygun alet
+              teçhizat vs... bulunması
+              durumunda çalışan için bu
+              koşullarla çalışmaya elverişli
+              olup olmadığı kanaati
+              belirtilecektir.)
+            </p>
+
+            <div className="dateLine">
+              ……...... / ............. /
+              20.............
+            </div>
+
+            <div className="doctorBlock">
+              <strong>İMZA</strong>
+              <strong>
+                Adı ve Soyadı :
+              </strong>
+              <strong>
+                Diploma Tarih ve No:
+              </strong>
+              <strong>
+                Diploma Tescil Tarih ve No:
+              </strong>
+              <span>
+                İşyeri Hekimliği Belgesi
+                Tarih ve No:
+              </span>
             </div>
           </section>
-
-          <aside
-            className="noPrint"
-            style={{
-              ...styles.rightPanel,
-              display: isReadOnlyMode
-                ? "none"
-                : "grid",
-            }}
-          >
-            <div style={styles.panelTitle}>
-              <Eye size={17} />
-              Şablon Bilgileri
-            </div>
-
-            <div style={styles.infoList}>
-              <InfoItem
-                label="Form Kodu"
-                value={
-                  record.template_code
-                }
-              />
-
-              <InfoItem
-                label="Kullanım"
-                value="İşe Giriş + Periyodik"
-              />
-
-              <InfoItem
-                label="Bölüm Sayısı"
-                value={String(
-                  sections.length
-                )}
-              />
-
-              <InfoItem
-                label="Alan Sayısı"
-                value={String(
-                  fields.length
-                )}
-              />
-
-              <InfoItem
-                label="Hedef Modül"
-                value="HEALTH"
-              />
-
-              <InfoItem
-                label="Mobil"
-                value="Görüntüleme / Kullanma"
-              />
-            </div>
-
-            <div style={styles.notice}>
-              Form oluşturma ve
-              düzenleme yalnızca web
-              tarafında yapılır. Mobil
-              uygulama yayımlanmış boş
-              şablonu indirir ve Sağlık
-              Modülünde kullanır.
-            </div>
-
-            <div style={styles.noticeBlue}>
-              Doldurulmuş çalışan sağlık
-              kayıtları bu arşivde
-              saklanmaz.
-            </div>
-          </aside>
         </div>
-      </div>
+      </section>
 
       <style jsx global>{`
-        .designerSpin {
-          animation: designer-spin
-            0.9s linear infinite;
+        * {
+          box-sizing: border-box;
         }
 
-        @keyframes designer-spin {
-          to {
-            transform: rotate(
-              360deg
+        .page {
+          min-height: 100vh;
+          width: 100%;
+          max-width: 100%;
+          overflow-x: hidden;
+          padding: 18px;
+          background:
+            linear-gradient(
+              180deg,
+              #f8fafc 0%,
+              #eef2f7 100%
             );
+          font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+        }
+
+        .loadingPage,
+        .errorPage {
+          min-height: 100vh;
+          display: grid;
+          place-items: center;
+          background: #f8fafc;
+          color: #64748b;
+        }
+
+        .spin {
+          animation: spin 0.9s
+            linear infinite;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
           }
+        }
+
+        .errorCard {
+          width: min(700px, 92%);
+          padding: 26px;
+          border: 1px solid #fecaca;
+          border-radius: 20px;
+          background: #ffffff;
+          text-align: center;
+        }
+
+        .errorCard button,
+        .primaryButton,
+        .secondaryButton {
+          min-height: 42px;
+          border-radius: 11px;
+          padding: 0 14px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .primaryButton {
+          border: 0;
+          background: #6b1020;
+          color: #ffffff;
+        }
+
+        .secondaryButton {
+          border: 1px solid #dbe3ec;
+          background: #ffffff;
+          color: #475569;
+        }
+
+        .toolbar {
+          width: 100%;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content:
+            space-between;
+          gap: 10px;
+          margin-bottom: 15px;
+        }
+
+        .toolbarActions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .intro {
+          width: 100%;
+          margin-bottom: 16px;
+          padding: 22px;
+          border-radius: 22px;
+          color: #ffffff;
+          background:
+            linear-gradient(
+              135deg,
+              #4c0d1a 0%,
+              #9f1239 52%,
+              #ea580c 100%
+            );
+          display: flex;
+          flex-wrap: wrap;
+          justify-content:
+            space-between;
+          gap: 18px;
+        }
+
+        .introBadge {
+          display: inline-flex;
+          border-radius: 999px;
+          background:
+            rgba(
+              255,
+              255,
+              255,
+              0.14
+            );
+          padding: 7px 10px;
+          font-size: 12px;
+          font-weight: 900;
+        }
+
+        .intro h1 {
+          margin: 14px 0 7px;
+          font-size:
+            clamp(
+              25px,
+              3vw,
+              38px
+            );
+          line-height: 1.08;
+        }
+
+        .intro p {
+          max-width: 780px;
+          margin: 0;
+          color:
+            rgba(
+              255,
+              255,
+              255,
+              0.84
+            );
+          line-height: 1.6;
+        }
+
+        .introMeta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+          align-content: flex-start;
+        }
+
+        .introMeta span {
+          border-radius: 999px;
+          background:
+            rgba(
+              255,
+              255,
+              255,
+              0.14
+            );
+          padding: 7px 10px;
+          font-size: 11px;
+          font-weight: 900;
+        }
+
+        .formArea {
+          width: 100%;
+          overflow-x: auto;
+          padding: 18px;
+          border: 1px solid #cbd5e1;
+          border-radius: 18px;
+          background: #d7dce2;
+        }
+
+        .paper {
+          width: 210mm;
+          min-height: 297mm;
+          margin: 0 auto 18px;
+          padding:
+            13mm 10mm 12mm;
+          background: #ffffff;
+          color: #111111;
+          box-shadow:
+            0 18px 48px
+            rgba(
+              15,
+              23,
+              42,
+              0.2
+            );
+          font-family:
+            "Times New Roman",
+            Times,
+            serif;
+          font-size: 10.5pt;
+        }
+
+        .paper:last-child {
+          margin-bottom: 0;
+        }
+
+        .documentHeader {
+          position: relative;
+          min-height: 45px;
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+        }
+
+        .documentHeader h2 {
+          margin: 0;
+          font-size: 14.5pt;
+          line-height: 1.15;
+          text-align: center;
+          font-weight: 700;
+        }
+
+        .documentHeader strong {
+          position: absolute;
+          right: 15%;
+          top: 1px;
+          font-size: 14pt;
+        }
+
+        .officialTable {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          margin: 0;
+        }
+
+        .officialTable td,
+        .officialTable th {
+          border: 1px dotted #555;
+          padding: 2px 7px;
+          min-height: 18px;
+          line-height: 1.05;
+          vertical-align: middle;
+          font-weight: 400;
+        }
+
+        .officialTable th {
+          text-align: left;
+          font-weight: 700;
+        }
+
+        .workplaceTable {
+          margin-top: 12px;
+        }
+
+        .workplaceTable td:first-child,
+        .workplaceTable th:first-child {
+          width: 18%;
+        }
+
+        .workplaceTable td:nth-child(2) {
+          width: 58%;
+        }
+
+        .workplaceTable .photoOuter {
+          width: 24%;
+          padding: 0;
+          position: relative;
+        }
+
+        .photoBox {
+          width: 60%;
+          height: 32mm;
+          margin: 0 auto;
+          border: 1px solid #333;
+          display: grid;
+          place-items: center;
+          font-size: 9pt;
+        }
+
+        .labelCell {
+          white-space: nowrap;
+        }
+
+        .consentCell {
+          height: 39mm;
+          vertical-align: top !important;
+          text-align: center;
+          padding-top: 7px !important;
+        }
+
+        .consentCell p {
+          margin:
+            0 auto 14px;
+          max-width: 95%;
+          line-height: 1.18;
+        }
+
+        .signatureText {
+          text-align: center;
+          line-height: 1.1;
+        }
+
+        .workerDivider {
+          width: 76%;
+          margin-top: -27mm;
+          margin-bottom: 0;
+          padding: 3px 7px 1px;
+          border-top:
+            2px dashed #333;
+          border-left:
+            1px dotted #555;
+          border-right:
+            1px dotted #555;
+          font-weight: 700;
+        }
+
+        .workerTable {
+          width: 100%;
+        }
+
+        .workerTable td:first-child {
+          width: 31%;
+        }
+
+        .workerTable td:nth-child(2) {
+          width: 19%;
+        }
+
+        .workerTable td:nth-child(3) {
+          width: 16%;
+        }
+
+        .workerTable td:nth-child(4) {
+          width: 34%;
+        }
+
+        .workerTable tr {
+          height: 18px;
+        }
+
+        .smallLabel {
+          white-space: nowrap;
+        }
+
+        .workHistoryTable td:nth-child(1) {
+          width: 22%;
+        }
+
+        .workHistoryTable td:nth-child(2) {
+          width: 15%;
+          text-align: center;
+        }
+
+        .workHistoryTable td:nth-child(3) {
+          width: 35%;
+          text-align: center;
+        }
+
+        .workHistoryTable td:nth-child(4) {
+          width: 28%;
+          text-align: center;
+        }
+
+        .workHistoryTable tbody td {
+          height: 18px;
+          text-align: left;
+        }
+
+        .historyTitle {
+          line-height: 1.02;
+        }
+
+        .historyTitle small {
+          font-size: 8.8pt;
+        }
+
+        .historyTable td:first-child {
+          width: 22%;
+        }
+
+        .historyTable .nestedLabel {
+          padding-left: 19px;
+        }
+
+        .familyTable td {
+          width: 25%;
+        }
+
+        .familyBlank td {
+          height: 22px;
+        }
+
+        .anamnesisTable td:first-child {
+          width: 63%;
+        }
+
+        .anamnesisTable td:nth-child(2),
+        .anamnesisTable td:nth-child(3) {
+          width: 18.5%;
+          text-align: center;
+        }
+
+        .anamnesisTable td,
+        .anamnesisTable th {
+          height: 17px;
+        }
+
+        .questionHeader td:first-child {
+          font-weight: 400;
+        }
+
+        .secondAnamnesis {
+          margin-top: 0;
+        }
+
+        .detailedQuestions td:nth-child(1) {
+          width: 42%;
+        }
+
+        .detailedQuestions td:nth-child(2) {
+          width: 14%;
+        }
+
+        .detailedQuestions td:nth-child(3) {
+          width: 16%;
+        }
+
+        .detailedQuestions td:nth-child(4) {
+          width: 28%;
+        }
+
+        .detailedQuestions td {
+          height: 26px;
+        }
+
+        .detailQuestionText {
+          line-height: 1.05;
+        }
+
+        .habitTable td {
+          height: 17px;
+        }
+
+        .habitTable td:nth-child(1) {
+          width: 23%;
+        }
+
+        .habitTable td:nth-child(2) {
+          width: 13%;
+        }
+
+        .habitTable td:nth-child(3),
+        .habitTable td:nth-child(4),
+        .habitTable td:nth-child(5) {
+          width: 21.3%;
+        }
+
+        .habitQuestion {
+          vertical-align: top !important;
+        }
+
+        .physicalTable td:first-child,
+        .laboratoryTable td:first-child {
+          width: 32%;
+        }
+
+        .physicalTable td,
+        .laboratoryTable td {
+          height: 16px;
+        }
+
+        .examNested {
+          padding-left: 22px !important;
+        }
+
+        .vitalLabel {
+          padding-left: 22px !important;
+        }
+
+        .vitalSpace {
+          display: inline-block;
+          min-width: 170px;
+          text-align: center;
+        }
+
+        .vitalComposite {
+          display: flex;
+          justify-content:
+            space-between;
+          padding-right: 35% !important;
+        }
+
+        .opinionSection {
+          margin-top: 4px;
+          font-size: 10.5pt;
+        }
+
+        .opinionSection h3 {
+          margin: 0 0 10px;
+          font-size: 11pt;
+        }
+
+        .opinionLine {
+          display: grid;
+          grid-template-columns:
+            22px 1fr auto;
+          align-items: end;
+          gap: 3px;
+          margin: 11px 0;
+        }
+
+        .opinionLine span {
+          border-bottom:
+            1px dotted #333;
+          min-width: 0;
+        }
+
+        .opinionLine b {
+          font-size: 10pt;
+          white-space: nowrap;
+        }
+
+        .opinionNote {
+          margin: 8px 0 0;
+          font-size: 8.5pt;
+          font-style: italic;
+          line-height: 1.2;
+        }
+
+        .dateLine {
+          margin-top: 16px;
+          text-align: right;
+          padding-right: 8%;
+          font-weight: 700;
+        }
+
+        .doctorBlock {
+          margin-top: 2px;
+          display: grid;
+          gap: 1px;
+          font-size: 11.5pt;
+          line-height: 1.02;
         }
 
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm;
+            margin: 0;
+          }
+
+          html,
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
           }
 
           body * {
             visibility: hidden !important;
           }
 
-          #ek2-print-root,
-          #ek2-print-root * {
+          #official-ek2-form,
+          #official-ek2-form * {
             visibility: visible !important;
           }
 
-          #ek2-print-root {
+          #official-ek2-form {
             position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            inset: 0 !important;
             width: 100% !important;
+            overflow: visible !important;
             padding: 0 !important;
+            border: 0 !important;
             background: #ffffff !important;
           }
 
-          #ek2-print-root > div {
-            width: 100% !important;
-            min-height: auto !important;
+          .paper {
+            width: 210mm !important;
+            min-height: 297mm !important;
             margin: 0 !important;
+            padding:
+              13mm 10mm 12mm !important;
             box-shadow: none !important;
+            break-after: page;
+            page-break-after: always;
+          }
+
+          .paper:last-child {
+            break-after: auto;
+            page-break-after: auto;
           }
 
           .noPrint {
@@ -1034,25 +1391,13 @@ export default function FormTemplateDesignerPage() {
           }
         }
 
-        @media (max-width: 1200px) {
-          .designerLayout {
-            grid-template-columns:
-              220px minmax(0,1fr) !important;
+        @media (max-width: 850px) {
+          .page {
+            padding: 10px;
           }
 
-          .designerLayout > aside:last-child {
-            grid-column: 1 / -1;
-          }
-        }
-
-        @media (max-width: 800px) {
-          .designerLayout {
-            grid-template-columns:
-              1fr !important;
-          }
-
-          .designerLayout > aside {
-            position: static !important;
+          .formArea {
+            padding: 8px;
           }
         }
       `}</style>
@@ -1060,393 +1405,97 @@ export default function FormTemplateDesignerPage() {
   );
 }
 
-function InfoItem({
+function SimpleRow({
   label,
-  value,
+  nested = false,
 }: {
   label: string;
-  value: string;
+  nested?: boolean;
 }) {
   return (
-    <div style={styles.infoItem}>
-      <div style={styles.infoLabel}>
+    <tr>
+      <td
+        className={
+          nested
+            ? "labelCell nestedLabel"
+            : "labelCell"
+        }
+      >
         {label}
-      </div>
-
-      <div style={styles.infoValue}>
-        {value}
-      </div>
-    </div>
+      </td>
+      <td colSpan={3} />
+    </tr>
   );
 }
 
-const styles: Record<
-  string,
-  React.CSSProperties
-> = {
-  page: {
-    minHeight: "100vh",
-    width: "100%",
-    maxWidth: "100%",
-    overflowX: "hidden",
-    background:
-      "linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)",
-    padding: 18,
-    boxSizing: "border-box",
-  },
+function QuestionHeader({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <tr className="questionHeader">
+      <td>{text}</td>
+      <td>Hayır</td>
+      <td>Evet</td>
+    </tr>
+  );
+}
 
-  loading: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    gap: 12,
-    background: "#f8fafc",
-    color: "#64748b",
-  },
+function YesNoRow({
+  label,
+}: {
+  label: string;
+}) {
+  return (
+    <tr>
+      <td>{label}</td>
+      <td />
+      <td />
+    </tr>
+  );
+}
 
-  container: {
-    width: "100%",
-    display: "grid",
-    gap: 16,
-  },
+function DetailQuestion({
+  no,
+  question,
+  detail,
+}: {
+  no: string;
+  question: string;
+  detail: string;
+}) {
+  return (
+    <tr>
+      <td className="detailQuestionText">
+        {no} {question}
+      </td>
+      <td>Hayır</td>
+      <td>{detail}</td>
+      <td />
+    </tr>
+  );
+}
 
-  toolbar: {
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent:
-      "space-between",
-    gap: 10,
-  },
-
-  buttonRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-
-  primaryButton: {
-    minHeight: 42,
-    borderRadius: 12,
-    border: 0,
-    background: "#6b1020",
-    color: "#ffffff",
-    padding: "0 15px",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    fontWeight: 900,
-    cursor: "pointer",
-  },
-
-  secondaryButton: {
-    minHeight: 42,
-    borderRadius: 12,
-    border:
-      "1px solid #dbe3ec",
-    background: "#ffffff",
-    color: "#475569",
-    padding: "0 14px",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    fontWeight: 850,
-    cursor: "pointer",
-  },
-
-  errorMessage: {
-    borderRadius: 13,
-    border:
-      "1px solid #fecaca",
-    background: "#fef2f2",
-    color: "#b91c1c",
-    padding: 12,
-    fontWeight: 800,
-  },
-
-  successMessage: {
-    borderRadius: 13,
-    border:
-      "1px solid #bbf7d0",
-    background: "#ecfdf5",
-    color: "#047857",
-    padding: 12,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    fontWeight: 800,
-  },
-
-  hero: {
-    borderRadius: 24,
-    background:
-      "linear-gradient(135deg,#4c0d1a 0%,#9f1239 52%,#ea580c 100%)",
-    color: "#ffffff",
-    padding: 22,
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent:
-      "space-between",
-    gap: 16,
-  },
-
-  heroBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 999,
-    background:
-      "rgba(255,255,255,0.14)",
-    padding: "7px 11px",
-    fontSize: 12,
-    fontWeight: 900,
-  },
-
-  heroTitle: {
-    margin: "14px 0 7px",
-    fontSize:
-      "clamp(25px,3vw,38px)",
-    lineHeight: 1.1,
-    fontWeight: 950,
-  },
-
-  heroText: {
-    margin: 0,
-    maxWidth: 800,
-    color:
-      "rgba(255,255,255,0.84)",
-    lineHeight: 1.6,
-  },
-
-  heroMeta: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 7,
-    alignContent: "flex-start",
-  },
-
-  heroChip: {
-    borderRadius: 999,
-    background:
-      "rgba(255,255,255,0.14)",
-    padding: "7px 10px",
-    fontSize: 11,
-    fontWeight: 900,
-  },
-
-  designerLayout: {
-    display: "grid",
-    gridTemplateColumns:
-      "230px minmax(0,1fr) 250px",
-    gap: 14,
-    alignItems: "start",
-  },
-
-  leftPanel: {
-    position: "sticky",
-    top: 12,
-    borderRadius: 18,
-    border:
-      "1px solid #e5e7eb",
-    background: "#ffffff",
-    padding: 13,
-    display: "grid",
-    gap: 12,
-  },
-
-  rightPanel: {
-    position: "sticky",
-    top: 12,
-    borderRadius: 18,
-    border:
-      "1px solid #e5e7eb",
-    background: "#ffffff",
-    padding: 13,
-    display: "grid",
-    gap: 12,
-  },
-
-  panelTitle: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    color: "#0f172a",
-    fontWeight: 950,
-  },
-
-  previewArea: {
-    minWidth: 0,
-    overflowX: "auto",
-    borderRadius: 18,
-    border:
-      "1px solid #e5e7eb",
-    background: "#cbd5e1",
-    padding: 18,
-  },
-
-  a4Page: {
-    width: "210mm",
-    minHeight: "297mm",
-    margin: "0 auto",
-    background: "#ffffff",
-    color: "#0f172a",
-    padding: "10mm",
-    boxSizing: "border-box",
-    boxShadow:
-      "0 18px 45px rgba(15,23,42,0.18)",
-    fontFamily:
-      "Arial, Helvetica, sans-serif",
-  },
-
-  formHeader: {
-    display: "flex",
-    justifyContent:
-      "space-between",
-    alignItems: "flex-start",
-    gap: 15,
-    border:
-      "1px solid #0f172a",
-    padding: 10,
-  },
-
-  formOldTitle: {
-    fontSize: 10,
-    marginBottom: 7,
-  },
-
-  formTitle: {
-    margin: 0,
-    fontSize: 17,
-    textAlign: "center",
-    letterSpacing: "0.01em",
-  },
-
-  ek2Badge: {
-    fontSize: 14,
-    fontWeight: 900,
-    whiteSpace: "nowrap",
-  },
-
-  usageRow: {
-    display: "flex",
-    gap: 30,
-    borderLeft:
-      "1px solid #0f172a",
-    borderRight:
-      "1px solid #0f172a",
-    borderBottom:
-      "1px solid #0f172a",
-    padding: 8,
-    fontSize: 11,
-    fontWeight: 800,
-  },
-
-  formSection: {
-    borderLeft:
-      "1px solid #0f172a",
-    borderTop:
-      "1px solid #0f172a",
-  },
-
-  formSectionTitle: {
-    borderRight:
-      "1px solid #0f172a",
-    borderBottom:
-      "1px solid #0f172a",
-    background: "#e2e8f0",
-    padding: "7px 8px",
-    fontSize: 11,
-    fontWeight: 950,
-  },
-
-  fieldLabel: {
-    fontSize: 10,
-    lineHeight: 1.35,
-    fontWeight: 800,
-  },
-
-  singleLine: {
-    minHeight: 19,
-    borderBottom:
-      "1px dotted #475569",
-  },
-
-  lineArea: {
-    minHeight: 28,
-    borderBottom:
-      "1px dotted #475569",
-  },
-
-  textArea: {
-    minHeight: 42,
-    border:
-      "1px solid #94a3b8",
-  },
-
-  formFooter: {
-    display: "flex",
-    justifyContent:
-      "space-between",
-    gap: 15,
-    border:
-      "1px solid #0f172a",
-    borderTop: 0,
-    padding: 7,
-    fontSize: 9,
-  },
-
-  infoList: {
-    display: "grid",
-    gap: 7,
-  },
-
-  infoItem: {
-    borderRadius: 11,
-    background: "#f8fafc",
-    padding: 10,
-  },
-
-  infoLabel: {
-    color: "#94a3b8",
-    fontSize: 9,
-    fontWeight: 900,
-  },
-
-  infoValue: {
-    marginTop: 4,
-    color: "#0f172a",
-    fontSize: 12,
-    fontWeight: 900,
-    overflowWrap: "anywhere",
-  },
-
-  notice: {
-    borderRadius: 12,
-    background: "#fff7ed",
-    color: "#9a3412",
-    padding: 11,
-    fontSize: 11,
-    lineHeight: 1.5,
-    fontWeight: 750,
-  },
-
-  noticeBlue: {
-    borderRadius: 12,
-    background: "#eff6ff",
-    color: "#1d4ed8",
-    padding: 11,
-    fontSize: 11,
-    lineHeight: 1.5,
-    fontWeight: 750,
-  },
-
-  errorCard: {
-    maxWidth: 800,
-    margin: "70px auto",
-    borderRadius: 20,
-    border:
-      "1px solid #fecaca",
-    background: "#ffffff",
-    padding: 25,
-    textAlign: "center",
-  },
-};
+function ExamRow({
+  label,
+  nested = false,
+}: {
+  label: string;
+  nested?: boolean;
+}) {
+  return (
+    <tr>
+      <td
+        className={
+          nested
+            ? "examNested"
+            : undefined
+        }
+      >
+        {label}
+      </td>
+      <td />
+    </tr>
+  );
+}
