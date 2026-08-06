@@ -581,6 +581,9 @@ export default function RiskWorkspace({
               .json()
               .catch(() => ({}));
 
+console.log("STATUS :", response.status);
+console.log("JSON :", json);
+
             if (!response.ok || !json.success) {
               throw new Error(
                 json.detail ||
