@@ -187,6 +187,9 @@ export default function RiskWorkspace({
   const [deletingId, setDeletingId] =
     useState("");
 
+  const [archiving, setArchiving] =
+    useState(false);
+
   const [error, setError] = useState("");
   const [showReports, setShowReports] =
     useState(false);
@@ -403,6 +406,212 @@ export default function RiskWorkspace({
     }
   };
 
+  const handleArchive = async () => {
+    try {
+      setArchiving(true);
+      setError("");
+
+      if (!firmId) {
+        throw new Error(
+          "Risk arşivi için seçili firma kimliği bulunamadı."
+        );
+      }
+
+      if (records.length === 0) {
+        throw new Error(
+          "Arşive aktarılacak risk kaydı bulunamadı."
+        );
+      }
+
+      const methodGroups = new Map<
+        RiskMethod,
+        RiskRecord[]
+      >();
+
+      records.forEach((record) => {
+        const current =
+          methodGroups.get(record.method) || [];
+
+        current.push(record);
+        methodGroups.set(record.method, current);
+      });
+
+      const results = await Promise.all(
+        Array.from(methodGroups.entries()).map(
+          async ([method, methodRecords]) => {
+            const latestDate = Math.max(
+              ...methodRecords.map(
+                (record) =>
+                  Number(
+                    record.updatedAtMillis ||
+                      record.createdAtMillis ||
+                      Date.now()
+                  )
+              )
+            );
+
+            const criticalCount =
+              methodRecords.filter(
+                (record) =>
+                  record.level === "VERY_HIGH" ||
+                  record.level === "INTOLERABLE"
+              ).length;
+
+            const highCount =
+              methodRecords.filter(
+                (record) =>
+                  record.level === "HIGH"
+              ).length;
+
+            const mediumCount =
+              methodRecords.filter(
+                (record) =>
+                  record.level === "MEDIUM"
+              ).length;
+
+            const lowCount =
+              methodRecords.filter(
+                (record) =>
+                  record.level === "LOW"
+              ).length;
+
+            const openDofCount =
+              methodRecords.filter(
+                (record) => !record.completed
+              ).length;
+
+            const methodLabel =
+              method === "FINE_KINNEY"
+                ? "Fine-Kinney Risk Değerlendirmesi"
+                : "5×5 Matris Risk Değerlendirmesi";
+
+            const payload = {
+              firmId,
+              assessmentRemoteId:
+                `RISK-ARCHIVE-${firmId}-${method}`,
+              documentTitle:
+                `${companyName || methodRecords[0]?.company || "Firma"} • ${methodLabel}`,
+              riskMethod: method,
+              assessmentDate:
+                new Date(latestDate).toISOString(),
+              preparedBy: "",
+              location: "",
+              department: "",
+              revisionNo: 1,
+              totalItemCount:
+                methodRecords.length,
+              criticalCount,
+              highCount,
+              mediumCount,
+              lowCount,
+              openDofCount,
+              complianceRate: null,
+              reportStatus: "COMPLETED",
+              source: "WEB",
+              resultJson: {
+                method,
+                companyName:
+                  companyName ||
+                  methodRecords[0]?.company ||
+                  "",
+                totalItemCount:
+                  methodRecords.length,
+                criticalCount,
+                highCount,
+                mediumCount,
+                lowCount,
+                openDofCount,
+              },
+              itemsJson: methodRecords.map(
+                (record, index) => ({
+                  id: record.id,
+                  firmId: record.firmId,
+                  company: record.company,
+                  department: record.department,
+                  process: record.process,
+                  activity: record.activity,
+                  hazard: record.hazard,
+                  consequence: record.consequence,
+                  existingControl:
+                    record.existingControl,
+                  proposedControl:
+                    record.proposedControl,
+                  responsible:
+                    record.responsible,
+                  dueDateMillis:
+                    record.dueDateMillis,
+                  completed:
+                    record.completed,
+                  probability:
+                    record.probability,
+                  frequency:
+                    record.frequency,
+                  severity:
+                    record.severity,
+                  score: record.score,
+                  method: record.method,
+                  level: record.level,
+                  photoUrl: record.photoUrl,
+                  attachmentUrl:
+                    record.attachmentUrl,
+                  createdAtMillis:
+                    record.createdAtMillis,
+                  updatedAtMillis:
+                    record.updatedAtMillis,
+                  sortOrder: index + 1,
+                })
+              ),
+            };
+
+            const response = await fetch(
+              "/api/mobile/risk-documents/sync",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                  "x-api-key":
+                    "dsec_mobile_123",
+                },
+                body: JSON.stringify(payload),
+              }
+            );
+
+            const json = await response
+              .json()
+              .catch(() => ({}));
+
+            if (!response.ok || !json.success) {
+              throw new Error(
+                json.detail ||
+                  json.error ||
+                  `${methodLabel} arşivlenemedi.`
+              );
+            }
+
+            return methodLabel;
+          }
+        )
+      );
+
+      window.alert(
+        `${results.length} risk değerlendirmesi dokümantasyon arşivine aktarıldı.`
+      );
+
+      setShowArchive(true);
+    } catch (archiveError) {
+      const message =
+        archiveError instanceof Error
+          ? archiveError.message
+          : "Risk değerlendirmeleri arşivlenemedi.";
+
+      setError(message);
+      window.alert(message);
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   const clearFilters = () => {
     setSearch("");
     setLevelFilter("ALL");
@@ -521,7 +730,8 @@ export default function RiskWorkspace({
 
             <button
               type="button"
-              onClick={() => setShowArchive(true)}
+              onClick={() => void handleArchive()}
+              disabled={archiving}
               style={{
                 minHeight: 42,
                 borderRadius: 12,
@@ -533,11 +743,23 @@ export default function RiskWorkspace({
                 alignItems: "center",
                 gap: 7,
                 fontWeight: 850,
-                cursor: "pointer",
+                cursor: archiving
+                  ? "wait"
+                  : "pointer",
+                opacity: archiving ? 0.7 : 1,
               }}
             >
-              <FileSpreadsheet size={16} />
-              Rapor Arşivi
+              {archiving ? (
+                <Loader2
+                  size={16}
+                  className="riskWorkspaceSpin"
+                />
+              ) : (
+                <FileSpreadsheet size={16} />
+              )}
+              {archiving
+                ? "Arşivleniyor..."
+                : "Rapor Arşivi"}
             </button>
 
             <button
