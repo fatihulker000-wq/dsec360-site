@@ -309,7 +309,9 @@ export default function RiskDocumentDetailPage() {
             ["Açık DÖF", record.open_dof_count, "#fffbeb", "#92400e"],
             [
               "PDF Durumu",
-              record.generated_pdf_url ? "Hazır" : "Bekliyor",
+              record.generated_pdf_url
+                ? "PDF Hazır"
+                : "PDF Oluşturulmadı",
               "#f8fafc",
               "#475569",
             ],
@@ -461,7 +463,9 @@ export default function RiskDocumentDetailPage() {
             {[
               [
                 "PDF Dokümanı",
-                record.generated_pdf_url ? "Hazır" : "Belge bekliyor",
+                record.generated_pdf_url
+                  ? "PDF Hazır"
+                  : "PDF Henüz Oluşturulmadı",
               ],
               [
                 "İmzalı Doküman",
@@ -594,11 +598,15 @@ export default function RiskDocumentDetailPage() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    background: "linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)",
-    padding: 24,
-  },
+ page: {
+  minHeight: "100vh",
+  width: "100%",
+  maxWidth: "100vw",
+  overflowX: "hidden",
+  background: "linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%)",
+  padding: 18,
+  boxSizing: "border-box",
+},
   loadingPage: {
     minHeight: "100vh",
     display: "grid",
@@ -607,12 +615,14 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#64748b",
     gap: 12,
   },
-  container: {
-    maxWidth: 1540,
-    margin: "0 auto",
-    display: "grid",
-    gap: 18,
-  },
+ container: {
+  width: "100%",
+  maxWidth: 1280,
+  margin: "0 auto",
+  display: "grid",
+  gap: 18,
+  boxSizing: "border-box",
+},
   toolbar: {
     display: "flex",
     flexWrap: "wrap",
@@ -664,15 +674,17 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
   },
   hero: {
-    borderRadius: 28,
+    borderRadius: 24,
     background:
       "linear-gradient(135deg,#4c0d1a 0%,#9f1239 52%,#ea580c 100%)",
     color: "#fff",
-    padding: 28,
+    padding: 22,
     display: "flex",
     flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 18,
+    overflow: "hidden",
+    boxSizing: "border-box",
     boxShadow: "0 24px 60px rgba(76,13,26,.22)",
   },
   heroBadge: {
@@ -686,10 +698,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
   },
   heroTitle: {
-    margin: "16px 0 8px",
-    fontSize: 36,
+    margin: "14px 0 8px",
+    fontSize: "clamp(24px, 3vw, 34px)",
     lineHeight: 1.12,
     fontWeight: 950,
+    overflowWrap: "anywhere",
   },
   heroSubtitle: {
     margin: 0,
@@ -709,7 +722,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   kpiGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(5,minmax(0,1fr))",
+    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
     gap: 12,
   },
   kpiCard: {
@@ -728,7 +741,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   infoGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
     gap: 12,
   },
   infoCard: {
