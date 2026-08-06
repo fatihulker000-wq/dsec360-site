@@ -94,14 +94,19 @@ function getSupabase() {
   });
 }
 
-function isAuthorized(req: Request): boolean {
+function isAuthorized(
+  req: Request
+): boolean {
   return (
-    clean(req.headers.get("x-api-key")) ===
-    API_KEY
+    clean(
+      req.headers.get("x-api-key")
+    ) === API_KEY
   );
 }
 
-export async function POST(req: Request) {
+export async function POST(
+  req: Request
+) {
   try {
     if (!isAuthorized(req)) {
       return NextResponse.json(
@@ -115,25 +120,35 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
+    /*
+     * Bu değer yerel Room ID değil,
+     * web firmasının UUID bilgisidir.
+     *
+     * Bu nedenle Supabase firm_id alanı
+     * TEXT olmalıdır.
+     */
     const firmId = clean(
       body.firmId ??
         body.firm_id
     );
 
-    const assessmentRemoteId = clean(
-      body.assessmentRemoteId ??
-        body.assessment_remote_id
-    );
+    const assessmentRemoteId =
+      clean(
+        body.assessmentRemoteId ??
+          body.assessment_remote_id
+      );
 
-    const documentTitle = clean(
-      body.documentTitle ??
-        body.document_title
-    );
+    const documentTitle =
+      clean(
+        body.documentTitle ??
+          body.document_title
+      );
 
-    const riskMethod = clean(
-      body.riskMethod ??
-        body.risk_method
-    );
+    const riskMethod =
+      clean(
+        body.riskMethod ??
+          body.risk_method
+      );
 
     if (!firmId) {
       return NextResponse.json(
@@ -294,10 +309,9 @@ export async function POST(req: Request) {
       updated_at:
         new Date().toISOString(),
     };
-        const supabase = getSupabase();
 
     const { data, error } =
-      await supabase
+      await getSupabase()
         .from(
           "risk_document_archive"
         )
@@ -332,7 +346,9 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET(req: Request) {
+export async function GET(
+  req: Request
+) {
   try {
     if (!isAuthorized(req)) {
       return NextResponse.json(
@@ -347,7 +363,9 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
 
     const firmId = clean(
-      url.searchParams.get("firmId")
+      url.searchParams.get(
+        "firmId"
+      )
     );
 
     const riskMethod = clean(
@@ -356,9 +374,7 @@ export async function GET(req: Request) {
       )
     );
 
-    const supabase = getSupabase();
-
-    let query = supabase
+    let query = getSupabase()
       .from(
         "risk_document_archive"
       )
@@ -396,27 +412,18 @@ export async function GET(req: Request) {
       success: true,
       records: data ?? [],
     });
-        return NextResponse.json({
-      success: true,
-      records: data ?? [],
-    });
-
   } catch (error) {
-
     return NextResponse.json(
       {
         success: false,
         error:
           "Risk dokümanları alınamadı.",
-
         detail:
           error instanceof Error
             ? error.message
             : String(error),
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
