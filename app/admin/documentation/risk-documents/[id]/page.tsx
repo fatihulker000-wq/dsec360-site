@@ -195,6 +195,12 @@ export default function RiskDocumentDetailPage() {
     return title.includes(" • ") ? title.split(" • ")[0] : "Firma";
   }, [record]);
 
+  const handlePrint = () => {
+    window.setTimeout(() => {
+      window.print();
+    }, 200);
+  };
+
   if (loading) {
     return (
       <main style={styles.loadingPage}>
@@ -265,7 +271,7 @@ export default function RiskDocumentDetailPage() {
 
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={handlePrint}
               style={styles.primaryButton}
             >
               <Printer size={17} />
@@ -274,7 +280,8 @@ export default function RiskDocumentDetailPage() {
           </div>
         </div>
 
-        <section style={styles.hero}>
+        <div id="risk-print-root">
+          <section style={styles.hero}>
           <div>
             <div style={styles.heroBadge}>
               <ShieldAlert size={16} />
@@ -469,28 +476,97 @@ export default function RiskDocumentDetailPage() {
             ))}
           </div>
         </section>
+        </div>
       </div>
 
       <style jsx global>{`
         @media print {
-          aside,
-          nav,
-          header,
-          .noPrint {
-            display: none !important;
+          @page {
+            size: A4 landscape;
+            margin: 8mm;
           }
 
-          main {
+          html,
+          body {
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
             padding: 0 !important;
+            overflow: visible !important;
             background: #ffffff !important;
           }
 
-          section {
+          body * {
+            visibility: hidden !important;
+          }
+
+          #risk-print-root,
+          #risk-print-root * {
+            visibility: visible !important;
+          }
+
+          #risk-print-root {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            background: #ffffff !important;
+          }
+
+          .noPrint,
+          aside,
+          nav,
+          header {
+            display: none !important;
+          }
+
+          #risk-print-root section {
+            display: block !important;
+            position: static !important;
+            overflow: visible !important;
             box-shadow: none !important;
           }
 
-          table {
-            font-size: 9px !important;
+          #risk-print-root table {
+            display: table !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            table-layout: fixed !important;
+            border-collapse: collapse !important;
+            font-size: 8px !important;
+          }
+
+          #risk-print-root thead {
+            display: table-header-group !important;
+          }
+
+          #risk-print-root tbody {
+            display: table-row-group !important;
+          }
+
+          #risk-print-root tr {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+
+          #risk-print-root th,
+          #risk-print-root td {
+            padding: 4px !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
+            border: 1px solid #d1d5db !important;
+          }
+
+          #risk-print-root h1 {
+            font-size: 24px !important;
+          }
+
+          #risk-print-root h2 {
+            font-size: 17px !important;
           }
         }
 
