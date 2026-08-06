@@ -547,6 +547,12 @@ const openCategory = (
     return;
   }
 
+if (category === "RISK") {
+  window.location.href =
+    "/admin/documentation/risk-documents";
+  return;
+}
+
   if (category === "BOARD") {
     window.location.href =
       "/admin/documentation/board";
