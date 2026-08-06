@@ -4,10 +4,10 @@ import {
   ArrowLeft,
   CheckCircle2,
   ClipboardList,
+  Download,
   Eye,
   FileText,
   Loader2,
-  Printer,
   Save,
   ShieldCheck,
 } from "lucide-react";
@@ -19,6 +19,7 @@ import {
 import {
   useParams,
   useRouter,
+  useSearchParams,
 } from "next/navigation";
 
 type TemplateSection = {
@@ -261,11 +262,16 @@ function FieldPreview({
 
 export default function FormTemplateDesignerPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const params = useParams<{
     id: string;
   }>();
 
   const id = clean(params?.id);
+  const mode = clean(searchParams.get("mode")).toLowerCase();
+  const isPreviewMode = mode === "preview";
+  const isDownloadMode = mode === "download";
+  const isReadOnlyMode = isPreviewMode || isDownloadMode;
 
   const [record, setRecord] =
     useState<FormTemplate | null>(
@@ -387,6 +393,39 @@ export default function FormTemplateDesignerPage() {
 
     void load();
   }, [id]);
+
+  const handleDownloadBlankForm = () => {
+    const oldTitle = document.title;
+
+    document.title =
+      "Ek-2_Ise_Giris_Periyodik_Muayene_Formu";
+
+    window.setTimeout(() => {
+      window.print();
+
+      window.setTimeout(() => {
+        document.title = oldTitle;
+      }, 600);
+    }, 250);
+  };
+
+  useEffect(() => {
+    if (
+      loading ||
+      !record ||
+      !isDownloadMode
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      handleDownloadBlankForm();
+    }, 650);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [loading, record, isDownloadMode]);
 
   const saveTemplate = async (
     status?: string
@@ -543,47 +582,65 @@ export default function FormTemplateDesignerPage() {
           <div style={styles.buttonRow}>
             <button
               type="button"
-              onClick={() =>
-                window.print()
-              }
+              onClick={() => {
+                document
+                  .getElementById("ek2-print-root")
+                  ?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+              }}
               style={styles.secondaryButton}
             >
-              <Printer size={17} />
-              A4 Önizleme
+              <Eye size={17} />
+              Formu Görüntüle
             </button>
 
             <button
               type="button"
-              disabled={saving}
-              onClick={() =>
-                void saveTemplate()
-              }
+              onClick={handleDownloadBlankForm}
               style={styles.secondaryButton}
             >
-              {saving ? (
-                <Loader2
-                  size={16}
-                  className="designerSpin"
-                />
-              ) : (
-                <Save size={16} />
-              )}
-              Kaydet
+              <Download size={17} />
+              Boş Formu İndir
             </button>
 
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() =>
-                void saveTemplate(
-                  "PUBLISHED"
-                )
-              }
-              style={styles.primaryButton}
-            >
-              <ShieldCheck size={17} />
-              Yayınla
-            </button>
+            {!isReadOnlyMode ? (
+              <>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() =>
+                    void saveTemplate()
+                  }
+                  style={styles.secondaryButton}
+                >
+                  {saving ? (
+                    <Loader2
+                      size={16}
+                      className="designerSpin"
+                    />
+                  ) : (
+                    <Save size={16} />
+                  )}
+                  Kaydet
+                </button>
+
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() =>
+                    void saveTemplate(
+                      "PUBLISHED"
+                    )
+                  }
+                  style={styles.primaryButton}
+                >
+                  <ShieldCheck size={17} />
+                  Yayınla
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -604,7 +661,9 @@ export default function FormTemplateDesignerPage() {
           <div>
             <div style={styles.heroBadge}>
               <FileText size={16} />
-              Form Tasarım Merkezi
+              {isReadOnlyMode
+                ? "Boş Form Önizleme"
+                : "Form Tasarım Merkezi"}
             </div>
 
             <h1 style={styles.heroTitle}>
@@ -642,11 +701,21 @@ export default function FormTemplateDesignerPage() {
 
         <div
           className="designerLayout"
-          style={styles.designerLayout}
+          style={{
+            ...styles.designerLayout,
+            gridTemplateColumns: isReadOnlyMode
+              ? "minmax(0,1fr)"
+              : "230px minmax(0,1fr) 250px",
+          }}
         >
           <aside
             className="noPrint"
-            style={styles.leftPanel}
+            style={{
+              ...styles.leftPanel,
+              display: isReadOnlyMode
+                ? "none"
+                : "grid",
+            }}
           >
             <div style={styles.panelTitle}>
               <ClipboardList size={17} />
@@ -847,7 +916,12 @@ export default function FormTemplateDesignerPage() {
 
           <aside
             className="noPrint"
-            style={styles.rightPanel}
+            style={{
+              ...styles.rightPanel,
+              display: isReadOnlyMode
+                ? "none"
+                : "grid",
+            }}
           >
             <div style={styles.panelTitle}>
               <Eye size={17} />

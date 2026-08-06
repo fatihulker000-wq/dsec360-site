@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Archive, BookOpen, CheckCircle2, FilePlus2, FileText,
+  Archive, BookOpen, CheckCircle2, Download, Eye, FilePlus2, FileText,
   Filter, Loader2, Pencil, Plus, RefreshCw, Search,
   ShieldCheck, Trash2, X
 } from "lucide-react";
@@ -154,30 +154,6 @@ export default function FormTemplatesPage() {
     system: records.filter(r => r.is_system).length,
     ek2: records.filter(r => r.category === "EK2").length
   }), [records]);
-
-  const openEdit = (r: RecordRow) => {
-    setForm({
-      id: r.id,
-      companyId: r.company_id || "",
-      templateCode: r.template_code,
-      title: r.title,
-      shortTitle: r.short_title || "",
-      category: r.category,
-      formType: r.form_type,
-      targetModule: r.target_module || "",
-      description: r.description || "",
-      legalBasis: r.legal_basis || "",
-      versionNo: Number(r.version_no || 1),
-      revisionNo: Number(r.revision_no || 0),
-      status: r.status,
-      schemaJson: JSON.stringify(r.schema_json || {}, null, 2),
-      sectionsJson: JSON.stringify(r.sections_json || [], null, 2),
-      fieldsJson: JSON.stringify(r.fields_json || [], null, 2)
-    });
-    setError("");
-    setMessage("");
-    setShowEditor(true);
-  };
 
   const save = async () => {
     try {
@@ -404,8 +380,40 @@ export default function FormTemplatesPage() {
                 </div>
 
                 <div style={s.actions}>
-                  <button type="button" onClick={() => openEdit(r)} style={s.editButton}>
-                    <Pencil size={14}/> Düzenle
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href =
+                        `/admin/documentation/form-templates/${r.id}`;
+                    }}
+                    style={s.editButton}
+                  >
+                    <Pencil size={14}/>
+                    Formu Tasarla
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href =
+                        `/admin/documentation/form-templates/${r.id}?mode=preview`;
+                    }}
+                    style={s.previewButton}
+                  >
+                    <Eye size={14}/>
+                    Görüntüle
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href =
+                        `/admin/documentation/form-templates/${r.id}?mode=download`;
+                    }}
+                    style={s.downloadButton}
+                  >
+                    <Download size={14}/>
+                    Boş Formu İndir
                   </button>
 
                   {!r.is_system ? (
@@ -635,6 +643,12 @@ const s: Record<string, React.CSSProperties> = {
   actions:{display:"flex",justifyContent:"flex-end",gap:7},
   editButton:{minHeight:38,borderRadius:10,border:"1px solid #bfdbfe",
     background:"#eff6ff",color:"#1d4ed8",padding:"0 11px",
+    display:"inline-flex",alignItems:"center",gap:6,fontWeight:850,cursor:"pointer"},
+  previewButton:{minHeight:38,borderRadius:10,border:"1px solid #bbf7d0",
+    background:"#ecfdf5",color:"#047857",padding:"0 11px",
+    display:"inline-flex",alignItems:"center",gap:6,fontWeight:850,cursor:"pointer"},
+  downloadButton:{minHeight:38,borderRadius:10,border:"1px solid #fed7aa",
+    background:"#fff7ed",color:"#c2410c",padding:"0 11px",
     display:"inline-flex",alignItems:"center",gap:6,fontWeight:850,cursor:"pointer"},
   deleteButton:{width:38,height:38,borderRadius:10,border:"1px solid #fecaca",
     background:"#fef2f2",color:"#b91c1c",display:"grid",placeItems:"center",cursor:"pointer"},
