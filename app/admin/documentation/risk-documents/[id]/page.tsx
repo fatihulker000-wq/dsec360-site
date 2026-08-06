@@ -484,6 +484,19 @@ export default function RiskDocumentDetailPage() {
       </div>
 
       <style jsx global>{`
+        #risk-print-root {
+          width: 100%;
+          min-width: 0;
+          display: grid;
+          gap: 14px;
+          box-sizing: border-box;
+        }
+
+        #risk-print-root > * {
+          min-width: 0;
+          max-width: 100%;
+        }
+
         @media print {
           @page {
             size: A4 landscape;
@@ -624,10 +637,13 @@ const styles: Record<string, React.CSSProperties> = {
   boxSizing: "border-box",
 },
   toolbar: {
+    width: "100%",
+    minWidth: 0,
     display: "flex",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 10,
+    boxSizing: "border-box",
   },
   buttonRow: {
     display: "flex",
@@ -674,17 +690,19 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
   },
   hero: {
-    borderRadius: 24,
+    width: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    overflow: "hidden",
+    borderRadius: 20,
     background:
       "linear-gradient(135deg,#4c0d1a 0%,#9f1239 52%,#ea580c 100%)",
     color: "#fff",
-    padding: 22,
+    padding: 18,
     display: "flex",
     flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 18,
-    overflow: "hidden",
-    boxSizing: "border-box",
     boxShadow: "0 24px 60px rgba(76,13,26,.22)",
   },
   heroBadge: {
@@ -698,8 +716,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
   },
   heroTitle: {
-    margin: "14px 0 8px",
-    fontSize: "clamp(24px, 3vw, 34px)",
+    margin: "12px 0 8px",
+    maxWidth: "100%",
+    fontSize: "clamp(21px, 2.4vw, 30px)",
     lineHeight: 1.12,
     fontWeight: 950,
     overflowWrap: "anywhere",
@@ -721,31 +740,40 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
   },
   kpiGrid: {
+    width: "100%",
+    minWidth: 0,
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit,minmax(135px,1fr))",
+    gap: 8,
   },
   kpiCard: {
-    borderRadius: 18,
-    padding: 16,
+    minWidth: 0,
+    borderRadius: 14,
+    padding: 12,
+    overflow: "hidden",
   },
   kpiLabel: {
     fontSize: 11,
     fontWeight: 900,
   },
   kpiValue: {
-    marginTop: 9,
-    fontSize: 26,
+    marginTop: 7,
+    fontSize: 22,
+    lineHeight: 1.15,
+    overflowWrap: "anywhere",
     fontWeight: 950,
     color: "#0f172a",
   },
   infoGrid: {
+    width: "100%",
+    minWidth: 0,
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+    gap: 8,
   },
   infoCard: {
-    borderRadius: 18,
+    minWidth: 0,
+    borderRadius: 14,
     border: "1px solid #e5e7eb",
     background: "#fff",
     padding: 16,
@@ -765,7 +793,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
   },
   tableCard: {
-    borderRadius: 22,
+    width: "100%",
+    minWidth: 0,
+    borderRadius: 18,
     border: "1px solid #e5e7eb",
     background: "#fff",
     overflow: "hidden",
@@ -826,7 +856,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
   },
   statusCard: {
-    borderRadius: 22,
+    width: "100%",
+    minWidth: 0,
+    borderRadius: 18,
     border: "1px solid #e5e7eb",
     background: "#fff",
     padding: 18,
