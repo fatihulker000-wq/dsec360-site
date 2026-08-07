@@ -152,12 +152,23 @@ const [doraSummary, setDoraSummary] = useState<DoraSummary | null>(null);
     void loadAdminContext();
   }, []);
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (firm = "all") => {
     try {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/admin/training-dashboard", {
+      const params = new URLSearchParams();
+
+      if (firm && normalizeCompanyKey(firm) !== "all") {
+        params.set("firm", firm);
+      }
+
+      const query = params.toString();
+      const endpoint = query
+        ? `/api/admin/training-dashboard?${query}`
+        : "/api/admin/training-dashboard";
+
+      const res = await fetch(endpoint, {
         method: "GET",
         cache: "no-store",
         credentials: "include",
@@ -322,7 +333,7 @@ const loadInspectionDashboard = async (firm = "all") => {
 };
 
   useEffect(() => {
-  void loadDashboard();
+  void loadDashboard("all");
   void loadCbs();
   void loadInspectionDashboard("all");
   void loadUpcomingTrainings();
@@ -343,7 +354,7 @@ const loadInspectionDashboard = async (firm = "all") => {
   }, []);
 
   const refreshAllDashboardData = () => {
-    void loadDashboard();
+    void loadDashboard(effectiveSelectedCompany);
     void loadCbs();
     void loadInspectionDashboard(effectiveSelectedCompany);
     void loadUpcomingTrainings();
@@ -476,6 +487,7 @@ const loadInspectionDashboard = async (firm = "all") => {
       : selectedCompany;
 
   useEffect(() => {
+    void loadDashboard(effectiveSelectedCompany);
     void loadInspectionDashboard(effectiveSelectedCompany);
   }, [effectiveSelectedCompany]);
 

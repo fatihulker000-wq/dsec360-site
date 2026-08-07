@@ -35,6 +35,78 @@ type CompanyRow = {
   name: string | null;
 };
 
+type RiskSummary = {
+  low: number;
+  medium: number;
+  high: number;
+  veryHigh: number;
+};
+
+function normalizeRiskLevel(value: unknown): keyof RiskSummary | null {
+  const raw = String(value ?? "")
+    .trim()
+    .toLocaleUpperCase("tr-TR")
+    .replaceAll("İ", "I")
+    .replaceAll("Ğ", "G")
+    .replaceAll("Ü", "U")
+    .replaceAll("Ş", "S")
+    .replaceAll("Ö", "O")
+    .replaceAll("Ç", "C")
+    .replace(/[\s-]+/g, "_");
+
+  if (!raw) return null;
+
+  if (
+    raw.includes("VERY_HIGH") ||
+    raw.includes("INTOLERABLE") ||
+    raw.includes("COK_YUKSEK") ||
+    raw.includes("KRITIK")
+  ) {
+    return "veryHigh";
+  }
+
+  if (raw.includes("HIGH") || raw.includes("YUKSEK")) {
+    return "high";
+  }
+
+  if (raw.includes("MEDIUM") || raw.includes("ORTA")) {
+    return "medium";
+  }
+
+  if (raw.includes("LOW") || raw.includes("DUSUK")) {
+    return "low";
+  }
+
+  return null;
+}
+
+function addRiskLevel(summary: RiskSummary, value: unknown) {
+  const level = normalizeRiskLevel(value);
+  if (level) summary[level] += 1;
+}
+
+function addRiskScore(
+  summary: RiskSummary,
+  scoreValue: unknown,
+  source: "MATRIX" | "FINE_KINNEY"
+) {
+  const score = Number(scoreValue);
+  if (!Number.isFinite(score)) return;
+
+  if (source === "MATRIX") {
+    if (score >= 20) summary.veryHigh += 1;
+    else if (score >= 15) summary.high += 1;
+    else if (score >= 8) summary.medium += 1;
+    else summary.low += 1;
+    return;
+  }
+
+  if (score > 400) summary.veryHigh += 1;
+  else if (score >= 200) summary.high += 1;
+  else if (score >= 70) summary.medium += 1;
+  else summary.low += 1;
+}
+
 function isOnlineTraining(training?: TrainingRow) {
   const type = String(training?.type || "").toLowerCase();
 
@@ -57,7 +129,7 @@ function isTrainingCompleted(row: AssignmentRow, training?: TrainingRow) {
   return row.status === "completed";
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
     const adminAuth =
@@ -373,6 +445,136 @@ const activities = [
   })),
 ];
 
+
+    // ============================================================
+    // GERÇEK RİSK ÖZETİ
+    // 5x5: risk_items
+    // Fine-Kinney: fine_kinney_risks
+    // ============================================================
+
+    const requestUrl = new URL(request.url);
+    const requestedFirm = String(
+      requestUrl.searchParams.get("firm") ||
+      requestUrl.searchParams.get("firmId") ||
+      ""
+    ).trim();
+
+    let selectedRiskCompanyId = "";
+
+    if (isCompanyScoped) {
+      selectedRiskCompanyId = companyIdFromCookie;
+    } else if (requestedFirm && requestedFirm.toLowerCase() !== "all") {
+      // Önce doğrudan company id olarak kontrol et.
+      if (companyMap[requestedFirm]) {
+        selectedRiskCompanyId = requestedFirm;
+      } else {
+        const requestedKey = requestedFirm
+          .trim()
+          .toLocaleLowerCase("tr-TR")
+          .replace(/\s+/g, " ");
+
+        selectedRiskCompanyId =
+          Object.entries(companyMap).find(([, name]) => {
+            const nameKey = String(name || "")
+              .trim()
+              .toLocaleLowerCase("tr-TR")
+              .replace(/\s+/g, " ");
+
+            return nameKey === requestedKey;
+          })?.[0] || "";
+      }
+    }
+
+    type DashboardRiskSummary = {
+      low: number;
+      medium: number;
+      high: number;
+      veryHigh: number;
+    };
+
+    const riskSummary: DashboardRiskSummary = {
+      low: 0,
+      medium: 0,
+      high: 0,
+      veryHigh: 0,
+    };
+
+    const matrixLevelFromScore = (score: number) => {
+      if (score >= 20) return "VERY_HIGH";
+      if (score >= 15) return "HIGH";
+      if (score >= 8) return "MEDIUM";
+      return "LOW";
+    };
+
+    const fineKinneyLevelFromScore = (score: number) => {
+      if (score >= 200) return "VERY_HIGH";
+      if (score >= 70) return "HIGH";
+      if (score >= 20) return "MEDIUM";
+      return "LOW";
+    };
+
+    let matrixRiskQuery = supabase
+      .from("risk_items")
+      .select("score, is_deleted")
+      .eq("is_deleted", false);
+
+    let fineKinneyRiskQuery = supabase
+      .from("fine_kinney_risks")
+      .select("score, is_deleted")
+      .eq("is_deleted", false);
+
+    if (selectedRiskCompanyId) {
+      matrixRiskQuery = matrixRiskQuery.eq(
+        "company_id",
+        selectedRiskCompanyId
+      );
+
+      fineKinneyRiskQuery = fineKinneyRiskQuery.eq(
+        "company_id",
+        selectedRiskCompanyId
+      );
+    }
+
+    const [matrixRiskResult, fineKinneyRiskResult] =
+      await Promise.all([
+        matrixRiskQuery,
+        fineKinneyRiskQuery,
+      ]);
+
+    if (matrixRiskResult.error) {
+      console.error(
+        "training-dashboard risk_items error:",
+        matrixRiskResult.error
+      );
+    } else {
+      for (const row of matrixRiskResult.data || []) {
+        const score = Number(row.score || 0);
+        const level = matrixLevelFromScore(score);
+
+        if (level === "VERY_HIGH") riskSummary.veryHigh += 1;
+        else if (level === "HIGH") riskSummary.high += 1;
+        else if (level === "MEDIUM") riskSummary.medium += 1;
+        else riskSummary.low += 1;
+      }
+    }
+
+    if (fineKinneyRiskResult.error) {
+      console.error(
+        "training-dashboard fine_kinney_risks error:",
+        fineKinneyRiskResult.error
+      );
+    } else {
+      for (const row of fineKinneyRiskResult.data || []) {
+        const score = Number(row.score || 0);
+        const level = fineKinneyLevelFromScore(score);
+
+        if (level === "VERY_HIGH") riskSummary.veryHigh += 1;
+        else if (level === "HIGH") riskSummary.high += 1;
+        else if (level === "MEDIUM") riskSummary.medium += 1;
+        else riskSummary.low += 1;
+      }
+    }
+
 const doraSummary = {
   level:
     riskRate >= 60 ? "Kritik" : riskRate >= 30 ? "Orta" : "İyi",
@@ -407,7 +609,8 @@ const doraSummary = {
       },
       activities,
   upcoming_trainings: upcomingTrainings,
-  dora_summary: doraSummary,
+  risk_summary: riskSummary,
+    dora_summary: doraSummary,
     });
   } catch (err) {
     console.error("admin training dashboard route error:", err);
