@@ -392,99 +392,113 @@ export default function FormTemplateLayout({
             overflow: visible !important;
           }
 
-          body * {
-            visibility:
-              hidden !important;
+          /*
+           * visibility:hidden elemanları sayfa akışında tuttuğu için
+           * iki adet boş PDF sayfası oluşuyordu.
+           * Baskıda yalnızca form alanını gerçek DOM akışında bırakıyoruz.
+           */
+          .templatePage {
+            width: 210mm !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            overflow: visible !important;
           }
 
-          .formCanvas,
-          .formCanvas * {
-            visibility:
-              visible !important;
+          .templatePage > *:not(.formCanvas) {
+            display: none !important;
           }
 
           .formCanvas {
-            position:
-              absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-
-            width:
-              210mm !important;
-            height:
-              auto !important;
-            min-height:
-              0 !important;
-            max-height:
-              none !important;
-
-            margin:
-              0 !important;
-            padding:
-              0 !important;
-
-            border:
-              0 !important;
-            border-radius:
-              0 !important;
-
-            background:
-              #ffffff !important;
-            overflow:
-              visible !important;
+            display: block !important;
+            position: static !important;
+            width: 210mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: #ffffff !important;
+            overflow: visible !important;
           }
 
+          /*
+           * Sabit 295 mm + overflow:hidden Ramak Kala formunu kesiyordu.
+           * Yükseklik artık içeriğe göre büyür; form gerekirse gerçek
+           * ikinci sayfaya devam eder, boş sayfa üretmez.
+           */
           .standardPaper {
-            width:
-              210mm !important;
-
-            height:
-              295mm !important;
-            min-height:
-              295mm !important;
-            max-height:
-              295mm !important;
-
-            margin:
-              0 !important;
-            padding:
-              9mm 10mm !important;
-
-            overflow:
-              hidden !important;
-            box-shadow:
-              none !important;
-
-            break-inside:
-              avoid !important;
-            page-break-inside:
-              avoid !important;
-            break-after:
-              auto !important;
-            page-break-after:
-              auto !important;
+            width: 210mm !important;
+            height: auto !important;
+            min-height: 296mm !important;
+            max-height: none !important;
+            margin: 0 !important;
+            padding: 7mm 8mm !important;
+            overflow: visible !important;
+            box-shadow: none !important;
+            break-after: auto !important;
+            page-break-after: auto !important;
           }
 
-          .formTable,
-          .formTable tbody,
-          .formTable thead,
+          /*
+           * Tek sayfalık formları A4'e sığdırmak için baskı ölçüleri.
+           */
+          .standardPaper {
+            font-size: 8.6pt !important;
+          }
+
+          .formTitle {
+            margin-bottom: 5px !important;
+            font-size: 14pt !important;
+          }
+
+          .formSubTitle {
+            margin-bottom: 7px !important;
+            font-size: 8pt !important;
+          }
+
+          .formTable {
+            margin-bottom: 5px !important;
+          }
+
+          .formTable th,
+          .formTable td {
+            height: 22px !important;
+            padding: 3px 4px !important;
+            line-height: 1.08 !important;
+          }
+
+          .blankCell {
+            height: 27px !important;
+          }
+
+          .largeBlank {
+            height: 45px !important;
+          }
+
+          .xLargeBlank {
+            height: 63px !important;
+          }
+
+          .signatureBox {
+            height: 55px !important;
+          }
+
+          .footerNote {
+            margin-top: 4px !important;
+            font-size: 7.2pt !important;
+          }
+
           .formTable tr {
-            break-inside:
-              avoid !important;
-            page-break-inside:
-              avoid !important;
-          }
-
-          .standardPaper:last-child {
-            break-after:
-              auto !important;
-            page-break-after:
-              auto !important;
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
           }
 
           .noPrint {
-            display:
-              none !important;
+            display: none !important;
           }
         }
 
