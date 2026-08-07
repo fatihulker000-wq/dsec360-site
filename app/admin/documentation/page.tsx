@@ -748,11 +748,28 @@ export default function DocumentationPage() {
           )
       ).length;
 
+    /*
+     * Ana Dokümantasyon KPI'larına yalnızca HAM / MASTER
+     * dokümanlar dahil edilir.
+     *
+     * Dahil:
+     * - Yayımlanmış form şablonları
+     * - Yayımlanmış talimat / prosedür şablonları
+     *
+     * Dahil değil:
+     * - Kurul toplantıları
+     * - Çalışan temsilcisi görevlendirmeleri
+     * - Doldurulmuş Ek-2 kayıtları
+     * - Uygulanmış denetimler
+     * - Eğitim katılım / sertifika kayıtları
+     * - Periyodik kontrol uygulama kayıtları
+     *
+     * Bunlar dokümanın kendisi değil, dokümanın uygulanması sonucu
+     * oluşan operasyonel kayıtlardır.
+     */
     const total =
       publishedForms.length +
-      publishedInstructions.length +
-      activeMeetings.length +
-      activeRepresentatives.length;
+      publishedInstructions.length;
 
     return {
       total,
@@ -1876,8 +1893,7 @@ export default function DocumentationPage() {
                     "#64748b",
                 }}
               >
-                App ile aynı veri
-                kaynaklarından hesaplanır
+                Ham dokümanlar ve uygulama kayıtları ayrı gösterilir
               </p>
 
               <div
@@ -1894,7 +1910,7 @@ export default function DocumentationPage() {
                     title:
                       "Formlar",
                     text:
-                      `${liveDashboard.formCount} yayınlanmış form`,
+                      `${liveDashboard.formCount} yayınlanmış form • Ana toplama dahil`,
                     icon:
                       <FileText
                         size={21}
@@ -1904,7 +1920,7 @@ export default function DocumentationPage() {
                     title:
                       "Talimatlar",
                     text:
-                      `${liveDashboard.instructionCount} yayınlanmış talimat`,
+                      `${liveDashboard.instructionCount} yayınlanmış talimat • Ana toplama dahil`,
                     icon:
                       <BookOpenCheck
                         size={21}
@@ -1914,7 +1930,7 @@ export default function DocumentationPage() {
                     title:
                       "Kurul",
                     text:
-                      `${liveDashboard.boardCount} toplantı kaydı`,
+                      `${liveDashboard.boardCount} toplantı kaydı • Ana toplama dahil değil`,
                     icon:
                       <Users
                         size={21}
@@ -1924,7 +1940,7 @@ export default function DocumentationPage() {
                     title:
                       "Çalışan Temsilcisi",
                     text:
-                      `${liveDashboard.representativeCount} aktif kayıt`,
+                      `${liveDashboard.representativeCount} aktif kayıt • Ana toplama dahil değil`,
                     icon:
                       <UserCheck
                         size={21}
