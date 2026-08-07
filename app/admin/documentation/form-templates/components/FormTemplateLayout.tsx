@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, Download, Eye } from "lucide-react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import type { FormTemplateRecord } from "./types";
@@ -16,7 +17,7 @@ type Props = {
 
 function fileTitle(record: FormTemplateRecord): string {
   return record.title
-    .replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/[^\\p{L}\\p{N}]+/gu, "_")
     .replace(/^_+|_+$/g, "");
 }
 
@@ -35,20 +36,268 @@ export default function FormTemplateLayout({
     mode === "download";
 
   const printForm = () => {
-    const oldTitle = document.title;
+    const source =
+      document.getElementById(formId);
 
-    document.title =
+    if (!source) {
+      window.alert(
+        "Yazdırılacak form alanı bulunamadı."
+      );
+      return;
+    }
+
+    const printWindow =
+      window.open(
+        "",
+        "_blank",
+        "width=980,height=1200"
+      );
+
+    if (!printWindow) {
+      window.alert(
+        "Yazdırma penceresi açılamadı. Tarayıcı açılır pencere engelini kontrol edin."
+      );
+      return;
+    }
+
+    const title =
       fileTitle(record);
 
-    window.setTimeout(() => {
-      window.print();
+    const formHtml =
+      source.innerHTML;
 
-      window.setTimeout(() => {
-        document.title =
-          oldTitle;
-      }, 500);
-    }, 120);
+    printWindow.document.open();
+
+    printWindow.document.write(`
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  />
+  <title>${title}</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #111111;
+    }
+
+    body {
+      font-family:
+        "Times New Roman",
+        Times,
+        serif;
+    }
+
+    .printRoot {
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+    }
+
+    .standardPaper {
+      width: 100%;
+      min-height: 0;
+      height: auto;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #111111;
+      box-shadow: none;
+      font-family:
+        "Times New Roman",
+        Times,
+        serif;
+      font-size: 8.4pt;
+    }
+
+    .formTitle {
+      margin: 0 0 5px;
+      text-align: center;
+      font-size: 13.5pt;
+      line-height: 1.08;
+      font-weight: 700;
+    }
+
+    .formSubTitle {
+      margin: -2px 0 6px;
+      text-align: center;
+      font-size: 8pt;
+      line-height: 1.1;
+    }
+
+    .formTable {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      margin: 0 0 4px;
+    }
+
+    .formTable th,
+    .formTable td {
+      border: 1px solid #222222;
+      padding: 2.5px 4px;
+      vertical-align: middle;
+      height: 21px;
+      line-height: 1.08;
+      overflow-wrap: anywhere;
+    }
+
+    .formTable th {
+      background: #f1f5f9;
+      font-weight: 700;
+      text-align: left;
+    }
+
+    .sectionTitle {
+      background: #e2e8f0 !important;
+      text-align: center !important;
+      font-size: 9pt;
+      font-weight: 700;
+    }
+
+    .labelCell {
+      width: 27%;
+      font-weight: 700;
+    }
+
+    .blankCell {
+      height: 25px !important;
+    }
+
+    .largeBlank {
+      height: 38px !important;
+    }
+
+    .xLargeBlank {
+      height: 52px !important;
+    }
+
+    .center {
+      text-align: center !important;
+    }
+
+    .check {
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+      font-size: 7.7pt;
+      white-space: normal;
+    }
+
+    .signatureBox {
+      height: 46px !important;
+      vertical-align: top !important;
+    }
+
+    .smallText {
+      font-size: 7.5pt;
+      line-height: 1.25;
+    }
+
+    .footerNote {
+      margin: 3px 0 0;
+      font-size: 7pt;
+      line-height: 1.2;
+    }
+
+    .formTable tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 6mm;
+    }
+
+    @media print {
+      html,
+      body {
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+
+      .printRoot,
+      .standardPaper {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        box-shadow: none !important;
+      }
+
+      .standardPaper {
+        break-after: auto !important;
+        page-break-after: auto !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="printRoot">
+    ${formHtml}
+  </main>
+
+  <script>
+    window.addEventListener("load", function () {
+      window.setTimeout(function () {
+        window.focus();
+        window.print();
+
+        window.setTimeout(function () {
+          window.close();
+        }, 500);
+      }, 250);
+    });
+  <\/script>
+</body>
+</html>
+    `);
+
+    printWindow.document.close();
   };
+
+  useEffect(() => {
+    if (mode !== "download") {
+      return;
+    }
+
+    const timer =
+      window.setTimeout(
+        printForm,
+        500
+      );
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    mode,
+    record.id,
+    formId,
+  ]);
 
   return (
     <main className="templatePage">
@@ -72,7 +321,9 @@ export default function FormTemplateLayout({
             className="secondaryButton"
             onClick={() =>
               document
-                .getElementById(formId)
+                .getElementById(
+                  formId
+                )
                 ?.scrollIntoView({
                   behavior: "smooth",
                   block: "start",
@@ -101,9 +352,13 @@ export default function FormTemplateLayout({
               {badge}
             </span>
 
-            <h1>{record.title}</h1>
+            <h1>
+              {record.title}
+            </h1>
 
-            <p>{description}</p>
+            <p>
+              {description}
+            </p>
           </div>
 
           <div className="introMeta">
@@ -355,7 +610,7 @@ export default function FormTemplateLayout({
           font-family:
             Arial,
             sans-serif;
-          white-space: nowrap;
+          white-space: normal;
         }
 
         .signatureBox {
@@ -373,133 +628,6 @@ export default function FormTemplateLayout({
           margin-top: 8px;
           font-size: 8pt;
           line-height: 1.35;
-        }
-
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
-
-          html,
-          body {
-            width: 210mm !important;
-            height: auto !important;
-            min-height: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: #ffffff !important;
-            overflow: visible !important;
-          }
-
-          /*
-           * visibility:hidden elemanları sayfa akışında tuttuğu için
-           * iki adet boş PDF sayfası oluşuyordu.
-           * Baskıda yalnızca form alanını gerçek DOM akışında bırakıyoruz.
-           */
-          .templatePage {
-            width: 210mm !important;
-            min-height: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: #ffffff !important;
-            overflow: visible !important;
-          }
-
-          .templatePage > *:not(.formCanvas) {
-            display: none !important;
-          }
-
-          .formCanvas {
-            display: block !important;
-            position: static !important;
-            width: 210mm !important;
-            height: auto !important;
-            min-height: 0 !important;
-            max-height: none !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: 0 !important;
-            border-radius: 0 !important;
-            background: #ffffff !important;
-            overflow: visible !important;
-          }
-
-          /*
-           * Sabit 295 mm + overflow:hidden Ramak Kala formunu kesiyordu.
-           * Yükseklik artık içeriğe göre büyür; form gerekirse gerçek
-           * ikinci sayfaya devam eder, boş sayfa üretmez.
-           */
-          .standardPaper {
-            width: 210mm !important;
-            height: auto !important;
-            min-height: 296mm !important;
-            max-height: none !important;
-            margin: 0 !important;
-            padding: 7mm 8mm !important;
-            overflow: visible !important;
-            box-shadow: none !important;
-            break-after: auto !important;
-            page-break-after: auto !important;
-          }
-
-          /*
-           * Tek sayfalık formları A4'e sığdırmak için baskı ölçüleri.
-           */
-          .standardPaper {
-            font-size: 8.6pt !important;
-          }
-
-          .formTitle {
-            margin-bottom: 5px !important;
-            font-size: 14pt !important;
-          }
-
-          .formSubTitle {
-            margin-bottom: 7px !important;
-            font-size: 8pt !important;
-          }
-
-          .formTable {
-            margin-bottom: 5px !important;
-          }
-
-          .formTable th,
-          .formTable td {
-            height: 22px !important;
-            padding: 3px 4px !important;
-            line-height: 1.08 !important;
-          }
-
-          .blankCell {
-            height: 27px !important;
-          }
-
-          .largeBlank {
-            height: 45px !important;
-          }
-
-          .xLargeBlank {
-            height: 63px !important;
-          }
-
-          .signatureBox {
-            height: 55px !important;
-          }
-
-          .footerNote {
-            margin-top: 4px !important;
-            font-size: 7.2pt !important;
-          }
-
-          .formTable tr {
-            break-inside: avoid !important;
-            page-break-inside: avoid !important;
-          }
-
-          .noPrint {
-            display: none !important;
-          }
         }
 
         @media (max-width: 850px) {
