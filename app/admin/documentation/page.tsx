@@ -559,6 +559,12 @@ const openCategory = (
     return;
   }
 
+ if (category === "INSTRUCTIONS") {
+    window.location.href =
+      "/admin/documentation/instructions";
+    return;
+  }
+
   if (category === "BOARD") {
     window.location.href =
       "/admin/documentation/board";
