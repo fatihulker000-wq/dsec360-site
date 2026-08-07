@@ -407,8 +407,47 @@ export default function FormTemplatesPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      window.location.href =
+                      const iframe =
+                        document.createElement("iframe");
+
+                      iframe.setAttribute(
+                        "aria-hidden",
+                        "true"
+                      );
+
+                      iframe.style.position =
+                        "fixed";
+                      iframe.style.width =
+                        "1px";
+                      iframe.style.height =
+                        "1px";
+                      iframe.style.right =
+                        "0";
+                      iframe.style.bottom =
+                        "0";
+                      iframe.style.border =
+                        "0";
+                      iframe.style.opacity =
+                        "0";
+                      iframe.style.pointerEvents =
+                        "none";
+
+                      iframe.src =
                         `/admin/documentation/form-templates/${r.id}?mode=download`;
+
+                      document.body.appendChild(
+                        iframe
+                      );
+
+                      window.setTimeout(() => {
+                        if (
+                          iframe.parentNode
+                        ) {
+                          iframe.parentNode.removeChild(
+                            iframe
+                          );
+                        }
+                      }, 15000);
                     }}
                     style={s.downloadButton}
                   >
