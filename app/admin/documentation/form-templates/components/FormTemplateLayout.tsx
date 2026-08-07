@@ -40,23 +40,6 @@ export default function FormTemplateLayout({
       document.getElementById(formId);
 
     if (!source) {
-      window.alert(
-        "Yazdırılacak form alanı bulunamadı."
-      );
-      return;
-    }
-
-    const printWindow =
-      window.open(
-        "",
-        "_blank",
-        "width=980,height=1200"
-      );
-
-    if (!printWindow) {
-      window.alert(
-        "Yazdırma penceresi açılamadı. Tarayıcı açılır pencere engelini kontrol edin."
-      );
       return;
     }
 
@@ -66,9 +49,52 @@ export default function FormTemplateLayout({
     const formHtml =
       source.innerHTML;
 
-    printWindow.document.open();
+    /*
+     * Görünür ikinci pencere açmıyoruz.
+     * Formu görünmeyen bir iframe içine taşıyıp
+     * yalnızca tarayıcının yazdır/PDF ekranını açıyoruz.
+     */
+    const iframe =
+      document.createElement("iframe");
 
-    printWindow.document.write(`
+    iframe.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    iframe.style.position =
+      "fixed";
+    iframe.style.right =
+      "0";
+    iframe.style.bottom =
+      "0";
+    iframe.style.width =
+      "0";
+    iframe.style.height =
+      "0";
+    iframe.style.border =
+      "0";
+    iframe.style.opacity =
+      "0";
+    iframe.style.pointerEvents =
+      "none";
+
+    document.body.appendChild(
+      iframe
+    );
+
+    const printDocument =
+      iframe.contentDocument ||
+      iframe.contentWindow?.document;
+
+    if (!printDocument) {
+      iframe.remove();
+      return;
+    }
+
+    printDocument.open();
+
+    printDocument.write(`
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -258,24 +284,52 @@ export default function FormTemplateLayout({
   <main class="printRoot">
     ${formHtml}
   </main>
-
-  <script>
-    window.addEventListener("load", function () {
-      window.setTimeout(function () {
-        window.focus();
-        window.print();
-
-        window.setTimeout(function () {
-          window.close();
-        }, 500);
-      }, 250);
-    });
-  <\/script>
 </body>
 </html>
     `);
 
-    printWindow.document.close();
+    printDocument.close();
+
+    const cleanup = () => {
+      window.setTimeout(() => {
+        iframe.remove();
+      }, 500);
+    };
+
+    const runPrint = () => {
+      const frameWindow =
+        iframe.contentWindow;
+
+      if (!frameWindow) {
+        cleanup();
+        return;
+      }
+
+      frameWindow.focus();
+      frameWindow.print();
+      cleanup();
+    };
+
+    /*
+     * iframe içeriği hazır olduktan sonra
+     * yalnızca sistem yazdırma/PDF penceresi açılır.
+     */
+    if (
+      printDocument.readyState ===
+      "complete"
+    ) {
+      window.setTimeout(
+        runPrint,
+        120
+      );
+    } else {
+      iframe.onload = () => {
+        window.setTimeout(
+          runPrint,
+          120
+        );
+      };
+    }
   };
 
   useEffect(() => {
