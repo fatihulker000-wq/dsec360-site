@@ -742,14 +742,69 @@ const dashboardPieData = [
 
   const openDofCount = Number(dofSummary?.open ?? 0);
 
-  const criticalRiskCount = hasActiveDashboardFilter
-    ? filteredRiskUsers.length
-    : Number(
-        riskSummary?.veryHigh ??
-          riskSummary?.high ??
-          filteredRiskUsers.length
-      );
+  /*
+   * APP ↔ WEB ortak Executive KPI sözleşmesi.
+   * Inspection API farklı sürümlerde farklı alan isimleri döndürebildiği için
+   * olası isimleri güvenli şekilde sırayla kontrol ediyoruz.
+   */
+  const nonconformityCount = Math.max(
+    0,
+    Number(
+      inspectionSummary?.nonconformityCount ??
+        inspectionSummary?.nonconformity_count ??
+        inspectionSummary?.totalNonconformities ??
+        inspectionSummary?.total_nonconformities ??
+        inspectionSummary?.uygunsuzlukCount ??
+        inspectionSummary?.uygunsuzluk_count ??
+        inspectionSummary?.nonCompliantCount ??
+        inspectionSummary?.non_compliant_count ??
+        0
+    )
+  );
 
+  const explicitHseScore = Number(
+    (summary as any)?.hseScore ??
+      (summary as any)?.hse_score ??
+      (summary as any)?.overallScore ??
+      (summary as any)?.overall_score ??
+      (inspectionSummary as any)?.hseScore ??
+      (inspectionSummary as any)?.hse_score ??
+      NaN
+  );
+
+  /*
+   * KRİTİK RİSK:
+   * Eğitimini başlamamış kullanıcılar "kritik İSG riski" değildir.
+   * App tarafındaki mantıkla uyum için yalnızca gerçek risk özetinden okunur.
+   * Risk özeti yoksa yanlış pozitif üretmek yerine 0 gösterilir.
+   */
+  const criticalRiskCount = Math.max(
+    0,
+    Number(riskSummary?.veryHigh ?? 0)
+  );
+
+
+  /*
+   * Backend doğrudan HSE skoru sağlıyorsa onu kullanırız.
+   * Sağlamıyorsa web tarafında şeffaf ve 0-100 arası bir birleşik skor üretiriz.
+   * Bu fallback; eğitim, sağlık, risk ve uygunsuzluk baskısını birlikte değerlendirir.
+   */
+  const calculatedHseScore = Math.round(
+    Math.max(
+      0,
+      Math.min(
+        100,
+        scopedCompletionRate * 0.45 +
+          healthCompliance * 0.25 +
+          (criticalRiskCount === 0 ? 100 : Math.max(0, 100 - criticalRiskCount * 12)) * 0.15 +
+          (nonconformityCount === 0 ? 100 : Math.max(0, 100 - nonconformityCount * 3)) * 0.15
+      )
+    )
+  );
+
+  const hseScore = Number.isFinite(explicitHseScore)
+    ? Math.max(0, Math.min(100, Math.round(explicitHseScore)))
+    : calculatedHseScore;
 
   const companyPerformance = useMemo(() => {
     const map = new Map<
@@ -855,13 +910,15 @@ const dashboardPieData = [
   const flatSparkline = (value: number) => Array.from({ length: 6 }, () => value);
 
   const doraInsights = [
-    doraSummary?.message || aiComment,
-    `${Math.round(scopedCompletionRate)}% eğitim tamamlama oranı ile ${riskHeadline.toLocaleLowerCase(
-      "tr-TR"
-    )} izleniyor.`,
-    upcomingTrainings.length > 0
-      ? `${upcomingTrainings.length} yaklaşan eğitim için planlama kontrolü önerilir.`
-      : "Yaklaşan eğitim takviminde kritik bir yoğunluk görünmüyor.",
+    criticalRiskCount > 0
+      ? `${criticalRiskCount} kritik risk kaydı öncelikli yönetim dikkati gerektiriyor.`
+      : "Şu anda kritik risk baskısı sınırlı görünüyor.",
+    `HSE skoru ${hseScore}/100 • eğitim uyumu %${Math.round(
+      scopedCompletionRate
+    )} • sağlık uyumu %${healthCompliance}.`,
+    nonconformityCount > 0
+      ? `${nonconformityCount} uygunsuzluk kaydı için aksiyon ve kapanış takibi önerilir.`
+      : "Denetim kaynaklı açık uygunsuzluk baskısı görünmüyor.",
     cbsSummary?.slaExceeded
       ? `${cbsSummary.slaExceeded} ÇBS kaydı SLA süresini aşmış durumda.`
       : "ÇBS süreçlerinde SLA aşımı görünmüyor.",
@@ -869,28 +926,52 @@ const dashboardPieData = [
 
   const metrics = [
     {
-      title: "Eğitim Uyumu",
-      value: `%${Math.round(scopedCompletionRate)}`,
-      icon: GraduationCap,
-      trend: scopedCompletionRate >= 70 ? ("up" as const) : ("down" as const),
-      change: Math.round(Math.abs(scopedCompletionRate - 70)),
-      color: "blue" as const,
-      description: "Tamamlanan eğitim atamalarının toplam atamalara oranı.",
-      href: withFirmParam("/admin/trainings", effectiveSelectedCompany),
-      sparkline: trainingSparkline,
-      statusLabel: scopedCompletionRate >= 80 ? "Hedefte" : "Takip gerekli",
-    },
-    {
       title: "Kritik Risk",
       value: criticalRiskCount,
       icon: ShieldAlert,
-      trend: scopedRiskRate <= 30 ? ("down" as const) : ("up" as const),
-      change: Math.round(scopedRiskRate),
+      trend: criticalRiskCount > 0 ? ("up" as const) : ("neutral" as const),
+      change: criticalRiskCount,
       color: "red" as const,
-      description: "Öncelikli müdahale gerektiren riskli kullanıcı ve süreçler.",
+      description: "Risk modülündeki gerçek kritik risk kayıtları.",
       href: withFirmParam("/admin/denetimler?tab=dof&status=open#dof", effectiveSelectedCompany),
       sparkline: flatSparkline(criticalRiskCount),
       statusLabel: criticalRiskCount > 0 ? "Aksiyon" : "Kontrollü",
+    },
+    {
+      title: "Eğitim / Uyum",
+      value: `${hseScore} / 100`,
+      icon: GraduationCap,
+      trend: hseScore >= 70 ? ("up" as const) : ("down" as const),
+      change: Math.abs(hseScore - 70),
+      color: "green" as const,
+      description: "HSE birleşik skoru ve eğitim uyum görünümü.",
+      href: withFirmParam("/admin/trainings", effectiveSelectedCompany),
+      sparkline: trainingSparkline,
+      statusLabel: hseScore >= 80 ? "Güçlü" : hseScore >= 60 ? "Takip" : "Geliştirilmeli",
+    },
+    {
+      title: "Uygunsuzluk",
+      value: nonconformityCount,
+      icon: ClipboardCheck,
+      trend: nonconformityCount > 0 ? ("up" as const) : ("neutral" as const),
+      change: nonconformityCount,
+      color: "purple" as const,
+      description: "Denetimlerden gelen uygunsuzluk kayıtlarının toplam görünümü.",
+      href: withFirmParam("/admin/denetimler", effectiveSelectedCompany),
+      sparkline: flatSparkline(nonconformityCount),
+      statusLabel: nonconformityCount > 0 ? "Takip" : "Uygun",
+    },
+    {
+      title: "ÇBS",
+      value: cbsSummary?.total ?? 0,
+      icon: Activity,
+      trend: (cbsSummary?.slaExceeded ?? 0) > 0 ? ("up" as const) : ("neutral" as const),
+      change: cbsSummary?.slaExceeded ?? 0,
+      color: "red" as const,
+      description: `${cbsSummary?.new ?? 0} yeni • ${cbsSummary?.processing ?? 0} işlemde • ${cbsSummary?.closed ?? 0} kapalı.`,
+      href: withFirmParam("/admin/cbs", effectiveSelectedCompany),
+      sparkline: flatSparkline(cbsSummary?.total ?? 0),
+      statusLabel: (cbsSummary?.slaExceeded ?? 0) > 0 ? "SLA Uyarı" : "Canlı",
     },
     {
       title: "Sağlık Uyumu",
@@ -910,21 +991,10 @@ const dashboardPieData = [
       icon: ClipboardCheck,
       trend: "neutral" as const,
       color: "purple" as const,
-      description: "Sistemde izlenen toplam ve yaklaşan denetim kayıtları.",
+      description: "Sistemde izlenen toplam denetim kayıtları.",
       href: withFirmParam("/admin/denetimler", effectiveSelectedCompany),
       sparkline: flatSparkline(inspectionCount),
       statusLabel: upcomingInspections.length > 0 ? "Planlı" : "Güncel",
-    },
-    {
-      title: "Toplam Firma",
-      value: companies.length,
-      icon: Building2,
-      trend: "neutral" as const,
-      color: "blue" as const,
-      description: "Dashboard kapsamında izlenen aktif firma sayısı.",
-      href: withFirmParam("/admin/companies", effectiveSelectedCompany),
-      sparkline: flatSparkline(companies.length),
-      statusLabel: "Aktif",
     },
     {
       title: "Açık DÖF",
@@ -949,17 +1019,10 @@ const dashboardPieData = [
       description: "Sağlık muayenesi veya periyodik kontrol zamanı yaklaşan kayıtlar.",
       href: withFirmParam("/admin/health", effectiveSelectedCompany),
       sparkline: flatSparkline(upcomingHealths.length + upcomingPeriodicControls.length),
-      statusLabel: upcomingHealths.length + upcomingPeriodicControls.length > 0 ? "Yaklaşıyor" : "Güncel",
-    },
-    {
-      title: "Operasyon Aktivitesi",
-      value: activities.length,
-      icon: Activity,
-      trend: "neutral" as const,
-      color: "purple" as const,
-      description: "Dashboard üzerinde izlenen güncel işlem ve aktivite sayısı.",
-      sparkline: flatSparkline(activities.length),
-      statusLabel: "Canlı",
+      statusLabel:
+        upcomingHealths.length + upcomingPeriodicControls.length > 0
+          ? "Yaklaşıyor"
+          : "Güncel",
     },
   ];
 
@@ -1039,7 +1102,7 @@ const dashboardPieData = [
       }}
     >
       <div
-        className="dashboardCompleteRoot"
+        className="dashboardCompleteRoot executiveDashboardAppAligned"
         style={{
           maxWidth: 1440,
           margin: "0 auto",
@@ -1050,20 +1113,26 @@ const dashboardPieData = [
           loading={loading}
           error={error}
           isMobile={isMobile}
-          title="Executive Command Center"
-          subtitle="İş sağlığı, güvenliği, sağlık, eğitim, denetim ve operasyon süreçlerinin canlı yönetim ekranı."
-          heroTitle={heroCompletionHeadline}
-          heroDescription={`${heroTotalTrainings} eğitim, ${filteredRiskUsers.length} riskli kullanıcı ve ${inspectionCount} denetim kaydı tek ekranda izleniyor.`}
+          title="Executive Dashboard"
+          subtitle="Canlı Yönetim Özeti"
+          heroTitle="Executive Dashboard"
+          heroDescription="Canlı yönetim özeti, HSE performansı ve kritik göstergeleri tek ekrandan takip edin."
           heroStats={[
             {
-              label: "Eğitim uyumu",
-              value: `%${Math.round(scopedCompletionRate)}`,
+              label: "HSE Skoru",
+              value: `${hseScore} / 100`,
             },
-            { label: "Risk durumu", value: heroRiskStatus },
-            { label: "Açık DÖF", value: openDofCount },
             {
-              label: "ÇBS SLA aşımı",
-              value: cbsSummary?.slaExceeded ?? 0,
+              label: "Kritik Risk",
+              value: criticalRiskCount,
+            },
+            {
+              label: "Uygunsuzluk",
+              value: nonconformityCount,
+            },
+            {
+              label: "Eğitim",
+              value: heroTotalTrainings,
             },
           ]}
           metrics={metrics}
@@ -1101,6 +1170,8 @@ const dashboardPieData = [
                 }`
               : criticalRiskCount > 0
               ? "Kritik risk kayıtlarını önceliklendirerek ilgili firma ve sorumlulara aksiyon atayın."
+              : nonconformityCount > 0
+              ? `${nonconformityCount} uygunsuzluk kaydının aksiyon ve kapanış durumunu kontrol edin.`
               : upcomingTrainings.length > 0
               ? "Yaklaşan eğitimlerin katılımcı ve tarih kontrollerini tamamlayın."
               : "Mevcut performansı koruyun ve yaklaşan operasyonları izlemeye devam edin."
