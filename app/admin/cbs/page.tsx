@@ -706,11 +706,67 @@ const categoryStats = useMemo(() => {
 
   return (
     <main>
-      <section className="hero hero-compact">
-        <div className="hero-inner">
-          <div className="hero-badge">D-SEC Yönetim</div>
-          <h1 className="hero-title">ÇBS Başvuru Paneli</h1>
-          <p className="hero-desc">
+      <section
+        style={{
+          margin: "18px auto 0",
+          maxWidth: "1440px",
+          borderRadius: "24px",
+          overflow: "hidden",
+          background:
+            "linear-gradient(135deg, #8f1732 0%, #d93422 52%, #9f160d 100%)",
+          boxShadow: "0 18px 42px rgba(127, 23, 52, 0.18)",
+        }}
+      >
+        <div
+          style={{
+            minHeight: "230px",
+            padding: "34px 28px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+            color: "#ffffff",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "7px 12px",
+              borderRadius: "999px",
+              background: "rgba(255,255,255,0.14)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              fontSize: "12px",
+              fontWeight: 800,
+              marginBottom: "14px",
+            }}
+          >
+            D-SEC Yönetim
+          </div>
+
+          <h1
+            style={{
+              margin: 0,
+              fontSize: "clamp(30px, 4vw, 48px)",
+              lineHeight: 1.08,
+              fontWeight: 900,
+              letterSpacing: "-0.02em",
+            }}
+          >
+            ÇBS Başvuru Paneli
+          </h1>
+
+          <p
+            style={{
+              margin: "14px auto 0",
+              maxWidth: "760px",
+              fontSize: "16px",
+              lineHeight: 1.6,
+              color: "rgba(255,255,255,0.9)",
+            }}
+          >
             Web sitesinden gelen şikayet, öneri ve talepleri tek ekranda takip edin,
             yönetin ve kapatın.
           </p>
