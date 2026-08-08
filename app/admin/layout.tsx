@@ -17,6 +17,7 @@ import {
 FolderArchive,
 AlertTriangle,
 Settings2,
+HardHat,
   Search,
   Bell,
   Sparkles,
@@ -58,6 +59,7 @@ const ACTIVE_LABELS: Record<string, string> = {
   "/admin/denetimler": "Denetimler",
   "/admin/employees": "Çalışanlar",
   "/admin/documentation": "Dokümantasyon Merkezi",
+  "/admin/subcontractors": "Taşeron Yönetimi",
 };
 
 export default function AdminLayout({
@@ -183,6 +185,13 @@ export default function AdminLayout({
   name: "Dokümantasyon",
   href: "/admin/documentation",
   icon: FolderArchive,
+},
+
+
+{
+  name: "Taşeron Yönetimi",
+  href: "/admin/subcontractors",
+  icon: HardHat,
 },
 
       { name: "Sistem Kullanıcıları", href: "/admin/users", icon: Users },
