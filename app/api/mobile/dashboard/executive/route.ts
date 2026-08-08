@@ -5,21 +5,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const MOBILE_API_KEY =
-  process.env.DSEC_MOBILE_API_KEY ||
-  "dsec_mobile_123";
-
-type CompanyRow = {
-  id: string;
-  name: string | null;
-  local_firm_id?: number | string | null;
-};
-
-type RiskSummary = {
-  low: number;
-  medium: number;
-  high: number;
-  veryHigh: number;
-};
+  process.env.DSEC_MOBILE_API_KEY || "dsec_mobile_123";
 
 function getSupabase() {
   const url =
@@ -49,18 +35,14 @@ function getSupabase() {
   });
 }
 
-function normalizeCompanyKey(
-  value: unknown
-): string {
-  return String(value ?? "")
-    .trim()
-    .toLocaleUpperCase("tr-TR")
-    .replace(/\s+/g, " ");
+function isAuthorized(request: Request): boolean {
+  const apiKey =
+    request.headers.get("x-api-key")?.trim() || "";
+
+  return apiKey === MOBILE_API_KEY;
 }
 
-function normalizeResult(
-  value: unknown
-): string {
+function normalizeResult(value: unknown): string {
   return String(value ?? "")
     .trim()
     .toLocaleUpperCase("tr-TR")
@@ -73,16 +55,86 @@ function normalizeResult(
     .replace(/[\s-]+/g, "_");
 }
 
-function isAuthorized(
-  request: Request
-): boolean {
-  const apiKey =
-    request.headers
-      .get("x-api-key")
-      ?.trim() || "";
+function resultRequiresDof(value: unknown): boolean {
+  const result = normalizeResult(value);
 
-  return apiKey === MOBILE_API_KEY;
+  if (!result) return false;
+
+  if (
+    result === "UYGUNSUZ" ||
+    result === "KISMEN" ||
+    result.includes("UYGUNSUZ") ||
+    result.includes("KISMEN") ||
+    result.includes("YETERSIZ") ||
+    result.includes("EKSIK")
+  ) {
+    return true;
+  }
+
+  if (result.startsWith("SCORE:")) {
+    const score =
+      Number(result.replace("SCORE:", ""));
+
+    return (
+      Number.isFinite(score) &&
+      score < 100
+    );
+  }
+
+  if (result.startsWith("ELMERI:")) {
+    const parts =
+      result.split(":");
+
+    const wrong =
+      Number(parts[2] || 0);
+
+    return (
+      Number.isFinite(wrong) &&
+      wrong > 0
+    );
+  }
+
+  return false;
 }
+
+function dofStatus(answer: any):
+  | "OPEN"
+  | "CLOSED"
+  | "NONE" {
+
+  const status =
+    normalizeResult(
+      answer?.dof_status
+    );
+
+  if (
+    status === "CLOSED" ||
+    status === "KAPALI"
+  ) {
+    return "CLOSED";
+  }
+
+  if (
+    status === "OPEN" ||
+    status === "IN_PROGRESS" ||
+    status === "ACIK"
+  ) {
+    return "OPEN";
+  }
+
+  return resultRequiresDof(
+    answer?.result
+  )
+    ? "OPEN"
+    : "NONE";
+}
+
+type RiskSummary = {
+  low: number;
+  medium: number;
+  high: number;
+  veryHigh: number;
+};
 
 function emptyRiskSummary(): RiskSummary {
   return {
@@ -114,13 +166,16 @@ function fineKinneyLevelFromScore(
 function calculateRiskSafetyScore(
   summary: RiskSummary
 ): number | null {
+
   const total =
     summary.low +
     summary.medium +
     summary.high +
     summary.veryHigh;
 
-  if (total <= 0) return null;
+  if (total <= 0) {
+    return null;
+  }
 
   const weighted =
     summary.low * 0.10 +
@@ -134,90 +189,11 @@ function calculateRiskSafetyScore(
       Math.min(
         100,
         100 -
-          (weighted / total) * 100
+          (weighted / total) *
+            100
       )
     )
   );
-}
-
-function resultRequiresDof(
-  value: unknown
-): boolean {
-  const result =
-    normalizeResult(value);
-
-  if (!result) return false;
-
-  if (
-    result === "UYGUNSUZ" ||
-    result === "KISMEN" ||
-    result.includes("UYGUNSUZ") ||
-    result.includes("KISMEN") ||
-    result.includes("YETERSIZ") ||
-    result.includes("EKSIK")
-  ) {
-    return true;
-  }
-
-  if (result.startsWith("SCORE:")) {
-    const score =
-      Number(
-        result.replace(
-          "SCORE:",
-          ""
-        )
-      );
-
-    return (
-      Number.isFinite(score) &&
-      score < 100
-    );
-  }
-
-  if (result.startsWith("ELMERI:")) {
-    const parts =
-      result.split(":");
-
-    const wrong =
-      Number(parts[2] || 0);
-
-    return (
-      Number.isFinite(wrong) &&
-      wrong > 0
-    );
-  }
-
-  return false;
-}
-
-function dofStatus(
-  answer: any
-): "OPEN" | "CLOSED" | "NONE" {
-  const status =
-    normalizeResult(
-      answer?.dof_status
-    );
-
-  if (
-    status === "CLOSED" ||
-    status === "KAPALI"
-  ) {
-    return "CLOSED";
-  }
-
-  if (
-    status === "OPEN" ||
-    status === "IN_PROGRESS" ||
-    status === "ACIK"
-  ) {
-    return "OPEN";
-  }
-
-  return resultRequiresDof(
-    answer?.result
-  )
-    ? "OPEN"
-    : "NONE";
 }
 
 type TrainingRow = {
@@ -229,7 +205,11 @@ type AssignmentRow = {
   id: string;
   user_id: string;
   training_id: string;
-  status?: string | null;
+  status?:
+    | "not_started"
+    | "in_progress"
+    | "completed"
+    | null;
   watch_completed?: boolean | null;
   final_exam_passed?: boolean | null;
 };
@@ -266,71 +246,6 @@ function isTrainingCompleted(
   return row.status === "completed";
 }
 
-async function resolveCompany(
-  supabase: ReturnType<
-    typeof getSupabase
-  >,
-  requestedWebId: string,
-  requestedLocalId: string,
-  requestedName: string
-): Promise<CompanyRow> {
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("companies")
-    .select(
-      "id,name,local_firm_id"
-    )
-    .order("name");
-
-  if (error) {
-    throw new Error(
-      `Firma listesi alınamadı: ${error.message}`
-    );
-  }
-
-  const companies =
-    (data || []) as CompanyRow[];
-
-  const normalizedName =
-    normalizeCompanyKey(
-      requestedName
-    );
-
-  const company =
-    companies.find(
-      (item) =>
-        (
-          requestedWebId &&
-          String(item.id) ===
-            requestedWebId
-        ) ||
-        (
-          requestedLocalId &&
-          String(
-            item.local_firm_id ?? ""
-          ) ===
-            requestedLocalId
-        ) ||
-        (
-          normalizedName &&
-          normalizeCompanyKey(
-            item.name
-          ) ===
-            normalizedName
-        )
-    );
-
-  if (!company) {
-    throw new Error(
-      `Firma Web ile eşleştirilemedi. web=${requestedWebId || "-"}, local=${requestedLocalId || "-"}, ad=${requestedName || "-"}`
-    );
-  }
-
-  return company;
-}
-
 export async function GET(
   request: Request
 ) {
@@ -339,47 +254,52 @@ export async function GET(
       return NextResponse.json(
         {
           success: false,
-          error:
-            "Yetkisiz mobil erişim. x-api-key doğrulanamadı.",
+          error: "Yetkisiz mobil erişim.",
         },
-        { status: 401 }
+        {
+          status: 401,
+          headers: {
+            "Cache-Control":
+              "no-store, no-cache, must-revalidate",
+          },
+        }
       );
     }
 
     const { searchParams } =
       new URL(request.url);
 
-    const requestedWebId =
+    const webFirmId =
       String(
         searchParams.get(
           "web_firm_id"
-        ) || ""
+        ) ||
+          searchParams.get(
+            "firm_id"
+          ) ||
+          searchParams.get(
+            "firmId"
+          ) ||
+          ""
       ).trim();
 
-    const requestedLocalId =
-      String(
-        searchParams.get(
-          "local_firm_id"
-        ) || ""
-      ).trim();
-
-    const requestedName =
+    const firmName =
       String(
         searchParams.get(
           "firm_name"
-        ) || ""
+        ) ||
+          searchParams.get(
+            "firmName"
+          ) ||
+          ""
       ).trim();
 
-    if (
-      !requestedWebId &&
-      !requestedLocalId &&
-      !requestedName
-    ) {
+    if (!webFirmId && !firmName) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "Firma eşleştirme parametresi bulunamadı.",
+            "web_firm_id veya firm_name zorunludur.",
         },
         { status: 400 }
       );
@@ -388,31 +308,86 @@ export async function GET(
     const supabase =
       getSupabase();
 
-    const company =
-      await resolveCompany(
-        supabase,
-        requestedWebId,
-        requestedLocalId,
-        requestedName
+    /*
+     * TEK FİRMA KİMLİĞİ ÇÖZÜMÜ
+     *
+     * Web Dashboard firma filtresinde şirket adını kullanabiliyor.
+     * App ise çoğu zaman remote UUID taşıyor.
+     * Önce companies tablosundan ikisini aynı gerçek company.id değerine çözüyoruz.
+     * Böylece eğitim, risk ve denetim aynı firmaya bakıyor.
+     */
+    const {
+      data: companies,
+      error: companiesError,
+    } = await supabase
+      .from("companies")
+      .select("id, name");
+
+    if (companiesError) {
+      throw new Error(
+        `Firmalar alınamadı: ${companiesError.message}`
       );
+    }
+
+    const normalizedRequestedId =
+      normalizeResult(webFirmId);
+
+    const normalizedRequestedName =
+      normalizeResult(firmName);
+
+    const matchedCompany =
+      (companies || []).find(
+        (company: any) => {
+          const id =
+            String(
+              company?.id || ""
+            ).trim();
+
+          const name =
+            String(
+              company?.name || ""
+            ).trim();
+
+          return (
+            (
+              normalizedRequestedId &&
+              normalizeResult(id) ===
+                normalizedRequestedId
+            ) ||
+            (
+              normalizedRequestedName &&
+              normalizeResult(name) ===
+                normalizedRequestedName
+            )
+          );
+        }
+      ) || null;
+
+    if (!matchedCompany) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            `Firma eşleşmedi. web_firm_id=${webFirmId || "-"}, firm_name=${firmName || "-"}`,
+        },
+        { status: 404 }
+      );
+    }
 
     const companyId =
-      String(company.id);
+      String(
+        matchedCompany.id
+      ).trim();
 
     const companyName =
       String(
-        company.name || ""
-      );
-
-    const localFirmId =
-      String(
-        company.local_firm_id ??
-          requestedLocalId ??
-          ""
+        matchedCompany.name || firmName
       ).trim();
 
     // ==========================================================
-    // EĞİTİM — Web dashboard ile aynı firma ve atama kaynağı
+    // 1) EĞİTİM
+    // Web dashboard ile aynı kaynak:
+    // users.company_id -> training_assignments
     // ==========================================================
 
     const {
@@ -421,10 +396,7 @@ export async function GET(
     } = await supabase
       .from("users")
       .select("id")
-      .eq(
-        "company_id",
-        companyId
-      );
+      .eq("company_id", companyId);
 
     if (usersError) {
       throw new Error(
@@ -434,15 +406,12 @@ export async function GET(
 
     const userIds =
       (firmUsers || [])
-        .map(
-          (row: any) =>
-            String(
-              row.id || ""
-            ).trim()
+        .map((row: any) =>
+          String(row.id || "").trim()
         )
         .filter(Boolean);
 
-    let assignments:
+    let assignmentRows:
       AssignmentRow[] = [];
 
     if (userIds.length > 0) {
@@ -454,12 +423,9 @@ export async function GET(
           "training_assignments"
         )
         .select(
-          "id,user_id,training_id,status,watch_completed,final_exam_passed"
+          "id, user_id, training_id, status, watch_completed, final_exam_passed"
         )
-        .in(
-          "user_id",
-          userIds
-        );
+        .in("user_id", userIds);
 
       if (error) {
         throw new Error(
@@ -467,14 +433,14 @@ export async function GET(
         );
       }
 
-      assignments =
+      assignmentRows =
         (data || []) as AssignmentRow[];
     }
 
     const trainingIds =
       Array.from(
         new Set(
-          assignments
+          assignmentRows
             .map(
               (row) =>
                 row.training_id
@@ -484,16 +450,20 @@ export async function GET(
       );
 
     const trainingMap:
-      Record<string, TrainingRow> =
-      {};
+      Record<
+        string,
+        TrainingRow
+      > = {};
 
-    if (trainingIds.length > 0) {
+    if (
+      trainingIds.length > 0
+    ) {
       const {
         data,
         error,
       } = await supabase
         .from("trainings")
-        .select("id,type")
+        .select("id, type")
         .in("id", trainingIds);
 
       if (error) {
@@ -503,23 +473,23 @@ export async function GET(
       }
 
       for (
-        const row of data || []
+        const item of data || []
       ) {
         trainingMap[
-          String(row.id)
+          String(item.id)
         ] = {
-          id: String(row.id),
+          id: String(item.id),
           type:
-            row.type ?? null,
+            item.type ?? null,
         };
       }
     }
 
     const trainingAssigned =
-      assignments.length;
+      assignmentRows.length;
 
     const trainingCompleted =
-      assignments.filter(
+      assignmentRows.filter(
         (row) =>
           isTrainingCompleted(
             row,
@@ -530,7 +500,7 @@ export async function GET(
       ).length;
 
     const trainingInProgress =
-      assignments.filter(
+      assignmentRows.filter(
         (row) =>
           !isTrainingCompleted(
             row,
@@ -561,42 +531,30 @@ export async function GET(
         : null;
 
     // ==========================================================
-    // RİSK
+    // 2) RİSK
+    // Web dashboard ile aynı tablolar ve eşikler
     // ==========================================================
 
     const riskSummary =
       emptyRiskSummary();
 
-    const [
-      matrixResult,
-      fineResult,
-    ] = await Promise.all([
-      supabase
+    /*
+     * Risk verisi kesinlikle seçili firma ile sınırlıdır.
+     * Tüm firmalara fallback YOK.
+     */
+    const matrixResult =
+      await supabase
         .from("risk_items")
         .select("score")
-        .eq(
-          "is_deleted",
-          false
-        )
-        .eq(
-          "company_id",
-          companyId
-        ),
+        .eq("is_deleted", false)
+        .eq("company_id", companyId);
 
-      supabase
-        .from(
-          "fine_kinney_risks"
-        )
+    const fineKinneyResult =
+      await supabase
+        .from("fine_kinney_risks")
         .select("score")
-        .eq(
-          "is_deleted",
-          false
-        )
-        .eq(
-          "company_id",
-          companyId
-        ),
-    ]);
+        .eq("is_deleted", false)
+        .eq("company_id", companyId);
 
     if (matrixResult.error) {
       throw new Error(
@@ -604,9 +562,9 @@ export async function GET(
       );
     }
 
-    if (fineResult.error) {
+    if (fineKinneyResult.error) {
       throw new Error(
-        `Fine-Kinney risk kayıtları alınamadı: ${fineResult.error.message}`
+        `Fine-Kinney risk kayıtları alınamadı: ${fineKinneyResult.error.message}`
       );
     }
 
@@ -626,7 +584,8 @@ export async function GET(
 
     for (
       const row of
-        fineResult.data || []
+        fineKinneyResult.data ||
+        []
     ) {
       const score =
         Number(row.score || 0);
@@ -650,12 +609,14 @@ export async function GET(
       );
 
     // ==========================================================
-    // DENETİM + DÖF
-    // denetim_runs.firm_id eski kayıtlarda local_firm_id olabilir.
-    // Bu yüzden Web'deki mevcut inspection mantığı gibi JS tarafında
-    // hem company UUID hem local id hem firma adı ile eşleştiriyoruz.
+    // 3) DENETİM + DÖF
     // ==========================================================
 
+    /*
+     * DENETİM FİLTRESİ:
+     * Web'deki /api/admin/inspection-dashboard ile aynı mantık.
+     * run.firm_id hem company.id hem de firma adı üzerinden eşleştirilir.
+     */
     const {
       data: allRuns,
       error: runsError,
@@ -673,50 +634,71 @@ export async function GET(
       );
     }
 
-    const companyNameKey =
-      normalizeCompanyKey(
-        companyName
-      );
+    const companyNameById =
+      new Map<string, string>();
 
-    const runs =
+    for (
+      const company of companies || []
+    ) {
+      const id =
+        String(
+          (company as any)?.id || ""
+        ).trim();
+
+      const name =
+        String(
+          (company as any)?.name || ""
+        ).trim();
+
+      if (id) {
+        companyNameById.set(
+          id,
+          name
+        );
+      }
+    }
+
+    const companyIdKey =
+      normalizeResult(companyId);
+
+    const companyNameKey =
+      normalizeResult(companyName);
+
+    const filteredRuns =
       (allRuns || []).filter(
         (run: any) => {
           const runFirmId =
             String(
-              run.firm_id || ""
+              run?.firm_id || ""
             ).trim();
 
           const runFirmName =
-            normalizeCompanyKey(
-              run.firm_name ||
-                run.firma_adi ||
+            String(
+              companyNameById.get(
+                runFirmId
+              ) ||
+                run?.firm_name ||
+                run?.firma_adi ||
                 ""
-            );
+            ).trim();
 
           return (
-            runFirmId ===
-              companyId ||
-            (
-              localFirmId &&
-              runFirmId ===
-                localFirmId
-            ) ||
-            (
-              runFirmName &&
-              runFirmName ===
-                companyNameKey
-            )
+            normalizeResult(
+              runFirmId
+            ) === companyIdKey ||
+            normalizeResult(
+              runFirmName
+            ) === companyNameKey
           );
         }
       );
 
     const runIds =
-      runs
-        .map(
-          (run: any) =>
-            String(
-              run.id || ""
-            ).trim()
+      filteredRuns
+        .map((row: any) =>
+          String(
+            row?.id || ""
+          ).trim()
         )
         .filter(Boolean);
 
@@ -731,7 +713,7 @@ export async function GET(
           "denetim_answers"
         )
         .select(
-          "result,dof_status"
+          "result, dof_status"
         )
         .in(
           "run_remote_id",
@@ -744,8 +726,7 @@ export async function GET(
         );
       }
 
-      answers =
-        data || [];
+      answers = data || [];
     }
 
     const suitable =
@@ -791,19 +772,18 @@ export async function GET(
       answers.filter(
         (row) =>
           dofStatus(row) ===
-            "OPEN"
+          "OPEN"
       ).length;
 
     const closedDof =
       answers.filter(
         (row) =>
           dofStatus(row) ===
-            "CLOSED"
+          "CLOSED"
       ).length;
 
     const totalDof =
-      openDof +
-      closedDof;
+      openDof + closedDof;
 
     const dofClosureRate =
       totalDof > 0
@@ -819,7 +799,9 @@ export async function GET(
         : null;
 
     // ==========================================================
-    // WEB İLE AYNI EXECUTIVE SKOR
+    // 4) İŞ GÜVENLİĞİ SKORU
+    // Web page ile birebir ağırlık:
+    // Risk %35 + Denetim %30 + Eğitim %20 + DÖF %15
     // ==========================================================
 
     const hseScore =
@@ -869,10 +851,9 @@ export async function GET(
     return NextResponse.json(
       {
         success: true,
+        webFirmId: companyId,
         company: {
           id: companyId,
-          localFirmId:
-            localFirmId || null,
           name: companyName,
         },
         summary: {
@@ -897,7 +878,7 @@ export async function GET(
           riskSafetyScore,
 
           inspectionCount:
-            runIds.length,
+            filteredRuns.length,
           totalInspectionAnswers,
           suitable,
           partial,
