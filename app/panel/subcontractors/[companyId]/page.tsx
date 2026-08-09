@@ -1805,6 +1805,216 @@ async function deleteWorkPermit(
         />
       </section>
 
+
+      {/* DSEC_WORK_PERMIT_SECTION_ADDED */}
+      <section className="employeeSection">
+        <div className="sectionTitle">
+          <div>
+            <h2>İş İzinleri</h2>
+
+            <p>
+              Çalışan bazlı riskli iş,
+              çalışma izni ve onay
+              süreçlerini yönetin.
+            </p>
+          </div>
+
+          <button
+            className="primary"
+            onClick={newWorkPermit}
+            disabled={
+              employees.length === 0
+            }
+          >
+            + Yeni İş İzni
+          </button>
+        </div>
+
+        {employees.length === 0 ? (
+          <div className="empty">
+            İş izni oluşturmak için
+            önce çalışan eklenmelidir.
+          </div>
+        ) : permits.length === 0 ? (
+          <div className="empty">
+            Bu taşeron firmaya ait
+            iş izni bulunmuyor.
+          </div>
+        ) : (
+          <div className="employeeList">
+            {permits.map(
+              (permit) => {
+                const employee =
+                  employees.find(
+                    (item) =>
+                      String(item.id) ===
+                      String(
+                        permit.employee_id
+                      )
+                  );
+
+                const expired =
+                  Boolean(
+                    permit.end_millis
+                  ) &&
+                  Number(
+                    permit.end_millis
+                  ) < Date.now();
+
+                const effectiveStatus =
+                  expired &&
+                  value(
+                    permit.status
+                  ).toUpperCase() ===
+                    "AKTIF"
+                    ? "SURESI_DOLDU"
+                    : value(
+                        permit.status
+                      ).toUpperCase() ||
+                      "BEKLIYOR";
+
+                return (
+                  <article
+                    className="employeeCard"
+                    key={permit.id}
+                  >
+                    <div className="employeeTop">
+                      <div className="avatar">
+                        🛠️
+                      </div>
+
+                      <div className="employeeIdentity">
+                        <h3>
+                          {permit.work_title ||
+                            "İş İzni"}
+                        </h3>
+
+                        <p>
+                          {employee?.full_name ||
+                            "Çalışan bulunamadı"}
+                        </p>
+                      </div>
+
+                      <span
+                        className={
+                          effectiveStatus ===
+                            "AKTIF"
+                            ? "permission allowed"
+                            : "permission blocked"
+                        }
+                      >
+                        {labelStatus(
+                          effectiveStatus
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="employeeMeta">
+                      <span>
+                        İzin Türü:{" "}
+                        {labelStatus(
+                          permit.permit_type
+                        )}
+                      </span>
+
+                      <span>
+                        Başlangıç:{" "}
+                        {formatDate(
+                          permit.start_millis
+                        )}
+                      </span>
+
+                      <span>
+                        Bitiş:{" "}
+                        {formatDate(
+                          permit.end_millis
+                        )}
+                      </span>
+
+                      <span>
+                        Onay:{" "}
+                        {labelStatus(
+                          permit.approval_status
+                        )}
+                      </span>
+                    </div>
+
+                    {value(
+                      permit.work_area
+                    ) && (
+                      <div className="warning">
+                        <strong>
+                          Çalışma Alanı:
+                        </strong>{" "}
+                        {permit.work_area}
+                      </div>
+                    )}
+
+                    {value(
+                      permit.precautions
+                    ) && (
+                      <div className="warning">
+                        <strong>
+                          Risk / Önlem:
+                        </strong>{" "}
+                        {permit.precautions}
+                      </div>
+                    )}
+
+                    {value(
+                      permit.approved_by
+                    ) && (
+                      <div className="warning">
+                        <strong>
+                          Onaylayan:
+                        </strong>{" "}
+                        {permit.approved_by}
+                      </div>
+                    )}
+
+                    {value(
+                      permit.note
+                    ) && (
+                      <div className="warning">
+                        <strong>
+                          Not:
+                        </strong>{" "}
+                        {permit.note}
+                      </div>
+                    )}
+
+                    <div className="employeeActions">
+                      <button
+                        className="outline"
+                        onClick={() =>
+                          editWorkPermit(
+                            permit
+                          )
+                        }
+                      >
+                        Düzenle
+                      </button>
+
+                      <button
+                        className="danger"
+                        disabled={saving}
+                        onClick={() =>
+                          void deleteWorkPermit(
+                            permit
+                          )
+                        }
+                      >
+                        Sil
+                      </button>
+                    </div>
+                  </article>
+                );
+              }
+            )}
+          </div>
+        )}
+      </section>
+
 <section className="employeeSection">
   <div className="sectionTitle">
     <div>
@@ -2192,6 +2402,360 @@ async function deleteWorkPermit(
         )}
       </section>
 
+
+
+      {/* DSEC_WORK_PERMIT_MODAL_ADDED */}
+      {workPermitModalOpen && (
+        <div
+          className="modalBackdrop"
+          onMouseDown={() =>
+            setWorkPermitModalOpen(
+              false
+            )
+          }
+        >
+          <div
+            className="modal"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="modalHeader">
+              <div>
+                <h2>
+                  {workPermitForm.id
+                    ? "İş İznini Düzenle"
+                    : "Yeni İş İzni"}
+                </h2>
+
+                <p>
+                  {company.company_name}
+                </p>
+              </div>
+
+              <button
+                className="close"
+                onClick={() =>
+                  setWorkPermitModalOpen(
+                    false
+                  )
+                }
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="formGrid">
+              <label className="field">
+                <span>Çalışan *</span>
+
+                <select
+                  value={
+                    workPermitForm.employeeId
+                  }
+                  onChange={(event) =>
+                    setWorkPermitForm(
+                      (old) => ({
+                        ...old,
+                        employeeId:
+                          event.target.value,
+                      })
+                    )
+                  }
+                >
+                  <option value="">
+                    Çalışan seçin
+                  </option>
+
+                  {employees.map(
+                    (employee) => (
+                      <option
+                        key={employee.id}
+                        value={employee.id}
+                      >
+                        {employee.full_name}
+                        {employee.position
+                          ? ` - ${employee.position}`
+                          : ""}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+
+              <SelectField
+                label="İş İzni Türü"
+                value={
+                  workPermitForm.permitType
+                }
+                options={[
+                  "YUKSEKTE_CALISMA",
+                  "SICAK_CALISMA",
+                  "ELEKTRIK",
+                  "KAZI",
+                  "KAPALI_ALAN",
+                  "KALDIRMA",
+                  "DIGER",
+                ]}
+                onChange={(v) =>
+                  setWorkPermitForm(
+                    (old) => ({
+                      ...old,
+                      permitType: v,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="İş Başlığı *"
+                value={
+                  workPermitForm.workTitle
+                }
+                onChange={(v) =>
+                  setWorkPermitForm(
+                    (old) => ({
+                      ...old,
+                      workTitle: v,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="Çalışma Alanı"
+                value={
+                  workPermitForm.workArea
+                }
+                onChange={(v) =>
+                  setWorkPermitForm(
+                    (old) => ({
+                      ...old,
+                      workArea: v,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="Sorumlu Kişi"
+                value={
+                  workPermitForm.responsiblePerson
+                }
+                onChange={(v) =>
+                  setWorkPermitForm(
+                    (old) => ({
+                      ...old,
+                      responsiblePerson: v,
+                    })
+                  )
+                }
+              />
+
+              <label className="field">
+                <span>
+                  Başlangıç Tarihi *
+                </span>
+
+                <input
+                  type="date"
+                  value={
+                    workPermitForm.startDate
+                  }
+                  onChange={(event) =>
+                    setWorkPermitForm(
+                      (old) => ({
+                        ...old,
+                        startDate:
+                          event.target.value,
+                      })
+                    )
+                  }
+                />
+              </label>
+
+              <label className="field">
+                <span>
+                  Bitiş Tarihi
+                </span>
+
+                <input
+                  type="date"
+                  value={
+                    workPermitForm.endDate
+                  }
+                  onChange={(event) =>
+                    setWorkPermitForm(
+                      (old) => ({
+                        ...old,
+                        endDate:
+                          event.target.value,
+                      })
+                    )
+                  }
+                />
+              </label>
+
+              <SelectField
+                label="İzin Durumu"
+                value={
+                  workPermitForm.status
+                }
+                options={[
+                  "BEKLIYOR",
+                  "AKTIF",
+                  "REDDEDILDI",
+                  "IPTAL",
+                  "KAPATILDI",
+                ]}
+                onChange={(v) =>
+                  setWorkPermitForm(
+                    (old) => ({
+                      ...old,
+                      status: v,
+                      approvalStatus:
+                        v === "AKTIF"
+                          ? "ONAYLANDI"
+                          : v ===
+                              "REDDEDILDI"
+                            ? "REDDEDILDI"
+                            : v ===
+                                "BEKLIYOR"
+                              ? "BEKLIYOR"
+                              : old.approvalStatus,
+                    })
+                  )
+                }
+              />
+
+              <SelectField
+                label="Onay Durumu"
+                value={
+                  workPermitForm.approvalStatus
+                }
+                options={[
+                  "BEKLIYOR",
+                  "ONAYLANDI",
+                  "REDDEDILDI",
+                ]}
+                onChange={(v) =>
+                  setWorkPermitForm(
+                    (old) => ({
+                      ...old,
+                      approvalStatus: v,
+                      status:
+                        v === "ONAYLANDI"
+                          ? "AKTIF"
+                          : v ===
+                              "REDDEDILDI"
+                            ? "REDDEDILDI"
+                            : old.status === "AKTIF" ||
+                                old.status === "REDDEDILDI"
+                              ? "BEKLIYOR"
+                              : old.status,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="Onaylayan"
+                value={
+                  workPermitForm.approvedBy
+                }
+                onChange={(v) =>
+                  setWorkPermitForm(
+                    (old) => ({
+                      ...old,
+                      approvedBy: v,
+                    })
+                  )
+                }
+              />
+            </div>
+
+            <div className="formSection">
+              <label className="field">
+                <span>
+                  Riskli İş Açıklaması /
+                  Alınacak Önlemler
+                </span>
+
+                <textarea
+                  rows={4}
+                  value={
+                    workPermitForm.precautions
+                  }
+                  onChange={(event) =>
+                    setWorkPermitForm(
+                      (old) => ({
+                        ...old,
+                        precautions:
+                          event.target.value,
+                      })
+                    )
+                  }
+                />
+              </label>
+
+              <label
+                className="field"
+                style={{
+                  marginTop: 12,
+                }}
+              >
+                <span>
+                  Not / Açıklama
+                </span>
+
+                <textarea
+                  rows={3}
+                  value={
+                    workPermitForm.note
+                  }
+                  onChange={(event) =>
+                    setWorkPermitForm(
+                      (old) => ({
+                        ...old,
+                        note:
+                          event.target.value,
+                      })
+                    )
+                  }
+                />
+              </label>
+            </div>
+
+            <div className="modalActions">
+              <button
+                className="outline"
+                disabled={saving}
+                onClick={() =>
+                  setWorkPermitModalOpen(
+                    false
+                  )
+                }
+              >
+                Vazgeç
+              </button>
+
+              <button
+                className="primary"
+                disabled={saving}
+                onClick={() =>
+                  void saveWorkPermit()
+                }
+              >
+                {saving
+                  ? "Kaydediliyor..."
+                  : workPermitForm.id
+                    ? "Değişiklikleri Kaydet"
+                    : "İş İznini Kaydet"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
 {companyDocumentModalOpen && (
   <div
@@ -3471,6 +4035,24 @@ const styles = `
 
   .field input:focus,
   .field select:focus {
+    border-color: #667085;
+  }
+
+
+  .field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 11px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 11px;
+    background: #ffffff;
+    color: #172033;
+    font: inherit;
+    outline: none;
+    resize: vertical;
+  }
+
+  .field textarea:focus {
     border-color: #667085;
   }
 
