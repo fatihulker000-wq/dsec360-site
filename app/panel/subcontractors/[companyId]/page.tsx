@@ -64,10 +64,27 @@ type Employee = {
 
 type CompanyDocument = {
   id: string;
+  firm_id?: string | null;
   company_id?: string | null;
-  status?: string | null;
+
+  app_local_id?: number | null;
+  sync_key?: string | null;
+
+  doc_key?: string | null;
+  doc_title?: string | null;
+
   is_required?: boolean | null;
+  status?: string | null;
+
+  file_url?: string | null;
   valid_until_millis?: number | null;
+  note?: string | null;
+
+  is_deleted?: boolean | null;
+  source?: string | null;
+
+  updated_at_millis?: number | null;
+  created_at_millis?: number | null;
 };
 
 type EmployeeDocument = {
@@ -112,6 +129,28 @@ type ApiResponse = {
   permits?: WorkPermit[];
   entryLogs?: EntryLog[];
   qrTokens?: QrToken[];
+};
+
+type CompanyDocumentForm = {
+  id: string;
+  docKey: string;
+  docTitle: string;
+  isRequired: boolean;
+  status: string;
+  fileUrl: string;
+  validUntil: string;
+  note: string;
+};
+
+const EMPTY_COMPANY_DOCUMENT: CompanyDocumentForm = {
+  id: "",
+  docKey: "",
+  docTitle: "",
+  isRequired: true,
+  status: "EKSIK",
+  fileUrl: "",
+  validUntil: "",
+  note: "",
 };
 
 type EmployeeForm = {
@@ -232,6 +271,18 @@ export default function SubcontractorDetailPage() {
 
   const [data, setData] =
     useState<ApiResponse>({});
+
+const [
+  companyDocumentModalOpen,
+  setCompanyDocumentModalOpen,
+] = useState(false);
+
+const [
+  companyDocumentForm,
+  setCompanyDocumentForm,
+] = useState<CompanyDocumentForm>(
+  EMPTY_COMPANY_DOCUMENT
+);
 
   const [
     employeeModalOpen,
@@ -776,6 +827,223 @@ export default function SubcontractorDetailPage() {
     }
   }
 
+function newCompanyDocument() {
+  setCompanyDocumentForm({
+    ...EMPTY_COMPANY_DOCUMENT,
+  });
+
+  setCompanyDocumentModalOpen(true);
+}
+
+function editCompanyDocument(
+  document: CompanyDocument
+) {
+  let validUntil = "";
+
+  if (document.valid_until_millis) {
+    const date = new Date(
+      Number(document.valid_until_millis)
+    );
+
+    if (!Number.isNaN(date.getTime())) {
+      validUntil =
+        date.toISOString().slice(0, 10);
+    }
+  }
+
+  setCompanyDocumentForm({
+    id: document.id,
+    docKey: value(document.doc_key),
+    docTitle: value(document.doc_title),
+
+    isRequired:
+      document.is_required !== false,
+
+    status:
+      value(document.status) || "EKSIK",
+
+    fileUrl:
+      value(document.file_url),
+
+    validUntil,
+
+    note:
+      value(document.note),
+  });
+
+  setCompanyDocumentModalOpen(true);
+}
+
+async function saveCompanyDocument() {
+  if (
+    !companyDocumentForm.docTitle.trim()
+  ) {
+    alert("Evrak adı zorunludur.");
+    return;
+  }
+
+  if (
+    !companyDocumentForm.docKey.trim()
+  ) {
+    alert("Evrak kodu zorunludur.");
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    const editing =
+      Boolean(companyDocumentForm.id);
+
+    let validUntilMillis:
+      | number
+      | null = null;
+
+    if (companyDocumentForm.validUntil) {
+      const date = new Date(
+        `${companyDocumentForm.validUntil}T23:59:59`
+      );
+
+      if (!Number.isNaN(date.getTime())) {
+        validUntilMillis =
+          date.getTime();
+      }
+    }
+
+    const response = await fetch(
+      "/api/admin/subcontractors/company-documents",
+      {
+        method: editing
+          ? "PATCH"
+          : "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+
+        body: JSON.stringify({
+          id:
+            companyDocumentForm.id ||
+            undefined,
+
+          firmId,
+          companyId,
+
+          docKey:
+            companyDocumentForm.docKey,
+
+          docTitle:
+            companyDocumentForm.docTitle,
+
+          isRequired:
+            companyDocumentForm.isRequired,
+
+          status:
+            companyDocumentForm.status,
+
+          fileUrl:
+            companyDocumentForm.fileUrl,
+
+          validUntilMillis,
+
+          note:
+            companyDocumentForm.note,
+        }),
+      }
+    );
+
+    const json =
+      await response.json();
+
+    if (
+      !response.ok ||
+      json.success === false
+    ) {
+      throw new Error(
+        json.error ||
+          "Firma evrakı kaydedilemedi."
+      );
+    }
+
+    setCompanyDocumentModalOpen(false);
+
+    setCompanyDocumentForm({
+      ...EMPTY_COMPANY_DOCUMENT,
+    });
+
+    await load();
+  } catch (e) {
+    alert(
+      e instanceof Error
+        ? e.message
+        : "Firma evrakı kaydedilemedi."
+    );
+  } finally {
+    setSaving(false);
+  }
+}
+
+async function deleteCompanyDocument(
+  document: CompanyDocument
+) {
+  const ok = window.confirm(
+    `${
+      document.doc_title ||
+      "Firma evrakı"
+    } silinsin mi?`
+  );
+
+  if (!ok) {
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    const response = await fetch(
+      "/api/admin/subcontractors/company-documents",
+      {
+        method: "DELETE",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+
+        body: JSON.stringify({
+          id: document.id,
+          firmId,
+          companyId,
+        }),
+      }
+    );
+
+    const json =
+      await response.json();
+
+    if (
+      !response.ok ||
+      json.success === false
+    ) {
+      throw new Error(
+        json.error ||
+          "Firma evrakı silinemedi."
+      );
+    }
+
+    await load();
+  } catch (e) {
+    alert(
+      e instanceof Error
+        ? e.message
+        : "Firma evrakı silinemedi."
+    );
+  } finally {
+    setSaving(false);
+  }
+}
+
   if (loading) {
     return (
       <main className="page">
@@ -1033,6 +1301,177 @@ export default function SubcontractorDetailPage() {
         />
       </section>
 
+<section className="employeeSection">
+  <div className="sectionTitle">
+    <div>
+      <h2>Firma Evrakları</h2>
+
+      <p>
+        Taşeron firmaya ait zorunlu,
+        süreli ve diğer belgeleri yönetin.
+      </p>
+    </div>
+
+    <button
+      className="primary"
+      onClick={newCompanyDocument}
+    >
+      + Firma Evrakı Ekle
+    </button>
+  </div>
+
+  {companyDocuments.length === 0 ? (
+    <div className="empty">
+      Bu taşeron firmaya ait firma
+      evrakı bulunmuyor.
+    </div>
+  ) : (
+    <div className="employeeList">
+      {companyDocuments.map(
+        (document) => {
+          const status =
+            value(document.status)
+              .toUpperCase() ||
+            "EKSIK";
+
+          const expired =
+            Boolean(
+              document.valid_until_millis
+            ) &&
+            Number(
+              document.valid_until_millis
+            ) < Date.now();
+
+          const effectiveStatus =
+            expired
+              ? "SURESI_GECMIS"
+              : status;
+
+          return (
+            <article
+              className="employeeCard"
+              key={document.id}
+            >
+              <div className="employeeTop">
+                <div className="avatar">
+                  📄
+                </div>
+
+                <div className="employeeIdentity">
+                  <h3>
+                    {document.doc_title ||
+                      "Adsız Evrak"}
+                  </h3>
+
+                  <p>
+                    Evrak Kodu:{" "}
+                    {document.doc_key ||
+                      "-"}
+                  </p>
+                </div>
+
+                <span
+                  className={
+                    effectiveStatus ===
+                    "TAM"
+                      ? "permission allowed"
+                      : "permission blocked"
+                  }
+                >
+                  {labelStatus(
+                    effectiveStatus
+                  )}
+                </span>
+              </div>
+
+              <div className="employeeMeta">
+                <span>
+                  Tür:{" "}
+                  {document.is_required !==
+                  false
+                    ? "Zorunlu"
+                    : "İsteğe Bağlı"}
+                </span>
+
+                <span>
+                  Geçerlilik:{" "}
+                  {formatDate(
+                    document.valid_until_millis
+                  )}
+                </span>
+
+                <span>
+                  Kaynak:{" "}
+                  {document.source ||
+                    "-"}
+                </span>
+              </div>
+
+              {value(document.note) && (
+                <div className="warning">
+                  <strong>Not:</strong>{" "}
+                  {document.note}
+                </div>
+              )}
+
+              {document.file_url ? (
+                <div
+                  className="employeeActions"
+                  style={{
+                    justifyContent:
+                      "flex-start",
+                  }}
+                >
+                  <a
+                    className="documentLink"
+                    href={
+                      document.file_url
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Evrakı Görüntüle
+                  </a>
+                </div>
+              ) : (
+                <div className="warning">
+                  Bu evraka henüz dosya
+                  yüklenmemiş.
+                </div>
+              )}
+
+              <div className="employeeActions">
+                <button
+                  className="outline"
+                  onClick={() =>
+                    editCompanyDocument(
+                      document
+                    )
+                  }
+                >
+                  Düzenle
+                </button>
+
+                <button
+                  className="danger"
+                  disabled={saving}
+                  onClick={() =>
+                    void deleteCompanyDocument(
+                      document
+                    )
+                  }
+                >
+                  Sil
+                </button>
+              </div>
+            </article>
+          );
+        }
+      )}
+    </div>
+  )}
+</section>
+
       <section className="employeeSection">
         <div className="sectionTitle">
           <div>
@@ -1248,6 +1687,207 @@ export default function SubcontractorDetailPage() {
           </div>
         )}
       </section>
+
+
+{companyDocumentModalOpen && (
+  <div
+    className="modalBackdrop"
+    onMouseDown={() =>
+      setCompanyDocumentModalOpen(false)
+    }
+  >
+    <div
+      className="modal"
+      onMouseDown={(event) =>
+        event.stopPropagation()
+      }
+    >
+      <div className="modalHeader">
+        <div>
+          <h2>
+            {companyDocumentForm.id
+              ? "Firma Evrakını Düzenle"
+              : "Yeni Firma Evrakı"}
+          </h2>
+
+          <p>
+            {company.company_name}
+          </p>
+        </div>
+
+        <button
+          className="close"
+          onClick={() =>
+            setCompanyDocumentModalOpen(
+              false
+            )
+          }
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="formGrid">
+        <Field
+          label="Evrak Adı *"
+          value={
+            companyDocumentForm.docTitle
+          }
+          onChange={(v) =>
+            setCompanyDocumentForm(
+              (old) => ({
+                ...old,
+                docTitle: v,
+              })
+            )
+          }
+        />
+
+        <Field
+          label="Evrak Kodu *"
+          value={
+            companyDocumentForm.docKey
+          }
+          onChange={(v) =>
+            setCompanyDocumentForm(
+              (old) => ({
+                ...old,
+                docKey:
+                  v
+                    .toLocaleUpperCase(
+                      "tr-TR"
+                    )
+                    .replace(
+                      /\s+/g,
+                      "_"
+                    ),
+              })
+            )
+          }
+        />
+
+        <SelectField
+          label="Evrak Durumu"
+          value={
+            companyDocumentForm.status
+          }
+          options={[
+            "EKSIK",
+            "TAM",
+            "SURESI_GECMIS",
+            "REVIZE_ISTENDI",
+            "REDDEDILDI",
+          ]}
+          onChange={(v) =>
+            setCompanyDocumentForm(
+              (old) => ({
+                ...old,
+                status: v,
+              })
+            )
+          }
+        />
+
+        <label className="field">
+          <span>
+            Geçerlilik Tarihi
+          </span>
+
+          <input
+            type="date"
+            value={
+              companyDocumentForm.validUntil
+            }
+            onChange={(event) =>
+              setCompanyDocumentForm(
+                (old) => ({
+                  ...old,
+                  validUntil:
+                    event.target.value,
+                })
+              )
+            }
+          />
+        </label>
+
+        <Field
+          label="Dosya URL"
+          value={
+            companyDocumentForm.fileUrl
+          }
+          onChange={(v) =>
+            setCompanyDocumentForm(
+              (old) => ({
+                ...old,
+                fileUrl: v,
+              })
+            )
+          }
+        />
+
+        <Field
+          label="Not / Açıklama"
+          value={
+            companyDocumentForm.note
+          }
+          onChange={(v) =>
+            setCompanyDocumentForm(
+              (old) => ({
+                ...old,
+                note: v,
+              })
+            )
+          }
+        />
+      </div>
+
+      <div className="formSection">
+        <Toggle
+          label="Zorunlu Evrak"
+          checked={
+            companyDocumentForm.isRequired
+          }
+          onChange={(v) =>
+            setCompanyDocumentForm(
+              (old) => ({
+                ...old,
+                isRequired: v,
+              })
+            )
+          }
+        />
+      </div>
+
+      <div className="modalActions">
+        <button
+          className="outline"
+          disabled={saving}
+          onClick={() =>
+            setCompanyDocumentModalOpen(
+              false
+            )
+          }
+        >
+          Vazgeç
+        </button>
+
+        <button
+          className="primary"
+          disabled={saving}
+          onClick={() =>
+            void saveCompanyDocument()
+          }
+        >
+          {saving
+            ? "Kaydediliyor..."
+            : companyDocumentForm.id
+              ? "Değişiklikleri Kaydet"
+              : "Evrakı Kaydet"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       {employeeModalOpen && (
         <div
@@ -2146,6 +2786,24 @@ const styles = `
     padding-top: 14px;
     border-top: 1px solid #edf0f5;
   }
+
+.documentLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border: 1px solid #d0d5dd;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.documentLink:hover {
+  background: #f8fafc;
+}
 
   .empty,
   .loading,
