@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck,
@@ -64,6 +65,7 @@ const emptySummary = {
 };
 
 export default function SubcontractorsPage() {
+    const router = useRouter();
   const [companies, setCompanies] =
     useState<CompanyItem[]>([]);
 
@@ -602,9 +604,18 @@ export default function SubcontractorsPage() {
                     </span>
                   </div>
 
-                  <button className="outline">
-                    Firmaya Gir →
-                  </button>
+                  <button
+  className="outline"
+  onClick={() =>
+    router.push(
+      `/panel/subcontractors/${c.id}?firmId=${encodeURIComponent(
+        firmId
+      )}`
+    )
+  }
+>
+  Firmaya Gir →
+</button>
                 </article>
               )
             )}
