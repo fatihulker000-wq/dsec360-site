@@ -97,11 +97,73 @@ type EmployeeDocument = {
 
 type WorkPermit = {
   id: string;
+  firm_id?: string | null;
   company_id?: string | null;
+  employee_id?: string | null;
+
+  sync_key?: string | null;
+
+  permit_type?: string | null;
+
+  work_title?: string | null;
+  work_area?: string | null;
+  responsible_person?: string | null;
+  precautions?: string | null;
+
   status?: string | null;
+  approval_status?: string | null;
+
   start_millis?: number | null;
   end_millis?: number | null;
+
+  approved_at_millis?: number | null;
+  approved_by?: string | null;
+  closed_by?: string | null;
+
+  note?: string | null;
+
+  source?: string | null;
 };
+
+type WorkPermitForm = {
+  id: string;
+  employeeId: string;
+  permitType: string;
+  workTitle: string;
+  workArea: string;
+  responsiblePerson: string;
+  precautions: string;
+
+  status: string;
+  approvalStatus: string;
+
+  startDate: string;
+  endDate: string;
+
+  approvedBy: string;
+  note: string;
+};
+
+const EMPTY_WORK_PERMIT: WorkPermitForm = {
+  id: "",
+  employeeId: "",
+  permitType: "YUKSEKTE_CALISMA",
+  workTitle: "",
+  workArea: "",
+  responsiblePerson: "",
+  precautions: "",
+
+  status: "BEKLIYOR",
+  approvalStatus: "BEKLIYOR",
+
+  startDate: "",
+  endDate: "",
+
+  approvedBy: "",
+  note: "",
+};
+
+
 
 type EntryLog = {
   id: string;
@@ -300,6 +362,18 @@ const [
   ] = useState<EmployeeForm>(
     EMPTY_EMPLOYEE
   );
+
+const [
+  workPermitModalOpen,
+  setWorkPermitModalOpen,
+] = useState(false);
+
+const [
+  workPermitForm,
+  setWorkPermitForm,
+] = useState<WorkPermitForm>(
+  EMPTY_WORK_PERMIT
+);
 
   const load = useCallback(
     async () => {
@@ -1125,6 +1199,351 @@ async function deleteCompanyDocument(
         : "Firma evrakı silinemedi."
     );
   } finally {
+    setSaving(false);
+  }
+}
+
+
+function dateInputFromMillis(
+  millis?: number | null
+) {
+  if (!millis) {
+    return "";
+  }
+
+  const date = new Date(
+    Number(millis)
+  );
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "";
+  }
+
+  return date
+    .toISOString()
+    .slice(0, 10);
+}
+
+function newWorkPermit() {
+  setWorkPermitForm({
+    ...EMPTY_WORK_PERMIT,
+
+    employeeId:
+      employees[0]?.id || "",
+
+    startDate:
+      new Date()
+        .toISOString()
+        .slice(0, 10),
+  });
+
+  setWorkPermitModalOpen(true);
+}
+
+function editWorkPermit(
+  permit: WorkPermit
+) {
+  setWorkPermitForm({
+    id:
+      permit.id,
+
+    employeeId:
+      value(
+        permit.employee_id
+      ),
+
+    permitType:
+      value(
+        permit.permit_type
+      ) ||
+      "YUKSEKTE_CALISMA",
+
+    workTitle:
+      value(
+        permit.work_title
+      ),
+
+    workArea:
+      value(
+        permit.work_area
+      ),
+
+    responsiblePerson:
+      value(
+        permit.responsible_person
+      ),
+
+    precautions:
+      value(
+        permit.precautions
+      ),
+
+    status:
+      value(
+        permit.status
+      ) ||
+      "BEKLIYOR",
+
+    approvalStatus:
+      value(
+        permit.approval_status
+      ) ||
+      "BEKLIYOR",
+
+    startDate:
+      dateInputFromMillis(
+        permit.start_millis
+      ),
+
+    endDate:
+      dateInputFromMillis(
+        permit.end_millis
+      ),
+
+    approvedBy:
+      value(
+        permit.approved_by
+      ),
+
+    note:
+      value(
+        permit.note
+      ),
+  });
+
+  setWorkPermitModalOpen(true);
+}
+
+async function saveWorkPermit() {
+  if (!workPermitForm.employeeId) {
+    alert(
+      "Çalışan seçilmelidir."
+    );
+    return;
+  }
+
+  if (
+    !workPermitForm.permitType.trim()
+  ) {
+    alert(
+      "İzin türü zorunludur."
+    );
+    return;
+  }
+
+  if (
+    !workPermitForm.workTitle.trim()
+  ) {
+    alert(
+      "İş başlığı zorunludur."
+    );
+    return;
+  }
+
+  if (
+    !workPermitForm.startDate
+  ) {
+    alert(
+      "Başlangıç tarihi zorunludur."
+    );
+    return;
+  }
+
+  const startMillis =
+    new Date(
+      `${workPermitForm.startDate}T00:00:00`
+    ).getTime();
+
+  const endMillis =
+    workPermitForm.endDate
+      ? new Date(
+          `${workPermitForm.endDate}T23:59:59`
+        ).getTime()
+      : null;
+
+  if (
+    endMillis !== null &&
+    endMillis < startMillis
+  ) {
+    alert(
+      "Bitiş tarihi başlangıç tarihinden önce olamaz."
+    );
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    const editing =
+      Boolean(
+        workPermitForm.id
+      );
+
+    const response =
+      await fetch(
+        "/api/admin/subcontractors/work-permits",
+        {
+          method:
+            editing
+              ? "PATCH"
+              : "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify({
+              id:
+                workPermitForm.id ||
+                undefined,
+
+              firmId,
+              companyId,
+
+              employeeId:
+                workPermitForm.employeeId,
+
+              permitType:
+                workPermitForm.permitType,
+
+              workTitle:
+                workPermitForm.workTitle,
+
+              workArea:
+                workPermitForm.workArea,
+
+              responsiblePerson:
+                workPermitForm.responsiblePerson,
+
+              precautions:
+                workPermitForm.precautions,
+
+              status:
+                workPermitForm.status,
+
+              approvalStatus:
+                workPermitForm.approvalStatus,
+
+              startMillis,
+              endMillis,
+
+              approvedBy:
+                workPermitForm.approvedBy,
+
+              note:
+                workPermitForm.note,
+            }),
+        }
+      );
+
+    const json =
+      await response.json();
+
+    if (
+      !response.ok ||
+      json.success === false
+    ) {
+      throw new Error(
+        json.error ||
+          "İş izni kaydedilemedi."
+      );
+    }
+
+    setWorkPermitModalOpen(
+      false
+    );
+
+    setWorkPermitForm({
+      ...EMPTY_WORK_PERMIT,
+    });
+
+    await load();
+
+  } catch (e) {
+
+    alert(
+      e instanceof Error
+        ? e.message
+        : "İş izni kaydedilemedi."
+    );
+
+  } finally {
+
+    setSaving(false);
+  }
+}
+
+async function deleteWorkPermit(
+  permit: WorkPermit
+) {
+  const ok =
+    window.confirm(
+      `${
+        permit.work_title ||
+        "İş izni"
+      } silinsin mi?`
+    );
+
+  if (!ok) {
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    const response =
+      await fetch(
+        "/api/admin/subcontractors/work-permits",
+        {
+          method: "DELETE",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify({
+              id:
+                permit.id,
+
+              firmId,
+              companyId,
+            }),
+        }
+      );
+
+    const json =
+      await response.json();
+
+    if (
+      !response.ok ||
+      json.success === false
+    ) {
+      throw new Error(
+        json.error ||
+          "İş izni silinemedi."
+      );
+    }
+
+    await load();
+
+  } catch (e) {
+
+    alert(
+      e instanceof Error
+        ? e.message
+        : "İş izni silinemedi."
+    );
+
+  } finally {
+
     setSaving(false);
   }
 }
