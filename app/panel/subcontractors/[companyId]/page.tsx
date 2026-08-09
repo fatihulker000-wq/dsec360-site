@@ -284,6 +284,11 @@ const [
   EMPTY_COMPANY_DOCUMENT
 );
 
+const [
+  companyDocumentFileUploading,
+  setCompanyDocumentFileUploading,
+] = useState(false);
+
   const [
     employeeModalOpen,
     setEmployeeModalOpen,
@@ -826,6 +831,86 @@ const [
       );
     }
   }
+
+async function uploadCompanyDocumentFile(
+  file: File
+) {
+  try {
+    setCompanyDocumentFileUploading(true);
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      "file",
+      file
+    );
+
+    formData.append(
+      "firmId",
+      firmId
+    );
+
+    formData.append(
+      "companyId",
+      companyId
+    );
+
+    const response =
+      await fetch(
+        "/api/admin/subcontractors/company-documents/upload",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+    const json =
+      await response.json();
+
+    if (
+      !response.ok ||
+      json.success === false
+    ) {
+      throw new Error(
+        json.error ||
+          "Dosya yüklenemedi."
+      );
+    }
+
+    const fileUrl =
+      String(
+        json.fileUrl ?? ""
+      ).trim();
+
+    if (!fileUrl) {
+      throw new Error(
+        "Dosya URL bilgisi alınamadı."
+      );
+    }
+
+    setCompanyDocumentForm(
+      (old) => ({
+        ...old,
+        fileUrl,
+      })
+    );
+
+  } catch (e) {
+
+    alert(
+      e instanceof Error
+        ? e.message
+        : "Dosya yüklenemedi."
+    );
+
+  } finally {
+
+    setCompanyDocumentFileUploading(
+      false
+    );
+  }
+}
 
 function newCompanyDocument() {
   setCompanyDocumentForm({
@@ -1810,20 +1895,54 @@ async function deleteCompanyDocument(
           />
         </label>
 
-        <Field
-          label="Dosya URL"
-          value={
+       <label className="field">
+  <span>Firma Evrakı Dosyası</span>
+
+  <input
+    type="file"
+    accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+    disabled={
+      companyDocumentFileUploading
+    }
+    onChange={(event) => {
+      const file =
+        event.target.files?.[0];
+
+      if (file) {
+        void uploadCompanyDocumentFile(
+          file
+        );
+      }
+
+      event.target.value = "";
+    }}
+  />
+
+  {companyDocumentFileUploading && (
+    <small>
+      Dosya yükleniyor...
+    </small>
+  )}
+
+  {!companyDocumentFileUploading &&
+    companyDocumentForm.fileUrl && (
+      <div className="uploadedFileBox">
+        <span>
+          ✓ Dosya yüklendi
+        </span>
+
+        <a
+          href={
             companyDocumentForm.fileUrl
           }
-          onChange={(v) =>
-            setCompanyDocumentForm(
-              (old) => ({
-                ...old,
-                fileUrl: v,
-              })
-            )
-          }
-        />
+          target="_blank"
+          rel="noreferrer"
+        >
+          Dosyayı Görüntüle
+        </a>
+      </div>
+    )}
+</label>
 
         <Field
           label="Not / Açıklama"
@@ -1873,16 +1992,21 @@ async function deleteCompanyDocument(
 
         <button
           className="primary"
-          disabled={saving}
+          disabled={
+  saving ||
+  companyDocumentFileUploading
+}
           onClick={() =>
             void saveCompanyDocument()
           }
         >
-          {saving
-            ? "Kaydediliyor..."
-            : companyDocumentForm.id
-              ? "Değişiklikleri Kaydet"
-              : "Evrakı Kaydet"}
+         {companyDocumentFileUploading
+  ? "Dosya Yükleniyor..."
+  : saving
+    ? "Kaydediliyor..."
+    : companyDocumentForm.id
+      ? "Değişiklikleri Kaydet"
+      : "Evrakı Kaydet"}
         </button>
       </div>
     </div>
@@ -2803,6 +2927,36 @@ const styles = `
 
 .documentLink:hover {
   background: #f8fafc;
+}
+
+.uploadedFileBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid #abefc6;
+  border-radius: 10px;
+  background: #ecfdf3;
+  color: #067647;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.uploadedFileBox a {
+  color: #175cd3;
+  text-decoration: none;
+  font-weight: 800;
+}
+
+.uploadedFileBox a:hover {
+  text-decoration: underline;
+}
+
+.field small {
+  color: #667085;
+  font-size: 12px;
 }
 
   .empty,
