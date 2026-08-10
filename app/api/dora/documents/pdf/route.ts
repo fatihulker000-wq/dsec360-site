@@ -258,7 +258,7 @@ export async function GET(
         process.cwd(),
         "public",
         "fonts",
-        "DoraSans-Regular.ttf"
+        "NotoSans-Regular.ttf"
       );
 
     if (
