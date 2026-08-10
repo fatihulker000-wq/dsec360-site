@@ -1,6 +1,5 @@
 "use client";
 
-
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -13,11 +12,11 @@ import {
   Building2,
   ClipboardCheck,
   FileBarChart,
- MessageSquareText,
-FolderArchive,
-AlertTriangle,
-Settings2,
-HardHat,
+  MessageSquareText,
+  FolderArchive,
+  AlertTriangle,
+  Settings2,
+  HardHat,
   Search,
   Bell,
   Sparkles,
@@ -85,7 +84,10 @@ export default function AdminLayout({
 
     const applyMobileState = (matches: boolean) => {
       setIsMobile(matches);
-      if (!matches) setMobileMenuOpen(false);
+
+      if (!matches) {
+        setMobileMenuOpen(false);
+      }
     };
 
     applyMobileState(media.matches);
@@ -95,7 +97,10 @@ export default function AdminLayout({
     };
 
     media.addEventListener?.("change", handleChange);
-    return () => media.removeEventListener?.("change", handleChange);
+
+    return () => {
+      media.removeEventListener?.("change", handleChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -139,14 +144,23 @@ export default function AdminLayout({
         setRole(nextRole);
 
         if (nextRole) {
-          sessionStorage.setItem("dsec_admin_role_cached", nextRole);
+          sessionStorage.setItem(
+            "dsec_admin_role_cached",
+            nextRole
+          );
         } else {
-          sessionStorage.removeItem("dsec_admin_role_cached");
+          sessionStorage.removeItem(
+            "dsec_admin_role_cached"
+          );
         }
       } catch (error) {
         console.error("admin role load error:", error);
+
         setRole("");
-        sessionStorage.removeItem("dsec_admin_role_cached");
+
+        sessionStorage.removeItem(
+          "dsec_admin_role_cached"
+        );
       } finally {
         setRoleLoaded(true);
       }
@@ -163,45 +177,85 @@ export default function AdminLayout({
     if (role === "training_user") {
       window.location.href = "/portal/training";
     }
-  }, [roleLoaded, role, pathname, isLoggingOutFlow]);
+  }, [
+    roleLoaded,
+    role,
+    pathname,
+    isLoggingOutFlow,
+  ]);
 
+  /*
+   * ============================================================
+   * D-SEC SOL MENÜ
+   * ============================================================
+   *
+   * Dashboard her zaman en üstte kalır.
+   *
+   * Dashboard dışındaki modüller Türkçe alfabetik
+   * olarak otomatik sıralanır.
+   *
+   * Böylece ileride yeni bir modül eklendiğinde
+   * menü sırasını elle değiştirmek gerekmez.
+   *
+   * Route, ikon ve rol/yetki yapısına dokunulmamıştır.
+   * ============================================================
+   */
   const menu = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [
-      { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-      { name: "Eğitimler", href: "/admin/trainings", icon: GraduationCap },
-      { name: "Sağlık", href: "/admin/health", icon: HeartPulse },
       {
-  name: "Ajanda",
-  href: "/admin/agenda",
-  icon: ClipboardCheck,
-},
+        name: "Dashboard",
+        href: "/admin/dashboard",
+        icon: LayoutDashboard,
+      },
+
+      {
+        name: "Eğitimler",
+        href: "/admin/trainings",
+        icon: GraduationCap,
+      },
+
+      {
+        name: "Sağlık",
+        href: "/admin/health",
+        icon: HeartPulse,
+      },
+
+      {
+        name: "Ajanda",
+        href: "/admin/agenda",
+        icon: ClipboardCheck,
+      },
+
       {
         name: "Risk Yönetimi",
         href: "/admin/risk",
         icon: AlertTriangle,
       },
 
+      {
+        name: "Dokümantasyon",
+        href: "/admin/documentation",
+        icon: FolderArchive,
+      },
 
-{
-  name: "Dokümantasyon",
-  href: "/admin/documentation",
-  icon: FolderArchive,
-},
+      {
+        name: "Taşeron Yönetimi",
+        href: "/admin/subcontractors",
+        icon: HardHat,
+      },
 
+      {
+        name: "DORA AI İSG Asistanı",
+        href: "/admin/dora",
+        icon: Sparkles,
+      },
 
-{
-  name: "Taşeron Yönetimi",
-  href: "/admin/subcontractors",
-  icon: HardHat,
-},
+      {
+        name: "Sistem Kullanıcıları",
+        href: "/admin/users",
+        icon: Users,
+      },
 
-{
-  name: "DORA AI İSG Asistanı",
-  href: "/admin/dora",
-  icon: Sparkles,
-},
-
-      { name: "Sistem Kullanıcıları", href: "/admin/users", icon: Users },
       {
         name: "Modül ve Yetki Yönetimi V3",
         href: "/admin/permissions",
@@ -209,14 +263,35 @@ export default function AdminLayout({
       },
 
       {
-  name: "İBYS Entegrasyon Merkezi",
-  href: "/admin/ibys",
-  icon: ShieldCheck,
-},
-      { name: "Denetimler", href: "/admin/denetimler", icon: ClipboardCheck },
-      { name: "Çalışanlar", href: "/admin/employees", icon: ShieldCheck },
-      { name: "Raporlar", href: "/admin/reports", icon: FileBarChart },
-      { name: "ÇBS Yönetimi", href: "/admin/cbs", icon: MessageSquareText },
+        name: "İBYS Entegrasyon Merkezi",
+        href: "/admin/ibys",
+        icon: ShieldCheck,
+      },
+
+      {
+        name: "Denetimler",
+        href: "/admin/denetimler",
+        icon: ClipboardCheck,
+      },
+
+      {
+        name: "Çalışanlar",
+        href: "/admin/employees",
+        icon: ShieldCheck,
+      },
+
+      {
+        name: "Raporlar",
+        href: "/admin/reports",
+        icon: FileBarChart,
+      },
+
+      {
+        name: "ÇBS Yönetimi",
+        href: "/admin/cbs",
+        icon: MessageSquareText,
+      },
+
       {
         name: "Kaza ve Olay Yönetimi",
         href: "/admin/accidents",
@@ -224,8 +299,34 @@ export default function AdminLayout({
       },
     ];
 
+    /*
+     * SUPER ADMIN
+     *
+     * Firma Yönetimi yalnızca super_admin
+     * kullanıcısına eklenir.
+     *
+     * Eskiden splice ile belirli bir konuma
+     * ekleniyordu. Artık alfabetik sıralama
+     * yapılacağı için push yeterlidir.
+     */
+    if (role === "super_admin") {
+      items.push({
+        name: "Firmalar",
+        href: "/admin/companies",
+        icon: Building2,
+      });
+    }
+
+    /*
+     * DEMO USER
+     *
+     * Demo kullanıcının mevcut erişim
+     * listesi aynen korunmuştur.
+     */
+    let visibleItems = items;
+
     if (role === "demo_user") {
-      return items.filter((item) =>
+      visibleItems = items.filter((item) =>
         [
           "/admin/dashboard",
           "/admin/trainings",
@@ -240,18 +341,45 @@ export default function AdminLayout({
       );
     }
 
-    if (role === "super_admin") {
-      items.splice(4, 0, {
-        name: "Firmalar",
-        href: "/admin/companies",
-        icon: Building2,
-      });
-    }
+    /*
+     * DASHBOARD
+     *
+     * Dashboard alfabetik sıralamaya
+     * dahil edilmez.
+     */
+    const dashboard = visibleItems.find(
+      (item) => item.href === "/admin/dashboard"
+    );
 
-    return items;
+    /*
+     * TÜRKÇE ALFABETİK SIRALAMA
+     *
+     * localeCompare + "tr" kullanıldığı için
+     * Ç, Ğ, İ, Ö, Ş, Ü gibi Türkçe
+     * karakterler doğru sırada değerlendirilir.
+     */
+    const alphabeticalItems = visibleItems
+      .filter(
+        (item) =>
+          item.href !== "/admin/dashboard"
+      )
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, "tr", {
+          sensitivity: "base",
+        })
+      );
+
+    /*
+     * Dashboard en başa alınır,
+     * alfabetik modüller arkasına eklenir.
+     */
+    return dashboard
+      ? [dashboard, ...alphabeticalItems]
+      : alphabeticalItems;
   }, [role]);
 
-  const activeLabel = ACTIVE_LABELS[pathname] || "Yönetim";
+  const activeLabel =
+    ACTIVE_LABELS[pathname] || "Yönetim";
 
   const handleLogout = async () => {
     if (loggingOut || isLoggingOutFlow) return;
@@ -266,6 +394,7 @@ export default function AdminLayout({
           credentials: "include",
           cache: "no-store",
         }),
+
         fetch("/api/auth/logout", {
           method: "POST",
           credentials: "include",
@@ -273,10 +402,18 @@ export default function AdminLayout({
         }),
       ]);
     } catch (error) {
-      console.error("admin logout error:", error);
+      console.error(
+        "admin logout error:",
+        error
+      );
     } finally {
-      sessionStorage.removeItem("dsec_admin_role_cached");
-      localStorage.removeItem("dsec_admin_role_cached");
+      sessionStorage.removeItem(
+        "dsec_admin_role_cached"
+      );
+
+      localStorage.removeItem(
+        "dsec_admin_role_cached"
+      );
 
       setMobileMenuOpen(false);
       setRole("");
@@ -286,13 +423,22 @@ export default function AdminLayout({
     }
   };
 
-  if (pathname === "/admin/login") return <>{children}</>;
+  if (pathname === "/admin/login") {
+    return <>{children}</>;
+  }
 
-  if (roleLoaded && role === "training_user") return null;
+  if (
+    roleLoaded &&
+    role === "training_user"
+  ) {
+    return null;
+  }
 
   const renderMenuItems = () =>
     menu.map((item) => {
-      const isActive = pathname === item.href;
+      const isActive =
+        pathname === item.href;
+
       const Icon = item.icon;
 
       return (
@@ -300,10 +446,16 @@ export default function AdminLayout({
           key={item.href}
           href={item.href}
           prefetch={false}
-          className={`admin-menu-item ${isActive ? "active" : ""}`}
+          className={`admin-menu-item ${
+            isActive ? "active" : ""
+          }`}
           onClick={(e) => {
             e.preventDefault();
-            if (isMobile) setMobileMenuOpen(false);
+
+            if (isMobile) {
+              setMobileMenuOpen(false);
+            }
+
             router.push(item.href);
           }}
         >
@@ -311,45 +463,82 @@ export default function AdminLayout({
             <Icon size={18} />
           </span>
 
-          <span className="admin-menu-text">{item.name}</span>
+          <span className="admin-menu-text">
+            {item.name}
+          </span>
         </Link>
       );
     });
 
   return (
     <div className="admin-layout">
+      {/* =========================
+          MOBİL ÜST BAR
+         ========================= */}
       {isMobile && (
         <header className="admin-mobile-header">
           <div className="admin-mobile-title">
-            <span>D-SEC360 Enterprise</span>
-            <strong>{activeLabel}</strong>
+            <span>
+              D-SEC360 Enterprise
+            </span>
+
+            <strong>
+              {activeLabel}
+            </strong>
           </div>
 
           <button
             type="button"
             className="admin-mobile-menu-button"
-            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            onClick={() =>
+              setMobileMenuOpen(
+                (prev) => !prev
+              )
+            }
           >
-            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
-            {mobileMenuOpen ? "Kapat" : "Menü"}
+            {mobileMenuOpen ? (
+              <X size={18} />
+            ) : (
+              <Menu size={18} />
+            )}
+
+            {mobileMenuOpen
+              ? "Kapat"
+              : "Menü"}
           </button>
         </header>
       )}
 
+      {/* =========================
+          DESKTOP SOL MENÜ
+         ========================= */}
       {!isMobile && (
         <aside className="admin-sidebar-shell">
           <div className="admin-sidebar-brand premium">
-            <div className="admin-logo-mark">D</div>
+            <div className="admin-logo-mark">
+              D
+            </div>
 
             <div>
-              <span>D-SEC360 Enterprise</span>
-              <strong>Yönetim Merkezi</strong>
+              <span>
+                D-SEC360 Enterprise
+              </span>
+
+              <strong>
+                Yönetim Merkezi
+              </strong>
             </div>
           </div>
 
           <div className="admin-active-box">
-            <small>AKTİF BÖLÜM</small>
-            <strong>{activeLabel}</strong>
+            <small>
+              AKTİF BÖLÜM
+            </small>
+
+            <strong>
+              {activeLabel}
+            </strong>
+
             <span>
               {role === "super_admin"
                 ? "Süper Admin"
@@ -359,7 +548,9 @@ export default function AdminLayout({
             </span>
           </div>
 
-          <nav className="admin-sidebar-nav">{renderMenuItems()}</nav>
+          <nav className="admin-sidebar-nav">
+            {renderMenuItems()}
+          </nav>
 
           <button
             type="button"
@@ -368,34 +559,58 @@ export default function AdminLayout({
             className="admin-logout-button"
           >
             <LogOut size={17} />
-            {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+
+            {loggingOut
+              ? "Çıkış yapılıyor..."
+              : "Çıkış Yap"}
           </button>
         </aside>
       )}
 
+      {/* =========================
+          MOBİL DRAWER
+         ========================= */}
       {isMobile && mobileMenuOpen && (
         <>
           <div
             className="admin-mobile-overlay"
-            onClick={() => setMobileMenuOpen(false)}
+            onClick={() =>
+              setMobileMenuOpen(false)
+            }
           />
 
           <aside className="admin-mobile-drawer">
             <div className="admin-mobile-drawer-head">
               <div>
-                <span>D-SEC360 Enterprise</span>
-                <strong>Yönetim Merkezi</strong>
+                <span>
+                  D-SEC360 Enterprise
+                </span>
+
+                <strong>
+                  Yönetim Merkezi
+                </strong>
               </div>
 
-              <button type="button" onClick={() => setMobileMenuOpen(false)}>
+              <button
+                type="button"
+                onClick={() =>
+                  setMobileMenuOpen(false)
+                }
+              >
                 <X size={17} />
                 Kapat
               </button>
             </div>
 
             <div className="admin-active-box mobile">
-              <small>AKTİF BÖLÜM</small>
-              <strong>{activeLabel}</strong>
+              <small>
+                AKTİF BÖLÜM
+              </small>
+
+              <strong>
+                {activeLabel}
+              </strong>
+
               <span>
                 {role === "super_admin"
                   ? "Süper Admin"
@@ -405,7 +620,9 @@ export default function AdminLayout({
               </span>
             </div>
 
-            <nav className="admin-sidebar-nav mobile">{renderMenuItems()}</nav>
+            <nav className="admin-sidebar-nav mobile">
+              {renderMenuItems()}
+            </nav>
 
             <button
               type="button"
@@ -414,12 +631,18 @@ export default function AdminLayout({
               className="admin-logout-button"
             >
               <LogOut size={17} />
-              {loggingOut ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+
+              {loggingOut
+                ? "Çıkış yapılıyor..."
+                : "Çıkış Yap"}
             </button>
           </aside>
         </>
       )}
 
+      {/* =========================
+          ANA İÇERİK
+         ========================= */}
       <main className="admin-layout-main">
         <div className="admin-topbar-premium">
           <div className="admin-breadcrumb">
@@ -429,15 +652,24 @@ export default function AdminLayout({
 
           <div className="admin-topbar-search">
             <Search size={17} />
-            <input placeholder="D-SEC içinde ara..." />
+
+            <input
+              placeholder="D-SEC içinde ara..."
+            />
           </div>
 
           <div className="admin-topbar-actions">
-            <button type="button" className="admin-icon-button">
+            <button
+              type="button"
+              className="admin-icon-button"
+            >
               <Bell size={18} />
             </button>
 
-            <button type="button" className="admin-ai-button">
+            <button
+              type="button"
+              className="admin-ai-button"
+            >
               <Sparkles size={17} />
               DORA AI
             </button>
@@ -446,8 +678,6 @@ export default function AdminLayout({
 
         {children}
       </main>
-
-      
     </div>
   );
 }
