@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -55,6 +56,11 @@ type DoraEmployeesResponse = {
   error?: string;
   employees?: DoraEmployee[];
   employee?: DoraEmployee;
+
+  inserted?: number;
+  skipped?: number;
+  errors?: string[];
+  message?: string;
 };
 
 type DoraEmployeeForm = {
@@ -133,6 +139,17 @@ export default function DoraEmployeesPage() {
 
   const [search, setSearch] =
     useState("");
+
+  const [bulkImporting, setBulkImporting] =
+    useState(false);
+
+  const [bulkResult, setBulkResult] =
+    useState("");
+
+  const bulkFileInputRef =
+    useRef<HTMLInputElement | null>(
+      null
+    );
 
   const [modalOpen, setModalOpen] =
     useState(false);
@@ -561,6 +578,92 @@ export default function DoraEmployeesPage() {
     }
   }
 
+  async function importExcel(
+    file: File
+  ) {
+    try {
+      setBulkImporting(true);
+      setBulkResult("");
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        "firmId",
+        firmId
+      );
+
+      formData.append(
+        "file",
+        file
+      );
+
+      const response =
+        await fetch(
+          "/api/dora/employees/bulk",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+      const json =
+        (await response.json()) as DoraEmployeesResponse;
+
+      if (
+        !response.ok ||
+        json.success === false
+      ) {
+        throw new Error(
+          json.error ||
+            "Excel toplu aktarımı başarısız."
+        );
+      }
+
+      const inserted =
+        Number(
+          json.inserted ?? 0
+        );
+
+      const skipped =
+        Number(
+          json.skipped ?? 0
+        );
+
+      const errorCount =
+        Array.isArray(
+          json.errors
+        )
+          ? json.errors.length
+          : 0;
+
+      setBulkResult(
+        `${inserted} çalışan aktarıldı • ${skipped} satır atlandı${
+          errorCount > 0
+            ? ` • ${errorCount} satır hatalı`
+            : ""
+        }`
+      );
+
+      await load();
+    } catch (e) {
+      alert(
+        e instanceof Error
+          ? e.message
+          : "Excel toplu aktarımı başarısız."
+      );
+    } finally {
+      setBulkImporting(false);
+
+      if (
+        bulkFileInputRef.current
+      ) {
+        bulkFileInputRef.current.value =
+          "";
+      }
+    }
+  }
+
   if (loading) {
     return (
       <main className="page">
@@ -653,12 +756,53 @@ export default function DoraEmployeesPage() {
           </div>
         </div>
 
-        <button
-          className="heroPrimary"
-          onClick={newEmployee}
-        >
-          + Yeni DORA Çalışanı
-        </button>
+        <div className="heroButtons">
+          <a
+            className="heroSecondary"
+            href="/templates/dora-calisan-toplu-aktarim.xlsx"
+            download
+          >
+            Excel Şablonu
+          </a>
+
+          <button
+            className="heroSecondary"
+            disabled={bulkImporting}
+            onClick={() =>
+              bulkFileInputRef.current?.click()
+            }
+          >
+            {bulkImporting
+              ? "Aktarılıyor..."
+              : "Excel'den Toplu Aktar"}
+          </button>
+
+          <button
+            className="heroPrimary"
+            onClick={newEmployee}
+          >
+            + Yeni DORA Çalışanı
+          </button>
+
+          <input
+            ref={bulkFileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            style={{
+              display: "none",
+            }}
+            onChange={(event) => {
+              const file =
+                event.target.files?.[0];
+
+              if (file) {
+                void importExcel(
+                  file
+                );
+              }
+            }}
+          />
+        </div>
       </section>
 
       <section className="kpis">
@@ -687,6 +831,12 @@ export default function DoraEmployeesPage() {
         />
       </section>
 
+      {bulkResult && (
+        <div className="bulkResult">
+          {bulkResult}
+        </div>
+      )}
+
       <section className="section">
         <div className="sectionTitle">
           <div>
@@ -706,12 +856,32 @@ export default function DoraEmployeesPage() {
             </p>
           </div>
 
-          <button
-            className="primary"
-            onClick={newEmployee}
-          >
-            + Yeni Çalışan
-          </button>
+          <div className="sectionActions">
+            <a
+              className="outline linkButton"
+              href="/templates/dora-calisan-toplu-aktarim.xlsx"
+              download
+            >
+              Excel Şablonu
+            </a>
+
+            <button
+              className="outline"
+              disabled={bulkImporting}
+              onClick={() =>
+                bulkFileInputRef.current?.click()
+              }
+            >
+              Excel'den Aktar
+            </button>
+
+            <button
+              className="primary"
+              onClick={newEmployee}
+            >
+              + Yeni Çalışan
+            </button>
+          </div>
         </div>
 
         <div className="toolbar">
@@ -1364,6 +1534,7 @@ const styles = `
   }
 
   .heroPrimary,
+  .heroSecondary,
   .primary {
     border: 0;
     cursor: pointer;
@@ -1371,11 +1542,29 @@ const styles = `
     border-radius: 13px;
   }
 
+  .heroButtons {
+    display: flex;
+    gap: 9px;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
   .heroPrimary {
     padding: 13px 18px;
     background: #ffffff;
     color: #681d2a;
     flex: 0 0 auto;
+  }
+
+  .heroSecondary {
+    padding: 12px 15px;
+    color: #ffffff;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    text-decoration: none;
+    border-radius: 13px;
+    cursor: pointer;
   }
 
   .primary {
@@ -1440,6 +1629,17 @@ const styles = `
     padding: 22px;
   }
 
+  .bulkResult {
+    max-width: 1450px;
+    margin: 20px auto 0;
+    padding: 13px 15px;
+    border: 1px solid #abefc6;
+    background: #ecfdf3;
+    color: #027a48;
+    border-radius: 14px;
+    font-weight: 800;
+  }
+
   .sectionTitle {
     display: flex;
     justify-content: space-between;
@@ -1449,6 +1649,19 @@ const styles = `
 
   .sectionTitle h2 {
     margin: 0;
+  }
+
+  .sectionActions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .linkButton {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
   }
 
   .sectionTitle p {
@@ -1865,8 +2078,15 @@ const styles = `
       flex-direction: column;
     }
 
-    .heroPrimary {
+    .heroButtons {
       width: 100%;
+      justify-content: stretch;
+    }
+
+    .heroPrimary,
+    .heroSecondary {
+      width: 100%;
+      text-align: center;
     }
 
     .kpis {
