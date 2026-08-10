@@ -1209,6 +1209,23 @@ export default function DoraDocumentsPage() {
     );
   }
 
+  function downloadWord(
+    document: DoraDocument
+  ) {
+    const url =
+      `/api/dora/documents/word?id=${encodeURIComponent(
+        document.id
+      )}&firmId=${encodeURIComponent(
+        firmId
+      )}`;
+
+    window.open(
+      url,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
   async function deleteDocument(
     document: DoraDocument
   ) {
@@ -1569,6 +1586,17 @@ export default function DoraDocumentsPage() {
                         >
                           PDF İndir
                         </button>
+
+                        <button
+                          className="wordBtn"
+                          onClick={() =>
+                            downloadWord(
+                              existing
+                            )
+                          }
+                        >
+                          Word İndir
+                        </button>
                       </>
                     )}
                   </div>
@@ -1692,6 +1720,17 @@ export default function DoraDocumentsPage() {
                       }
                     >
                       PDF İndir
+                    </button>
+
+                    <button
+                      className="wordBtn"
+                      onClick={() =>
+                        downloadWord(
+                          document
+                        )
+                      }
+                    >
+                      Word İndir
                     </button>
 
                     <button
@@ -2156,6 +2195,17 @@ export default function DoraDocumentsPage() {
                   </button>
 
                   <button
+                    className="wordBtn"
+                    onClick={() =>
+                      downloadWord(
+                        previewDocument
+                      )
+                    }
+                  >
+                    Word İndir
+                  </button>
+
+                  <button
                     className="close"
                     onClick={() =>
                       setPreviewOpen(false)
@@ -2362,7 +2412,8 @@ const styles = `
   .outline,
   .dangerBtn,
   .approveBtn,
-  .pdfBtn {
+  .pdfBtn,
+  .wordBtn {
     border: 1px solid #d0d5dd;
     background: #ffffff;
     color: #344054;
@@ -2393,6 +2444,17 @@ const styles = `
   .pdfBtn:hover {
     background: #641f2a;
     border-color: #641f2a;
+  }
+
+  .wordBtn {
+    color: #ffffff;
+    border-color: #185abd;
+    background: #185abd;
+  }
+
+  .wordBtn:hover {
+    background: #124a9c;
+    border-color: #124a9c;
   }
 
   button:disabled {
