@@ -1192,6 +1192,23 @@ export default function DoraDocumentsPage() {
     }
   }
 
+  function downloadPdf(
+    document: DoraDocument
+  ) {
+    const url =
+      `/api/dora/documents/pdf?id=${encodeURIComponent(
+        document.id
+      )}&firmId=${encodeURIComponent(
+        firmId
+      )}`;
+
+    window.open(
+      url,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
   async function deleteDocument(
     document: DoraDocument
   ) {
@@ -1530,16 +1547,29 @@ export default function DoraDocumentsPage() {
                     </button>
 
                     {existing && (
-                      <button
-                        className="outline"
-                        onClick={() =>
-                          preview(
-                            existing
-                          )
-                        }
-                      >
-                        Önizle
-                      </button>
+                      <>
+                        <button
+                          className="outline"
+                          onClick={() =>
+                            preview(
+                              existing
+                            )
+                          }
+                        >
+                          Önizle
+                        </button>
+
+                        <button
+                          className="pdfBtn"
+                          onClick={() =>
+                            downloadPdf(
+                              existing
+                            )
+                          }
+                        >
+                          PDF İndir
+                        </button>
+                      </>
                     )}
                   </div>
                 </article>
@@ -1651,6 +1681,17 @@ export default function DoraDocumentsPage() {
                       }
                     >
                       Önizle
+                    </button>
+
+                    <button
+                      className="pdfBtn"
+                      onClick={() =>
+                        downloadPdf(
+                          document
+                        )
+                      }
+                    >
+                      PDF İndir
                     </button>
 
                     <button
@@ -2102,14 +2143,27 @@ export default function DoraDocumentsPage() {
                   </h2>
                 </div>
 
-                <button
-                  className="close"
-                  onClick={() =>
-                    setPreviewOpen(false)
-                  }
-                >
-                  ×
-                </button>
+                <div className="previewHeaderActions">
+                  <button
+                    className="pdfBtn"
+                    onClick={() =>
+                      downloadPdf(
+                        previewDocument
+                      )
+                    }
+                  >
+                    PDF İndir
+                  </button>
+
+                  <button
+                    className="close"
+                    onClick={() =>
+                      setPreviewOpen(false)
+                    }
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
 
               <div className="previewInfoGrid">
@@ -2307,7 +2361,8 @@ const styles = `
   .refresh,
   .outline,
   .dangerBtn,
-  .approveBtn {
+  .approveBtn,
+  .pdfBtn {
     border: 1px solid #d0d5dd;
     background: #ffffff;
     color: #344054;
@@ -2327,6 +2382,17 @@ const styles = `
     color: #027a48;
     border-color: #abefc6;
     background: #ecfdf3;
+  }
+
+  .pdfBtn {
+    color: #ffffff;
+    border-color: #7a2633;
+    background: #7a2633;
+  }
+
+  .pdfBtn:hover {
+    background: #641f2a;
+    border-color: #641f2a;
   }
 
   button:disabled {
@@ -2821,6 +2887,12 @@ const styles = `
   .modalHeader h2,
   .previewHeader h2 {
     margin: 0;
+  }
+
+  .previewHeaderActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .modalHeader p {
