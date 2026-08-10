@@ -84,6 +84,7 @@ type DoraDocumentForm = {
 
   documentType: string;
   title: string;
+  category: string;
   documentNo: string;
 
   status: string;
@@ -276,6 +277,7 @@ const EMPTY_FORM: DoraDocumentForm = {
   id: "",
   documentType: "",
   title: "",
+  category: "",
   documentNo: "",
   status: "DRAFT",
   approvalStatus: "DRAFT",
@@ -476,6 +478,54 @@ function bodyTextFromDocument(
   }
 
   return "";
+}
+
+function slugifyDocumentType(
+  input: string
+): string {
+  const normalized =
+    input
+      .trim()
+      .toLocaleUpperCase("tr-TR")
+      .replaceAll("İ", "I")
+      .replaceAll("Ş", "S")
+      .replaceAll("Ğ", "G")
+      .replaceAll("Ü", "U")
+      .replaceAll("Ö", "O")
+      .replaceAll("Ç", "C")
+      .replace(/[^A-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+  return normalized
+    ? `CUSTOM_${normalized.slice(0, 48)}`
+    : `CUSTOM_${Date.now()}`;
+}
+
+function customDocumentBody(
+  firm: DoraFirm,
+  title: string
+): string {
+  return [
+    title,
+    "",
+    `Firma: ${firm.firm_name}`,
+    `Sektör: ${firm.sector || "-"}`,
+    `NACE: ${firm.nace_code || "-"}`,
+    `Tehlike Sınıfı: ${firm.danger_class || "-"}`,
+    `Yetkili: ${firm.authorized_person || "-"}`,
+    "",
+    "Amaç ve Kapsam",
+    "Bu bölüm kullanıcı tarafından düzenlenebilir.",
+    "",
+    "Uygulama Esasları",
+    "Bu bölüm kullanıcı tarafından düzenlenebilir.",
+    "",
+    "Görev ve Sorumluluklar",
+    "Bu bölüm kullanıcı tarafından düzenlenebilir.",
+    "",
+    "Kayıt ve İzleme",
+    "Bu bölüm kullanıcı tarafından düzenlenebilir.",
+  ].join("\\n");
 }
 
 function createDefaultBody(
@@ -736,6 +786,30 @@ export default function DoraDocumentsPage() {
         )
     ).length;
 
+  function openCustomDocument() {
+    if (!firm) {
+      return;
+    }
+
+    setForm({
+      ...EMPTY_FORM,
+      documentType: "",
+      title: "",
+      category: "Özel Doküman",
+      documentNo: "",
+      preparedBy:
+        firm.authorized_person ||
+        "",
+      bodyText:
+        customDocumentBody(
+          firm,
+          "Yeni DORA Dokümanı"
+        ),
+    });
+
+    setFormOpen(true);
+  }
+
   function openNewDocument(
     template: DoraDocumentTemplate
   ) {
@@ -761,6 +835,9 @@ export default function DoraDocumentsPage() {
 
       title:
         template.title,
+
+      category:
+        template.category,
 
       documentNo:
         `DORA-${template.key}`,
@@ -791,6 +868,16 @@ export default function DoraDocumentsPage() {
 
       title:
         document.title,
+
+      category:
+        String(
+          (
+            document.content_json as
+              | Record<string, unknown>
+              | null
+              | undefined
+          )?.category ?? ""
+        ),
 
       documentNo:
         value(
@@ -875,15 +962,6 @@ export default function DoraDocumentsPage() {
 
   async function saveDocument() {
     if (
-      !form.documentType.trim()
-    ) {
-      alert(
-        "Doküman türü bulunamadı."
-      );
-      return;
-    }
-
-    if (
       !form.title.trim()
     ) {
       alert(
@@ -891,6 +969,12 @@ export default function DoraDocumentsPage() {
       );
       return;
     }
+
+    const derivedDocumentType =
+      form.documentType.trim() ||
+      slugifyDocumentType(
+        form.title
+      );
 
     try {
       setSaving(true);
@@ -921,7 +1005,7 @@ export default function DoraDocumentsPage() {
                 firmId,
 
                 documentType:
-                  form.documentType,
+                  derivedDocumentType,
 
                 title:
                   form.title,
@@ -972,7 +1056,9 @@ export default function DoraDocumentsPage() {
                   form.approvedBy,
 
                 templateKey:
-                  form.documentType,
+                  form.documentType.trim()
+                    ? form.documentType
+                    : derivedDocumentType,
 
                 templateVersion:
                   1,
@@ -986,6 +1072,12 @@ export default function DoraDocumentsPage() {
                 contentJson: {
                   body:
                     form.bodyText,
+
+                  category:
+                    form.category,
+
+                  customDocument:
+                    form.documentType.trim() === "",
 
                   source:
                     "DORA_WEB",
@@ -1260,11 +1352,20 @@ export default function DoraDocumentsPage() {
           </div>
         </div>
 
-        <div className="heroMark">
-          DORA
-          <span>
-            DOC
-          </span>
+        <div className="heroSide">
+          <button
+            className="heroNewButton"
+            onClick={openCustomDocument}
+          >
+            + Yeni Doküman
+          </button>
+
+          <div className="heroMark">
+            DORA
+            <span>
+              DOC
+            </span>
+          </div>
         </div>
       </section>
 
@@ -1315,11 +1416,18 @@ export default function DoraDocumentsPage() {
             </h2>
 
             <p>
-              Bir kart seçildiğinde
-              DORA firma bilgilerinden
-              başlangıç taslağı üretir.
+              Hazır 11 şablondan birini kullanın
+              veya ihtiyacınıza göre yeni bir
+              DORA dokümanı oluşturun.
             </p>
           </div>
+
+          <button
+            className="primary"
+            onClick={openCustomDocument}
+          >
+            + Yeni Doküman
+          </button>
         </div>
 
         <div className="toolbar">
@@ -1668,6 +1776,21 @@ export default function DoraDocumentsPage() {
               </button>
             </div>
 
+            {!form.documentType && (
+              <div className="customNotice">
+                <strong>
+                  Özel DORA Dokümanı
+                </strong>
+
+                <span>
+                  Bu doküman hazır 11 şablondan bağımsız
+                  oluşturulacaktır. Kaydedildiğinde
+                  DORA içinde benzersiz bir doküman türü
+                  otomatik üretilecektir.
+                </span>
+              </div>
+            )}
+
             <div className="formGrid">
               <Field
                 label="Doküman Başlığı *"
@@ -1677,6 +1800,28 @@ export default function DoraDocumentsPage() {
                     (old) => ({
                       ...old,
                       title: v,
+                      bodyText:
+                        !old.id &&
+                        !old.documentType &&
+                        firm
+                          ? customDocumentBody(
+                              firm,
+                              v || "Yeni DORA Dokümanı"
+                            )
+                          : old.bodyText,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="Kategori"
+                value={form.category}
+                onChange={(v) =>
+                  setForm(
+                    (old) => ({
+                      ...old,
+                      category: v,
                     })
                   )
                 }
@@ -2263,6 +2408,27 @@ const styles = `
     font-weight: 750;
   }
 
+  .heroSide {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 0 0 auto;
+  }
+
+  .heroNewButton {
+    border: 1px solid rgba(255,255,255,0.28);
+    background: rgba(255,255,255,0.12);
+    color: #ffffff;
+    padding: 12px 15px;
+    border-radius: 13px;
+    font-weight: 850;
+    cursor: pointer;
+  }
+
+  .heroNewButton:hover {
+    background: rgba(255,255,255,0.18);
+  }
+
   .heroMark {
     width: 145px;
     height: 145px;
@@ -2339,6 +2505,13 @@ const styles = `
     border: 1px solid #eaecf0;
     border-radius: 23px;
     padding: 22px;
+  }
+
+  .sectionTitle {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
   }
 
   .sectionTitle h2 {
@@ -2666,6 +2839,27 @@ const styles = `
     cursor: pointer;
   }
 
+  .customNotice {
+    margin: 18px 21px 0;
+    padding: 13px 14px;
+    border-radius: 14px;
+    background: #fff8f5;
+    border: 1px solid #f8d9ce;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .customNotice strong {
+    color: #6e1f2c;
+  }
+
+  .customNotice span {
+    color: #80545c;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
   .formGrid {
     padding: 21px;
     display: grid;
@@ -2856,8 +3050,22 @@ const styles = `
       border-radius: 22px;
     }
 
+    .heroSide {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .heroNewButton {
+      width: 100%;
+    }
+
     .heroMark {
       display: none;
+    }
+
+    .sectionTitle {
+      flex-direction: column;
+      align-items: stretch;
     }
 
     .kpis {
