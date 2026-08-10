@@ -417,6 +417,196 @@ export async function POST(
   }
 }
 
+
+async function validateEntryPermission(
+  supabase: ReturnType<typeof db>,
+  args: {
+    firmId: string;
+    companyId: string;
+    employeeId: string;
+    body: any;
+  }
+) {
+  const {
+    firmId,
+    companyId,
+    employeeId,
+    body,
+  } = args;
+
+  const now = Date.now();
+
+  const [
+    companyResult,
+    employeeResult,
+    documentsResult,
+  ] = await Promise.all([
+    supabase
+      .from("subcontractor_companies")
+      .select(
+        "id,is_active,approval_status,application_status,contract_end_millis"
+      )
+      .eq("id", companyId)
+      .eq("firm_id", firmId)
+      .eq("is_deleted", false)
+      .maybeSingle(),
+
+    supabase
+      .from("subcontractor_employees")
+      .select("*")
+      .eq("id", employeeId)
+      .eq("firm_id", firmId)
+      .eq("company_id", companyId)
+      .eq("is_deleted", false)
+      .maybeSingle(),
+
+    supabase
+      .from("subcontractor_employee_documents")
+      .select(
+        "id,is_required,status,valid_until_millis"
+      )
+      .eq("firm_id", firmId)
+      .eq("company_id", companyId)
+      .eq("employee_id", employeeId)
+      .eq("is_deleted", false),
+  ]);
+
+  if (companyResult.error) {
+    throw companyResult.error;
+  }
+
+  if (employeeResult.error) {
+    throw employeeResult.error;
+  }
+
+  if (documentsResult.error) {
+    throw documentsResult.error;
+  }
+
+  const company = companyResult.data;
+  const employee = employeeResult.data;
+
+  if (!company) {
+    throw new Error(
+      "Taşeron firma bulunamadı."
+    );
+  }
+
+  if (!employee) {
+    throw new Error(
+      "Çalışan bulunamadı."
+    );
+  }
+
+  if (company.is_active !== true) {
+    throw new Error(
+      "Firma aktif olmadığı için saha giriş yetkisi verilemez."
+    );
+  }
+
+  if (
+    text(company.approval_status)
+      .toUpperCase() !== "ONAYLANDI"
+  ) {
+    throw new Error(
+      "Firma onaylanmadan çalışana saha giriş yetkisi verilemez."
+    );
+  }
+
+  if (
+    company.contract_end_millis &&
+    Number(
+      company.contract_end_millis
+    ) < now
+  ) {
+    throw new Error(
+      "Firmanın sözleşme süresi dolduğu için saha giriş yetkisi verilemez."
+    );
+  }
+
+  const effectiveApprovalStatus =
+    body.approvalStatus !== undefined
+      ? text(body.approvalStatus)
+      : text(employee.approval_status);
+
+  if (
+    effectiveApprovalStatus
+      .toUpperCase() !== "ONAYLANDI"
+  ) {
+    throw new Error(
+      "Çalışan onaylanmadan saha giriş yetkisi verilemez."
+    );
+  }
+
+  const getBool = (
+    bodyKey: string,
+    rowKey: string
+  ) =>
+    body[bodyKey] !== undefined
+      ? bool(body[bodyKey])
+      : employee[rowKey] === true;
+
+  const compliance = [
+    ["SGK girişi", getBool("sgkEntryOk", "sgk_entry_ok")],
+    ["İSG eğitimi", getBool("isgTrainingOk", "isg_training_ok")],
+    ["Sağlık raporu", getBool("healthReportOk", "health_report_ok")],
+    ["MYK belgesi", getBool("mykCertificateOk", "myk_certificate_ok")],
+    ["KKD teslimi", getBool("kkdDeliveryOk", "kkd_delivery_ok")],
+    ["Saha oryantasyonu", getBool("siteOrientationOk", "site_orientation_ok")],
+    ["Yüksekte çalışma", getBool("workAtHeightOk", "work_at_height_ok")],
+  ] as const;
+
+  const missingCompliance =
+    compliance
+      .filter(([, ok]) => !ok)
+      .map(([label]) => label);
+
+  if (missingCompliance.length > 0) {
+    throw new Error(
+      `Saha giriş yetkisi verilemez. Eksik uygunluk: ${missingCompliance.join(", ")}.`
+    );
+  }
+
+  const requiredDocuments =
+    (documentsResult.data ?? [])
+      .filter(
+        (doc: any) =>
+          doc.is_required === true
+      );
+
+  const invalidDocuments =
+    requiredDocuments.filter(
+      (doc: any) =>
+        text(doc.status)
+          .toUpperCase() !== "TAM" ||
+        (
+          doc.valid_until_millis &&
+          Number(
+            doc.valid_until_millis
+          ) < now
+        )
+    );
+
+  if (invalidDocuments.length > 0) {
+    throw new Error(
+      "Çalışanın zorunlu evrakları eksik veya süresi dolmuş. Saha giriş yetkisi verilemez."
+    );
+  }
+
+  const blockedNote =
+    body.accessBlockedNote !== undefined
+      ? text(body.accessBlockedNote)
+      : text(
+          employee.access_blocked_note
+        );
+
+  if (blockedNote) {
+    throw new Error(
+      "Giriş engel açıklaması bulunduğu için saha giriş yetkisi verilemez. Önce giriş engel açıklamasını temizleyin."
+    );
+  }
+}
+
 // =========================================================
 // PATCH
 // Çalışan güncelle
@@ -576,6 +766,70 @@ export async function PATCH(
 
     const supabase =
       db();
+
+    const requestedEntryPermission =
+      body.entryPermission !== undefined
+        ? bool(body.entryPermission)
+        : undefined;
+
+    if (
+      requestedEntryPermission === true
+    ) {
+      await validateEntryPermission(
+        supabase,
+        {
+          firmId,
+          companyId,
+          employeeId: id,
+          body,
+        }
+      );
+
+      payload.entry_permission = true;
+      payload.employee_status =
+        "SAHAYA_GIREBILIR";
+      payload.approval_status =
+        "ONAYLANDI";
+      payload.approved_at_millis =
+        Date.now();
+      payload.access_blocked_note =
+        "";
+    }
+
+    if (
+      requestedEntryPermission === false
+    ) {
+      payload.entry_permission = false;
+
+      if (
+        text(body.employeeStatus)
+          .toUpperCase() ===
+        "SAHAYA_GIREBILIR"
+      ) {
+        payload.employee_status =
+          "ONAYLANDI";
+      }
+    }
+
+    if (
+      body.approvalStatus !== undefined &&
+      text(body.approvalStatus)
+        .toUpperCase() ===
+        "REDDEDILDI"
+    ) {
+      payload.entry_permission = false;
+      payload.employee_status =
+        "GIRIS_ENGELLI";
+    }
+
+    if (
+      body.accessBlockedNote !== undefined &&
+      text(body.accessBlockedNote)
+    ) {
+      payload.entry_permission = false;
+      payload.employee_status =
+        "GIRIS_ENGELLI";
+    }
 
     const {
       data,

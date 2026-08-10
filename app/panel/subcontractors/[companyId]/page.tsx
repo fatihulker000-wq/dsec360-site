@@ -29,6 +29,37 @@ type Company = {
   is_active?: boolean | null;
 };
 
+
+type CompanyForm = {
+  companyName: string;
+  authorizedPerson: string;
+  phone: string;
+  email: string;
+  taxNo: string;
+  workScope: string;
+  contractStartDate: string;
+  contractEndDate: string;
+  applicationStatus: string;
+  approvalStatus: string;
+  revisionNote: string;
+  isActive: boolean;
+};
+
+const EMPTY_COMPANY_FORM: CompanyForm = {
+  companyName: "",
+  authorizedPerson: "",
+  phone: "",
+  email: "",
+  taxNo: "",
+  workScope: "",
+  contractStartDate: "",
+  contractEndDate: "",
+  applicationStatus: "TASLAK",
+  approvalStatus: "BEKLIYOR",
+  revisionNote: "",
+  isActive: true,
+};
+
 type Employee = {
   id: string;
   firm_id: string;
@@ -352,6 +383,18 @@ const [
 ] = useState(false);
 
   const [
+    companyModalOpen,
+    setCompanyModalOpen,
+  ] = useState(false);
+
+  const [
+    companyForm,
+    setCompanyForm,
+  ] = useState<CompanyForm>(
+    EMPTY_COMPANY_FORM
+  );
+
+  const [
     employeeModalOpen,
     setEmployeeModalOpen,
   ] = useState(false);
@@ -608,6 +651,104 @@ const [
         )
     ).length;
 
+
+  const requiredCompanyDocuments =
+    companyDocuments.filter(
+      (document) =>
+        document.is_required !== false
+    );
+
+  const companyDocumentIssues =
+    requiredCompanyDocuments.filter(
+      (document) => {
+        const status =
+          value(document.status)
+            .toUpperCase();
+
+        const expired =
+          Boolean(
+            document.valid_until_millis
+          ) &&
+          Number(
+            document.valid_until_millis
+          ) < Date.now();
+
+        return (
+          status !== "TAM" ||
+          expired
+        );
+      }
+    );
+
+  const companyDocumentsReady =
+    requiredCompanyDocuments.length > 0 &&
+    companyDocumentIssues.length === 0;
+
+  function employeeDocumentsReady(
+    employee: Employee
+  ) {
+    const docs =
+      employeeDocuments.filter(
+        (document) =>
+          String(
+            document.employee_id ?? ""
+          ) === String(employee.id) &&
+          document.is_required !== false
+      );
+
+    if (docs.length === 0) {
+      return (
+        complianceCount(employee) === 7
+      );
+    }
+
+    return docs.every(
+      (document) => {
+        const status =
+          value(document.status)
+            .toUpperCase();
+
+        const expired =
+          Boolean(
+            document.valid_until_millis
+          ) &&
+          Number(
+            document.valid_until_millis
+          ) < Date.now();
+
+        return (
+          status === "TAM" &&
+          !expired
+        );
+      }
+    );
+  }
+
+  function employeeCanReceiveEntryPermission(
+    employee: Employee
+  ) {
+    if (!company) {
+      return false;
+    }
+
+    return (
+      company.is_active === true &&
+      value(
+        company.approval_status
+      ).toUpperCase() ===
+        "ONAYLANDI" &&
+      value(
+        employee.approval_status
+      ).toUpperCase() ===
+        "ONAYLANDI" &&
+      complianceCount(employee) === 7 &&
+      employeeDocumentsReady(employee) &&
+      !value(
+        employee.access_blocked_note
+      )
+    );
+  }
+
   const activePermitCount =
     permits.filter(
       (permit) => {
@@ -629,6 +770,437 @@ const [
         );
       }
     ).length;
+
+  function editCompany() {
+    if (!company) {
+      return;
+    }
+
+    setCompanyForm({
+      companyName:
+        value(company.company_name),
+
+      authorizedPerson:
+        value(
+          company.authorized_person
+        ),
+
+      phone:
+        value(company.phone),
+
+      email:
+        value(company.email),
+
+      taxNo:
+        value(company.tax_no),
+
+      workScope:
+        value(company.work_scope),
+
+      contractStartDate:
+        dateInputFromMillis(
+          company.contract_start_millis
+        ),
+
+      contractEndDate:
+        dateInputFromMillis(
+          company.contract_end_millis
+        ),
+
+      applicationStatus:
+        value(
+          company.application_status
+        ) || "TASLAK",
+
+      approvalStatus:
+        value(
+          company.approval_status
+        ) || "BEKLIYOR",
+
+      revisionNote:
+        value(
+          company.revision_note
+        ),
+
+      isActive:
+        company.is_active !== false,
+    });
+
+    setCompanyModalOpen(true);
+  }
+
+  async function saveCompany() {
+    if (!company) {
+      alert("Firma bilgisi bulunamadı.");
+      return;
+    }
+
+    if (!companyForm.companyName.trim()) {
+      alert(
+        "Firma adı zorunludur."
+      );
+      return;
+    }
+
+    const contractStartMillis =
+      companyForm.contractStartDate
+        ? new Date(
+            `${companyForm.contractStartDate}T00:00:00`
+          ).getTime()
+        : null;
+
+    const contractEndMillis =
+      companyForm.contractEndDate
+        ? new Date(
+            `${companyForm.contractEndDate}T23:59:59`
+          ).getTime()
+        : null;
+
+    try {
+      setSaving(true);
+
+      const response =
+        await fetch(
+          "/api/admin/subcontractors",
+          {
+            method: "PATCH",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                id: company.id,
+                firmId,
+
+                companyName:
+                  companyForm.companyName,
+
+                authorizedPerson:
+                  companyForm.authorizedPerson,
+
+                phone:
+                  companyForm.phone,
+
+                email:
+                  companyForm.email,
+
+                taxNo:
+                  companyForm.taxNo,
+
+                workScope:
+                  companyForm.workScope,
+
+                contractStartMillis,
+                contractEndMillis,
+
+                applicationStatus:
+                  companyForm.applicationStatus,
+
+                approvalStatus:
+                  companyForm.approvalStatus,
+
+                revisionNote:
+                  companyForm.revisionNote,
+
+                isActive:
+                  companyForm.isActive,
+              }),
+          }
+        );
+
+      const json =
+        await response.json();
+
+      if (
+        !response.ok ||
+        json.success === false
+      ) {
+        throw new Error(
+          json.error ||
+            "Firma güncellenemedi."
+        );
+      }
+
+      setCompanyModalOpen(false);
+      await load();
+
+    } catch (e) {
+      alert(
+        e instanceof Error
+          ? e.message
+          : "Firma güncellenemedi."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateCompanyDecision(
+    decision:
+      | "ONAYLANDI"
+      | "REVIZE_ISTENDI"
+      | "REDDEDILDI"
+  ) {
+    if (!company) {
+      alert("Firma bilgisi bulunamadı.");
+      return;
+    }
+
+    if (
+      decision === "ONAYLANDI" &&
+      !companyDocumentsReady
+    ) {
+      alert(
+        "Firma onaylanamaz. Zorunlu firma evraklarının tamamı TAM olmalı ve süreleri geçmemiş olmalıdır."
+      );
+      return;
+    }
+
+    let revisionNote =
+      value(
+        company.revision_note
+      );
+
+    if (
+      decision === "REVIZE_ISTENDI" ||
+      decision === "REDDEDILDI"
+    ) {
+      revisionNote =
+        window.prompt(
+          decision ===
+              "REVIZE_ISTENDI"
+            ? "Revizyon açıklamasını girin:"
+            : "Red gerekçesini girin:",
+          revisionNote
+        ) ?? "";
+
+      if (!revisionNote.trim()) {
+        return;
+      }
+    }
+
+    try {
+      setSaving(true);
+
+      const response =
+        await fetch(
+          "/api/admin/subcontractors",
+          {
+            method: "PATCH",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                id: company.id,
+                firmId,
+
+                applicationStatus:
+                  decision,
+
+                approvalStatus:
+                  decision ===
+                  "ONAYLANDI"
+                    ? "ONAYLANDI"
+                    : decision ===
+                      "REDDEDILDI"
+                      ? "REDDEDILDI"
+                      : "BEKLIYOR",
+
+                revisionNote,
+
+                isActive:
+                  decision ===
+                  "ONAYLANDI",
+              }),
+          }
+        );
+
+      const json =
+        await response.json();
+
+      if (
+        !response.ok ||
+        json.success === false
+      ) {
+        throw new Error(
+          json.error ||
+            "Firma onay durumu güncellenemedi."
+        );
+      }
+
+      await load();
+
+    } catch (e) {
+      alert(
+        e instanceof Error
+          ? e.message
+          : "Firma onay durumu güncellenemedi."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateEmployeeEntryPermission(
+    employee: Employee,
+    allowed: boolean
+  ) {
+    if (!company) {
+      alert("Firma bilgisi bulunamadı.");
+      return;
+    }
+
+    if (
+      allowed &&
+      !employeeCanReceiveEntryPermission(
+        employee
+      )
+    ) {
+      const reasons: string[] = [];
+
+      if (
+        company.is_active !== true
+      ) {
+        reasons.push(
+          "firma aktif değil"
+        );
+      }
+
+      if (
+        value(
+          company.approval_status
+        ).toUpperCase() !==
+        "ONAYLANDI"
+      ) {
+        reasons.push(
+          "firma onaylı değil"
+        );
+      }
+
+      if (
+        value(
+          employee.approval_status
+        ).toUpperCase() !==
+        "ONAYLANDI"
+      ) {
+        reasons.push(
+          "çalışan onaylı değil"
+        );
+      }
+
+      if (
+        complianceCount(employee) < 7
+      ) {
+        reasons.push(
+          "uygunluk kontrolleri eksik"
+        );
+      }
+
+      if (
+        !employeeDocumentsReady(
+          employee
+        )
+      ) {
+        reasons.push(
+          "zorunlu çalışan evrakları eksik/süresi dolmuş"
+        );
+      }
+
+      if (
+        value(
+          employee.access_blocked_note
+        )
+      ) {
+        reasons.push(
+          "giriş engel açıklaması mevcut"
+        );
+      }
+
+      alert(
+        `Saha giriş yetkisi verilemez: ${reasons.join(", ")}.`
+      );
+
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const response =
+        await fetch(
+          "/api/admin/subcontractors/employees",
+          {
+            method: "PATCH",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                id: employee.id,
+                firmId,
+                companyId,
+
+                entryPermission:
+                  allowed,
+
+                approvalStatus:
+                  allowed
+                    ? "ONAYLANDI"
+                    : value(
+                        employee.approval_status
+                      ) ||
+                      "BEKLIYOR",
+
+                employeeStatus:
+                  allowed
+                    ? "SAHAYA_GIREBILIR"
+                    : "ONAYLANDI",
+
+                accessBlockedNote:
+                  allowed
+                    ? ""
+                    : value(
+                        employee.access_blocked_note
+                      ),
+              }),
+          }
+        );
+
+      const json =
+        await response.json();
+
+      if (
+        !response.ok ||
+        json.success === false
+      ) {
+        throw new Error(
+          json.error ||
+            "Saha giriş yetkisi güncellenemedi."
+        );
+      }
+
+      await load();
+
+    } catch (e) {
+      alert(
+        e instanceof Error
+          ? e.message
+          : "Saha giriş yetkisi güncellenemedi."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function newEmployee() {
     setEmployeeForm({
@@ -1708,10 +2280,77 @@ async function deleteWorkPermit(
 
             <p>
               Taşeron firmanın temel
-              kayıt ve sözleşme
+              kayıt, onay ve sözleşme
               bilgileri.
             </p>
           </div>
+
+          <button
+            className="outline"
+            onClick={editCompany}
+          >
+            Firma Düzenle
+          </button>
+        </div>
+
+        <div
+          className="warning"
+          style={{
+            marginBottom: 16,
+          }}
+        >
+          <strong>
+            Evrak Uygunluğu:
+          </strong>{" "}
+          {companyDocumentsReady
+            ? "Zorunlu firma evrakları tam ve geçerli."
+            : `${companyDocumentIssues.length} zorunlu evrak eksik veya süresi dolmuş.`}
+        </div>
+
+        <div
+          className="employeeActions"
+          style={{
+            marginBottom: 18,
+          }}
+        >
+          <button
+            className="primary"
+            disabled={
+              saving ||
+              !companyDocumentsReady
+            }
+            onClick={() =>
+              void updateCompanyDecision(
+                "ONAYLANDI"
+              )
+            }
+          >
+            Firmayı Onayla
+          </button>
+
+          <button
+            className="outline"
+            disabled={saving}
+            onClick={() =>
+              void updateCompanyDecision(
+                "REVIZE_ISTENDI"
+              )
+            }
+          >
+            Revizyon İste
+          </button>
+
+          <button
+            className="danger"
+            disabled={saving}
+            onClick={() =>
+              void updateCompanyDecision(
+                "REDDEDILDI"
+              )
+            }
+          >
+            Reddet
+          </button>
         </div>
 
         <div className="infoGrid">
@@ -2371,7 +3010,50 @@ async function deleteWorkPermit(
                       </div>
                     )}
 
+                    <div className="warning">
+                      <strong>
+                        Evrak Uygunluğu:
+                      </strong>{" "}
+                      {employeeDocumentsReady(
+                        employee
+                      )
+                        ? "Tam"
+                        : "Eksik / süresi dolmuş"}
+                      {" · "}
+                      <strong>
+                        Yönetici Onayı:
+                      </strong>{" "}
+                      {labelStatus(
+                        employee.approval_status
+                      ) || "Bekliyor"}
+                      {" · "}
+                      <strong>
+                        Saha Giriş:
+                      </strong>{" "}
+                      {employee.entry_permission
+                        ? "Yetkili"
+                        : "Yetki verilmedi"}
+                    </div>
+
                     <div className="employeeActions">
+                      <button
+                        className={
+                          employee.entry_permission
+                            ? "outline"
+                            : "primary"
+                        }
+                        disabled={saving}
+                        onClick={() =>
+                          void updateEmployeeEntryPermission(
+                            employee,
+                            !employee.entry_permission
+                          )
+                        }
+                      >
+                        {employee.entry_permission
+                          ? "Giriş Yetkisini Kaldır"
+                          : "Giriş Yetkisi Ver"}
+                      </button>
                       <button
                         className="outline"
                         onClick={() =>
@@ -2403,6 +3085,270 @@ async function deleteWorkPermit(
       </section>
 
 
+
+      {companyModalOpen && (
+        <div
+          className="modalBackdrop"
+          onMouseDown={() =>
+            setCompanyModalOpen(false)
+          }
+        >
+          <div
+            className="modal"
+            onMouseDown={(event) =>
+              event.stopPropagation()
+            }
+          >
+            <div className="modalHeader">
+              <div>
+                <h2>
+                  Firma Bilgilerini Düzenle
+                </h2>
+
+                <p>
+                  {company.company_name}
+                </p>
+              </div>
+
+              <button
+                className="close"
+                onClick={() =>
+                  setCompanyModalOpen(false)
+                }
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="formGrid">
+              <Field
+                label="Firma Adı *"
+                value={
+                  companyForm.companyName
+                }
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      companyName: v,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="Yetkili"
+                value={
+                  companyForm.authorizedPerson
+                }
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      authorizedPerson: v,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="Telefon"
+                value={companyForm.phone}
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      phone: v,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="E-posta"
+                value={companyForm.email}
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      email: v,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="Vergi No"
+                value={companyForm.taxNo}
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      taxNo: v,
+                    })
+                  )
+                }
+              />
+
+              <Field
+                label="İş Kapsamı"
+                value={companyForm.workScope}
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      workScope: v,
+                    })
+                  )
+                }
+              />
+
+              <label className="field">
+                <span>
+                  Sözleşme Başlangıç
+                </span>
+
+                <input
+                  type="date"
+                  value={
+                    companyForm.contractStartDate
+                  }
+                  onChange={(event) =>
+                    setCompanyForm(
+                      (old) => ({
+                        ...old,
+                        contractStartDate:
+                          event.target.value,
+                      })
+                    )
+                  }
+                />
+              </label>
+
+              <label className="field">
+                <span>
+                  Sözleşme Bitiş
+                </span>
+
+                <input
+                  type="date"
+                  value={
+                    companyForm.contractEndDate
+                  }
+                  onChange={(event) =>
+                    setCompanyForm(
+                      (old) => ({
+                        ...old,
+                        contractEndDate:
+                          event.target.value,
+                      })
+                    )
+                  }
+                />
+              </label>
+
+              <SelectField
+                label="Başvuru Durumu"
+                value={
+                  companyForm.applicationStatus
+                }
+                options={[
+                  "TASLAK",
+                  "EVRAK_BEKLIYOR",
+                  "INCELEMEDE",
+                  "REVIZE_ISTENDI",
+                  "ONAYLANDI",
+                  "REDDEDILDI",
+                ]}
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      applicationStatus: v,
+                    })
+                  )
+                }
+              />
+
+              <SelectField
+                label="Onay Durumu"
+                value={
+                  companyForm.approvalStatus
+                }
+                options={[
+                  "BEKLIYOR",
+                  "ONAYLANDI",
+                  "REDDEDILDI",
+                ]}
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      approvalStatus: v,
+                    })
+                  )
+                }
+              />
+            </div>
+
+            <div className="formSection">
+              <Field
+                label="Revizyon / Açıklama Notu"
+                value={
+                  companyForm.revisionNote
+                }
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      revisionNote: v,
+                    })
+                  )
+                }
+              />
+
+              <Toggle
+                label="Firma Aktif"
+                checked={
+                  companyForm.isActive
+                }
+                onChange={(v) =>
+                  setCompanyForm(
+                    (old) => ({
+                      ...old,
+                      isActive: v,
+                    })
+                  )
+                }
+              />
+            </div>
+
+            <div className="modalActions">
+              <button
+                className="outline"
+                disabled={saving}
+                onClick={() =>
+                  setCompanyModalOpen(false)
+                }
+              >
+                Vazgeç
+              </button>
+
+              <button
+                className="primary"
+                disabled={saving}
+                onClick={() =>
+                  void saveCompany()
+                }
+              >
+                {saving
+                  ? "Kaydediliyor..."
+                  : "Firma Bilgilerini Kaydet"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DSEC_WORK_PERMIT_MODAL_ADDED */}
       {workPermitModalOpen && (
