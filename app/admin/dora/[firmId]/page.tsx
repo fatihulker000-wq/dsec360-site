@@ -274,7 +274,7 @@ export default function DoraFirmWorkspacePage() {
           <p>
             Hızlı İSG kurulumu,
             bağımsız çalışan havuzu,
-            doküman üretimi, 5×5
+            doküman üretimi, Fine Kinney
             risk, DORA denetimleri
             ve raporlar.
           </p>
@@ -337,7 +337,7 @@ export default function DoraFirmWorkspacePage() {
         <Kpi
           title="Risk"
           value="0"
-          detail="DORA 5×5 kayıtları"
+          detail="DORA Fine Kinney kayıtları"
           muted
         />
 
@@ -452,15 +452,15 @@ export default function DoraFirmWorkspacePage() {
           </p>
 
           <button
-            className="primary"
-            onClick={() =>
-              alert(
-                "DORA Çalışan Merkezi bir sonraki pakette aktif edilecek."
-              )
-            }
-          >
-            Çalışanları Yönet
-          </button>
+  className="primary"
+  onClick={() =>
+    router.push(
+      `/admin/dora/${firmId}/employees`
+    )
+  }
+>
+  Çalışanları Yönet
+</button>
         </article>
 
         <article className="card">
@@ -471,7 +471,7 @@ export default function DoraFirmWorkspacePage() {
               </div>
 
               <h2>
-                DORA 5×5 Risk Merkezi
+                DORA Fine Kinney Risk Merkezi
               </h2>
             </div>
 
@@ -483,7 +483,7 @@ export default function DoraFirmWorkspacePage() {
           <p>
             Ana D-SEC Risk
             modülünden tamamen
-            bağımsız hızlı 5×5 risk
+            bağımsız Fine Kinney risk
             değerlendirmesi.
           </p>
 
@@ -491,7 +491,7 @@ export default function DoraFirmWorkspacePage() {
             className="primary"
             onClick={() =>
               alert(
-                "DORA 5×5 Risk Merkezi bir sonraki pakette aktif edilecek."
+                "DORA Fine Kinney Risk Merkezi bir sonraki pakette aktif edilecek."
               )
             }
           >
