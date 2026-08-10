@@ -415,15 +415,15 @@ export default function DoraFirmWorkspacePage() {
           </p>
 
           <button
-            className="primary"
-            onClick={() =>
-              alert(
-                "DORA Doküman Merkezi bir sonraki pakette aktif edilecek."
-              )
-            }
-          >
-            Doküman Merkezi
-          </button>
+  className="primary"
+  onClick={() =>
+    router.push(
+      `/admin/dora/${firmId}/documents`
+    )
+  }
+>
+  Doküman Merkezi
+</button>
         </article>
 
         <article className="card">
