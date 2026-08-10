@@ -305,13 +305,13 @@ export async function GET(
       fontkit
     );
 
-    const font =
-      await pdfDoc.embedFont(
-        fontBytes,
-        {
-          subset: true,
-        }
-      );
+   const font =
+  await pdfDoc.embedFont(
+    fontBytes,
+    {
+      subset: false,
+    }
+  );
 
     const pageWidth =
       595.28;
