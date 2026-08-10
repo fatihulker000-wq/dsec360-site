@@ -60,6 +60,7 @@ const ACTIVE_LABELS: Record<string, string> = {
   "/admin/employees": "Çalışanlar",
   "/admin/documentation": "Dokümantasyon Merkezi",
   "/admin/subcontractors": "Taşeron Yönetimi",
+  "/admin/dora": "DORA AI İSG Asistanı",
 };
 
 export default function AdminLayout({
@@ -192,6 +193,12 @@ export default function AdminLayout({
   name: "Taşeron Yönetimi",
   href: "/admin/subcontractors",
   icon: HardHat,
+},
+
+{
+  name: "DORA AI İSG Asistanı",
+  href: "/admin/dora",
+  icon: Sparkles,
 },
 
       { name: "Sistem Kullanıcıları", href: "/admin/users", icon: Users },

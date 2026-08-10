@@ -543,10 +543,10 @@ export default function DoraPage() {
     firm: DoraFirm
   ) {
     router.push(
-      `/panel/dora/${encodeURIComponent(
-        firm.id
-      )}`
-    );
+  `/admin/dora/${encodeURIComponent(
+    firm.id
+  )}`
+);
   }
 
   return (
@@ -555,7 +555,7 @@ export default function DoraPage() {
         <button
           className="back"
           onClick={() =>
-            router.push("/panel")
+            router.push("/admin/dashboard")
           }
         >
           ← Panel
