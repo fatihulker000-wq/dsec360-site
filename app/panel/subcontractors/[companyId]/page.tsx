@@ -658,12 +658,79 @@ const [
         document.is_required !== false
     );
 
+  const requiredCompanyDocumentCount =
+    requiredCompanyDocuments.length;
+
+  const uploadedRequiredCompanyDocuments =
+    requiredCompanyDocuments.filter(
+      (document) =>
+        value(document.file_url).length > 0
+    );
+
+  const uploadedRequiredCompanyDocumentCount =
+    uploadedRequiredCompanyDocuments.length;
+
+  const expiredRequiredCompanyDocuments =
+    requiredCompanyDocuments.filter(
+      (document) =>
+        Boolean(
+          document.valid_until_millis
+        ) &&
+        Number(
+          document.valid_until_millis
+        ) < Date.now()
+    );
+
+  const expiredRequiredCompanyDocumentCount =
+    expiredRequiredCompanyDocuments.length;
+
+  const validRequiredCompanyDocuments =
+    requiredCompanyDocuments.filter(
+      (document) => {
+        const status =
+          value(document.status)
+            .toUpperCase();
+
+        const hasFile =
+          value(document.file_url)
+            .length > 0;
+
+        const expired =
+          Boolean(
+            document.valid_until_millis
+          ) &&
+          Number(
+            document.valid_until_millis
+          ) < Date.now();
+
+        return (
+          status === "TAM" &&
+          hasFile &&
+          !expired
+        );
+      }
+    );
+
+  const validRequiredCompanyDocumentCount =
+    validRequiredCompanyDocuments.length;
+
+  const missingRequiredCompanyDocumentCount =
+    Math.max(
+      0,
+      requiredCompanyDocumentCount -
+        uploadedRequiredCompanyDocumentCount
+    );
+
   const companyDocumentIssues =
     requiredCompanyDocuments.filter(
       (document) => {
         const status =
           value(document.status)
             .toUpperCase();
+
+        const hasFile =
+          value(document.file_url)
+            .length > 0;
 
         const expired =
           Boolean(
@@ -675,14 +742,16 @@ const [
 
         return (
           status !== "TAM" ||
+          !hasFile ||
           expired
         );
       }
     );
 
   const companyDocumentsReady =
-    requiredCompanyDocuments.length > 0 &&
-    companyDocumentIssues.length === 0;
+    requiredCompanyDocumentCount > 0 &&
+    validRequiredCompanyDocumentCount ===
+      requiredCompanyDocumentCount;
 
   function employeeDocumentsReady(
     employee: Employee
@@ -2294,17 +2363,145 @@ async function deleteWorkPermit(
         </div>
 
         <div
-          className="warning"
           style={{
             marginBottom: 16,
+            padding: 16,
+            borderRadius: 16,
+            border: companyDocumentsReady
+              ? "1px solid #86efac"
+              : "1px solid #fecaca",
+            background: companyDocumentsReady
+              ? "#f0fdf4"
+              : "#fef2f2",
           }}
         >
-          <strong>
-            Evrak Uygunluğu:
-          </strong>{" "}
-          {companyDocumentsReady
-            ? "Zorunlu firma evrakları tam ve geçerli."
-            : `${companyDocumentIssues.length} zorunlu evrak eksik veya süresi dolmuş.`}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+              marginBottom: 12,
+            }}
+          >
+            <div>
+              <strong
+                style={{
+                  color: companyDocumentsReady
+                    ? "#166534"
+                    : "#991b1b",
+                  fontSize: 16,
+                }}
+              >
+                Firma Evrak Uygunluğu
+              </strong>
+
+              <div
+                style={{
+                  marginTop: 4,
+                  color: companyDocumentsReady
+                    ? "#166534"
+                    : "#991b1b",
+                  fontWeight: 700,
+                }}
+              >
+                {companyDocumentsReady
+                  ? "✓ ONAY İÇİN UYGUN"
+                  : "✕ ONAY İÇİN UYGUN DEĞİL"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                background: companyDocumentsReady
+                  ? "#dcfce7"
+                  : "#fee2e2",
+                color: companyDocumentsReady
+                  ? "#166534"
+                  : "#991b1b",
+                fontWeight: 800,
+              }}
+            >
+              {validRequiredCompanyDocumentCount}/
+              {requiredCompanyDocumentCount} Uygun
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(130px, 1fr))",
+              gap: 10,
+            }}
+          >
+            <div className="infoItem">
+              <span>Gerekli Evrak</span>
+              <strong>
+                {requiredCompanyDocumentCount}
+              </strong>
+            </div>
+
+            <div className="infoItem">
+              <span>Yüklenen</span>
+              <strong
+                style={{
+                  color:
+                    uploadedRequiredCompanyDocumentCount ===
+                    requiredCompanyDocumentCount
+                      ? "#15803d"
+                      : "#dc2626",
+                }}
+              >
+                {uploadedRequiredCompanyDocumentCount}
+              </strong>
+            </div>
+
+            <div className="infoItem">
+              <span>Eksik</span>
+              <strong
+                style={{
+                  color:
+                    missingRequiredCompanyDocumentCount === 0
+                      ? "#15803d"
+                      : "#dc2626",
+                }}
+              >
+                {missingRequiredCompanyDocumentCount}
+              </strong>
+            </div>
+
+            <div className="infoItem">
+              <span>Süresi Geçmiş</span>
+              <strong
+                style={{
+                  color:
+                    expiredRequiredCompanyDocumentCount === 0
+                      ? "#15803d"
+                      : "#dc2626",
+                }}
+              >
+                {expiredRequiredCompanyDocumentCount}
+              </strong>
+            </div>
+          </div>
+
+          {!companyDocumentsReady && (
+            <div
+              style={{
+                marginTop: 12,
+                color: "#991b1b",
+                fontWeight: 650,
+              }}
+            >
+              {requiredCompanyDocumentCount === 0
+                ? "Firma için zorunlu evrak gerekliliği tanımlanmamış."
+                : `${companyDocumentIssues.length} zorunlu evrak eksik, yüklenmemiş, tamamlanmamış veya süresi geçmiş.`}
+            </div>
+          )}
         </div>
 
         <div
@@ -2662,6 +2859,10 @@ async function deleteWorkPermit(
       <p>
         Taşeron firmaya ait zorunlu,
         süreli ve diğer belgeleri yönetin.
+        {" "}Gerekli: {requiredCompanyDocumentCount}
+        {" • "}Yüklenen: {uploadedRequiredCompanyDocumentCount}
+        {" • "}Uygun: {validRequiredCompanyDocumentCount}
+        {" • "}Süresi geçmiş: {expiredRequiredCompanyDocumentCount}
       </p>
     </div>
 
