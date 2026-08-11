@@ -621,8 +621,8 @@ export default function DoraFirmWorkspacePage() {
           <button
             className="primary"
             onClick={() =>
-              alert(
-                "DORA Denetim Merkezi Web entegrasyonunda aktif edilecek."
+              router.push(
+                `/admin/dora/${firmId}/audits`
               )
             }
           >
