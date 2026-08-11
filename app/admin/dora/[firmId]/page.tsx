@@ -126,6 +126,9 @@ export default function DoraFirmWorkspacePage() {
       null
     );
 
+  const [riskCount, setRiskCount] =
+    useState(0);
+
   const load = useCallback(
     async () => {
       if (!firmId) {
@@ -140,21 +143,32 @@ export default function DoraFirmWorkspacePage() {
         setLoading(true);
         setError("");
 
-        const response =
-          await fetch(
-            `/api/dora/firms?id=${encodeURIComponent(
-              firmId
-            )}`,
-            {
-              cache: "no-store",
-            }
-          );
+        const [firmResponse, riskResponse] =
+          await Promise.all([
+            fetch(
+              `/api/dora/firms?id=${encodeURIComponent(
+                firmId
+              )}`,
+              {
+                cache: "no-store",
+              }
+            ),
+
+            fetch(
+              `/api/dora/risks?firmId=${encodeURIComponent(
+                firmId
+              )}`,
+              {
+                cache: "no-store",
+              }
+            ),
+          ]);
 
         const json =
-          (await response.json()) as DoraFirmApiResponse;
+          (await firmResponse.json()) as DoraFirmApiResponse;
 
         if (
-          !response.ok ||
+          !firmResponse.ok ||
           json.success === false
         ) {
           throw new Error(
@@ -166,6 +180,19 @@ export default function DoraFirmWorkspacePage() {
         setFirm(
           json.firm ?? null
         );
+
+        if (riskResponse.ok) {
+          const riskJson =
+            await riskResponse.json();
+
+          setRiskCount(
+            Array.isArray(riskJson.risks)
+              ? riskJson.risks.length
+              : 0
+          );
+        } else {
+          setRiskCount(0);
+        }
       } catch (e) {
         setError(
           e instanceof Error
@@ -336,9 +363,8 @@ export default function DoraFirmWorkspacePage() {
 
         <Kpi
           title="Risk"
-          value="0"
+          value={riskCount}
           detail="DORA Fine Kinney kayıtları"
-          muted
         />
 
         <Kpi
@@ -476,7 +502,7 @@ export default function DoraFirmWorkspacePage() {
             </div>
 
             <span className="badge neutral">
-              0
+              {riskCount}
             </span>
           </div>
 
@@ -488,15 +514,15 @@ export default function DoraFirmWorkspacePage() {
           </p>
 
           <button
-  className="primary"
-  onClick={() =>
-    router.push(
-      `/admin/dora/${firmId}/risks`
-    )
-  }
->
-  Risk Merkezine Gir
-</button>
+            className="primary"
+            onClick={() =>
+              router.push(
+                `/admin/dora/${firmId}/risks`
+              )
+            }
+          >
+            Risk Merkezine Gir
+          </button>
         </article>
 
         <article className="card">

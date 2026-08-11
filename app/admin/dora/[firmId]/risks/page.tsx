@@ -1361,6 +1361,16 @@ export default function DoraRisksPage() {
     );
   }
 
+  function downloadAssessmentReport() {
+    window.open(
+      `/api/dora/risks/assessment-report?firmId=${encodeURIComponent(
+        firmId
+      )}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
   /* =======================================================
   DÖF
   ======================================================= */
@@ -1669,6 +1679,13 @@ export default function DoraRisksPage() {
             onClick={downloadPdfReport}
           >
             PDF Rapor
+          </button>
+
+          <button
+            className="assessmentBtn"
+            onClick={downloadAssessmentReport}
+          >
+            Risk Değerlendirme Raporu
           </button>
 
           <button
@@ -3298,7 +3315,8 @@ export default function DoraRisksPage() {
         .refreshBtn,
         .outlineBtn,
         .deleteBtn,
-        .primaryBtn {
+        .primaryBtn,
+        .assessmentBtn {
           border-radius: 10px;
           padding: 10px 14px;
           font-weight: 700;
@@ -3322,6 +3340,17 @@ export default function DoraRisksPage() {
           border: 1px solid #7a2633;
           background: #7a2633;
           color: #fff;
+        }
+
+        .assessmentBtn {
+          border: 1px solid #344054;
+          background: #344054;
+          color: #fff;
+        }
+
+        .assessmentBtn:hover {
+          background: #1d2939;
+          border-color: #1d2939;
         }
 
         .primaryBtn:disabled {
