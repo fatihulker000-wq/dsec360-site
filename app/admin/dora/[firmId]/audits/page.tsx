@@ -399,6 +399,9 @@ export default function DoraAuditsPage() {
   const [auditSaving, setAuditSaving] = useState(false);
   const [auditModalOpen, setAuditModalOpen] = useState(false);
   const [auditForm, setAuditForm] = useState<AuditRunForm>(emptyAuditRunForm());
+  const [resultAuditId, setResultAuditId] = useState("");
+  const [resultUploading, setResultUploading] = useState(false);
+  const resultFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadAudits = useCallback(async () => {
     if (!firmId) return;
@@ -486,7 +489,16 @@ export default function DoraAuditsPage() {
     finally { setCapaLoading(false); }
   }, [firmId]);
 
-  useEffect(() => { void loadFindings(); void loadCapas(); }, [loadFindings, loadCapas]);
+  useEffect(() => {
+    if (activeTab === "FINDINGS") {
+      void loadFindings();
+    }
+
+    if (activeTab === "CAPA") {
+      void loadFindings();
+      void loadCapas();
+    }
+  }, [activeTab, loadFindings, loadCapas]);
 
   const findingStats = useMemo(() => ({
     total: findings.length, open: findings.filter(x => x.status === "ACIK").length,
@@ -1475,6 +1487,333 @@ export default function DoraAuditsPage() {
     }
   }
 
+
+  function normalizeExcelResult(value: unknown): string {
+    return String(value ?? "")
+      .trim()
+      .toLocaleUpperCase("tr-TR")
+      .replaceAll("İ", "I")
+      .replaceAll("Ş", "S")
+      .replaceAll("Ğ", "G")
+      .replaceAll("Ü", "U")
+      .replaceAll("Ö", "O")
+      .replaceAll("Ç", "C")
+      .replace(/\s+/g, "_");
+  }
+
+  function excelYes(value: unknown): boolean {
+    const normalized = normalizeExcelResult(value);
+    return ["EVET", "E", "YES", "TRUE", "1"].includes(normalized);
+  }
+
+  async function fetchAuditAnswersForExcel(auditId: string) {
+    const response = await fetch(
+      `/api/dora/audits/answers?firmId=${encodeURIComponent(firmId)}&auditId=${encodeURIComponent(auditId)}`,
+      { cache: "no-store" }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Denetim maddeleri alınamadı.");
+    }
+
+    return Array.isArray(data.answers) ? data.answers : [];
+  }
+
+  async function downloadResultExcelTemplate() {
+    if (!resultAuditId) {
+      alert("Önce sonuç Excel'i hazırlanacak denetimi seç.");
+      return;
+    }
+
+    try {
+      const audit = audits.find((item) => item.id === resultAuditId);
+      const answers = await fetchAuditAnswersForExcel(resultAuditId);
+      const XLSX = await import("xlsx");
+
+      const rows: unknown[][] = [
+        [
+          "Cevap ID",
+          "Madde ID",
+          "Sıra",
+          "Bölüm",
+          "Başlık",
+          "Denetim Sorusu",
+          "Sonuç",
+          "Açıklama",
+          "Aksiyon Gerekli",
+          "Önerilen Aksiyon",
+          "Cevaplayan",
+          "Not",
+          "Bulgu Oluştur",
+          "Bulgu Risk Seviyesi",
+          "Bulgu Açıklaması",
+          "Bulgu Önerisi",
+        ],
+      ];
+
+      answers.forEach((answer: any, index: number) => {
+        const question = Array.isArray(answer.question)
+          ? answer.question[0]
+          : answer.question;
+
+        rows.push([
+          answer.id || "",
+          answer.question_id || question?.id || "",
+          question?.sort_order ?? index + 1,
+          question?.section_title || "",
+          question?.title || "",
+          question?.question || "",
+          answer.answered_at_millis ? answer.answer_status || "" : "",
+          answer.explanation || "",
+          answer.action_required ? "EVET" : "HAYIR",
+          answer.action_text || "",
+          answer.answered_by || audit?.auditor_name || "",
+          answer.note || "",
+          "HAYIR",
+          question?.risk_level || "ORTA",
+          "",
+          "",
+        ]);
+      });
+
+      const sheet = XLSX.utils.aoa_to_sheet(rows);
+      sheet["!cols"] = [
+        { wch: 38 }, { wch: 38 }, { wch: 8 }, { wch: 22 },
+        { wch: 30 }, { wch: 48 }, { wch: 20 }, { wch: 38 },
+        { wch: 18 }, { wch: 38 }, { wch: 22 }, { wch: 28 },
+        { wch: 18 }, { wch: 22 }, { wch: 38 }, { wch: 38 },
+      ];
+
+      const info = XLSX.utils.aoa_to_sheet([
+        ["DORA DENETİM SONUÇ AKTARIMI"],
+        ["Denetim", audit?.title || ""],
+        ["Denetim No", audit?.audit_no || ""],
+        ["Kural", "Cevap ID ve Madde ID sütunlarını değiştirmeyin."],
+        ["Sonuç değerleri", "UYGUN / KISMEN_UYGUN / UYGUNSUZ / UYGULANAMAZ"],
+        ["Bulgu", "Yalnız UYGUNSUZ veya KISMEN_UYGUN satırında Bulgu Oluştur=EVET kullanılabilir."],
+        ["DÖF", "Excel aktarımı DÖF oluşturmaz. DÖF, DORA Bulgular sekmesinden kontrollü açılır."],
+      ]);
+
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, "Denetim Sonuclari");
+      XLSX.utils.book_append_sheet(book, info, "Kullanim");
+      XLSX.writeFile(
+        book,
+        `DORA_Denetim_Sonuc_${(audit?.audit_no || audit?.title || "Sablon").replace(/[^a-zA-Z0-9_-]+/g, "_")}.xlsx`
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Sonuç Excel şablonu hazırlanamadı.");
+    }
+  }
+
+  function openResultExcelUpload() {
+    if (!resultAuditId) {
+      alert("Önce sonuçların aktarılacağı denetimi seç.");
+      return;
+    }
+
+    resultFileInputRef.current?.click();
+  }
+
+  async function handleResultExcelFile(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setResultUploading(true);
+
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const sheet = workbook.Sheets["Denetim Sonuclari"] || workbook.Sheets[workbook.SheetNames[0]];
+
+      if (!sheet) {
+        throw new Error("Excel dosyasında Denetim Sonuclari sayfası bulunamadı.");
+      }
+
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        defval: "",
+        raw: false,
+      });
+
+      if (rows.length === 0) {
+        throw new Error("Excel dosyasında aktarılacak denetim sonucu bulunamadı.");
+      }
+
+      const allowedStatuses = new Set([
+        "UYGUN",
+        "KISMEN_UYGUN",
+        "UYGUNSUZ",
+        "UYGULANAMAZ",
+      ]);
+
+      const answersPayload: Array<Record<string, unknown>> = [];
+      const findingRows: Array<Record<string, unknown>> = [];
+      const errors: string[] = [];
+
+      rows.forEach((row, index) => {
+        const excelRow = index + 2;
+        const id = String(row["Cevap ID"] ?? "").trim();
+        const questionId = String(row["Madde ID"] ?? "").trim();
+        const status = normalizeExcelResult(row["Sonuç"]);
+
+        // Sonuç boş bırakılmış satır aktarılmaz; böylece kısmi Excel yüklemesi yapılabilir.
+        if (!status) return;
+
+        if (!id) {
+          errors.push(`${excelRow}. satır: Cevap ID boş.`);
+          return;
+        }
+
+        if (!allowedStatuses.has(status)) {
+          errors.push(
+            `${excelRow}. satır: Sonuç geçersiz (${String(row["Sonuç"] ?? "")}).`
+          );
+          return;
+        }
+
+        const actionRequired =
+          excelYes(row["Aksiyon Gerekli"]) ||
+          status === "UYGUNSUZ" ||
+          status === "KISMEN_UYGUN";
+
+        answersPayload.push({
+          id,
+          answerStatus: status,
+          explanation: String(row["Açıklama"] ?? "").trim(),
+          actionRequired,
+          actionText: String(row["Önerilen Aksiyon"] ?? "").trim(),
+          answeredBy: String(row["Cevaplayan"] ?? "").trim(),
+          note: String(row["Not"] ?? "").trim(),
+        });
+
+        if (excelYes(row["Bulgu Oluştur"])) {
+          if (status !== "UYGUNSUZ" && status !== "KISMEN_UYGUN") {
+            errors.push(
+              `${excelRow}. satır: Bulgu yalnız UYGUNSUZ veya KISMEN_UYGUN sonuçtan oluşturulabilir.`
+            );
+            return;
+          }
+
+          findingRows.push({
+            answerId: id,
+            questionId,
+            title:
+              String(row["Başlık"] ?? "").trim() ||
+              String(row["Denetim Sorusu"] ?? "").trim() ||
+              `Denetim Bulgusu ${excelRow}`,
+            description:
+              String(row["Bulgu Açıklaması"] ?? "").trim() ||
+              String(row["Açıklama"] ?? "").trim(),
+            riskLevel:
+              normalizeExcelResult(row["Bulgu Risk Seviyesi"]) || "ORTA",
+            legalBasis: "",
+            recommendation:
+              String(row["Bulgu Önerisi"] ?? "").trim() ||
+              String(row["Önerilen Aksiyon"] ?? "").trim(),
+            detectedBy: String(row["Cevaplayan"] ?? "").trim(),
+          });
+        }
+      });
+
+      if (errors.length > 0) {
+        throw new Error(
+          `Excel doğrulamasında ${errors.length} hata bulundu:\n\n${errors.slice(0, 12).join("\n")}${
+            errors.length > 12 ? `\n... ve ${errors.length - 12} hata daha.` : ""
+          }`
+        );
+      }
+
+      if (answersPayload.length === 0) {
+        throw new Error("Excel'de Sonuç alanı doldurulmuş hiçbir satır bulunamadı.");
+      }
+
+      const answerResponse = await fetch("/api/dora/audits/answers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firmId,
+          auditId: resultAuditId,
+          answers: answersPayload,
+        }),
+      });
+
+      const answerData = await answerResponse.json();
+
+      if (!answerResponse.ok || !answerData.success) {
+        throw new Error(answerData.error || "Denetim sonuçları toplu kaydedilemedi.");
+      }
+
+      let findingsCreated = 0;
+      let findingsSkipped = 0;
+
+      for (const finding of findingRows) {
+        const existingResponse = await fetch(
+          `/api/dora/audits/findings?firmId=${encodeURIComponent(firmId)}&auditId=${encodeURIComponent(resultAuditId)}&answerId=${encodeURIComponent(String(finding.answerId))}`,
+          { cache: "no-store" }
+        );
+        const existingData = await existingResponse.json();
+
+        if (
+          existingResponse.ok &&
+          existingData.success &&
+          Array.isArray(existingData.findings) &&
+          existingData.findings.length > 0
+        ) {
+          findingsSkipped += 1;
+          continue;
+        }
+
+        const findingResponse = await fetch("/api/dora/audits/findings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firmId,
+            auditId: resultAuditId,
+            ...finding,
+            findingType: "UYGUNSUZLUK",
+          }),
+        });
+
+        const findingData = await findingResponse.json();
+
+        if (!findingResponse.ok || !findingData.success) {
+          throw new Error(
+            findingData.error ||
+              `Denetim cevapları kaydedildi ancak "${String(finding.title)}" bulgusu oluşturulamadı.`
+          );
+        }
+
+        findingsCreated += 1;
+      }
+
+      await loadAudits();
+
+      alert(
+        `Denetim sonuçları aktarıldı.\n\n` +
+          `İşlenen cevap: ${answersPayload.length}\n` +
+          `Oluşturulan bulgu: ${findingsCreated}\n` +
+          `Mevcut olduğu için atlanan bulgu: ${findingsSkipped}\n\n` +
+          `DÖF otomatik oluşturulmadı. Gerekli DÖF'leri Bulgular sekmesinden açabilirsin.`
+      );
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Denetim sonuçları Excel'den aktarılamadı."
+      );
+    } finally {
+      setResultUploading(false);
+
+      if (resultFileInputRef.current) {
+        resultFileInputRef.current.value = "";
+      }
+    }
+  }
+
   return (
     <main className="page">
       <section className="hero">
@@ -1584,7 +1923,62 @@ export default function DoraAuditsPage() {
             <Kpi title="Uygunsuzluk" value={auditStats.nonCompliant} />
           </section>
           <section className="auditRunPanel">
-            <div className="panelHeader"><div><div className="eyebrow">SAHA DENETİMLERİ</div><h2>Denetim Kayıtları</h2></div><button className="primaryBtn" onClick={openNewAudit} disabled={publishedTemplates.length === 0}>+ Yeni Denetim Başlat</button></div>
+            <div className="panelHeader">
+              <div>
+                <div className="eyebrow">SAHA DENETİMLERİ</div>
+                <h2>Denetim Kayıtları</h2>
+              </div>
+              <div className="rowActions">
+                <select
+                  className="auditResultSelect"
+                  value={resultAuditId}
+                  onChange={(event) => setResultAuditId(event.target.value)}
+                >
+                  <option value="">Sonuç aktarılacak denetimi seç...</option>
+                  {audits.map((audit) => (
+                    <option key={audit.id} value={audit.id}>
+                      {audit.audit_no || "DORA"} • {audit.title}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  className="outlineBtn"
+                  disabled={!resultAuditId}
+                  onClick={() => void downloadResultExcelTemplate()}
+                >
+                  Sonuç Excel Şablonu
+                </button>
+
+                <input
+                  ref={resultFileInputRef}
+                  type="file"
+                  hidden
+                  accept=".xlsx,.xls"
+                  onChange={(event) => void handleResultExcelFile(event)}
+                />
+
+                <button
+                  className="outlineBtn"
+                  disabled={!resultAuditId || resultUploading}
+                  onClick={openResultExcelUpload}
+                >
+                  {resultUploading ? "Sonuçlar Aktarılıyor..." : "Denetim Sonuçlarını Excel'den Aktar"}
+                </button>
+
+                <button
+                  className="primaryBtn"
+                  onClick={openNewAudit}
+                  disabled={publishedTemplates.length === 0}
+                >
+                  + Yeni Denetim Başlat
+                </button>
+              </div>
+            </div>
+            <div className="infoBox">
+              <strong>Toplu sonuç girişi:</strong> Denetimi seç → Sonuç Excel Şablonu'nu indir → sonuçları Excel'de doldur → aynı dosyayı toplu aktar.
+              UYGUNSUZ/KISMEN UYGUN satırlarda “Bulgu Oluştur = EVET” seçilebilir. DÖF otomatik açılmaz.
+            </div>
             {publishedTemplates.length === 0 && <div className="errorBox">Yeni denetim başlatmak için en az bir yayınlanmış ve aktif şablon bulunmalıdır.</div>}
             {auditLoading ? <div className="empty">Denetimler yükleniyor...</div> : audits.length === 0 ? <div className="empty">Henüz başlatılmış DORA denetimi yok.</div> : (
               <div className="auditTableWrap"><table className="auditTable"><thead><tr><th>Denetim No</th><th>Denetim</th><th>Şablon</th><th>Tarih</th><th>Denetçi</th><th>İlerleme</th><th>Uygunsuz</th><th>Uyum</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
@@ -2762,6 +3156,16 @@ export default function DoraAuditsPage() {
         .auditTabs { display:flex; gap:8px; margin-top:18px; padding:6px; width:max-content; border:1px solid #e5e7eb; border-radius:14px; background:#fff; }
         .tabBtn { border:0; border-radius:10px; padding:10px 16px; background:transparent; color:#667085; font-weight:800; }
         .activeTab { background:#7a2633; color:#fff; }
+        .auditResultSelect {
+          min-width: 260px;
+          max-width: 360px;
+          border: 1px solid #d0d5dd;
+          border-radius: 10px;
+          background: #fff;
+          padding: 10px 12px;
+          color: #344054;
+          font: inherit;
+        }
         .auditRunPanel { margin-top:18px; padding:18px; border:1px solid #e5e7eb; border-radius:18px; background:#fff; }
         .auditTableWrap { overflow:auto; }
         .auditTable { width:100%; border-collapse:collapse; min-width:1150px; }
