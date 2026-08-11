@@ -129,6 +129,9 @@ export default function DoraFirmWorkspacePage() {
   const [riskCount, setRiskCount] =
     useState(0);
 
+  const [riskTeamCount, setRiskTeamCount] =
+    useState(0);
+
   const load = useCallback(
     async () => {
       if (!firmId) {
@@ -143,7 +146,11 @@ export default function DoraFirmWorkspacePage() {
         setLoading(true);
         setError("");
 
-        const [firmResponse, riskResponse] =
+        const [
+          firmResponse,
+          riskResponse,
+          riskTeamResponse,
+        ] =
           await Promise.all([
             fetch(
               `/api/dora/firms?id=${encodeURIComponent(
@@ -156,6 +163,15 @@ export default function DoraFirmWorkspacePage() {
 
             fetch(
               `/api/dora/risks?firmId=${encodeURIComponent(
+                firmId
+              )}`,
+              {
+                cache: "no-store",
+              }
+            ),
+
+            fetch(
+              `/api/dora/risk-team?firmId=${encodeURIComponent(
                 firmId
               )}`,
               {
@@ -192,6 +208,21 @@ export default function DoraFirmWorkspacePage() {
           );
         } else {
           setRiskCount(0);
+        }
+
+        if (riskTeamResponse.ok) {
+          const riskTeamJson =
+            await riskTeamResponse.json();
+
+          setRiskTeamCount(
+            Array.isArray(
+              riskTeamJson.members
+            )
+              ? riskTeamJson.members.length
+              : 0
+          );
+        } else {
+          setRiskTeamCount(0);
         }
       } catch (e) {
         setError(
@@ -522,6 +553,44 @@ export default function DoraFirmWorkspacePage() {
             }
           >
             Risk Merkezine Gir
+          </button>
+        </article>
+
+        <article className="card">
+          <div className="cardHead">
+            <div>
+              <div className="sectionEyebrow">
+                RİSK EKİBİ
+              </div>
+
+              <h2>
+                Risk Değerlendirme Ekibi
+              </h2>
+            </div>
+
+            <span className="badge neutral">
+              {riskTeamCount}
+            </span>
+          </div>
+
+          <p>
+            DORA Fine Kinney risk
+            değerlendirmesinde görev alan
+            işveren/vekili, İSG uzmanı,
+            işyeri hekimi, çalışan
+            temsilcisi ve diğer ekip
+            üyelerini bağımsız olarak yönet.
+          </p>
+
+          <button
+            className="primary"
+            onClick={() =>
+              router.push(
+                `/admin/dora/${firmId}/risk-team`
+              )
+            }
+          >
+            Risk Ekibini Yönet
           </button>
         </article>
 

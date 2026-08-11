@@ -227,6 +227,46 @@ export async function GET(request: NextRequest) {
 
     const allRisks = Array.isArray(risks) ? risks : [];
 
+    const { data: riskTeamMembers, error: riskTeamError } = await supabase
+      .from("dora_risk_team_members")
+      .select("*")
+      .eq("firm_id", firmId)
+      .eq("is_deleted", false)
+      .eq("is_active", true)
+      .eq("show_in_report", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at_millis", { ascending: true });
+
+    if (riskTeamError) throw riskTeamError;
+
+    const reportTeam = Array.isArray(riskTeamMembers)
+      ? riskTeamMembers
+      : [];
+
+    const roleLabels: Record<string, string> = {
+      ISVEREN_VEKILI: "İşveren / İşveren Vekili",
+      ISG_UZMANI: "İş Güvenliği Uzmanı",
+      ISYERI_HEKIMI: "İşyeri Hekimi",
+      CALISAN_TEMSILCISI: "Çalışan Temsilcisi",
+      DESTEK_ELEMANI: "Destek Elemanı",
+      BIRIM_TEMSILCISI: "Birimleri Temsil Eden Çalışan",
+      DIGER: "Diğer Ekip Üyesi",
+    };
+
+    function teamRoleLabel(value?: string | null): string {
+      return roleLabels[text(value).toUpperCase()] || text(value) || "Diğer Ekip Üyesi";
+    }
+
+    function teamMemberLine(member: any): string {
+      const parts = [
+        text(member.full_name),
+        text(member.title) ? `Unvan: ${text(member.title)}` : "",
+        text(member.certificate_no) ? `Belge No: ${text(member.certificate_no)}` : "",
+      ].filter(Boolean);
+
+      return parts.join(" • ") || "-";
+    }
+
     const regularPath = path.join(
       process.cwd(),
       "public",
@@ -565,44 +605,54 @@ export async function GET(request: NextRequest) {
     );
     y -= 52;
 
-    const team = [
-      ["İşveren / İşveren Vekili", text(firm.authorized_person) || "................................................"],
-      ["İş Güvenliği Uzmanı", "................................................  Belge No: ........................"],
-      ["İşyeri Hekimi", "................................................  Belge No: ........................"],
-      ["Çalışan Temsilcisi", "................................................"],
-      ["Destek Elemanı", "................................................"],
-      ["Birimleri Temsil Eden Çalışan", "................................................"],
-    ];
+    const team =
+      reportTeam.length > 0
+        ? reportTeam.map((member: any) => [
+            teamRoleLabel(member.role_type),
+            teamMemberLine(member),
+          ])
+        : [
+            [
+              "İşveren / İşveren Vekili",
+              text(firm.authorized_person) ||
+                "................................................",
+            ],
+            [
+              "Risk Değerlendirme Ekibi",
+              "DORA Risk Değerlendirme Ekibi kaydı bulunamadı.",
+            ],
+          ];
 
     for (const [role, member] of team) {
+      if (y < 120) {
+        page = addPortraitPage("RİSK DEĞERLENDİRMESİ • EKİP VE ONAY");
+        y = 770;
+        y = drawSectionTitle(page, "5. RİSK DEĞERLENDİRME EKİBİ (DEVAM)", y, bold);
+      }
+
       page.drawRectangle({
         x: 50,
         y: y - 8,
         width: 495,
-        height: 44,
+        height: 52,
         borderWidth: 0.6,
         borderColor: rgb(0.83, 0.84, 0.86),
       });
       page.drawText(role, {
         x: 58,
-        y: y + 18,
+        y: y + 23,
         size: 8,
         font: bold,
       });
-      page.drawText(member, {
-        x: 190,
-        y: y + 18,
-        size: 7.5,
-        font: regular,
-      });
+      drawWrapped(page, member, 190, y + 23, 345, regular, 7.2, 9);
       page.drawText("İmza / Paraf: ____________________", {
         x: 190,
-        y: y + 3,
+        y: y + 2,
         size: 7,
         font: regular,
         color: rgb(0.42, 0.44, 0.48),
       });
-      y -= 44;
+      y -= 52;
     }
 
     y -= 15;
@@ -793,42 +843,52 @@ export async function GET(request: NextRequest) {
 
     y = drawSectionTitle(page, "9. SON SAYFA İMZALARI", y, bold);
 
-    const signRows = [
-      ["İşveren / İşveren Vekili", text(firm.authorized_person) || "................................"],
-      ["İş Güvenliği Uzmanı", "................................"],
-      ["İşyeri Hekimi", "................................"],
-      ["Çalışan Temsilcisi", "................................"],
-      ["Destek Elemanı / Diğer Ekip Üyesi", "................................"],
-    ];
+    const signRows =
+      reportTeam.length > 0
+        ? reportTeam.map((member: any) => [
+            teamRoleLabel(member.role_type),
+            teamMemberLine(member),
+          ])
+        : [
+            [
+              "İşveren / İşveren Vekili",
+              text(firm.authorized_person) || "................................",
+            ],
+            [
+              "Risk Değerlendirme Ekibi",
+              "DORA ekip kaydı bulunamadı.",
+            ],
+          ];
 
     for (const [role, name] of signRows) {
+      if (y < 105) {
+        page = addPortraitPage("RİSK DEĞERLENDİRMESİ • SON SAYFA İMZALARI");
+        y = 770;
+        y = drawSectionTitle(page, "9. SON SAYFA İMZALARI (DEVAM)", y, bold);
+      }
+
       page.drawRectangle({
         x: 50,
         y: y - 5,
         width: 495,
-        height: 48,
+        height: 56,
         borderWidth: 0.6,
         borderColor: rgb(0.83, 0.84, 0.86),
       });
       page.drawText(role, {
         x: 58,
-        y: y + 22,
+        y: y + 28,
         size: 8,
         font: bold,
       });
-      page.drawText(name, {
-        x: 205,
-        y: y + 22,
-        size: 8,
+      drawWrapped(page, name, 205, y + 28, 220, regular, 7.2, 9);
+      page.drawText("İmza: __________________", {
+        x: 430,
+        y: y + 20,
+        size: 7,
         font: regular,
       });
-      page.drawText("İmza: __________________________", {
-        x: 340,
-        y: y + 22,
-        size: 7.5,
-        font: regular,
-      });
-      y -= 48;
+      y -= 56;
     }
 
     const bytes = await pdf.save();
