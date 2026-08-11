@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -91,6 +92,52 @@ type RiskForm = {
   residualFrequency: string;
   residualSeverity: string;
 
+  note: string;
+};
+
+type DoraRiskDof = {
+  id: string;
+  firm_id: string;
+  risk_id: string;
+  title: string;
+  finding?: string | null;
+  root_cause?: string | null;
+  corrective_action?: string | null;
+  preventive_action?: string | null;
+  responsible_person?: string | null;
+  opened_by?: string | null;
+  opened_at_millis?: number | null;
+  target_date_millis?: number | null;
+  status: string;
+  closure_note?: string | null;
+  closed_by?: string | null;
+  closed_at_millis?: number | null;
+  effectiveness_status?: string | null;
+  effectiveness_note?: string | null;
+  verified_by?: string | null;
+  verified_at_millis?: number | null;
+  note?: string | null;
+  created_at_millis?: number | null;
+  updated_at_millis?: number | null;
+};
+
+type DofForm = {
+  id: string;
+  riskId: string;
+  title: string;
+  finding: string;
+  rootCause: string;
+  correctiveAction: string;
+  preventiveAction: string;
+  responsiblePerson: string;
+  openedBy: string;
+  targetDate: string;
+  status: string;
+  closureNote: string;
+  closedBy: string;
+  effectivenessStatus: string;
+  effectivenessNote: string;
+  verifiedBy: string;
   note: string;
 };
 
@@ -220,6 +267,65 @@ function emptyForm(): RiskForm {
 
     note: "",
   };
+}
+
+function emptyDofForm(): DofForm {
+  return {
+    id: "",
+    riskId: "",
+    title: "",
+    finding: "",
+    rootCause: "",
+    correctiveAction: "",
+    preventiveAction: "",
+    responsiblePerson: "",
+    openedBy: "",
+    targetDate: "",
+    status: "ACIK",
+    closureNote: "",
+    closedBy: "",
+    effectivenessStatus: "BEKLIYOR",
+    effectivenessNote: "",
+    verifiedBy: "",
+    note: "",
+  };
+}
+
+function dofStatusLabel(value?: string | null): string {
+  switch (value) {
+    case "ACIK":
+      return "Açık";
+    case "DEVAM_EDIYOR":
+      return "Devam Ediyor";
+    case "KAPALI":
+      return "Kapalı";
+    case "IPTAL":
+      return "İptal";
+    default:
+      return value || "-";
+  }
+}
+
+function effectivenessLabel(value?: string | null): string {
+  switch (value) {
+    case "BEKLIYOR":
+      return "Bekliyor";
+    case "ETKILI":
+      return "Etkili";
+    case "ETKISIZ":
+      return "Etkisiz";
+    default:
+      return value || "-";
+  }
+}
+
+function isDofOverdue(dof: DoraRiskDof): boolean {
+  return Boolean(
+    dof.target_date_millis &&
+      dof.status !== "KAPALI" &&
+      dof.status !== "IPTAL" &&
+      Number(dof.target_date_millis) < Date.now()
+  );
 }
 
 function levelFromScore(
@@ -419,6 +525,38 @@ export default function DoraRisksPage() {
       emptyForm()
     );
 
+  const [activeTab, setActiveTab] =
+    useState<"RISKS" | "DOFS">("RISKS");
+
+  const [dofs, setDofs] =
+    useState<DoraRiskDof[]>([]);
+
+  const [dofLoading, setDofLoading] =
+    useState(true);
+
+  const [dofModalOpen, setDofModalOpen] =
+    useState(false);
+
+  const [dofSaving, setDofSaving] =
+    useState(false);
+
+  const [dofForm, setDofForm] =
+    useState<DofForm>(
+      emptyDofForm()
+    );
+
+  const [dofSearch, setDofSearch] =
+    useState("");
+
+  const [dofStatusFilter, setDofStatusFilter] =
+    useState("ALL");
+
+  const [bulkUploading, setBulkUploading] =
+    useState(false);
+
+  const fileInputRef =
+    useRef<HTMLInputElement | null>(null);
+
   /* =======================================================
   LOAD
   ======================================================= */
@@ -481,6 +619,60 @@ export default function DoraRisksPage() {
     void loadRisks();
   }, [loadRisks]);
 
+  const loadDofs =
+    useCallback(
+      async () => {
+        if (!firmId) {
+          return;
+        }
+
+        try {
+          setDofLoading(true);
+
+          const response =
+            await fetch(
+              `/api/dora/risk-dofs?firmId=${encodeURIComponent(
+                firmId
+              )}`,
+              {
+                cache: "no-store",
+              }
+            );
+
+          const data =
+            await response.json();
+
+          if (
+            !response.ok ||
+            !data.success
+          ) {
+            throw new Error(
+              data.error ||
+                "DÖF kayıtları alınamadı."
+            );
+          }
+
+          setDofs(
+            Array.isArray(data.dofs)
+              ? data.dofs
+              : []
+          );
+        } catch (err) {
+          console.error(
+            "DORA DÖF LOAD ERROR:",
+            err
+          );
+        } finally {
+          setDofLoading(false);
+        }
+      },
+      [firmId]
+    );
+
+  useEffect(() => {
+    void loadDofs();
+  }, [loadDofs]);
+
   /* =======================================================
   KPI
   ======================================================= */
@@ -526,6 +718,89 @@ export default function DoraRisksPage() {
           ),
       };
     }, [risks]);
+
+  const riskMap =
+    useMemo(
+      () =>
+        new Map(
+          risks.map((risk) => [
+            risk.id,
+            risk,
+          ])
+        ),
+      [risks]
+    );
+
+  const dofStats =
+    useMemo(() => {
+      return {
+        total: dofs.length,
+        open: dofs.filter(
+          (dof) =>
+            dof.status === "ACIK"
+        ).length,
+        progress: dofs.filter(
+          (dof) =>
+            dof.status === "DEVAM_EDIYOR"
+        ).length,
+        overdue: dofs.filter(
+          isDofOverdue
+        ).length,
+        closed: dofs.filter(
+          (dof) =>
+            dof.status === "KAPALI"
+        ).length,
+        ineffective: dofs.filter(
+          (dof) =>
+            dof.effectiveness_status === "ETKISIZ"
+        ).length,
+      };
+    }, [dofs]);
+
+  const filteredDofs =
+    useMemo(() => {
+      const q =
+        dofSearch
+          .trim()
+          .toLocaleLowerCase("tr-TR");
+
+      return dofs.filter((dof) => {
+        if (
+          dofStatusFilter !== "ALL" &&
+          dof.status !== dofStatusFilter
+        ) {
+          return false;
+        }
+
+        if (!q) {
+          return true;
+        }
+
+        const risk =
+          riskMap.get(dof.risk_id);
+
+        const haystack = [
+          dof.title,
+          dof.finding,
+          dof.root_cause,
+          dof.corrective_action,
+          dof.preventive_action,
+          dof.responsible_person,
+          risk?.hazard,
+          risk?.department,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("tr-TR");
+
+        return haystack.includes(q);
+      });
+    }, [
+      dofs,
+      dofSearch,
+      dofStatusFilter,
+      riskMap,
+    ]);
 
   /* =======================================================
   FILTER
@@ -989,6 +1264,343 @@ export default function DoraRisksPage() {
   }
 
   /* =======================================================
+  EXCEL / PDF
+  ======================================================= */
+
+  function downloadExcelTemplate() {
+    window.location.href =
+      "/templates/DORA_Fine_Kinney_Toplu_Aktarim_Sablonu.xlsx";
+  }
+
+  function openBulkPicker() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleBulkFile(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file =
+      event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      setBulkUploading(true);
+
+      const formData =
+        new FormData();
+
+      formData.append(
+        "firmId",
+        firmId
+      );
+
+      formData.append(
+        "file",
+        file
+      );
+
+      const response =
+        await fetch(
+          "/api/dora/risks/bulk",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ||
+            "Excel aktarımı yapılamadı."
+        );
+      }
+
+      alert(
+        `Excel aktarımı tamamlandı.\n\nEklenen: ${
+          data.inserted ?? 0
+        }\nAtlanan: ${
+          data.skipped ?? 0
+        }`
+      );
+
+      await loadRisks();
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Excel aktarımı yapılamadı."
+      );
+    } finally {
+      setBulkUploading(false);
+
+      if (
+        fileInputRef.current
+      ) {
+        fileInputRef.current.value =
+          "";
+      }
+    }
+  }
+
+  function downloadPdfReport() {
+    window.open(
+      `/api/dora/risks/pdf?firmId=${encodeURIComponent(
+        firmId
+      )}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  /* =======================================================
+  DÖF
+  ======================================================= */
+
+  function openNewDof(
+    risk?: DoraRisk
+  ) {
+    setDofForm({
+      ...emptyDofForm(),
+      riskId:
+        risk?.id || "",
+      title:
+        risk
+          ? `${risk.hazard} - DÖF`
+          : "",
+      finding:
+        risk?.risk_description ||
+        risk?.hazard ||
+        "",
+      correctiveAction:
+        risk?.corrective_action ||
+        "",
+      responsiblePerson:
+        risk?.responsible_person ||
+        "",
+      targetDate:
+        dateInputFromMillis(
+          risk?.due_date_millis
+        ),
+    });
+
+    setDofModalOpen(true);
+  }
+
+  function openEditDof(
+    dof: DoraRiskDof
+  ) {
+    setDofForm({
+      id: dof.id,
+      riskId: dof.risk_id,
+      title: dof.title || "",
+      finding: dof.finding || "",
+      rootCause: dof.root_cause || "",
+      correctiveAction:
+        dof.corrective_action || "",
+      preventiveAction:
+        dof.preventive_action || "",
+      responsiblePerson:
+        dof.responsible_person || "",
+      openedBy:
+        dof.opened_by || "",
+      targetDate:
+        dateInputFromMillis(
+          dof.target_date_millis
+        ),
+      status:
+        dof.status || "ACIK",
+      closureNote:
+        dof.closure_note || "",
+      closedBy:
+        dof.closed_by || "",
+      effectivenessStatus:
+        dof.effectiveness_status ||
+        "BEKLIYOR",
+      effectivenessNote:
+        dof.effectiveness_note || "",
+      verifiedBy:
+        dof.verified_by || "",
+      note:
+        dof.note || "",
+    });
+
+    setDofModalOpen(true);
+  }
+
+  async function saveDof() {
+    if (!dofForm.riskId) {
+      alert(
+        "DÖF için bağlı risk seçilmelidir."
+      );
+      return;
+    }
+
+    if (!dofForm.title.trim()) {
+      alert(
+        "DÖF başlığı zorunludur."
+      );
+      return;
+    }
+
+    try {
+      setDofSaving(true);
+
+      const response =
+        await fetch(
+          "/api/dora/risk-dofs",
+          {
+            method:
+              dofForm.id
+                ? "PATCH"
+                : "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                id:
+                  dofForm.id ||
+                  undefined,
+                firmId,
+                riskId:
+                  dofForm.riskId,
+                title:
+                  dofForm.title,
+                finding:
+                  dofForm.finding,
+                rootCause:
+                  dofForm.rootCause,
+                correctiveAction:
+                  dofForm.correctiveAction,
+                preventiveAction:
+                  dofForm.preventiveAction,
+                responsiblePerson:
+                  dofForm.responsiblePerson,
+                openedBy:
+                  dofForm.openedBy,
+                targetDateMillis:
+                  millisFromDateInput(
+                    dofForm.targetDate
+                  ),
+                status:
+                  dofForm.status,
+                closureNote:
+                  dofForm.closureNote,
+                closedBy:
+                  dofForm.closedBy,
+                effectivenessStatus:
+                  dofForm.effectivenessStatus,
+                effectivenessNote:
+                  dofForm.effectivenessNote,
+                verifiedBy:
+                  dofForm.verifiedBy,
+                verifiedAtMillis:
+                  dofForm.effectivenessStatus !==
+                  "BEKLIYOR"
+                    ? Date.now()
+                    : null,
+                note:
+                  dofForm.note,
+              }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ||
+            "DÖF kaydedilemedi."
+        );
+      }
+
+      setDofModalOpen(false);
+      setDofForm(
+        emptyDofForm()
+      );
+
+      await loadDofs();
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "DÖF kaydedilemedi."
+      );
+    } finally {
+      setDofSaving(false);
+    }
+  }
+
+  async function deleteDof(
+    dof: DoraRiskDof
+  ) {
+    const ok =
+      window.confirm(
+        `"${dof.title}" DÖF kaydı silinsin mi?`
+      );
+
+    if (!ok) {
+      return;
+    }
+
+    try {
+      const response =
+        await fetch(
+          "/api/dora/risk-dofs",
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body:
+              JSON.stringify({
+                id: dof.id,
+                firmId,
+              }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ||
+            "DÖF silinemedi."
+        );
+      }
+
+      await loadDofs();
+    } catch (err) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "DÖF silinemedi."
+      );
+    }
+  }
+
+  /* =======================================================
   RENDER
   ======================================================= */
 
@@ -1025,11 +1637,46 @@ export default function DoraRisksPage() {
         </div>
 
         <div className="heroActions">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            hidden
+            onChange={(event) =>
+              void handleBulkFile(event)
+            }
+          />
+
+          <button
+            className="outlineBtn"
+            onClick={downloadExcelTemplate}
+          >
+            Excel Şablonu
+          </button>
+
+          <button
+            className="outlineBtn"
+            disabled={bulkUploading}
+            onClick={openBulkPicker}
+          >
+            {bulkUploading
+              ? "Aktarılıyor..."
+              : "Excel'den Toplu Aktar"}
+          </button>
+
+          <button
+            className="outlineBtn"
+            onClick={downloadPdfReport}
+          >
+            PDF Rapor
+          </button>
+
           <button
             className="refreshBtn"
-            onClick={() =>
-              void loadRisks()
-            }
+            onClick={() => {
+              void loadRisks();
+              void loadDofs();
+            }}
           >
             Yenile
           </button>
@@ -1043,6 +1690,37 @@ export default function DoraRisksPage() {
         </div>
       </section>
 
+      <section className="tabs">
+        <button
+          className={
+            activeTab === "RISKS"
+              ? "tab activeTab"
+              : "tab"
+          }
+          onClick={() =>
+            setActiveTab("RISKS")
+          }
+        >
+          Riskler
+          <span>{risks.length}</span>
+        </button>
+
+        <button
+          className={
+            activeTab === "DOFS"
+              ? "tab activeTab"
+              : "tab"
+          }
+          onClick={() =>
+            setActiveTab("DOFS")
+          }
+        >
+          DÖF Takibi
+          <span>{dofs.length}</span>
+        </button>
+      </section>
+
+      {activeTab === "RISKS" ? (
       <section className="kpiGrid">
         <Kpi
           title="Toplam Risk"
@@ -1088,7 +1766,47 @@ export default function DoraRisksPage() {
           tone="red"
         />
       </section>
+      ) : (
+        <section className="kpiGrid">
+          <Kpi
+            title="Toplam DÖF"
+            value={dofStats.total}
+            tone="neutral"
+          />
 
+          <Kpi
+            title="Açık"
+            value={dofStats.open}
+            tone="blue"
+          />
+
+          <Kpi
+            title="Devam Ediyor"
+            value={dofStats.progress}
+            tone="amber"
+          />
+
+          <Kpi
+            title="Geciken"
+            value={dofStats.overdue}
+            tone="red"
+          />
+
+          <Kpi
+            title="Kapalı"
+            value={dofStats.closed}
+            tone="green"
+          />
+
+          <Kpi
+            title="Etkisiz"
+            value={dofStats.ineffective}
+            tone="orange"
+          />
+        </section>
+      )}
+
+      {activeTab === "RISKS" ? (
       <section className="toolbar">
         <input
           value={search}
@@ -1158,6 +1876,57 @@ export default function DoraRisksPage() {
           </option>
         </select>
       </section>
+      ) : (
+        <section className="toolbar dofToolbar">
+          <input
+            value={dofSearch}
+            onChange={(event) =>
+              setDofSearch(
+                event.target.value
+              )
+            }
+            placeholder="DÖF, risk, sorumlu veya bulgu ara..."
+          />
+
+          <select
+            value={dofStatusFilter}
+            onChange={(event) =>
+              setDofStatusFilter(
+                event.target.value
+              )
+            }
+          >
+            <option value="ALL">
+              Tüm DÖF Durumları
+            </option>
+
+            <option value="ACIK">
+              Açık
+            </option>
+
+            <option value="DEVAM_EDIYOR">
+              Devam Ediyor
+            </option>
+
+            <option value="KAPALI">
+              Kapalı
+            </option>
+
+            <option value="IPTAL">
+              İptal
+            </option>
+          </select>
+
+          <button
+            className="primaryBtn"
+            onClick={() =>
+              openNewDof()
+            }
+          >
+            + Yeni DÖF
+          </button>
+        </section>
+      )}
 
       {error && (
         <div className="errorBox">
@@ -1165,6 +1934,7 @@ export default function DoraRisksPage() {
         </div>
       )}
 
+      {activeTab === "RISKS" && (
       <section className="panel">
         <div className="panelHeader">
           <div>
@@ -1367,6 +2137,17 @@ export default function DoraRisksPage() {
                     </span>
 
                     <button
+                      className="dofBtn"
+                      onClick={() =>
+                        openNewDof(
+                          risk
+                        )
+                      }
+                    >
+                      + DÖF Aç
+                    </button>
+
+                    <button
                       className="outlineBtn"
                       onClick={() =>
                         openEdit(
@@ -1394,6 +2175,187 @@ export default function DoraRisksPage() {
           </div>
         )}
       </section>
+      )}
+
+      {activeTab === "DOFS" && (
+        <section className="panel">
+          <div className="panelHeader">
+            <div>
+              <div className="eyebrow">
+                DÖF TAKİP MERKEZİ
+              </div>
+
+              <h2>
+                Düzeltici / Önleyici Faaliyetler
+              </h2>
+            </div>
+
+            <strong>
+              {filteredDofs.length} kayıt
+            </strong>
+          </div>
+
+          {dofLoading ? (
+            <div className="empty">
+              DÖF kayıtları yükleniyor...
+            </div>
+          ) : filteredDofs.length === 0 ? (
+            <div className="empty">
+              Uygun DÖF kaydı bulunmuyor.
+            </div>
+          ) : (
+            <div className="dofList">
+              {filteredDofs.map((dof) => {
+                const risk =
+                  riskMap.get(
+                    dof.risk_id
+                  );
+
+                const overdue =
+                  isDofOverdue(dof);
+
+                return (
+                  <article
+                    className={`dofCard ${
+                      overdue
+                        ? "dofOverdue"
+                        : ""
+                    }`}
+                    key={dof.id}
+                  >
+                    <div className="dofTop">
+                      <div>
+                        <div className="dofMeta">
+                          {risk?.department ||
+                            "Bölüm belirtilmedi"}
+
+                          {risk?.hazard
+                            ? ` • ${risk.hazard}`
+                            : ""}
+                        </div>
+
+                        <h3>
+                          {dof.title}
+                        </h3>
+
+                        {dof.finding && (
+                          <p>
+                            {dof.finding}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="dofBadges">
+                        {overdue && (
+                          <span className="overdueBadge">
+                            Geciken
+                          </span>
+                        )}
+
+                        <span
+                          className={`dofStatus dof-${dof.status}`}
+                        >
+                          {dofStatusLabel(
+                            dof.status
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="detailGrid">
+                      <Detail
+                        label="Kök Neden"
+                        value={
+                          dof.root_cause
+                        }
+                      />
+
+                      <Detail
+                        label="Düzeltici Faaliyet"
+                        value={
+                          dof.corrective_action
+                        }
+                      />
+
+                      <Detail
+                        label="Önleyici Faaliyet"
+                        value={
+                          dof.preventive_action
+                        }
+                      />
+
+                      <Detail
+                        label="Sorumlu"
+                        value={
+                          dof.responsible_person
+                        }
+                      />
+
+                      <Detail
+                        label="Termin"
+                        value={formatDate(
+                          dof.target_date_millis
+                        )}
+                      />
+
+                      <Detail
+                        label="Etkinlik"
+                        value={effectivenessLabel(
+                          dof.effectiveness_status
+                        )}
+                      />
+                    </div>
+
+                    {dof.status ===
+                      "KAPALI" && (
+                      <div className="closureBox">
+                        <strong>
+                          Kapanış
+                        </strong>
+
+                        <span>
+                          {formatDate(
+                            dof.closed_at_millis
+                          )}
+                        </span>
+
+                        <p>
+                          {dof.closure_note ||
+                            "Kapanış notu girilmemiş."}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="dofActions">
+                      <button
+                        className="outlineBtn"
+                        onClick={() =>
+                          openEditDof(
+                            dof
+                          )
+                        }
+                      >
+                        Düzenle
+                      </button>
+
+                      <button
+                        className="deleteBtn"
+                        onClick={() =>
+                          void deleteDof(
+                            dof
+                          )
+                        }
+                      >
+                        Sil
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       {modalOpen && (
         <div
@@ -1943,6 +2905,339 @@ export default function DoraRisksPage() {
         </div>
       )}
 
+      {dofModalOpen && (
+        <div
+          className="overlay"
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              setDofModalOpen(false);
+            }
+          }}
+        >
+          <div className="modal dofModal">
+            <div className="modalHeader">
+              <div>
+                <div className="eyebrow">
+                  DORA • BAĞIMSIZ DÖF
+                </div>
+
+                <h2>
+                  {dofForm.id
+                    ? "DÖF Kaydını Düzenle"
+                    : "Yeni DÖF Oluştur"}
+                </h2>
+              </div>
+
+              <button
+                className="closeBtn"
+                onClick={() =>
+                  setDofModalOpen(false)
+                }
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modalBody">
+              <FormSection title="1. Risk Bağlantısı">
+                <label className="field">
+                  <span>
+                    Bağlı Fine Kinney Riski *
+                  </span>
+
+                  <select
+                    value={dofForm.riskId}
+                    disabled={Boolean(
+                      dofForm.id
+                    )}
+                    onChange={(event) =>
+                      setDofForm({
+                        ...dofForm,
+                        riskId:
+                          event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">
+                      Risk seçiniz
+                    </option>
+
+                    {risks.map((risk) => (
+                      <option
+                        key={risk.id}
+                        value={risk.id}
+                      >
+                        {risk.hazard}
+                        {risk.department
+                          ? ` - ${risk.department}`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <Field
+                  label="DÖF Başlığı *"
+                  value={dofForm.title}
+                  onChange={(value) =>
+                    setDofForm({
+                      ...dofForm,
+                      title: value,
+                    })
+                  }
+                />
+
+                <TextArea
+                  label="Bulgu / Uygunsuzluk"
+                  value={dofForm.finding}
+                  onChange={(value) =>
+                    setDofForm({
+                      ...dofForm,
+                      finding: value,
+                    })
+                  }
+                />
+
+                <TextArea
+                  label="Kök Neden"
+                  value={dofForm.rootCause}
+                  onChange={(value) =>
+                    setDofForm({
+                      ...dofForm,
+                      rootCause: value,
+                    })
+                  }
+                />
+              </FormSection>
+
+              <FormSection title="2. Faaliyet Planı">
+                <TextArea
+                  label="Düzeltici Faaliyet"
+                  value={
+                    dofForm.correctiveAction
+                  }
+                  onChange={(value) =>
+                    setDofForm({
+                      ...dofForm,
+                      correctiveAction:
+                        value,
+                    })
+                  }
+                />
+
+                <TextArea
+                  label="Önleyici Faaliyet"
+                  value={
+                    dofForm.preventiveAction
+                  }
+                  onChange={(value) =>
+                    setDofForm({
+                      ...dofForm,
+                      preventiveAction:
+                        value,
+                    })
+                  }
+                />
+
+                <div className="grid3">
+                  <Field
+                    label="Sorumlu"
+                    value={
+                      dofForm.responsiblePerson
+                    }
+                    onChange={(value) =>
+                      setDofForm({
+                        ...dofForm,
+                        responsiblePerson:
+                          value,
+                      })
+                    }
+                  />
+
+                  <label className="field">
+                    <span>
+                      Termin Tarihi
+                    </span>
+
+                    <input
+                      type="date"
+                      value={
+                        dofForm.targetDate
+                      }
+                      onChange={(event) =>
+                        setDofForm({
+                          ...dofForm,
+                          targetDate:
+                            event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>
+                      DÖF Durumu
+                    </span>
+
+                    <select
+                      value={dofForm.status}
+                      onChange={(event) =>
+                        setDofForm({
+                          ...dofForm,
+                          status:
+                            event.target.value,
+                        })
+                      }
+                    >
+                      <option value="ACIK">
+                        Açık
+                      </option>
+
+                      <option value="DEVAM_EDIYOR">
+                        Devam Ediyor
+                      </option>
+
+                      <option value="KAPALI">
+                        Kapalı
+                      </option>
+
+                      <option value="IPTAL">
+                        İptal
+                      </option>
+                    </select>
+                  </label>
+                </div>
+              </FormSection>
+
+              <FormSection title="3. Kapanış ve Etkinlik">
+                <div className="grid2">
+                  <Field
+                    label="Kapatan"
+                    value={dofForm.closedBy}
+                    onChange={(value) =>
+                      setDofForm({
+                        ...dofForm,
+                        closedBy: value,
+                      })
+                    }
+                  />
+
+                  <label className="field">
+                    <span>
+                      Etkinlik Durumu
+                    </span>
+
+                    <select
+                      value={
+                        dofForm.effectivenessStatus
+                      }
+                      onChange={(event) =>
+                        setDofForm({
+                          ...dofForm,
+                          effectivenessStatus:
+                            event.target.value,
+                        })
+                      }
+                    >
+                      <option value="BEKLIYOR">
+                        Bekliyor
+                      </option>
+
+                      <option value="ETKILI">
+                        Etkili
+                      </option>
+
+                      <option value="ETKISIZ">
+                        Etkisiz
+                      </option>
+                    </select>
+                  </label>
+                </div>
+
+                <TextArea
+                  label="Kapanış Notu"
+                  value={
+                    dofForm.closureNote
+                  }
+                  onChange={(value) =>
+                    setDofForm({
+                      ...dofForm,
+                      closureNote: value,
+                    })
+                  }
+                />
+
+                <TextArea
+                  label="Etkinlik Değerlendirmesi"
+                  value={
+                    dofForm.effectivenessNote
+                  }
+                  onChange={(value) =>
+                    setDofForm({
+                      ...dofForm,
+                      effectivenessNote:
+                        value,
+                    })
+                  }
+                />
+
+                <Field
+                  label="Etkinlik Kontrolünü Yapan"
+                  value={
+                    dofForm.verifiedBy
+                  }
+                  onChange={(value) =>
+                    setDofForm({
+                      ...dofForm,
+                      verifiedBy: value,
+                    })
+                  }
+                />
+
+                <TextArea
+                  label="Not"
+                  value={dofForm.note}
+                  onChange={(value) =>
+                    setDofForm({
+                      ...dofForm,
+                      note: value,
+                    })
+                  }
+                />
+              </FormSection>
+            </div>
+
+            <div className="modalFooter">
+              <button
+                className="outlineBtn"
+                onClick={() =>
+                  setDofModalOpen(false)
+                }
+              >
+                Vazgeç
+              </button>
+
+              <button
+                className="primaryBtn"
+                disabled={dofSaving}
+                onClick={() =>
+                  void saveDof()
+                }
+              >
+                {dofSaving
+                  ? "Kaydediliyor..."
+                  : dofForm.id
+                    ? "DÖF Değişikliklerini Kaydet"
+                    : "DÖF Oluştur"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         .page {
           min-height: 100vh;
@@ -2404,6 +3699,181 @@ export default function DoraRisksPage() {
           font-size: 13px;
         }
 
+        .tabs {
+          display: flex;
+          gap: 8px;
+          margin-top: 18px;
+          padding: 6px;
+          border: 1px solid #e5e7eb;
+          border-radius: 14px;
+          background: #fff;
+        }
+
+        .tab {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          border: 0;
+          border-radius: 10px;
+          padding: 10px 15px;
+          background: transparent;
+          color: #667085;
+          font-weight: 800;
+        }
+
+        .tab span {
+          min-width: 24px;
+          padding: 3px 7px;
+          border-radius: 999px;
+          background: #f2f4f7;
+          font-size: 11px;
+          text-align: center;
+        }
+
+        .activeTab {
+          background: #7a2633;
+          color: #fff;
+        }
+
+        .activeTab span {
+          background: rgba(255,255,255,0.18);
+          color: #fff;
+        }
+
+        .dofBtn {
+          border: 1px solid #abefc6;
+          border-radius: 10px;
+          padding: 10px 14px;
+          background: #ecfdf3;
+          color: #027a48;
+          font-weight: 800;
+        }
+
+        .dofToolbar {
+          grid-template-columns:
+            minmax(300px, 1fr)
+            220px
+            auto;
+        }
+
+        .dofList {
+          display: grid;
+          gap: 12px;
+        }
+
+        .dofCard {
+          padding: 18px;
+          border: 1px solid #eaecf0;
+          border-radius: 14px;
+          background: #fff;
+        }
+
+        .dofOverdue {
+          border-color: #fda29b;
+          box-shadow: inset 4px 0 0 #d92d20;
+        }
+
+        .dofTop {
+          display: flex;
+          justify-content: space-between;
+          gap: 18px;
+        }
+
+        .dofMeta {
+          color: #667085;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .dofTop h3 {
+          margin: 5px 0;
+          font-size: 18px;
+        }
+
+        .dofTop p {
+          margin: 5px 0 0;
+          color: #667085;
+          line-height: 1.5;
+        }
+
+        .dofBadges {
+          display: flex;
+          align-items: flex-start;
+          gap: 7px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .dofStatus,
+        .overdueBadge {
+          display: inline-flex;
+          padding: 6px 9px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .dof-ACIK {
+          background: #eff8ff;
+          color: #175cd3;
+        }
+
+        .dof-DEVAM_EDIYOR {
+          background: #fffaeb;
+          color: #b54708;
+        }
+
+        .dof-KAPALI {
+          background: #ecfdf3;
+          color: #027a48;
+        }
+
+        .dof-IPTAL {
+          background: #f2f4f7;
+          color: #667085;
+        }
+
+        .overdueBadge {
+          background: #fef3f2;
+          color: #b42318;
+        }
+
+        .closureBox {
+          margin-top: 14px;
+          padding: 12px;
+          border: 1px solid #abefc6;
+          border-radius: 10px;
+          background: #f6fef9;
+          color: #475467;
+        }
+
+        .closureBox strong,
+        .closureBox span {
+          margin-right: 10px;
+        }
+
+        .closureBox p {
+          margin: 7px 0 0;
+        }
+
+        .dofActions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          margin-top: 14px;
+          padding-top: 14px;
+          border-top: 1px solid #f0f1f3;
+        }
+
+        .heroActions {
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .dofModal {
+          width: min(980px, 100%);
+        }
+
         @media (max-width: 1150px) {
           .kpiGrid {
             grid-template-columns: repeat(3, 1fr);
@@ -2429,10 +3899,23 @@ export default function DoraRisksPage() {
           }
 
           .toolbar,
+          .dofToolbar,
           .grid2,
           .grid3,
           .detailGrid {
             grid-template-columns: 1fr;
+          }
+
+          .tabs {
+            flex-direction: column;
+          }
+
+          .dofTop {
+            flex-direction: column;
+          }
+
+          .dofBadges {
+            justify-content: flex-start;
           }
 
           .kpiGrid {
