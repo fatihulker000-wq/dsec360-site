@@ -28,20 +28,27 @@ function numberOrZero(value: unknown): number {
 
 /*
  * ============================================================
- * DORA APP <-> WEB FIRM RESOLVER / BOOTSTRAP
+ * DORA MOBILE FIRM RESOLVER
  * ============================================================
  *
- * GET ?bootstrap=1
- *   -> Web'deki son aktif DORA firmasını app bootstrap için döndürür.
+ * Desteklenen GET çağrıları:
  *
- * GET ?appLocalId=12
- *   -> App local firma ID ile eşleşmiş DORA web firmasını döndürür.
+ * 1)
+ * /api/dora/mobile/firm-resolve?bootstrap=1
  *
- * POST
- *   -> App local firma ile web DORA firmasını eşler / oluşturur.
+ * App ilk açılışında web'deki aktif DORA firmasını getirir.
  *
- * Bu route yalnız public.dora_firms kullanır.
- * Ana D-SEC firma tablolarına yazmaz.
+ * 2)
+ * /api/dora/mobile/firm-resolve?appLocalId=12
+ *
+ * Lokal app firma ID'sine bağlı DORA web firmasını getirir.
+ *
+ * POST:
+ * App firmasını web DORA firmasıyla eşleştirir veya oluşturur.
+ *
+ * DİKKAT:
+ * Bu endpoint yalnız public.dora_firms kullanır.
+ * Ana D-SEC firma / DÖF / Risk / Ajanda tablolarına dokunmaz.
  */
 
 export async function GET(request: NextRequest) {
@@ -52,7 +59,9 @@ export async function GET(request: NextRequest) {
           success: false,
           error: "Yetkisiz mobil istek.",
         },
-        { status: 401 }
+        {
+          status: 401,
+        }
       );
     }
 
@@ -63,8 +72,13 @@ export async function GET(request: NextRequest) {
       searchParams.get("bootstrap") === "1";
 
     /*
-     * APP ilk kez açıldığında local DORA firması yoksa
-     * web'deki mevcut DORA firmasını mobile al.
+     * ========================================================
+     * BOOTSTRAP MODE
+     * ========================================================
+     *
+     * AiIsgAsistaniScreen şu anda bunu kullanıyor:
+     *
+     * /firm-resolve?bootstrap=1
      */
     if (bootstrap) {
       const {
@@ -118,11 +132,31 @@ export async function GET(request: NextRequest) {
         throw error;
       }
 
+      if (!data) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Web'de aktif DORA firması bulunamadı.",
+          },
+          {
+            status: 404,
+          }
+        );
+      }
+
       return NextResponse.json({
         success: true,
-        firm: data ?? null,
+        mode: "BOOTSTRAP",
+        firm: data,
       });
     }
+
+    /*
+     * ========================================================
+     * APP LOCAL ID MODE
+     * ========================================================
+     */
 
     const appLocalId =
       Number(
@@ -137,9 +171,11 @@ export async function GET(request: NextRequest) {
         {
           success: false,
           error:
-            "DORA appLocalId zorunludur.",
+            "bootstrap=1 veya geçerli appLocalId zorunludur.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
@@ -189,6 +225,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      mode: "APP_LOCAL_ID",
       firm: data ?? null,
     });
   } catch (error) {
@@ -205,7 +242,9 @@ export async function GET(request: NextRequest) {
             ? error.message
             : "DORA web firma eşleştirmesi yapılamadı.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
@@ -218,7 +257,9 @@ export async function POST(request: NextRequest) {
           success: false,
           error: "Yetkisiz mobil istek.",
         },
-        { status: 401 }
+        {
+          status: 401,
+        }
       );
     }
 
@@ -245,13 +286,18 @@ export async function POST(request: NextRequest) {
           error:
             "appLocalId ve firmName zorunludur.",
         },
-        { status: 400 }
+        {
+          status: 400,
+        }
       );
     }
 
     /*
-     * 1) Kesin app_local_id eşleşmesi.
+     * ========================================================
+     * 1. LOCAL ID İLE MEVCUT EŞLEŞME
+     * ========================================================
      */
+
     const {
       data: byLocalId,
       error: byLocalIdError,
@@ -281,20 +327,28 @@ export async function POST(request: NextRequest) {
         .update({
           firm_name:
             firmName,
+
           sgk_no:
             text(body.sgkNo),
+
           tax_no:
             text(body.taxNo),
+
           tax_office:
             text(body.taxOffice),
+
           mersis_no:
             text(body.mersisNo),
+
           nace_code:
             text(body.naceCode),
+
           sector:
             text(body.sector),
+
           danger_class:
             text(body.dangerClass),
+
           employee_count:
             Math.max(
               0,
@@ -302,22 +356,30 @@ export async function POST(request: NextRequest) {
                 body.employeeCount
               )
             ),
+
           address:
             text(body.address),
+
           phone:
             text(body.phone),
+
           email:
             text(body.email),
+
           authorized_person:
             text(
               body.authorizedPerson
             ),
+
           note:
             text(body.note),
+
           is_active:
             true,
+
           source:
             "APP",
+
           updated_at_millis:
             Date.now(),
         })
@@ -335,14 +397,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         created: false,
+        linkedExisting: false,
         firm: updated,
       });
     }
 
     /*
-     * 2) Aynı isimli web DORA firması varsa duplicate oluşturma;
-     *    yalnız app_local_id bağla.
+     * ========================================================
+     * 2. AYNI İSİMLİ DORA FİRMASI VAR MI?
+     * ========================================================
      */
+
     const {
       data: sameName,
       error: sameNameError,
@@ -379,8 +444,13 @@ export async function POST(request: NextRequest) {
         .update({
           app_local_id:
             appLocalId,
+
+          is_active:
+            true,
+
           source:
             "APP",
+
           updated_at_millis:
             Date.now(),
         })
@@ -404,8 +474,11 @@ export async function POST(request: NextRequest) {
     }
 
     /*
-     * 3) Web'de yoksa DORA'nın kendi firma tablosunda oluştur.
+     * ========================================================
+     * 3. YENİ DORA FİRMASI
+     * ========================================================
      */
+
     const now =
       Date.now();
 
@@ -417,22 +490,31 @@ export async function POST(request: NextRequest) {
       .insert({
         app_local_id:
           appLocalId,
+
         firm_name:
           firmName,
+
         sgk_no:
           text(body.sgkNo),
+
         tax_no:
           text(body.taxNo),
+
         tax_office:
           text(body.taxOffice),
+
         mersis_no:
           text(body.mersisNo),
+
         nace_code:
           text(body.naceCode),
+
         sector:
           text(body.sector),
+
         danger_class:
           text(body.dangerClass),
+
         employee_count:
           Math.max(
             0,
@@ -440,30 +522,42 @@ export async function POST(request: NextRequest) {
               body.employeeCount
             )
           ),
+
         address:
           text(body.address),
+
         phone:
           text(body.phone),
+
         email:
           text(body.email),
+
         authorized_person:
           text(
             body.authorizedPerson
           ),
+
         note:
           text(body.note),
+
         setup_score:
           0,
+
         setup_status:
           "BASLANGIC",
+
         is_active:
           true,
+
         is_deleted:
           false,
+
         source:
           "APP",
+
         created_at_millis:
           now,
+
         updated_at_millis:
           now,
       })
@@ -477,6 +571,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       created: true,
+      linkedExisting: false,
       firm: inserted,
     });
   } catch (error) {
@@ -493,7 +588,9 @@ export async function POST(request: NextRequest) {
             ? error.message
             : "DORA web firma eşleştirmesi yapılamadı.",
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
