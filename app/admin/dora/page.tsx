@@ -952,11 +952,11 @@ export default function DoraPage() {
           />
 
           <QuickCard
-            icon="03"
-            title="DORA 5×5 Risk"
-            description="Ana Risk modülüne dokunmadan bağımsız hızlı risk değerlendirmeleri oluştur."
-            status="Sonraki paket"
-          />
+  icon="03"
+  title="DORA Fine Kinney Risk"
+  description="Ana Risk modülüne dokunmadan bağımsız Fine Kinney risk değerlendirmeleri, DÖF takibi, Excel aktarımı ve raporlama yap."
+  status="Aktif"
+/>
 
           <QuickCard
             icon="04"

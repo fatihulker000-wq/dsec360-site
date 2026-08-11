@@ -488,15 +488,15 @@ export default function DoraFirmWorkspacePage() {
           </p>
 
           <button
-            className="primary"
-            onClick={() =>
-              alert(
-                "DORA Fine Kinney Risk Merkezi bir sonraki pakette aktif edilecek."
-              )
-            }
-          >
-            Risk Merkezine Gir
-          </button>
+  className="primary"
+  onClick={() =>
+    router.push(
+      `/admin/dora/${firmId}/risks`
+    )
+  }
+>
+  Risk Merkezine Gir
+</button>
         </article>
 
         <article className="card">
