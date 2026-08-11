@@ -36,6 +36,32 @@ function normalize(value: unknown): string {
     .replaceAll(" ", "_");
 }
 
+function errorMessage(
+  error: unknown,
+  fallback: string
+): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error
+  ) {
+    const message = String(
+      (error as { message?: unknown }).message ?? ""
+    ).trim();
+
+    if (message) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
+
 const VALID_STATUSES = new Set([
   "ACIK",
   "DEVAM_EDIYOR",
@@ -108,86 +134,33 @@ export async function GET(
       );
     }
 
-    if (id) {
-      let query = supabase
-        .from("dora_audit_capa")
-        .select(`
-          *,
-          finding:dora_audit_findings(
-            id,
-            title,
-            description,
-            finding_type,
-            risk_level,
-            legal_basis,
-            recommendation,
-            status
-          ),
-          audit:dora_audits(
-            id,
-            audit_no,
-            title,
-            audit_date_millis,
-            status
-          )
-        `)
-        .eq("id", id)
-        .eq("is_deleted", false);
-
-      if (firmId) {
-        query = query.eq(
-          "firm_id",
-          firmId
-        );
-      }
-
-      const {
-        data,
-        error,
-      } = await query.maybeSingle();
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "DORA DÖF kaydı bulunamadı.",
-          },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        capa: data,
-      });
-    }
+    /*
+     * ÖNEMLİ:
+     * dora_audit_capa -> finding/audit ilişkilerini
+     * PostgREST nested select ile zorlamıyoruz.
+     *
+     * Böylece Supabase tarafında FK relationship cache
+     * eksik olsa bile DÖF ekranı çalışmaya devam eder.
+     */
 
     let query = supabase
       .from("dora_audit_capa")
-      .select(`
-        *,
-        finding:dora_audit_findings(
-          id,
-          title,
-          finding_type,
-          risk_level,
-          status
-        ),
-        audit:dora_audits(
-          id,
-          audit_no,
-          title,
-          audit_date_millis,
-          status
-        )
-      `)
-      .eq("firm_id", firmId)
+      .select("*")
       .eq("is_deleted", false);
+
+    if (id) {
+      query = query.eq(
+        "id",
+        id
+      );
+    }
+
+    if (firmId) {
+      query = query.eq(
+        "firm_id",
+        firmId
+      );
+    }
 
     if (auditId) {
       query = query.eq(
@@ -214,25 +187,256 @@ export async function GET(
     }
 
     const {
-      data,
-      error,
+      data: capaRows,
+      error: capaError,
     } = await query
       .order(
         "due_date_millis",
-        { ascending: true }
+        {
+          ascending: true,
+          nullsFirst: false,
+        }
       )
       .order(
         "created_at_millis",
-        { ascending: false }
+        {
+          ascending: false,
+        }
       );
 
-    if (error) {
-      throw error;
+    if (capaError) {
+      /*
+       * Tablo henüz yoksa Şablonlar/Denetimler ekranını
+       * bloklamıyoruz. DÖF sekmesi boş açılır.
+       * POST sırasında gerçek kurulum hatası ayrıca görünür.
+       */
+      const code =
+        text(
+          (
+            capaError as {
+              code?: string;
+            }
+          ).code
+        );
+
+      if (
+        code === "42P01" ||
+        code === "PGRST205"
+      ) {
+        return NextResponse.json({
+          success: true,
+          capas: [],
+          capa: null,
+          setupRequired: true,
+          warning:
+            "dora_audit_capa tablosu henüz oluşturulmamış.",
+        });
+      }
+
+      throw capaError;
+    }
+
+    const rows =
+      Array.isArray(capaRows)
+        ? capaRows
+        : [];
+
+    if (
+      id &&
+      rows.length === 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "DORA DÖF kaydı bulunamadı.",
+        },
+        { status: 404 }
+      );
+    }
+
+    const findingIds =
+      Array.from(
+        new Set(
+          rows
+            .map(
+              (
+                item: Record<
+                  string,
+                  unknown
+                >
+              ) =>
+                text(
+                  item.finding_id
+                )
+            )
+            .filter(Boolean)
+        )
+      );
+
+    const auditIds =
+      Array.from(
+        new Set(
+          rows
+            .map(
+              (
+                item: Record<
+                  string,
+                  unknown
+                >
+              ) =>
+                text(
+                  item.audit_id
+                )
+            )
+            .filter(Boolean)
+        )
+      );
+
+    const findingMap =
+      new Map<
+        string,
+        Record<string, unknown>
+      >();
+
+    const auditMap =
+      new Map<
+        string,
+        Record<string, unknown>
+      >();
+
+    if (
+      findingIds.length > 0
+    ) {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "dora_audit_findings"
+        )
+        .select(`
+          id,
+          title,
+          description,
+          finding_type,
+          risk_level,
+          legal_basis,
+          recommendation,
+          status
+        `)
+        .in(
+          "id",
+          findingIds
+        )
+        .eq(
+          "is_deleted",
+          false
+        );
+
+      if (error) {
+        console.warn(
+          "DORA CAPA FINDING ENRICH WARNING:",
+          error
+        );
+      } else {
+        for (
+          const item of
+          data ?? []
+        ) {
+          findingMap.set(
+            text(item.id),
+            item
+          );
+        }
+      }
+    }
+
+    if (
+      auditIds.length > 0
+    ) {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "dora_audits"
+        )
+        .select(`
+          id,
+          audit_no,
+          title,
+          audit_date_millis,
+          status
+        `)
+        .in(
+          "id",
+          auditIds
+        )
+        .eq(
+          "is_deleted",
+          false
+        );
+
+      if (error) {
+        console.warn(
+          "DORA CAPA AUDIT ENRICH WARNING:",
+          error
+        );
+      } else {
+        for (
+          const item of
+          data ?? []
+        ) {
+          auditMap.set(
+            text(item.id),
+            item
+          );
+        }
+      }
+    }
+
+    const enriched =
+      rows.map(
+        (
+          item: Record<
+            string,
+            unknown
+          >
+        ) => ({
+          ...item,
+
+          finding:
+            findingMap.get(
+              text(
+                item.finding_id
+              )
+            ) ??
+            null,
+
+          audit:
+            auditMap.get(
+              text(
+                item.audit_id
+              )
+            ) ??
+            null,
+        })
+      );
+
+    if (id) {
+      return NextResponse.json({
+        success: true,
+        capa:
+          enriched[0] ??
+          null,
+      });
     }
 
     return NextResponse.json({
       success: true,
-      capas: data ?? [],
+      capas:
+        enriched,
     });
   } catch (error) {
     console.error(
@@ -244,9 +448,7 @@ export async function GET(
       {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "DORA DÖF kayıtları alınamadı.",
+          errorMessage(error, "DORA DÖF kayıtları alınamadı."),
       },
       { status: 500 }
     );
@@ -625,9 +827,7 @@ export async function POST(
       {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "DORA DÖF oluşturulamadı.",
+          errorMessage(error, "DORA DÖF oluşturulamadı."),
       },
       { status: 500 }
     );
@@ -987,9 +1187,7 @@ export async function PATCH(
       {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "DORA DÖF güncellenemedi.",
+          errorMessage(error, "DORA DÖF güncellenemedi."),
       },
       { status: 500 }
     );
@@ -1084,9 +1282,7 @@ export async function DELETE(
       {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "DORA DÖF silinemedi.",
+          errorMessage(error, "DORA DÖF silinemedi."),
       },
       { status: 500 }
     );

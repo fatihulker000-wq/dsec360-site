@@ -1690,7 +1690,10 @@ export default function DoraAuditsPage() {
           note: String(row["Not"] ?? "").trim(),
         });
 
-        if (excelYes(row["Bulgu Oluştur"])) {
+        if (
+          status === "UYGUNSUZ" ||
+          excelYes(row["Bulgu Oluştur"])
+        ) {
           if (status !== "UYGUNSUZ" && status !== "KISMEN_UYGUN") {
             errors.push(
               `${excelRow}. satır: Bulgu yalnız UYGUNSUZ veya KISMEN_UYGUN sonuçtan oluşturulabilir.`
@@ -1701,6 +1704,7 @@ export default function DoraAuditsPage() {
           findingRows.push({
             answerId: id,
             questionId,
+            answerStatus: status,
             title:
               String(row["Başlık"] ?? "").trim() ||
               String(row["Denetim Sorusu"] ?? "").trim() ||
@@ -1749,13 +1753,19 @@ export default function DoraAuditsPage() {
 
       let findingsCreated = 0;
       let findingsSkipped = 0;
+      let capasCreated = 0;
+      let capasSkipped = 0;
 
       for (const finding of findingRows) {
+        let findingId = "";
+
         const existingResponse = await fetch(
           `/api/dora/audits/findings?firmId=${encodeURIComponent(firmId)}&auditId=${encodeURIComponent(resultAuditId)}&answerId=${encodeURIComponent(String(finding.answerId))}`,
           { cache: "no-store" }
         );
-        const existingData = await existingResponse.json();
+
+        const existingData =
+          await existingResponse.json();
 
         if (
           existingResponse.ok &&
@@ -1763,31 +1773,161 @@ export default function DoraAuditsPage() {
           Array.isArray(existingData.findings) &&
           existingData.findings.length > 0
         ) {
+          findingId =
+            String(
+              existingData.findings[0]?.id ??
+              ""
+            );
+
           findingsSkipped += 1;
-          continue;
+        } else {
+          const findingResponse =
+            await fetch(
+              "/api/dora/audits/findings",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                },
+                body: JSON.stringify({
+                  firmId,
+                  auditId:
+                    resultAuditId,
+                  ...finding,
+                  findingType:
+                    "UYGUNSUZLUK",
+                }),
+              }
+            );
+
+          const findingData =
+            await findingResponse.json();
+
+          if (
+            !findingResponse.ok ||
+            !findingData.success
+          ) {
+            throw new Error(
+              findingData.error ||
+                `Denetim cevapları kaydedildi ancak "${String(
+                  finding.title
+                )}" bulgusu oluşturulamadı.`
+            );
+          }
+
+          findingId =
+            String(
+              findingData.finding?.id ??
+              ""
+            );
+
+          findingsCreated += 1;
         }
 
-        const findingResponse = await fetch("/api/dora/audits/findings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            firmId,
-            auditId: resultAuditId,
-            ...finding,
-            findingType: "UYGUNSUZLUK",
-          }),
-        });
+        /*
+         * KURAL:
+         * Yalnızca gerçekten UYGUNSUZ olan her madde
+         * otomatik DORA DÖF açar.
+         *
+         * KISMEN_UYGUN bulguları DÖF oluşturmaz;
+         * gerektiğinde Bulgular sekmesinden manuel açılabilir.
+         */
+        if (
+          finding.answerStatus ===
+            "UYGUNSUZ" &&
+          findingId
+        ) {
+          const existingCapaResponse =
+            await fetch(
+              `/api/dora/audits/capa?firmId=${encodeURIComponent(
+                firmId
+              )}&findingId=${encodeURIComponent(
+                findingId
+              )}`,
+              {
+                cache:
+                  "no-store",
+              }
+            );
 
-        const findingData = await findingResponse.json();
+          const existingCapaData =
+            await existingCapaResponse.json();
 
-        if (!findingResponse.ok || !findingData.success) {
-          throw new Error(
-            findingData.error ||
-              `Denetim cevapları kaydedildi ancak "${String(finding.title)}" bulgusu oluşturulamadı.`
-          );
+          if (
+            existingCapaResponse.ok &&
+            existingCapaData.success &&
+            Array.isArray(
+              existingCapaData.capas
+            ) &&
+            existingCapaData.capas.length >
+              0
+          ) {
+            capasSkipped += 1;
+          } else {
+            const capaResponse =
+              await fetch(
+                "/api/dora/audits/capa",
+                {
+                  method:
+                    "POST",
+                  headers: {
+                    "Content-Type":
+                      "application/json",
+                  },
+                  body:
+                    JSON.stringify({
+                      firmId,
+                      auditId:
+                        resultAuditId,
+                      findingId,
+                      title:
+                        `${String(
+                          finding.title
+                        )} - DÖF`,
+                      description:
+                        String(
+                          finding.description ??
+                            ""
+                        ),
+                      correctiveAction:
+                        String(
+                          finding.recommendation ??
+                            ""
+                        ) ||
+                        "Uygunsuzluk giderilmeli ve uygunluk tekrar doğrulanmalıdır.",
+                      responsiblePerson:
+                        String(
+                          finding.detectedBy ??
+                            ""
+                        ),
+                      priority:
+                        String(
+                          finding.riskLevel ??
+                            "ORTA"
+                        ),
+                    }),
+                }
+              );
+
+            const capaData =
+              await capaResponse.json();
+
+            if (
+              !capaResponse.ok ||
+              !capaData.success
+            ) {
+              throw new Error(
+                capaData.error ||
+                  `"${String(
+                    finding.title
+                  )}" için otomatik DORA DÖF oluşturulamadı.`
+              );
+            }
+
+            capasCreated += 1;
+          }
         }
-
-        findingsCreated += 1;
       }
 
       await loadAudits();
@@ -1796,8 +1936,10 @@ export default function DoraAuditsPage() {
         `Denetim sonuçları aktarıldı.\n\n` +
           `İşlenen cevap: ${answersPayload.length}\n` +
           `Oluşturulan bulgu: ${findingsCreated}\n` +
-          `Mevcut olduğu için atlanan bulgu: ${findingsSkipped}\n\n` +
-          `DÖF otomatik oluşturulmadı. Gerekli DÖF'leri Bulgular sekmesinden açabilirsin.`
+          `Mevcut olduğu için atlanan bulgu: ${findingsSkipped}\n` +
+          `Otomatik oluşturulan DÖF: ${capasCreated}\n` +
+          `Mevcut olduğu için atlanan DÖF: ${capasSkipped}\n\n` +
+          `Kural: Her UYGUNSUZ madde otomatik DORA DÖF açar. KISMEN_UYGUN bulguları manuel yönetilir.`
       );
     } catch (err) {
       alert(
@@ -1977,7 +2119,7 @@ export default function DoraAuditsPage() {
             </div>
             <div className="infoBox">
               <strong>Toplu sonuç girişi:</strong> Denetimi seç → Sonuç Excel Şablonu'nu indir → sonuçları Excel'de doldur → aynı dosyayı toplu aktar.
-              UYGUNSUZ/KISMEN UYGUN satırlarda “Bulgu Oluştur = EVET” seçilebilir. DÖF otomatik açılmaz.
+              Her UYGUNSUZ sonuç otomatik bulgu ve DORA DÖF oluşturur. KISMEN_UYGUN satırlarda “Bulgu Oluştur = EVET” seçilebilir; bunlarda DÖF manuel açılır.
             </div>
             {publishedTemplates.length === 0 && <div className="errorBox">Yeni denetim başlatmak için en az bir yayınlanmış ve aktif şablon bulunmalıdır.</div>}
             {auditLoading ? <div className="empty">Denetimler yükleniyor...</div> : audits.length === 0 ? <div className="empty">Henüz başlatılmış DORA denetimi yok.</div> : (
