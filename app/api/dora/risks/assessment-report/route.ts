@@ -83,6 +83,41 @@ function levelLabel(level?: string | null): string {
   }
 }
 
+function levelColors(level?: string | null) {
+  switch (level) {
+    case "KABUL_EDILEBILIR":
+      return {
+        fill: rgb(0.86, 0.96, 0.86),
+        text: rgb(0.06, 0.42, 0.18),
+      };
+    case "KESIN_RISK":
+      return {
+        fill: rgb(1.0, 0.95, 0.72),
+        text: rgb(0.55, 0.34, 0.02),
+      };
+    case "ONEMLI_RISK":
+      return {
+        fill: rgb(1.0, 0.80, 0.35),
+        text: rgb(0.35, 0.18, 0.01),
+      };
+    case "YUKSEK_RISK":
+      return {
+        fill: rgb(0.96, 0.34, 0.20),
+        text: rgb(1, 1, 1),
+      };
+    case "COK_YUKSEK_RISK":
+      return {
+        fill: rgb(0.58, 0.03, 0.05),
+        text: rgb(1, 1, 1),
+      };
+    default:
+      return {
+        fill: rgb(0.95, 0.95, 0.96),
+        text: rgb(0.24, 0.26, 0.30),
+      };
+  }
+}
+
 function safeFileName(input: string): string {
   return input
     .toLocaleLowerCase("tr-TR")
@@ -674,131 +709,638 @@ export async function GET(request: NextRequest) {
 
     /* =====================================================
        4. RİSK TABLOSU
+       KURUMSAL - AYRI BÖLÜM / FAALİYET / TEHLİKE / RİSK
+       İLK VE KALAN RİSK ALT BAŞLIKLARI AYRI
     ===================================================== */
 
-    const columns = [
-      { key: "no", label: "No", width: 24 },
-      { key: "dept", label: "Bölüm / Faaliyet", width: 76 },
-      { key: "hazard", label: "Tehlike / Risk", width: 125 },
-      { key: "existing", label: "Mevcut Önlemler", width: 105 },
-      { key: "initial", label: "İlk Risk\nO/F/Ş - Skor", width: 72 },
-      { key: "action", label: "Alınacak Tedbir", width: 120 },
-      { key: "owner", label: "Sorumlu / Termin", width: 83 },
-      { key: "residual", label: "Kalan Risk", width: 76 },
-      { key: "basis", label: "Mevzuat", width: 80 },
+    type RiskTableColumn = {
+      key: string;
+      label: string;
+      width: number;
+      group?: "INITIAL" | "RESIDUAL";
+      levelCell?: boolean;
+    };
+
+    const columns: RiskTableColumn[] = [
+      { key: "no", label: "No", width: 18 },
+      { key: "department", label: "Bölüm", width: 40 },
+      { key: "activity", label: "Faaliyet", width: 40 },
+      { key: "hazard", label: "Tehlike", width: 55 },
+      { key: "risk", label: "Risk", width: 60 },
+      { key: "existing", label: "Mevcut Önlemler", width: 62 },
+
+      { key: "probability", label: "O", width: 23, group: "INITIAL" },
+      { key: "frequency", label: "F", width: 23, group: "INITIAL" },
+      { key: "severity", label: "Ş", width: 24, group: "INITIAL" },
+      { key: "score", label: "Skor", width: 30, group: "INITIAL" },
+
+      { key: "level", label: "Risk Seviyesi", width: 50, levelCell: true },
+
+      { key: "action", label: "Alınacak Tedbirler", width: 68 },
+      { key: "owner", label: "Sorumlu", width: 45 },
+      { key: "due", label: "Termin", width: 45 },
+
+      { key: "rProbability", label: "O", width: 23, group: "RESIDUAL" },
+      { key: "rFrequency", label: "F", width: 23, group: "RESIDUAL" },
+      { key: "rSeverity", label: "Ş", width: 24, group: "RESIDUAL" },
+      { key: "rScore", label: "Skor", width: 30, group: "RESIDUAL" },
+
+      {
+        key: "rLevel",
+        label: "Kalan Risk Seviyesi",
+        width: 50,
+        levelCell: true,
+      },
+
+      { key: "basis", label: "Mevzuat", width: 65 },
     ];
 
-    const tableX = 23;
+    const tableX = 20;
     const tableTop = 535;
     const tableBottom = 42;
-    const headerHeight = 34;
 
-    function drawTableHeader(target: PDFPage, yTop: number) {
-      let x = tableX;
-      for (const column of columns) {
-        target.drawRectangle({
-          x,
-          y: yTop - headerHeight,
-          width: column.width,
-          height: headerHeight,
-          borderWidth: 0.6,
-          borderColor: rgb(0.76, 0.77, 0.8),
-          color: rgb(0.94, 0.91, 0.92),
-        });
+    const firstHeaderHeight = 23;
+    const secondHeaderHeight = 23;
+    const headerHeight = firstHeaderHeight + secondHeaderHeight;
 
-        const headerLines = column.label.split("\n");
-        let headerY = yTop - 14;
-        for (const line of headerLines) {
-          target.drawText(line, {
-            x: x + 3,
-            y: headerY,
-            size: 6.3,
+    const initialColumns = columns.filter(
+      (column) => column.group === "INITIAL"
+    );
+
+    const residualColumns = columns.filter(
+      (column) => column.group === "RESIDUAL"
+    );
+
+    const initialWidth = initialColumns.reduce(
+      (sum, column) => sum + column.width,
+      0
+    );
+
+    const residualWidth = residualColumns.reduce(
+      (sum, column) => sum + column.width,
+      0
+    );
+
+    function drawHeaderCell(
+      target: PDFPage,
+      x: number,
+      yTop: number,
+      width: number,
+      height: number,
+      label: string,
+      size = 5.4
+    ) {
+      target.drawRectangle({
+        x,
+        y: yTop - height,
+        width,
+        height,
+        borderWidth: 0.6,
+        borderColor: rgb(0.70, 0.71, 0.74),
+        color: rgb(0.40, 0.03, 0.06),
+      });
+
+      const lines = wrapText(
+        label,
+        Math.max(8, width - 6),
+        bold,
+        size
+      );
+
+      const totalTextHeight =
+        Math.max(1, lines.length) * (size + 1.5);
+
+      let lineY =
+        yTop -
+        (height - totalTextHeight) / 2 -
+        size;
+
+      for (const line of lines) {
+        const textWidth =
+          bold.widthOfTextAtSize(
+            line,
+            size
+          );
+
+        target.drawText(
+          line || " ",
+          {
+            x:
+              x +
+              Math.max(
+                3,
+                (width - textWidth) / 2
+              ),
+            y: lineY,
+            size,
             font: bold,
-            color: rgb(0.28, 0.09, 0.13),
-          });
-          headerY -= 8;
-        }
-        x += column.width;
+            color: rgb(1, 1, 1),
+          }
+        );
+
+        lineY -= size + 1.5;
       }
     }
 
-    function cellLines(value: string, width: number, font = regular, size = 6.2) {
-      return wrapText(value || "-", width - 6, font, size);
+    function drawTableHeader(
+      target: PDFPage,
+      yTop: number
+    ) {
+      let x = tableX;
+
+      for (
+        let index = 0;
+        index < columns.length;
+        index += 1
+      ) {
+        const column =
+          columns[index];
+
+        if (
+          column.group ===
+          "INITIAL"
+        ) {
+          if (
+            column.key ===
+            "probability"
+          ) {
+            drawHeaderCell(
+              target,
+              x,
+              yTop,
+              initialWidth,
+              firstHeaderHeight,
+              "İlk Risk (Olasılık - Frekans - Şiddet - Skor)",
+              5.6
+            );
+          }
+
+          drawHeaderCell(
+            target,
+            x,
+            yTop -
+              firstHeaderHeight,
+            column.width,
+            secondHeaderHeight,
+            column.label,
+            5.4
+          );
+
+          x +=
+            column.width;
+
+          continue;
+        }
+
+        if (
+          column.group ===
+          "RESIDUAL"
+        ) {
+          if (
+            column.key ===
+            "rProbability"
+          ) {
+            drawHeaderCell(
+              target,
+              x,
+              yTop,
+              residualWidth,
+              firstHeaderHeight,
+              "Kalan Risk (Olasılık - Frekans - Şiddet - Skor)",
+              5.6
+            );
+          }
+
+          drawHeaderCell(
+            target,
+            x,
+            yTop -
+              firstHeaderHeight,
+            column.width,
+            secondHeaderHeight,
+            column.label,
+            5.4
+          );
+
+          x +=
+            column.width;
+
+          continue;
+        }
+
+        drawHeaderCell(
+          target,
+          x,
+          yTop,
+          column.width,
+          headerHeight,
+          column.label,
+          5.1
+        );
+
+        x +=
+          column.width;
+      }
     }
 
-    page = addLandscapePage("KURUMSAL FINE KINNEY RİSK DEĞERLENDİRME TABLOSU");
-    drawTableHeader(page, tableTop);
-    let tableY = tableTop - headerHeight;
-
-    if (allRisks.length === 0) {
-      page.drawText("Kayıtlı risk bulunmamaktadır.", {
-        x: tableX,
-        y: tableY - 24,
-        size: 9,
-        font: regular,
-      });
+    function cellLines(
+      value: string,
+      width: number,
+      font = regular,
+      size = 5.45
+    ) {
+      return wrapText(
+        value || "-",
+        Math.max(8, width - 6),
+        font,
+        size
+      );
     }
 
-    for (let index = 0; index < allRisks.length; index += 1) {
-      const risk = allRisks[index];
+    page = addLandscapePage(
+      "KURUMSAL FINE KINNEY RİSK DEĞERLENDİRME TABLOSU"
+    );
 
-      const values = {
-        no: String(index + 1),
-        dept: [risk.department, risk.activity, risk.location].filter(Boolean).join(" / ") || "-",
-        hazard: [risk.hazard, risk.risk_description, risk.consequence].filter(Boolean).join(" — ") || "-",
-        existing: text(risk.existing_controls) || "-",
-        initial: `${risk.fk_probability}/${risk.fk_frequency}/${risk.fk_severity} - ${risk.fk_score}\n${levelLabel(risk.fk_level)}`,
-        action: text(risk.corrective_action) || "-",
-        owner: `${text(risk.responsible_person) || "-"}\n${formatDate(risk.due_date_millis)}`,
-        residual:
-          risk.residual_score != null
-            ? `${risk.residual_probability ?? "-"}/${risk.residual_frequency ?? "-"}/${risk.residual_severity ?? "-"} - ${risk.residual_score}\n${levelLabel(risk.residual_level)}`
-            : "Henüz değerlendirilmedi",
-        basis: text(risk.legal_basis) || "-",
+    drawTableHeader(
+      page,
+      tableTop
+    );
+
+    let tableY =
+      tableTop -
+      headerHeight;
+
+    if (
+      allRisks.length === 0
+    ) {
+      page.drawText(
+        "Kayıtlı risk bulunmamaktadır.",
+        {
+          x: tableX,
+          y: tableY - 24,
+          size: 9,
+          font: regular,
+        }
+      );
+    }
+
+    for (
+      let index = 0;
+      index < allRisks.length;
+      index += 1
+    ) {
+      const risk =
+        allRisks[index];
+
+      const riskText =
+        [
+          text(
+            risk.risk_description
+          ),
+          text(
+            risk.consequence
+          ),
+        ]
+          .filter(Boolean)
+          .join(" - ") ||
+        "-";
+
+      const hasResidual =
+        risk.residual_score !=
+        null;
+
+      const values: Record<
+        string,
+        string
+      > = {
+        no:
+          String(index + 1),
+
+        department:
+          text(
+            risk.department
+          ) || "-",
+
+        activity:
+          text(
+            risk.activity
+          ) || "-",
+
+        hazard:
+          text(
+            risk.hazard
+          ) || "-",
+
+        risk:
+          riskText,
+
+        existing:
+          text(
+            risk.existing_controls
+          ) || "-",
+
+        probability:
+          String(
+            risk.fk_probability ??
+            "-"
+          ),
+
+        frequency:
+          String(
+            risk.fk_frequency ??
+            "-"
+          ),
+
+        severity:
+          String(
+            risk.fk_severity ??
+            "-"
+          ),
+
+        score:
+          String(
+            risk.fk_score ??
+            "-"
+          ),
+
+        level:
+          levelLabel(
+            risk.fk_level
+          ),
+
+        action:
+          text(
+            risk.corrective_action
+          ) || "-",
+
+        owner:
+          text(
+            risk.responsible_person
+          ) || "-",
+
+        due:
+          formatDate(
+            risk.due_date_millis
+          ),
+
+        rProbability:
+          hasResidual
+            ? String(
+                risk.residual_probability ??
+                "-"
+              )
+            : "-",
+
+        rFrequency:
+          hasResidual
+            ? String(
+                risk.residual_frequency ??
+                "-"
+              )
+            : "-",
+
+        rSeverity:
+          hasResidual
+            ? String(
+                risk.residual_severity ??
+                "-"
+              )
+            : "-",
+
+        rScore:
+          hasResidual
+            ? String(
+                risk.residual_score
+              )
+            : "-",
+
+        rLevel:
+          hasResidual
+            ? levelLabel(
+                risk.residual_level
+              )
+            : "Değerlendirilmedi",
+
+        basis:
+          text(
+            risk.legal_basis
+          ) || "-",
       };
 
-      const prepared = columns.map((column) => {
-        const value = values[column.key as keyof typeof values];
-        return cellLines(value, column.width);
-      });
+      const prepared =
+        columns.map(
+          (column) =>
+            cellLines(
+              values[
+                column.key
+              ],
+              column.width,
+              column.levelCell
+                ? bold
+                : regular,
+              column.levelCell
+                ? 5.0
+                : 5.45
+            )
+        );
 
-      const maxLines = Math.max(...prepared.map((lines) => lines.length));
-      const rowHeight = Math.max(28, maxLines * 8 + 8);
+      const maxLines =
+        Math.max(
+          ...prepared.map(
+            (lines) =>
+              Math.max(
+                1,
+                lines.length
+              )
+          )
+        );
 
-      if (tableY - rowHeight < tableBottom) {
-        page = addLandscapePage("KURUMSAL FINE KINNEY RİSK DEĞERLENDİRME TABLOSU");
-        drawTableHeader(page, tableTop);
-        tableY = tableTop - headerHeight;
+      const rowHeight =
+        Math.max(
+          32,
+          maxLines * 7 +
+            10
+        );
+
+      if (
+        tableY -
+          rowHeight <
+        tableBottom
+      ) {
+        page =
+          addLandscapePage(
+            "KURUMSAL FINE KINNEY RİSK DEĞERLENDİRME TABLOSU"
+          );
+
+        drawTableHeader(
+          page,
+          tableTop
+        );
+
+        tableY =
+          tableTop -
+          headerHeight;
       }
 
-      let x = tableX;
-      columns.forEach((column, columnIndex) => {
-        page.drawRectangle({
-          x,
-          y: tableY - rowHeight,
-          width: column.width,
-          height: rowHeight,
-          borderWidth: 0.5,
-          borderColor: rgb(0.83, 0.84, 0.86),
-          color: index % 2 === 0 ? rgb(1, 1, 1) : rgb(0.985, 0.987, 0.99),
-        });
+      let x =
+        tableX;
 
-        let lineY = tableY - 10;
-        for (const line of prepared[columnIndex]) {
-          page.drawText(line || " ", {
-            x: x + 3,
-            y: lineY,
-            size: 6.2,
-            font: regular,
-            color: rgb(0.18, 0.2, 0.24),
+      columns.forEach(
+        (
+          column,
+          columnIndex
+        ) => {
+          let fill =
+            index % 2 === 0
+              ? rgb(
+                  1,
+                  1,
+                  1
+                )
+              : rgb(
+                  0.985,
+                  0.987,
+                  0.99
+                );
+
+          let textColor =
+            rgb(
+              0.18,
+              0.20,
+              0.24
+            );
+
+          if (
+            column.key ===
+            "level"
+          ) {
+            const color =
+              levelColors(
+                risk.fk_level
+              );
+
+            fill =
+              color.fill;
+
+            textColor =
+              color.text;
+          }
+
+          if (
+            column.key ===
+            "rLevel"
+          ) {
+            const color =
+              hasResidual
+                ? levelColors(
+                    risk.residual_level
+                  )
+                : {
+                    fill: rgb(
+                      0.95,
+                      0.95,
+                      0.96
+                    ),
+                    text: rgb(
+                      0.38,
+                      0.40,
+                      0.44
+                    ),
+                  };
+
+            fill =
+              color.fill;
+
+            textColor =
+              color.text;
+          }
+
+          page.drawRectangle({
+            x,
+            y:
+              tableY -
+              rowHeight,
+            width:
+              column.width,
+            height:
+              rowHeight,
+            borderWidth: 0.5,
+            borderColor:
+              rgb(
+                0.82,
+                0.83,
+                0.85
+              ),
+            color:
+              fill,
           });
-          lineY -= 8;
+
+          const lines =
+            prepared[
+              columnIndex
+            ];
+
+          const fontSize =
+            column.levelCell
+              ? 5.0
+              : 5.45;
+
+          const lineHeight =
+            7;
+
+          const blockHeight =
+            Math.max(
+              1,
+              lines.length
+            ) *
+            lineHeight;
+
+          let lineY =
+            tableY -
+            Math.max(
+              10,
+              (
+                rowHeight -
+                blockHeight
+              ) /
+                2 +
+                fontSize
+            );
+
+          for (
+            const line of
+            lines
+          ) {
+            page.drawText(
+              line || " ",
+              {
+                x:
+                  x +
+                  3,
+                y:
+                  lineY,
+                size:
+                  fontSize,
+                font:
+                  column.levelCell
+                    ? bold
+                    : regular,
+                color:
+                  textColor,
+              }
+            );
+
+            lineY -=
+              lineHeight;
+          }
+
+          x +=
+            column.width;
         }
+      );
 
-        x += column.width;
-      });
-
-      tableY -= rowHeight;
+      tableY -=
+        rowHeight;
     }
 
     /* =====================================================
