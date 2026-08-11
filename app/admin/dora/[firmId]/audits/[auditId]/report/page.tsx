@@ -550,7 +550,7 @@ export default function DoraAuditReportPage() {
       () =>
         chunk(
           sortedAnswers,
-          10
+          14
         ),
       [sortedAnswers]
     );
@@ -560,7 +560,7 @@ export default function DoraAuditReportPage() {
       () =>
         chunk(
           findings,
-          8
+          14
         ),
       [findings]
     );
@@ -570,7 +570,7 @@ export default function DoraAuditReportPage() {
       () =>
         chunk(
           capas,
-          8
+          13
         ),
       [capas]
     );
@@ -610,7 +610,7 @@ export default function DoraAuditReportPage() {
       () =>
         chunk(
           improvementAnswers,
-          12
+          18
         ),
       [improvementAnswers]
     );
@@ -1102,147 +1102,31 @@ export default function DoraAuditReportPage() {
               />
             </div>
           </ReportSection>
+
+          <div className="compactSummary">
+            <div className="compactScore">
+              <span>UYGUNLUK</span>
+              <strong>%{complianceScore.toFixed(1)}</strong>
+            </div>
+
+            <div className="compactMetrics">
+              <Metric label="Toplam Madde" value={counts.total} />
+              <Metric label="Uygun" value={counts.uygun} />
+              <Metric label="Kısmen Uygun" value={counts.kismen} />
+              <Metric label="Uygunsuz" value={counts.uygunsuz} />
+              <Metric label="Uygulanamaz" value={counts.uygulanamaz} />
+            </div>
+          </div>
+
         </PdfSheet>
 
         {/* ====================================================
-            SAYFA 2 - Yönetici Özeti
+            DENETİM SONUÇLARI
         ==================================================== */}
-        <PdfSheet
-          pageTitle="Denetim Özeti"
-          auditNo={
-            audit.audit_no
-          }
-        >
-          <ReportSection
-            title="2. Denetim Özeti ve Uygunluk Skoru"
-          >
-            <div className="summaryHero">
-              <div className="heroScore">
-                <span>
-                  UYGUNLUK SKORU
-                </span>
-
-                <strong>
-                  %
-                  {complianceScore.toFixed(
-                    1
-                  )}
-                </strong>
-              </div>
-
-              <div className="summaryMetrics">
-                <Metric
-                  label="Toplam Madde"
-                  value={
-                    counts.total
-                  }
-                />
-
-                <Metric
-                  label="Cevaplanan"
-                  value={
-                    counts.answered
-                  }
-                />
-
-                <Metric
-                  label="Uygun"
-                  value={
-                    counts.uygun
-                  }
-                />
-
-                <Metric
-                  label="Kısmen Uygun"
-                  value={
-                    counts.kismen
-                  }
-                />
-
-                <Metric
-                  label="Uygunsuz"
-                  value={
-                    counts.uygunsuz
-                  }
-                />
-
-                <Metric
-                  label="Uygulanamaz"
-                  value={
-                    counts.uygulanamaz
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="distributionCard">
-              <h3>
-                Sonuç Dağılımı
-              </h3>
-
-              <Bar
-                label="Uygun"
-                value={
-                  counts.uygun
-                }
-                total={
-                  counts.total
-                }
-                className="ok"
-              />
-
-              <Bar
-                label="Kısmen Uygun"
-                value={
-                  counts.kismen
-                }
-                total={
-                  counts.total
-                }
-                className="partial"
-              />
-
-              <Bar
-                label="Uygunsuz"
-                value={
-                  counts.uygunsuz
-                }
-                total={
-                  counts.total
-                }
-                className="bad"
-              />
-
-              <Bar
-                label="Uygulanamaz"
-                value={
-                  counts.uygulanamaz
-                }
-                total={
-                  counts.total
-                }
-                className="na"
-              />
-            </div>
-
-            <div className="methodBox">
-              <strong>
-                Hesaplama yöntemi
-              </strong>
-
-              <p>
-                Uygunluk skoru, uygulanabilir maddeler üzerinden
-                Uygun = 1, Kısmen Uygun = 0,5 ve Uygunsuz = 0
-                kabul edilerek hesaplanmıştır. Uygulanamaz maddeler
-                skor paydasına dahil edilmemiştir.
-              </p>
-            </div>
-          </ReportSection>
-        </PdfSheet>
-
         {/* ====================================================
-            DENETİM SONUÇLARI - 10 satır / sayfa
+            DENETİM SONUÇLARI - yoğunlaştırılmış sayfalama
         ==================================================== */}
+
         {resultPages.map(
           (
             pageAnswers,
@@ -1339,7 +1223,7 @@ export default function DoraAuditReportPage() {
                             <td>
                               {q?.sort_order ??
                                 pageIndex *
-                                  10 +
+                                  14 +
                                   localIndex +
                                   1}
                             </td>
@@ -1507,7 +1391,7 @@ export default function DoraAuditReportPage() {
                           >
                             <td>
                               {pageIndex *
-                                8 +
+                                14 +
                                 localIndex +
                                 1}
                             </td>
@@ -1697,7 +1581,7 @@ export default function DoraAuditReportPage() {
                             >
                               <td>
                                 {pageIndex *
-                                  8 +
+                                  13 +
                                   localIndex +
                                   1}
                               </td>
@@ -2057,7 +1941,7 @@ export default function DoraAuditReportPage() {
           width: 1120px;
           height: 792px;
           background: #fff;
-          padding: 34px 38px 44px;
+          padding: 26px 30px 36px;
           position: relative;
           overflow: hidden;
           box-shadow: 0 8px 28px rgba(16, 24, 40, 0.08);
@@ -2071,8 +1955,8 @@ export default function DoraAuditReportPage() {
           justify-content: space-between;
           align-items: center;
           border-bottom: 4px solid #7a2633;
-          padding-bottom: 7px;
-          margin-bottom: 18px;
+          padding-bottom: 5px;
+          margin-bottom: 12px;
           font-size: 10px;
           color: #667085;
         }
@@ -2084,9 +1968,9 @@ export default function DoraAuditReportPage() {
 
         :global(.pdfSheetFooter) {
           position: absolute;
-          left: 38px;
-          right: 38px;
-          bottom: 18px;
+          left: 30px;
+          right: 30px;
+          bottom: 12px;
           border-top: 1px solid #e4e7ec;
           padding-top: 7px;
           display: flex;
@@ -2096,9 +1980,9 @@ export default function DoraAuditReportPage() {
         }
 
         .cover {
-          min-height: 180px;
+          min-height: 132px;
           border-bottom: 1px solid #d7dce2;
-          padding: 20px 0 24px;
+          padding: 12px 0 14px;
           display: flex;
           justify-content: space-between;
           gap: 30px;
@@ -2117,9 +2001,9 @@ export default function DoraAuditReportPage() {
         }
 
         h1 {
-          font-size: 28px;
+          font-size: 24px;
           line-height: 1.12;
-          margin: 14px 0 10px;
+          margin: 8px 0 7px;
           color: #1f2937;
         }
 
@@ -2154,12 +2038,12 @@ export default function DoraAuditReportPage() {
         }
 
         :global(.reportSection) {
-          margin-top: 16px;
+          margin-top: 11px;
         }
 
         :global(.reportSectionTitle) {
-          margin: 0 0 12px;
-          padding-bottom: 7px;
+          margin: 0 0 8px;
+          padding-bottom: 5px;
           border-bottom: 2px solid #7a2633;
           font-size: 16px;
           line-height: 1.25;
@@ -2215,6 +2099,45 @@ export default function DoraAuditReportPage() {
           word-break: break-word;
         }
 
+
+        .compactSummary {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: 150px 1fr;
+          gap: 8px;
+          border-top: 1px solid #e4e7ec;
+          padding-top: 10px;
+        }
+
+        .compactScore {
+          background: #7a2633;
+          color: #fff;
+          border-radius: 10px;
+          padding: 12px 14px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          min-height: 74px;
+        }
+
+        .compactScore span {
+          color: #f6dbe0;
+          font-size: 8px;
+          font-weight: 900;
+          letter-spacing: 0.07em;
+        }
+
+        .compactScore strong {
+          font-size: 26px;
+          margin-top: 4px;
+        }
+
+        .compactMetrics {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 7px;
+        }
+
         .summaryHero {
           display: grid;
           grid-template-columns: 180px 1fr;
@@ -2254,8 +2177,8 @@ export default function DoraAuditReportPage() {
           border: 1px solid #e4e7ec;
           border-radius: 10px;
           background: #fafafa;
-          padding: 13px 14px;
-          min-height: 58px;
+          padding: 9px 10px;
+          min-height: 50px;
         }
 
         :global(.metricCard span) {
@@ -2269,7 +2192,7 @@ export default function DoraAuditReportPage() {
 
         :global(.metricCard strong) {
           display: block;
-          font-size: 22px;
+          font-size: 18px;
           margin-top: 3px;
           color: #1f2937;
         }
@@ -2351,20 +2274,20 @@ export default function DoraAuditReportPage() {
         th {
           background: #f1f3f6;
           color: #475467;
-          font-size: 7px;
-          line-height: 1.15;
+          font-size: 6.6px;
+          line-height: 1.12;
           text-transform: uppercase;
           text-align: left;
-          padding: 5px 4px;
+          padding: 3px 3px;
           border: 1px solid #dfe3e8;
           overflow-wrap: anywhere;
         }
 
         td {
-          font-size: 7px;
-          line-height: 1.26;
+          font-size: 6.6px;
+          line-height: 1.18;
           vertical-align: top;
-          padding: 4px;
+          padding: 3px;
           border: 1px solid #e4e7ec;
           overflow-wrap: anywhere;
         }
@@ -2465,8 +2388,8 @@ export default function DoraAuditReportPage() {
 
         .detailTable th,
         .detailTable td {
-          font-size: 7.5px;
-          line-height: 1.28;
+          font-size: 7px;
+          line-height: 1.2;
         }
 
         .findingsTable th:nth-child(1) {
@@ -2544,7 +2467,7 @@ export default function DoraAuditReportPage() {
         .legalGrid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 8px;
+          gap: 6px;
         }
 
         .legalItem {
@@ -2553,8 +2476,8 @@ export default function DoraAuditReportPage() {
           gap: 8px;
           border: 1px solid #e4e7ec;
           border-radius: 6px;
-          padding: 8px;
-          min-height: 78px;
+          padding: 6px;
+          min-height: 58px;
           background: #fff;
         }
 
@@ -2587,8 +2510,8 @@ export default function DoraAuditReportPage() {
         }
 
         .legalItem p {
-          margin: 5px 0 0;
-          font-size: 7.5px;
+          margin: 3px 0 0;
+          font-size: 7px;
           color: #475467;
           line-height: 1.35;
         }
