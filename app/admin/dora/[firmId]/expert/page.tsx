@@ -142,6 +142,9 @@ export default function DoraExpertPage() {
   const [analyzing, setAnalyzing] =
     useState(false);
 
+  const [robotStarted, setRobotStarted] =
+    useState(false);
+
   const [error, setError] =
     useState("");
 
@@ -695,8 +698,9 @@ table{width:100%;border-collapse:collapse;font-size:11px}
 th,td{border:1px solid #333;padding:7px;text-align:left;vertical-align:top}
 th{background:#f2f4f7}
 ul,ol{font-size:11px;line-height:1.55}
-.signatures{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px;font-size:11px}
-.sign{height:55px;border-bottom:1px dotted #444}
+.docPage{page-break-after:always;min-height:250mm;padding-bottom:8mm}.docPage:last-child{page-break-after:auto}
+.meta th{width:26%}.question{margin:0 0 12px;font-size:11px;line-height:1.5}.answerGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:25px 0}.certificate{text-align:center;border:3px solid #7a0017;border-radius:20px;padding:28px;min-height:175mm}.certificate h2{font-size:28px;color:#7a0017;margin:28px 0 12px}.fillRow{border:1px solid #b4becd;padding:10px;min-height:38px}.wideTable{overflow:visible}.wideTable table{font-size:8px}.decisionBox{height:170px;border:1px solid #333;margin-bottom:18px}.reqLine{border:1px solid #e1e5eb;border-radius:10px;padding:10px;margin:8px 0;font-size:11px}.reqLine span{color:#7a0017;font-weight:700}
+.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;margin-top:40px;font-size:11px}.sign{height:55px;border-bottom:1px dotted #444}
 @media print{body{background:#fff}.toolbar{display:none}.sheet{width:auto;min-height:auto;margin:0;padding:0}}
 </style>
 </head>
@@ -745,240 +749,150 @@ ${bodyHtml}
       </table>`;
   }
 
-  function generateRobotDocument(
-    kind: string
-  ) {
-    const employeeRows =
-      employees.length > 0
-        ? employees
-            .map(
-              (employee, index) => `
-              <tr>
-                <td>${index + 1}</td>
-                <td>${escapeHtml(
-                  employee.full_name ??
-                    employee.fullName
-                )}</td>
-                <td>${escapeHtml(
-                  employee.tc_no ??
-                    employee.tcNo ??
-                    "-"
-                )}</td>
-                <td>${escapeHtml(
-                  employee.job_title ??
-                    employee.position ??
-                    "-"
-                )}</td>
-              </tr>`
-            )
-            .join("")
-        : `<tr><td colspan="4">DORA çalışan kaydı bulunamadı.</td></tr>`;
+  function employeeName(e: AnyRow) {
+    return value(e.full_name ?? e.fullName ?? e.name) || "Çalışan Adı Girilmedi";
+  }
 
-    const riskRows =
-      risks.length > 0
-        ? risks
-            .slice(0, 100)
-            .map(
-              (risk, index) => `
-              <tr>
-                <td>${index + 1}</td>
-                <td>${escapeHtml(
-                  risk.activity ??
-                    risk.title ??
-                    "-"
-                )}</td>
-                <td>${escapeHtml(
-                  risk.hazard ?? "-"
-                )}</td>
-                <td>${escapeHtml(
-                  risk.risk ??
-                    risk.risk_description ??
-                    "-"
-                )}</td>
-                <td>${escapeHtml(
-                  risk.score ??
-                    risk.risk_score ??
-                    "-"
-                )}</td>
-              </tr>`
-            )
-            .join("")
-        : `<tr><td colspan="5">DORA risk kaydı bulunamadı.</td></tr>`;
+  function employeeTc(e: AnyRow) {
+    return value(e.tc_no ?? e.tcNo) || "-";
+  }
 
-    const trainingRows =
-      trainings.length > 0
-        ? trainings
-            .map(
-              (training, index) => `
-              <tr>
-                <td>${index + 1}</td>
-                <td>${escapeHtml(
-                  training.title
-                )}</td>
-                <td>${escapeHtml(
-                  training.trainingDate ??
-                    "-"
-                )}</td>
-                <td>${arr(
-                  training.participants
-                ).length}</td>
-                <td>${escapeHtml(
-                  training.status ??
-                    "-"
-                )}</td>
-              </tr>`
-            )
-            .join("")
-        : `<tr><td colspan="5">DORA eğitim kaydı bulunamadı.</td></tr>`;
+  function employeeJob(e: AnyRow) {
+    return value(e.job_title ?? e.jobTitle ?? e.position) || "-";
+  }
 
-    const docs: Record<
-      string,
-      {
-        title: string;
-        body: string;
+  function authorityName(...keys: string[]) {
+    for (const key of keys) {
+      const v = authorities?.[key];
+      if (typeof v === "string" && value(v)) return value(v);
+      if (v && typeof v === "object") {
+        const n = value(v.fullName ?? v.full_name ?? v.name);
+        if (n) return n;
       }
-    > = {
-      training_package: {
-        title:
-          "DORA Eğitim ve Sertifika Paketi",
-        body: `
-          <h2>Eğitim Oturumları</h2>
-          <table><tr><th>No</th><th>Eğitim</th><th>Tarih</th><th>Katılımcı</th><th>Durum</th></tr>${trainingRows}</table>
-          <h2>Sertifika Özeti</h2>
-          <p>Toplam DORA sertifikası: <b>${certificates.length}</b></p>
-          <p>Bu paket DORA Eğitim ve Sertifika Merkezi kayıtlarından oluşturulmuştur.</p>`,
-      },
-
-      corporate: {
-        title:
-          "DORA Kurumsal Doküman Paketi",
-        body: `
-          <h2>Kurulum Durumu</h2>
-          <p>Kurulum skoru: <b>%${effectiveScore}</b></p>
-          ${requirementTable()}
-          <h2>DORA Yorumu</h2><p>${escapeHtml(expertComment)}</p>`,
-      },
-
-      fine_kinney: {
-        title:
-          "DORA Fine Kinney Risk Değerlendirmesi",
-        body: `<table><tr><th>No</th><th>Faaliyet</th><th>Tehlike</th><th>Risk</th><th>Skor</th></tr>${riskRows}</table>`,
-      },
-
-      certificates: {
-        title:
-          "DORA Toplu İSG Eğitim Sertifikaları",
-        body: certificates.length > 0
-          ? certificates
-              .map(
-                (c, i) => `
-                <h2>${i + 1}. ${escapeHtml(c.employeeName ?? "-")}</h2>
-                <table>
-                  <tr><th>Belge No</th><td>${escapeHtml(c.certificateNo ?? "-")}</td></tr>
-                  <tr><th>Eğitim</th><td>${escapeHtml(c.trainingTitle ?? "-")}</td></tr>
-                  <tr><th>Düzenlenme</th><td>${escapeHtml(c.issueDate ?? "-")}</td></tr>
-                </table>`
-              )
-              .join("")
-          : "<p>DORA sertifika kaydı bulunamadı.</p>",
-      },
-
-      board_minutes: {
-        title:
-          "İSG Kurul Toplantı Tutanağı Taslağı",
-        body: `
-          <table>
-            <tr><th>İşyeri</th><td>${escapeHtml(firm?.firm_name || "-")}</td></tr>
-            <tr><th>Toplantı Tarihi</th><td>................................</td></tr>
-            <tr><th>Toplantı No</th><td>................................</td></tr>
-          </table>
-          <h2>Gündem</h2><ol><li>İSG performansının değerlendirilmesi</li><li>Risk ve aksiyonların gözden geçirilmesi</li><li>Eğitim ve çalışan katılımının değerlendirilmesi</li><li>Yeni kararlar</li></ol>
-          <h2>Kararlar</h2><div style="height:180px;border:1px solid #333"></div>
-          <div class="signatures"><div>Kurul Başkanı<div class="sign"></div></div><div>Üyeler<div class="sign"></div></div></div>`,
-      },
-
-      appointments: {
-        title:
-          "DORA Atama Yazıları Personel Listesi",
-        body: `<table><tr><th>No</th><th>Ad Soyad</th><th>TC</th><th>Görev/Unvan</th></tr>${employeeRows}</table>
-        <p>Görevlendirme türüne göre imzalı atama yazıları DORA kurumsal kayıtları kapsamında düzenlenir.</p>`,
-      },
-
-      risk_team: {
-        title:
-          "DORA Risk Değerlendirme Ekibi",
-        body: riskTeam.length > 0
-          ? `<table><tr><th>No</th><th>Ad Soyad</th><th>Rol</th></tr>${riskTeam
-              .map(
-                (m, i) =>
-                  `<tr><td>${i + 1}</td><td>${escapeHtml(m.full_name ?? m.fullName ?? m.name ?? "-")}</td><td>${escapeHtml(m.role ?? m.team_role ?? "-")}</td></tr>`
-              )
-              .join("")}</table>`
-          : "<p>Risk değerlendirme ekibi kaydı bulunamadı.</p>",
-      },
-
-      board_members: {
-        title:
-          "DORA İSG Kurulu Üyeleri",
-        body: `<p>Çalışan sayısı: <b>${Math.max(employees.length, num(firm?.employee_count))}</b></p>
-        <p>Kurul yükümlülüğü değerlendirmesi DORA analizindeki firma bilgilerine göre yapılmıştır.</p>
-        <table><tr><th>No</th><th>Ad Soyad</th><th>TC</th><th>Görev/Unvan</th></tr>${employeeRows}</table>`,
-      },
-
-      attendance_exam: {
-        title:
-          "DORA Eğitim Katılım ve Sınav Formu",
-        body: `<h2>Eğitim Oturumları</h2><table><tr><th>No</th><th>Eğitim</th><th>Tarih</th><th>Katılımcı</th><th>Durum</th></tr>${trainingRows}</table>
-        <h2>Katılımcı İmza / Sınav Alanı</h2>
-        <table><tr><th>No</th><th>Ad Soyad</th><th>TC</th><th>Unvan</th><th>İmza</th><th>Sınav Puanı</th></tr>${employees
-          .map(
-            (e, i) =>
-              `<tr><td>${i + 1}</td><td>${escapeHtml(e.full_name ?? e.fullName ?? "-")}</td><td>${escapeHtml(e.tc_no ?? e.tcNo ?? "-")}</td><td>${escapeHtml(e.job_title ?? e.position ?? "-")}</td><td style="height:32px"></td><td></td></tr>`
-          )
-          .join("")}</table>`,
-      },
-
-      commitment: {
-        title:
-          "DORA İSG Taahhütname ve Talimat",
-        body: `<p>İş sağlığı ve güvenliği kurallarına, işveren talimatlarına, güvenli çalışma yöntemlerine ve kişisel koruyucu donanım kullanım kurallarına uyacağımı; tehlikeli durumları derhal bildireceğimi kabul ve taahhüt ederim.</p>
-        <table><tr><th>Çalışan</th><td>................................</td></tr><tr><th>Görev</th><td>................................</td></tr><tr><th>Tarih</th><td>${today()}</td></tr></table><div class="signatures"><div>Çalışan İmzası<div class="sign"></div></div><div>İşveren / Vekili<div class="sign"></div></div></div>`,
-      },
-
-      health: {
-        title:
-          "DORA Sağlık Gözetimi Formu Taslağı",
-        body: `<p>Bu çıktı DORA kurulum sürecindeki sağlık gözetimi hazırlığı için taslak kayıt formudur. Yetkili işyeri hekimi tarafından mevzuata uygun nihai sağlık değerlendirmesi ayrıca yapılmalıdır.</p>
-        <table><tr><th>Çalışan</th><td>................................</td></tr><tr><th>Görev</th><td>................................</td></tr><tr><th>Muayene Tarihi</th><td>................................</td></tr><tr><th>Hekim Değerlendirmesi</th><td style="height:120px"></td></tr></table>`,
-      },
-
-      drill: {
-        title:
-          "DORA Tatbikat Senaryo ve Katılım Tutanağı",
-        body: `<table><tr><th>Tatbikat Türü</th><td>Yangın / Tahliye / Acil Durum</td></tr><tr><th>Tarih</th><td>................................</td></tr><tr><th>Senaryo</th><td style="height:100px"></td></tr></table>
-        <h2>Katılımcılar</h2><table><tr><th>No</th><th>Ad Soyad</th><th>TC</th><th>Görev</th><th>İmza</th></tr>${employees
-          .map(
-            (e, i) =>
-              `<tr><td>${i + 1}</td><td>${escapeHtml(e.full_name ?? e.fullName ?? "-")}</td><td>${escapeHtml(e.tc_no ?? e.tcNo ?? "-")}</td><td>${escapeHtml(e.job_title ?? e.position ?? "-")}</td><td></td></tr>`
-          )
-          .join("")}</table>`,
-      },
-    };
-
-    const doc =
-      docs[kind];
-
-    if (!doc) {
-      alert(
-        "Doküman tipi bulunamadı."
-      );
-      return;
     }
+    return "-";
+  }
 
-    printDocument(
-      doc.title,
-      doc.body
-    );
+  function employeeRowsHtml(withSignature = false) {
+    const list = employees.length ? employees : [{ full_name: "Çalışan Adı Girilmedi", tc_no: "-", job_title: "-" }];
+    return list.map((e, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(employeeName(e))}</td><td>${escapeHtml(employeeTc(e))}</td><td>${escapeHtml(employeeJob(e))}</td>${withSignature ? '<td style="height:34px"></td>' : ''}</tr>`).join("");
+  }
+
+  function selectedDutyRows() {
+    const rows: Array<{e: AnyRow; duty: string}> = [];
+    for (const e of employees) {
+      if (e.isEmployeeRepresentative || e.is_employee_representative) rows.push({e,duty:"Çalışan Temsilcisi"});
+      if (e.isChiefRepresentative || e.is_chief_representative) rows.push({e,duty:"Baş Çalışan Temsilcisi"});
+      if (e.isFireTeam || e.is_fire_team) rows.push({e,duty:"Yangınla Mücadele Destek Elemanı"});
+      if (e.isSearchRescueTeam || e.is_search_rescue_team) rows.push({e,duty:"Arama Kurtarma ve Tahliye Destek Elemanı"});
+      if (e.isProtectionTeam || e.is_protection_team) rows.push({e,duty:"Koruma Destek Elemanı"});
+      if (e.isFirstAidTeam || e.is_first_aid_team) rows.push({e,duty:"İlk Yardım Destek Elemanı"});
+      if (e.isRiskAssessmentTeam || e.is_risk_assessment_team) rows.push({e,duty:"Risk Değerlendirme Ekibi Üyesi"});
+      if (e.isIsgBoardMember || e.is_isg_board_member) rows.push({e,duty:"İSG Kurul Üyesi"});
+    }
+    return rows.length ? rows : [{e:{full_name:"Seçili personel bulunmuyor",tc_no:"-",job_title:"-"},duty:"Atama Yapılmadı"}];
+  }
+
+  function pageBreak(title: string, body: string) {
+    return `<section class="docPage"><h1>${escapeHtml(title)}</h1>${body}</section>`;
+  }
+
+  function trainingPackageHtml() {
+    const t = trainings[0] ?? {};
+    const trainingName = value(t.title) || "Temel İş Sağlığı ve Güvenliği Eğitimi";
+    const trainingDate = value(t.trainingDate) || today();
+    const startTime = value(t.startTime) || "09:00";
+    const endTime = value(t.endTime) || "17:00";
+    const hours = value(t.trainingHours) || "8";
+    const place = value(t.place) || "-";
+    const trainer = value(t.trainerName) || authorityName("isgExpert","isg_expert");
+    const participants = arr(t.participants);
+    const pRows = (participants.length ? participants : employees).map((e:any,i:number)=>`<tr><td>${i+1}</td><td>${escapeHtml(value(e.fullName ?? e.full_name) || employeeName(e))}</td><td>${escapeHtml(value(e.tcNo ?? e.tc_no) || employeeTc(e))}</td><td>${escapeHtml(value(e.jobTitle ?? e.job_title) || employeeJob(e))}</td><td style="height:32px"></td></tr>`).join("");
+    const questions = [
+      "İş sağlığı ve güvenliğinin temel amacı nedir?","İşyerinde tespit edilen tehlikeler kime bildirilmelidir?","Kişisel koruyucu donanımlar hangi amaçla kullanılır?","Acil durumda ilk yapılması gereken işlem nedir?","Yangın söndürücü kullanılmadan önce ne kontrol edilmelidir?","Elle taşıma işlerinde bel sağlığı için nelere dikkat edilmelidir?","Elektrik panolarına kimler müdahale edebilir?","Ramak kala olayların bildirilmesi neden önemlidir?","İş kazası meydana geldiğinde çalışan ne yapmalıdır?","Tahliye sırasında asansör kullanılır mı?","Kaygan zeminde hangi önlem alınmalıdır?","KKD hasarlıysa çalışan ne yapmalıdır?","Acil çıkış kapıları neden açık tutulmalıdır?","İş ekipmanları kimler tarafından kullanılmalıdır?","Kimyasal maddelerde SDS/MSDS ne için kullanılır?","Yüksekte çalışmada temel korunma nedir?","Yangın ekipmanlarının önü kapatılabilir mi?","İşyerinde düzen ve temizlik neden önemlidir?","Meslek hastalığı şüphesi nasıl bildirilmelidir?","Eğitim sonrası sınavın amacı nedir?"
+    ];
+    const answers = ["1-B","2-C","3-A","4-D","5-B","6-A","7-C","8-D","9-B","10-A","11-C","12-D","13-B","14-A","15-C","16-D","17-A","18-B","19-C","20-D"];
+    const topicText = value(t.topicsText) || "Genel konular\nSağlık konuları\nTeknik konular\nİşe ve işyerine özgü riskler";
+    const topics = topicText.split(/\n+/).filter(Boolean);
+    let html = pageBreak("İŞ SAĞLIĞI VE GÜVENLİĞİ EĞİTİM KATILIM FORMU", `
+      <table class="meta"><tr><th>Firma</th><td>${escapeHtml(firm?.firm_name||"-")}</td></tr><tr><th>Eğitim Adı</th><td>${escapeHtml(trainingName)}</td></tr><tr><th>Eğitim Tarihi</th><td>${escapeHtml(trainingDate)}</td></tr><tr><th>Saat</th><td>${escapeHtml(startTime)} - ${escapeHtml(endTime)}</td></tr><tr><th>Eğitim Süresi</th><td>${escapeHtml(hours)} Saat</td></tr><tr><th>Eğitim Yeri</th><td>${escapeHtml(place)}</td></tr><tr><th>Eğitici</th><td>${escapeHtml(trainer)}</td></tr><tr><th>İSG Uzmanı</th><td>${escapeHtml(authorityName("isgExpert","isg_expert"))}</td></tr><tr><th>İşyeri Hekimi</th><td>${escapeHtml(authorityName("doctor","workplaceDoctor","workplace_doctor"))}</td></tr></table>
+      <table><thead><tr><th>No</th><th>Ad Soyad</th><th>T.C.</th><th>Görev</th><th>İmza</th></tr></thead><tbody>${pRows}</tbody></table>`);
+    html += pageBreak("İSG EĞİTİMİ SINAV KAĞIDI", `<p>Firma: ${escapeHtml(firm?.firm_name||"-")}<br/>Eğitim: ${escapeHtml(trainingName)}<br/>Tarih: ${escapeHtml(trainingDate)}<br/><br/>Ad Soyad: ____________________ &nbsp;&nbsp; T.C.: ____________________</p>${questions.map((q,i)=>`<div class="question"><b>${i+1}) ${escapeHtml(q)}</b><br/>A) _______ &nbsp; B) _______ &nbsp; C) _______ &nbsp; D) _______</div>`).join("")}`);
+    html += pageBreak("İSG EĞİTİMİ CEVAP ANAHTARI", `<div class="answerGrid">${answers.map(a=>`<b>${a}</b>`).join("")}</div><p>Başarı değerlendirmesi: 100 üzerinden en az 70 puan başarılı kabul edilir.</p><p>Değerlendiren / Eğitici: ${escapeHtml(trainer)}</p>`);
+    html += pageBreak("EĞİTİM SONUÇ RAPORU", `<table class="meta"><tr><th>Firma</th><td>${escapeHtml(firm?.firm_name||"-")}</td></tr><tr><th>SGK Sicil No</th><td>${escapeHtml(firm?.sgk_no||"-")}</td></tr><tr><th>Adres</th><td>${escapeHtml(firm?.address||"-")}</td></tr><tr><th>Eğitim</th><td>${escapeHtml(trainingName)}</td></tr><tr><th>Tarih</th><td>${escapeHtml(trainingDate)}</td></tr><tr><th>Saat</th><td>${escapeHtml(startTime)} - ${escapeHtml(endTime)}</td></tr><tr><th>Süre</th><td>${escapeHtml(hours)} Saat</td></tr><tr><th>Yer</th><td>${escapeHtml(place)}</td></tr><tr><th>Eğitici</th><td>${escapeHtml(trainer)}</td></tr><tr><th>Katılımcı Sayısı</th><td>${participants.length || employees.length}</td></tr></table><h2>Eğitim Konu Başlıkları</h2><ol>${topics.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ol><h2>Değerlendirme</h2><p>Eğitim katılım listesi alınmış, sınav/değerlendirme süreci uygulanmış ve kayıt altına alınmıştır.</p><p>Katılımcıların eğitim içeriği hakkında bilgilendirildiği kabul edilmiştir.</p>`);
+    const certPeople = participants.length ? participants : employees;
+    html += certPeople.map((e:any,i:number)=>pageBreak("İŞ SAĞLIĞI VE GÜVENLİĞİ EĞİTİM SERTİFİKASI", `<div class="certificate"><p>Aşağıda bilgileri yer alan çalışan, belirtilen eğitime katılmıştır.</p><h2>${escapeHtml(value(e.fullName ?? e.full_name) || employeeName(e))}</h2><p>T.C.: ${escapeHtml(value(e.tcNo ?? e.tc_no) || employeeTc(e))} • Görev: ${escapeHtml(value(e.jobTitle ?? e.job_title) || employeeJob(e))}</p><p>Eğitim Adı: ${escapeHtml(trainingName)}</p><p>Eğitim Tarihi: ${escapeHtml(trainingDate)} • Süre: ${escapeHtml(hours)} Saat</p><p>Firma: ${escapeHtml(firm?.firm_name||"-")}</p><p>SGK Sicil No: ${escapeHtml(firm?.sgk_no||"-")}</p><p>Adres: ${escapeHtml(firm?.address||"-")}</p><div class="signatures"><div><b>Eğitici / İSG Uzmanı</b><br/>${escapeHtml(trainer)}<div class="sign"></div></div><div><b>İşyeri Hekimi</b><br/>${escapeHtml(authorityName("doctor","workplaceDoctor"))}<div class="sign"></div></div><div><b>İşveren / Vekili</b><br/>${escapeHtml(authorityName("employer","employerRep"))}<div class="sign"></div></div></div><p>Sertifika No: DSEC-${new Date().getFullYear()}-${String(i+1).padStart(6,"0")}</p></div>`)).join("");
+    return html;
+  }
+
+  function commitmentHtml() {
+    const commitments = ["İşyerinde verilen iş sağlığı ve güvenliği talimatlarına uyacağımı,","Tarafıma verilen kişisel koruyucu donanımları eksiksiz ve doğru kullanacağımı,","Tehlikeli durumları amirime ve İSG birimine bildireceğimi,","Makine, ekipman ve çalışma alanlarında güvenlik kurallarına uyacağımı,","Acil durum, yangın, tahliye ve ilk yardım talimatlarına uygun hareket edeceğimi,","Yetkim olmayan ekipmanlara müdahale etmeyeceğimi,","İş kazası, ramak kala ve uygunsuzlukları bildireceğimi kabul ve taahhüt ederim."];
+    const instructions = ["Genel İş Sağlığı ve Güvenliği Talimatı","Kişisel Koruyucu Donanım Kullanım Talimatı","Yangın ve Acil Durum Talimatı","Elektrik Güvenliği Talimatı","Elle Taşıma İşleri Talimatı","Makine / Ekipman Güvenliği Talimatı","İş Kazası ve Ramak Kala Bildirim Talimatı"];
+    const list = employees.length ? employees : [{full_name:"Çalışan Adı Girilmedi",tc_no:"-",job_title:"-"}];
+    return list.map(e=>pageBreak("İSG TAAHHÜTNAMESİ VE TALİMAT TESLİM FORMU", `<table class="meta"><tr><th>Firma Ünvanı</th><td>${escapeHtml(firm?.firm_name||"-")}</td></tr><tr><th>Çalışan</th><td>${escapeHtml(employeeName(e))}</td></tr><tr><th>T.C. Kimlik No</th><td>${escapeHtml(employeeTc(e))}</td></tr><tr><th>Görev / Ünvan</th><td>${escapeHtml(employeeJob(e))}</td></tr><tr><th>Tarih</th><td>${today()}</td></tr></table><h2>Çalışan Taahhüdü</h2><ul>${commitments.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ul><h2>Teslim Edilen Talimatlar</h2><ol>${instructions.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ol><div class="signatures"><div>Çalışan İmza<div class="sign"></div></div><div>İşveren / İşveren Vekili<br/>${escapeHtml(authorityName("employer","employerRep"))}<div class="sign"></div></div></div>`)).join("");
+  }
+
+  function healthHtml() {
+    const list = employees.length ? employees : [{full_name:"Çalışan Adı Girilmedi",tc_no:"-",job_title:"-"}];
+    return list.map(e=>pageBreak("EK-2 İŞE GİRİŞ / PERİYODİK MUAYENE FORMU TASLAĞI", `<table class="meta"><tr><th>Firma Ünvanı</th><td>${escapeHtml(firm?.firm_name||"-")}</td></tr><tr><th>Çalışan Ad Soyad</th><td>${escapeHtml(employeeName(e))}</td></tr><tr><th>T.C. Kimlik No</th><td>${escapeHtml(employeeTc(e))}</td></tr><tr><th>Görev / Ünvan</th><td>${escapeHtml(employeeJob(e))}</td></tr><tr><th>Muayene Türü</th><td>İşe Giriş / Periyodik</td></tr><tr><th>Muayene Tarihi</th><td>__ / __ / __</td></tr><tr><th>İşyeri Hekimi</th><td>${escapeHtml(authorityName("doctor","workplaceDoctor"))}</td></tr></table><h2>Tıbbi Anamnez</h2>${["Yakınma / Şikayet","Geçirilmiş Hastalıklar","İş Kazası / Meslek Hastalığı Geçmişi","Sürekli Kullanılan İlaçlar","Alerji Bilgisi"].map(x=>`<div class="fillRow"><b>${x}</b></div>`).join("")}<h2>Fizik Muayene ve Tetkikler</h2>${["Boy / Kilo / VKİ","Kan Basıncı / Nabız","Görme / İşitme","Solunum Sistemi","Kas İskelet Sistemi","Laboratuvar / Radyoloji","Odyometri / SFT / Diğer"].map(x=>`<div class="fillRow"><b>${x}</b></div>`).join("")}<h2>Kanaat</h2>${["Çalışmaya Elverişlidir","Şartlı Elverişlidir","Çalışmaya Elverişli Değildir","Açıklama / Kısıt"].map(x=>`<div class="fillRow"><b>${x}</b></div>`).join("")}<p><b>İşyeri Hekimi İmza:</b> __________________</p>`)).join("");
+  }
+
+  function drillHtml() {
+    const fire = employees.filter(e=>e.isFireTeam||e.is_fire_team).map(employeeName).join(", ") || "-";
+    const search = employees.filter(e=>e.isSearchRescueTeam||e.is_search_rescue_team).map(employeeName).join(", ") || "-";
+    const protection = employees.filter(e=>e.isProtectionTeam||e.is_protection_team).map(employeeName).join(", ") || "-";
+    const firstAid = employees.filter(e=>e.isFirstAidTeam||e.is_first_aid_team).map(employeeName).join(", ") || "-";
+    const riskTeamNames = employees.filter(e=>e.isRiskAssessmentTeam||e.is_risk_assessment_team).map(employeeName).join(", ") || "-";
+    const board = employees.filter(e=>e.isIsgBoardMember||e.is_isg_board_member).map(employeeName).join(", ") || "-";
+    const flow = ["Alarm / uyarı sistemi çalıştırılır.","Çalışanlar en yakın güvenli çıkış güzergahından tahliye edilir.","Acil durum ekipleri kendi görev alanlarına yönelir.","Yangın ekibi ilk müdahale senaryosunu uygular.","Arama-kurtarma ve tahliye ekibi alan kontrolü yapar.","Koruma ekibi toplanma alanı ve giriş-çıkış güvenliğini sağlar.","İlk yardım ekibi olası yaralanma senaryosuna müdahale eder.","Toplanma alanında kişi sayımı yapılır.","Tatbikat sonrası değerlendirme toplantısı yapılır."];
+    const scenario = pageBreak("ACİL DURUM TAHLİYE TATBİKATI SENARYOSU", `<table class="meta"><tr><th>Firma Ünvanı</th><td>${escapeHtml(firm?.firm_name||"-")}</td></tr><tr><th>Tatbikat Türü</th><td>Yangın ve Tahliye Tatbikatı</td></tr><tr><th>Tatbikat Tarihi</th><td>__ / __ / __</td></tr><tr><th>Tatbikat Saati</th><td>__</td></tr><tr><th>Tatbikat Yeri</th><td>İşletme geneli / belirlenen saha</td></tr><tr><th>Tatbikat Koordinatörü</th><td>${escapeHtml(authorityName("isgExpert","isg_expert"))}</td></tr></table><h2>1. Senaryo Tanımı</h2><p>İşletmenin belirlenen bölümünde yangın alarmı verilmesi üzerine çalışanların güvenli şekilde tahliye edilmesi, acil durum ekiplerinin görev dağılımına uygun hareket etmesi ve toplanma alanında personel sayımının yapılması amaçlanmıştır.</p><h2>2. Tatbikat Akışı</h2><ol>${flow.map(x=>`<li>${escapeHtml(x)}</li>`).join("")}</ol><h2>3. Görevli Ekipler</h2><p>Yangın Ekibi: ${escapeHtml(fire)}</p><p>Arama Kurtarma: ${escapeHtml(search)}</p><p>Koruma Ekibi: ${escapeHtml(protection)}</p><p>İlk Yardım Ekibi: ${escapeHtml(firstAid)}</p><p>Risk Değerlendirme Ekibi: ${escapeHtml(riskTeamNames)}</p><p>İSG Kurul Üyeleri: ${escapeHtml(board)}</p><h2>4. Onay</h2><p>İşveren / Vekili: ${escapeHtml(authorityName("employer","employerRep"))}</p><p>İSG Uzmanı: ${escapeHtml(authorityName("isgExpert","isg_expert"))}</p><p>İşyeri Hekimi: ${escapeHtml(authorityName("doctor","workplaceDoctor"))}</p><p>İmza: __________</p>`);
+    const rows = (employees.length?employees:[{full_name:"Çalışan Adı Girilmedi",job_title:"-"}]).map((e,i)=>{const duties=[]; if(e.isFireTeam||e.is_fire_team)duties.push("Yangın"); if(e.isSearchRescueTeam||e.is_search_rescue_team)duties.push("Arama/Tahliye"); if(e.isProtectionTeam||e.is_protection_team)duties.push("Koruma"); if(e.isFirstAidTeam||e.is_first_aid_team)duties.push("İlk Yardım"); if(e.isRiskAssessmentTeam||e.is_risk_assessment_team)duties.push("Risk Ekibi"); if(e.isIsgBoardMember||e.is_isg_board_member)duties.push("İSG Kurulu"); return `<tr><td>${i+1}</td><td>${escapeHtml(employeeName(e))}</td><td>${escapeHtml(employeeJob(e))}</td><td>${escapeHtml(duties.join(", ")||"-")}</td><td></td></tr>`}).join("");
+    return scenario + pageBreak("TATBİKAT KATILIM FORMU", `<p>Firma: ${escapeHtml(firm?.firm_name||"-")}<br/>Tatbikat: Yangın ve Tahliye Tatbikatı<br/>Tarih: __ / __ / __</p><table><thead><tr><th>No</th><th>Ad Soyad</th><th>Görev</th><th>Ekip Görevi</th><th>İmza</th></tr></thead><tbody>${rows}</tbody></table>`);
+  }
+
+  function assignmentHtml() {
+    return selectedDutyRows().map(({e,duty})=>pageBreak("GÖREVLENDİRME / ATAMA YAZISI", `<p><b>Firma Ünvanı:</b> ${escapeHtml(firm?.firm_name||"-")}<br/><b>Tarih:</b> ${today()}</p><p><b>Sayın ${escapeHtml(employeeName(e))},</b></p><p>İşyerimizde yürütülen İş Sağlığı ve Güvenliği çalışmaları kapsamında; 6331 sayılı İş Sağlığı ve Güvenliği Kanunu ve ilgili mevzuat hükümleri doğrultusunda aşağıda belirtilen görev için görevlendirilmiş bulunmaktasınız.</p><table class="meta"><tr><th>Görevlendirilen Personel</th><td>${escapeHtml(employeeName(e))}</td></tr><tr><th>T.C. Kimlik No</th><td>${escapeHtml(employeeTc(e))}</td></tr><tr><th>Görev / Ünvan</th><td>${escapeHtml(employeeJob(e))}</td></tr><tr><th>Atandığı Görev</th><td>${escapeHtml(duty)}</td></tr></table><h2>Görevin kapsamı</h2>${duty.includes("Risk Değerlendirme")?'<ul><li>Risk değerlendirme çalışmalarına aktif katılım sağlamak,</li><li>Tehlike ve risklerin belirlenmesine katkı sunmak,</li><li>Mevcut önlemleri ve alınacak aksiyonları değerlendirmek,</li><li>Aksiyonların takibi ve revizyon süreçlerine destek olmak.</li></ul>':duty.includes("Kurul")?'<ul><li>İSG kurul toplantılarına katılım sağlamak,</li><li>Kurul gündemindeki konulara görüş ve öneri sunmak,</li><li>Alınan kararların takip edilmesine destek olmak,</li><li>Çalışanların İSG konularındaki bildirimlerini kurula taşımak.</li></ul>':'<ul><li>İşyerinde İSG faaliyetlerine katkı sağlamak,</li><li>Acil durum, eğitim, bilgilendirme ve koordinasyon süreçlerinde görev almak,</li><li>İşveren/işveren vekili, İSG uzmanı ve işyeri hekimi ile koordineli çalışmak,</li><li>Göreviyle ilgili eğitim ve bilgilendirme çalışmalarına katılmak.</li></ul>'}<div class="signatures"><div><b>İşveren / İşveren Vekili</b><br/>${escapeHtml(authorityName("employer","employerRep"))}<div class="sign"></div></div></div>`)).join("");
+  }
+
+  function riskHtml() {
+    const rows = risks.length ? risks.map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.activity ?? r.title ?? "-")}</td><td>${escapeHtml(r.hazard ?? "-")}</td><td>${escapeHtml(r.risk ?? r.risk_description ?? "-")}</td><td>${escapeHtml(r.currentMeasure ?? r.current_measure ?? "-")}</td><td>${escapeHtml(r.probability ?? "-")}</td><td>${escapeHtml(r.frequency ?? "-")}</td><td>${escapeHtml(r.severity ?? "-")}</td><td>${escapeHtml(r.score ?? r.risk_score ?? "-")}</td><td>${escapeHtml(r.action ?? "-")}</td><td>${escapeHtml(r.responsible ?? "-")}</td><td>${escapeHtml(r.deadline ?? "-")}</td></tr>`).join("") : '<tr><td colspan="12">Fine Kinney risk kaydı bulunamadı.</td></tr>';
+    return pageBreak("FINE KINNEY RİSK DEĞERLENDİRMESİ", `<table class="meta"><tr><th>Firma Ünvanı</th><td>${escapeHtml(firm?.firm_name||"-")}</td><th>SGK Sicil No</th><td>${escapeHtml(firm?.sgk_no||"-")}</td></tr><tr><th>Adres</th><td>${escapeHtml(firm?.address||"-")}</td><th>NACE</th><td>${escapeHtml(firm?.nace_code||"-")}</td></tr><tr><th>Sektör</th><td>${escapeHtml(firm?.sector||"-")}</td><th>Tehlike Sınıfı</th><td>${escapeHtml(firm?.danger_class||"-")}</td></tr></table><div class="wideTable"><table><thead><tr><th>No</th><th>Faaliyet</th><th>Tehlike</th><th>Risk</th><th>Mevcut Önlem</th><th>O</th><th>F</th><th>Ş</th><th>Skor</th><th>Aksiyon</th><th>Sorumlu</th><th>Termin</th></tr></thead><tbody>${rows}</tbody></table></div><div class="signatures"><div>İşveren / Vekili<br/>${escapeHtml(authorityName("employer","employerRep"))}<div class="sign"></div></div><div>İSG Uzmanı<br/>${escapeHtml(authorityName("isgExpert","isg_expert"))}<div class="sign"></div></div><div>İşyeri Hekimi<br/>${escapeHtml(authorityName("doctor","workplaceDoctor"))}<div class="sign"></div></div></div>`);
+  }
+
+  function boardMembersHtml(title: string, filter: (e:AnyRow)=>boolean) {
+    const list = employees.filter(filter);
+    const rows = (list.length?list:employees).map((e,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(employeeName(e))}</td><td>${escapeHtml(employeeTc(e))}</td><td>${escapeHtml(employeeJob(e))}</td><td></td></tr>`).join("");
+    return pageBreak(title, `<table class="meta"><tr><th>Firma</th><td>${escapeHtml(firm?.firm_name||"-")}</td></tr><tr><th>SGK Sicil No</th><td>${escapeHtml(firm?.sgk_no||"-")}</td></tr><tr><th>Adres</th><td>${escapeHtml(firm?.address||"-")}</td></tr></table><table><thead><tr><th>No</th><th>Ad Soyad</th><th>T.C.</th><th>Görev / Ünvan</th><th>İmza</th></tr></thead><tbody>${rows}</tbody></table><div class="signatures"><div>İşveren / Vekili<br/>${escapeHtml(authorityName("employer","employerRep"))}<div class="sign"></div></div><div>İSG Uzmanı<br/>${escapeHtml(authorityName("isgExpert","isg_expert"))}<div class="sign"></div></div><div>İşyeri Hekimi<br/>${escapeHtml(authorityName("doctor","workplaceDoctor"))}<div class="sign"></div></div></div>`);
+  }
+
+  function boardMeetingHtml() {
+    const boardNames = employees.filter(e=>e.isIsgBoardMember||e.is_isg_board_member);
+    return pageBreak("İSG KURUL TOPLANTI TUTANAĞI", `<table class="meta"><tr><th>Firma Ünvanı</th><td>${escapeHtml(firm?.firm_name||"-")}</td></tr><tr><th>SGK Sicil No</th><td>${escapeHtml(firm?.sgk_no||"-")}</td></tr><tr><th>Adres</th><td>${escapeHtml(firm?.address||"-")}</td></tr><tr><th>Toplantı Tarihi</th><td>__ / __ / __</td></tr><tr><th>Toplantı No</th><td>_____</td></tr></table><h2>Gündem</h2><ol><li>İş sağlığı ve güvenliği performansının değerlendirilmesi.</li><li>Risk değerlendirmesi ve açık aksiyonların gözden geçirilmesi.</li><li>İş kazaları, ramak kala olaylar ve uygunsuzlukların değerlendirilmesi.</li><li>Eğitim, sağlık gözetimi, acil durum ve saha denetimlerinin değerlendirilmesi.</li><li>Çalışan görüş ve önerilerinin değerlendirilmesi.</li></ol><h2>Alınan Kararlar</h2><div class="decisionBox"></div><h2>Katılımcılar</h2><table><thead><tr><th>No</th><th>Ad Soyad</th><th>Görev / Ünvan</th><th>İmza</th></tr></thead><tbody>${(boardNames.length?boardNames:employees).map((e,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(employeeName(e))}</td><td>${escapeHtml(employeeJob(e))}</td><td></td></tr>`).join("")}</tbody></table>`);
+  }
+
+  function corporateHtml() {
+    return pageBreak("DORA KURUMSAL İSG EVRAK PAKETİ", `<h2>1. Firma Bilgileri</h2><table class="meta"><tr><th>Firma</th><td>${escapeHtml(firm?.firm_name||"-")}</td></tr><tr><th>NACE Kodu</th><td>${escapeHtml(firm?.nace_code||"-")}</td></tr><tr><th>Sektör / Faaliyet</th><td>${escapeHtml(firm?.sector||"-")}</td></tr><tr><th>Tehlike Sınıfı</th><td>${escapeHtml(firm?.danger_class||"-")}</td></tr><tr><th>Çalışan Sayısı</th><td>${Math.max(employees.length,num(firm?.employee_count))}</td></tr><tr><th>Kurulum Skoru</th><td>%${effectiveScore}</td></tr><tr><th>Rapor Tarihi</th><td>${new Date().toLocaleString("tr-TR")}</td></tr></table><h2>2. DORA Yönetici Özeti</h2><p>DORA, girilen firma bilgilerine göre kurumsal İSG kurulum ihtiyaçlarını analiz etmiştir.</p><p>Öncelikli alanlar: risk değerlendirmesi, acil durum planı, eğitim planı, sağlık gözetimi ve KKD kayıtları.</p><p>Bu rapor ilk kurulum dokümantasyon yol haritası olarak kullanılabilir.</p><h2>3. Gereklilik Özeti</h2><p>Toplam Gereklilik: ${requirements.length}<br/>Kritik Gereklilik: ${criticalCount}<br/>Profesyonel Gereklilik: ${proCount}</p><h2>4. Robotik Doküman Üretim Listesi</h2>${requirements.map((r,i)=>`<div class="reqLine"><b>${i+1}. ${escapeHtml(r.title)}</b><br/>${escapeHtml(r.description)}<br/><span>Çıktı: ${escapeHtml(r.output)} • ${r.robotCanProduce?"DORA Üretebilir":"Manuel"}</span></div>`).join("")}`);
+  }
+
+  function generateRobotDocument(kind: string) {
+    let title = "DORA Dokümanı";
+    let html = "";
+    switch (kind) {
+      case "training_package": title = "DORA Eğitim ve Sertifika Paketi"; html = trainingPackageHtml(); break;
+      case "corporate": title = "DORA Kurumsal Doküman Paketi"; html = corporateHtml(); break;
+      case "fine_kinney": title = "DORA Fine Kinney Risk Değerlendirmesi"; html = riskHtml(); break;
+      case "certificates": title = "DORA Toplu İSG Eğitim Sertifikaları"; html = trainingPackageHtml().split('<section class="docPage">').filter(x=>x.includes('EĞİTİM SERTİFİKASI')).map(x=>'<section class="docPage">'+x).join(''); if(!html) html=trainingPackageHtml(); break;
+      case "board_minutes": title = "İSG Kurul Toplantı Tutanağı"; html = boardMeetingHtml(); break;
+      case "appointments": title = "DORA Atama Yazıları"; html = assignmentHtml(); break;
+      case "risk_team": title = "DORA Risk Değerlendirme Ekibi"; html = boardMembersHtml("RİSK DEĞERLENDİRME EKİBİ", e=>Boolean(e.isRiskAssessmentTeam||e.is_risk_assessment_team)); break;
+      case "board_members": title = "DORA İSG Kurulu Üyeleri"; html = boardMembersHtml("İSG KURULU ÜYELERİ", e=>Boolean(e.isIsgBoardMember||e.is_isg_board_member)); break;
+      case "attendance_exam": title = "DORA Eğitim Katılım ve Sınav Formu"; { const full=trainingPackageHtml(); const sections=full.match(/<section class="docPage">[\s\S]*?<\/section>/g)||[]; html=sections.slice(0,2).join(''); } break;
+      case "commitment": title = "DORA İSG Taahhütname ve Talimat"; html = commitmentHtml(); break;
+      case "health": title = "DORA Ek-2 Sağlık Formu Taslağı"; html = healthHtml(); break;
+      case "drill": title = "DORA Tatbikat Senaryo ve Katılım"; html = drillHtml(); break;
+      default: alert("Doküman tipi bulunamadı."); return;
+    }
+    printDocument(title, html);
   }
 
   if (loading) {
@@ -1394,6 +1308,70 @@ ${bodyHtml}
         </div>
       </section>
 
+      <section className="section">
+        <div className="sectionHead">
+          <div>
+            <h2>Robotik Doküman Üretim Sırası</h2>
+            <p>DORA’nın oluşturacağı ilk kurumsal doküman paketi.</p>
+          </div>
+        </div>
+
+        <div className="productionList">
+          {requirements.map((item) => (
+            <article className="productionCard" key={`prod-${item.id}`}>
+              <div className="prodTop">
+                <div>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                </div>
+                <span className={item.priority === "CRITICAL" ? "prodCritical" : "prodPro"}>
+                  {item.priority === "CRITICAL" ? "KRİTİK" : "PROFESYONEL"}
+                </span>
+              </div>
+              <strong>Çıktı: {item.output}</strong>
+              <div className="chips">
+                <span>{item.complete ? "TAMAMLANDI" : "BEKLİYOR"}</span>
+                {item.robotCanProduce ? <span className="robotChip">DORA Üretebilir</span> : <span className="manualChip">Manuel</span>}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <button
+          className="robotStart"
+          onClick={() => setRobotStarted(true)}
+        >
+          {robotStarted ? "Robotik Üretim Başlatıldı" : "Robotik Doküman Üretimini Başlat"}
+        </button>
+
+        {robotStarted ? (
+          <div className="robotQueueBlock">
+            <div className="sectionHead">
+              <div>
+                <h2>DORA Robotik Üretim Kuyruğu</h2>
+                <p>Kurumsal dokümanlar üretim sırasına alındı.</p>
+              </div>
+            </div>
+            <div className="robotStatusCard">
+              <strong>Robotik Üretim Durumu</strong>
+              <p>{requirements.filter(x => x.robotCanProduce).length} adet doküman taslak üretim sürecine alındı.</p>
+            </div>
+            <div className="queue">
+              {requirements.filter(x => x.robotCanProduce).map((item, index) => (
+                <article className="queueItem robot" key={`auto-${item.id}`}>
+                  <div className="queueIcon">{index + 1}</div>
+                  <div className="queueBody">
+                    <h3>{item.title}</h3>
+                    <p>{item.output}</p>
+                    <small>DORA otomatik üretim kuyruğunda.</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       <section className="robotSection">
         <div className="sectionHead">
           <div>
@@ -1605,7 +1583,7 @@ button{font:inherit;cursor:pointer}button:disabled{opacity:.6;cursor:not-allowed
 .requirementGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:13px;margin-top:16px}.requirement{display:flex;gap:14px;padding:18px;border:1px solid #eaecf0;border-radius:18px;background:#fff}.reqIcon,.queueIcon{width:46px;height:46px;flex:0 0 46px;border-radius:14px;display:grid;place-items:center;font-size:22px;font-weight:900;background:#fee2e2;color:#b42318}.requirement h3{margin:0}.requirement p{color:#667085;line-height:1.5}.requirement>div>strong{font-size:12px;color:#8e1e1e}
 .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.chips span{padding:5px 10px;border-radius:999px;font-size:11px;font-weight:900;background:#fce7ea;color:#8e1e1e}.robotChip{background:#eaf8ef!important;color:#2e7d32!important}.manualChip{background:#f2f4f7!important;color:#667085!important}.linkButton{margin-top:11px;border:1px solid #d0d5dd;background:#fff;border-radius:10px;padding:8px 11px;font-weight:800;color:#344054}
 .queueCount{padding:7px 11px;border-radius:999px;background:#f2f4f7;color:#667085;font-size:12px;font-weight:850}.queue{display:grid;gap:12px;margin-top:16px}.queueItem{display:flex;gap:15px;padding:19px;border:1px solid #eaecf0;border-radius:19px;background:#fff}.queueItem.done .queueIcon{background:#dcfae6;color:#067647}.queueItem.robot .queueIcon{background:#eaf1ff;color:#2563eb}.queueItem h3{margin:0}.queueItem p{margin:6px 0;color:#667085}.queueItem small{color:#98a2b3}
-.robotSection{margin-top:25px;padding:24px;border-radius:24px;background:#fff;border:1px solid #eaecf0}.robotButtons{display:grid;gap:12px;margin-top:18px}.robotButton{width:100%;padding:17px 20px;border:0;border-radius:999px;background:#8e1e1e;color:#fff;font-size:17px;font-weight:800;box-shadow:0 3px 8px rgba(122,38,51,.12)}
+.productionList{display:grid;gap:12px;margin-top:16px}.productionCard{padding:18px;border:1px solid #eaecf0;border-radius:18px;background:#fff}.prodTop{display:flex;justify-content:space-between;gap:16px}.prodTop h3{margin:0}.prodTop p{color:#667085;line-height:1.5}.prodCritical,.prodPro{height:max-content;padding:6px 9px;border-radius:999px;font-size:11px;font-weight:900}.prodCritical{background:#fee2e2;color:#b42318}.prodPro{background:#fff0d6;color:#9a4c00}.robotStart{width:100%;margin-top:18px;padding:17px 20px;border:0;border-radius:999px;background:#8e1e1e;color:#fff;font-size:17px;font-weight:850}.robotQueueBlock{margin-top:22px}.robotStatusCard{padding:18px;border:1px solid #bfd7ff;border-radius:18px;background:#eff6ff;color:#344054}.robotStatusCard p{margin-bottom:0;color:#667085}.robotSection{margin-top:25px;padding:24px;border-radius:24px;background:#fff;border:1px solid #eaecf0}.robotButtons{display:grid;gap:12px;margin-top:18px}.robotButton{width:100%;padding:17px 20px;border:0;border-radius:999px;background:#8e1e1e;color:#fff;font-size:17px;font-weight:800;box-shadow:0 3px 8px rgba(122,38,51,.12)}
 .independence{margin-top:22px;margin-bottom:32px;padding:17px 20px;border:1px solid #f8d9ce;border-radius:18px;background:#fff8f5}.independence strong{color:#7a2633}.independence p{margin:5px 0 0;color:#80545c;line-height:1.5}
 .loading,.empty{padding:25px;text-align:center;color:#667085;background:#fff;border:1px solid #eaecf0;border-radius:16px}
 @media(max-width:900px){.page{padding:14px}.topbar,.hero{flex-direction:column;align-items:stretch}.topActions{width:100%}.topActions button{flex:1}.heroScore{min-height:auto}.kpis,.expertTop,.requirementGrid{grid-template-columns:1fr 1fr}.sectionHead{flex-direction:column}}
