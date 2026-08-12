@@ -580,61 +580,113 @@ export async function GET(req: NextRequest) {
 }
 
 
-function mergeTrainingPayload(existingPayload: unknown, incomingPayload: unknown) {
-  const existingRoot = existingPayload && typeof existingPayload === "object"
-    ? (existingPayload as Record<string, unknown>) : {};
-  const incomingRoot = incomingPayload && typeof incomingPayload === "object"
-    ? (incomingPayload as Record<string, unknown>) : {};
+function mergeTrainingPayload(
+  existingPayload: unknown,
+  incomingPayload: unknown,
+  authoritativeIncoming = false
+) {
+  const existingRoot =
+    existingPayload && typeof existingPayload === "object"
+      ? (existingPayload as Record<string, unknown>)
+      : {};
+  const incomingRoot =
+    incomingPayload && typeof incomingPayload === "object"
+      ? (incomingPayload as Record<string, unknown>)
+      : {};
+
   const existing = arrayOf(existingRoot.items);
   const incoming = arrayOf(incomingRoot.items);
-
   const byId = new Map<string, Record<string, unknown>>();
+
   for (const item of existing) {
     const id = text(item.id);
     if (id) byId.set(id, item);
   }
+
   for (const item of incoming) {
     const id = text(item.id);
     if (!id) continue;
+
     const old = byId.get(id);
-    if (!old) {
-      byId.set(id, item);
+    if (!old || authoritativeIncoming) {
+      byId.set(id, {
+        ...(old ?? {}),
+        ...item,
+        participants: arrayOf(item.participants),
+        participantCount: arrayOf(item.participants).length,
+      });
       continue;
     }
+
+    // APP merge: webde tamamlanmış ve katılımcıları bulunan kaydı eski app snapshot'ı geriye çekmesin.
     const oldParticipants = arrayOf(old.participants);
     const newParticipants = arrayOf(item.participants);
-    const participants = newParticipants.length >= oldParticipants.length
-      ? newParticipants : oldParticipants;
+    const participants =
+      newParticipants.length > oldParticipants.length
+        ? newParticipants
+        : oldParticipants;
+
     const oldStatus = text(old.status).toUpperCase();
     const newStatus = text(item.status).toUpperCase();
+
     byId.set(id, {
-      ...old,
       ...item,
+      ...old,
       participants,
       participantCount: participants.length,
-      status: oldStatus === "TAMAMLANDI" || newStatus === "TAMAMLANDI"
-        ? "TAMAMLANDI"
-        : (text(item.status) || text(old.status) || "PLANLANDI"),
+      status:
+        oldStatus === "TAMAMLANDI" || newStatus === "TAMAMLANDI"
+          ? "TAMAMLANDI"
+          : text(old.status) || text(item.status) || "PLANLANDI",
     });
   }
+
   const items = Array.from(byId.values());
   return { items, count: items.length, updatedAtMillis: Date.now() };
 }
 
-function mergeCertificatePayload(existingPayload: unknown, incomingPayload: unknown) {
-  const existingRoot = existingPayload && typeof existingPayload === "object"
-    ? (existingPayload as Record<string, unknown>) : {};
-  const incomingRoot = incomingPayload && typeof incomingPayload === "object"
-    ? (incomingPayload as Record<string, unknown>) : {};
-  const all = [...arrayOf(existingRoot.items), ...arrayOf(incomingRoot.items)];
-  const byKey = new Map<string, Record<string, unknown>>();
-  for (const item of all) {
-    const key = text(item.id) || `${text(item.trainingId)}|${normalize(text(item.employeeTc) || text(item.employeeName))}`;
-    if (!key) continue;
-    byKey.set(key, { ...(byKey.get(key) ?? {}), ...item });
+function mergeCertificatePayload(
+  existingPayload: unknown,
+  incomingPayload: unknown,
+  authoritativeIncoming = false
+) {
+  const existingRoot =
+    existingPayload && typeof existingPayload === "object"
+      ? (existingPayload as Record<string, unknown>)
+      : {};
+  const incomingRoot =
+    incomingPayload && typeof incomingPayload === "object"
+      ? (incomingPayload as Record<string, unknown>)
+      : {};
+
+  const existing = arrayOf(existingRoot.items);
+  const incoming = arrayOf(incomingRoot.items);
+  const byId = new Map<string, Record<string, unknown>>();
+
+  for (const item of existing) {
+    const id = text(item.id);
+    if (id) byId.set(id, item);
   }
-  const items = Array.from(byKey.values());
+
+  for (const item of incoming) {
+    const id = text(item.id);
+    if (!id) continue;
+    const old = byId.get(id);
+    byId.set(
+      id,
+      authoritativeIncoming
+        ? { ...(old ?? {}), ...item }
+        : { ...item, ...(old ?? {}) }
+    );
+  }
+
+  const items = Array.from(byId.values());
   return { items, count: items.length, updatedAtMillis: Date.now() };
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((x) => text(x)).filter(Boolean);
 }
 
 export async function POST(req: NextRequest) {
@@ -674,7 +726,12 @@ export async function POST(req: NextRequest) {
     if (body.authorities !== undefined) {
       await upsertState(firmId, "AUTHORITIES", body.authorities);
     }
-    if (body.trainings !== undefined || body.certificates !== undefined) {
+    if (
+      body.trainings !== undefined ||
+      body.certificates !== undefined ||
+      body.deletedTrainingIds !== undefined ||
+      body.deletedCertificateIds !== undefined
+    ) {
       const { data: existingState, error: existingStateError } = await supabase
         .from("dora_module_state")
         .select("module_key,payload")
@@ -689,31 +746,101 @@ export async function POST(req: NextRequest) {
       }
 
       const syncMode = text(body.syncMode ?? body.sync_mode).toLowerCase();
+      const webAuthoritative = syncMode === "web_upsert";
       const existingTraining = stateMap.get("TRAINING") ?? { items: [] };
       const existingCertificate = stateMap.get("CERTIFICATE") ?? { items: [] };
 
-      const trainingPayload =
+      let trainingPayload =
         body.trainings === undefined
           ? existingTraining
-          : syncMode === "replace"
-            ? body.trainings
-            : mergeTrainingPayload(existingTraining, body.trainings);
+          : mergeTrainingPayload(
+              existingTraining,
+              body.trainings,
+              webAuthoritative
+            );
 
-      const certificatePayload =
+      let certificatePayload =
         body.certificates === undefined
           ? existingCertificate
-          : syncMode === "replace"
-            ? body.certificates
-            : mergeCertificatePayload(existingCertificate, body.certificates);
+          : mergeCertificatePayload(
+              existingCertificate,
+              body.certificates,
+              webAuthoritative
+            );
 
-      await upsertState(firmId, "TRAINING", trainingPayload, syncMode === "replace" ? "WEB" : "APP_MERGE");
+      const deletedTrainingIds = new Set(
+        stringArray(body.deletedTrainingIds ?? body.deleted_training_ids)
+      );
+      const deletedCertificateIds = new Set(
+        stringArray(body.deletedCertificateIds ?? body.deleted_certificate_ids)
+      );
 
-      const generatedCertificates = autoCertificates(trainingPayload, certificatePayload);
+      if (deletedTrainingIds.size > 0) {
+        const root =
+          trainingPayload && typeof trainingPayload === "object"
+            ? (trainingPayload as Record<string, unknown>)
+            : {};
+        const items = arrayOf(root.items).filter(
+          (item) => !deletedTrainingIds.has(text(item.id))
+        );
+        trainingPayload = {
+          ...root,
+          items,
+          count: items.length,
+          updatedAtMillis: Date.now(),
+        };
+
+        // Eğitim açıkça silindiyse yalnız ona bağlı sertifikalar da silinir.
+        const certRoot =
+          certificatePayload && typeof certificatePayload === "object"
+            ? (certificatePayload as Record<string, unknown>)
+            : {};
+        const certItems = arrayOf(certRoot.items).filter(
+          (item) => !deletedTrainingIds.has(text(item.trainingId ?? item.training_id))
+        );
+        certificatePayload = {
+          ...certRoot,
+          items: certItems,
+          count: certItems.length,
+          updatedAtMillis: Date.now(),
+        };
+      }
+
+      // Önce eğitim state'i kaydedilir.
+      await upsertState(
+        firmId,
+        "TRAINING",
+        trainingPayload,
+        webAuthoritative ? "WEB_UPSERT" : "APP_MERGE"
+      );
+
+      // Tamamlanan eğitimler için eksik sertifikaları üret.
+      let generatedCertificates = autoCertificates(
+        trainingPayload,
+        certificatePayload
+      );
+
+      if (deletedCertificateIds.size > 0) {
+        const certRoot =
+          generatedCertificates && typeof generatedCertificates === "object"
+            ? (generatedCertificates as Record<string, unknown>)
+            : {};
+        const certItems = arrayOf(certRoot.items).filter(
+          (item) => !deletedCertificateIds.has(text(item.id))
+        );
+        generatedCertificates = {
+          ...certRoot,
+          items: certItems,
+          count: certItems.length,
+          updatedAtMillis: Date.now(),
+        };
+      }
+
       await upsertState(
         firmId,
         "CERTIFICATE",
         generatedCertificates,
-        syncMode === "replace" ? "WEB_DORA_AUTO" : "APP_DORA_AUTO"
+        webAuthoritative ? "WEB_DORA_AUTO" : "APP_DORA_AUTO"
       );
     }
 

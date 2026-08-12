@@ -46,6 +46,11 @@ type TrainingItem = {
   endTime: string;
   place: string;
   trainerName: string;
+  trainerTitle: string;
+  providerName: string;
+  deliveryMethod: string;
+  isRepeat: boolean;
+  topicsText: string;
   status: string;
   participants: TrainingParticipant[];
 };
@@ -101,6 +106,16 @@ function emptyTraining(): TrainingItem {
     endTime: "17:00",
     place: "",
     trainerName: "",
+    trainerTitle: "",
+    providerName: "",
+    deliveryMethod: "YUZ_YUZE",
+    isRepeat: false,
+    topicsText: [
+      "1. Genel konular",
+      "2. Sağlık konuları",
+      "3. Teknik konular",
+      "4. İşe ve işyerine özgü riskler / faaliyetin genel riskleri"
+    ].join("\n"),
     status: "PLANLANDI",
     participants: [],
   };
@@ -127,6 +142,16 @@ function mapTraining(row: any, index: number): TrainingItem {
     endTime: value(row?.endTime ?? row?.trainingEndTime) || "17:00",
     place: value(row?.place ?? row?.trainingPlace),
     trainerName: value(row?.trainerName ?? row?.trainer_name),
+    trainerTitle: value(row?.trainerTitle ?? row?.trainer_title),
+    providerName: value(row?.providerName ?? row?.provider_name),
+    deliveryMethod: value(row?.deliveryMethod ?? row?.delivery_method) || "YUZ_YUZE",
+    isRepeat: Boolean(row?.isRepeat ?? row?.is_repeat),
+    topicsText: value(row?.topicsText ?? row?.topics_text) || [
+      "1. Genel konular",
+      "2. Sağlık konuları",
+      "3. Teknik konular",
+      "4. İşe ve işyerine özgü riskler / faaliyetin genel riskleri"
+    ].join("\n"),
     status: value(row?.status) || "PLANLANDI",
     participants: Array.isArray(row?.participants)
       ? row.participants.map((p: any) => ({
@@ -202,6 +227,7 @@ export default function DoraTrainingPage() {
   const [certificateOpen, setCertificateOpen] = useState(false);
   const [certificateForm, setCertificateForm] = useState<CertificateItem | null>(null);
   const [previewCertificate, setPreviewCertificate] = useState<CertificateItem | null>(null);
+  const [previewAttendance, setPreviewAttendance] = useState<TrainingItem | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
 
   const load = useCallback(async () => {
@@ -256,9 +282,11 @@ export default function DoraTrainingPage() {
   }, [load]);
 
   async function persist(
-    nextTrainings: TrainingItem[],
-    nextCertificates: CertificateItem[] = certificates,
-    message = "Kayıtlar güncellendi."
+    changedTrainings: TrainingItem[] = [],
+    changedCertificates: CertificateItem[] = [],
+    message = "Kayıtlar güncellendi.",
+    deletedTrainingIds: string[] = [],
+    deletedCertificateIds: string[] = []
   ) {
     setSaving(true);
     try {
@@ -271,17 +299,19 @@ export default function DoraTrainingPage() {
         },
         body: JSON.stringify({
           firmId,
-          syncMode: "replace",
+          syncMode: "web_upsert",
           trainings: {
-            items: nextTrainings,
-            count: nextTrainings.length,
+            items: changedTrainings,
+            count: changedTrainings.length,
             updatedAtMillis: Date.now(),
           },
           certificates: {
-            items: nextCertificates,
-            count: nextCertificates.length,
+            items: changedCertificates,
+            count: changedCertificates.length,
             updatedAtMillis: Date.now(),
           },
+          deletedTrainingIds,
+          deletedCertificateIds,
         }),
       });
 
@@ -295,14 +325,12 @@ export default function DoraTrainingPage() {
       }
 
       setTrainings(
-        (Array.isArray(json.trainings?.items) ? json.trainings!.items! : nextTrainings)
+        (Array.isArray(json.trainings?.items) ? json.trainings!.items! : [])
           .map(mapTraining)
       );
       setCertificates(
-        (Array.isArray(json.certificates?.items)
-          ? json.certificates!.items!
-          : nextCertificates
-        ).map(mapCertificate)
+        (Array.isArray(json.certificates?.items) ? json.certificates!.items! : [])
+          .map(mapCertificate)
       );
       setSuccess(message);
     } finally {
@@ -351,8 +379,8 @@ export default function DoraTrainingPage() {
 
     try {
       await persist(
-        next,
-        certificates,
+        [trainingForm],
+        [],
         trainingForm.status === "TAMAMLANDI"
           ? "Eğitim tamamlandı. Katılımcı sertifikaları otomatik oluşturuldu."
           : "Eğitim kaydı başarıyla kaydedildi."
@@ -366,12 +394,14 @@ export default function DoraTrainingPage() {
   }
 
   async function deleteTraining(id: string) {
-    if (!confirm("Bu eğitim kaydı silinsin mi?")) return;
+    if (!confirm("Bu eğitim kaydı ve bu eğitime bağlı DORA sertifikaları silinsin mi?")) return;
     try {
       await persist(
-        trainings.filter((x) => x.id !== id),
-        certificates.filter((x) => x.trainingId !== id),
-        "Eğitim ve bağlı sertifikalar silindi."
+        [],
+        [],
+        "Eğitim ve bağlı DORA sertifikaları silindi.",
+        [id],
+        []
       );
       await load();
     } catch (e) {
@@ -386,7 +416,7 @@ export default function DoraTrainingPage() {
     );
 
     try {
-      await persist(trainings, next, "Sertifika güncellendi.");
+      await persist([], [certificateForm], "Sertifika güncellendi.");
       setCertificateOpen(false);
       setCertificateForm(null);
       await load();
@@ -396,12 +426,14 @@ export default function DoraTrainingPage() {
   }
 
   async function deleteCertificate(id: string) {
-    if (!confirm("Bu sertifika kaydı silinsin mi?")) return;
+    if (!confirm("Bu DORA sertifika kaydı silinsin mi?")) return;
     try {
       await persist(
-        trainings,
-        certificates.filter((x) => x.id !== id),
-        "Sertifika silindi."
+        [],
+        [],
+        "Sertifika silindi.",
+        [],
+        [id]
       );
       await load();
     } catch (e) {
@@ -433,81 +465,198 @@ export default function DoraTrainingPage() {
 
   function isBasicTraining(certificate: CertificateItem) {
     const key = `${certificate.trainingType} ${certificate.trainingTitle}`.toLocaleUpperCase("tr-TR");
-    return key.includes("TEMEL") || key.includes("TEMEL_ISG");
+    return key.includes("TEMEL");
+  }
+
+  const ek2Rows = [
+    ["1. Genel konular", ""],
+    ["a) Çalışma mevzuatı ile ilgili bilgiler", ""],
+    ["b) Çalışanların yasal hak ve sorumlulukları", ""],
+    ["c) İşyeri temizliği ve düzeni", ""],
+    ["ç) İş kazası ve meslek hastalığından doğan hukuki sonuçlar", ""],
+    ["2. Sağlık konuları", ""],
+    ["a) Meslek hastalıklarının sebepleri", ""],
+    ["b) Hastalıktan korunma prensipleri ve korunma tekniklerinin uygulanması", ""],
+    ["c) Biyolojik ve psikososyal risk etmenleri", ""],
+    ["ç) İlkyardım", ""],
+    ["d) Bağımlılık yapıcı maddelerin zararları ve teknoloji bağımlılığı", ""],
+    ["3. Teknik konular", ""],
+    ["a) Kimyasal, fiziksel ve ergonomik risk etmenleri", ""],
+    ["b) Elle kaldırma ve taşıma", ""],
+    ["c) Parlama, patlama", ""],
+    ["ç) Yangın ve yangından korunma", ""],
+    ["d) İş ekipmanlarının güvenli kullanımı", ""],
+    ["e) Ekranlı araçlarla çalışma", ""],
+    ["f) Elektrik, tehlikeleri, riskleri ve önlemleri", ""],
+    ["g) İş kazalarının sebepleri ve korunma prensipleri ile tekniklerinin uygulanması", ""],
+    ["ğ) Sağlık ve güvenlik işaretleri", ""],
+    ["h) Kişisel koruyucu donanım kullanımı", ""],
+    ["ı) İş sağlığı ve güvenliği genel kuralları ve güvenlik kültürü", ""],
+    ["i) Acil durumlar, tahliye ve kurtarma", ""],
+    ["4. İşe ve işyerine özgü riskler ve risk değerlendirmesine dayalı konular (Tehlikeli ve Çok Tehlikeli Sınıf) / Faaliyetin Genel Riskleri (Az Tehlikeli Sınıf)", ""],
+    ["a) (Tehlikeli veya Çok Tehlikeli Sınıf) İşyerinin acil durum planı, risk değerlendirmesi dokümanı, bulunması halinde patlamadan korunma dokümanı ve iş sağlığı ve güvenliği mevzuatı kapsamında hazırlanan diğer dokümanlarda belirlenmiş olan hususlar ile işyerine ve işe özgü hususları içeren konular □", ""],
+    ["b) (Az Tehlikeli Sınıf) Faaliyetin genel tehlike ve riskleri □", ""],
+  ];
+
+  function ek2Html(certificate: CertificateItem) {
+    const training = certificateTraining(certificate);
+    const workplace = firm?.firm_name || "........................................................";
+    const provider = training?.providerName || training?.trainerName || certificate.trainerName || "........................................................";
+    const trainer = [training?.trainerName || certificate.trainerName, training?.trainerTitle]
+      .filter(Boolean).join(" - ") || "........................................................";
+    const trainingDate = certificate.trainingDate || training?.trainingDate || "................";
+    const hours = certificate.trainingHours || training?.trainingHours || "....";
+    const remoteChecked = training?.deliveryMethod === "UZAKTAN";
+    const faceChecked = !remoteChecked;
+    const repeatChecked = Boolean(training?.isRepeat);
+    const titleOrPlace = training?.place || certificate.trainingTitle || "";
+
+    return `
+      <div class="ek2-title">Ek-2 TEMEL EĞİTİM BELGESİ</div>
+      <div class="ek2-frame">
+        <section class="ek2-front">
+          <div class="face-label">(ÖN YÜZ)</div>
+          <h2>TEMEL EĞİTİM BELGESİ</h2>
+          <p class="ek2-paragraph">
+            İşbu belge,<br><br>
+            <b>${escapeHtml(certificate.employeeName)}${certificate.employeePosition ? ` (${escapeHtml(certificate.employeePosition)})` : ""}</b> adına
+          </p>
+          <p class="ek2-paragraph center-text">
+            Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında Yönetmelik
+            kapsamında <b>${escapeHtml(provider)}</b> tarafından <b>${escapeHtml(trainingDate)}</b> tarihinde
+            gerçekleştirilen temel eğitim sonunda düzenlenmiştir.
+          </p>
+          <div class="ek2-lines">
+            <div>Belge düzenlenme tarihi: <b>${escapeHtml(certificate.issueDate || "-")}</b></div>
+            <div>Eğitimin süresi: <b>${escapeHtml(hours)} ders saati</b></div>
+            <div>Eğitimin türü: İlk defa verilen temel eğitim ${repeatChecked ? "□" : "☒"}</div>
+            <div class="indent">Tekrar verilen temel eğitim ${repeatChecked ? "☒" : "□"}</div>
+            <div>Eğitimin şekli: Uzaktan ${remoteChecked ? "☒" : "□"} (Başlık ${remoteChecked ? escapeHtml(certificate.trainingTitle) : "............."})</div>
+            <div class="indent">Yüz yüze ${faceChecked ? "☒" : "□"} (Başlık ${faceChecked ? escapeHtml(titleOrPlace) : "............."})</div>
+            <div>Eğiticilerin adı soyadı ve unvanı: <b>${escapeHtml(trainer)}</b></div>
+            <div>Eğiticilerin imzası: <span class="sig-line"></span></div>
+            <br>
+            <div>Çalışanın işyerinin unvanı: <b>${escapeHtml(workplace)}</b></div>
+            <div>İşverenin/işveren vekilinin adı soyadı: <span class="long-line"></span></div>
+            <div>İşveren/işveren vekilinin imzası: <span class="sig-line"></span></div>
+          </div>
+        </section>
+        <section class="ek2-back">
+          <div class="face-label">(ARKA YÜZ)</div>
+          <table class="ek2-table">
+            <thead><tr><th>EĞİTİM KONULARI</th><th>SÜRE</th></tr></thead>
+            <tbody>
+              ${ek2Rows.map(([label]) => {
+                const heading = /^[1-4]\./.test(label);
+                return `<tr class="${heading ? "group" : ""}"><td>${escapeHtml(label)}</td><td></td></tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </section>
+      </div>
+      <div class="ek2-note">
+        * İşveren, Ek-2’de yer alan temel eğitimin dördüncü konu başlığını tehlike sınıfına uygun şekilde
+        a) veya b) seçeneğini işaretler ve varsa ilave konuları da ekler.
+      </div>`;
   }
 
   function printCertificate(certificate: CertificateItem) {
-    const training = certificateTraining(certificate);
     const basic = isBasicTraining(certificate);
-    const workplace = firm?.firm_name || "........................................................";
-    const trainer = certificate.trainerName || training?.trainerName || "........................................................";
-    const trainingDate = certificate.trainingDate || training?.trainingDate || "................";
-    const hours = certificate.trainingHours || training?.trainingHours || "....";
-    const mode = training?.place ? "Yüz yüze" : "Yüz yüze / Uzaktan";
-    const topics = [
-      ["1. Genel konular", "Çalışma mevzuatı; çalışanların yasal hak ve sorumlulukları; işyeri temizliği ve düzeni; iş kazası ve meslek hastalığından doğan hukuki sonuçlar"],
-      ["2. Sağlık konuları", "Meslek hastalıklarının sebepleri; korunma prensipleri; biyolojik ve psikososyal risk etmenleri; ilkyardım; bağımlılık yapıcı maddelerin zararları ve teknoloji bağımlılığı"],
-      ["3. Teknik konular", "Kimyasal, fiziksel ve ergonomik risk etmenleri; elle kaldırma ve taşıma; parlama-patlama; yangın; iş ekipmanları; ekranlı araçlar; elektrik; iş kazalarından korunma; sağlık ve güvenlik işaretleri; KKD; İSG genel kuralları ve güvenlik kültürü; acil durumlar, tahliye ve kurtarma"],
-      ["4. İşe ve işyerine özgü riskler", "Risk değerlendirmesine dayalı işe/işyerine özgü konular veya az tehlikeli işyerlerinde faaliyetin genel tehlike ve riskleri"]
-    ];
+    const html = basic
+      ? ek2Html(certificate)
+      : `<div class="other-doc"><h1>EĞİTİM BELGESİ</h1>
+          <p><b>${escapeHtml(certificate.employeeName)}</b>, <b>${escapeHtml(certificate.trainingTitle)}</b> eğitimini tamamlamıştır.</p>
+          <table>
+            <tr><th>Belge No</th><td>${escapeHtml(certificate.certificateNo || "-")}</td></tr>
+            <tr><th>Çalışan / Unvan</th><td>${escapeHtml(certificate.employeeName)} / ${escapeHtml(certificate.employeePosition || "-")}</td></tr>
+            <tr><th>Eğitim Tarihi</th><td>${escapeHtml(certificate.trainingDate || "-")}</td></tr>
+            <tr><th>Süre</th><td>${escapeHtml(certificate.trainingHours || "-")} saat</td></tr>
+            <tr><th>Eğitici</th><td>${escapeHtml(certificate.trainerName || "-")}</td></tr>
+            <tr><th>İşyeri</th><td>${escapeHtml(firm?.firm_name || "-")}</td></tr>
+            <tr><th>Çalışan İmzası</th><td class="signature"></td></tr>
+            <tr><th>İşveren / İşveren Vekili İmzası</th><td class="signature"></td></tr>
+          </table></div>`;
 
-    const front = basic ? `
-      <section class="sheet">
-        <h1>TEMEL EĞİTİM BELGESİ</h1>
-        <p>İşbu belge, <b>${escapeHtml(certificate.employeeName)} (${escapeHtml(certificate.employeePosition || "unvan belirtilmemiş")})</b> adına Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında Yönetmelik kapsamında <b>${escapeHtml(trainer)}</b> tarafından <b>${escapeHtml(trainingDate)}</b> tarihinde gerçekleştirilen temel eğitim sonunda düzenlenmiştir.</p>
-        <table>
-          <tr><th>Belge No</th><td>${escapeHtml(certificate.certificateNo || "-")}</td></tr>
-          <tr><th>Belge düzenlenme tarihi</th><td>${escapeHtml(certificate.issueDate || "-")}</td></tr>
-          <tr><th>Eğitimin süresi</th><td>${escapeHtml(hours)} ders saati</td></tr>
-          <tr><th>Eğitimin türü</th><td>☒ İlk defa verilen temel eğitim &nbsp;&nbsp; ☐ Tekrar verilen temel eğitim</td></tr>
-          <tr><th>Eğitimin şekli</th><td>${mode === "Yüz yüze" ? "☒" : "☐"} Yüz yüze &nbsp;&nbsp; ☐ Uzaktan<br/>Başlık/Yer: ${escapeHtml(training?.place || certificate.trainingTitle)}</td></tr>
-          <tr><th>Eğiticilerin adı soyadı ve unvanı</th><td>${escapeHtml(trainer)}</td></tr>
-          <tr><th>Eğiticilerin imzası</th><td class="signature"></td></tr>
-          <tr><th>Çalışanın işyerinin unvanı</th><td>${escapeHtml(workplace)}</td></tr>
-          <tr><th>İşverenin / işveren vekilinin adı soyadı</th><td>........................................................</td></tr>
-          <tr><th>İşveren / işveren vekilinin imzası</th><td class="signature"></td></tr>
-        </table>
-        <div class="foot">DORA kayıt no: ${escapeHtml(certificate.id)} • Bu çıktı DORA Eğitim ve Sertifika Merkezi kayıtlarından oluşturulmuştur.</div>
-      </section>
-      <section class="sheet back">
-        <h1>EĞİTİM KONULARI</h1>
-        <table>
-          <tr><th>EĞİTİM KONULARI</th><th class="duration">SÜRE</th></tr>
-          ${topics.map(([t,d]) => `<tr><td><b>${t}</b><br/>${d}</td><td>${escapeHtml(hours)} saatlik toplam program içinde</td></tr>`).join("")}
-        </table>
-        <p class="note">İşveren, dördüncü konu başlığını işyerinin tehlike sınıfına uygun şekilde belirler ve varsa ilave konuları eğitim kaydına ekler.</p>
-      </section>` : `
-      <section class="sheet">
-        <h1>EĞİTİM BELGESİ</h1>
-        <p><b>${escapeHtml(certificate.employeeName)}</b> adlı çalışanın <b>${escapeHtml(certificate.trainingTitle)}</b> eğitimini tamamladığını gösterir.</p>
-        <table>
-          <tr><th>Belge No</th><td>${escapeHtml(certificate.certificateNo || "-")}</td></tr>
-          <tr><th>Çalışan / Unvan</th><td>${escapeHtml(certificate.employeeName)} / ${escapeHtml(certificate.employeePosition || "-")}</td></tr>
-          <tr><th>Eğitim tarihi</th><td>${escapeHtml(trainingDate)}</td></tr>
-          <tr><th>Eğitim süresi</th><td>${escapeHtml(hours)} saat</td></tr>
-          <tr><th>Eğitici</th><td>${escapeHtml(trainer)}</td></tr>
-          <tr><th>İşyeri</th><td>${escapeHtml(workplace)}</td></tr>
-          <tr><th>Eğitici imzası</th><td class="signature"></td></tr>
-          <tr><th>İşveren / işveren vekili imzası</th><td class="signature"></td></tr>
-        </table>
-      </section>`;
-
-    const win = window.open("", "_blank", "width=1000,height=900");
+    const win = window.open("", "_blank", "width=1400,height=900");
     if (!win) {
-      alert("Yazdırma penceresi açılamadı. Tarayıcı açılır pencere iznini kontrol edin.");
+      alert("Yazdırma penceresi açılamadı.");
       return;
     }
-    win.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${escapeHtml(certificate.certificateNo || "DORA Sertifika")}</title>
-      <style>
-        @page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;background:#eee}
-        .toolbar{position:sticky;top:0;padding:12px;text-align:center;background:#7a2633;color:#fff}.toolbar button{padding:10px 18px;font-weight:700;cursor:pointer}
-        .sheet{width:210mm;min-height:297mm;margin:12px auto;background:#fff;padding:18mm 16mm;page-break-after:always}
-        .sheet:last-child{page-break-after:auto}h1{text-align:center;font-size:20px;margin:0 0 24px;text-decoration:underline}
-        p{font-size:13px;line-height:1.65}table{width:100%;border-collapse:collapse;margin-top:18px;font-size:12px}
-        th,td{border:1px solid #111;padding:9px;vertical-align:top}th{width:34%;text-align:left;background:#f5f5f5}.back th:first-child{width:auto}.duration{width:28%!important;text-align:center}
-        .signature{height:58px}.foot,.note{margin-top:14px;font-size:10px;color:#444}
-        @media print{body{background:#fff}.toolbar{display:none}.sheet{margin:0;width:auto;min-height:auto;padding:0}}
-      </style></head><body><div class="toolbar"><button onclick="window.print()">Yazdır / PDF Olarak Kaydet</button></div>${front}</body></html>`);
+    win.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${escapeHtml(certificate.certificateNo || "DORA Eğitim Belgesi")}</title>
+    <style>
+      @page{size:${basic ? "A4 landscape" : "A4 portrait"};margin:9mm}
+      *{box-sizing:border-box} body{margin:0;background:#eee;color:#000;font-family:"Times New Roman",serif}
+      .toolbar{position:sticky;top:0;z-index:5;background:#7a2633;padding:10px;text-align:center}.toolbar button{padding:10px 18px;font-weight:700}
+      .doc{background:#fff;margin:10px auto;padding:8mm;width:${basic ? "297mm" : "210mm"};min-height:${basic ? "210mm" : "297mm"}}
+      .ek2-title{font-size:18px;font-weight:700;margin:0 0 3px 6mm}.ek2-frame{border:1px solid #000;display:grid;grid-template-columns:1fr 1.08fr;min-height:168mm}
+      .ek2-front,.ek2-back{position:relative;padding:5mm 4mm}.ek2-front{border-right:1px solid #000}.face-label{position:absolute;left:2mm;top:1mm;font-size:11px}
+      .ek2-front h2{font-size:15px;margin:8mm 0 9mm}.ek2-paragraph{font-size:12px;line-height:1.35;margin:0 0 5mm}.center-text{text-align:center}
+      .ek2-lines{font-size:12px;line-height:1.38}.indent{padding-left:20mm}.sig-line{display:inline-block;width:38mm;border-bottom:1px dotted #555;height:4mm}.long-line{display:inline-block;width:48mm;border-bottom:1px dotted #555}
+      .ek2-table{width:100%;border-collapse:collapse;font-size:9.2px;margin-top:1mm}.ek2-table th,.ek2-table td{border:1px solid #000;padding:1.1mm 1.5mm;line-height:1.12;vertical-align:top}
+      .ek2-table th:first-child{width:89%}.ek2-table th:last-child{width:11%;text-align:center}.ek2-table .group td{font-weight:700;background:#eee}
+      .ek2-note{font-size:10px;margin:1mm 0 0 1mm}.other-doc{font-family:Arial,sans-serif;padding:14mm}.other-doc h1{text-align:center}.other-doc table{width:100%;border-collapse:collapse}.other-doc th,.other-doc td{border:1px solid #000;padding:10px}.signature{height:60px}
+      @media print{body{background:#fff}.toolbar{display:none}.doc{margin:0;padding:0;width:auto;min-height:auto}}
+    </style></head><body><div class="toolbar"><button onclick="window.print()">Yazdır / PDF Olarak Kaydet</button></div><div class="doc">${html}</div></body></html>`);
+    win.document.close();
+  }
+
+  function attendanceHtml(training: TrainingItem) {
+    const workplace = firm?.firm_name || "-";
+    const topics = training.topicsText
+      .split("\\n")
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    return `
+      <section class="attendance-sheet">
+        <h1>EĞİTİM KATILIM TUTANAĞI</h1>
+        <table class="meta">
+          <tr><th>İşyeri / Firma</th><td>${escapeHtml(workplace)}</td><th>Eğitim Tarihi</th><td>${escapeHtml(training.trainingDate || "-")}</td></tr>
+          <tr><th>Eğitim Adı</th><td>${escapeHtml(training.title)}</td><th>Eğitim Süresi</th><td>${escapeHtml(training.trainingHours)} ders saati</td></tr>
+          <tr><th>Eğitim Yeri</th><td>${escapeHtml(training.place || "-")}</td><th>Saat</th><td>${escapeHtml(training.startTime)} - ${escapeHtml(training.endTime)}</td></tr>
+          <tr><th>Eğitici</th><td>${escapeHtml(training.trainerName || "-")} ${training.trainerTitle ? `- ${escapeHtml(training.trainerTitle)}` : ""}</td><th>Eğitim Şekli</th><td>${training.deliveryMethod === "UZAKTAN" ? "Uzaktan" : "Yüz yüze"}</td></tr>
+        </table>
+
+        <h2>Eğitimde Yer Alan Konu Başlıkları</h2>
+        <ol class="topics">${topics.map((t) => `<li>${escapeHtml(t.replace(/^\\d+\\.\\s*/, ""))}</li>`).join("")}</ol>
+
+        <h2>Katılımcılar</h2>
+        <table class="people">
+          <thead><tr><th>Sıra</th><th>Adı Soyadı</th><th>TC / Çalışan Kimliği</th><th>Görev / Unvan</th><th>İmza</th></tr></thead>
+          <tbody>${training.participants.map((participant, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${escapeHtml(participant.fullName)}</td>
+              <td>${escapeHtml(participant.tcNo || "-")}</td>
+              <td>${escapeHtml(participant.jobTitle || "-")}</td>
+              <td class="participant-sign"></td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+
+        <div class="trainer-sign">
+          <div><b>Eğiticinin Adı Soyadı:</b><br>${escapeHtml(training.trainerName || "-")}</div>
+          <div><b>Eğiticinin İmzası:</b><div class="signature-box"></div></div>
+        </div>
+      </section>`;
+  }
+
+  function printAttendance(training: TrainingItem) {
+    const win = window.open("", "_blank", "width=1100,height=900");
+    if (!win) {
+      alert("Katılım formu yazdırma penceresi açılamadı.");
+      return;
+    }
+    win.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${escapeHtml(training.title)} - Katılım Tutanağı</title>
+    <style>
+      @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#eee;font-family:Arial,sans-serif;color:#111}
+      .toolbar{position:sticky;top:0;background:#7a2633;padding:10px;text-align:center}.toolbar button{padding:10px 18px;font-weight:700}
+      .doc{width:210mm;min-height:297mm;margin:10px auto;padding:12mm;background:#fff}.attendance-sheet h1{text-align:center;font-size:20px;margin:0 0 18px}
+      table{width:100%;border-collapse:collapse;font-size:11px}th,td{border:1px solid #111;padding:7px;vertical-align:middle}.meta th{background:#f2f2f2;width:18%}
+      h2{font-size:13px;margin:16px 0 8px}.topics{font-size:11px;line-height:1.5;margin:0 0 12px}.people th{background:#f2f2f2}.people th:nth-child(1){width:7%}.people th:nth-child(3){width:20%}.people th:nth-child(4){width:22%}.people th:nth-child(5){width:20%}
+      .participant-sign{height:30px}.trainer-sign{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:30px;font-size:11px}.signature-box{height:45px;border-bottom:1px dotted #444;margin-top:4px}
+      @media print{body{background:#fff}.toolbar{display:none}.doc{margin:0;padding:0;width:auto;min-height:auto}.people tr{break-inside:avoid}}
+    </style></head><body><div class="toolbar"><button onclick="window.print()">Yazdır / PDF Olarak Kaydet</button></div><div class="doc">${attendanceHtml(training)}</div></body></html>`);
     win.document.close();
   }
 
@@ -614,6 +763,18 @@ export default function DoraTrainingPage() {
                     }}
                   >
                     Düzenle / Katılımcılar
+                  </button>
+                  <button
+                    className="previewBtn"
+                    onClick={() => setPreviewAttendance({ ...training })}
+                  >
+                    Katılım Formu Ön İzleme
+                  </button>
+                  <button
+                    className="printBtn"
+                    onClick={() => printAttendance(training)}
+                  >
+                    Katılım Formu PDF
                   </button>
                   <button className="danger" onClick={() => void deleteTraining(training.id)}>
                     Sil
@@ -738,6 +899,34 @@ export default function DoraTrainingPage() {
               </label>
             </div>
 
+            <div className="formGrid">
+              <Field label="Eğiticinin Unvanı" value={trainingForm.trainerTitle}
+                onChange={(v) => setTrainingForm({ ...trainingForm, trainerTitle: v })} />
+              <Field label="Eğitimi Veren Kişi / Kurum / Kuruluş" value={trainingForm.providerName}
+                onChange={(v) => setTrainingForm({ ...trainingForm, providerName: v })} />
+              <label className="field">
+                <span>Eğitimin Şekli</span>
+                <select value={trainingForm.deliveryMethod}
+                  onChange={(e) => setTrainingForm({ ...trainingForm, deliveryMethod: e.target.value })}>
+                  <option value="YUZ_YUZE">Yüz yüze</option>
+                  <option value="UZAKTAN">Uzaktan</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Temel Eğitim Türü</span>
+                <select value={trainingForm.isRepeat ? "TEKRAR" : "ILK"}
+                  onChange={(e) => setTrainingForm({ ...trainingForm, isRepeat: e.target.value === "TEKRAR" })}>
+                  <option value="ILK">İlk defa verilen temel eğitim</option>
+                  <option value="TEKRAR">Tekrar verilen temel eğitim</option>
+                </select>
+              </label>
+            </div>
+            <label className="field">
+              <span>Eğitimde Yer Alan Konu Başlıkları (her satıra bir konu)</span>
+              <textarea value={trainingForm.topicsText}
+                onChange={(e) => setTrainingForm({ ...trainingForm, topicsText: e.target.value })} />
+            </label>
+
             <div className="participantsBox">
               <div className="participantHeader">
                 <div>
@@ -803,6 +992,29 @@ export default function DoraTrainingPage() {
       ) : null}
 
 
+      {previewAttendance ? (
+        <div className="backdrop" onMouseDown={() => setPreviewAttendance(null)}>
+          <div className="modal previewModal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="panelHead">
+              <div>
+                <span>DORA • EĞİTİM KATILIM TUTANAĞI</span>
+                <h2>{previewAttendance.title}</h2>
+              </div>
+              <div className="actions">
+                <button className="printBtn" onClick={() => printAttendance(previewAttendance)}>
+                  Katılım Formu PDF
+                </button>
+                <button className="outline" onClick={() => setPreviewAttendance(null)}>×</button>
+              </div>
+            </div>
+            <div
+              className="attendancePreview"
+              dangerouslySetInnerHTML={{ __html: attendanceHtml(previewAttendance) }}
+            />
+          </div>
+        </div>
+      ) : null}
+
       {previewCertificate ? (
         <div className="backdrop" onMouseDown={() => setPreviewCertificate(null)}>
           <div className="modal previewModal" onMouseDown={(e) => e.stopPropagation()}>
@@ -819,33 +1031,14 @@ export default function DoraTrainingPage() {
               </div>
             </div>
 
-            <div className="paperPreview">
-              <h2>{isBasicTraining(previewCertificate) ? "TEMEL EĞİTİM BELGESİ" : "EĞİTİM BELGESİ"}</h2>
-              <p>
-                <b>{previewCertificate.employeeName}</b>
-                {previewCertificate.employeePosition ? ` (${previewCertificate.employeePosition})` : ""} adına,
-                <b> {previewCertificate.trainingTitle}</b> eğitiminin tamamlanması üzerine düzenlenmiştir.
-              </p>
-              <table className="previewTable">
-                <tbody>
-                  <tr><th>Belge No</th><td>{previewCertificate.certificateNo || "-"}</td></tr>
-                  <tr><th>Eğitim Tarihi</th><td>{previewCertificate.trainingDate || "-"}</td></tr>
-                  <tr><th>Belge Düzenlenme Tarihi</th><td>{previewCertificate.issueDate || "-"}</td></tr>
-                  <tr><th>Eğitim Süresi</th><td>{previewCertificate.trainingHours || "-"} saat</td></tr>
-                  <tr><th>Eğitici</th><td>{previewCertificate.trainerName || "-"}</td></tr>
-                  <tr><th>İşyeri</th><td>{firm?.firm_name || "-"}</td></tr>
-                  <tr><th>Eğiticinin İmzası</th><td className="previewSignature"></td></tr>
-                  <tr><th>İşveren / İşveren Vekili İmzası</th><td className="previewSignature"></td></tr>
-                </tbody>
-              </table>
-              {isBasicTraining(previewCertificate) ? (
-                <div className="legalNotice">
-                  Bu temel eğitim belgesi, Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin
-                  Usul ve Esasları Hakkında Yönetmelik Ek-2 yapısına göre ön/arka yüz olarak
-                  yazdırılır. Arka yüzde eğitim konuları yer alır.
-                </div>
-              ) : null}
-            </div>
+            <div
+              className="ek2PreviewHost"
+              dangerouslySetInnerHTML={{
+                __html: isBasicTraining(previewCertificate)
+                  ? ek2Html(previewCertificate)
+                  : `<div class="paperPreview"><h2>EĞİTİM BELGESİ</h2><p><b>${escapeHtml(previewCertificate.employeeName)}</b> — ${escapeHtml(previewCertificate.trainingTitle)}</p></div>`
+              }}
+            />
           </div>
         </div>
       ) : null}
@@ -947,5 +1140,5 @@ function Field({
 }
 
 const styles = `
-:global(*){box-sizing:border-box}.page{min-height:100vh;padding:24px;color:#172033;background:linear-gradient(180deg,#f7f8fb,#fff 430px)}button{font:inherit;cursor:pointer}button:disabled{opacity:.6}.topbar,.hero,.kpis,.panel,.error,.success{max-width:1450px;margin-left:auto;margin-right:auto}.topbar{display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.actions,.badges{display:flex;gap:8px;flex-wrap:wrap}.hero{padding:32px;border-radius:28px;display:flex;justify-content:space-between;gap:24px;align-items:center;color:#fff;background:linear-gradient(120deg,#50141f,#7a2633 48%,#d0602c)}.eyebrow,.panelHead span{font-size:11px;font-weight:900;letter-spacing:.13em}.hero h1{margin:8px 0 10px;font-size:clamp(32px,5vw,52px)}.hero p{max-width:800px;color:rgba(255,255,255,.86);line-height:1.6}.heroNumbers{display:flex;gap:12px}.heroNumbers b{min-width:120px;padding:18px;border-radius:18px;background:rgba(255,255,255,.13);text-align:center;font-size:36px}.heroNumbers small{display:block;font-size:12px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.kpi,.panel,.card,.certificateCard{background:#fff;border:1px solid #e4e7ec}.kpi{padding:18px;border-radius:18px}.kpi span,.kpi small{display:block;color:#667085}.kpi strong{display:block;font-size:30px;margin:8px 0}.panel{margin-top:18px;padding:22px;border-radius:22px}.panelHead{display:flex;justify-content:space-between;gap:16px}.panelHead span{color:#8c3543}.panelHead h2{margin:5px 0}.panelHead p{color:#667085}.list{display:grid;gap:12px;margin-top:18px}.card{padding:18px;border-radius:17px;display:flex;justify-content:space-between;gap:20px;align-items:center}.card h3{margin:8px 0}.card p,.card small{color:#667085}.badge,.neutral,.auto,.participantNames span{padding:5px 9px;border-radius:999px;font-size:11px;font-weight:850}.badge{background:#fff0f2;color:#8c3543}.neutral{background:#f2f4f7;color:#475467}.auto{background:#ecfdf3;color:#067647}.participantNames{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.participantNames span{background:#f7f8fa;color:#475467}.certificateGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}.certificateCard{padding:18px;border-radius:17px}.certificateCard h3{margin:10px 0 4px}.certificateCard p{color:#667085;line-height:1.65}.primary,.outline,.danger,.previewBtn,.printBtn{padding:10px 14px;border-radius:12px;font-weight:850}.primary{border:0;background:#7a2633;color:#fff}.outline{border:1px solid #d0d5dd;background:#fff;color:#344054}.danger{border:1px solid #f1b4b4;background:#fff2f2;color:#b42318}.previewBtn{border:1px solid #b9c7dc;background:#f7f9fc;color:#344054}.printBtn{border:1px solid #7a2633;background:#7a2633;color:#fff}.empty,.error,.success{margin-top:16px;padding:18px;border-radius:14px}.empty{background:#f8fafc;color:#667085}.error{background:#fff2f2;color:#b42318}.success{background:#ecfdf3;color:#067647}.backdrop{position:fixed;inset:0;background:rgba(16,24,40,.5);display:grid;place-items:center;padding:18px;z-index:50}.modal{width:min(1000px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:24px;padding:24px}.formGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.field{display:grid;gap:6px}.field span{font-size:12px;font-weight:800;color:#475467}.field input,.field select,.field textarea,.search{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:11px;background:#fff}.field textarea{min-height:100px}.participantsBox{border:1px solid #e4e7ec;border-radius:18px;padding:16px;margin:16px 0}.participantHeader{display:flex;justify-content:space-between;gap:12px}.participantHeader h3,.participantHeader p{margin:0}.participantHeader p{color:#667085}.search{margin:14px 0}.employeeList{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:280px;overflow:auto}.employeeRow{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid #eaecf0;border-radius:12px}.employeeRow small{display:block;color:#667085}.autoInfo{padding:14px;border-radius:12px;background:#ecfdf3;color:#067647;margin-bottom:14px;font-weight:700}.certificateIdentity{display:grid;gap:4px;padding:14px;background:#f8fafc;border-radius:14px;margin-top:14px}.previewModal{width:min(900px,100%)}.paperPreview{margin-top:18px;padding:38px;border:1px solid #cfd4dc;background:#fff;box-shadow:0 10px 35px rgba(16,24,40,.08)}.paperPreview>h2{text-align:center;text-decoration:underline}.paperPreview p{line-height:1.7}.previewTable{width:100%;border-collapse:collapse;margin-top:20px}.previewTable th,.previewTable td{border:1px solid #344054;padding:10px;text-align:left;vertical-align:top}.previewTable th{width:34%;background:#f8fafc}.previewSignature{height:58px}.legalNotice{margin-top:16px;padding:12px;border-radius:10px;background:#f8fafc;color:#475467;font-size:12px;line-height:1.5}.full{width:100%}@media(max-width:900px){.topbar,.hero,.card{flex-direction:column;align-items:flex-start}.kpis,.certificateGrid,.formGrid,.employeeList{grid-template-columns:1fr}.heroNumbers{width:100%}}
+:global(*){box-sizing:border-box}.page{min-height:100vh;padding:24px;color:#172033;background:linear-gradient(180deg,#f7f8fb,#fff 430px)}button{font:inherit;cursor:pointer}button:disabled{opacity:.6}.topbar,.hero,.kpis,.panel,.error,.success{max-width:1450px;margin-left:auto;margin-right:auto}.topbar{display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.actions,.badges{display:flex;gap:8px;flex-wrap:wrap}.hero{padding:32px;border-radius:28px;display:flex;justify-content:space-between;gap:24px;align-items:center;color:#fff;background:linear-gradient(120deg,#50141f,#7a2633 48%,#d0602c)}.eyebrow,.panelHead span{font-size:11px;font-weight:900;letter-spacing:.13em}.hero h1{margin:8px 0 10px;font-size:clamp(32px,5vw,52px)}.hero p{max-width:800px;color:rgba(255,255,255,.86);line-height:1.6}.heroNumbers{display:flex;gap:12px}.heroNumbers b{min-width:120px;padding:18px;border-radius:18px;background:rgba(255,255,255,.13);text-align:center;font-size:36px}.heroNumbers small{display:block;font-size:12px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.kpi,.panel,.card,.certificateCard{background:#fff;border:1px solid #e4e7ec}.kpi{padding:18px;border-radius:18px}.kpi span,.kpi small{display:block;color:#667085}.kpi strong{display:block;font-size:30px;margin:8px 0}.panel{margin-top:18px;padding:22px;border-radius:22px}.panelHead{display:flex;justify-content:space-between;gap:16px}.panelHead span{color:#8c3543}.panelHead h2{margin:5px 0}.panelHead p{color:#667085}.list{display:grid;gap:12px;margin-top:18px}.card{padding:18px;border-radius:17px;display:flex;justify-content:space-between;gap:20px;align-items:center}.card h3{margin:8px 0}.card p,.card small{color:#667085}.badge,.neutral,.auto,.participantNames span{padding:5px 9px;border-radius:999px;font-size:11px;font-weight:850}.badge{background:#fff0f2;color:#8c3543}.neutral{background:#f2f4f7;color:#475467}.auto{background:#ecfdf3;color:#067647}.participantNames{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.participantNames span{background:#f7f8fa;color:#475467}.certificateGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}.certificateCard{padding:18px;border-radius:17px}.certificateCard h3{margin:10px 0 4px}.certificateCard p{color:#667085;line-height:1.65}.primary,.outline,.danger,.previewBtn,.printBtn{padding:10px 14px;border-radius:12px;font-weight:850}.primary{border:0;background:#7a2633;color:#fff}.outline{border:1px solid #d0d5dd;background:#fff;color:#344054}.danger{border:1px solid #f1b4b4;background:#fff2f2;color:#b42318}.previewBtn{border:1px solid #b9c7dc;background:#f7f9fc;color:#344054}.printBtn{border:1px solid #7a2633;background:#7a2633;color:#fff}.empty,.error,.success{margin-top:16px;padding:18px;border-radius:14px}.empty{background:#f8fafc;color:#667085}.error{background:#fff2f2;color:#b42318}.success{background:#ecfdf3;color:#067647}.backdrop{position:fixed;inset:0;background:rgba(16,24,40,.5);display:grid;place-items:center;padding:18px;z-index:50}.modal{width:min(1000px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:24px;padding:24px}.formGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.field{display:grid;gap:6px}.field span{font-size:12px;font-weight:800;color:#475467}.field input,.field select,.field textarea,.search{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:11px;background:#fff}.field textarea{min-height:100px}.participantsBox{border:1px solid #e4e7ec;border-radius:18px;padding:16px;margin:16px 0}.participantHeader{display:flex;justify-content:space-between;gap:12px}.participantHeader h3,.participantHeader p{margin:0}.participantHeader p{color:#667085}.search{margin:14px 0}.employeeList{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:280px;overflow:auto}.employeeRow{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid #eaecf0;border-radius:12px}.employeeRow small{display:block;color:#667085}.autoInfo{padding:14px;border-radius:12px;background:#ecfdf3;color:#067647;margin-bottom:14px;font-weight:700}.certificateIdentity{display:grid;gap:4px;padding:14px;background:#f8fafc;border-radius:14px;margin-top:14px}.previewModal{width:min(1200px,100%)}.attendancePreview{margin-top:16px;border:1px solid #d0d5dd;padding:18px;background:#fff}.attendancePreview .attendance-sheet h1{text-align:center}.attendancePreview table{width:100%;border-collapse:collapse}.attendancePreview th,.attendancePreview td{border:1px solid #344054;padding:7px;font-size:11px}.attendancePreview .meta th{background:#f8fafc}.attendancePreview .people th{background:#f8fafc}.attendancePreview .participant-sign{height:30px}.attendancePreview .trainer-sign{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:18px}.attendancePreview .signature-box{height:40px;border-bottom:1px dotted #555}.ek2PreviewHost{margin-top:18px;overflow:auto;background:#f5f5f5;padding:12px}.ek2PreviewHost .ek2-title{font-family:"Times New Roman",serif;font-size:17px;font-weight:700;margin-bottom:3px}.ek2PreviewHost .ek2-frame{font-family:"Times New Roman",serif;border:1px solid #111;display:grid;grid-template-columns:1fr 1.08fr;min-width:1050px;background:#fff}.ek2PreviewHost .ek2-front,.ek2PreviewHost .ek2-back{position:relative;padding:18px}.ek2PreviewHost .ek2-front{border-right:1px solid #111}.ek2PreviewHost .face-label{position:absolute;left:6px;top:4px;font-size:10px}.ek2PreviewHost .ek2-front h2{margin:30px 0 35px;font-size:15px}.ek2PreviewHost .ek2-paragraph{font-size:12px;line-height:1.35}.ek2PreviewHost .center-text{text-align:center}.ek2PreviewHost .ek2-lines{font-size:12px;line-height:1.4}.ek2PreviewHost .indent{padding-left:65px}.ek2PreviewHost .ek2-table{width:100%;border-collapse:collapse;font-size:9px}.ek2PreviewHost .ek2-table th,.ek2PreviewHost .ek2-table td{border:1px solid #111;padding:3px;line-height:1.15}.ek2PreviewHost .ek2-table th:last-child{width:70px}.ek2PreviewHost .group td{font-weight:700;background:#eee}.ek2PreviewHost .ek2-note{font-family:"Times New Roman",serif;font-size:10px;background:#fff;padding:4px}.ek2PreviewHost .sig-line,.ek2PreviewHost .long-line{display:inline-block;border-bottom:1px dotted #555;width:120px}.paperPreview{margin-top:18px;padding:38px;border:1px solid #cfd4dc;background:#fff;box-shadow:0 10px 35px rgba(16,24,40,.08)}.paperPreview>h2{text-align:center;text-decoration:underline}.paperPreview p{line-height:1.7}.previewTable{width:100%;border-collapse:collapse;margin-top:20px}.previewTable th,.previewTable td{border:1px solid #344054;padding:10px;text-align:left;vertical-align:top}.previewTable th{width:34%;background:#f8fafc}.previewSignature{height:58px}.legalNotice{margin-top:16px;padding:12px;border-radius:10px;background:#f8fafc;color:#475467;font-size:12px;line-height:1.5}.full{width:100%}@media(max-width:900px){.topbar,.hero,.card{flex-direction:column;align-items:flex-start}.kpis,.certificateGrid,.formGrid,.employeeList{grid-template-columns:1fr}.heroNumbers{width:100%}}
 `;
