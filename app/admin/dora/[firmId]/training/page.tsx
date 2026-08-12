@@ -31,78 +31,91 @@ type TrainingItem = {
   status: string;
 };
 
+type CertificateItem = {
+  id: string;
+  certificateNo: string;
+  employeeName: string;
+  employeeTc: string;
+  trainingId: string;
+  trainingTitle: string;
+  trainingDate: string;
+  issueDate: string;
+  validUntil: string;
+  trainerName: string;
+  trainingHours: string;
+  status: string;
+  note: string;
+};
+
 type DoraSyncResponse = {
   success?: boolean;
   error?: string;
   firm?: DoraFirm | null;
-
   trainings?: {
     items?: unknown[];
     count?: number;
     updatedAtMillis?: number;
   };
-
-  training?: {
-    items?: unknown[];
-    count?: number;
-    updatedAtMillis?: number;
-  };
-
-  modules?: {
-    TRAINING?: {
-      payload?: {
-        items?: unknown[];
-      };
-    };
-  };
-};
-
-type ModuleStateResponse = {
-  success?: boolean;
-  error?: string;
-  payload?: {
+  certificates?: {
     items?: unknown[];
     count?: number;
     updatedAtMillis?: number;
   };
 };
 
-function createId() {
+function value(v: unknown) {
+  return String(v ?? "").trim();
+}
+
+function createId(prefix: string) {
   if (
     typeof crypto !== "undefined" &&
     typeof crypto.randomUUID === "function"
   ) {
-    return crypto.randomUUID();
+    return `${prefix}-${crypto.randomUUID()}`;
   }
 
-  return `training-${Date.now()}-${Math.random()
+  return `${prefix}-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2)}`;
 }
 
 function todayTr() {
-  return new Date().toLocaleDateString(
-    "tr-TR"
-  );
+  return new Date().toLocaleDateString("tr-TR");
 }
 
-const EMPTY = (): TrainingItem => ({
-  id: createId(),
-  title:
-    "Temel İş Sağlığı ve Güvenliği Eğitimi",
-  trainingType: "TEMEL_ISG",
-  trainingDate: todayTr(),
-  trainingHours: "8",
-  startTime: "09:00",
-  endTime: "17:00",
-  place: "",
-  trainerName: "",
-  participantCount: 0,
-  status: "PLANLANDI",
-});
+function emptyTraining(): TrainingItem {
+  return {
+    id: createId("training"),
+    title: "Temel İş Sağlığı ve Güvenliği Eğitimi",
+    trainingType: "TEMEL_ISG",
+    trainingDate: todayTr(),
+    trainingHours: "8",
+    startTime: "09:00",
+    endTime: "17:00",
+    place: "",
+    trainerName: "",
+    participantCount: 0,
+    status: "PLANLANDI",
+  };
+}
 
-function value(v: unknown) {
-  return String(v ?? "").trim();
+function emptyCertificate(): CertificateItem {
+  return {
+    id: createId("certificate"),
+    certificateNo: "",
+    employeeName: "",
+    employeeTc: "",
+    trainingId: "",
+    trainingTitle: "",
+    trainingDate: "",
+    issueDate: todayTr(),
+    validUntil: "",
+    trainerName: "",
+    trainingHours: "",
+    status: "GECERLI",
+    note: "",
+  };
 }
 
 async function readJsonSafely<T>(
@@ -117,103 +130,122 @@ async function readJsonSafely<T>(
       .toLowerCase()
       .includes("application/json")
   ) {
-    const raw =
-      await response.text();
-
-    const preview =
-      raw
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 180) ||
-      "Boş yanıt";
+    const raw = await response.text();
 
     throw new Error(
-      `${serviceName} JSON döndürmedi. HTTP ${response.status}. Yanıt: ${preview}`
+      `${serviceName} JSON döndürmedi. HTTP ${response.status}. Yanıt: ${
+        raw.replace(/\s+/g, " ").trim().slice(0, 180) || "Boş yanıt"
+      }`
     );
   }
 
   return (await response.json()) as T;
 }
 
-function mapTrainingItem(
-  x: any,
+function mapTraining(
+  row: any,
   index: number
 ): TrainingItem {
   return {
     id:
-      value(x?.id) ||
-      value(x?.syncKey) ||
-      value(x?.sync_key) ||
+      value(row?.id) ||
+      value(row?.syncKey) ||
       `training-${index}`,
-
     title:
-      value(x?.title) ||
-      value(x?.trainingName) ||
-      value(x?.training_name) ||
+      value(row?.title) ||
+      value(row?.trainingName) ||
       "İSG Eğitimi",
-
     trainingType:
-      value(x?.trainingType) ||
-      value(x?.training_type) ||
+      value(row?.trainingType) ||
+      value(row?.training_type) ||
       "TEMEL_ISG",
-
     trainingDate:
-      value(x?.trainingDate) ||
-      value(x?.training_date),
-
+      value(row?.trainingDate) ||
+      value(row?.training_date),
     trainingHours:
-      value(x?.trainingHours) ||
-      value(x?.training_hours) ||
+      value(row?.trainingHours) ||
+      value(row?.training_hours) ||
       "8",
-
     startTime:
-      value(x?.startTime) ||
-      value(x?.trainingStartTime) ||
-      value(x?.start_time) ||
-      value(x?.training_start_time) ||
+      value(row?.startTime) ||
+      value(row?.trainingStartTime) ||
       "09:00",
-
     endTime:
-      value(x?.endTime) ||
-      value(x?.trainingEndTime) ||
-      value(x?.end_time) ||
-      value(x?.training_end_time) ||
+      value(row?.endTime) ||
+      value(row?.trainingEndTime) ||
       "17:00",
-
     place:
-      value(x?.place) ||
-      value(x?.trainingPlace) ||
-      value(x?.training_place),
-
+      value(row?.place) ||
+      value(row?.trainingPlace),
     trainerName:
-      value(x?.trainerName) ||
-      value(x?.trainer_name),
-
+      value(row?.trainerName),
     participantCount:
-      Number(
-        x?.participantCount ??
-          x?.participant_count ??
-          0
-      ) || 0,
-
+      Number(row?.participantCount ?? 0) || 0,
     status:
-      value(x?.status) ||
+      value(row?.status) ||
       "PLANLANDI",
+  };
+}
+
+function mapCertificate(
+  row: any,
+  index: number
+): CertificateItem {
+  return {
+    id:
+      value(row?.id) ||
+      `certificate-${index}`,
+    certificateNo:
+      value(row?.certificateNo) ||
+      value(row?.certificate_no),
+    employeeName:
+      value(row?.employeeName) ||
+      value(row?.employee_name),
+    employeeTc:
+      value(row?.employeeTc) ||
+      value(row?.employee_tc) ||
+      value(row?.tcNo),
+    trainingId:
+      value(row?.trainingId) ||
+      value(row?.training_id),
+    trainingTitle:
+      value(row?.trainingTitle) ||
+      value(row?.training_title),
+    trainingDate:
+      value(row?.trainingDate) ||
+      value(row?.training_date),
+    issueDate:
+      value(row?.issueDate) ||
+      value(row?.issue_date) ||
+      todayTr(),
+    validUntil:
+      value(row?.validUntil) ||
+      value(row?.valid_until),
+    trainerName:
+      value(row?.trainerName),
+    trainingHours:
+      value(row?.trainingHours),
+    status:
+      value(row?.status) ||
+      "GECERLI",
+    note:
+      value(row?.note),
   };
 }
 
 export default function DoraTrainingPage() {
   const router = useRouter();
   const params = useParams();
-
-  const firmId =
-    value(params?.firmId);
+  const firmId = value(params?.firmId);
 
   const [firm, setFirm] =
     useState<DoraFirm | null>(null);
 
-  const [items, setItems] =
+  const [trainings, setTrainings] =
     useState<TrainingItem[]>([]);
+
+  const [certificates, setCertificates] =
+    useState<CertificateItem[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -230,135 +262,102 @@ export default function DoraTrainingPage() {
   const [success, setSuccess] =
     useState("");
 
-  const [formOpen, setFormOpen] =
+  const [trainingOpen, setTrainingOpen] =
     useState(false);
 
-  const [form, setForm] =
-    useState<TrainingItem>(
-      EMPTY()
-    );
+  const [certificateOpen, setCertificateOpen] =
+    useState(false);
 
-  const load = useCallback(
-    async () => {
-      if (!firmId) {
-        setError(
-          "DORA firma ID bulunamadı."
-        );
-        setLoading(false);
-        return;
-      }
+  const [trainingForm, setTrainingForm] =
+    useState<TrainingItem>(emptyTraining());
 
-      try {
-        setLoading(true);
-        setError("");
-        setSuccess("");
+  const [certificateForm, setCertificateForm] =
+    useState<CertificateItem>(emptyCertificate());
 
-        const syncRes =
-          await fetch(
-            `/api/dora/mobile/sync?firmId=${encodeURIComponent(
-              firmId
-            )}`,
-            {
-              cache: "no-store",
-              headers: {
-                "x-api-key":
-                  "dsec_mobile_123",
-                Accept:
-                  "application/json",
-              },
-            }
-          );
+  const load = useCallback(async () => {
+    if (!firmId) {
+      setError("DORA firma ID bulunamadı.");
+      setLoading(false);
+      return;
+    }
 
-        const syncJson =
-          await readJsonSafely<DoraSyncResponse>(
-            syncRes,
-            "DORA tam senkron servisi"
-          );
+    try {
+      setLoading(true);
+      setError("");
 
-        if (
-          !syncRes.ok ||
-          syncJson.success === false
-        ) {
-          throw new Error(
-            syncJson.error ||
-              "DORA eğitim verileri alınamadı."
-          );
+      const response = await fetch(
+        `/api/dora/mobile/sync?firmId=${encodeURIComponent(
+          firmId
+        )}`,
+        {
+          cache: "no-store",
+          headers: {
+            "x-api-key": "dsec_mobile_123",
+            Accept: "application/json",
+          },
         }
+      );
 
-        setFirm(
-          syncJson.firm ?? null
+      const json =
+        await readJsonSafely<DoraSyncResponse>(
+          response,
+          "DORA Eğitim ve Sertifika senkron servisi"
         );
 
-        const incoming =
-          Array.isArray(
-            syncJson.trainings?.items
-          )
-            ? syncJson.trainings
-                ?.items
-            : Array.isArray(
-                syncJson.training
-                  ?.items
-              )
-            ? syncJson.training
-                ?.items
-            : Array.isArray(
-                syncJson.modules
-                  ?.TRAINING?.payload
-                  ?.items
-              )
-            ? syncJson.modules
-                ?.TRAINING?.payload
-                ?.items
-            : [];
-
-        setItems(
-          incoming.map(
-            (
-              x: any,
-              index: number
-            ) =>
-              mapTrainingItem(
-                x,
-                index
-              )
-          )
+      if (
+        !response.ok ||
+        json.success === false
+      ) {
+        throw new Error(
+          json.error ||
+            "DORA Eğitim ve Sertifika verileri alınamadı."
         );
-      } catch (e) {
-        setError(
-          e instanceof Error
-            ? e.message
-            : "Eğitim merkezi yüklenemedi."
-        );
-      } finally {
-        setLoading(false);
       }
-    },
-    [firmId]
-  );
+
+      setFirm(json.firm ?? null);
+
+      const trainingRows =
+        Array.isArray(json.trainings?.items)
+          ? json.trainings!.items!
+          : [];
+
+      const certificateRows =
+        Array.isArray(json.certificates?.items)
+          ? json.certificates!.items!
+          : [];
+
+      setTrainings(
+        trainingRows.map(
+          (row, index) =>
+            mapTraining(row, index)
+        )
+      );
+
+      setCertificates(
+        certificateRows.map(
+          (row, index) =>
+            mapCertificate(row, index)
+        )
+      );
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "DORA Eğitim ve Sertifika Merkezi yüklenemedi."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [firmId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!success) return;
-
-    const timer =
-      window.setTimeout(
-        () => {
-          setSuccess("");
-        },
-        3500
-      );
-
-    return () =>
-      window.clearTimeout(
-        timer
-      );
-  }, [success]);
-
   async function persist(
-    next: TrainingItem[]
+    nextTrainings: TrainingItem[],
+    nextCertificates: CertificateItem[],
+    message: string
   ) {
     if (!firmId) {
       throw new Error(
@@ -372,78 +371,9 @@ export default function DoraTrainingPage() {
     try {
       const response =
         await fetch(
-          "/api/dora/module-state",
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-              Accept:
-                "application/json",
-            },
-
-            body:
-              JSON.stringify({
-                firmId,
-                moduleKey:
-                  "TRAINING",
-
-                payload: {
-                  items: next,
-                  count:
-                    next.length,
-                  updatedAtMillis:
-                    Date.now(),
-                },
-              }),
-          }
-        );
-
-      const json =
-        await readJsonSafely<ModuleStateResponse>(
-          response,
-          "DORA eğitim kayıt servisi"
-        );
-
-      if (
-        !response.ok ||
-        json.success === false
-      ) {
-        throw new Error(
-          json.error ||
-            "Eğitim kaydedilemedi."
-        );
-      }
-
-      setItems(next);
-
-      setSuccess(
-        "Eğitim verileri kaydedildi."
-      );
-
-      return json;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function syncAll() {
-    if (!firmId) {
-      return;
-    }
-
-    try {
-      setSyncing(true);
-      setError("");
-      setSuccess("");
-
-      const response =
-        await fetch(
           "/api/dora/mobile/sync",
           {
             method: "POST",
-
             headers: {
               "Content-Type":
                 "application/json",
@@ -452,38 +382,26 @@ export default function DoraTrainingPage() {
               Accept:
                 "application/json",
             },
-
-            body:
-              JSON.stringify({
-                firmId,
-
-                trainings: {
-                  items,
-                  count:
-                    items.length,
-                  updatedAtMillis:
-                    Date.now(),
-                },
-
-                modules: {
-                  TRAINING: {
-                    payload: {
-                      items,
-                      count:
-                        items.length,
-                      updatedAtMillis:
-                        Date.now(),
-                    },
-                  },
-                },
-              }),
+            body: JSON.stringify({
+              firmId,
+              trainings: {
+                items: nextTrainings,
+                count: nextTrainings.length,
+                updatedAtMillis: Date.now(),
+              },
+              certificates: {
+                items: nextCertificates,
+                count: nextCertificates.length,
+                updatedAtMillis: Date.now(),
+              },
+            }),
           }
         );
 
       const json =
         await readJsonSafely<DoraSyncResponse>(
           response,
-          "DORA eğitim senkron servisi"
+          "DORA Eğitim ve Sertifika kayıt servisi"
         );
 
       if (
@@ -492,111 +410,123 @@ export default function DoraTrainingPage() {
       ) {
         throw new Error(
           json.error ||
-            "DORA eğitim senkronizasyonu başarısız."
+            "DORA Eğitim ve Sertifika verileri kaydedilemedi."
         );
       }
 
-      setSuccess(
-        "DORA Eğitim Merkezi Web ve App ile senkronize edildi."
+      const trainingRows =
+        Array.isArray(json.trainings?.items)
+          ? json.trainings!.items!
+          : nextTrainings;
+
+      const certificateRows =
+        Array.isArray(json.certificates?.items)
+          ? json.certificates!.items!
+          : nextCertificates;
+
+      setTrainings(
+        trainingRows.map(
+          (row, index) =>
+            mapTraining(row, index)
+        )
       );
 
+      setCertificates(
+        certificateRows.map(
+          (row, index) =>
+            mapCertificate(row, index)
+        )
+      );
+
+      setSuccess(message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function syncAll() {
+    try {
+      setSyncing(true);
+      await persist(
+        trainings,
+        certificates,
+        "Eğitim ve sertifika verileri Web ↔ App ortak senkron alanına kaydedildi."
+      );
       await load();
     } catch (e) {
       setError(
         e instanceof Error
           ? e.message
-          : "DORA eğitim senkronizasyonu başarısız."
+          : "Senkronizasyon başarısız."
       );
     } finally {
       setSyncing(false);
     }
   }
 
-  async function saveForm() {
-    if (
-      !form.title.trim()
-    ) {
-      alert(
-        "Eğitim adı zorunludur."
-      );
+  async function saveTraining() {
+    if (!trainingForm.title.trim()) {
+      alert("Eğitim adı zorunludur.");
       return;
     }
 
-    const normalized: TrainingItem =
-      {
-        ...form,
-
-        id:
-          form.id ||
-          createId(),
-
-        title:
-          form.title.trim(),
-
-        trainingType:
-          form.trainingType.trim() ||
-          "TEMEL_ISG",
-
-        trainingDate:
-          form.trainingDate.trim(),
-
-        trainingHours:
-          form.trainingHours.trim() ||
-          "8",
-
-        startTime:
-          form.startTime.trim() ||
-          "09:00",
-
-        endTime:
-          form.endTime.trim() ||
-          "17:00",
-
-        place:
-          form.place.trim(),
-
-        trainerName:
-          form.trainerName.trim(),
-
-        participantCount:
-          Math.max(
-            0,
-            Number(
-              form.participantCount
-            ) || 0
-          ),
-
-        status:
-          form.status.trim() ||
-          "PLANLANDI",
-      };
+    const normalized: TrainingItem = {
+      ...trainingForm,
+      id:
+        trainingForm.id ||
+        createId("training"),
+      title:
+        trainingForm.title.trim(),
+      trainingType:
+        trainingForm.trainingType.trim() ||
+        "TEMEL_ISG",
+      trainingHours:
+        trainingForm.trainingHours.trim() ||
+        "8",
+      startTime:
+        trainingForm.startTime.trim() ||
+        "09:00",
+      endTime:
+        trainingForm.endTime.trim() ||
+        "17:00",
+      participantCount:
+        Math.max(
+          0,
+          Number(
+            trainingForm.participantCount
+          ) || 0
+        ),
+      status:
+        trainingForm.status ||
+        "PLANLANDI",
+    };
 
     const exists =
-      items.some(
-        (x) =>
-          x.id ===
-          normalized.id
+      trainings.some(
+        (row) =>
+          row.id === normalized.id
       );
 
-    const next =
+    const nextTrainings =
       exists
-        ? items.map(
-            (x) =>
-              x.id ===
-              normalized.id
-                ? normalized
-                : x
+        ? trainings.map((row) =>
+            row.id === normalized.id
+              ? normalized
+              : row
           )
-        : [
-            ...items,
-            normalized,
-          ];
+        : [...trainings, normalized];
 
     try {
-      await persist(next);
+      await persist(
+        nextTrainings,
+        certificates,
+        "Eğitim kaydı başarıyla kaydedildi."
+      );
 
-      setFormOpen(false);
-      setForm(EMPTY());
+      setTrainingOpen(false);
+      setTrainingForm(
+        emptyTraining()
+      );
     } catch (e) {
       alert(
         e instanceof Error
@@ -606,7 +536,7 @@ export default function DoraTrainingPage() {
     }
   }
 
-  async function remove(
+  async function deleteTraining(
     id: string
   ) {
     if (
@@ -617,12 +547,22 @@ export default function DoraTrainingPage() {
       return;
     }
 
+    const nextTrainings =
+      trainings.filter(
+        (row) => row.id !== id
+      );
+
+    const nextCertificates =
+      certificates.filter(
+        (row) =>
+          row.trainingId !== id
+      );
+
     try {
       await persist(
-        items.filter(
-          (x) =>
-            x.id !== id
-        )
+        nextTrainings,
+        nextCertificates,
+        "Eğitim kaydı silindi."
       );
     } catch (e) {
       alert(
@@ -633,50 +573,175 @@ export default function DoraTrainingPage() {
     }
   }
 
+  function createCertificateForTraining(
+    training: TrainingItem
+  ) {
+    const next =
+      emptyCertificate();
+
+    next.trainingId =
+      training.id;
+
+    next.trainingTitle =
+      training.title;
+
+    next.trainingDate =
+      training.trainingDate;
+
+    next.trainerName =
+      training.trainerName;
+
+    next.trainingHours =
+      training.trainingHours;
+
+    next.certificateNo =
+      `DORA-${new Date()
+        .getFullYear()}-${String(
+        certificates.length + 1
+      ).padStart(5, "0")}`;
+
+    setCertificateForm(next);
+    setCertificateOpen(true);
+  }
+
+  async function saveCertificate() {
+    if (
+      !certificateForm.employeeName.trim()
+    ) {
+      alert(
+        "Sertifika için çalışan adı zorunludur."
+      );
+      return;
+    }
+
+    if (
+      !certificateForm.trainingTitle.trim()
+    ) {
+      alert(
+        "Sertifikanın bağlı olduğu eğitim zorunludur."
+      );
+      return;
+    }
+
+    const normalized: CertificateItem = {
+      ...certificateForm,
+      id:
+        certificateForm.id ||
+        createId("certificate"),
+      certificateNo:
+        certificateForm.certificateNo.trim() ||
+        `DORA-${new Date()
+          .getFullYear()}-${String(
+          certificates.length + 1
+        ).padStart(5, "0")}`,
+      employeeName:
+        certificateForm.employeeName.trim(),
+      employeeTc:
+        certificateForm.employeeTc.trim(),
+      trainingTitle:
+        certificateForm.trainingTitle.trim(),
+      status:
+        certificateForm.status ||
+        "GECERLI",
+    };
+
+    const exists =
+      certificates.some(
+        (row) =>
+          row.id === normalized.id
+      );
+
+    const nextCertificates =
+      exists
+        ? certificates.map((row) =>
+            row.id === normalized.id
+              ? normalized
+              : row
+          )
+        : [
+            ...certificates,
+            normalized,
+          ];
+
+    try {
+      await persist(
+        trainings,
+        nextCertificates,
+        "Sertifika kaydı başarıyla kaydedildi."
+      );
+
+      setCertificateOpen(false);
+      setCertificateForm(
+        emptyCertificate()
+      );
+    } catch (e) {
+      alert(
+        e instanceof Error
+          ? e.message
+          : "Sertifika kaydedilemedi."
+      );
+    }
+  }
+
+  async function deleteCertificate(
+    id: string
+  ) {
+    if (
+      !window.confirm(
+        "Bu DORA sertifika kaydı silinsin mi?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await persist(
+        trainings,
+        certificates.filter(
+          (row) =>
+            row.id !== id
+        ),
+        "Sertifika kaydı silindi."
+      );
+    } catch (e) {
+      alert(
+        e instanceof Error
+          ? e.message
+          : "Sertifika silinemedi."
+      );
+    }
+  }
+
   const planned =
     useMemo(
       () =>
-        items.filter(
-          (x) =>
-            x.status !==
+        trainings.filter(
+          (row) =>
+            row.status !==
             "TAMAMLANDI"
         ).length,
-      [items]
+      [trainings]
     );
 
   const completed =
-    items.length -
-    planned;
+    trainings.length - planned;
 
-  const totalParticipants =
+  const validCertificates =
     useMemo(
       () =>
-        items.reduce(
-          (
-            total,
-            item
-          ) =>
-            total +
-            Number(
-              item.participantCount ||
-                0
-            ),
-          0
-        ),
-      [items]
+        certificates.filter(
+          (row) =>
+            row.status ===
+            "GECERLI"
+        ).length,
+      [certificates]
     );
 
   if (loading) {
     return (
       <main className="page">
-        <div className="loading">
-          DORA Eğitim Merkezi
-          yükleniyor...
-        </div>
-
-        <style jsx>
-          {styles}
-        </style>
+        DORA Eğitim ve Sertifika Merkezi yükleniyor...
+        <style jsx>{styles}</style>
       </main>
     );
   }
@@ -695,23 +760,10 @@ export default function DoraTrainingPage() {
           ← Firma Merkezine Dön
         </button>
 
-        <div className="topActions">
+        <div className="actions">
           <button
-            className="outline"
-            disabled={syncing}
-            onClick={() =>
-              void load()
-            }
-          >
-            Yenile
-          </button>
-
-          <button
-            className="syncBtn"
-            disabled={
-              syncing ||
-              saving
-            }
+            className="sync"
+            disabled={syncing || saving}
             onClick={() =>
               void syncAll()
             }
@@ -724,15 +776,29 @@ export default function DoraTrainingPage() {
           <button
             className="primary"
             onClick={() => {
-              setForm(
-                EMPTY()
+              setTrainingForm(
+                emptyTraining()
               );
-              setFormOpen(
+              setTrainingOpen(
                 true
               );
             }}
           >
             + Yeni Eğitim
+          </button>
+
+          <button
+            className="primary"
+            onClick={() => {
+              setCertificateForm(
+                emptyCertificate()
+              );
+              setCertificateOpen(
+                true
+              );
+            }}
+          >
+            + Yeni Sertifika
           </button>
         </div>
       </div>
@@ -740,48 +806,39 @@ export default function DoraTrainingPage() {
       <section className="hero">
         <div>
           <div className="eyebrow">
-            DORA • EĞİTİM VE
-            SERTİFİKA
+            DORA • EĞİTİM VE SERTİFİKA
           </div>
-
           <h1>
-            Eğitim ve Sertifika
-            Merkezi
+            Eğitim ve Sertifika Merkezi
           </h1>
-
           <p>
             {firm?.firm_name ||
               "DORA firması"}{" "}
-            için eğitim
-            oturumlarını,
-            katılımı,
-            sınav/sertifika
-            hazırlığını ve App
-            ile ortak eğitim
-            durumunu yönetin.
+            için eğitim oturumlarını ve
+            çalışan bazlı sertifikaları
+            Web ↔ App ortak senkron alanında yönetin.
           </p>
         </div>
 
-        <div className="heroCount">
-          <strong>
-            {items.length}
-          </strong>
-
-          <span>
-            eğitim
-          </span>
+        <div className="heroNumbers">
+          <div>
+            <strong>
+              {trainings.length}
+            </strong>
+            <span>Eğitim</span>
+          </div>
+          <div>
+            <strong>
+              {certificates.length}
+            </strong>
+            <span>Sertifika</span>
+          </div>
         </div>
       </section>
 
       {error ? (
         <div className="error">
-          <strong>
-            İşlem Hatası
-          </strong>
-
-          <div>
-            {error}
-          </div>
+          {error}
         </div>
       ) : null}
 
@@ -791,206 +848,77 @@ export default function DoraTrainingPage() {
         </div>
       ) : null}
 
-      <section className="syncInfo">
-        <div>
-          <span>
-            APP ↔ WEB
-          </span>
-
-          <strong>
-            DORA Eğitim
-            Senkronizasyonu
-          </strong>
-
-          <p>
-            Eğitim verileri
-            DORA ortak mobil
-            senkron servisi
-            üzerinden
-            eşitlenir.
-          </p>
-        </div>
-
-        <button
-          className="syncBtn"
-          disabled={
-            syncing ||
-            saving
-          }
-          onClick={() =>
-            void syncAll()
-          }
-        >
-          {syncing
-            ? "Senkronize Ediliyor..."
-            : "Şimdi Senkronize Et"}
-        </button>
-      </section>
-
       <section className="kpis">
         <Kpi
           title="Toplam Eğitim"
-          value={
-            items.length
-          }
+          value={trainings.length}
           detail="DORA eğitim oturumları"
         />
-
         <Kpi
           title="Planlanan"
           value={planned}
           detail="Bekleyen eğitim"
         />
-
         <Kpi
           title="Tamamlanan"
           value={completed}
-          detail="Tamamlandı durumu"
+          detail="Tamamlanan eğitim"
         />
-
         <Kpi
-          title="Çalışan"
-          value={
-            firm?.employee_count ??
-            0
-          }
-          detail="DORA çalışan havuzu"
+          title="Geçerli Sertifika"
+          value={validCertificates}
+          detail={`${certificates.length} toplam sertifika`}
         />
       </section>
 
       <section className="panel">
         <div className="panelHead">
           <div>
-            <span>
-              DORA EĞİTİMLERİ
-            </span>
-
-            <h2>
-              Eğitim Oturumları
-            </h2>
-
-            <p>
-              Toplam katılımcı
-              kaydı:{" "}
-              <b>
-                {totalParticipants}
-              </b>
-            </p>
+            <span>DORA EĞİTİMLERİ</span>
+            <h2>Eğitim Oturumları</h2>
           </div>
 
-          <div className="panelActions">
-            <button
-              className="outline"
-              onClick={() =>
-                void load()
-              }
-            >
-              Yenile
-            </button>
-
-            <button
-              className="primary"
-              onClick={() => {
-                setForm(
-                  EMPTY()
-                );
-
-                setFormOpen(
-                  true
-                );
-              }}
-            >
-              Yeni Eğitim
-            </button>
-          </div>
+          <button
+            className="outline"
+            onClick={() => void load()}
+          >
+            Yenile
+          </button>
         </div>
 
-        {items.length ===
-        0 ? (
+        {trainings.length === 0 ? (
           <div className="empty">
-            <strong>
-              Henüz DORA eğitim
-              kaydı yok.
-            </strong>
-
-            <p>
-              App veya Web
-              üzerinden oluşturulan
-              eğitimler
-              senkronizasyonla
-              burada
-              ortaklaşacaktır.
-            </p>
-
-            <button
-              className="syncBtn"
-              disabled={
-                syncing
-              }
-              onClick={() =>
-                void syncAll()
-              }
-            >
-              Web ile
-              Senkronize Et
-            </button>
+            Henüz eğitim kaydı yok.
           </div>
         ) : (
           <div className="list">
-            {items.map(
-              (item) => (
+            {trainings.map(
+              (training) => (
                 <article
                   className="card"
-                  key={
-                    item.id
-                  }
+                  key={training.id}
                 >
-                  <div className="cardMain">
-                    <div className="cardTop">
-                      <span className="badge">
-                        {
-                          item.status
-                        }
-                      </span>
-
-                      <span className="typeBadge">
-                        {
-                          item.trainingType
-                        }
-                      </span>
-                    </div>
-
+                  <div>
+                    <span className="badge">
+                      {training.status}
+                    </span>
                     <h3>
-                      {item.title}
+                      {training.title}
                     </h3>
-
                     <p>
-                      {item.trainingDate ||
+                      {training.trainingDate ||
                         "Tarih yok"}{" "}
                       •{" "}
-                      {
-                        item.trainingHours
-                      }{" "}
-                      saat •{" "}
-                      {item.startTime ||
-                        "-"}{" "}
-                      -{" "}
-                      {item.endTime ||
-                        "-"}
-                    </p>
-
-                    <small>
-                      Eğitmen:{" "}
-                      {item.trainerName ||
-                        "Atanmadı"}{" "}
-                      • Yer:{" "}
-                      {item.place ||
-                        "Belirtilmedi"}{" "}
+                      {training.trainingHours} saat
                       •{" "}
-                      {
-                        item.participantCount
-                      }{" "}
-                      katılımcı
+                      {training.trainerName ||
+                        "Eğitmen atanmadı"}
+                    </p>
+                    <small>
+                      {training.place ||
+                        "Yer belirtilmedi"}{" "}
+                      •{" "}
+                      {training.participantCount} katılımcı
                     </small>
                   </div>
 
@@ -998,11 +926,10 @@ export default function DoraTrainingPage() {
                     <button
                       className="outline"
                       onClick={() => {
-                        setForm({
-                          ...item,
+                        setTrainingForm({
+                          ...training,
                         });
-
-                        setFormOpen(
+                        setTrainingOpen(
                           true
                         );
                       }}
@@ -1011,13 +938,21 @@ export default function DoraTrainingPage() {
                     </button>
 
                     <button
-                      className="danger"
-                      disabled={
-                        saving
-                      }
+                      className="certButton"
                       onClick={() =>
-                        void remove(
-                          item.id
+                        createCertificateForTraining(
+                          training
+                        )
+                      }
+                    >
+                      Sertifika Oluştur
+                    </button>
+
+                    <button
+                      className="danger"
+                      onClick={() =>
+                        void deleteTraining(
+                          training.id
                         )
                       }
                     >
@@ -1031,269 +966,533 @@ export default function DoraTrainingPage() {
         )}
       </section>
 
-      {formOpen ? (
-        <div
-          className="backdrop"
-          onMouseDown={() => {
-            if (!saving) {
-              setFormOpen(
-                false
+      <section className="panel">
+        <div className="panelHead">
+          <div>
+            <span>DORA SERTİFİKALARI</span>
+            <h2>Sertifika Merkezi</h2>
+          </div>
+
+          <button
+            className="primary"
+            onClick={() => {
+              setCertificateForm(
+                emptyCertificate()
               );
-            }
-          }}
-        >
-          <div
-            className="modal"
-            onMouseDown={(
-              event
-            ) =>
-              event.stopPropagation()
-            }
+              setCertificateOpen(
+                true
+              );
+            }}
           >
-            <div className="panelHead">
-              <div>
-                <span>
-                  DORA EĞİTİM
-                  FORMU
-                </span>
+            + Yeni Sertifika
+          </button>
+        </div>
 
-                <h2>
-                  Eğitim Kaydı
-                </h2>
-              </div>
-
-              <button
-                className="closeBtn"
-                disabled={
-                  saving
-                }
-                onClick={() =>
-                  setFormOpen(
-                    false
-                  )
-                }
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="formGrid">
-              <Field
-                label="Eğitim Adı"
-                value={
-                  form.title
-                }
-                onChange={(
-                  v
-                ) =>
-                  setForm({
-                    ...form,
-                    title: v,
-                  })
-                }
-              />
-
-              <Field
-                label="Eğitim Türü"
-                value={
-                  form.trainingType
-                }
-                onChange={(
-                  v
-                ) =>
-                  setForm({
-                    ...form,
-                    trainingType:
-                      v,
-                  })
-                }
-              />
-
-              <Field
-                label="Tarih"
-                value={
-                  form.trainingDate
-                }
-                onChange={(
-                  v
-                ) =>
-                  setForm({
-                    ...form,
-                    trainingDate:
-                      v,
-                  })
-                }
-              />
-
-              <Field
-                label="Süre (saat)"
-                value={
-                  form.trainingHours
-                }
-                onChange={(
-                  v
-                ) =>
-                  setForm({
-                    ...form,
-                    trainingHours:
-                      v,
-                  })
-                }
-              />
-
-              <Field
-                label="Başlangıç"
-                value={
-                  form.startTime
-                }
-                onChange={(
-                  v
-                ) =>
-                  setForm({
-                    ...form,
-                    startTime: v,
-                  })
-                }
-              />
-
-              <Field
-                label="Bitiş"
-                value={
-                  form.endTime
-                }
-                onChange={(
-                  v
-                ) =>
-                  setForm({
-                    ...form,
-                    endTime: v,
-                  })
-                }
-              />
-
-              <Field
-                label="Yer"
-                value={
-                  form.place
-                }
-                onChange={(
-                  v
-                ) =>
-                  setForm({
-                    ...form,
-                    place: v,
-                  })
-                }
-              />
-
-              <Field
-                label="Eğitmen"
-                value={
-                  form.trainerName
-                }
-                onChange={(
-                  v
-                ) =>
-                  setForm({
-                    ...form,
-                    trainerName:
-                      v,
-                  })
-                }
-              />
-
-              <Field
-                label="Katılımcı Sayısı"
-                value={String(
-                  form.participantCount
-                )}
-                onChange={(
-                  v
-                ) =>
-                  setForm({
-                    ...form,
-                    participantCount:
-                      Number(
-                        v
-                      ) || 0,
-                  })
-                }
-              />
-
-              <label className="field">
-                <span>
-                  Durum
-                </span>
-
-                <select
-                  value={
-                    form.status
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setForm({
-                      ...form,
-                      status:
-                        event
-                          .target
-                          .value,
-                    })
+        {certificates.length ===
+        0 ? (
+          <div className="empty">
+            Henüz sertifika kaydı yok.
+          </div>
+        ) : (
+          <div className="list">
+            {certificates.map(
+              (certificate) => (
+                <article
+                  className="card"
+                  key={
+                    certificate.id
                   }
                 >
-                  <option value="PLANLANDI">
-                    Planlandı
-                  </option>
+                  <div>
+                    <span className="badge">
+                      {
+                        certificate.status
+                      }
+                    </span>
+                    <h3>
+                      {
+                        certificate.employeeName
+                      }
+                    </h3>
+                    <p>
+                      {
+                        certificate.trainingTitle
+                      }
+                    </p>
+                    <small>
+                      Belge No:{" "}
+                      {certificate.certificateNo ||
+                        "-"}{" "}
+                      • Düzenleme:{" "}
+                      {certificate.issueDate ||
+                        "-"}{" "}
+                      • Geçerlilik:{" "}
+                      {certificate.validUntil ||
+                        "-"}
+                    </small>
+                  </div>
 
-                  <option value="DEVAM_EDIYOR">
-                    Devam
-                    Ediyor
-                  </option>
+                  <div className="actions">
+                    <button
+                      className="outline"
+                      onClick={() => {
+                        setCertificateForm({
+                          ...certificate,
+                        });
+                        setCertificateOpen(
+                          true
+                        );
+                      }}
+                    >
+                      Düzenle
+                    </button>
 
-                  <option value="TAMAMLANDI">
-                    Tamamlandı
-                  </option>
-                </select>
-              </label>
-            </div>
-
-            <div className="modalActions">
-              <button
-                className="outline"
-                disabled={
-                  saving
-                }
-                onClick={() =>
-                  setFormOpen(
-                    false
-                  )
-                }
-              >
-                Vazgeç
-              </button>
-
-              <button
-                className="primary saveBtn"
-                disabled={
-                  saving
-                }
-                onClick={() =>
-                  void saveForm()
-                }
-              >
-                {saving
-                  ? "Kaydediliyor..."
-                  : "Eğitimi Kaydet"}
-              </button>
-            </div>
+                    <button
+                      className="danger"
+                      onClick={() =>
+                        void deleteCertificate(
+                          certificate.id
+                        )
+                      }
+                    >
+                      Sil
+                    </button>
+                  </div>
+                </article>
+              )
+            )}
           </div>
-        </div>
+        )}
+      </section>
+
+      {trainingOpen ? (
+        <Modal
+          title="Eğitim Kaydı"
+          onClose={() =>
+            !saving &&
+            setTrainingOpen(false)
+          }
+        >
+          <div className="formGrid">
+            <Field
+              label="Eğitim Adı"
+              value={trainingForm.title}
+              onChange={(v) =>
+                setTrainingForm({
+                  ...trainingForm,
+                  title: v,
+                })
+              }
+            />
+            <Field
+              label="Eğitim Türü"
+              value={
+                trainingForm.trainingType
+              }
+              onChange={(v) =>
+                setTrainingForm({
+                  ...trainingForm,
+                  trainingType: v,
+                })
+              }
+            />
+            <Field
+              label="Tarih"
+              value={
+                trainingForm.trainingDate
+              }
+              onChange={(v) =>
+                setTrainingForm({
+                  ...trainingForm,
+                  trainingDate: v,
+                })
+              }
+            />
+            <Field
+              label="Süre (saat)"
+              value={
+                trainingForm.trainingHours
+              }
+              onChange={(v) =>
+                setTrainingForm({
+                  ...trainingForm,
+                  trainingHours: v,
+                })
+              }
+            />
+            <Field
+              label="Başlangıç"
+              value={
+                trainingForm.startTime
+              }
+              onChange={(v) =>
+                setTrainingForm({
+                  ...trainingForm,
+                  startTime: v,
+                })
+              }
+            />
+            <Field
+              label="Bitiş"
+              value={
+                trainingForm.endTime
+              }
+              onChange={(v) =>
+                setTrainingForm({
+                  ...trainingForm,
+                  endTime: v,
+                })
+              }
+            />
+            <Field
+              label="Yer"
+              value={trainingForm.place}
+              onChange={(v) =>
+                setTrainingForm({
+                  ...trainingForm,
+                  place: v,
+                })
+              }
+            />
+            <Field
+              label="Eğitmen"
+              value={
+                trainingForm.trainerName
+              }
+              onChange={(v) =>
+                setTrainingForm({
+                  ...trainingForm,
+                  trainerName: v,
+                })
+              }
+            />
+            <Field
+              label="Katılımcı Sayısı"
+              value={String(
+                trainingForm.participantCount
+              )}
+              onChange={(v) =>
+                setTrainingForm({
+                  ...trainingForm,
+                  participantCount:
+                    Number(v) || 0,
+                })
+              }
+            />
+
+            <label className="field">
+              <span>Durum</span>
+              <select
+                value={
+                  trainingForm.status
+                }
+                onChange={(event) =>
+                  setTrainingForm({
+                    ...trainingForm,
+                    status:
+                      event.target.value,
+                  })
+                }
+              >
+                <option value="PLANLANDI">
+                  Planlandı
+                </option>
+                <option value="DEVAM_EDIYOR">
+                  Devam Ediyor
+                </option>
+                <option value="TAMAMLANDI">
+                  Tamamlandı
+                </option>
+              </select>
+            </label>
+          </div>
+
+          <button
+            className="primary full"
+            disabled={saving}
+            onClick={() =>
+              void saveTraining()
+            }
+          >
+            {saving
+              ? "Kaydediliyor..."
+              : "Eğitimi Kaydet"}
+          </button>
+        </Modal>
       ) : null}
 
-      <style jsx>
-        {styles}
-      </style>
+      {certificateOpen ? (
+        <Modal
+          title="Sertifika Kaydı"
+          onClose={() =>
+            !saving &&
+            setCertificateOpen(false)
+          }
+        >
+          <div className="formGrid">
+            <Field
+              label="Sertifika No"
+              value={
+                certificateForm.certificateNo
+              }
+              onChange={(v) =>
+                setCertificateForm({
+                  ...certificateForm,
+                  certificateNo: v,
+                })
+              }
+            />
+
+            <Field
+              label="Çalışan Adı"
+              value={
+                certificateForm.employeeName
+              }
+              onChange={(v) =>
+                setCertificateForm({
+                  ...certificateForm,
+                  employeeName: v,
+                })
+              }
+            />
+
+            <Field
+              label="TC / Çalışan Kimliği"
+              value={
+                certificateForm.employeeTc
+              }
+              onChange={(v) =>
+                setCertificateForm({
+                  ...certificateForm,
+                  employeeTc: v,
+                })
+              }
+            />
+
+            <label className="field">
+              <span>Bağlı Eğitim</span>
+              <select
+                value={
+                  certificateForm.trainingId
+                }
+                onChange={(event) => {
+                  const training =
+                    trainings.find(
+                      (row) =>
+                        row.id ===
+                        event.target.value
+                    );
+
+                  setCertificateForm({
+                    ...certificateForm,
+                    trainingId:
+                      training?.id || "",
+                    trainingTitle:
+                      training?.title || "",
+                    trainingDate:
+                      training?.trainingDate ||
+                      "",
+                    trainerName:
+                      training?.trainerName ||
+                      "",
+                    trainingHours:
+                      training?.trainingHours ||
+                      "",
+                  });
+                }}
+              >
+                <option value="">
+                  Eğitim seçin
+                </option>
+
+                {trainings.map(
+                  (training) => (
+                    <option
+                      key={
+                        training.id
+                      }
+                      value={
+                        training.id
+                      }
+                    >
+                      {
+                        training.title
+                      }
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+
+            <Field
+              label="Eğitim Tarihi"
+              value={
+                certificateForm.trainingDate
+              }
+              onChange={(v) =>
+                setCertificateForm({
+                  ...certificateForm,
+                  trainingDate: v,
+                })
+              }
+            />
+
+            <Field
+              label="Belge Düzenleme Tarihi"
+              value={
+                certificateForm.issueDate
+              }
+              onChange={(v) =>
+                setCertificateForm({
+                  ...certificateForm,
+                  issueDate: v,
+                })
+              }
+            />
+
+            <Field
+              label="Geçerlilik Tarihi"
+              value={
+                certificateForm.validUntil
+              }
+              onChange={(v) =>
+                setCertificateForm({
+                  ...certificateForm,
+                  validUntil: v,
+                })
+              }
+            />
+
+            <Field
+              label="Eğitmen"
+              value={
+                certificateForm.trainerName
+              }
+              onChange={(v) =>
+                setCertificateForm({
+                  ...certificateForm,
+                  trainerName: v,
+                })
+              }
+            />
+
+            <Field
+              label="Eğitim Süresi"
+              value={
+                certificateForm.trainingHours
+              }
+              onChange={(v) =>
+                setCertificateForm({
+                  ...certificateForm,
+                  trainingHours: v,
+                })
+              }
+            />
+
+            <label className="field">
+              <span>Sertifika Durumu</span>
+              <select
+                value={
+                  certificateForm.status
+                }
+                onChange={(event) =>
+                  setCertificateForm({
+                    ...certificateForm,
+                    status:
+                      event.target.value,
+                  })
+                }
+              >
+                <option value="GECERLI">
+                  Geçerli
+                </option>
+                <option value="YAKLASIYOR">
+                  Süresi Yaklaşıyor
+                </option>
+                <option value="SURESI_DOLDU">
+                  Süresi Doldu
+                </option>
+                <option value="IPTAL">
+                  İptal
+                </option>
+              </select>
+            </label>
+
+            <label className="field wide">
+              <span>Açıklama</span>
+              <textarea
+                value={
+                  certificateForm.note
+                }
+                onChange={(event) =>
+                  setCertificateForm({
+                    ...certificateForm,
+                    note:
+                      event.target.value,
+                  })
+                }
+              />
+            </label>
+          </div>
+
+          <button
+            className="primary full"
+            disabled={saving}
+            onClick={() =>
+              void saveCertificate()
+            }
+          >
+            {saving
+              ? "Kaydediliyor..."
+              : "Sertifikayı Kaydet"}
+          </button>
+        </Modal>
+      ) : null}
+
+      <style jsx>{styles}</style>
     </main>
+  );
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children:
+    React.ReactNode;
+}) {
+  return (
+    <div
+      className="backdrop"
+      onMouseDown={onClose}
+    >
+      <div
+        className="modal"
+        onMouseDown={(event) =>
+          event.stopPropagation()
+        }
+      >
+        <div className="panelHead">
+          <div>
+            <span>
+              DORA EĞİTİM VE SERTİFİKA
+            </span>
+            <h2>{title}</h2>
+          </div>
+          <button
+            className="outline"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -1309,14 +1508,8 @@ function Kpi({
   return (
     <article className="kpi">
       <span>{title}</span>
-
-      <strong>
-        {value}
-      </strong>
-
-      <small>
-        {detail}
-      </small>
+      <strong>{value}</strong>
+      <small>{detail}</small>
     </article>
   );
 }
@@ -1328,24 +1521,16 @@ function Field({
 }: {
   label: string;
   value: string;
-  onChange: (
-    v: string
-  ) => void;
+  onChange: (value: string) => void;
 }) {
   return (
     <label className="field">
-      <span>
-        {label}
-      </span>
-
+      <span>{label}</span>
       <input
         value={value}
-        onChange={(
-          event
-        ) =>
+        onChange={(event) =>
           onChange(
-            event.target
-              .value
+            event.target.value
           )
         }
       />
@@ -1354,541 +1539,20 @@ function Field({
 }
 
 const styles = `
-:global(*) {
-  box-sizing: border-box;
-}
-
-.page {
-  min-height: 100vh;
-  padding: 24px;
-  color: #172033;
-  background:
-    linear-gradient(
-      180deg,
-      #f7f8fb 0%,
-      #ffffff 430px
-    );
-}
-
-button {
-  font: inherit;
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: .6;
-}
-
-.topbar,
-.hero,
-.kpis,
-.panel,
-.syncInfo {
-  max-width: 1450px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.topbar {
-  display: flex;
-  justify-content:
-    space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.topActions,
-.panelActions,
-.modalActions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.hero {
-  padding: 32px;
-  border-radius: 28px;
-  display: flex;
-  justify-content:
-    space-between;
-  gap: 24px;
-  align-items: center;
-  color: #ffffff;
-  background:
-    linear-gradient(
-      120deg,
-      #50141f 0%,
-      #7a2633 48%,
-      #d0602c 100%
-    );
-  box-shadow:
-    0 22px 50px
-    rgba(73,20,31,.17);
-}
-
-.eyebrow,
-.panelHead span {
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .13em;
-}
-
-.hero h1 {
-  margin: 8px 0 10px;
-  font-size:
-    clamp(
-      32px,
-      5vw,
-      52px
-    );
-}
-
-.hero p {
-  margin: 0;
-  max-width: 760px;
-  line-height: 1.6;
-  color:
-    rgba(
-      255,
-      255,
-      255,
-      .86
-    );
-}
-
-.heroCount {
-  min-width: 150px;
-  padding: 20px;
-  border:
-    1px solid
-    rgba(
-      255,
-      255,
-      255,
-      .2
-    );
-  border-radius: 20px;
-  text-align: center;
-  background:
-    rgba(
-      255,
-      255,
-      255,
-      .13
-    );
-}
-
-.heroCount strong {
-  display: block;
-  font-size: 42px;
-}
-
-.heroCount span {
-  font-weight: 800;
-}
-
-.syncInfo {
-  margin-top: 18px;
-  padding: 18px 20px;
-  display: flex;
-  justify-content:
-    space-between;
-  align-items: center;
-  gap: 18px;
-  border:
-    1px solid
-    #dbe4ef;
-  border-radius: 18px;
-  background: #f8fbff;
-}
-
-.syncInfo span {
-  display: block;
-  margin-bottom: 4px;
-  color: #2563eb;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .12em;
-}
-
-.syncInfo strong {
-  display: block;
-  font-size: 16px;
-}
-
-.syncInfo p {
-  margin: 5px 0 0;
-  color: #667085;
-  font-size: 13px;
-}
-
-.kpis {
-  display: grid;
-  grid-template-columns:
-    repeat(
-      4,
-      minmax(0,1fr)
-    );
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.kpi,
-.panel,
-.card {
-  border:
-    1px solid
-    #e4e7ec;
-  background: #ffffff;
-}
-
-.kpi {
-  padding: 18px;
-  border-radius: 18px;
-}
-
-.kpi span,
-.kpi small {
-  display: block;
-  color: #667085;
-}
-
-.kpi strong {
-  display: block;
-  font-size: 30px;
-  margin: 8px 0;
-}
-
-.panel {
-  margin-top: 18px;
-  padding: 22px;
-  border-radius: 22px;
-}
-
-.panelHead {
-  display: flex;
-  justify-content:
-    space-between;
-  gap: 16px;
-  align-items:
-    flex-start;
-}
-
-.panelHead span {
-  color: #8c3543;
-}
-
-.panelHead h2 {
-  margin: 5px 0 0;
-}
-
-.panelHead p {
-  margin: 6px 0 0;
-  color: #667085;
-  font-size: 13px;
-}
-
-.list {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.card {
-  padding: 18px;
-  border-radius: 17px;
-  display: flex;
-  justify-content:
-    space-between;
-  gap: 20px;
-  align-items: center;
-}
-
-.cardMain {
-  min-width: 0;
-}
-
-.cardTop {
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
-}
-
-.card h3 {
-  margin: 8px 0;
-}
-
-.card p,
-.card small {
-  color: #667085;
-}
-
-.badge,
-.typeBadge {
-  display: inline-flex;
-  padding: 5px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 850;
-}
-
-.badge {
-  background: #fff0f2;
-  color: #8c3543;
-}
-
-.typeBadge {
-  background: #f2f4f7;
-  color: #475467;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.primary,
-.outline,
-.danger,
-.syncBtn {
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-weight: 850;
-}
-
-.primary {
-  border: 0;
-  background: #7a2633;
-  color: #ffffff;
-}
-
-.outline {
-  border:
-    1px solid
-    #d0d5dd;
-  background: #ffffff;
-  color: #344054;
-}
-
-.danger {
-  border:
-    1px solid
-    #f1b4b4;
-  background: #fff2f2;
-  color: #b42318;
-}
-
-.syncBtn {
-  border:
-    1px solid
-    #bfd4ff;
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.empty,
-.error,
-.success {
-  margin-top: 16px;
-  padding: 18px;
-  border-radius: 14px;
-}
-
-.empty {
-  background: #f8fafc;
-  color: #667085;
-  text-align: center;
-}
-
-.empty strong {
-  display: block;
-  margin-bottom: 6px;
-  color: #344054;
-}
-
-.empty p {
-  margin: 0 0 14px;
-}
-
-.error {
-  max-width: 1450px;
-  margin-left: auto;
-  margin-right: auto;
-  background: #fff2f2;
-  color: #b42318;
-  border:
-    1px solid
-    #f1b4b4;
-}
-
-.error strong {
-  display: block;
-  margin-bottom: 5px;
-}
-
-.success {
-  max-width: 1450px;
-  margin-left: auto;
-  margin-right: auto;
-  background: #ecfdf3;
-  color: #067647;
-  border:
-    1px solid
-    #abefc6;
-  font-weight: 800;
-}
-
-.loading {
-  max-width: 1450px;
-  margin: 100px auto;
-  padding: 30px;
-  text-align: center;
-  color: #667085;
-  font-weight: 800;
-}
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background:
-    rgba(
-      16,
-      24,
-      40,
-      .48
-    );
-  display: grid;
-  place-items: center;
-  padding: 18px;
-  z-index: 50;
-}
-
-.modal {
-  width:
-    min(
-      850px,
-      100%
-    );
-  max-height: 90vh;
-  overflow: auto;
-  background: #ffffff;
-  border-radius: 24px;
-  padding: 24px;
-  box-shadow:
-    0 25px 70px
-    rgba(
-      16,
-      24,
-      40,
-      .22
-    );
-}
-
-.closeBtn {
-  width: 38px;
-  height: 38px;
-  border:
-    1px solid
-    #d0d5dd;
-  border-radius: 12px;
-  background: #ffffff;
-  color: #344054;
-  font-size: 22px;
-}
-
-.formGrid {
-  display: grid;
-  grid-template-columns:
-    repeat(
-      2,
-      minmax(0,1fr)
-    );
-  gap: 12px;
-  margin: 18px 0;
-}
-
-.field {
-  display: grid;
-  gap: 6px;
-}
-
-.field span {
-  font-size: 12px;
-  font-weight: 800;
-  color: #475467;
-}
-
-.field input,
-.field select {
-  width: 100%;
-  padding: 11px 12px;
-  border:
-    1px solid
-    #d0d5dd;
-  border-radius: 11px;
-  background: #ffffff;
-  color: #101828;
-  outline: none;
-}
-
-.field input:focus,
-.field select:focus {
-  border-color: #7a2633;
-  box-shadow:
-    0 0 0 3px
-    rgba(
-      122,
-      38,
-      51,
-      .08
-    );
-}
-
-.modalActions {
-  justify-content:
-    flex-end;
-}
-
-.saveBtn {
-  min-width: 160px;
-}
-
-@media (
-  max-width: 900px
-) {
-  .hero,
-  .syncInfo {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .topbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .topActions {
-    width: 100%;
-  }
-
-  .kpis,
-  .formGrid {
-    grid-template-columns:
-      1fr;
-  }
-
-  .card {
-    flex-direction: column;
-    align-items:
-      flex-start;
-  }
-
-  .actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-}
+:global(*){box-sizing:border-box}
+.page{min-height:100vh;padding:24px;color:#172033;background:linear-gradient(180deg,#f7f8fb,#fff 430px)}
+button{font:inherit;cursor:pointer}button:disabled{opacity:.6;cursor:not-allowed}
+.topbar,.hero,.kpis,.panel{max-width:1450px;margin-left:auto;margin-right:auto}
+.topbar{display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.actions{display:flex;gap:8px;flex-wrap:wrap}
+.hero{padding:32px;border-radius:28px;display:flex;justify-content:space-between;gap:24px;align-items:center;color:#fff;background:linear-gradient(120deg,#50141f,#7a2633 48%,#d0602c);box-shadow:0 22px 50px rgba(73,20,31,.17)}
+.eyebrow,.panelHead span{font-size:11px;font-weight:900;letter-spacing:.13em}.hero h1{margin:8px 0 10px;font-size:clamp(32px,5vw,52px)}.hero p{margin:0;max-width:780px;line-height:1.6;color:rgba(255,255,255,.86)}
+.heroNumbers{display:flex;gap:12px}.heroNumbers>div{min-width:125px;padding:18px;border:1px solid rgba(255,255,255,.2);border-radius:18px;text-align:center;background:rgba(255,255,255,.12)}.heroNumbers strong,.heroNumbers span{display:block}.heroNumbers strong{font-size:38px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.kpi,.panel,.card{border:1px solid #e4e7ec;background:#fff}.kpi{padding:18px;border-radius:18px}.kpi span,.kpi small{display:block;color:#667085}.kpi strong{display:block;font-size:30px;margin:8px 0}
+.panel{margin-top:18px;padding:22px;border-radius:22px}.panelHead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.panelHead span{color:#8c3543}.panelHead h2{margin:5px 0 0}.list{display:grid;gap:12px;margin-top:18px}
+.card{padding:18px;border-radius:17px;display:flex;justify-content:space-between;gap:20px;align-items:center}.card h3{margin:8px 0}.card p,.card small{color:#667085}.badge{padding:5px 9px;border-radius:999px;background:#fff0f2;color:#8c3543;font-size:11px;font-weight:850}
+.primary,.outline,.danger,.sync,.certButton{padding:10px 14px;border-radius:12px;font-weight:850}.primary{border:0;background:#7a2633;color:#fff}.outline{border:1px solid #d0d5dd;background:#fff;color:#344054}.danger{border:1px solid #f1b4b4;background:#fff2f2;color:#b42318}.sync{border:1px solid #b8cdfa;background:#eff6ff;color:#1d4ed8}.certButton{border:1px solid #f5c77a;background:#fff7e8;color:#9a4c00}
+.empty,.error,.success{max-width:1450px;margin:16px auto 0;padding:18px;border-radius:14px}.empty{background:#f8fafc;color:#667085}.error{background:#fff2f2;color:#b42318;border:1px solid #f1b4b4}.success{background:#ecfdf3;color:#067647;border:1px solid #abefc6;font-weight:800}
+.backdrop{position:fixed;inset:0;background:rgba(16,24,40,.48);display:grid;place-items:center;padding:18px;z-index:50}.modal{width:min(900px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:24px;padding:24px}
+.formGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.field{display:grid;gap:6px}.field span{font-size:12px;font-weight:800;color:#475467}.field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:11px;background:#fff}.field textarea{min-height:90px;resize:vertical}.wide{grid-column:1/-1}.full{width:100%}
+@media(max-width:900px){.topbar,.hero{flex-direction:column;align-items:flex-start}.heroNumbers,.actions{width:100%}.kpis,.formGrid{grid-template-columns:1fr}.card{flex-direction:column;align-items:flex-start}}
 `;

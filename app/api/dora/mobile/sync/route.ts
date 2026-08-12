@@ -115,6 +115,7 @@ async function getSnapshot(firmId: string) {
     riskTeam: riskTeamResult.data ?? [],
     authorities: state.get("AUTHORITIES") ?? {},
     trainings: state.get("TRAINING") ?? { items: [] },
+    certificates: state.get("CERTIFICATE") ?? { items: [] },
     expert: state.get("EXPERT") ?? {},
     corporate: state.get("CORPORATE") ?? {},
     updatedAtMillis: Date.now(),
@@ -477,7 +478,10 @@ export async function POST(req: NextRequest) {
       await upsertState(firmId, "AUTHORITIES", body.authorities);
     }
     if (body.trainings !== undefined) {
-      await upsertState(firmId, "TRAINING", body.trainings);
+      await upsertState(firmId, "TRAINING", body.trainings, "WEB_APP");
+    }
+    if (body.certificates !== undefined) {
+      await upsertState(firmId, "CERTIFICATE", body.certificates, "WEB_APP");
     }
     if (body.expert !== undefined) {
       await upsertState(firmId, "EXPERT", body.expert);
