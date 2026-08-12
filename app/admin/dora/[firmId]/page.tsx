@@ -132,6 +132,12 @@ export default function DoraFirmWorkspacePage() {
   const [riskTeamCount, setRiskTeamCount] =
     useState(0);
 
+  const [trainingCount, setTrainingCount] =
+    useState(0);
+
+  const [expertScore, setExpertScore] =
+    useState(0);
+
   const load = useCallback(
     async () => {
       if (!firmId) {
@@ -150,6 +156,8 @@ export default function DoraFirmWorkspacePage() {
           firmResponse,
           riskResponse,
           riskTeamResponse,
+          trainingResponse,
+          expertResponse,
         ] =
           await Promise.all([
             fetch(
@@ -177,6 +185,21 @@ export default function DoraFirmWorkspacePage() {
               {
                 cache: "no-store",
               }
+            ),
+
+
+            fetch(
+              `/api/dora/module-state?firmId=${encodeURIComponent(
+                firmId
+              )}&moduleKey=TRAINING`,
+              { cache: "no-store" }
+            ),
+
+            fetch(
+              `/api/dora/module-state?firmId=${encodeURIComponent(
+                firmId
+              )}&moduleKey=EXPERT`,
+              { cache: "no-store" }
             ),
           ]);
 
@@ -221,6 +244,27 @@ export default function DoraFirmWorkspacePage() {
               ? riskTeamJson.members.length
               : 0
           );
+
+        const trainingJson =
+          await trainingResponse.json().catch(() => ({}));
+        const expertJson =
+          await expertResponse.json().catch(() => ({}));
+
+        setTrainingCount(
+          Array.isArray(trainingJson?.payload?.items)
+            ? trainingJson.payload.items.length
+            : Number(trainingJson?.payload?.count ?? 0) || 0
+        );
+
+        setExpertScore(
+          Math.max(
+            0,
+            Math.min(
+              100,
+              Number(expertJson?.payload?.setupScore ?? 0) || 0
+            )
+          )
+        );
         } else {
           setRiskTeamCount(0);
         }
@@ -610,6 +654,40 @@ export default function DoraFirmWorkspacePage() {
           <div className="cardHead">
             <div>
               <div className="sectionEyebrow">
+                EĞİTİM
+              </div>
+
+              <h2>
+                Eğitim ve Sertifika Merkezi
+              </h2>
+            </div>
+
+            <span className="badge neutral">
+              {trainingCount}
+            </span>
+          </div>
+
+          <p>
+            DORA eğitim oturumları, katılım, sınav, sertifika ve
+            App/Web ortak eğitim durumunu yönetin.
+          </p>
+
+          <button
+            className="primary"
+            onClick={() =>
+              router.push(
+                `/admin/dora/${firmId}/training`
+              )
+            }
+          >
+            Eğitim Merkezini Aç
+          </button>
+        </article>
+
+        <article className="card">
+          <div className="cardHead">
+            <div>
+              <div className="sectionEyebrow">
                 RİSK
               </div>
 
@@ -713,6 +791,40 @@ export default function DoraFirmWorkspacePage() {
             }
           >
             Denetim Merkezi
+          </button>
+        </article>
+
+        <article className="card">
+          <div className="cardHead">
+            <div>
+              <div className="sectionEyebrow">
+                DORA EXPERT
+              </div>
+
+              <h2>
+                Durum Analizi ve Robot
+              </h2>
+            </div>
+
+            <span className="badge neutral">
+              %{Math.round(expertScore)}
+            </span>
+          </div>
+
+          <p>
+            Kurulum skoru, eksiklik analizi, öncelikli iş planı ve
+            DORA Robot İş Kuyruğunu yönetin.
+          </p>
+
+          <button
+            className="primary"
+            onClick={() =>
+              router.push(
+                `/admin/dora/${firmId}/expert`
+              )
+            }
+          >
+            DORA Analizini Aç
           </button>
         </article>
 
