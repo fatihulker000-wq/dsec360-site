@@ -579,6 +579,64 @@ export async function GET(req: NextRequest) {
   }
 }
 
+
+function mergeTrainingPayload(existingPayload: unknown, incomingPayload: unknown) {
+  const existingRoot = existingPayload && typeof existingPayload === "object"
+    ? (existingPayload as Record<string, unknown>) : {};
+  const incomingRoot = incomingPayload && typeof incomingPayload === "object"
+    ? (incomingPayload as Record<string, unknown>) : {};
+  const existing = arrayOf(existingRoot.items);
+  const incoming = arrayOf(incomingRoot.items);
+
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const item of existing) {
+    const id = text(item.id);
+    if (id) byId.set(id, item);
+  }
+  for (const item of incoming) {
+    const id = text(item.id);
+    if (!id) continue;
+    const old = byId.get(id);
+    if (!old) {
+      byId.set(id, item);
+      continue;
+    }
+    const oldParticipants = arrayOf(old.participants);
+    const newParticipants = arrayOf(item.participants);
+    const participants = newParticipants.length >= oldParticipants.length
+      ? newParticipants : oldParticipants;
+    const oldStatus = text(old.status).toUpperCase();
+    const newStatus = text(item.status).toUpperCase();
+    byId.set(id, {
+      ...old,
+      ...item,
+      participants,
+      participantCount: participants.length,
+      status: oldStatus === "TAMAMLANDI" || newStatus === "TAMAMLANDI"
+        ? "TAMAMLANDI"
+        : (text(item.status) || text(old.status) || "PLANLANDI"),
+    });
+  }
+  const items = Array.from(byId.values());
+  return { items, count: items.length, updatedAtMillis: Date.now() };
+}
+
+function mergeCertificatePayload(existingPayload: unknown, incomingPayload: unknown) {
+  const existingRoot = existingPayload && typeof existingPayload === "object"
+    ? (existingPayload as Record<string, unknown>) : {};
+  const incomingRoot = incomingPayload && typeof incomingPayload === "object"
+    ? (incomingPayload as Record<string, unknown>) : {};
+  const all = [...arrayOf(existingRoot.items), ...arrayOf(incomingRoot.items)];
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const item of all) {
+    const key = text(item.id) || `${text(item.trainingId)}|${normalize(text(item.employeeTc) || text(item.employeeName))}`;
+    if (!key) continue;
+    byKey.set(key, { ...(byKey.get(key) ?? {}), ...item });
+  }
+  const items = Array.from(byKey.values());
+  return { items, count: items.length, updatedAtMillis: Date.now() };
+}
+
 export async function POST(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json(
@@ -616,10 +674,6 @@ export async function POST(req: NextRequest) {
     if (body.authorities !== undefined) {
       await upsertState(firmId, "AUTHORITIES", body.authorities);
     }
-    if (body.trainings !== undefined) {
-      await upsertState(firmId, "TRAINING", body.trainings, "WEB_APP");
-    }
-
     if (body.trainings !== undefined || body.certificates !== undefined) {
       const { data: existingState, error: existingStateError } = await supabase
         .from("dora_module_state")
@@ -634,26 +688,32 @@ export async function POST(req: NextRequest) {
         stateMap.set(text(row.module_key).toUpperCase(), row.payload ?? {});
       }
 
+      const syncMode = text(body.syncMode ?? body.sync_mode).toLowerCase();
+      const existingTraining = stateMap.get("TRAINING") ?? { items: [] };
+      const existingCertificate = stateMap.get("CERTIFICATE") ?? { items: [] };
+
       const trainingPayload =
-        body.trainings !== undefined
-          ? body.trainings
-          : stateMap.get("TRAINING") ?? { items: [] };
+        body.trainings === undefined
+          ? existingTraining
+          : syncMode === "replace"
+            ? body.trainings
+            : mergeTrainingPayload(existingTraining, body.trainings);
 
       const certificatePayload =
-        body.certificates !== undefined
-          ? body.certificates
-          : stateMap.get("CERTIFICATE") ?? { items: [] };
+        body.certificates === undefined
+          ? existingCertificate
+          : syncMode === "replace"
+            ? body.certificates
+            : mergeCertificatePayload(existingCertificate, body.certificates);
 
-      const generatedCertificates = autoCertificates(
-        trainingPayload,
-        certificatePayload
-      );
+      await upsertState(firmId, "TRAINING", trainingPayload, syncMode === "replace" ? "WEB" : "APP_MERGE");
 
+      const generatedCertificates = autoCertificates(trainingPayload, certificatePayload);
       await upsertState(
         firmId,
         "CERTIFICATE",
         generatedCertificates,
-        "DORA_AUTO"
+        syncMode === "replace" ? "WEB_DORA_AUTO" : "APP_DORA_AUTO"
       );
     }
 

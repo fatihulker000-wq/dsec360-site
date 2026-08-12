@@ -174,6 +174,16 @@ async function readJson<T>(response: Response, name: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+
+function escapeHtml(input: unknown) {
+  return String(input ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 export default function DoraTrainingPage() {
   const router = useRouter();
   const params = useParams();
@@ -191,6 +201,7 @@ export default function DoraTrainingPage() {
   const [trainingForm, setTrainingForm] = useState<TrainingItem>(emptyTraining());
   const [certificateOpen, setCertificateOpen] = useState(false);
   const [certificateForm, setCertificateForm] = useState<CertificateItem | null>(null);
+  const [previewCertificate, setPreviewCertificate] = useState<CertificateItem | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
 
   const load = useCallback(async () => {
@@ -260,6 +271,7 @@ export default function DoraTrainingPage() {
         },
         body: JSON.stringify({
           firmId,
+          syncMode: "replace",
           trainings: {
             items: nextTrainings,
             count: nextTrainings.length,
@@ -413,6 +425,91 @@ export default function DoraTrainingPage() {
     (sum, x) => sum + x.participants.length,
     0
   );
+
+
+  function certificateTraining(certificate: CertificateItem) {
+    return trainings.find((x) => x.id === certificate.trainingId) ?? null;
+  }
+
+  function isBasicTraining(certificate: CertificateItem) {
+    const key = `${certificate.trainingType} ${certificate.trainingTitle}`.toLocaleUpperCase("tr-TR");
+    return key.includes("TEMEL") || key.includes("TEMEL_ISG");
+  }
+
+  function printCertificate(certificate: CertificateItem) {
+    const training = certificateTraining(certificate);
+    const basic = isBasicTraining(certificate);
+    const workplace = firm?.firm_name || "........................................................";
+    const trainer = certificate.trainerName || training?.trainerName || "........................................................";
+    const trainingDate = certificate.trainingDate || training?.trainingDate || "................";
+    const hours = certificate.trainingHours || training?.trainingHours || "....";
+    const mode = training?.place ? "Yüz yüze" : "Yüz yüze / Uzaktan";
+    const topics = [
+      ["1. Genel konular", "Çalışma mevzuatı; çalışanların yasal hak ve sorumlulukları; işyeri temizliği ve düzeni; iş kazası ve meslek hastalığından doğan hukuki sonuçlar"],
+      ["2. Sağlık konuları", "Meslek hastalıklarının sebepleri; korunma prensipleri; biyolojik ve psikososyal risk etmenleri; ilkyardım; bağımlılık yapıcı maddelerin zararları ve teknoloji bağımlılığı"],
+      ["3. Teknik konular", "Kimyasal, fiziksel ve ergonomik risk etmenleri; elle kaldırma ve taşıma; parlama-patlama; yangın; iş ekipmanları; ekranlı araçlar; elektrik; iş kazalarından korunma; sağlık ve güvenlik işaretleri; KKD; İSG genel kuralları ve güvenlik kültürü; acil durumlar, tahliye ve kurtarma"],
+      ["4. İşe ve işyerine özgü riskler", "Risk değerlendirmesine dayalı işe/işyerine özgü konular veya az tehlikeli işyerlerinde faaliyetin genel tehlike ve riskleri"]
+    ];
+
+    const front = basic ? `
+      <section class="sheet">
+        <h1>TEMEL EĞİTİM BELGESİ</h1>
+        <p>İşbu belge, <b>${escapeHtml(certificate.employeeName)} (${escapeHtml(certificate.employeePosition || "unvan belirtilmemiş")})</b> adına Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin Usul ve Esasları Hakkında Yönetmelik kapsamında <b>${escapeHtml(trainer)}</b> tarafından <b>${escapeHtml(trainingDate)}</b> tarihinde gerçekleştirilen temel eğitim sonunda düzenlenmiştir.</p>
+        <table>
+          <tr><th>Belge No</th><td>${escapeHtml(certificate.certificateNo || "-")}</td></tr>
+          <tr><th>Belge düzenlenme tarihi</th><td>${escapeHtml(certificate.issueDate || "-")}</td></tr>
+          <tr><th>Eğitimin süresi</th><td>${escapeHtml(hours)} ders saati</td></tr>
+          <tr><th>Eğitimin türü</th><td>☒ İlk defa verilen temel eğitim &nbsp;&nbsp; ☐ Tekrar verilen temel eğitim</td></tr>
+          <tr><th>Eğitimin şekli</th><td>${mode === "Yüz yüze" ? "☒" : "☐"} Yüz yüze &nbsp;&nbsp; ☐ Uzaktan<br/>Başlık/Yer: ${escapeHtml(training?.place || certificate.trainingTitle)}</td></tr>
+          <tr><th>Eğiticilerin adı soyadı ve unvanı</th><td>${escapeHtml(trainer)}</td></tr>
+          <tr><th>Eğiticilerin imzası</th><td class="signature"></td></tr>
+          <tr><th>Çalışanın işyerinin unvanı</th><td>${escapeHtml(workplace)}</td></tr>
+          <tr><th>İşverenin / işveren vekilinin adı soyadı</th><td>........................................................</td></tr>
+          <tr><th>İşveren / işveren vekilinin imzası</th><td class="signature"></td></tr>
+        </table>
+        <div class="foot">DORA kayıt no: ${escapeHtml(certificate.id)} • Bu çıktı DORA Eğitim ve Sertifika Merkezi kayıtlarından oluşturulmuştur.</div>
+      </section>
+      <section class="sheet back">
+        <h1>EĞİTİM KONULARI</h1>
+        <table>
+          <tr><th>EĞİTİM KONULARI</th><th class="duration">SÜRE</th></tr>
+          ${topics.map(([t,d]) => `<tr><td><b>${t}</b><br/>${d}</td><td>${escapeHtml(hours)} saatlik toplam program içinde</td></tr>`).join("")}
+        </table>
+        <p class="note">İşveren, dördüncü konu başlığını işyerinin tehlike sınıfına uygun şekilde belirler ve varsa ilave konuları eğitim kaydına ekler.</p>
+      </section>` : `
+      <section class="sheet">
+        <h1>EĞİTİM BELGESİ</h1>
+        <p><b>${escapeHtml(certificate.employeeName)}</b> adlı çalışanın <b>${escapeHtml(certificate.trainingTitle)}</b> eğitimini tamamladığını gösterir.</p>
+        <table>
+          <tr><th>Belge No</th><td>${escapeHtml(certificate.certificateNo || "-")}</td></tr>
+          <tr><th>Çalışan / Unvan</th><td>${escapeHtml(certificate.employeeName)} / ${escapeHtml(certificate.employeePosition || "-")}</td></tr>
+          <tr><th>Eğitim tarihi</th><td>${escapeHtml(trainingDate)}</td></tr>
+          <tr><th>Eğitim süresi</th><td>${escapeHtml(hours)} saat</td></tr>
+          <tr><th>Eğitici</th><td>${escapeHtml(trainer)}</td></tr>
+          <tr><th>İşyeri</th><td>${escapeHtml(workplace)}</td></tr>
+          <tr><th>Eğitici imzası</th><td class="signature"></td></tr>
+          <tr><th>İşveren / işveren vekili imzası</th><td class="signature"></td></tr>
+        </table>
+      </section>`;
+
+    const win = window.open("", "_blank", "width=1000,height=900");
+    if (!win) {
+      alert("Yazdırma penceresi açılamadı. Tarayıcı açılır pencere iznini kontrol edin.");
+      return;
+    }
+    win.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${escapeHtml(certificate.certificateNo || "DORA Sertifika")}</title>
+      <style>
+        @page{size:A4;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:0;background:#eee}
+        .toolbar{position:sticky;top:0;padding:12px;text-align:center;background:#7a2633;color:#fff}.toolbar button{padding:10px 18px;font-weight:700;cursor:pointer}
+        .sheet{width:210mm;min-height:297mm;margin:12px auto;background:#fff;padding:18mm 16mm;page-break-after:always}
+        .sheet:last-child{page-break-after:auto}h1{text-align:center;font-size:20px;margin:0 0 24px;text-decoration:underline}
+        p{font-size:13px;line-height:1.65}table{width:100%;border-collapse:collapse;margin-top:18px;font-size:12px}
+        th,td{border:1px solid #111;padding:9px;vertical-align:top}th{width:34%;text-align:left;background:#f5f5f5}.back th:first-child{width:auto}.duration{width:28%!important;text-align:center}
+        .signature{height:58px}.foot,.note{margin-top:14px;font-size:10px;color:#444}
+        @media print{body{background:#fff}.toolbar{display:none}.sheet{margin:0;width:auto;min-height:auto;padding:0}}
+      </style></head><body><div class="toolbar"><button onclick="window.print()">Yazdır / PDF Olarak Kaydet</button></div>${front}</body></html>`);
+    win.document.close();
+  }
 
   if (loading) {
     return <main className="page">DORA Eğitim ve Sertifika Merkezi yükleniyor...</main>;
@@ -573,6 +670,18 @@ export default function DoraTrainingPage() {
                     Düzenle
                   </button>
                   <button
+                    className="previewBtn"
+                    onClick={() => setPreviewCertificate({ ...certificate })}
+                  >
+                    Ön İzleme
+                  </button>
+                  <button
+                    className="printBtn"
+                    onClick={() => printCertificate(certificate)}
+                  >
+                    Sertifika Bas / PDF
+                  </button>
+                  <button
                     className="danger"
                     onClick={() => void deleteCertificate(certificate.id)}
                   >
@@ -693,6 +802,54 @@ export default function DoraTrainingPage() {
         </div>
       ) : null}
 
+
+      {previewCertificate ? (
+        <div className="backdrop" onMouseDown={() => setPreviewCertificate(null)}>
+          <div className="modal previewModal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="panelHead">
+              <div>
+                <span>DORA • BELGE ÖN İZLEME</span>
+                <h2>{isBasicTraining(previewCertificate) ? "Ek-2 Temel Eğitim Belgesi" : "Eğitim Belgesi"}</h2>
+              </div>
+              <div className="actions">
+                <button className="printBtn" onClick={() => printCertificate(previewCertificate)}>
+                  Sertifika Bas / PDF
+                </button>
+                <button className="outline" onClick={() => setPreviewCertificate(null)}>×</button>
+              </div>
+            </div>
+
+            <div className="paperPreview">
+              <h2>{isBasicTraining(previewCertificate) ? "TEMEL EĞİTİM BELGESİ" : "EĞİTİM BELGESİ"}</h2>
+              <p>
+                <b>{previewCertificate.employeeName}</b>
+                {previewCertificate.employeePosition ? ` (${previewCertificate.employeePosition})` : ""} adına,
+                <b> {previewCertificate.trainingTitle}</b> eğitiminin tamamlanması üzerine düzenlenmiştir.
+              </p>
+              <table className="previewTable">
+                <tbody>
+                  <tr><th>Belge No</th><td>{previewCertificate.certificateNo || "-"}</td></tr>
+                  <tr><th>Eğitim Tarihi</th><td>{previewCertificate.trainingDate || "-"}</td></tr>
+                  <tr><th>Belge Düzenlenme Tarihi</th><td>{previewCertificate.issueDate || "-"}</td></tr>
+                  <tr><th>Eğitim Süresi</th><td>{previewCertificate.trainingHours || "-"} saat</td></tr>
+                  <tr><th>Eğitici</th><td>{previewCertificate.trainerName || "-"}</td></tr>
+                  <tr><th>İşyeri</th><td>{firm?.firm_name || "-"}</td></tr>
+                  <tr><th>Eğiticinin İmzası</th><td className="previewSignature"></td></tr>
+                  <tr><th>İşveren / İşveren Vekili İmzası</th><td className="previewSignature"></td></tr>
+                </tbody>
+              </table>
+              {isBasicTraining(previewCertificate) ? (
+                <div className="legalNotice">
+                  Bu temel eğitim belgesi, Çalışanların İş Sağlığı ve Güvenliği Eğitimlerinin
+                  Usul ve Esasları Hakkında Yönetmelik Ek-2 yapısına göre ön/arka yüz olarak
+                  yazdırılır. Arka yüzde eğitim konuları yer alır.
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {certificateOpen && certificateForm ? (
         <div className="backdrop" onMouseDown={() => !saving && setCertificateOpen(false)}>
           <div className="modal certificateModal" onMouseDown={(e) => e.stopPropagation()}>
@@ -790,5 +947,5 @@ function Field({
 }
 
 const styles = `
-:global(*){box-sizing:border-box}.page{min-height:100vh;padding:24px;color:#172033;background:linear-gradient(180deg,#f7f8fb,#fff 430px)}button{font:inherit;cursor:pointer}button:disabled{opacity:.6}.topbar,.hero,.kpis,.panel,.error,.success{max-width:1450px;margin-left:auto;margin-right:auto}.topbar{display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.actions,.badges{display:flex;gap:8px;flex-wrap:wrap}.hero{padding:32px;border-radius:28px;display:flex;justify-content:space-between;gap:24px;align-items:center;color:#fff;background:linear-gradient(120deg,#50141f,#7a2633 48%,#d0602c)}.eyebrow,.panelHead span{font-size:11px;font-weight:900;letter-spacing:.13em}.hero h1{margin:8px 0 10px;font-size:clamp(32px,5vw,52px)}.hero p{max-width:800px;color:rgba(255,255,255,.86);line-height:1.6}.heroNumbers{display:flex;gap:12px}.heroNumbers b{min-width:120px;padding:18px;border-radius:18px;background:rgba(255,255,255,.13);text-align:center;font-size:36px}.heroNumbers small{display:block;font-size:12px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.kpi,.panel,.card,.certificateCard{background:#fff;border:1px solid #e4e7ec}.kpi{padding:18px;border-radius:18px}.kpi span,.kpi small{display:block;color:#667085}.kpi strong{display:block;font-size:30px;margin:8px 0}.panel{margin-top:18px;padding:22px;border-radius:22px}.panelHead{display:flex;justify-content:space-between;gap:16px}.panelHead span{color:#8c3543}.panelHead h2{margin:5px 0}.panelHead p{color:#667085}.list{display:grid;gap:12px;margin-top:18px}.card{padding:18px;border-radius:17px;display:flex;justify-content:space-between;gap:20px;align-items:center}.card h3{margin:8px 0}.card p,.card small{color:#667085}.badge,.neutral,.auto,.participantNames span{padding:5px 9px;border-radius:999px;font-size:11px;font-weight:850}.badge{background:#fff0f2;color:#8c3543}.neutral{background:#f2f4f7;color:#475467}.auto{background:#ecfdf3;color:#067647}.participantNames{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.participantNames span{background:#f7f8fa;color:#475467}.certificateGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}.certificateCard{padding:18px;border-radius:17px}.certificateCard h3{margin:10px 0 4px}.certificateCard p{color:#667085;line-height:1.65}.primary,.outline,.danger{padding:10px 14px;border-radius:12px;font-weight:850}.primary{border:0;background:#7a2633;color:#fff}.outline{border:1px solid #d0d5dd;background:#fff;color:#344054}.danger{border:1px solid #f1b4b4;background:#fff2f2;color:#b42318}.empty,.error,.success{margin-top:16px;padding:18px;border-radius:14px}.empty{background:#f8fafc;color:#667085}.error{background:#fff2f2;color:#b42318}.success{background:#ecfdf3;color:#067647}.backdrop{position:fixed;inset:0;background:rgba(16,24,40,.5);display:grid;place-items:center;padding:18px;z-index:50}.modal{width:min(1000px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:24px;padding:24px}.formGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.field{display:grid;gap:6px}.field span{font-size:12px;font-weight:800;color:#475467}.field input,.field select,.field textarea,.search{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:11px;background:#fff}.field textarea{min-height:100px}.participantsBox{border:1px solid #e4e7ec;border-radius:18px;padding:16px;margin:16px 0}.participantHeader{display:flex;justify-content:space-between;gap:12px}.participantHeader h3,.participantHeader p{margin:0}.participantHeader p{color:#667085}.search{margin:14px 0}.employeeList{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:280px;overflow:auto}.employeeRow{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid #eaecf0;border-radius:12px}.employeeRow small{display:block;color:#667085}.autoInfo{padding:14px;border-radius:12px;background:#ecfdf3;color:#067647;margin-bottom:14px;font-weight:700}.certificateIdentity{display:grid;gap:4px;padding:14px;background:#f8fafc;border-radius:14px;margin-top:14px}.full{width:100%}@media(max-width:900px){.topbar,.hero,.card{flex-direction:column;align-items:flex-start}.kpis,.certificateGrid,.formGrid,.employeeList{grid-template-columns:1fr}.heroNumbers{width:100%}}
+:global(*){box-sizing:border-box}.page{min-height:100vh;padding:24px;color:#172033;background:linear-gradient(180deg,#f7f8fb,#fff 430px)}button{font:inherit;cursor:pointer}button:disabled{opacity:.6}.topbar,.hero,.kpis,.panel,.error,.success{max-width:1450px;margin-left:auto;margin-right:auto}.topbar{display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.actions,.badges{display:flex;gap:8px;flex-wrap:wrap}.hero{padding:32px;border-radius:28px;display:flex;justify-content:space-between;gap:24px;align-items:center;color:#fff;background:linear-gradient(120deg,#50141f,#7a2633 48%,#d0602c)}.eyebrow,.panelHead span{font-size:11px;font-weight:900;letter-spacing:.13em}.hero h1{margin:8px 0 10px;font-size:clamp(32px,5vw,52px)}.hero p{max-width:800px;color:rgba(255,255,255,.86);line-height:1.6}.heroNumbers{display:flex;gap:12px}.heroNumbers b{min-width:120px;padding:18px;border-radius:18px;background:rgba(255,255,255,.13);text-align:center;font-size:36px}.heroNumbers small{display:block;font-size:12px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.kpi,.panel,.card,.certificateCard{background:#fff;border:1px solid #e4e7ec}.kpi{padding:18px;border-radius:18px}.kpi span,.kpi small{display:block;color:#667085}.kpi strong{display:block;font-size:30px;margin:8px 0}.panel{margin-top:18px;padding:22px;border-radius:22px}.panelHead{display:flex;justify-content:space-between;gap:16px}.panelHead span{color:#8c3543}.panelHead h2{margin:5px 0}.panelHead p{color:#667085}.list{display:grid;gap:12px;margin-top:18px}.card{padding:18px;border-radius:17px;display:flex;justify-content:space-between;gap:20px;align-items:center}.card h3{margin:8px 0}.card p,.card small{color:#667085}.badge,.neutral,.auto,.participantNames span{padding:5px 9px;border-radius:999px;font-size:11px;font-weight:850}.badge{background:#fff0f2;color:#8c3543}.neutral{background:#f2f4f7;color:#475467}.auto{background:#ecfdf3;color:#067647}.participantNames{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.participantNames span{background:#f7f8fa;color:#475467}.certificateGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:18px}.certificateCard{padding:18px;border-radius:17px}.certificateCard h3{margin:10px 0 4px}.certificateCard p{color:#667085;line-height:1.65}.primary,.outline,.danger,.previewBtn,.printBtn{padding:10px 14px;border-radius:12px;font-weight:850}.primary{border:0;background:#7a2633;color:#fff}.outline{border:1px solid #d0d5dd;background:#fff;color:#344054}.danger{border:1px solid #f1b4b4;background:#fff2f2;color:#b42318}.previewBtn{border:1px solid #b9c7dc;background:#f7f9fc;color:#344054}.printBtn{border:1px solid #7a2633;background:#7a2633;color:#fff}.empty,.error,.success{margin-top:16px;padding:18px;border-radius:14px}.empty{background:#f8fafc;color:#667085}.error{background:#fff2f2;color:#b42318}.success{background:#ecfdf3;color:#067647}.backdrop{position:fixed;inset:0;background:rgba(16,24,40,.5);display:grid;place-items:center;padding:18px;z-index:50}.modal{width:min(1000px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:24px;padding:24px}.formGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.field{display:grid;gap:6px}.field span{font-size:12px;font-weight:800;color:#475467}.field input,.field select,.field textarea,.search{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:11px;background:#fff}.field textarea{min-height:100px}.participantsBox{border:1px solid #e4e7ec;border-radius:18px;padding:16px;margin:16px 0}.participantHeader{display:flex;justify-content:space-between;gap:12px}.participantHeader h3,.participantHeader p{margin:0}.participantHeader p{color:#667085}.search{margin:14px 0}.employeeList{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:280px;overflow:auto}.employeeRow{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid #eaecf0;border-radius:12px}.employeeRow small{display:block;color:#667085}.autoInfo{padding:14px;border-radius:12px;background:#ecfdf3;color:#067647;margin-bottom:14px;font-weight:700}.certificateIdentity{display:grid;gap:4px;padding:14px;background:#f8fafc;border-radius:14px;margin-top:14px}.previewModal{width:min(900px,100%)}.paperPreview{margin-top:18px;padding:38px;border:1px solid #cfd4dc;background:#fff;box-shadow:0 10px 35px rgba(16,24,40,.08)}.paperPreview>h2{text-align:center;text-decoration:underline}.paperPreview p{line-height:1.7}.previewTable{width:100%;border-collapse:collapse;margin-top:20px}.previewTable th,.previewTable td{border:1px solid #344054;padding:10px;text-align:left;vertical-align:top}.previewTable th{width:34%;background:#f8fafc}.previewSignature{height:58px}.legalNotice{margin-top:16px;padding:12px;border-radius:10px;background:#f8fafc;color:#475467;font-size:12px;line-height:1.5}.full{width:100%}@media(max-width:900px){.topbar,.hero,.card{flex-direction:column;align-items:flex-start}.kpis,.certificateGrid,.formGrid,.employeeList{grid-template-columns:1fr}.heroNumbers{width:100%}}
 `;
