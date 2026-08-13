@@ -769,6 +769,9 @@ export default function AdminPermissionsPage() {
   const [saving, setSaving] = useState(false);
   const [currentAdmin, setCurrentAdmin] = useState<AdminMe | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [draftPermissions, setDraftPermissions] = useState<string[]>([]);
+  const [originalPermissions, setOriginalPermissions] = useState<string[]>([]);
+  const [moduleSearch, setModuleSearch] = useState("");
 
   const selectedUser = useMemo(
     () => users.find((u) => u.id === selectedUserId) || null,
@@ -802,7 +805,12 @@ export default function AdminPermissionsPage() {
     });
   }, [users, search, roleFilter]);
 
-  const selectedPerms = selectedUser?.permissions || [];
+  const selectedPerms = draftPermissions;
+  const dirty = useMemo(() => {
+    const a = Array.from(new Set(draftPermissions)).sort();
+    const b = Array.from(new Set(originalPermissions)).sort();
+    return a.length !== b.length || a.some((v, i) => v !== b[i]);
+  }, [draftPermissions, originalPermissions]);
   const currentAdminRole = currentAdmin?.role || "company_admin";
 
 const canCurrentAdminAssignAction = (action: PermissionAction) => {
@@ -886,7 +894,11 @@ const loadCurrentAdmin = async () => {
       setUsers(normalized);
 
       if (!selectedUserId && normalized.length > 0) {
-        setSelectedUserId(normalized[0].id);
+        const requestedUserId = typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("userId")
+          : null;
+        const requestedExists = requestedUserId && normalized.some((u) => u.id === requestedUserId);
+        setSelectedUserId(requestedExists ? String(requestedUserId) : normalized[0].id);
       }
     } catch (error) {
       console.error(error);
@@ -913,6 +925,14 @@ const loadCurrentAdmin = async () => {
   void loadUsers();
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
+  useEffect(() => {
+    const perms = selectedUser?.permissions || [];
+    setDraftPermissions(perms);
+    setOriginalPermissions(perms);
+    setSelectedModuleKey("ALL");
+    setModuleSearch("");
+  }, [selectedUserId]);
 
   const savePermissions = async (userId: string, permissions: string[]) => {
     try {
@@ -979,7 +999,7 @@ const loadCurrentAdmin = async () => {
     ? Array.from(new Set([...current, key]))
     : current.filter((p) => p !== key);
 
-  void savePermissions(selectedUser.id, next);
+  setDraftPermissions(next);
 };
 
   const toggleKeys = (keys: string[], checked: boolean) => {
@@ -992,7 +1012,7 @@ const loadCurrentAdmin = async () => {
     ? Array.from(new Set([...current, ...assignableKeys]))
     : current.filter((p) => !assignableKeys.includes(p));
 
-  void savePermissions(selectedUser.id, next);
+  setDraftPermissions(next);
 };
 
   type TemplateKey =
@@ -1066,7 +1086,7 @@ const applyQuickPreset = (
     );
   }
 
-  void savePermissions(selectedUser.id, Array.from(new Set(keys)));
+  setDraftPermissions(Array.from(new Set(keys)));
 };
 
 const applyTemplate = (template: TemplateKey) => {
@@ -1488,78 +1508,99 @@ const applyTemplate = (template: TemplateKey) => {
     ? keys
     : getAssignableKeys(keys);
 
-void savePermissions(selectedUser.id, Array.from(new Set(finalKeys)));
+setDraftPermissions(Array.from(new Set(finalKeys)));
 };
 
+
+
+  const filteredModules = MODULES.filter((module) => {
+    const q = moduleSearch.trim().toLocaleLowerCase("tr-TR");
+    if (!q) return true;
+    return `${module.title} ${module.desc} ${module.key}`.toLocaleLowerCase("tr-TR").includes(q);
+  });
+
+  const currentModule =
+    selectedModuleKey === "ALL"
+      ? filteredModules[0] || null
+      : filteredModules.find((m) => m.key === selectedModuleKey) || null;
+
+  const enabledModuleCount = MODULES.filter((m) =>
+    modulePermissionKeys(m).some((k) => selectedPerms.includes(k))
+  ).length;
+
+  const criticalPermissionCount = MODULES.flatMap((m) =>
+    m.groups.flatMap((g) => g.actions)
+  ).filter((a) => a.isCritical && selectedPerms.includes(a.key)).length;
+
+  const commitChanges = async () => {
+    if (!selectedUser) return;
+    await savePermissions(selectedUser.id, draftPermissions);
+    setOriginalPermissions(Array.from(new Set(draftPermissions)).sort((a, b) => a.localeCompare(b, "tr")));
+  };
+
+  const discardChanges = () => {
+    setDraftPermissions(originalPermissions);
+  };
 
   return (
     <main
       style={{
         minHeight: "100vh",
-        background: BRAND.bg,
-        padding: "clamp(12px, 2vw, 24px)",
+        background: "#f6f7f9",
+        padding: "18px clamp(12px, 2vw, 24px) 80px",
       }}
     >
-      <div style={{ maxWidth: 1500, margin: "0 auto", width: "100%" }}>
-        <div
+      <style>{`
+        .perm-card { background:#fff; border:1px solid #e4e7ec; border-radius:16px; box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.05); }
+        .perm-user:hover,.perm-module:hover { background:#f9fafb !important; }
+        .perm-action:hover { border-color:#d0d5dd !important; }
+        .perm-scroll::-webkit-scrollbar { width:8px; height:8px; }
+        .perm-scroll::-webkit-scrollbar-thumb { background:#d0d5dd; border-radius:999px; }
+        @media (max-width: 1050px){ .perm-grid{grid-template-columns:1fr !important;} .perm-left,.perm-mid{max-height:none !important;} }
+      `}</style>
+
+      <div style={{ maxWidth: 1580, margin: "0 auto", width: "100%" }}>
+        <section
+          className="perm-card"
           style={{
-            ...cardStyle(),
-            background: `linear-gradient(135deg, ${BRAND.redDark} 0%, ${BRAND.red} 100%)`,
+            padding: "18px 20px",
+            marginBottom: 14,
+            border: "none",
             color: "#fff",
-            marginBottom: 20,
-            padding: "clamp(16px, 2.4vw, 24px)",
-            borderRadius: 24,
+            background: "linear-gradient(135deg,#59131b 0%,#811d25 55%,#a52828 100%)",
+            boxShadow: "0 8px 24px rgba(89,19,27,.15)",
           }}
         >
-          <h1 style={{ margin: 0, fontSize: "clamp(26px, 4vw, 36px)", fontWeight: 900 }}>
-            Modül ve Yetki Yönetimi V3
-          </h1>
-          <p style={{ margin: "10px 0 0", color: "rgba(255,255,255,0.92)", lineHeight: 1.7 }}>
-            App ve web tarafındaki modül, alt sekme, kart ve işlem yetkilerini kullanıcı bazında yönetin.
-          </p>
-        </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            <div>
+              <div style={{ display:"inline-flex", padding:"4px 8px", borderRadius:999, background:"rgba(255,255,255,.12)", border:"1px solid rgba(255,255,255,.18)", fontSize:10, fontWeight:900, letterSpacing:".08em", marginBottom:6 }}>
+                D-SEC ACCESS CONTROL
+              </div>
+              <h1 style={{ margin:0, fontSize:"clamp(22px,3vw,30px)", fontWeight:900, letterSpacing:"-.6px" }}>
+                Modül ve Yetki Yönetimi V3
+              </h1>
+              <p style={{ margin:"5px 0 0", color:"rgba(255,255,255,.78)", fontSize:13, lineHeight:1.55 }}>
+                Kullanıcıların web ve app modül erişimlerini, alt ekranlarını ve işlem yetkilerini merkezi olarak yönetin.
+              </p>
+            </div>
+            <button type="button" onClick={() => { window.location.href = "/admin/users"; }} style={{ border:"none", background:"#fff", color:"#65151d", borderRadius:10, padding:"10px 14px", fontSize:12, fontWeight:900, cursor:"pointer" }}>
+              ← Sistem Kullanıcıları
+            </button>
+          </div>
+        </section>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 360px) minmax(0, 1fr)",
-            gap: 18,
-            alignItems: "start",
-          }}
-        >
-          <section style={cardStyle()}>
-            <h2 style={{ marginTop: 0, fontSize: 20, fontWeight: 900 }}>
-              Kullanıcı Seç
-            </h2>
+        <section style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:10, marginBottom:14 }}>
+          {summaryCard("👤", "Seçili Kullanıcı", selectedUser ? "1" : "0", selectedUser ? getRoleLabel(selectedUser.role, selectedUser.app_user_type) : "Kullanıcı seçin")}
+          {summaryCard("▣", "Yetkili Modül", String(enabledModuleCount), `${MODULES.length} modülden`)}
+          {summaryCard("🔑", "Aktif Yetki", String(selectedPerms.length), `${allPermissionKeys().length} tanımdan`)}
+          {summaryCard("⚠", "Kritik Yetki", String(criticalPermissionCount), "yüksek hassasiyet")}
+        </section>
 
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Kullanıcı ara..."
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                borderRadius: 12,
-                border: `1px solid ${BRAND.border}`,
-                fontSize: 14,
-                boxSizing: "border-box",
-                marginBottom: 10,
-              }}
-            />
-
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                borderRadius: 12,
-                border: `1px solid ${BRAND.border}`,
-                background: "#fff",
-                fontSize: 14,
-                marginBottom: 14,
-              }}
-            >
+        <section className="perm-grid" style={{ display:"grid", gridTemplateColumns:"300px 300px minmax(0,1fr)", gap:12, alignItems:"start" }}>
+          <aside className="perm-card perm-left" style={{ padding:14, maxHeight:"calc(100vh - 250px)", overflow:"hidden" }}>
+            <div style={{ fontSize:13, fontWeight:900, color:"#18212f", marginBottom:10 }}>Kullanıcılar</div>
+            <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Kullanıcı ara..." style={fieldStyle()} />
+            <select value={roleFilter} onChange={(e)=>setRoleFilter(e.target.value)} style={{...fieldStyle(), marginTop:8}}>
               <option value="all">Tüm kullanıcılar</option>
               <option value="app_users">App kullanıcıları</option>
               <option value="isg_uzmani">İSG Uzmanı</option>
@@ -1570,452 +1611,196 @@ void savePermissions(selectedUser.id, Array.from(new Set(finalKeys)));
               <option value="operator">Operatör</option>
             </select>
 
-            {loading ? (
-              <div style={{ color: BRAND.muted }}>Yükleniyor...</div>
-            ) : (
-              <div
-  style={{
-    display: "grid",
-    gap: 8,
-    maxHeight: isMobile ? 320 : 650,
-    overflowY: "auto",
-  }}
->
-                {filteredUsers.map((u) => {
-                  const active = selectedUserId === u.id;
-
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => setSelectedUserId(u.id)}
-                      style={{
-                        textAlign: "left",
-                        border: active ? `2px solid ${BRAND.red}` : `1px solid ${BRAND.border}`,
-                        background: active ? "#fff5f5" : "#fff",
-                        borderRadius: 14,
-                        padding: 12,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div style={{ fontSize: 14, fontWeight: 900, color: BRAND.text }}>
-                        {u.full_name}
-                      </div>
-                      <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 4 }}>
-                        {u.email}
-                      </div>
-                      <div style={{ fontSize: 12, color: BRAND.red, marginTop: 6, fontWeight: 800 }}>
-                        {getRoleLabel(u.role, u.app_user_type)}
-                      </div>
-                      <div style={{ fontSize: 11, color: BRAND.muted, marginTop: 4 }}>
-                        {u.permissions.length} yetki
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          <section style={{ display: "grid", gap: 16 }}>
-            <div style={cardStyle()}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>
-                    {selectedUser ? selectedUser.full_name : "Kullanıcı seçilmedi"}
-                  </h2>
-                  <div style={{ color: BRAND.muted, fontSize: 13, marginTop: 5 }}>
-                    {selectedUser
-                      ? `${selectedUser.email} • ${getRoleLabel(selectedUser.role, selectedUser.app_user_type)}`
-                      : "Yetki yönetimi için soldan kullanıcı seçin."}
-                  </div>
-                </div>
-
-                <div style={{ fontSize: 13, fontWeight: 900, color: saving ? BRAND.red : BRAND.green }}>
-                  {saving ? "Kaydediliyor..." : "Hazır"}
-                </div>
-              </div>
-
-              {selectedUser && (
-                <>
-                  <div
-                    style={{
-                      display: "flex",
-gap: 8,
-flexWrap: isMobile ? "nowrap" : "wrap",
-overflowX: isMobile ? "auto" : "visible",
-paddingBottom: isMobile ? 8 : 0,
-                      marginTop: 16,
-                    }}
-                  >
-                     <button type="button" onClick={() => applyTemplate("super_admin")} style={templateButton()}>
-  👑 Süper Admin
-</button>
-
-<button type="button" onClick={() => applyTemplate("company_admin")} style={templateButton()}>
-  🏢 Firma Admini
-</button>
-
-<button type="button" onClick={() => applyTemplate("isg")} style={templateButton()}>
-  🦺 İSG Uzmanı
-</button>
-
-<button type="button" onClick={() => applyTemplate("hekim")} style={templateButton()}>
-  👨‍⚕️ İşyeri Hekimi
-</button>
-
-<button type="button" onClick={() => applyTemplate("dsp")} style={templateButton()}>
-  👩‍⚕️ DSP
-</button>
-
-<button type="button" onClick={() => applyTemplate("hr")} style={templateButton()}>
-  👨‍💼 İnsan Kaynakları
-</button>
-
-<button type="button" onClick={() => applyTemplate("auditor")} style={templateButton()}>
-  🔍 Denetçi
-</button>
-
-<button type="button" onClick={() => applyTemplate("subcontractor")} style={templateButton()}>
-  🏗️ Taşeron Yetkilisi
-</button>
-
-<button type="button" onClick={() => applyTemplate("department_manager")} style={templateButton()}>
-  🧑‍💼 Birim Sorumlusu
-</button>
-
-<button type="button" onClick={() => applyTemplate("employee")} style={templateButton()}>
-  👷 Çalışan
-</button>
-
-<button type="button" onClick={() => applyTemplate("viewer")} style={templateButton()}>
-  👀 Salt Okunur
-</button>
-
-<button type="button" onClick={() => applyTemplate("ai_operator")} style={templateButton()}>
-  🤖 AI Operatörü
-</button>
-
-                    <button
-                      type="button"
-                      onClick={() => savePermissions(selectedUser.id, [])}
-                      style={{
-                        ...templateButton(),
-                        background: "#fff5f5",
-                        color: "#b91c1c",
-                        border: "1px solid #fecaca",
-                      }}
-                    >
-                      Tümünü Temizle
-                    </button>
-                  </div>
-
-
-<div
-  style={{
-    display: "flex",
-gap: 8,
-flexWrap: isMobile ? "nowrap" : "wrap",
-overflowX: isMobile ? "auto" : "visible",
-paddingBottom: isMobile ? 8 : 0,
-    marginTop: 12,
-  }}
->
-  <button
-    type="button"
-    onClick={() => applyQuickPreset("readonly")}
-    style={templateButton()}
-  >
-    👀 Sadece Görüntüleme
-  </button>
-
-  <button
-    type="button"
-    onClick={() => applyQuickPreset("operation")}
-    style={templateButton()}
-  >
-    ⚙️ Operasyon Yetkisi
-  </button>
-
-  <button
-    type="button"
-    onClick={() => applyQuickPreset("report")}
-    style={templateButton()}
-  >
-    📊 Sadece Rapor
-  </button>
-
-  <button
-    type="button"
-    onClick={() => applyQuickPreset("view_only")}
-    style={templateButton()}
-  >
-    🔒 Salt Okunur
-  </button>
-</div>
-
-                  <div style={{ marginTop: 16 }}>
-                    <select
-                      value={selectedModuleKey}
-                      onChange={(e) => setSelectedModuleKey(e.target.value)}
-                      style={{
-                        width: "100%",
-                        maxWidth: isMobile ? "100%" : 420,
-                        padding: "12px 14px",
-                        borderRadius: 12,
-                        border: `1px solid ${BRAND.border}`,
-                        background: "#fff",
-                        fontSize: 14,
-                      }}
-                    >
-                      <option value="ALL">Tüm modüller</option>
-                      {MODULES.map((m) => (
-                        <option key={m.key} value={m.key}>
-                          {m.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {selectedUser &&
-              visibleModules.map((module) => {
-                const mKeys = modulePermissionKeys(module);
-                const mCheckedCount = mKeys.filter((k) => selectedPerms.includes(k)).length;
-                const moduleAllChecked = mCheckedCount === mKeys.length;
-
+            <div className="perm-scroll" style={{ display:"grid", gap:6, overflowY:"auto", maxHeight:"calc(100vh - 370px)", marginTop:10, paddingRight:2 }}>
+              {loading ? <div style={{ padding:16, color:"#667085", fontSize:12 }}>Yükleniyor...</div> : filteredUsers.map((u)=>{
+                const active = u.id === selectedUserId;
                 return (
-                  <div key={module.key} style={cardStyle()}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        flexWrap: "wrap",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <div>
-                        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>
-                          {module.title}
-                        </h3>
-                        <p style={{ margin: "6px 0 0", color: BRAND.muted, fontSize: 13 }}>
-                          {module.desc}
-                        </p>
+                  <button key={u.id} type="button" className="perm-user" onClick={()=>setSelectedUserId(u.id)} style={{ border:active ? "1.5px solid #b42318" : "1px solid #e4e7ec", background:active ? "#fff1f0" : "#fff", borderRadius:11, padding:10, textAlign:"left", cursor:"pointer" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", gap:8, alignItems:"flex-start" }}>
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontSize:12, fontWeight:900, color:"#18212f", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{u.full_name}</div>
+                        <div style={{ fontSize:10, color:"#667085", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{u.email}</div>
                       </div>
-
-                      <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 800 }}>
-                        <input
-  type="checkbox"
-  checked={moduleAllChecked}
-  disabled={
-    saving ||
-    getAssignableKeys(mKeys).length === 0
-  }
-  onChange={(e) =>
-    toggleKeys(mKeys, e.target.checked)
-  }
-/>
-                        Tüm modül yetkileri
-                      </label>
+                      <span style={{ width:8, height:8, borderRadius:999, background:u.is_active ? "#12b76a" : "#f04438", marginTop:3, flexShrink:0 }} />
                     </div>
-
-                    <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
-                      {module.groups.map((group) => {
-                        const gKeys = groupPermissionKeys(group);
-                        const groupAllChecked = gKeys.every((k) => selectedPerms.includes(k));
-
-                        return (
-                          <div
-                            key={`${module.key}-${group.title}`}
-                            style={{
-                              border: `1px solid ${BRAND.border}`,
-                              borderRadius: 14,
-                              padding: 14,
-                              background: "#fafafa",
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                gap: 12,
-                                flexWrap: "wrap",
-                                alignItems: "center",
-                                marginBottom: 10,
-                              }}
-                            >
-                              <div>
-                                <div style={{ fontSize: 15, fontWeight: 900 }}>
-                                  {group.title}
-                                </div>
-                                <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 3 }}>
-                                  {group.desc}
-                                </div>
-                              </div>
-
-                              <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, fontWeight: 800 }}>
-                                <input
-  type="checkbox"
-  checked={groupAllChecked}
-  disabled={
-    saving ||
-    getAssignableKeys(gKeys).length === 0
-  }
-  onChange={(e) =>
-    toggleKeys(gKeys, e.target.checked)
-  }
-/>
-                                Grubu seç
-                              </label>
-                            </div>
-
-                            <div
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))",
-                                gap: 8,
-                              }}
-                            >
-                              {group.actions.map((action) => {
-                                const checked = selectedPerms.includes(action.key);
-                                const canAssign =
-  canCurrentAdminAssignAction(action);
-
-                                return (
-                                  <label
-                                    key={action.key}
-                                    style={{
-                                      display: "flex",
-                                      gap: 8,
-                                      alignItems: "flex-start",
-                                      padding: 10,
-                                      borderRadius: 12,
-                                      border: !canAssign
-  ? "1px dashed #cbd5e1"
-  : checked
-  ? "1px solid #86efac"
-  : `1px solid ${BRAND.border}`,
-                                      background: !canAssign
-  ? "#f3f4f6"
-  : checked
-  ? "#f0fdf4"
-  : "#fff",
-                                      cursor: "pointer",
-                                    }}
-                                  >
-                                    <input
-  type="checkbox"
-  checked={checked}
-  disabled={
-    saving ||
-    !canAssign
-  }
-                                      onChange={(e) => togglePermission(action.key, e.target.checked)}
-                                      style={{ marginTop: 2 }}
-                                    />
-                                    <span>
-                                      <span style={{ display: "block", fontSize: 13, fontWeight: 850, color: BRAND.text }}>
-                                        {action.label}
-                                      </span>
-                                      <span
-  style={{
-    display: "block",
-    fontSize: 11,
-    color: BRAND.muted,
-    marginTop: 3,
-  }}
->
-  {action.key}
-</span>
-
-{!canAssign && (
-  <span
-    style={{
-      display: "block",
-      fontSize: 10,
-      color: "#dc2626",
-      marginTop: 4,
-      fontWeight: 700,
-    }}
-  >
-    🔒 Sadece Süper Admin tarafından atanabilir
-  </span>
-)}
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div style={{ display:"flex", justifyContent:"space-between", gap:8, marginTop:7 }}>
+                      <span style={{ fontSize:10, fontWeight:800, color:active ? "#b42318" : "#475467" }}>{getRoleLabel(u.role,u.app_user_type)}</span>
+                      <span style={{ fontSize:10, color:"#98a2b3" }}>{u.permissions.length} yetki</span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
+            </div>
+          </aside>
+
+          <aside className="perm-card perm-mid" style={{ padding:14, maxHeight:"calc(100vh - 250px)", overflow:"hidden" }}>
+            <div style={{ fontSize:13, fontWeight:900, color:"#18212f", marginBottom:10 }}>Modüller</div>
+            <input value={moduleSearch} onChange={(e)=>setModuleSearch(e.target.value)} placeholder="Modül ara..." style={fieldStyle()} />
+            <div className="perm-scroll" style={{ display:"grid", gap:6, overflowY:"auto", maxHeight:"calc(100vh - 330px)", marginTop:10, paddingRight:2 }}>
+              {filteredModules.map((module)=>{
+                const keys = modulePermissionKeys(module);
+                const count = keys.filter((k)=>selectedPerms.includes(k)).length;
+                const active = selectedModuleKey === module.key || (selectedModuleKey === "ALL" && currentModule?.key === module.key);
+                return (
+                  <button key={module.key} type="button" className="perm-module" onClick={()=>setSelectedModuleKey(module.key)} style={{ border:active ? "1.5px solid #b42318" : "1px solid #e4e7ec", background:active ? "#fff1f0" : "#fff", borderRadius:11, padding:10, textAlign:"left", cursor:"pointer" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", gap:8 }}>
+                      <span style={{ fontSize:12, fontWeight:900, color:"#18212f" }}>{module.title}</span>
+                      <span style={{ fontSize:10, fontWeight:800, color:count ? "#067647" : "#98a2b3" }}>{count}/{keys.length}</span>
+                    </div>
+                    <div style={{ fontSize:10, color:"#667085", marginTop:3, lineHeight:1.35 }}>{module.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          <section style={{ display:"grid", gap:12, minWidth:0 }}>
+            <div className="perm-card" style={{ padding:16 }}>
+              {selectedUser ? (
+                <>
+                  <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-start", flexWrap:"wrap" }}>
+                    <div>
+                      <div style={{ fontSize:18, fontWeight:900, color:"#18212f" }}>{selectedUser.full_name}</div>
+                      <div style={{ fontSize:11, color:"#667085", marginTop:3 }}>{selectedUser.email} • {getRoleLabel(selectedUser.role, selectedUser.app_user_type)}</div>
+                    </div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      <span style={pillStyle("#ecfdf3","#abefc6","#067647")}>{selectedUser.is_active ? "● Aktif" : "● Pasif"}</span>
+                      <span style={pillStyle("#eff8ff","#b2ddff","#175cd3")}>{selectedPerms.length} yetki</span>
+                      {dirty ? <span style={pillStyle("#fffaeb","#fedf89","#b54708")}>● Kaydedilmemiş</span> : <span style={pillStyle("#f2f4f7","#eaecf0","#475467")}>Kaydedildi</span>}
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid #eaecf0" }}>
+                    <div style={{ fontSize:10, textTransform:"uppercase", letterSpacing:".05em", fontWeight:900, color:"#667085", marginBottom:7 }}>Rol şablonları</div>
+                    <div className="perm-scroll" style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4 }}>
+                      <button onClick={()=>applyTemplate("super_admin")} style={presetButton()}>Süper Admin</button>
+                      <button onClick={()=>applyTemplate("company_admin")} style={presetButton()}>Firma Admini</button>
+                      <button onClick={()=>applyTemplate("isg")} style={presetButton()}>İSG Uzmanı</button>
+                      <button onClick={()=>applyTemplate("hekim")} style={presetButton()}>İşyeri Hekimi</button>
+                      <button onClick={()=>applyTemplate("dsp")} style={presetButton()}>DSP</button>
+                      <button onClick={()=>applyTemplate("hr")} style={presetButton()}>İnsan Kaynakları</button>
+                      <button onClick={()=>applyTemplate("auditor")} style={presetButton()}>Denetçi</button>
+                      <button onClick={()=>applyTemplate("subcontractor")} style={presetButton()}>Taşeron Yetkilisi</button>
+                      <button onClick={()=>applyTemplate("department_manager")} style={presetButton()}>Birim Sorumlusu</button>
+                      <button onClick={()=>applyTemplate("employee")} style={presetButton()}>Çalışan</button>
+                      <button onClick={()=>applyTemplate("viewer")} style={presetButton()}>Salt Okunur</button>
+                      <button onClick={()=>applyTemplate("ai_operator")} style={presetButton()}>AI Operatörü</button>
+                    </div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:8 }}>
+                      <button onClick={()=>applyQuickPreset("view_only")} style={presetButton()}>Sadece Görüntüleme</button>
+                      <button onClick={()=>applyQuickPreset("operation")} style={presetButton()}>Operasyon Yetkisi</button>
+                      <button onClick={()=>applyQuickPreset("report")} style={presetButton()}>Sadece Rapor</button>
+                      <button onClick={()=>setDraftPermissions([])} style={{...presetButton(), color:"#b42318", borderColor:"#fecdca", background:"#fff1f0"}}>Tümünü Temizle</button>
+                    </div>
+                  </div>
+                </>
+              ) : <div style={{ color:"#667085", fontSize:12 }}>Yetki yönetimi için kullanıcı seçin.</div>}
+            </div>
+
+            {selectedUser && currentModule ? (
+              <div className="perm-card" style={{ padding:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-start", flexWrap:"wrap" }}>
+                  <div>
+                    <div style={{ fontSize:18, fontWeight:900, color:"#18212f" }}>{currentModule.title}</div>
+                    <div style={{ fontSize:11, color:"#667085", marginTop:4 }}>{currentModule.desc}</div>
+                  </div>
+                  {(() => {
+                    const keys = modulePermissionKeys(currentModule);
+                    const assignable = getAssignableKeys(keys);
+                    const checked = keys.filter((k)=>selectedPerms.includes(k)).length === keys.length;
+                    return (
+                      <label style={{ display:"flex", gap:7, alignItems:"center", fontSize:11, fontWeight:900, color:"#344054" }}>
+                        <input type="checkbox" checked={checked} disabled={assignable.length===0} onChange={(e)=>toggleKeys(keys,e.target.checked)} />
+                        Tüm modül yetkileri
+                      </label>
+                    );
+                  })()}
+                </div>
+
+                <div style={{ display:"grid", gap:10, marginTop:14 }}>
+                  {currentModule.groups.map((group)=>{
+                    const gKeys = groupPermissionKeys(group);
+                    const gAll = gKeys.every((k)=>selectedPerms.includes(k));
+                    return (
+                      <div key={`${currentModule.key}-${group.title}`} style={{ border:"1px solid #eaecf0", borderRadius:12, overflow:"hidden" }}>
+                        <div style={{ padding:"11px 12px", background:"#f9fafb", borderBottom:"1px solid #eaecf0", display:"flex", justifyContent:"space-between", gap:10, alignItems:"center" }}>
+                          <div>
+                            <div style={{ fontSize:12, fontWeight:900, color:"#18212f" }}>{group.title}</div>
+                            <div style={{ fontSize:10, color:"#667085", marginTop:2 }}>{group.desc}</div>
+                          </div>
+                          <label style={{ display:"flex", gap:6, alignItems:"center", fontSize:10, fontWeight:800, color:"#475467" }}>
+                            <input type="checkbox" checked={gAll} disabled={getAssignableKeys(gKeys).length===0} onChange={(e)=>toggleKeys(gKeys,e.target.checked)} />
+                            Grubu seç
+                          </label>
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "repeat(auto-fit,minmax(240px,1fr))", gap:8, padding:10 }}>
+                          {group.actions.map((action)=>{
+                            const checked = selectedPerms.includes(action.key);
+                            const canAssign = canCurrentAdminAssignAction(action);
+                            return (
+                              <label key={action.key} className="perm-action" style={{ display:"flex", gap:9, alignItems:"flex-start", padding:10, borderRadius:10, border:checked ? "1px solid #abefc6" : !canAssign ? "1px dashed #d0d5dd" : "1px solid #eaecf0", background:checked ? "#ecfdf3" : !canAssign ? "#f9fafb" : "#fff", cursor:canAssign ? "pointer" : "not-allowed", opacity:canAssign ? 1 : .68 }}>
+                                <input type="checkbox" checked={checked} disabled={!canAssign} onChange={(e)=>togglePermission(action.key,e.target.checked)} style={{ marginTop:2 }} />
+                                <span style={{ minWidth:0 }}>
+                                  <span style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", fontSize:11, fontWeight:900, color:"#18212f" }}>
+                                    {action.label}
+                                    {action.isCritical ? <span style={pillStyle("#fff1f0","#fecdca","#b42318")}>Kritik</span> : null}
+                                  </span>
+                                  <span style={{ display:"block", fontSize:9, color:"#98a2b3", marginTop:3, wordBreak:"break-all" }}>{action.key}</span>
+                                  {!canAssign ? <span style={{ display:"block", fontSize:9, color:"#b42318", marginTop:4, fontWeight:800 }}>Sadece Süper Admin atayabilir</span> : null}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
           </section>
-        </div>
+        </section>
       </div>
-      <style jsx global>{`
-  html,
-  body {
-    max-width: 100%;
-    overflow-x: hidden;
-  }
 
-  button,
-  input,
-  select {
-    max-width: 100%;
-  }
-
-  @media (max-width: 900px) {
-    main {
-      overflow-x: hidden;
-    }
-
-    section {
-      max-width: 100%;
-    }
-
-    label {
-      min-width: 0;
-    }
-
-    label span {
-      min-width: 0;
-      word-break: break-word;
-    }
-
-    button {
-      white-space: nowrap;
-    }
-  }
-`}</style>
+      {selectedUser && dirty ? (
+        <div style={{ position:"fixed", left:"50%", transform:"translateX(-50%)", bottom:18, zIndex:1000, width:"min(760px,calc(100vw - 24px))", background:"#101828", color:"#fff", borderRadius:14, boxShadow:"0 18px 50px rgba(16,24,40,.28)", padding:"12px 14px", display:"flex", justifyContent:"space-between", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+          <div>
+            <div style={{ fontSize:12, fontWeight:900 }}>Kaydedilmemiş yetki değişiklikleri var</div>
+            <div style={{ fontSize:10, color:"#d0d5dd", marginTop:2 }}>{selectedUser.full_name} için değişiklikleri kaydedin veya geri alın.</div>
+          </div>
+          <div style={{ display:"flex", gap:7 }}>
+            <button type="button" onClick={discardChanges} disabled={saving} style={{ border:"1px solid #475467", background:"transparent", color:"#fff", borderRadius:9, padding:"8px 11px", fontSize:11, fontWeight:900, cursor:"pointer" }}>Vazgeç</button>
+            <button type="button" onClick={()=>void commitChanges()} disabled={saving} style={{ border:"none", background:"#fff", color:"#101828", borderRadius:9, padding:"8px 12px", fontSize:11, fontWeight:900, cursor:"pointer", opacity:saving ? .6 : 1 }}>{saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}</button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
 
-function templateButton(): React.CSSProperties {
-  return {
-    border: "1px solid #d1d5db",
-    background: "#fff",
-    color: "#111827",
-    borderRadius: 12,
-    padding: "9px 12px",
-    fontSize: 12,
-    fontWeight: 850,
-    cursor: "pointer",
-  };
+function summaryCard(icon: string, label: string, value: string, sub: string) {
+  return (
+    <div className="perm-card" style={{ padding:14, display:"flex", alignItems:"center", gap:10 }}>
+      <div style={{ width:36, height:36, borderRadius:10, background:"#f2f4f7", display:"grid", placeItems:"center", fontSize:16, flexShrink:0 }}>{icon}</div>
+      <div style={{ minWidth:0 }}>
+        <div style={{ fontSize:10, color:"#667085", fontWeight:800 }}>{label}</div>
+        <div style={{ display:"flex", alignItems:"baseline", gap:6, marginTop:2 }}>
+          <strong style={{ fontSize:21, lineHeight:1, color:"#18212f" }}>{value}</strong>
+          <span style={{ fontSize:9, color:"#98a2b3", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sub}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function fieldStyle(): React.CSSProperties {
+  return { width:"100%", minHeight:40, padding:"9px 11px", borderRadius:9, border:"1px solid #e4e7ec", background:"#fff", color:"#18212f", fontSize:12, outline:"none", boxSizing:"border-box" };
+}
+
+function presetButton(): React.CSSProperties {
+  return { border:"1px solid #d0d5dd", background:"#fff", color:"#344054", borderRadius:9, padding:"7px 10px", fontSize:10, fontWeight:850, cursor:"pointer", whiteSpace:"nowrap" };
+}
+
+function pillStyle(bg: string, border: string, color: string): React.CSSProperties {
+  return { display:"inline-flex", alignItems:"center", minHeight:22, padding:"2px 7px", borderRadius:999, background:bg, border:`1px solid ${border}`, color, fontSize:9, fontWeight:900, whiteSpace:"nowrap" };
 }
