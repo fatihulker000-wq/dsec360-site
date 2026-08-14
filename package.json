@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/patch-ffmpeg-next.mjs && node scripts/copy-ffmpeg-core.mjs",
     "dev": "next dev --webpack",
+    "prebuild": "node scripts/patch-ffmpeg-next.mjs && node scripts/copy-ffmpeg-core.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
