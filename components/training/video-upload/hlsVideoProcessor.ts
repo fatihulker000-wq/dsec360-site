@@ -87,7 +87,9 @@ async function getFfmpeg() {
       const ffmpeg = new FFmpeg();
 
       try {
-        await ffmpeg.load({
+               await ffmpeg.load({
+          classWorkerURL:
+            "/ffmpeg/worker.js",
           coreURL:
             "/ffmpeg/ffmpeg-core.js",
           wasmURL:
