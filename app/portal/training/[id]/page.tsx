@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import HlsTrainingPlayer from "../../../../components/training/HlsTrainingPlayer";
 
 type TrainingStatus = "not_started" | "in_progress" | "completed";
 
@@ -141,6 +142,7 @@ export default function TrainingDetailPage() {
   const [playbackReady, setPlaybackReady] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState("");
   const [progressSaved, setProgressSaved] = useState(false);
+  const [playbackSessionId, setPlaybackSessionId] = useState("");
 
   const trainingType = normalizeType(training?.training?.type);
   const isAsync = trainingType === "asenkron";
@@ -360,6 +362,7 @@ if (unlocked) {
     setVideoDuration(0);
     setPlaybackReady(false);
     setVideoLoadError("");
+    setPlaybackSessionId("");
 
     if (videoRef.current) {
       isProgrammaticSeekRef.current = true;
@@ -413,7 +416,7 @@ if (unlocked) {
     duration: number
   ) => {
     if (hasV2Videos && activeVideo) {
-      return fetch("/api/training/video-progress", {
+      const response = await fetch("/api/training/video-progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -423,8 +426,30 @@ if (unlocked) {
           action,
           currentSecond,
           duration,
+          playbackSessionId: playbackSessionId || undefined,
         }),
       });
+
+      const json = await response.json().catch(() => ({}));
+
+      if (json?.playbackSessionId) {
+        setPlaybackSessionId(String(json.playbackSessionId));
+      }
+
+      if (!response.ok) {
+        if (json?.code === "SEEK_BLOCKED" && videoRef.current) {
+          const allowed = Math.max(0, Number(json?.allowedPosition || maxReachedRef.current || 0));
+          isProgrammaticSeekRef.current = true;
+          videoRef.current.pause();
+          videoRef.current.currentTime = allowed;
+          maxReachedRef.current = allowed;
+          setMaxReachedTime(Math.floor(allowed));
+        }
+
+        throw new Error(json?.error || "Video ilerlemesi kaydedilemedi.");
+      }
+
+      return response;
     }
 
     if (action === "heartbeat") {
@@ -746,13 +771,11 @@ if (unlocked) {
                     <h3 style={{ marginTop: 0 }}>{activeVideo.title}</h3>
                   ) : null}
 
-                  <video
+                  <HlsTrainingPlayer
                     key={activeVideo?.id || contentUrl}
                     ref={videoRef}
-                    controls={preExamCompleted}
-                    controlsList="nodownload noplaybackrate"
-                    disablePictureInPicture
-                    preload="metadata"
+                    src={contentUrl}
+                    disabled={!preExamCompleted}
                     onLoadedMetadata={handleLoadedMetadata}
                     onCanPlay={() => {
                       setPlaybackReady(true);
@@ -768,21 +791,11 @@ if (unlocked) {
                       if (player && player.playbackRate !== 1) player.playbackRate = 1;
                     }}
                     onEnded={handleVideoEnded}
-                    onError={() => {
-                      setVideoLoadError("Video yüklenemedi. Dosya yolu veya içerik tipi kontrol edilmelidir.");
+                    onError={(message) => {
+                      setVideoLoadError(message || "Video yüklenemedi. Dosya yolu veya içerik tipi kontrol edilmelidir.");
                       setPlaybackReady(false);
                     }}
-                    style={{
-                      width: "100%",
-                      borderRadius: 16,
-                      background: "#000",
-                      pointerEvents: preExamCompleted ? "auto" : "none",
-                      opacity: preExamCompleted ? 1 : 0.65,
-                    }}
-                  >
-                    <source src={contentUrl} type={inferVideoMimeType(contentUrl)} />
-                    Tarayıcınız video oynatmayı desteklemiyor.
-                  </video>
+                  />
                 </>
               ) : (
                 <Warning text="Desteklenmeyen video formatı." />

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./VideoManager.module.css";
+import HlsVideoUploader from "../../../components/training/video-upload/HlsVideoUploader";
 
 export type TrainingVideoRow = {
   id: string;
@@ -360,6 +361,13 @@ export default function TrainingVideoManager({
       {message ? (
         <div className={styles.successMessage}>{message}</div>
       ) : null}
+
+      <HlsVideoUploader
+        trainingId={trainingId}
+        trainingTitle={trainingTitle}
+        nextSortOrder={videos.length + 1}
+        onCompleted={notifyChanged}
+      />
 
       <div className={styles.createPanel}>
         <div className={styles.formGrid}>
