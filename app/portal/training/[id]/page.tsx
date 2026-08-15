@@ -1092,3 +1092,4 @@ const modalBox = {
   textAlign: "center" as const,
   boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
 };
+
