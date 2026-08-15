@@ -240,7 +240,9 @@ export default function AgendaPage() {
     titleValue: string
   ) {
     if (
-      !window.confirm(
+      !(globalThis as unknown as {
+        confirm: (message?: string) => boolean;
+      }).confirm(
         `"${titleValue}" kaydı silinsin mi?`
       )
     ) {
@@ -336,7 +338,7 @@ export default function AgendaPage() {
 
             <input
               value={search}
-              onChange={(event) =>
+              onChange={(event: any) =>
                 setSearch(event.target.value)
               }
               placeholder="Başlık, açıklama, çalışan veya lokasyon ara..."
@@ -345,7 +347,7 @@ export default function AgendaPage() {
 
             <select
               value={typeFilter}
-              onChange={(event) =>
+              onChange={(event: any) =>
                 setTypeFilter(event.target.value)
               }
               style={inputStyle}
@@ -552,7 +554,7 @@ export default function AgendaPage() {
                 Kayıt türü
                 <select
                   value={type}
-                  onChange={(event) =>
+                  onChange={(event: any) =>
                     setType(
                       event.target.value as TaskType
                     )
@@ -574,7 +576,7 @@ export default function AgendaPage() {
                 Öncelik
                 <select
                   value={priority}
-                  onChange={(event) =>
+                  onChange={(event: any) =>
                     setPriority(event.target.value)
                   }
                   style={inputStyle}
@@ -589,7 +591,7 @@ export default function AgendaPage() {
                 Başlık
                 <input
                   value={title}
-                  onChange={(event) =>
+                  onChange={(event: any) =>
                     setTitle(event.target.value)
                   }
                   style={inputStyle}
@@ -600,7 +602,7 @@ export default function AgendaPage() {
                 Açıklama
                 <textarea
                   value={note}
-                  onChange={(event) =>
+                  onChange={(event: any) =>
                     setNote(event.target.value)
                   }
                   rows={4}
@@ -616,7 +618,7 @@ export default function AgendaPage() {
                 <input
                   type="datetime-local"
                   value={dueAt}
-                  onChange={(event) =>
+                  onChange={(event: any) =>
                     setDueAt(event.target.value)
                   }
                   style={inputStyle}
@@ -628,7 +630,7 @@ export default function AgendaPage() {
                 <input
                   type="datetime-local"
                   value={endAt}
-                  onChange={(event) =>
+                  onChange={(event: any) =>
                     setEndAt(event.target.value)
                   }
                   style={inputStyle}
@@ -639,7 +641,7 @@ export default function AgendaPage() {
                 Lokasyon
                 <input
                   value={location}
-                  onChange={(event) =>
+                  onChange={(event: any) =>
                     setLocation(event.target.value)
                   }
                   style={inputStyle}
@@ -650,7 +652,7 @@ export default function AgendaPage() {
                 Toplantı bağlantısı
                 <input
                   value={meetingLink}
-                  onChange={(event) =>
+                  onChange={(event: any) =>
                     setMeetingLink(event.target.value)
                   }
                   style={inputStyle}
@@ -661,7 +663,7 @@ export default function AgendaPage() {
                 <input
                   type="checkbox"
                   checked={isAllDay}
-                  onChange={(event) =>
+                  onChange={(event: any) =>
                     setIsAllDay(event.target.checked)
                   }
                 />
