@@ -195,7 +195,9 @@ export default function TrainingDetailPage() {
 
   const totalVideos = hasV2Videos ? videos.length : 1;
   const videoChainCompleted = hasV2Videos
-    ? videos.length > 0 && completedVideos >= videos.length
+    ? (videos.length > 0 && completedVideos >= videos.length) ||
+      training?.video_chain_completed === true ||
+      training?.watch_completed === true
     : training?.watch_completed === true;
 
   const activeProgress = activeVideo?.progress || null;

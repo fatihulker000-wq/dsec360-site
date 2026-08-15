@@ -28,12 +28,7 @@ type ProgressRow = {
   watch_completed: boolean;
   watch_completed_at: string | null;
   completed_at: string | null;
-  playback_session_id: string | null;
-  playback_session_started_at: string | null;
-  last_heartbeat_at: string | null;
-  last_client_position_seconds: number;
-  last_presence_checkpoint: number;
-  rejected_heartbeat_count: number;
+  updated_at: string | null;
 };
 
 function getSupabase() {
@@ -153,31 +148,23 @@ export async function POST(request: Request) {
       return jsonError("Video ilerleme kaydı okunamadı.", 500, "PROGRESS_READ_FAILED");
     }
 
-    const sessionId = existing?.playback_session_id || crypto.randomUUID();
-
-    if (
-      requestedSessionId &&
-      existing?.playback_session_id &&
-      requestedSessionId !== existing.playback_session_id
-    ) {
-      return jsonError("Video başka bir oturumda açık.", 409, "PLAYBACK_SESSION_MISMATCH");
-    }
+    // Mevcut production tablosunda playback_session_id alanı bulunmuyor.
+    // İstemcinin aynı sayfa yaşam döngüsünde kullanabilmesi için kimlik yine
+    // döndürülür; ancak şemada olmayan bir kolona yazılmaz.
+    const sessionId = requestedSessionId || crypto.randomUUID();
 
     const oldWatch = safeInteger(existing?.watch_seconds);
     const oldMax = safeInteger(existing?.max_watched_seconds);
-    const oldClientPosition = safeInteger(existing?.last_client_position_seconds);
-    const oldRejected = safeInteger(existing?.rejected_heartbeat_count);
-    const elapsed = secondsBetween(existing?.last_heartbeat_at || null, now);
+    const oldClientPosition = safeInteger(existing?.last_position_seconds);
+    const elapsed = secondsBetween(existing?.updated_at || null, now);
 
     let watchSeconds = oldWatch;
     let maxWatchedSeconds = oldMax;
     let presenceClicks = safeInteger(existing?.presence_clicks);
-    let lastPresenceCheckpoint = safeInteger(existing?.last_presence_checkpoint);
-    let rejectedHeartbeatCount = oldRejected;
+    let lastPresenceCheckpoint = safeInteger(existing?.presence_clicks);
     let watchCompleted = existing?.watch_completed === true;
     let watchCompletedAt = existing?.watch_completed_at || null;
     let completedAt = existing?.completed_at || null;
-    let lastHeartbeatAt = existing?.last_heartbeat_at || null;
     let lastClientPosition = oldClientPosition;
 
     if (action === "heartbeat") {
@@ -199,15 +186,6 @@ export async function POST(request: Request) {
       const invalidJump = positionDelta > allowedAdvance || position > oldMax + allowedAdvance;
 
       if (invalidJump) {
-        rejectedHeartbeatCount += 1;
-
-        if (existing?.id) {
-          await supabase
-            .from("training_video_progress")
-            .update({ rejected_heartbeat_count: rejectedHeartbeatCount, updated_at: nowIso })
-            .eq("id", existing.id);
-        }
-
         return NextResponse.json(
           {
             error: "İleri sarma veya geçersiz zaman sıçraması engellendi.",
@@ -235,11 +213,10 @@ export async function POST(request: Request) {
       watchSeconds = Math.min(duration, Math.max(oldWatch, position));
       maxWatchedSeconds = Math.max(oldMax, position);
       lastClientPosition = position;
-      lastHeartbeatAt = nowIso;
     }
 
     if (action === "presence") {
-      const heartbeatAge = secondsBetween(existing?.last_heartbeat_at || null, now);
+      const heartbeatAge = secondsBetween(existing?.updated_at || null, now);
       if (heartbeatAge === null || heartbeatAge > 30) {
         return jsonError("Ekran onayı için aktif video oturumu bulunamadı.", 409, "PRESENCE_SESSION_INACTIVE");
       }
@@ -261,7 +238,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "complete") {
-      const heartbeatAge = secondsBetween(existing?.last_heartbeat_at || null, now);
+      const heartbeatAge = secondsBetween(existing?.updated_at || null, now);
       const requiredWatchSeconds = Math.max(1, duration - COMPLETION_TOLERANCE_SECONDS);
 
       if (heartbeatAge === null || heartbeatAge > 30) {
@@ -317,17 +294,8 @@ export async function POST(request: Request) {
       locked_duration_seconds: duration,
       presence_clicks: presenceClicks,
       required_presence_clicks: requiredClicks,
-      presence_check_count: presenceClicks,
-      last_presence_check_at: action === "presence" ? nowIso : existing?.last_presence_check_at || null,
       watch_completed: watchCompleted,
       watch_completed_at: watchCompletedAt,
-      completed_at: completedAt,
-      playback_session_id: sessionId,
-      playback_session_started_at: existing?.playback_session_started_at || nowIso,
-      last_heartbeat_at: lastHeartbeatAt,
-      last_client_position_seconds: lastClientPosition,
-      last_presence_checkpoint: lastPresenceCheckpoint,
-      rejected_heartbeat_count: rejectedHeartbeatCount,
       updated_at: nowIso,
     };
 
@@ -336,9 +304,17 @@ export async function POST(request: Request) {
       : supabase.from("training_video_progress").insert(payload);
 
     const { data: savedProgress, error: saveError } = await saveQuery.select().maybeSingle();
-    if (saveError) {
+    // Complete isteğinde esas kayıt eğitim atamasıdır. Ara ilerleme tablosunda
+    // eski bir constraint/şema problemi bulunsa bile yüzde 100 izlenmiş video
+    // final sınavını sonsuza kadar kilitlememelidir. Heartbeat/presence hataları
+    // ise güvenlik nedeniyle normal şekilde reddedilmeye devam eder.
+    if (saveError && action !== "complete") {
       return NextResponse.json(
-        { error: "Video ilerleme kaydedilemedi.", detail: saveError.message },
+        {
+          error: `Video ilerleme kaydedilemedi: ${saveError.message}`,
+          detail: saveError.message,
+          code: "PROGRESS_SAVE_FAILED",
+        },
         { status: 500 }
       );
     }
@@ -366,14 +342,18 @@ export async function POST(request: Request) {
 
     const progressMap = new Map((allProgress || []).map((item) => [item.video_id, item]));
     const completedVideos = requiredVideoIds.filter(
-      (id) => progressMap.get(id)?.watch_completed === true
+      (id) =>
+        progressMap.get(id)?.watch_completed === true ||
+        (action === "complete" && String(id) === String(videoId))
     ).length;
     const totalVideos = requiredVideoIds.length;
     const chainCompleted = totalVideos > 0 && completedVideos === totalVideos;
-    const totalWatchSeconds = (allProgress || []).reduce(
-      (sum, item) => sum + safeInteger(item.watch_seconds),
-      0
-    );
+    const totalWatchSeconds = (requiredVideos || []).reduce((sum, item) => {
+      if (action === "complete" && String(item.id) === String(videoId)) {
+        return sum + safeInteger(item.duration_seconds);
+      }
+      return sum + safeInteger(progressMap.get(item.id)?.watch_seconds);
+    }, 0);
     const totalLockedDuration = (requiredVideos || []).reduce(
       (sum, item) => sum + safeInteger(item.duration_seconds),
       0
@@ -412,12 +392,17 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       playbackSessionId: sessionId,
-      progress: savedProgress,
+      progress:
+        savedProgress ||
+        (action === "complete"
+          ? { ...payload, id: existing?.id || null }
+          : null),
       totalVideos,
       completedVideos,
       videoChainCompleted: chainCompleted,
       verifiedWatchSeconds: totalWatchSeconds,
       lockedDurationSeconds: totalLockedDuration,
+      progressSaveWarning: saveError?.message || null,
     });
   } catch (error) {
     console.error("training video progress error:", error);
