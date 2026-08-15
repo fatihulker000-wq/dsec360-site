@@ -2,7 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-const HEARTBEAT_GRACE_SECONDS = 1;
+// HTML5/HLS timeupdate tam saniyede gelmez. İstemci saniyeyi aşağı
+// yuvarlarken sunucu duvar saatini de aşağı yuvarladığı için iki normal
+// heartbeat arasında yapay olarak 1 saniyelik fark oluşabilir.
+const HEARTBEAT_GRACE_SECONDS = 2;
 const HEARTBEAT_MAX_GAP_SECONDS = 45;
 const COMPLETION_TOLERANCE_SECONDS = 2;
 const PRESENCE_INTERVAL_SECONDS = 360;
@@ -179,7 +182,7 @@ export async function POST(request: Request) {
       // küçük doğal zaman farkını kabul eder. İlk istekte 20 saniyeye
       // kadar ilerlemeye izin vermek ileri sarma korumasını zayıflatırdı.
       const allowedAdvance = firstHeartbeat
-        ? Math.min(2, position)
+        ? Math.min(3, position)
         : Math.min(HEARTBEAT_MAX_GAP_SECONDS, elapsed + HEARTBEAT_GRACE_SECONDS);
       const positionDelta = position - oldClientPosition;
 

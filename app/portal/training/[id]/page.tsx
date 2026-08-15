@@ -436,7 +436,10 @@ if (unlocked) {
       }
 
       if (!response.ok) {
-        if (json?.code === "SEEK_BLOCKED" && videoRef.current) {
+        // Heartbeat, ağ ve HLS zamanlaması nedeniyle gecikmeli gelebilir.
+        // Arka plan heartbeat reddi oynatıcıyı durdurmamalıdır. Gerçek
+        // kullanıcı ileri sarması handleSeeking içinde ayrıca engellenir.
+        if (action !== "heartbeat" && json?.code === "SEEK_BLOCKED" && videoRef.current) {
           const allowed = Math.max(0, Number(json?.allowedPosition || maxReachedRef.current || 0));
           videoRef.current.pause();
           videoRef.current.currentTime = allowed;
@@ -542,6 +545,18 @@ if (unlocked) {
     ) {
       player.pause();
       setShowPresencePopup(true);
+    }
+  };
+
+  const handleSeeking = () => {
+    const player = videoRef.current;
+    if (!player || activeProgress?.watch_completed === true) return;
+
+    const allowedPosition = Math.max(0, Number(maxReachedRef.current || 0));
+    // Küçük farklar HLS parça geçişlerinde tarayıcının yaptığı doğal
+    // düzeltmelerdir. Bunun üzerindeki ileri hareket kullanıcı seek'idir.
+    if (player.currentTime > allowedPosition + 1.25) {
+      player.currentTime = allowedPosition;
     }
   };
 
@@ -762,6 +777,7 @@ if (unlocked) {
                       setVideoLoadError("");
                     }}
                     onTimeUpdate={handleTimeUpdate}
+                    onSeeking={handleSeeking}
                     onRateChange={() => {
                       const player = videoRef.current;
                       if (player && player.playbackRate !== 1) player.playbackRate = 1;
