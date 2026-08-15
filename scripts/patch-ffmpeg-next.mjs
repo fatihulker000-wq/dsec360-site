@@ -16,7 +16,7 @@ for (const candidate of candidates) {
     target = absolute;
     break;
   } catch {
-    // Sonraki olası dosya yolunu dene.
+    // Sonraki olası paket yolunu dene.
   }
 }
 
@@ -27,30 +27,32 @@ if (!target) {
 }
 
 const source = await readFile(target, "utf8");
+const dynamicWorkerPattern =
+  /new\s+URL\(\s*classWorkerURL\s*,\s*import\.meta\.url\s*\)/;
+const dynamicWorkerReplacePattern =
+  /new\s+URL\(\s*classWorkerURL\s*,\s*import\.meta\.url\s*\)/g;
 
-const dynamicExpression =
-  "new URL(classWorkerURL, import.meta.url)";
-
-const fixedExpression =
-  "classWorkerURL";
-
-if (source.includes(dynamicExpression)) {
-  const patched = source.replaceAll(
-    dynamicExpression,
-    fixedExpression
+if (dynamicWorkerPattern.test(source)) {
+  const patched = source.replace(
+    dynamicWorkerReplacePattern,
+    "classWorkerURL"
   );
 
   await writeFile(target, patched, "utf8");
 
+  const verified = await readFile(target, "utf8");
+
+  if (dynamicWorkerPattern.test(verified)) {
+    throw new Error("FFmpeg worker yolu düzeltmesi doğrulanamadı.");
+  }
+
   console.log(
-    "FFmpeg worker yolu Next.js/Webpack için düzeltildi."
+    "FFmpeg worker yolu Next.js/Webpack için kalıcı olarak düzeltildi."
   );
 } else if (source.includes("new Worker(classWorkerURL")) {
-  console.log(
-    "FFmpeg worker düzeltmesi zaten uygulanmış."
-  );
+  console.log("FFmpeg worker düzeltmesi zaten uygulanmış.");
 } else {
   throw new Error(
-    "Beklenen FFmpeg worker ifadesi bulunamadı. Paket sürümünü kontrol edin."
+    "Beklenen FFmpeg worker ifadesi bulunamadı. @ffmpeg/ffmpeg sürümünü kontrol edin."
   );
 }
