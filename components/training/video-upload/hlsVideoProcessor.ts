@@ -252,7 +252,7 @@ export async function prepareHlsVideo(
       "hls",
 
       "-hls_time",
-      "10",
+      "4",
 
       "-hls_playlist_type",
       "vod",
@@ -303,7 +303,7 @@ export async function prepareHlsVideo(
         "hls",
 
         "-hls_time",
-        "10",
+        "4",
 
         "-hls_playlist_type",
         "vod",

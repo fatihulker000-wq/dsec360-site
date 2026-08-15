@@ -1,73 +1,7 @@
-import {
-  createClient,
-} from "@supabase/supabase-js";
-
 import type {
   HlsAsset,
   UploadSession,
 } from "./types";
-
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-function getBrowserSupabase() {
-  if (
-    !supabaseUrl ||
-    !supabaseAnonKey
-  ) {
-    throw new Error(
-      "Supabase tarayıcı ortam değişkenleri eksik."
-    );
-  }
-
-  return createClient(
-    supabaseUrl,
-    supabaseAnonKey,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    }
-  );
-}
-
-function wait(
-  milliseconds: number
-) {
-  return new Promise<void>(
-    (resolve) => {
-      window.setTimeout(
-        resolve,
-        milliseconds
-      );
-    }
-  );
-}
-
-function readableError(
-  cause: unknown
-) {
-  if (
-    cause instanceof Error &&
-    cause.message
-  ) {
-    return cause.message;
-  }
-
-  if (
-    typeof cause === "string" &&
-    cause.trim()
-  ) {
-    return cause;
-  }
-
-  return "Bilinmeyen yükleme hatası";
-}
 
 export async function createAssetUploadSession(
   params: {
@@ -111,20 +45,10 @@ export async function createAssetUploadSession(
     );
   }
 
-  if (
-    !json?.data?.bucket ||
-    !json?.data?.objectPath ||
-    !json?.data?.token
-  ) {
-    throw new Error(
-      "İmzalı yükleme bilgileri eksik."
-    );
-  }
-
   return json.data as UploadSession;
 }
 
-export async function uploadHlsAsset(
+export function uploadHlsAsset(
   asset: HlsAsset,
   session: UploadSession,
   onProgress?: (
@@ -132,85 +56,95 @@ export async function uploadHlsAsset(
     total: number
   ) => void
 ) {
-  const supabase =
-    getBrowserSupabase();
+  return new Promise<void>(
+    (resolve, reject) => {
+      const params =
+        new URLSearchParams({
+          trainingId:
+            session.objectPath
+              .split("/")[1],
+          uploadId:
+            session.basePath
+              .split("/")[2],
+          fileName:
+            asset.name,
+        });
 
-  const retryDelays = [
-    0,
-    1500,
-    3000,
-    5000,
-    10000,
-  ];
+      const request =
+        new XMLHttpRequest();
 
-  let lastError = "";
-
-  onProgress?.(
-    0,
-    asset.blob.size
-  );
-
-  for (
-    let attempt = 0;
-    attempt < retryDelays.length;
-    attempt += 1
-  ) {
-    if (
-      retryDelays[attempt] > 0
-    ) {
-      await wait(
-        retryDelays[attempt]
+      request.open(
+        "POST",
+        `/api/admin/training-videos/upload-asset?${params.toString()}`
       );
-    }
 
-    try {
-      const {
-        data,
-        error,
-      } = await supabase.storage
-        .from(session.bucket)
-        .uploadToSignedUrl(
-          session.objectPath,
-          session.token,
-          asset.blob,
-          {
-            contentType:
-              asset.contentType,
-            cacheControl: "3600",
-            upsert: false,
-          }
+      request.withCredentials =
+        true;
+
+      request.setRequestHeader(
+        "Content-Type",
+        asset.contentType
+      );
+
+      request.upload.onprogress = (
+        event
+      ) => {
+        if (
+          event.lengthComputable
+        ) {
+          onProgress?.(
+            event.loaded,
+            event.total
+          );
+        }
+      };
+
+      request.onerror = () => {
+        reject(
+          new Error(
+            `${asset.name} yüklenemedi: bağlantı hatası.`
+          )
         );
+      };
 
-      if (error) {
-        lastError =
-          error.message;
+      request.onload = () => {
+        let json: {
+          error?: string;
+        } = {};
 
-        continue;
-      }
+        try {
+          json = JSON.parse(
+            request.responseText ||
+              "{}"
+          );
+        } catch {
+          // Yanıt JSON değilse aşağıdaki genel hata kullanılır.
+        }
 
-      if (!data?.path) {
-        lastError =
-          "Supabase yükleme yolu döndürmedi.";
+        if (
+          request.status >= 200 &&
+          request.status < 300
+        ) {
+          onProgress?.(
+            asset.blob.size,
+            asset.blob.size
+          );
 
-        continue;
-      }
+          resolve();
+          return;
+        }
 
-      onProgress?.(
-        asset.blob.size,
-        asset.blob.size
+        reject(
+          new Error(
+            json.error ||
+              `${asset.name} yüklenemedi (${request.status}).`
+          )
+        );
+      };
+
+      request.send(
+        asset.blob
       );
-
-      return;
-    } catch (cause) {
-      lastError =
-        readableError(cause);
     }
-  }
-
-  throw new Error(
-    `${asset.name} yüklenemedi: ${
-      lastError ||
-      "Supabase yükleme hatası"
-    }`
   );
 }
