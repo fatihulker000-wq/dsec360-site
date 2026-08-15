@@ -175,8 +175,11 @@ export async function POST(request: Request) {
 
     if (action === "heartbeat") {
       const firstHeartbeat = elapsed === null;
+      // Yeni oturumun ilk heartbeat kaydı yalnızca HLS başlangıcındaki
+      // küçük doğal zaman farkını kabul eder. İlk istekte 20 saniyeye
+      // kadar ilerlemeye izin vermek ileri sarma korumasını zayıflatırdı.
       const allowedAdvance = firstHeartbeat
-        ? Math.min(20, position)
+        ? Math.min(2, position)
         : Math.min(HEARTBEAT_MAX_GAP_SECONDS, elapsed + HEARTBEAT_GRACE_SECONDS);
       const positionDelta = position - oldClientPosition;
 

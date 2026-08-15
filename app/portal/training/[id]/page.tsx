@@ -567,7 +567,11 @@ if (unlocked) {
     const current = Number(player.currentTime || 0);
     const allowedMax = Number(maxReachedRef.current || 0);
 
-    if (current > allowedMax + 0.5) {
+    // HLS.js medya arabelleğini bağlarken küçük bir dahili zaman
+    // düzeltmesi (yaklaşık 1 saniye) oluşturabilir. Bu kullanıcı seek'i
+    // değildir. Daha büyük atlamalar istemcide, tüm atlamalar ayrıca
+    // sunucudaki heartbeat doğrulamasında kontrol edilir.
+    if (current > allowedMax + 2) {
       blockSeekRef.current = true;
       player.pause();
       isProgrammaticSeekRef.current = true;
