@@ -12,7 +12,8 @@ const HEARTBEAT_MAX_GAP_SECONDS = 45;
 // içindir; daha büyük ileri sıçramalar hâlâ reddedilir.
 const MAX_VERIFIED_MEDIA_STEP_SECONDS = 6;
 const COMPLETION_TOLERANCE_SECONDS = 2;
-const PRESENCE_INTERVAL_SECONDS = 360;
+// İstemciyle aynı kurumsal ekran başı doğrulama aralığı (3,5 dakika).
+const PRESENCE_INTERVAL_SECONDS = 210;
 
 type ProgressAction = "heartbeat" | "presence" | "complete";
 

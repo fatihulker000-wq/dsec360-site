@@ -51,7 +51,8 @@ type TrainingVideo = {
   progress?: VideoProgress | null;
 };
 
-const PRESENCE_INTERVAL_SECONDS = 360;
+// Kurumsal İSG kuralı: her 3,5 dakikalık aktif izlemede ekran başı onayı.
+const PRESENCE_INTERVAL_SECONDS = 210;
 
 function normalizeType(type?: string | null) {
   const value = (type || "").trim().toLowerCase();
@@ -920,25 +921,47 @@ if (unlocked) {
             <button
               onClick={async () => {
                 const player = videoRef.current;
-                const currentSecond = Math.floor(player?.currentTime || effectiveWatchSeconds || 0);
-                const newCount = clickCount + 1;
-
-                maxReachedRef.current = Math.max(maxReachedRef.current, currentSecond);
-                setMaxReachedTime((prev) => Math.max(prev, currentSecond));
-                setClickCount(newCount);
-                setCheckpointIndex((prev) => prev + 1);
-                setShowPresencePopup(false);
+                // Özellikle kayıtlı konumdan devam edildiğinde oynatıcı birden
+                // fazla kontrol noktasının ilerisinde olabilir. Sunucuya mevcut
+                // medya konumu yerine sıradaki kesin kontrol noktasını gönder.
+                const checkpointSecond =
+                  checkpointsRef.current[checkpointIndex] ||
+                  Math.floor(player?.currentTime || effectiveWatchSeconds || 0);
+                const actualPosition = Math.floor(
+                  player?.currentTime || checkpointSecond
+                );
 
                 try {
-                  await saveVideoProgress("presence", currentSecond, Math.floor(videoDuration || 0));
+                  // Kullanıcı doğrulama penceresini uzun süre açık bırakmış
+                  // olabilir. Önce aynı medya konumunda oturumu tazele; bu
+                  // işlem izleme süresi eklemez ve ileri sıçramaya izin vermez.
+                  await queueVideoHeartbeat(
+                    actualPosition,
+                    Math.floor(videoDuration || 0)
+                  );
+                  await saveVideoProgress("presence", checkpointSecond, Math.floor(videoDuration || 0));
+                  const newCount = clickCount + 1;
+                  maxReachedRef.current = Math.max(maxReachedRef.current, actualPosition);
+                  setMaxReachedTime((prev) => Math.max(prev, actualPosition));
+                  setClickCount(newCount);
+                  setCheckpointIndex((prev) => prev + 1);
+                  setShowPresencePopup(false);
+                  setCompletionError("");
                   await fetchVideos();
+
+                  requestAnimationFrame(() => {
+                    player?.play().catch(() => undefined);
+                  });
                 } catch (err) {
                   console.error("presence save error:", err);
+                  // Sunucu onayı başarısızsa pencere açık ve video duraklatılmış
+                  // kalır. Böylece onay kaydedilmeden eğitim ilerleyemez.
+                  setCompletionError(
+                    err instanceof Error
+                      ? err.message
+                      : "Ekran başı doğrulaması kaydedilemedi."
+                  );
                 }
-
-                requestAnimationFrame(() => {
-                  player?.play().catch(() => undefined);
-                });
               }}
               style={primaryButton}
             >
