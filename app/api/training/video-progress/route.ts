@@ -7,6 +7,10 @@ import { NextResponse } from "next/server";
 // heartbeat arasında yapay olarak 1 saniyelik fark oluşabilir.
 const HEARTBEAT_GRACE_SECONDS = 2;
 const HEARTBEAT_MAX_GAP_SECONDS = 45;
+// HLS, özellikle kısa/az segmentli videolarda timeupdate olayını her saniye
+// üretmeyebilir. Bu pencere yalnızca ardışık ve sunucuda doğrulanan konumlar
+// içindir; daha büyük ileri sıçramalar hâlâ reddedilir.
+const MAX_VERIFIED_MEDIA_STEP_SECONDS = 6;
 const COMPLETION_TOLERANCE_SECONDS = 2;
 const PRESENCE_INTERVAL_SECONDS = 360;
 
@@ -182,8 +186,14 @@ export async function POST(request: Request) {
       // küçük doğal zaman farkını kabul eder. İlk istekte 20 saniyeye
       // kadar ilerlemeye izin vermek ileri sarma korumasını zayıflatırdı.
       const allowedAdvance = firstHeartbeat
-        ? Math.min(3, position)
-        : Math.min(HEARTBEAT_MAX_GAP_SECONDS, elapsed + HEARTBEAT_GRACE_SECONDS);
+        ? MAX_VERIFIED_MEDIA_STEP_SECONDS
+        : Math.min(
+            HEARTBEAT_MAX_GAP_SECONDS,
+            Math.max(
+              MAX_VERIFIED_MEDIA_STEP_SECONDS,
+              elapsed + HEARTBEAT_GRACE_SECONDS
+            )
+          );
       const positionDelta = position - oldClientPosition;
 
       const invalidJump = positionDelta > allowedAdvance || position > oldMax + allowedAdvance;
@@ -219,11 +229,10 @@ export async function POST(request: Request) {
         });
       }
 
-      const verifiedAddition = firstHeartbeat
-        ? allowedAdvance
-        : Math.max(0, Math.min(elapsed, Math.max(0, positionDelta)));
-
-      watchSeconds = Math.min(duration, oldWatch + verifiedAddition);
+      // Konum artışı yukarıdaki sıçrama kontrolünden geçti. Duvar saatini tam
+      // saniyeye yuvarlamak kısa videolarda 5/5 izlendiği hâlde 0/1 görünmesine
+      // neden oluyordu. Doğrulanmış monoton konumu izleme süresi kabul ediyoruz.
+      watchSeconds = Math.min(duration, Math.max(oldWatch, position));
       maxWatchedSeconds = Math.max(oldMax, position);
       lastClientPosition = position;
       lastHeartbeatAt = nowIso;
@@ -260,13 +269,18 @@ export async function POST(request: Request) {
       }
 
       const finalPositionDelta = Math.max(0, position - oldClientPosition);
-      const finalAllowedAdvance = heartbeatAge + HEARTBEAT_GRACE_SECONDS;
+      const finalAllowedAdvance = Math.max(
+        MAX_VERIFIED_MEDIA_STEP_SECONDS,
+        heartbeatAge + HEARTBEAT_GRACE_SECONDS
+      );
 
       if (finalPositionDelta > finalAllowedAdvance) {
         return jsonError("İleri sarma veya geçersiz bitiş konumu engellendi.", 409, "SEEK_BLOCKED");
       }
 
-      const finalVerifiedAddition = Math.min(heartbeatAge, finalPositionDelta);
+      // Bitiş farkı üstteki güvenli adım sınırını geçtiyse zaten reddedildi.
+      // Bu nedenle doğrulanmış son konum doğrudan izleme süresine eklenebilir.
+      const finalVerifiedAddition = finalPositionDelta;
       // Heartbeat süreleri güvenlik amacıyla tam saniyeye indirilir. Özellikle
       // kısa videolarda bu yuvarlama, normal izleme tamamlandığı halde
       // watch_seconds değerini 1-2 saniye geride bırakabilir. oldMax yalnızca
@@ -274,7 +288,7 @@ export async function POST(request: Request) {
       // bu nedenle doğrulanmış izleme süresinin güvenli alt sınırıdır.
       const projectedWatch = Math.min(
         duration,
-        Math.max(oldWatch + finalVerifiedAddition, oldMax)
+        Math.max(oldWatch + finalVerifiedAddition, oldMax, position)
       );
       const projectedMax = Math.max(oldMax, position);
 
