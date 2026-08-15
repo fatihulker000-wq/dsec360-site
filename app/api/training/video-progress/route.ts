@@ -267,7 +267,15 @@ export async function POST(request: Request) {
       }
 
       const finalVerifiedAddition = Math.min(heartbeatAge, finalPositionDelta);
-      const projectedWatch = Math.min(duration, oldWatch + finalVerifiedAddition);
+      // Heartbeat süreleri güvenlik amacıyla tam saniyeye indirilir. Özellikle
+      // kısa videolarda bu yuvarlama, normal izleme tamamlandığı halde
+      // watch_seconds değerini 1-2 saniye geride bırakabilir. oldMax yalnızca
+      // daha önce sunucu tarafından sıçrama kontrolünden geçmiş konumdur;
+      // bu nedenle doğrulanmış izleme süresinin güvenli alt sınırıdır.
+      const projectedWatch = Math.min(
+        duration,
+        Math.max(oldWatch + finalVerifiedAddition, oldMax)
+      );
       const projectedMax = Math.max(oldMax, position);
 
       if (projectedWatch < requiredWatchSeconds || projectedMax < requiredWatchSeconds) {

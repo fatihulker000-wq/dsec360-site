@@ -141,6 +141,7 @@ export default function TrainingDetailPage() {
   const [playbackReady, setPlaybackReady] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState("");
   const [progressSaved, setProgressSaved] = useState(false);
+  const [completionError, setCompletionError] = useState("");
   const [playbackSessionId, setPlaybackSessionId] = useState("");
 
   const trainingType = normalizeType(training?.training?.type);
@@ -562,7 +563,10 @@ if (unlocked) {
 
   const handleVideoEnded = async () => {
     try {
+      setCompletionError("");
+
       if (effectiveClickCount < requiredClicks) {
+        setCompletionError("Zorunlu ekran başı onayları tamamlanmadı.");
         return;
       }
 
@@ -580,6 +584,11 @@ if (unlocked) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       console.error("video complete error:", err);
+      setCompletionError(
+        err instanceof Error
+          ? err.message
+          : "Video tamamlama kaydı oluşturulamadı."
+      );
     }
   };
 
@@ -801,7 +810,8 @@ if (unlocked) {
             <div style={{ marginTop: 16, color: "#1d4ed8" }}>Video hazırlanıyor...</div>
           ) : null}
 
-          {!!lockReason && !finalPassed ? <Warning text={lockReason} /> : null}
+          {!!completionError ? <Warning text={completionError} /> : null}
+          {!!lockReason && !finalPassed && !completionError ? <Warning text={lockReason} /> : null}
 
           <div style={{ marginTop: 24, display: "flex", gap: 12, flexWrap: "wrap" }}>
             {!preExamCompleted ? (
