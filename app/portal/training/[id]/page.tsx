@@ -124,6 +124,7 @@ export default function TrainingDetailPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const maxReachedRef = useRef(0);
   const lastHeartbeatSecondRef = useRef(-1);
+  const heartbeatPromiseRef = useRef<Promise<unknown> | null>(null);
   const checkpointsRef = useRef<number[]>([]);
 
   const [training, setTraining] = useState<TrainingDetail | null>(null);
@@ -533,11 +534,15 @@ if (unlocked) {
 
       if (shouldSendHeartbeat) {
         lastHeartbeatSecondRef.current = flooredCurrent;
-        saveVideoProgress(
+        const heartbeatPromise = saveVideoProgress(
           "heartbeat",
           flooredCurrent,
           Math.floor(videoDuration || 0)
-        ).catch((err) => console.error("heartbeat error:", err));
+        );
+        heartbeatPromiseRef.current = heartbeatPromise;
+        void heartbeatPromise.catch((err) =>
+          console.error("heartbeat error:", err)
+        );
       }
     }
 
@@ -576,6 +581,13 @@ if (unlocked) {
       const finalWatchSeconds = Math.floor(videoDuration || 0);
 
       if (hasV2Videos && activeVideo) {
+        // Özellikle kısa videolarda son timeupdate heartbeat'i ile ended
+        // olayı aynı anda oluşur. Complete isteği heartbeat veritabanına
+        // yazılmadan gönderilirse sunucu aktif izlemeyi doğrulayamaz.
+        // Önce devam eden heartbeat isteğinin tamamlanmasını bekle.
+        if (heartbeatPromiseRef.current) {
+          await heartbeatPromiseRef.current;
+        }
         await saveVideoProgress("complete", finalWatchSeconds, finalWatchSeconds);
       } else {
         await saveLegacyComplete(finalWatchSeconds, effectiveClickCount);
@@ -799,11 +811,13 @@ if (unlocked) {
                         lastHeartbeatSecondRef.current < 0
                       ) {
                         lastHeartbeatSecondRef.current = 0;
-                        saveVideoProgress(
+                        const initialHeartbeatPromise = saveVideoProgress(
                           "heartbeat",
                           0,
                           Math.floor(videoDuration || activeVideo.duration_seconds || 0)
-                        ).catch((err) => {
+                        );
+                        heartbeatPromiseRef.current = initialHeartbeatPromise;
+                        void initialHeartbeatPromise.catch((err) => {
                           console.error("initial heartbeat error:", err);
                           setCompletionError(
                             err instanceof Error
