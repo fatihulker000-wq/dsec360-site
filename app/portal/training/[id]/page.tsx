@@ -125,6 +125,7 @@ export default function TrainingDetailPage() {
   const maxReachedRef = useRef(0);
   const isProgrammaticSeekRef = useRef(false);
   const blockSeekRef = useRef(false);
+  const lastHeartbeatSecondRef = useRef(-1);
   const checkpointsRef = useRef<number[]>([]);
 
   const [training, setTraining] = useState<TrainingDetail | null>(null);
@@ -363,10 +364,15 @@ if (unlocked) {
     setPlaybackReady(false);
     setVideoLoadError("");
     setPlaybackSessionId("");
+    lastHeartbeatSecondRef.current = -1;
 
     if (videoRef.current) {
-      isProgrammaticSeekRef.current = true;
-      videoRef.current.currentTime = 0;
+      if (videoRef.current.currentTime > 0.05) {
+        isProgrammaticSeekRef.current = true;
+        videoRef.current.currentTime = 0;
+      } else {
+        isProgrammaticSeekRef.current = false;
+      }
     }
   }, [activeVideo?.id]);
 
@@ -491,8 +497,12 @@ if (unlocked) {
 
     const safeResume = shouldResume ? Math.floor(resumeFrom) : 0;
 
-    isProgrammaticSeekRef.current = true;
-    player.currentTime = safeResume;
+    if (Math.abs(player.currentTime - safeResume) > 0.05) {
+      isProgrammaticSeekRef.current = true;
+      player.currentTime = safeResume;
+    } else {
+      isProgrammaticSeekRef.current = false;
+    }
     player.playbackRate = 1;
 
     maxReachedRef.current = safeResume;
@@ -513,19 +523,20 @@ if (unlocked) {
     const flooredCurrent = Math.floor(current);
     const prevMax = Number(maxReachedRef.current || 0);
 
-    if (!isProgrammaticSeekRef.current && current > prevMax + 1.2) {
-      blockSeekRef.current = true;
-      player.pause();
-      isProgrammaticSeekRef.current = true;
-      player.currentTime = prevMax;
-      return;
-    }
-
-    if (current >= prevMax && current <= prevMax + 1.2) {
+    // HLS oynatımında timeupdate olayı 1-2 saniyelik doğal aralıklarla
+    // gelebilir. İleri sarma kontrolü onSeeking ve sunucu doğrulamasında
+    // yapılır; normal oynatma burada zaman sıçraması olarak değerlendirilmez.
+    if (current >= prevMax) {
       maxReachedRef.current = current;
       setMaxReachedTime(flooredCurrent);
 
-      if (flooredCurrent > 0 && flooredCurrent % 15 === 0) {
+      const shouldSendHeartbeat =
+        flooredCurrent >= 1 &&
+        (lastHeartbeatSecondRef.current < 0 ||
+          flooredCurrent - lastHeartbeatSecondRef.current >= 5);
+
+      if (shouldSendHeartbeat) {
+        lastHeartbeatSecondRef.current = flooredCurrent;
         saveVideoProgress(
           "heartbeat",
           flooredCurrent,
@@ -550,7 +561,6 @@ if (unlocked) {
     if (!player) return;
 
     if (isProgrammaticSeekRef.current) {
-      isProgrammaticSeekRef.current = false;
       return;
     }
 
@@ -784,7 +794,8 @@ if (unlocked) {
                     onTimeUpdate={handleTimeUpdate}
                     onSeeking={handleSeeking}
                     onSeeked={() => {
-                      if (blockSeekRef.current) blockSeekRef.current = false;
+                      isProgrammaticSeekRef.current = false;
+                      blockSeekRef.current = false;
                     }}
                     onRateChange={() => {
                       const player = videoRef.current;
