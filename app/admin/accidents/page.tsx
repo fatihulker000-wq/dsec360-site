@@ -26,6 +26,13 @@ const browserWindow = globalThis as unknown as {
   alert: (message?: string) => void;
   confirm: (message?: string) => boolean;
   print: () => void;
+  document: {
+    createElement: (tagName: string) => {
+      href: string;
+      download: string;
+      click: () => void;
+    };
+  };
 };
 
 type AccidentRow = {
@@ -2471,7 +2478,7 @@ function IncidentReportsCenter({
       URL.createObjectURL(blob);
 
     const anchor =
-      document.createElement("a");
+      browserWindow.document.createElement("a");
 
     anchor.href = url;
     anchor.download =
@@ -2505,7 +2512,7 @@ function IncidentReportsCenter({
       URL.createObjectURL(blob);
 
     const anchor =
-      document.createElement("a");
+      browserWindow.document.createElement("a");
 
     anchor.href = url;
     anchor.download =
