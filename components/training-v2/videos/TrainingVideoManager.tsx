@@ -100,7 +100,7 @@ export default function TrainingVideoManager({
       const json = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(json?.error || "Videolar alınamadı.");
+        throw new Error(json?.error || "Eğitim alt konuları alınamadı.");
       }
 
       setVideos(normalizeRows(json?.data));
@@ -110,7 +110,7 @@ export default function TrainingVideoManager({
       setError(
         cause instanceof Error
           ? cause.message
-          : "Videolar alınırken hata oluştu."
+          : "Eğitim alt konuları alınırken hata oluştu."
       );
     } finally {
       setLoading(false);
@@ -136,14 +136,28 @@ export default function TrainingVideoManager({
     [videos]
   );
 
+  const totalDurationSeconds = useMemo(
+    () =>
+      orderedVideos.reduce(
+        (sum, video) => sum + Math.max(0, Number(video.duration_seconds || 0)),
+        0
+      ),
+    [orderedVideos]
+  );
+
+  const requiredTopicCount = useMemo(
+    () => orderedVideos.filter((video) => video.is_required !== false).length,
+    [orderedVideos]
+  );
+
   const notifyChanged = async () => {
     await loadVideos();
     await onChanged?.();
   };
 
   const validateDraft = (value: VideoDraft) => {
-    if (!value.title.trim()) return "Video başlığı zorunlu.";
-    if (!value.videoUrl.trim()) return "Video URL zorunlu.";
+    if (!value.title.trim()) return "Alt konu başlığı zorunlu.";
+    if (!value.videoUrl.trim()) return "Alt konu videosu URL bilgisi zorunlu.";
     return "";
   };
 
@@ -185,21 +199,21 @@ export default function TrainingVideoManager({
       const json = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(json?.error || "Video eklenemedi.");
+        throw new Error(json?.error || "Alt konu eklenemedi.");
       }
 
       setDraft({
         ...EMPTY_DRAFT,
         sortOrder: String(videos.length + 2),
       });
-      setMessage("Video başarıyla eklendi.");
+      setMessage("Alt konu başarıyla eklendi.");
       await notifyChanged();
     } catch (cause) {
       console.error(cause);
       setError(
         cause instanceof Error
           ? cause.message
-          : "Video eklenirken hata oluştu."
+          : "Alt konu eklenirken hata oluştu."
       );
     } finally {
       setSaving(false);
@@ -270,18 +284,18 @@ export default function TrainingVideoManager({
       const json = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(json?.error || "Video güncellenemedi.");
+        throw new Error(json?.error || "Alt konu güncellenemedi.");
       }
 
       cancelEditing();
-      setMessage("Video başarıyla güncellendi.");
+      setMessage("Alt konu başarıyla güncellendi.");
       await notifyChanged();
     } catch (cause) {
       console.error(cause);
       setError(
         cause instanceof Error
           ? cause.message
-          : "Video güncellenirken hata oluştu."
+          : "Alt konu güncellenirken hata oluştu."
       );
     } finally {
       setActionId(null);
@@ -290,7 +304,7 @@ export default function TrainingVideoManager({
 
   const deleteVideo = async (video: TrainingVideoRow) => {
     const confirmed = window.confirm(
-      `"${video.title}" videosunu silmek istediğine emin misin?`
+      `"${video.title}" alt konusunu silmek istediğine emin misin?`
     );
 
     if (!confirmed) return;
@@ -311,21 +325,21 @@ export default function TrainingVideoManager({
       const json = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(json?.error || "Video silinemedi.");
+        throw new Error(json?.error || "Alt konu silinemedi.");
       }
 
       if (editingId === video.id) {
         cancelEditing();
       }
 
-      setMessage("Video başarıyla silindi.");
+      setMessage("Alt konu başarıyla silindi.");
       await notifyChanged();
     } catch (cause) {
       console.error(cause);
       setError(
         cause instanceof Error
           ? cause.message
-          : "Video silinirken hata oluştu."
+          : "Alt konu silinirken hata oluştu."
       );
     } finally {
       setActionId(null);
@@ -339,17 +353,16 @@ export default function TrainingVideoManager({
       <header className={styles.header}>
         <div>
           <div className={styles.eyebrow}>
-            Asenkron Eğitim İçerikleri
+            Ana Eğitim → Alt Konular
           </div>
-          <h2>Video Yönetimi</h2>
+          <h2>Eğitim Alt Konuları / Bölümleri</h2>
           <p>
-            <strong>{trainingTitle}</strong> eğitimine bağlı
-            videoları sıraya göre ekleyin ve yönetin.
+            <strong>{trainingTitle}</strong> tek ana eğitim olarak kalır. Alt konuları ayrı videolar halinde sıraya göre ekleyin. Çalışan, bu bölümleri tek eğitim içinde sırasıyla tamamlar.
           </p>
         </div>
 
         <div className={styles.counter}>
-          <span>Toplam Video</span>
+          <span>Toplam Alt Konu</span>
           <strong>{videos.length}</strong>
         </div>
       </header>
@@ -362,6 +375,39 @@ export default function TrainingVideoManager({
         <div className={styles.successMessage}>{message}</div>
       ) : null}
 
+      <div
+        style={{
+          marginBottom: 16,
+          padding: 14,
+          border: "1px solid #dbeafe",
+          background: "#eff6ff",
+          borderRadius: 14,
+          color: "#1e3a8a",
+          lineHeight: 1.6,
+        }}
+      >
+        <strong>Yeni bölüm kurgusu:</strong> Çalışan bu içeriklerin tamamını
+        tek bir “{trainingTitle}” eğitimi altında görür. Bölümler sıra numarasına
+        göre açılır; önceki zorunlu bölüm tamamlanmadan sonraki zorunlu bölüm
+        eğitim akışında açılmaz. Video izleme, ekran başı doğrulama ve final
+        kuralları çalışan portalındaki mevcut güvenli mekanizma tarafından
+        uygulanmaya devam eder.
+        <div
+          style={{
+            marginTop: 10,
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            fontSize: 13,
+            fontWeight: 800,
+          }}
+        >
+          <span>Alt konu: {orderedVideos.length}</span>
+          <span>Zorunlu: {requiredTopicCount}</span>
+          <span>Toplam süre: {formatDuration(totalDurationSeconds)}</span>
+        </div>
+      </div>
+
       <HlsVideoUploader
         trainingId={trainingId}
         trainingTitle={trainingTitle}
@@ -372,7 +418,7 @@ export default function TrainingVideoManager({
       <div className={styles.createPanel}>
         <div className={styles.formGrid}>
           <label>
-            <span>Video başlığı</span>
+            <span>Alt konu başlığı</span>
             <input
               value={draft.title}
               onChange={(event) =>
@@ -381,12 +427,12 @@ export default function TrainingVideoManager({
                   title: event.target.value,
                 }))
               }
-              placeholder="Ör. Yangın güvenliği giriş"
+              placeholder="Ör. Meslek hastalıklarının nedenleri ve korunma yöntemleri"
             />
           </label>
 
           <label>
-            <span>Video URL</span>
+            <span>Alt konu video URL</span>
             <input
               value={draft.videoUrl}
               onChange={(event) =>
@@ -400,7 +446,7 @@ export default function TrainingVideoManager({
           </label>
 
           <label>
-            <span>Süre (saniye)</span>
+            <span>Alt konu süresi (saniye)</span>
             <input
               type="number"
               min="0"
@@ -432,7 +478,7 @@ export default function TrainingVideoManager({
         </div>
 
         <label className={styles.descriptionField}>
-          <span>Video açıklaması</span>
+          <span>Alt konu açıklaması</span>
           <textarea
             rows={3}
             value={draft.description}
@@ -442,7 +488,7 @@ export default function TrainingVideoManager({
                 description: event.target.value,
               }))
             }
-            placeholder="Videonun amacı ve kapsamı"
+            placeholder="Alt konunun amacı, kapsamı ve öğrenme hedefi"
           />
         </label>
 
@@ -452,7 +498,7 @@ export default function TrainingVideoManager({
           disabled={saving}
           onClick={saveVideo}
         >
-          {saving ? "Kaydediliyor..." : "Video Ekle"}
+          {saving ? "Kaydediliyor..." : "Alt Konu Ekle"}
         </button>
       </div>
 
@@ -460,8 +506,8 @@ export default function TrainingVideoManager({
         <div className={styles.editPanel}>
           <div className={styles.editHeader}>
             <div>
-              <span>Düzenlenen video</span>
-              <strong>{editingDraft.title || "Video"}</strong>
+              <span>Düzenlenen alt konu</span>
+              <strong>{editingDraft.title || "Alt Konu"}</strong>
             </div>
             <button type="button" onClick={cancelEditing}>
               Kapat
@@ -470,7 +516,7 @@ export default function TrainingVideoManager({
 
           <div className={styles.formGrid}>
             <label>
-              <span>Video başlığı</span>
+              <span>Alt konu başlığı</span>
               <input
                 value={editingDraft.title}
                 onChange={(event) =>
@@ -483,7 +529,7 @@ export default function TrainingVideoManager({
             </label>
 
             <label>
-              <span>Video URL</span>
+              <span>Alt konu video URL</span>
               <input
                 value={editingDraft.videoUrl}
                 onChange={(event) =>
@@ -496,7 +542,7 @@ export default function TrainingVideoManager({
             </label>
 
             <label>
-              <span>Süre (saniye)</span>
+              <span>Alt konu süresi (saniye)</span>
               <input
                 type="number"
                 min="0"
@@ -527,7 +573,7 @@ export default function TrainingVideoManager({
           </div>
 
           <label className={styles.descriptionField}>
-            <span>Video açıklaması</span>
+            <span>Alt konu açıklaması</span>
             <textarea
               rows={3}
               value={editingDraft.description}
@@ -564,11 +610,11 @@ export default function TrainingVideoManager({
 
       {loading ? (
         <div className={styles.emptyState}>
-          Videolar yükleniyor...
+          Alt konular yükleniyor...
         </div>
       ) : orderedVideos.length === 0 ? (
         <div className={styles.emptyState}>
-          Bu eğitime henüz video eklenmemiş.
+          Bu ana eğitime henüz alt konu videosu eklenmemiş.
         </div>
       ) : (
         <div className={styles.videoGrid}>
@@ -584,7 +630,7 @@ export default function TrainingVideoManager({
                     <h3>{video.title}</h3>
                     <p>
                       {video.description ||
-                        "Video açıklaması girilmemiş."}
+                        "Alt konu açıklaması girilmemiş."}
                     </p>
                   </div>
 
@@ -606,7 +652,7 @@ export default function TrainingVideoManager({
                       ? "İsteğe bağlı"
                       : "Zorunlu içerik"}
                   </span>
-                  <span>Audit izine hazır</span>
+                  <span>Sıralı eğitim akışına hazır</span>
                 </div>
 
                 <div className={styles.urlText}>

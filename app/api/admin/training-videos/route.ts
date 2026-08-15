@@ -38,7 +38,13 @@ export async function GET(request: Request) {
     .order("sort_order", { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: "Videolar alınamadı." }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "Eğitim alt konuları alınamadı.",
+        detail: error.message,
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ success: true, data: data || [] });
@@ -64,13 +70,25 @@ export async function POST(request: Request) {
 
   if (!trainingId || !title || !videoUrl) {
     return NextResponse.json(
-      { error: "Eğitim, video başlığı ve video URL zorunludur." },
+      {
+        error:
+          "Eğitim, alt konu başlığı ve alt konu videosu URL bilgisi zorunludur.",
+      },
       { status: 400 }
     );
   }
 
   const supabase = getSupabase();
 
+  /*
+   * D-SEC ALT KONU MODELİ
+   *
+   * trainings        -> ana eğitim
+   * training_videos  -> ana eğitimin sıralı alt konuları / video bölümleri
+   *
+   * Yeni tablo açmıyoruz. Mevcut çalışan video ilerleme ve ekran başı
+   * doğrulama mekanizmasına dokunmuyoruz.
+   */
   const { data, error } = await supabase
     .from("training_videos")
     .insert({
@@ -88,7 +106,10 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json(
-      { error: "Video eklenemedi.", detail: error.message },
+      {
+        error: "Eğitim alt konusu eklenemedi.",
+        detail: error.message,
+      },
       { status: 500 }
     );
   }
