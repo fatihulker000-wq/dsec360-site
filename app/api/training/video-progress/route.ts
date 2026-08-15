@@ -7,6 +7,11 @@ import { NextResponse } from "next/server";
 // heartbeat arasında yapay olarak 1 saniyelik fark oluşabilir.
 const HEARTBEAT_GRACE_SECONDS = 2;
 const HEARTBEAT_MAX_GAP_SECONDS = 45;
+// Doğrulama penceresi videoyu bilerek durdurur. Kullanıcı pencereyi hemen
+// onaylamayabilir; bu nedenle normal oynatma heartbeat süresi burada
+// kullanılamaz. Onay yine aynı sayfa oturum kimliği ve kesin kontrol noktası
+// ile doğrulanır.
+const PRESENCE_RESPONSE_WINDOW_SECONDS = 15 * 60;
 // HLS, özellikle kısa/az segmentli videolarda timeupdate olayını her saniye
 // üretmeyebilir. Bu pencere yalnızca ardışık ve sunucuda doğrulanan konumlar
 // içindir; daha büyük ileri sıçramalar hâlâ reddedilir.
@@ -217,8 +222,19 @@ export async function POST(request: Request) {
     }
 
     if (action === "presence") {
+      if (!requestedSessionId) {
+        return jsonError(
+          "Ekran onayı için video oturumu başlatılamadı.",
+          409,
+          "PRESENCE_SESSION_REQUIRED"
+        );
+      }
+
       const heartbeatAge = secondsBetween(existing?.updated_at || null, now);
-      if (heartbeatAge === null || heartbeatAge > HEARTBEAT_MAX_GAP_SECONDS) {
+      if (
+        heartbeatAge === null ||
+        heartbeatAge > PRESENCE_RESPONSE_WINDOW_SECONDS
+      ) {
         return jsonError("Ekran onayı için aktif video oturumu bulunamadı.", 409, "PRESENCE_SESSION_INACTIVE");
       }
 

@@ -951,12 +951,20 @@ if (unlocked) {
                   setCompletionError("");
 
                   // Kontrol noktasına gelirken gönderilmiş heartbeat varsa
-                  // önce onun bitmesini bekle. Burada ikinci bir heartbeat
-                  // göndermek HLS'nin kesirli zaman farkını ileri sıçrama gibi
-                  // gösterebiliyor ve geçerli onayı gereksiz yere engelliyordu.
+                  // önce onun bitmesini bekle.
                   if (heartbeatPromiseRef.current) {
                     await heartbeatPromiseRef.current.catch(() => undefined);
                   }
+
+                  // Doğrulama penceresi açıkken video bilerek durduğu için
+                  // normal heartbeat zaman aşımına uğrayabilir. Kesirli medya
+                  // zamanı yerine sıradaki kesin kontrol noktasını kullanarak
+                  // aynı oturumu güvenli biçimde tazele; sunucu ileri sıçrama
+                  // kontrolünü bu istekte de uygulamaya devam eder.
+                  await queueVideoHeartbeat(
+                    checkpointSecond,
+                    Math.floor(videoDuration || 0)
+                  );
 
                   await saveVideoProgress("presence", checkpointSecond, Math.floor(videoDuration || 0));
 
@@ -1126,4 +1134,3 @@ const modalBox = {
   textAlign: "center" as const,
   boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
 };
-
