@@ -956,16 +956,10 @@ if (unlocked) {
                     await heartbeatPromiseRef.current.catch(() => undefined);
                   }
 
-                  // Doğrulama penceresi açıkken video bilerek durduğu için
-                  // normal heartbeat zaman aşımına uğrayabilir. Kesirli medya
-                  // zamanı yerine sıradaki kesin kontrol noktasını kullanarak
-                  // aynı oturumu güvenli biçimde tazele; sunucu ileri sıçrama
-                  // kontrolünü bu istekte de uygulamaya devam eder.
-                  await queueVideoHeartbeat(
-                    checkpointSecond,
-                    Math.floor(videoDuration || 0)
-                  );
-
+                  // Onay isteğinin kendisi canlı doğrulamadır. Video modal
+                  // nedeniyle duruyorken aynı saniye için ikinci heartbeat
+                  // göndermek HLS parça sınırında yanlış SEEK_BLOCKED hatası
+                  // üretiyordu. Kesin kontrol noktasını doğrudan kaydet.
                   await saveVideoProgress("presence", checkpointSecond, Math.floor(videoDuration || 0));
 
                   // Ref'leri state'ten önce ilerlet. Video yeniden oynatılırken
@@ -1134,3 +1128,4 @@ const modalBox = {
   textAlign: "center" as const,
   boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
 };
+
