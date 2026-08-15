@@ -47,6 +47,7 @@ type TrainingVideo = {
   video_url: string;
   duration_seconds?: number | null;
   sort_order?: number | null;
+  is_required?: boolean | null;
   unlocked?: boolean;
   progress?: VideoProgress | null;
 };
@@ -199,6 +200,70 @@ export default function TrainingDetailPage() {
     : 0;
 
   const totalVideos = hasV2Videos ? videos.length : 1;
+
+  // PAKET 2: Ana eğitim -> sıralı alt konu/video bölümleri.
+  // DİKKAT: 210 saniyelik ekran başı doğrulama ve video güvenlik
+  // mekanizmasına burada dokunulmaz. Bu bölüm yalnızca eğitim zincirini,
+  // görünümü ve bölüm geçişini yönetir.
+  const orderedTopics = useMemo(
+    () =>
+      [...videos].sort(
+        (a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0)
+      ),
+    [videos]
+  );
+
+  const requiredTopics = useMemo(
+    () => orderedTopics.filter((video) => video.is_required !== false),
+    [orderedTopics]
+  );
+
+  const completedRequiredTopics = requiredTopics.filter(
+    (video) => video.progress?.watch_completed === true
+  ).length;
+
+  const totalTrainingDurationSeconds = requiredTopics.reduce(
+    (sum, video) => sum + Math.max(0, Number(video.duration_seconds || 0)),
+    0
+  );
+
+  const totalTrainingWatchedSeconds = requiredTopics.reduce((sum, video) => {
+    const duration = Math.max(0, Number(video.duration_seconds || 0));
+    const watched = Math.max(
+      Number(video.progress?.watch_seconds || 0),
+      Number(video.progress?.max_watched_seconds || 0)
+    );
+    return sum + Math.min(duration || watched, watched);
+  }, 0);
+
+  const overallTrainingPercent =
+    totalTrainingDurationSeconds > 0
+      ? Math.min(
+          100,
+          Math.round(
+            (totalTrainingWatchedSeconds / totalTrainingDurationSeconds) * 100
+          )
+        )
+      : requiredTopics.length > 0
+      ? Math.round((completedRequiredTopics / requiredTopics.length) * 100)
+      : 0;
+
+  const isTopicUnlocked = (index: number) => {
+    if (index <= 0) return true;
+
+    for (let i = 0; i < index; i += 1) {
+      const previous = orderedTopics[i];
+      if (
+        previous?.is_required !== false &&
+        previous?.progress?.watch_completed !== true
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
   const videoChainCompleted = hasV2Videos
     ? (videos.length > 0 && completedVideos >= videos.length) ||
       training?.video_chain_completed === true ||
@@ -282,7 +347,7 @@ export default function TrainingDetailPage() {
     return found as TrainingDetail;
   };
 
-  const fetchVideos = async () => {
+  const fetchVideos = async (options?: { advanceFromVideoId?: string }) => {
     const res = await fetch(`/api/training/videos?assignmentId=${assignmentId}`, {
       method: "GET",
       cache: "no-store",
@@ -297,18 +362,70 @@ export default function TrainingDetailPage() {
     const json = await res.json();
     const rows = Array.isArray(json?.data) ? (json.data as TrainingVideo[]) : [];
 
-    setVideos(rows);
+    const orderedRows = [...rows].sort(
+      (a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0)
+    );
 
-    const firstActive =
-      rows.find((v) => v.unlocked && v.progress?.watch_completed !== true) ||
-      rows.find((v) => v.unlocked) ||
-      rows[0];
+    setVideos(orderedRows);
 
-    if (firstActive) {
-      setActiveVideoId((prev) => prev || firstActive.id);
+    const canOpenAtIndex = (index: number) => {
+      if (index <= 0) return true;
+
+      for (let i = 0; i < index; i += 1) {
+        const previous = orderedRows[i];
+        if (
+          previous?.is_required !== false &&
+          previous?.progress?.watch_completed !== true
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    };
+
+    let target: TrainingVideo | undefined;
+
+    // Bir alt konu yeni tamamlandıysa bir sonraki zorunlu/açık bölüme otomatik geç.
+    if (options?.advanceFromVideoId) {
+      const completedIndex = orderedRows.findIndex(
+        (video) => video.id === options.advanceFromVideoId
+      );
+
+      for (let i = completedIndex + 1; i < orderedRows.length; i += 1) {
+        const candidate = orderedRows[i];
+        if (
+          canOpenAtIndex(i) &&
+          candidate.progress?.watch_completed !== true
+        ) {
+          target = candidate;
+          break;
+        }
+      }
     }
 
-    return rows;
+    // Normal sayfa açılışında ilk tamamlanmamış ve sırası gelmiş bölümü aç.
+    if (!target) {
+      target = orderedRows.find(
+        (video, index) =>
+          canOpenAtIndex(index) &&
+          video.progress?.watch_completed !== true
+      );
+    }
+
+    // Bütün bölümler bittiyse son tamamlanan bölümü seçili bırak.
+    if (!target) {
+      target =
+        [...orderedRows].reverse().find(
+          (video) => video.progress?.watch_completed === true
+        ) || orderedRows[0];
+    }
+
+    if (target) {
+      setActiveVideoId(target.id);
+    }
+
+    return orderedRows;
   };
 
   const reloadAll = async () => {
@@ -330,16 +447,6 @@ export default function TrainingDetailPage() {
 
       await fetchTraining();
       await fetchVideos();
-      const unlocked = videos.find(
-  (v) =>
-    v.id !== activeVideo?.id &&
-    v.unlocked &&
-    v.progress?.watch_completed !== true
-);
-
-if (unlocked) {
-  setActiveVideoId(unlocked.id);
-}
     } catch (err: any) {
       setError(err?.message || "Eğitim yüklenemedi.");
       setTraining(null);
@@ -628,8 +735,24 @@ if (unlocked) {
       }
 
       setProgressSaved(true);
+      const completedVideoId = activeVideo?.id || "";
       await fetchTraining();
-      await fetchVideos();
+      const refreshedVideos = await fetchVideos({
+        advanceFromVideoId: completedVideoId,
+      });
+
+      const hasNextTopic = refreshedVideos.some(
+        (video) =>
+          video.id !== completedVideoId &&
+          video.progress?.watch_completed !== true
+      );
+
+      setCompletionError(
+        hasNextTopic
+          ? "Bu alt konu tamamlandı. Sıradaki alt konu açıldı."
+          : ""
+      );
+
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       console.error("video complete error:", err);
@@ -659,7 +782,7 @@ if (unlocked) {
       return "Eğitim süresi tamamlanmadan final açılmaz.";
     }
 
-    return "Tüm videolar tamamlanmadan final açılmaz.";
+    return "Tüm zorunlu alt konular tamamlanmadan final açılmaz.";
   }, [
     resetRequired,
     finalPassed,
@@ -737,37 +860,153 @@ if (unlocked) {
           </div>
 
           {hasV2Videos ? (
-            <div style={{ marginTop: 22, padding: 16, borderRadius: 14, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
-              <h3 style={{ marginTop: 0 }}>Eğitim Video Akışı</h3>
+            <div
+              style={{
+                marginTop: 22,
+                padding: 18,
+                borderRadius: 14,
+                background: "#f8fafc",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  marginBottom: 14,
+                }}
+              >
+                <div>
+                  <h3 style={{ margin: 0 }}>Eğitim Alt Konuları</h3>
+                  <div style={{ marginTop: 6, color: "#64748b", fontSize: 13 }}>
+                    Tek eğitim içinde sıralı ilerleme • Önceki zorunlu alt konu
+                    tamamlanmadan sonraki bölüm açılmaz.
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    background: videoChainCompleted ? "#dcfce7" : "#eff6ff",
+                    color: videoChainCompleted ? "#166534" : "#1d4ed8",
+                    fontSize: 13,
+                    fontWeight: 800,
+                  }}
+                >
+                  {completedRequiredTopics} / {requiredTopics.length} alt konu tamamlandı
+                </div>
+              </div>
+
+              <div
+                style={{
+                  height: 9,
+                  borderRadius: 999,
+                  background: "#e5e7eb",
+                  overflow: "hidden",
+                  marginBottom: 16,
+                }}
+              >
+                <div
+                  style={{
+                    width: `${overallTrainingPercent}%`,
+                    height: "100%",
+                    background: "#2563eb",
+                    transition: "width .2s ease",
+                  }}
+                />
+              </div>
 
               <div style={{ display: "grid", gap: 10 }}>
-                {videos.map((video, index) => {
+                {orderedTopics.map((video, index) => {
                   const completed = video.progress?.watch_completed === true;
                   const selected = activeVideo?.id === video.id;
-                  const locked = !video.unlocked;
+                  const locked = !isTopicUnlocked(index);
 
                   return (
                     <button
                       key={video.id}
                       type="button"
-                      disabled={locked}
+                      disabled={locked || finalPassed}
                       onClick={() => {
-                        if (!locked) setActiveVideoId(video.id);
+                        if (!locked && !finalPassed) {
+                          setActiveVideoId(video.id);
+                        }
                       }}
                       style={{
                         textAlign: "left",
-                        padding: "12px 14px",
+                        padding: "13px 14px",
                         borderRadius: 12,
-                        border: selected ? "2px solid #2563eb" : "1px solid #e5e7eb",
-                        background: locked ? "#f3f4f6" : completed ? "#f0fdf4" : "#fff",
-                        cursor: locked ? "not-allowed" : "pointer",
+                        border: selected
+                          ? "2px solid #2563eb"
+                          : "1px solid #e5e7eb",
+                        background: locked
+                          ? "#f3f4f6"
+                          : completed
+                          ? "#f0fdf4"
+                          : selected
+                          ? "#eff6ff"
+                          : "#fff",
+                        cursor:
+                          locked || finalPassed ? "not-allowed" : "pointer",
+                        opacity: locked ? 0.72 : 1,
                       }}
                     >
-                      <b>
-                        {index + 1}. {video.title}
-                      </b>
-                      <div style={{ marginTop: 4, fontSize: 13, color: locked ? "#6b7280" : completed ? "#166534" : "#374151" }}>
-                        {locked ? "Kilitli" : completed ? "Tamamlandı" : selected ? "Aktif Video" : "Açık"}
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 10,
+                          alignItems: "center",
+                        }}
+                      >
+                        <b>
+                          {index + 1}. {video.title}
+                        </b>
+                        <span style={{ fontSize: 12, fontWeight: 800 }}>
+                          {completed
+                            ? "✓ Tamamlandı"
+                            : locked
+                            ? "🔒 Kilitli"
+                            : selected
+                            ? "▶ Aktif Alt Konu"
+                            : "Açık"}
+                        </span>
+                      </div>
+
+                      {video.description ? (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: 13,
+                            color: "#64748b",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {video.description}
+                        </div>
+                      ) : null}
+
+                      <div
+                        style={{
+                          marginTop: 7,
+                          fontSize: 12,
+                          color: completed
+                            ? "#166534"
+                            : locked
+                            ? "#6b7280"
+                            : "#475569",
+                        }}
+                      >
+                        {formatSeconds(Number(video.duration_seconds || 0))}
+                        {locked
+                          ? " • Önceki zorunlu alt konuyu tamamlayın"
+                          : completed
+                          ? " • Bu bölüm başarıyla tamamlandı"
+                          : " • Sırası gelmiş eğitim bölümü"}
                       </div>
                     </button>
                   );
@@ -790,11 +1029,42 @@ if (unlocked) {
                 fontSize: 13,
               }}
             >
-              <Info label="Toplam Video" value={`${completedVideos} / ${totalVideos}`} />
-              <Info label="Video Süresi" value={formatSeconds(videoDuration)} />
-              <Info label="İzlenen Süre" value={formatSeconds(effectiveWatchSeconds)} />
-              <Info label="Ekran Onayı" value={`${effectiveClickCount} / ${requiredClicks}`} />
-              <Info label="İlerleme" value={`%${progressPercent}`} />
+              <Info
+                label="Alt Konu"
+                value={`${completedRequiredTopics} / ${requiredTopics.length}`}
+              />
+              <Info
+                label="Toplam Eğitim Süresi"
+                value={formatSeconds(totalTrainingDurationSeconds)}
+              />
+              <Info
+                label="Toplam İzlenen"
+                value={formatSeconds(totalTrainingWatchedSeconds)}
+              />
+              <Info
+                label="Aktif Alt Konu"
+                value={
+                  activeVideo
+                    ? `${orderedTopics.findIndex((v) => v.id === activeVideo.id) + 1} / ${orderedTopics.length}`
+                    : "-"
+                }
+              />
+              <Info
+                label="Aktif Video Süresi"
+                value={formatSeconds(videoDuration)}
+              />
+              <Info
+                label="Aktif Video İzlenen"
+                value={formatSeconds(effectiveWatchSeconds)}
+              />
+              <Info
+                label="Aktif Video Ekran Onayı"
+                value={`${effectiveClickCount} / ${requiredClicks}`}
+              />
+              <Info
+                label="Genel İlerleme"
+                value={`%${overallTrainingPercent}`}
+              />
             </div>
           ) : null}
 
@@ -821,7 +1091,23 @@ if (unlocked) {
               ) : nativeVideo ? (
                 <>
                   {activeVideo ? (
-                    <h3 style={{ marginTop: 0 }}>{activeVideo.title}</h3>
+                    <div style={{ marginBottom: 12 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                          color: "#2563eb",
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                        }}
+                      >
+                        Aktif Alt Konu
+                      </div>
+                      <h3 style={{ margin: "5px 0 0" }}>
+                        {orderedTopics.findIndex((v) => v.id === activeVideo.id) + 1}.{" "}
+                        {activeVideo.title}
+                      </h3>
+                    </div>
                   ) : null}
 
                   <HlsTrainingPlayer
@@ -1192,5 +1478,3 @@ const modalBox = {
   textAlign: "center" as const,
   boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
 };
-
-
