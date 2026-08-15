@@ -8,6 +8,7 @@ export type PreparedHlsVideo = {
   durationSeconds: number;
   assets: HlsAsset[];
   segmentCount: number;
+  totalOutputBytes: number;
 };
 
 export type UploadSession = {
