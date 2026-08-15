@@ -472,6 +472,25 @@ if (unlocked) {
     return null;
   };
 
+  const queueVideoHeartbeat = (
+    currentSecond: number,
+    duration: number
+  ): Promise<unknown> => {
+    // Heartbeat istekleri paralel gönderilirse kısa videolarda 4. saniye
+    // isteği 2. saniye isteğinden önce sunucuya ulaşabilir. Sunucu bunu
+    // haklı olarak ileri sarma kabul eder. İstekleri tek kuyrukta, üretildiği
+    // sırayla göndererek güvenlik kontrolünü gevşetmeden bu yarışı önlüyoruz.
+    const previous = heartbeatPromiseRef.current ?? Promise.resolve();
+    const next = previous
+      .catch(() => undefined)
+      .then(() =>
+        saveVideoProgress("heartbeat", currentSecond, duration)
+      );
+
+    heartbeatPromiseRef.current = next;
+    return next;
+  };
+
   const handleLoadedMetadata = () => {
     const player = videoRef.current;
     if (!player) return;
@@ -534,12 +553,10 @@ if (unlocked) {
 
       if (shouldSendHeartbeat) {
         lastHeartbeatSecondRef.current = flooredCurrent;
-        const heartbeatPromise = saveVideoProgress(
-          "heartbeat",
+        const heartbeatPromise = queueVideoHeartbeat(
           flooredCurrent,
           Math.floor(videoDuration || 0)
         );
-        heartbeatPromiseRef.current = heartbeatPromise;
         void heartbeatPromise.catch((err) =>
           console.error("heartbeat error:", err)
         );
@@ -811,12 +828,10 @@ if (unlocked) {
                         lastHeartbeatSecondRef.current < 0
                       ) {
                         lastHeartbeatSecondRef.current = 0;
-                        const initialHeartbeatPromise = saveVideoProgress(
-                          "heartbeat",
+                        const initialHeartbeatPromise = queueVideoHeartbeat(
                           0,
                           Math.floor(videoDuration || activeVideo.duration_seconds || 0)
                         );
-                        heartbeatPromiseRef.current = initialHeartbeatPromise;
                         void initialHeartbeatPromise.catch((err) => {
                           console.error("initial heartbeat error:", err);
                           setCompletionError(
