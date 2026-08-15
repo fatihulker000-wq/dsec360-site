@@ -16,5 +16,4 @@ export type UploadSession = {
   basePath: string;
   objectPath: string;
   token: string;
-  endpoint: string;
 };

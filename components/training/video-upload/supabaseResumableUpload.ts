@@ -1,5 +1,19 @@
-import * as tus from "tus-js-client";
+import { createClient } from "@supabase/supabase-js";
 import type { HlsAsset, UploadSession } from "./types";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+function getBrowserSupabase() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL veya NEXT_PUBLIC_SUPABASE_ANON_KEY eksik."
+    );
+  }
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 export async function createAssetUploadSession(params: {
   trainingId: string;
@@ -19,36 +33,32 @@ export async function createAssetUploadSession(params: {
     }),
   });
   const json = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(json?.error || "Yükleme oturumu oluşturulamadı.");
+  if (!response.ok) {
+    throw new Error(json?.detail || json?.error || "Yükleme oturumu oluşturulamadı.");
+  }
   return json.data as UploadSession;
 }
 
-export function uploadHlsAsset(
+export async function uploadHlsAsset(
   asset: HlsAsset,
   session: UploadSession,
   onProgress?: (uploaded: number, total: number) => void
 ) {
-  return new Promise<void>((resolve, reject) => {
-    const upload = new tus.Upload(asset.blob, {
-      endpoint: session.endpoint,
-      retryDelays: [0, 2000, 5000, 10000, 20000],
-      chunkSize: 6 * 1024 * 1024,
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      headers: { "x-signature": session.token },
-      metadata: {
-        bucketName: session.bucket,
-        objectName: session.objectPath,
-        contentType: asset.contentType,
-        cacheControl: "3600",
-      },
-      onError: (error) => reject(new Error(`${asset.name} yüklenemedi: ${error.message}`)),
-      onProgress,
-      onSuccess: () => resolve(),
+  onProgress?.(0, asset.blob.size);
+
+  // createSignedUploadUrl ile üretilen token TUS x-signature değildir.
+  // Token yalnızca uploadToSignedUrl üzerinden kullanılmalıdır.
+  const supabase = getBrowserSupabase();
+  const { error } = await supabase.storage
+    .from(session.bucket)
+    .uploadToSignedUrl(session.objectPath, session.token, asset.blob, {
+      contentType: asset.contentType,
+      cacheControl: "3600",
+      upsert: false,
     });
-    upload.findPreviousUploads().then((previous) => {
-      if (previous.length > 0) upload.resumeFromPreviousUpload(previous[0]);
-      upload.start();
-    }).catch(reject);
-  });
+
+  if (error) {
+    throw new Error(`${asset.name} yüklenemedi: ${error.message}`);
+  }
+  onProgress?.(asset.blob.size, asset.blob.size);
 }

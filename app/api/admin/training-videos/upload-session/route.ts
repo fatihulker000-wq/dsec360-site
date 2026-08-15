@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 const BUCKET = "egitim-videolari";
 const ALLOWED_FILES = /^(index\.m3u8|segment-\d{5}\.ts)$/;
 const MAX_OBJECT_BYTES = 45 * 1024 * 1024;
+
 function supabaseAdmin() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
     if (auth !== "ok" || !["super_admin", "company_admin"].includes(role || "")) {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
+
     const body = await request.json();
     const trainingId = String(body?.trainingId || "").trim();
     const uploadId = String(body?.uploadId || "").trim();
@@ -34,9 +36,13 @@ export async function POST(request: Request) {
     if (!/^[0-9a-f-]{36}$/i.test(trainingId) || !/^[0-9a-f-]{36}$/i.test(uploadId)) {
       return NextResponse.json({ error: "Geçersiz kimlik." }, { status: 400 });
     }
+
     const supabase = supabaseAdmin();
-    const { data: training } = await supabase.from("trainings").select("id")
-      .eq("id", trainingId).maybeSingle();
+    const { data: training, error: trainingError } = await supabase
+      .from("trainings").select("id").eq("id", trainingId).maybeSingle();
+    if (trainingError) {
+      return NextResponse.json({ error: "Eğitim doğrulanamadı.", detail: trainingError.message }, { status: 500 });
+    }
     if (!training) return NextResponse.json({ error: "Eğitim bulunamadı." }, { status: 404 });
 
     const basePath = `trainings/${trainingId}/${uploadId}`;
@@ -44,15 +50,18 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.storage.from(BUCKET)
       .createSignedUploadUrl(objectPath, { upsert: false });
     if (error || !data?.token) {
-      return NextResponse.json({ error: "İmzalı yükleme oluşturulamadı.", detail: error?.message }, { status: 500 });
+      return NextResponse.json({
+        error: "İmzalı yükleme oluşturulamadı.", detail: error?.message,
+      }, { status: 500 });
     }
-    const projectUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const projectId = new URL(projectUrl).hostname.split(".")[0];
-    return NextResponse.json({ success: true, data: {
-      bucket: BUCKET, basePath, objectPath, token: data.token,
-      endpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
-    }});
+
+    return NextResponse.json({
+      success: true,
+      data: { bucket: BUCKET, basePath, objectPath, token: data.token },
+    });
   } catch (cause) {
-    return NextResponse.json({ error: cause instanceof Error ? cause.message : "Sunucu hatası." }, { status: 500 });
+    return NextResponse.json({
+      error: cause instanceof Error ? cause.message : "Sunucu hatası.",
+    }, { status: 500 });
   }
 }
