@@ -1059,7 +1059,7 @@ const investigationIncidents =
           value={selectedFirmId}
           onChange={(event) =>
             setSelectedFirmId(
-              event.target.value
+              event.currentTarget.value
             )
           }
           style={{
@@ -2353,7 +2353,7 @@ function IncidentSelector({
         <select
           value={selectedIncidentId}
           onChange={(event) =>
-            onChange(event.target.value)
+            onChange(event.currentTarget.value)
           }
           style={{
             minHeight: 46,
@@ -3204,7 +3204,7 @@ function EditField({
         value={value}
         onChange={(event) =>
           onChange(
-            event.target.value
+            event.currentTarget.value
           )
         }
         style={{
