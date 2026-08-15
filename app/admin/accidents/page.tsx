@@ -22,6 +22,12 @@ const SgkCenterView = SgkCenter as ComponentType<any>;
 const IbysCenterView = IbysCenter as ComponentType<any>;
 const IncidentAuditCenterView = IncidentAuditCenter as ComponentType<any>;
 
+const browserWindow = globalThis as unknown as {
+  alert: (message?: string) => void;
+  confirm: (message?: string) => boolean;
+  print: () => void;
+};
+
 type AccidentRow = {
   id: number;
   title?: string | null;
@@ -304,7 +310,7 @@ export default function AdminAccidentsPage() {
           ? errorValue.message
           : "Güncelleme hatası.";
 
-      window.alert(message);
+      browserWindow.alert(message);
     } finally {
       setSaving(false);
     }
@@ -314,7 +320,7 @@ export default function AdminAccidentsPage() {
     id: number
   ) => {
     const firstConfirm =
-      window.confirm(
+      browserWindow.confirm(
         "Bu kaza/olay kaydı web listesinden kaldırılacak ve mobil uygulamaya silindi bilgisi gönderilecektir. Devam edilsin mi?"
       );
 
@@ -323,7 +329,7 @@ export default function AdminAccidentsPage() {
     }
 
     const secondConfirm =
-      window.confirm(
+      browserWindow.confirm(
         "Bu işlem kaydı kalıcı olarak veritabanından silmez; senkronizasyon için silinmiş olarak işaretler. Kaydı silmek istediğinize emin misiniz?"
       );
 
@@ -371,7 +377,7 @@ export default function AdminAccidentsPage() {
           ? errorValue.message
           : "Silme işlemi sırasında hata oluştu.";
 
-      window.alert(message);
+      browserWindow.alert(message);
     } finally {
       setDeleting(false);
     }
@@ -2619,7 +2625,7 @@ function IncidentReportsCenter({
       >
         <button
           type="button"
-          onClick={() => window.print()}
+          onClick={() => browserWindow.print()}
           style={reportButtonStyle(
             "#111827"
           )}
