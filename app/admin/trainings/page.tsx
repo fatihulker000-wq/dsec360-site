@@ -14,6 +14,7 @@ import AssignmentCenter, {
 import ParticipantImportCenter from "../../../components/training-v2/participants";
 import TrainingCatalog from "../../../components/training-v2/catalog";
 import TrainingExamCenter from "../../../components/training-v2/exams";
+import TrainingExamQuestionManager from "../../../components/training-v2/exams/TrainingExamQuestionManager";
 import TrainingCertificateCenter from "../../../components/training-v2/certificates";
 import TrainingAuditCenter from "../../../components/training-v2/audit";
 import TrainingExecutiveDashboard from "../../../components/training-v2/executive";
@@ -915,6 +916,14 @@ if (companyFilter !== "all") {
           selectedTrainingId={trainingId}
           onSelectTraining={setTrainingId}
         />
+
+        {selectedTrainingInfo ? (
+          <TrainingExamQuestionManager
+            trainingId={trainingId}
+            trainingTitle={selectedTrainingInfo.title}
+            onChanged={loadAll}
+          />
+        ) : null}
 
         <TrainingCertificateCenter
           trainings={trainings}
