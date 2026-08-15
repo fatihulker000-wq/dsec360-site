@@ -787,6 +787,32 @@ if (unlocked) {
                     onCanPlay={() => {
                       setPlaybackReady(true);
                       setVideoLoadError("");
+
+                      // Çok kısa HLS videolarda tarayıcı ara timeupdate
+                      // üretmeden doğrudan ended olayına geçebilir. Aktif
+                      // izleme oturumunu video oynatılabilir hâle geldiği anda
+                      // oluştur; böylece bitiş isteğinin doğrulayacağı bir
+                      // sunucu heartbeat kaydı her zaman bulunur.
+                      if (
+                        hasV2Videos &&
+                        activeVideo &&
+                        lastHeartbeatSecondRef.current < 0
+                      ) {
+                        lastHeartbeatSecondRef.current = 0;
+                        saveVideoProgress(
+                          "heartbeat",
+                          0,
+                          Math.floor(videoDuration || activeVideo.duration_seconds || 0)
+                        ).catch((err) => {
+                          console.error("initial heartbeat error:", err);
+                          setCompletionError(
+                            err instanceof Error
+                              ? err.message
+                              : "Aktif izleme oturumu başlatılamadı."
+                          );
+                          lastHeartbeatSecondRef.current = -1;
+                        });
+                      }
                     }}
                     onTimeUpdate={handleTimeUpdate}
                     onSeeking={handleSeeking}
