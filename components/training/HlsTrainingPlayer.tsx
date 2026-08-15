@@ -46,8 +46,15 @@ const HlsTrainingPlayer = forwardRef<
 ) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const onErrorRef = useRef(onError);
 
   useImperativeHandle(forwardedRef, () => videoRef.current!, []);
+
+  // Callback değiştiğinde HLS motorunu yeniden kurma. Yalnızca en güncel
+  // callback'i ref içinde tut. Aksi halde parent render'ında video sıfırlanır.
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -72,7 +79,7 @@ const HlsTrainingPlayer = forwardRef<
     }
 
     if (!Hls.isSupported()) {
-      onError?.("Bu tarayıcı HLS eğitim videosunu desteklemiyor.");
+      onErrorRef.current?.("Bu tarayıcı HLS eğitim videosunu desteklemiyor.");
       return;
     }
 
@@ -94,25 +101,27 @@ const HlsTrainingPlayer = forwardRef<
 
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
         hls.startLoad();
-        onError?.("Video bağlantısı kesildi; yeniden bağlanılıyor.");
+        onErrorRef.current?.("Video bağlantısı kesildi; yeniden bağlanılıyor.");
         return;
       }
 
       if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
         hls.recoverMediaError();
-        onError?.("Video oynatma hatası düzeltilmeye çalışılıyor.");
+        onErrorRef.current?.("Video oynatma hatası düzeltilmeye çalışılıyor.");
         return;
       }
 
-      onError?.("HLS eğitim videosu yüklenemedi.");
+      onErrorRef.current?.("HLS eğitim videosu yüklenemedi.");
       hls.destroy();
     });
 
     return () => {
       hls.destroy();
-      hlsRef.current = null;
+      if (hlsRef.current === hls) {
+        hlsRef.current = null;
+      }
     };
-  }, [src, onError]);
+  }, [src]);
 
   useEffect(() => {
     const pauseWhenHidden = () => {
@@ -153,7 +162,7 @@ const HlsTrainingPlayer = forwardRef<
         onRateChange?.(event);
       }}
       onEnded={onEnded}
-      onError={() => onError?.("Video dosyası yüklenemedi.")}
+      onError={() => onErrorRef.current?.("Video dosyası yüklenemedi.")}
       style={{
         width: "100%",
         borderRadius: 16,
