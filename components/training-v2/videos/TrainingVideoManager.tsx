@@ -85,6 +85,7 @@ export default function TrainingVideoManager({
     useState<VideoDraft>(EMPTY_DRAFT);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [showManualUrlForm, setShowManualUrlForm] = useState(false);
 
   const loadVideos = useCallback(async () => {
     if (!trainingId) {
@@ -611,14 +612,111 @@ export default function TrainingVideoManager({
         ) : null}
       </div>
 
-      <HlsVideoUploader
-        trainingId={trainingId}
-        trainingTitle={trainingTitle}
-        nextSortOrder={nextSuggestedSortOrder}
-        onCompleted={notifyChanged}
-      />
-
       <div className={styles.createPanel}>
+        <div
+          style={{
+            marginBottom: 18,
+            paddingBottom: 18,
+            borderBottom: "1px solid #e5e7eb",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: 12,
+              flexWrap: "wrap",
+              marginBottom: 12,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 900,
+                  color: "#2563eb",
+                  textTransform: "uppercase",
+                  letterSpacing: ".04em",
+                }}
+              >
+                Yeni Alt Konu Ekle
+              </div>
+              <h3 style={{ margin: "4px 0 6px" }}>
+                Bilgisayardan video yükleyerek alt konu oluştur
+              </h3>
+              <p
+                style={{
+                  margin: 0,
+                  color: "#64748b",
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                }}
+              >
+                Aşağıdaki yükleyicideki <strong>Video başlığı</strong> alanına
+                alt konu başlığını yazın. Dosyayı seçip yüklediğinizde video
+                otomatik olarak bu <strong>{trainingTitle}</strong> ana
+                eğitimine <strong>{nextSuggestedSortOrder}. alt konu</strong>{" "}
+                olarak eklenir. Video URL&apos;sini elle kopyalamanız gerekmez.
+              </p>
+            </div>
+
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: 999,
+                background: "#eff6ff",
+                color: "#1d4ed8",
+                fontSize: 12,
+                fontWeight: 900,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Sıradaki Alt Konu: {nextSuggestedSortOrder}
+            </div>
+          </div>
+
+          <HlsVideoUploader
+            trainingId={trainingId}
+            trainingTitle={trainingTitle}
+            nextSortOrder={nextSuggestedSortOrder}
+            onCompleted={async () => {
+              setMessage(
+                `${nextSuggestedSortOrder}. alt konu videosu yüklendi ve ana eğitime eklendi.`
+              );
+              setError("");
+              await notifyChanged();
+            }}
+          />
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: showManualUrlForm ? 16 : 0,
+          }}
+        >
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => setShowManualUrlForm((current) => !current)}
+          >
+            {showManualUrlForm
+              ? "Manuel URL Alanını Kapat"
+              : "Gelişmiş: Video URL ile Alt Konu Ekle"}
+          </button>
+
+          {!showManualUrlForm ? (
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              Normal kullanımda yukarıdaki dosya yükleme alanını kullanın.
+            </span>
+          ) : null}
+        </div>
+
+        {showManualUrlForm ? (
+          <>
         <div className={styles.formGrid}>
           <label>
             <span>Alt konu başlığı</span>
@@ -635,7 +733,7 @@ export default function TrainingVideoManager({
           </label>
 
           <label>
-            <span>Alt konu video URL</span>
+            <span>Alt konu video URL (manuel)</span>
             <input
               value={draft.videoUrl}
               onChange={(event) =>
@@ -701,8 +799,10 @@ export default function TrainingVideoManager({
           disabled={saving}
           onClick={saveVideo}
         >
-          {saving ? "Kaydediliyor..." : "Alt Konu Ekle"}
+          {saving ? "Kaydediliyor..." : "URL ile Alt Konu Ekle"}
         </button>
+          </>
+        ) : null}
       </div>
 
       {editingId ? (
@@ -808,6 +908,19 @@ export default function TrainingVideoManager({
               Vazgeç
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {orderedVideos.length > 0 ? (
+        <div
+          style={{
+            margin: "18px 0 10px",
+            fontSize: 13,
+            fontWeight: 800,
+            color: "#334155",
+          }}
+        >
+          Eklenen Alt Konular • Aynı ana eğitim içinde sıralı oynatılır
         </div>
       ) : null}
 
