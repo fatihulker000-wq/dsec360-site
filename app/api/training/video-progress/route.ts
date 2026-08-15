@@ -7,11 +7,6 @@ import { NextResponse } from "next/server";
 // heartbeat arasında yapay olarak 1 saniyelik fark oluşabilir.
 const HEARTBEAT_GRACE_SECONDS = 2;
 const HEARTBEAT_MAX_GAP_SECONDS = 45;
-// Doğrulama penceresi videoyu bilerek durdurur. Kullanıcı pencereyi hemen
-// onaylamayabilir; bu nedenle normal oynatma heartbeat süresi burada
-// kullanılamaz. Onay yine aynı sayfa oturum kimliği ve kesin kontrol noktası
-// ile doğrulanır.
-const PRESENCE_RESPONSE_WINDOW_SECONDS = 15 * 60;
 // HLS, özellikle kısa/az segmentli videolarda timeupdate olayını her saniye
 // üretmeyebilir. Bu pencere yalnızca ardışık ve sunucuda doğrulanan konumlar
 // içindir; daha büyük ileri sıçramalar hâlâ reddedilir.
@@ -222,29 +217,54 @@ export async function POST(request: Request) {
     }
 
     if (action === "presence") {
-      // Presence isteğinin kendisi oturum açmış kullanıcının canlı onayıdır.
-      // playbackSessionId veritabanında tutulmadığı için istemci belleğindeki
-      // kimliği burada zorunlu kılmak güvenlik sağlamıyor ve HLS yenilemesinde
-      // geçerli onayı reddediyordu. Aşağıdaki sıralı checkpoint ve sunucuda
-      // doğrulanmış izleme konumu kontrolleri korunmaktadır.
-      const checkpoint = Math.floor(position / PRESENCE_INTERVAL_SECONDS);
+      // İstemci her zaman kesin checkpoint saniyesini gönderir: 210, 420,
+      // 630, 840... Burada sırayı sunucudaki presence_clicks belirler.
+      const requestedCheckpoint = Math.floor(position / PRESENCE_INTERVAL_SECONDS);
+      const checkpointSecond = requestedCheckpoint * PRESENCE_INTERVAL_SECONDS;
       const expectedCheckpoint = lastPresenceCheckpoint + 1;
-      const checkpointSecond = checkpoint * PRESENCE_INTERVAL_SECONDS;
       const verifiedPosition = Math.max(oldMax, oldClientPosition);
 
       if (
-        checkpoint !== expectedCheckpoint ||
-        checkpoint <= 0 ||
-        checkpoint > requiredClicks ||
+        requestedCheckpoint <= 0 ||
+        requestedCheckpoint > requiredClicks ||
         position !== checkpointSecond
       ) {
-        return jsonError("Geçersiz veya tekrarlanan ekran onayı.", 409, "INVALID_PRESENCE_CHECKPOINT");
+        return jsonError(
+          "Geçersiz ekran onayı.",
+          409,
+          "INVALID_PRESENCE_CHECKPOINT"
+        );
       }
 
-      // Onay yalnızca sunucunun daha önce doğruladığı oynatma konumu ilgili
-      // kontrol noktasına gerçekten ulaşmışsa kabul edilir. HLS timeupdate
-      // olaylarının birkaç saniye seyrek gelmesine sınırlı tolerans tanınır;
-      // kullanıcı ileri sararak bu kontrolü geçemez.
+      // Aynı checkpoint daha önce kaydedildi ancak istemci cevabı alamadıysa
+      // bunu hata sayma. İdempotent başarı döndürmek, özellikle uzun eğitimlerde
+      // 3/8 -> 4/8 geçişinde modalın sonsuza kadar açık kalmasını engeller.
+      if (requestedCheckpoint <= lastPresenceCheckpoint) {
+        return NextResponse.json({
+          success: true,
+          idempotent: true,
+          playbackSessionId: sessionId,
+          progress: existing,
+        });
+      }
+
+      // Bir checkpoint atlanamaz. Örn. sunucuda 3 kayıtlıysa yalnızca 4 kabul edilir.
+      if (requestedCheckpoint !== expectedCheckpoint) {
+        return NextResponse.json(
+          {
+            error: "Ekran onayı sırası uyuşmuyor. Sayfa ilerlemesi yenilenmelidir.",
+            code: "PRESENCE_SEQUENCE_MISMATCH",
+            expectedCheckpoint,
+            currentPresenceClicks: lastPresenceCheckpoint,
+            playbackSessionId: sessionId,
+          },
+          { status: 409 }
+        );
+      }
+
+      // Popup timeupdate ile checkpoint'e ulaşıldığında açılır. Son heartbeat HLS
+      // parça sınırı nedeniyle birkaç saniye geride kalabilir; yalnızca bu doğal
+      // fark kadar tolerans verilir. Daha büyük sıçrama yine kabul edilmez.
       if (verifiedPosition < checkpointSecond - MAX_VERIFIED_MEDIA_STEP_SECONDS) {
         return NextResponse.json(
           {
@@ -257,8 +277,8 @@ export async function POST(request: Request) {
         );
       }
 
-      presenceClicks = checkpoint;
-      lastPresenceCheckpoint = checkpoint;
+      presenceClicks = requestedCheckpoint;
+      lastPresenceCheckpoint = requestedCheckpoint;
       watchSeconds = Math.min(duration, Math.max(oldWatch, checkpointSecond));
       maxWatchedSeconds = Math.max(oldMax, checkpointSecond);
       lastClientPosition = Math.max(oldClientPosition, checkpointSecond);
@@ -312,25 +332,73 @@ export async function POST(request: Request) {
       completedAt = existing?.completed_at || nowIso;
     }
 
-    const payload = {
+    const basePayload = {
       assignment_id: assignmentId,
       video_id: videoId,
       watch_seconds: watchSeconds,
       max_watched_seconds: maxWatchedSeconds,
       last_position_seconds: lastClientPosition,
       locked_duration_seconds: duration,
-      presence_clicks: presenceClicks,
       required_presence_clicks: requiredClicks,
-      watch_completed: watchCompleted,
-      watch_completed_at: watchCompletedAt,
       updated_at: nowIso,
     };
 
-    const saveQuery = existing?.id
-      ? supabase.from("training_video_progress").update(payload).eq("id", existing.id)
-      : supabase.from("training_video_progress").insert(payload);
+    // KRİTİK YARIŞ DÜZELTMESİ:
+    // Heartbeat isteği eski bir satır snapshot'ı ile çalışırken presence kaydı
+    // tamamlanırsa, heartbeat'in daha sonra yaptığı genel UPDATE eski
+    // presence_clicks değerini tekrar yazabiliyordu. Bu da ekranda 3/8
+    // görünürken sunucunun 2 beklemesine ve 14:00 onayının reddedilmesine yol
+    // açıyordu. Artık heartbeat presence alanlarına ASLA dokunmaz.
+    const updatePayload =
+      action === "heartbeat"
+        ? {
+            watch_seconds: watchSeconds,
+            max_watched_seconds: maxWatchedSeconds,
+            last_position_seconds: lastClientPosition,
+            locked_duration_seconds: duration,
+            required_presence_clicks: requiredClicks,
+            updated_at: nowIso,
+          }
+        : action === "presence"
+        ? {
+            watch_seconds: watchSeconds,
+            max_watched_seconds: maxWatchedSeconds,
+            last_position_seconds: lastClientPosition,
+            locked_duration_seconds: duration,
+            presence_clicks: presenceClicks,
+            required_presence_clicks: requiredClicks,
+            updated_at: nowIso,
+          }
+        : {
+            watch_seconds: watchSeconds,
+            max_watched_seconds: maxWatchedSeconds,
+            last_position_seconds: lastClientPosition,
+            locked_duration_seconds: duration,
+            presence_clicks: presenceClicks,
+            required_presence_clicks: requiredClicks,
+            watch_completed: watchCompleted,
+            watch_completed_at: watchCompletedAt,
+            updated_at: nowIso,
+          };
 
-    const { data: savedProgress, error: saveError } = await saveQuery.select().maybeSingle();
+    const insertPayload = {
+      ...basePayload,
+      presence_clicks: presenceClicks,
+      watch_completed: watchCompleted,
+      watch_completed_at: watchCompletedAt,
+    };
+
+    const saveQuery = existing?.id
+      ? supabase
+          .from("training_video_progress")
+          .update(updatePayload)
+          .eq("id", existing.id)
+      : supabase.from("training_video_progress").insert(insertPayload);
+
+    const { data: savedProgress, error: saveError } = await saveQuery
+      .select()
+      .maybeSingle();
+
     // Complete isteğinde esas kayıt eğitim atamasıdır. Ara ilerleme tablosunda
     // eski bir constraint/şema problemi bulunsa bile yüzde 100 izlenmiş video
     // final sınavını sonsuza kadar kilitlememelidir. Heartbeat/presence hataları
@@ -422,7 +490,7 @@ export async function POST(request: Request) {
       progress:
         savedProgress ||
         (action === "complete"
-          ? { ...payload, id: existing?.id || null }
+          ? { ...insertPayload, id: existing?.id || null }
           : null),
       totalVideos,
       completedVideos,

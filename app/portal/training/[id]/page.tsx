@@ -467,7 +467,7 @@ if (unlocked) {
         throw new Error(json?.error || "Video ilerlemesi kaydedilemedi.");
       }
 
-      return response;
+      return { response, json };
     }
 
     if (action === "heartbeat") {
@@ -939,53 +939,117 @@ if (unlocked) {
                 if (presenceSaving) return;
 
                 const player = videoRef.current;
-                // Özellikle kayıtlı konumdan devam edildiğinde oynatıcı birden
-                // fazla kontrol noktasının ilerisinde olabilir. Sunucuya mevcut
-                // medya konumu yerine sıradaki kesin kontrol noktasını gönder.
-                const checkpointSecond =
-                  checkpointsRef.current[checkpointIndexRef.current] ||
-                  Math.floor(player?.currentTime || effectiveWatchSeconds || 0);
+                if (!player) {
+                  setCompletionError("Video oynatıcısı bulunamadı.");
+                  return;
+                }
+
+                const currentIndex = checkpointIndexRef.current;
+                const checkpointSecond = checkpointsRef.current[currentIndex];
+
+                // Checkpoint dizisi yenilenirken eski bir popup ekranda kaldıysa
+                // kullanıcıyı kilitleme; popupı kapat ve oynatmayı sürdür.
+                if (!checkpointSecond) {
+                  presencePopupRef.current = false;
+                  setShowPresencePopup(false);
+                  requestAnimationFrame(() => {
+                    player.play().catch(() => undefined);
+                  });
+                  return;
+                }
 
                 try {
                   setPresenceSaving(true);
                   setCompletionError("");
 
-                  // Kontrol noktasına gelirken gönderilmiş heartbeat varsa
-                  // önce onun bitmesini bekle.
+                  // Popup açıldığı anda video zaten pause edilir. O ana kadar kuyruğa
+                  // girmiş son heartbeat'in bitmesini bekliyoruz. Böylece eski bir
+                  // heartbeat, presence kaydından SONRA gelip presence_clicks alanını
+                  // geriye yazamaz. API tarafında da heartbeat artık presence_clicks
+                  // alanını hiç güncellemiyor; iki kat koruma vardır.
                   if (heartbeatPromiseRef.current) {
                     await heartbeatPromiseRef.current.catch(() => undefined);
                   }
 
-                  // Onay isteğinin kendisi canlı doğrulamadır. Video modal
-                  // nedeniyle duruyorken aynı saniye için ikinci heartbeat
-                  // göndermek HLS parça sınırında yanlış SEEK_BLOCKED hatası
-                  // üretiyordu. Kesin kontrol noktasını doğrudan kaydet.
-                  await saveVideoProgress("presence", checkpointSecond, Math.floor(videoDuration || 0));
+                  const result = await saveVideoProgress(
+                    "presence",
+                    checkpointSecond,
+                    Math.floor(videoDuration || 0)
+                  );
 
-                  // Ref'leri state'ten önce ilerlet. Video yeniden oynatılırken
-                  // oluşan ilk timeupdate aynı pencereyi yeniden açamaz.
-                  const nextCheckpointIndex = checkpointIndexRef.current + 1;
-                  checkpointIndexRef.current = nextCheckpointIndex;
+                  const serverPresenceClicks = Math.max(
+                    currentIndex + 1,
+                    Number((result as any)?.json?.progress?.presence_clicks || 0)
+                  );
+
+                  // Ref'leri state'ten önce ilerlet. Video tekrar oynarken oluşan ilk
+                  // timeupdate aynı kontrol penceresini yeniden açamaz.
+                  checkpointIndexRef.current = serverPresenceClicks;
                   presencePopupRef.current = false;
-                  maxReachedRef.current = Math.max(maxReachedRef.current, checkpointSecond);
-                  setMaxReachedTime((prev) => Math.max(prev, checkpointSecond));
-                  setClickCount((prev) => Math.max(prev + 1, nextCheckpointIndex));
-                  setCheckpointIndex(nextCheckpointIndex);
+                  maxReachedRef.current = Math.max(
+                    maxReachedRef.current,
+                    checkpointSecond
+                  );
+
+                  setMaxReachedTime((prev) =>
+                    Math.max(prev, checkpointSecond)
+                  );
+                  setClickCount((prev) =>
+                    Math.max(prev, serverPresenceClicks)
+                  );
+                  setCheckpointIndex(serverPresenceClicks);
                   setShowPresencePopup(false);
                   setCompletionError("");
 
+                  // Onay başarılı olur olmaz video devam eder. Sunucu listesinin
+                  // yenilenmesini bekletmiyoruz.
                   requestAnimationFrame(() => {
-                    player?.play().catch(() => undefined);
+                    player.play().catch((playError) => {
+                      console.error("presence sonrası play error:", playError);
+                    });
                   });
 
-                  // Sunucu verisini oynatmayı bloke etmeden arka planda tazele.
+                  // Veriyi arkada tazele. Bu işlem oynatmayı bloke etmez.
                   void fetchVideos().catch((fetchError) =>
                     console.error("presence refresh error:", fetchError)
                   );
                 } catch (err) {
                   console.error("presence save error:", err);
-                  // Sunucu onayı başarısızsa pencere açık ve video duraklatılmış
-                  // kalır. Böylece onay kaydedilmeden eğitim ilerleyemez.
+
+                  // Ağ cevabı kaybolmuş ama kayıt sunucuda gerçekleşmiş olabilir.
+                  // Sunucu durumunu bir kez tazele ve ilgili checkpoint gerçekten
+                  // kaydedilmişse kullanıcıyı popup içinde sonsuza kadar tutma.
+                  try {
+                    const refreshed = await fetchVideos();
+                    const refreshedVideo = refreshed.find(
+                      (item) => item.id === activeVideo?.id
+                    );
+                    const refreshedPresence = Number(
+                      refreshedVideo?.progress?.presence_clicks || 0
+                    );
+
+                    if (refreshedPresence >= currentIndex + 1) {
+                      checkpointIndexRef.current = refreshedPresence;
+                      presencePopupRef.current = false;
+                      setClickCount((prev) =>
+                        Math.max(prev, refreshedPresence)
+                      );
+                      setCheckpointIndex(refreshedPresence);
+                      setShowPresencePopup(false);
+                      setCompletionError("");
+
+                      requestAnimationFrame(() => {
+                        player.play().catch(() => undefined);
+                      });
+                      return;
+                    }
+                  } catch (refreshError) {
+                    console.error(
+                      "presence recovery refresh error:",
+                      refreshError
+                    );
+                  }
+
                   setCompletionError(
                     err instanceof Error
                       ? err.message
@@ -1128,4 +1192,3 @@ const modalBox = {
   textAlign: "center" as const,
   boxShadow: "0 18px 45px rgba(0,0,0,0.25)",
 };
-
