@@ -24,10 +24,11 @@ export default function CompanySelect({
       <select
         value={value}
         disabled={loading || companies.length === 0}
-        onChange={(event) => {
+        onChange={(event: any) => {
+          const selectedValue = String(event.currentTarget.value || "");
           const selected =
             companies.find(
-              (company) => company.id === event.target.value
+              (company) => company.id === selectedValue
             ) ?? null;
 
           onChange(selected);
