@@ -11,10 +11,6 @@ const HEARTBEAT_MAX_GAP_SECONDS = 45;
 // üretmeyebilir. Bu pencere yalnızca ardışık ve sunucuda doğrulanan konumlar
 // içindir; daha büyük ileri sıçramalar hâlâ reddedilir.
 const MAX_VERIFIED_MEDIA_STEP_SECONDS = 6;
-// Presence popup tam checkpointte açılır; ancak son heartbeat HLS/tarayıcı
-// zamanlaması nedeniyle birkaç saniye geride kalabilir. 30 sn tolerans yalnızca
-// SIRADAKİ checkpoint için geçerlidir; checkpoint atlama yine engellenir.
-const PRESENCE_VERIFIED_LAG_TOLERANCE_SECONDS = 30;
 const COMPLETION_TOLERANCE_SECONDS = 2;
 // İstemciyle aynı kurumsal ekran başı doğrulama aralığı (3,5 dakika).
 const PRESENCE_INTERVAL_SECONDS = 210;
@@ -226,8 +222,6 @@ export async function POST(request: Request) {
       const requestedCheckpoint = Math.floor(position / PRESENCE_INTERVAL_SECONDS);
       const checkpointSecond = requestedCheckpoint * PRESENCE_INTERVAL_SECONDS;
       const expectedCheckpoint = lastPresenceCheckpoint + 1;
-      const verifiedPosition = Math.max(oldWatch, oldMax, oldClientPosition);
-
       if (
         requestedCheckpoint <= 0 ||
         requestedCheckpoint > requiredClicks ||
@@ -266,25 +260,13 @@ export async function POST(request: Request) {
         );
       }
 
-      // Popup istemcide gerçek medya zamanı checkpoint'e ulaştığında açılır.
-      // HLS/timeupdate ve ağ kuyruğu nedeniyle sunucudaki son heartbeat birkaç
-      // saniye geride kalabilir. Bu nedenle yalnızca SIRADAKİ checkpoint için
-      // kontrollü bir gecikme toleransı tanıyoruz. Checkpoint sırası üstte hala
-      // zorunlu olduğundan 3 -> 5 gibi atlama yapılamaz.
-      if (
-        verifiedPosition <
-        checkpointSecond - PRESENCE_VERIFIED_LAG_TOLERANCE_SECONDS
-      ) {
-        return NextResponse.json(
-          {
-            error: "Ekran onayı için kontrol noktasına henüz ulaşılmadı.",
-            code: "PRESENCE_POSITION_NOT_REACHED",
-            allowedPosition: verifiedPosition,
-            playbackSessionId: sessionId,
-          },
-          { status: 409 }
-        );
-      }
+      // ÖNEMLİ: Presence onayında son heartbeat konumunu tekrar şart koşmuyoruz.
+      // Popup zaten istemcide gerçek player.currentTime ilgili 210 sn kontrol
+      // noktasına ulaştığında açılıyor. HLS heartbeat'i birkaç saniye hatta
+      // segment süresi kadar geride kalabildiği için burada oldMax/oldWatch ile
+      // ikinci kez konum doğrulamak doğru kullanıcıyı kilitliyordu.
+      // Güvenlik için exact checkpoint ve sıra kontrolleri yukarıda korunuyor:
+      // 210 -> 420 -> 630 -> 840 ... atlanamaz ve tekrar edilemez.
 
       presenceClicks = requestedCheckpoint;
       lastPresenceCheckpoint = requestedCheckpoint;
