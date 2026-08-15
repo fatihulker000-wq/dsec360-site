@@ -61,6 +61,15 @@ function formatDuration(seconds?: number | null) {
   return `${minutes} dk ${remainder} sn`;
 }
 
+function isTopicReady(video: TrainingVideoRow) {
+  return (
+    Boolean(String(video.title || "").trim()) &&
+    Boolean(String(video.video_url || "").trim()) &&
+    Number(video.duration_seconds || 0) > 0 &&
+    video.is_active !== false
+  );
+}
+
 export default function TrainingVideoManager({
   trainingId,
   trainingTitle,
@@ -150,6 +159,68 @@ export default function TrainingVideoManager({
     [orderedVideos]
   );
 
+  const readyTopicCount = useMemo(
+    () => orderedVideos.filter(isTopicReady).length,
+    [orderedVideos]
+  );
+
+  const missingDurationCount = useMemo(
+    () =>
+      orderedVideos.filter(
+        (video) => Number(video.duration_seconds || 0) <= 0
+      ).length,
+    [orderedVideos]
+  );
+
+  const duplicateSortOrders = useMemo(() => {
+    const counts = new Map<number, number>();
+
+    orderedVideos.forEach((video) => {
+      const order = Number(video.sort_order || 0);
+      if (order > 0) {
+        counts.set(order, (counts.get(order) || 0) + 1);
+      }
+    });
+
+    return Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([order]) => order)
+      .sort((a, b) => a - b);
+  }, [orderedVideos]);
+
+  const readinessPercent =
+    orderedVideos.length > 0
+      ? Math.round((readyTopicCount / orderedVideos.length) * 100)
+      : 0;
+
+  const nextSuggestedSortOrder =
+    orderedVideos.length > 0
+      ? Math.max(
+          ...orderedVideos.map((video) => Number(video.sort_order || 0)),
+          0
+        ) + 1
+      : 1;
+
+  useEffect(() => {
+    setDraft((current) => {
+      const currentOrder = Number(current.sortOrder || 0);
+      const draftIsUntouched =
+        !current.title.trim() &&
+        !current.description.trim() &&
+        !current.videoUrl.trim() &&
+        !current.durationSeconds.trim();
+
+      if (!draftIsUntouched || currentOrder === nextSuggestedSortOrder) {
+        return current;
+      }
+
+      return {
+        ...current,
+        sortOrder: String(nextSuggestedSortOrder),
+      };
+    });
+  }, [nextSuggestedSortOrder]);
+
   const notifyChanged = async () => {
     await loadVideos();
     await onChanged?.();
@@ -166,6 +237,22 @@ export default function TrainingVideoManager({
 
     if (validationError) {
       setError(validationError);
+      return;
+    }
+
+    const requestedSortOrder = Math.max(
+      1,
+      parsePositiveNumber(draft.sortOrder, nextSuggestedSortOrder)
+    );
+
+    if (
+      orderedVideos.some(
+        (video) => Number(video.sort_order || 0) === requestedSortOrder
+      )
+    ) {
+      setError(
+        `${requestedSortOrder}. sıra zaten kullanılıyor. Her alt konu için farklı bir sıra numarası girin.`
+      );
       return;
     }
 
@@ -189,10 +276,7 @@ export default function TrainingVideoManager({
             draft.durationSeconds,
             0
           ),
-          sortOrder: parsePositiveNumber(
-            draft.sortOrder,
-            videos.length + 1
-          ),
+          sortOrder: requestedSortOrder,
         }),
       });
 
@@ -204,7 +288,7 @@ export default function TrainingVideoManager({
 
       setDraft({
         ...EMPTY_DRAFT,
-        sortOrder: String(videos.length + 2),
+        sortOrder: String(nextSuggestedSortOrder + 1),
       });
       setMessage("Alt konu başarıyla eklendi.");
       await notifyChanged();
@@ -252,6 +336,24 @@ export default function TrainingVideoManager({
       return;
     }
 
+    const requestedSortOrder = Math.max(
+      1,
+      parsePositiveNumber(editingDraft.sortOrder, 1)
+    );
+
+    if (
+      orderedVideos.some(
+        (video) =>
+          video.id !== editingId &&
+          Number(video.sort_order || 0) === requestedSortOrder
+      )
+    ) {
+      setError(
+        `${requestedSortOrder}. sıra başka bir alt konu tarafından kullanılıyor.`
+      );
+      return;
+    }
+
     try {
       setActionId(editingId);
       setMessage("");
@@ -273,10 +375,7 @@ export default function TrainingVideoManager({
               editingDraft.durationSeconds,
               0
             ),
-            sortOrder: parsePositiveNumber(
-              editingDraft.sortOrder,
-              1
-            ),
+            sortOrder: requestedSortOrder,
           }),
         }
       );
@@ -378,7 +477,7 @@ export default function TrainingVideoManager({
       <div
         style={{
           marginBottom: 16,
-          padding: 14,
+          padding: 16,
           border: "1px solid #dbeafe",
           background: "#eff6ff",
           borderRadius: 14,
@@ -386,32 +485,136 @@ export default function TrainingVideoManager({
           lineHeight: 1.6,
         }}
       >
-        <strong>Yeni bölüm kurgusu:</strong> Çalışan bu içeriklerin tamamını
+        <strong>Alt konu zinciri:</strong> Çalışan bu içeriklerin tamamını
         tek bir “{trainingTitle}” eğitimi altında görür. Bölümler sıra numarasına
-        göre açılır; önceki zorunlu bölüm tamamlanmadan sonraki zorunlu bölüm
-        eğitim akışında açılmaz. Video izleme, ekran başı doğrulama ve final
-        kuralları çalışan portalındaki mevcut güvenli mekanizma tarafından
-        uygulanmaya devam eder.
+        göre ilerler. Mevcut video izleme, ekran başı doğrulama ve final
+        güvenlik kuralları değiştirilmez.
+
         <div
           style={{
-            marginTop: 10,
-            display: "flex",
+            marginTop: 14,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
             gap: 10,
-            flexWrap: "wrap",
-            fontSize: 13,
-            fontWeight: 800,
           }}
         >
-          <span>Alt konu: {orderedVideos.length}</span>
-          <span>Zorunlu: {requiredTopicCount}</span>
-          <span>Toplam süre: {formatDuration(totalDurationSeconds)}</span>
+          <div style={{ padding: 12, borderRadius: 12, background: "#fff" }}>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
+              İçerik Hazırlığı
+            </div>
+            <div style={{ marginTop: 3, fontSize: 20, fontWeight: 900 }}>
+              {readyTopicCount} / {orderedVideos.length}
+            </div>
+          </div>
+
+          <div style={{ padding: 12, borderRadius: 12, background: "#fff" }}>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
+              Hazırlık Oranı
+            </div>
+            <div style={{ marginTop: 3, fontSize: 20, fontWeight: 900 }}>
+              %{readinessPercent}
+            </div>
+          </div>
+
+          <div style={{ padding: 12, borderRadius: 12, background: "#fff" }}>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
+              Zorunlu Alt Konu
+            </div>
+            <div style={{ marginTop: 3, fontSize: 20, fontWeight: 900 }}>
+              {requiredTopicCount}
+            </div>
+          </div>
+
+          <div style={{ padding: 12, borderRadius: 12, background: "#fff" }}>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>
+              Toplam Eğitim Süresi
+            </div>
+            <div style={{ marginTop: 3, fontSize: 20, fontWeight: 900 }}>
+              {formatDuration(totalDurationSeconds)}
+            </div>
+          </div>
         </div>
+
+        <div
+          style={{
+            marginTop: 12,
+            height: 8,
+            borderRadius: 999,
+            background: "#dbeafe",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${readinessPercent}%`,
+              background: readinessPercent === 100 ? "#16a34a" : "#2563eb",
+              transition: "width .2s ease",
+            }}
+          />
+        </div>
+
+        {missingDurationCount > 0 ? (
+          <div
+            style={{
+              marginTop: 12,
+              padding: "10px 12px",
+              borderRadius: 10,
+              background: "#fff7ed",
+              border: "1px solid #fed7aa",
+              color: "#9a3412",
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            {missingDurationCount} alt konuda süre bilgisi eksik. Eğitim
+            hazırlığı tamamlanmış sayılması için süre bilgisini girin.
+          </div>
+        ) : null}
+
+        {duplicateSortOrders.length > 0 ? (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "10px 12px",
+              borderRadius: 10,
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#991b1b",
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            Aynı sıra numarası birden fazla kez kullanılmış:{" "}
+            {duplicateSortOrders.join(", ")}. Alt konu sıralamasını düzeltin.
+          </div>
+        ) : null}
+
+        {orderedVideos.length > 0 &&
+        readinessPercent === 100 &&
+        duplicateSortOrders.length === 0 ? (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "10px 12px",
+              borderRadius: 10,
+              background: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              color: "#166534",
+              fontWeight: 800,
+              fontSize: 13,
+            }}
+          >
+            ✓ Eğitim içeriği hazır. {orderedVideos.length} alt konu sıralı
+            eğitim akışına uygun durumda.
+          </div>
+        ) : null}
       </div>
 
       <HlsVideoUploader
         trainingId={trainingId}
         trainingTitle={trainingTitle}
-        nextSortOrder={videos.length + 1}
+        nextSortOrder={nextSuggestedSortOrder}
         onCompleted={notifyChanged}
       />
 
@@ -634,15 +837,41 @@ export default function TrainingVideoManager({
                     </p>
                   </div>
 
-                  <span
-                    className={
-                      video.is_active
-                        ? styles.activeBadge
-                        : styles.passiveBadge
-                    }
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
                   >
-                    {video.is_active ? "Aktif" : "Pasif"}
-                  </span>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        padding: "5px 9px",
+                        borderRadius: 999,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        background: isTopicReady(video) ? "#dcfce7" : "#fff7ed",
+                        color: isTopicReady(video) ? "#166534" : "#9a3412",
+                        border: isTopicReady(video)
+                          ? "1px solid #bbf7d0"
+                          : "1px solid #fed7aa",
+                      }}
+                    >
+                      {isTopicReady(video) ? "İçerik Hazır" : "Hazırlık Eksik"}
+                    </span>
+
+                    <span
+                      className={
+                        video.is_active
+                          ? styles.activeBadge
+                          : styles.passiveBadge
+                      }
+                    >
+                      {video.is_active ? "Aktif" : "Pasif"}
+                    </span>
+                  </div>
                 </div>
 
                 <div className={styles.videoMeta}>
