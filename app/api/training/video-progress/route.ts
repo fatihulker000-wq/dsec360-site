@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-const HEARTBEAT_GRACE_SECONDS = 3;
+const HEARTBEAT_GRACE_SECONDS = 1;
 const HEARTBEAT_MAX_GAP_SECONDS = 45;
 const COMPLETION_TOLERANCE_SECONDS = 2;
 const PRESENCE_INTERVAL_SECONDS = 360;
@@ -183,16 +183,6 @@ export async function POST(request: Request) {
         : Math.min(HEARTBEAT_MAX_GAP_SECONDS, elapsed + HEARTBEAT_GRACE_SECONDS);
       const positionDelta = position - oldClientPosition;
 
-      if (!firstHeartbeat && elapsed < 3) {
-        return NextResponse.json({
-          success: true,
-          ignored: true,
-          reason: "HEARTBEAT_TOO_FREQUENT",
-          playbackSessionId: sessionId,
-          progress: existing,
-        });
-      }
-
       const invalidJump = positionDelta > allowedAdvance || position > oldMax + allowedAdvance;
 
       if (invalidJump) {
@@ -214,6 +204,16 @@ export async function POST(request: Request) {
           },
           { status: 409 }
         );
+      }
+
+      if (!firstHeartbeat && elapsed < 1) {
+        return NextResponse.json({
+          success: true,
+          ignored: true,
+          reason: "HEARTBEAT_TOO_FREQUENT",
+          playbackSessionId: sessionId,
+          progress: existing,
+        });
       }
 
       const verifiedAddition = firstHeartbeat

@@ -123,8 +123,6 @@ export default function TrainingDetailPage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const maxReachedRef = useRef(0);
-  const isProgrammaticSeekRef = useRef(false);
-  const blockSeekRef = useRef(false);
   const lastHeartbeatSecondRef = useRef(-1);
   const checkpointsRef = useRef<number[]>([]);
 
@@ -367,12 +365,7 @@ if (unlocked) {
     lastHeartbeatSecondRef.current = -1;
 
     if (videoRef.current) {
-      if (videoRef.current.currentTime > 0.05) {
-        isProgrammaticSeekRef.current = true;
-        videoRef.current.currentTime = 0;
-      } else {
-        isProgrammaticSeekRef.current = false;
-      }
+      videoRef.current.currentTime = 0;
     }
   }, [activeVideo?.id]);
 
@@ -445,7 +438,6 @@ if (unlocked) {
       if (!response.ok) {
         if (json?.code === "SEEK_BLOCKED" && videoRef.current) {
           const allowed = Math.max(0, Number(json?.allowedPosition || maxReachedRef.current || 0));
-          isProgrammaticSeekRef.current = true;
           videoRef.current.pause();
           videoRef.current.currentTime = allowed;
           maxReachedRef.current = allowed;
@@ -498,10 +490,7 @@ if (unlocked) {
     const safeResume = shouldResume ? Math.floor(resumeFrom) : 0;
 
     if (Math.abs(player.currentTime - safeResume) > 0.05) {
-      isProgrammaticSeekRef.current = true;
       player.currentTime = safeResume;
-    } else {
-      isProgrammaticSeekRef.current = false;
     }
     player.playbackRate = 1;
 
@@ -524,8 +513,8 @@ if (unlocked) {
     const prevMax = Number(maxReachedRef.current || 0);
 
     // HLS oynatımında timeupdate olayı 1-2 saniyelik doğal aralıklarla
-    // gelebilir. İleri sarma kontrolü onSeeking ve sunucu doğrulamasında
-    // yapılır; normal oynatma burada zaman sıçraması olarak değerlendirilmez.
+    // gelebilir. İleri sarma sunucudaki heartbeat doğrulamasında kontrol
+    // edilir; normal oynatma burada zaman sıçraması olarak değerlendirilmez.
     if (current >= prevMax) {
       maxReachedRef.current = current;
       setMaxReachedTime(flooredCurrent);
@@ -533,7 +522,7 @@ if (unlocked) {
       const shouldSendHeartbeat =
         flooredCurrent >= 1 &&
         (lastHeartbeatSecondRef.current < 0 ||
-          flooredCurrent - lastHeartbeatSecondRef.current >= 5);
+          flooredCurrent - lastHeartbeatSecondRef.current >= 2);
 
       if (shouldSendHeartbeat) {
         lastHeartbeatSecondRef.current = flooredCurrent;
@@ -553,29 +542,6 @@ if (unlocked) {
     ) {
       player.pause();
       setShowPresencePopup(true);
-    }
-  };
-
-  const handleSeeking = () => {
-    const player = videoRef.current;
-    if (!player) return;
-
-    if (isProgrammaticSeekRef.current) {
-      return;
-    }
-
-    const current = Number(player.currentTime || 0);
-    const allowedMax = Number(maxReachedRef.current || 0);
-
-    // HLS.js medya arabelleğini bağlarken küçük bir dahili zaman
-    // düzeltmesi (yaklaşık 1 saniye) oluşturabilir. Bu kullanıcı seek'i
-    // değildir. Daha büyük atlamalar istemcide, tüm atlamalar ayrıca
-    // sunucudaki heartbeat doğrulamasında kontrol edilir.
-    if (current > allowedMax + 2) {
-      blockSeekRef.current = true;
-      player.pause();
-      isProgrammaticSeekRef.current = true;
-      player.currentTime = allowedMax;
     }
   };
 
@@ -796,11 +762,6 @@ if (unlocked) {
                       setVideoLoadError("");
                     }}
                     onTimeUpdate={handleTimeUpdate}
-                    onSeeking={handleSeeking}
-                    onSeeked={() => {
-                      isProgrammaticSeekRef.current = false;
-                      blockSeekRef.current = false;
-                    }}
                     onRateChange={() => {
                       const player = videoRef.current;
                       if (player && player.playbackRate !== 1) player.playbackRate = 1;
