@@ -1,8 +1,24 @@
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile } from "@ffmpeg/util";
 import type { HlsAsset, PreparedHlsVideo } from "./types";
 
-let loadedFfmpeg: Promise<FFmpeg> | null = null;
+type FfmpegProgress = { progress: number; time?: number };
+type FfmpegEntry = { name: string; isDir: boolean };
+
+type FfmpegClient = {
+  load(options: { coreURL: string; wasmURL: string }): Promise<boolean>;
+  on(event: "progress", callback: (event: FfmpegProgress) => void): void;
+  off(event: "progress", callback: (event: FfmpegProgress) => void): void;
+  createDir(path: string): Promise<boolean>;
+  deleteDir(path: string): Promise<boolean>;
+  writeFile(path: string, data: Uint8Array): Promise<boolean>;
+  readFile(path: string): Promise<Uint8Array | string>;
+  deleteFile(path: string): Promise<boolean>;
+  listDir(path: string): Promise<FfmpegEntry[]>;
+  exec(args: string[]): Promise<number>;
+};
+
+type FfmpegConstructor = new () => FfmpegClient;
+
+let loadedFfmpeg: Promise<FfmpegClient> | null = null;
 
 function errorMessage(cause: unknown) {
   if (cause instanceof Error && cause.message) return cause.message;
@@ -29,9 +45,29 @@ async function getFfmpeg() {
       await Promise.all([
         verifyCoreAsset("/ffmpeg/ffmpeg-core.js", "FFmpeg çekirdek dosyası"),
         verifyCoreAsset("/ffmpeg/ffmpeg-core.wasm", "FFmpeg WASM dosyası"),
+        verifyCoreAsset(
+          "/ffmpeg/ffmpeg-wrapper/index.js",
+          "FFmpeg tarayıcı sarmalayıcısı"
+        ),
+        verifyCoreAsset(
+          "/ffmpeg/ffmpeg-wrapper/worker.js",
+          "FFmpeg tarayıcı worker dosyası"
+        ),
       ]);
 
-      const ffmpeg = new FFmpeg();
+      // Değişken URL ve webpackIgnore birlikte kullanılır. Böylece Next.js,
+      // @ffmpeg/ffmpeg içindeki dinamik Worker ifadesini paketlemeye çalışmaz;
+      // modül public klasöründen tarayıcı tarafından doğal ESM olarak yüklenir.
+      const wrapperUrl = "/ffmpeg/ffmpeg-wrapper/index.js";
+      const wrapperModule = (await import(
+        /* webpackIgnore: true */ wrapperUrl
+      )) as { FFmpeg?: FfmpegConstructor };
+
+      if (!wrapperModule.FFmpeg) {
+        throw new Error("FFmpeg tarayıcı sınıfı yüklenemedi.");
+      }
+
+      const ffmpeg = new wrapperModule.FFmpeg();
       try {
         await ffmpeg.load({
           coreURL: "/ffmpeg/ffmpeg-core.js",
@@ -94,7 +130,10 @@ export async function prepareHlsVideo(
 
   try {
     await ffmpeg.createDir(workDir);
-    await ffmpeg.writeFile(inputName, await fetchFile(file));
+    await ffmpeg.writeFile(
+      inputName,
+      new Uint8Array(await file.arrayBuffer())
+    );
 
     // Kaynak MP4/MOV zaman damgalarını doğrudan MPEG-TS içine kopyalamak,
     // bazı videolarda görünen süre doğru olsa bile oynatmanın ilk saniyede
