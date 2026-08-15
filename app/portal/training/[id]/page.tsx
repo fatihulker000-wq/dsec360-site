@@ -524,7 +524,10 @@ if (unlocked) {
       setMaxReachedTime(flooredCurrent);
 
       const shouldSendHeartbeat =
-        flooredCurrent >= 1 &&
+        // İlk timeupdate olayında (0. saniyede) sunucuda aktif izleme
+        // oturumu oluşturulur. Kısa HLS videolarda ilk olay doğrudan
+        // sona yakın gelebileceği için 1. saniyeyi beklemek güvenilir değildi.
+        flooredCurrent >= 0 &&
         (lastHeartbeatSecondRef.current < 0 ||
           flooredCurrent - lastHeartbeatSecondRef.current >= 2);
 
