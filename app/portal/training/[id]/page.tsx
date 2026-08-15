@@ -127,6 +127,9 @@ export default function TrainingDetailPage() {
   const lastHeartbeatSecondRef = useRef(-1);
   const heartbeatPromiseRef = useRef<Promise<unknown> | null>(null);
   const checkpointsRef = useRef<number[]>([]);
+  const checkpointIndexRef = useRef(0);
+  const presencePopupRef = useRef(false);
+  const playbackSessionIdRef = useRef("");
 
   const [training, setTraining] = useState<TrainingDetail | null>(null);
   const [videos, setVideos] = useState<TrainingVideo[]>([]);
@@ -138,8 +141,9 @@ export default function TrainingDetailPage() {
   const [maxReachedTime, setMaxReachedTime] = useState(0);
   const [clickCount, setClickCount] = useState(0);
   const [requiredClicks, setRequiredClicks] = useState(0);
-  const [checkpointIndex, setCheckpointIndex] = useState(0);
+  const [, setCheckpointIndex] = useState(0);
   const [showPresencePopup, setShowPresencePopup] = useState(false);
+  const [presenceSaving, setPresenceSaving] = useState(false);
   const [playbackReady, setPlaybackReady] = useState(false);
   const [videoLoadError, setVideoLoadError] = useState("");
   const [progressSaved, setProgressSaved] = useState(false);
@@ -361,12 +365,18 @@ if (unlocked) {
     setMaxReachedTime(dbWatch);
     maxReachedRef.current = dbWatch;
     setClickCount(Number(source?.presence_clicks || 0));
-    setCheckpointIndex(Number(source?.presence_clicks || 0));
+    const savedPresenceCount = Number(source?.presence_clicks || 0);
+    checkpointIndexRef.current = savedPresenceCount;
+    setCheckpointIndex(savedPresenceCount);
+    presencePopupRef.current = false;
+    setShowPresencePopup(false);
+    setPresenceSaving(false);
     setProgressSaved(source?.watch_completed === true);
     setVideoDuration(0);
     setPlaybackReady(false);
     setVideoLoadError("");
     setPlaybackSessionId("");
+    playbackSessionIdRef.current = "";
     lastHeartbeatSecondRef.current = -1;
 
     if (videoRef.current) {
@@ -430,14 +440,16 @@ if (unlocked) {
           action,
           currentSecond,
           duration,
-          playbackSessionId: playbackSessionId || undefined,
+          playbackSessionId: playbackSessionIdRef.current || playbackSessionId || undefined,
         }),
       });
 
       const json = await response.json().catch(() => ({}));
 
       if (json?.playbackSessionId) {
-        setPlaybackSessionId(String(json.playbackSessionId));
+        const nextSessionId = String(json.playbackSessionId);
+        playbackSessionIdRef.current = nextSessionId;
+        setPlaybackSessionId(nextSessionId);
       }
 
       if (!response.ok) {
@@ -567,12 +579,14 @@ if (unlocked) {
     }
 
     const checkpoints = checkpointsRef.current;
+    const currentCheckpointIndex = checkpointIndexRef.current;
     if (
-      checkpointIndex < checkpoints.length &&
-      flooredCurrent >= checkpoints[checkpointIndex] &&
-      !showPresencePopup
+      currentCheckpointIndex < checkpoints.length &&
+      flooredCurrent >= checkpoints[currentCheckpointIndex] &&
+      !presencePopupRef.current
     ) {
       player.pause();
+      presencePopupRef.current = true;
       setShowPresencePopup(true);
     }
   };
@@ -919,39 +933,53 @@ if (unlocked) {
             </p>
 
             <button
+              type="button"
+              disabled={presenceSaving}
               onClick={async () => {
+                if (presenceSaving) return;
+
                 const player = videoRef.current;
                 // Özellikle kayıtlı konumdan devam edildiğinde oynatıcı birden
                 // fazla kontrol noktasının ilerisinde olabilir. Sunucuya mevcut
                 // medya konumu yerine sıradaki kesin kontrol noktasını gönder.
                 const checkpointSecond =
-                  checkpointsRef.current[checkpointIndex] ||
+                  checkpointsRef.current[checkpointIndexRef.current] ||
                   Math.floor(player?.currentTime || effectiveWatchSeconds || 0);
-                const actualPosition = Math.floor(
-                  player?.currentTime || checkpointSecond
-                );
 
                 try {
-                  // Kullanıcı doğrulama penceresini uzun süre açık bırakmış
-                  // olabilir. Önce aynı medya konumunda oturumu tazele; bu
-                  // işlem izleme süresi eklemez ve ileri sıçramaya izin vermez.
-                  await queueVideoHeartbeat(
-                    actualPosition,
-                    Math.floor(videoDuration || 0)
-                  );
+                  setPresenceSaving(true);
+                  setCompletionError("");
+
+                  // Kontrol noktasına gelirken gönderilmiş heartbeat varsa
+                  // önce onun bitmesini bekle. Burada ikinci bir heartbeat
+                  // göndermek HLS'nin kesirli zaman farkını ileri sıçrama gibi
+                  // gösterebiliyor ve geçerli onayı gereksiz yere engelliyordu.
+                  if (heartbeatPromiseRef.current) {
+                    await heartbeatPromiseRef.current.catch(() => undefined);
+                  }
+
                   await saveVideoProgress("presence", checkpointSecond, Math.floor(videoDuration || 0));
-                  const newCount = clickCount + 1;
-                  maxReachedRef.current = Math.max(maxReachedRef.current, actualPosition);
-                  setMaxReachedTime((prev) => Math.max(prev, actualPosition));
-                  setClickCount(newCount);
-                  setCheckpointIndex((prev) => prev + 1);
+
+                  // Ref'leri state'ten önce ilerlet. Video yeniden oynatılırken
+                  // oluşan ilk timeupdate aynı pencereyi yeniden açamaz.
+                  const nextCheckpointIndex = checkpointIndexRef.current + 1;
+                  checkpointIndexRef.current = nextCheckpointIndex;
+                  presencePopupRef.current = false;
+                  maxReachedRef.current = Math.max(maxReachedRef.current, checkpointSecond);
+                  setMaxReachedTime((prev) => Math.max(prev, checkpointSecond));
+                  setClickCount((prev) => Math.max(prev + 1, nextCheckpointIndex));
+                  setCheckpointIndex(nextCheckpointIndex);
                   setShowPresencePopup(false);
                   setCompletionError("");
-                  await fetchVideos();
 
                   requestAnimationFrame(() => {
                     player?.play().catch(() => undefined);
                   });
+
+                  // Sunucu verisini oynatmayı bloke etmeden arka planda tazele.
+                  void fetchVideos().catch((fetchError) =>
+                    console.error("presence refresh error:", fetchError)
+                  );
                 } catch (err) {
                   console.error("presence save error:", err);
                   // Sunucu onayı başarısızsa pencere açık ve video duraklatılmış
@@ -961,11 +989,17 @@ if (unlocked) {
                       ? err.message
                       : "Ekran başı doğrulaması kaydedilemedi."
                   );
+                } finally {
+                  setPresenceSaving(false);
                 }
               }}
-              style={primaryButton}
+              style={{
+                ...primaryButton,
+                opacity: presenceSaving ? 0.65 : 1,
+                cursor: presenceSaving ? "wait" : "pointer",
+              }}
             >
-              Ekrandayım, Devam Et
+              {presenceSaving ? "Onay kaydediliyor..." : "Ekrandayım, Devam Et"}
             </button>
           </div>
         </div>

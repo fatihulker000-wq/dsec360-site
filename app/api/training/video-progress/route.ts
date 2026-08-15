@@ -218,24 +218,45 @@ export async function POST(request: Request) {
 
     if (action === "presence") {
       const heartbeatAge = secondsBetween(existing?.updated_at || null, now);
-      if (heartbeatAge === null || heartbeatAge > 30) {
+      if (heartbeatAge === null || heartbeatAge > HEARTBEAT_MAX_GAP_SECONDS) {
         return jsonError("Ekran onayı için aktif video oturumu bulunamadı.", 409, "PRESENCE_SESSION_INACTIVE");
       }
 
       const checkpoint = Math.floor(position / PRESENCE_INTERVAL_SECONDS);
       const expectedCheckpoint = lastPresenceCheckpoint + 1;
+      const checkpointSecond = checkpoint * PRESENCE_INTERVAL_SECONDS;
+      const verifiedPosition = Math.max(oldMax, oldClientPosition);
 
       if (
         checkpoint !== expectedCheckpoint ||
         checkpoint <= 0 ||
         checkpoint > requiredClicks ||
-        position < checkpoint * PRESENCE_INTERVAL_SECONDS
+        position !== checkpointSecond
       ) {
         return jsonError("Geçersiz veya tekrarlanan ekran onayı.", 409, "INVALID_PRESENCE_CHECKPOINT");
       }
 
+      // Onay yalnızca sunucunun daha önce doğruladığı oynatma konumu ilgili
+      // kontrol noktasına gerçekten ulaşmışsa kabul edilir. HLS timeupdate
+      // olaylarının birkaç saniye seyrek gelmesine sınırlı tolerans tanınır;
+      // kullanıcı ileri sararak bu kontrolü geçemez.
+      if (verifiedPosition < checkpointSecond - MAX_VERIFIED_MEDIA_STEP_SECONDS) {
+        return NextResponse.json(
+          {
+            error: "Ekran onayı için kontrol noktasına henüz ulaşılmadı.",
+            code: "PRESENCE_POSITION_NOT_REACHED",
+            allowedPosition: verifiedPosition,
+            playbackSessionId: sessionId,
+          },
+          { status: 409 }
+        );
+      }
+
       presenceClicks = checkpoint;
       lastPresenceCheckpoint = checkpoint;
+      watchSeconds = Math.min(duration, Math.max(oldWatch, checkpointSecond));
+      maxWatchedSeconds = Math.max(oldMax, checkpointSecond);
+      lastClientPosition = Math.max(oldClientPosition, checkpointSecond);
     }
 
     if (action === "complete") {
