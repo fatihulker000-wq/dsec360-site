@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { prepareHlsVideo } from "./hlsVideoProcessor";
-import { createAssetUploadSession, uploadHlsAsset } from "./supabaseResumableUpload";
+import { uploadHlsAsset } from "./supabaseResumableUpload";
+import type { PreparedHlsVideo } from "./types";
 import styles from "./HlsVideoUploader.module.css";
 
 type Props = {
@@ -13,6 +14,10 @@ type Props = {
 };
 type Stage = "idle" | "processing" | "uploading" | "finalizing" | "done" | "error";
 const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
+
+function fileKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
 
 export default function HlsVideoUploader({
   trainingId, trainingTitle, nextSortOrder, onCompleted,
@@ -25,13 +30,29 @@ export default function HlsVideoUploader({
   const [uploadPercent, setUploadPercent] = useState(0);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const preparedRef = useRef<PreparedHlsVideo | null>(null);
+  const preparedFileKeyRef = useRef("");
+  const uploadIdRef = useRef("");
+  const uploadedNamesRef = useRef(new Set<string>());
+
   const busy = ["processing", "uploading", "finalizing"].includes(stage);
+  const canRetryUpload = stage === "error" && preparedRef.current !== null;
   const sizeText = useMemo(
     () => file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : "", [file]
   );
 
+  const resetPrepared = () => {
+    preparedRef.current = null;
+    preparedFileKeyRef.current = "";
+    uploadIdRef.current = "";
+    uploadedNamesRef.current = new Set<string>();
+    setProcessPercent(0);
+    setUploadPercent(0);
+  };
+
   const selectFile = (selected: File | null) => {
-    setError(""); setMessage(""); setStage("idle");
+    setError(""); setMessage(""); setStage("idle"); resetPrepared();
     if (!selected) return setFile(null);
     if (!selected.type.startsWith("video/") || !/\.(mp4|mov)$/i.test(selected.name)) {
       setFile(null); return setError("Yalnızca MP4 veya MOV video seçilebilir.");
@@ -41,32 +62,56 @@ export default function HlsVideoUploader({
       return setError("Bu tarayıcı işleme hattında kaynak video en fazla 512 MB olabilir.");
     }
     setFile(selected);
-    setTitle((current) => current || selected.name.replace(/\.[^.]+$/, ""));
+    setTitle(selected.name.replace(/\.[^.]+$/, ""));
   };
 
   const startUpload = async () => {
     if (!file || !title.trim() || !trainingId) {
       setError("Video dosyası ve başlık zorunludur."); return;
     }
-    try {
-      setError(""); setMessage(""); setProcessPercent(0); setUploadPercent(0);
-      setStage("processing");
-      const prepared = await prepareHlsVideo(file, setProcessPercent);
-      const uploadId = crypto.randomUUID();
-      let completedBytes = 0;
 
-      // İşlemci manifesti zaten en sona koyar. Manifestin son yüklenmesi,
-      // yarım yüklemenin oynatılabilir görünmesini engeller.
+    try {
+      setError(""); setMessage("");
+      const selectedKey = fileKey(file);
+      let prepared = preparedRef.current;
+
+      if (!prepared || preparedFileKeyRef.current !== selectedKey) {
+        resetPrepared();
+        setStage("processing");
+        prepared = await prepareHlsVideo(file, setProcessPercent);
+        preparedRef.current = prepared;
+        preparedFileKeyRef.current = selectedKey;
+        uploadIdRef.current = crypto.randomUUID();
+        uploadedNamesRef.current = new Set<string>();
+      } else {
+        setProcessPercent(100);
+      }
+
+      const uploadId = uploadIdRef.current || crypto.randomUUID();
+      uploadIdRef.current = uploadId;
+      const uploadedNames = uploadedNamesRef.current;
+      const completedBefore = prepared.assets
+        .filter((asset) => uploadedNames.has(asset.name))
+        .reduce((sum, asset) => sum + asset.blob.size, 0);
+      let completedBytes = completedBefore;
+      setUploadPercent(Math.min(99, Math.round(
+        (completedBytes / prepared.totalOutputBytes) * 100
+      )));
+
       setStage("uploading");
-      while (prepared.assets.length > 0) {
-        const asset = prepared.assets.shift();
-        if (!asset) break;
-        const session = await createAssetUploadSession({ trainingId, uploadId, asset });
-        await uploadHlsAsset(asset, session, (uploaded) => {
-          setUploadPercent(Math.min(99, Math.round(
-            ((completedBytes + uploaded) / prepared.totalOutputBytes) * 100
-          )));
+      for (const asset of prepared.assets) {
+        if (uploadedNames.has(asset.name)) continue;
+        await uploadHlsAsset({
+          trainingId,
+          uploadId,
+          asset,
+          onProgress: (uploaded) => {
+            setUploadPercent(Math.min(99, Math.round(
+              ((completedBytes + uploaded) / prepared!.totalOutputBytes) * 100
+            )));
+          },
         });
+        uploadedNames.add(asset.name);
         completedBytes += asset.blob.size;
         setUploadPercent(Math.min(99, Math.round(
           (completedBytes / prepared.totalOutputBytes) * 100
@@ -90,11 +135,17 @@ export default function HlsVideoUploader({
 
       setUploadPercent(100); setStage("done");
       setMessage(`Video hazır: ${prepared.segmentCount} parça güvenli biçimde yüklendi.`);
-      setFile(null); setTitle(""); setDescription("");
+      setFile(null); setTitle(""); setDescription(""); resetPrepared();
+      setProcessPercent(100); setUploadPercent(100);
       await onCompleted?.();
     } catch (cause) {
       console.error(cause); setStage("error");
-      setError(cause instanceof Error ? cause.message : "Video yüklenemedi.");
+      const detail = cause instanceof Error ? cause.message : "Video yüklenemedi.";
+      setError(
+        preparedRef.current
+          ? `${detail} Hazırlanan video korundu; sayfayı yenilemeden yalnızca yüklemeyi tekrar deneyin.`
+          : detail
+      );
     }
   };
 
@@ -109,7 +160,7 @@ export default function HlsVideoUploader({
           <span>MP4 veya MOV seç</span>
           <input type="file" accept="video/mp4,video/quicktime,.mp4,.mov" disabled={busy}
             onChange={(event) => selectFile(event.currentTarget.files?.[0] || null)} />
-          <small>{file ? `${file.name} • ${sizeText}` : "50 MB üzeri video HLS parçalarına ayrılır (en fazla 512 MB kaynak)."}</small>
+          <small>{file ? `${file.name} • ${sizeText}` : "50 MB üzeri video küçük HLS parçalarına ayrılır (en fazla 512 MB kaynak)."}</small>
         </label>
         <label><span>Video başlığı</span><input value={title} disabled={busy}
           onChange={(event) => setTitle(event.currentTarget.value)} placeholder="Ör. Yangın güvenliği" /></label>
@@ -119,18 +170,21 @@ export default function HlsVideoUploader({
       {stage !== "idle" && <div className={styles.progressArea}>
         <div><span>Video hazırlama</span><b>%{processPercent}</b></div>
         <progress max={100} value={processPercent} />
-        <div><span>Supabase yükleme</span><b>%{uploadPercent}</b></div>
+        <div><span>Güvenli yükleme</span><b>%{uploadPercent}</b></div>
         <progress max={100} value={uploadPercent} />
-        <small>{stage === "processing" ? "Video 6 saniyelik HLS parçalarına ayrılıyor. Sayfayı kapatmayın."
-          : stage === "uploading" ? "Parçalar sırayla yükleniyor; bağlantı kesilirse yeniden denenecek."
+        <small>{stage === "processing" ? "Video küçük HLS parçalarına ayrılıyor. Sayfayı kapatmayın."
+          : stage === "uploading" ? "Parçalar D-SEC güvenli API üzerinden yükleniyor."
           : stage === "finalizing" ? "Manifest ve parça sayısı doğrulanıyor."
-          : stage === "done" ? "Video yayınlanmaya hazır." : "İşlem durdu."}</small>
+          : stage === "done" ? "Video yayınlanmaya hazır."
+          : canRetryUpload ? "Video hazır tutuluyor. Sayfayı yenilemeden yüklemeyi tekrar deneyebilirsiniz."
+          : "İşlem durdu."}</small>
       </div>}
       {error && <div className={styles.error}>{error}</div>}
       {message && <div className={styles.success}>{message}</div>}
       <button type="button" className={styles.button} disabled={busy || !file || !title.trim()} onClick={startUpload}>
         {stage === "processing" ? "Video hazırlanıyor..." : stage === "uploading" ? "Yükleniyor..."
-          : stage === "finalizing" ? "Doğrulanıyor..." : "Videoyu Hazırla ve Yükle"}
+          : stage === "finalizing" ? "Doğrulanıyor..." : canRetryUpload ? "Yalnızca Yüklemeyi Tekrar Dene"
+          : "Videoyu Hazırla ve Yükle"}
       </button>
     </section>
   );

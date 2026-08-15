@@ -17,7 +17,7 @@ type FfmpegClient = {
 type FfmpegConstructor = new () => FfmpegClient;
 
 const MAX_SOURCE_BYTES = 512 * 1024 * 1024;
-const MAX_ASSET_BYTES = 45 * 1024 * 1024;
+const MAX_ASSET_BYTES = Math.floor(3.5 * 1024 * 1024);
 let loadedFfmpeg: Promise<FfmpegClient> | null = null;
 
 function errorMessage(cause: unknown) {
@@ -47,9 +47,7 @@ async function getFfmpeg() {
         verifyCoreAsset("/ffmpeg/ffmpeg-wrapper/worker.js", "FFmpeg worker dosyası"),
       ]);
       const wrapperUrl = "/ffmpeg/ffmpeg-wrapper/index.js";
-      const wrapper = (await import(/* webpackIgnore: true */ wrapperUrl)) as {
-        FFmpeg?: FfmpegConstructor;
-      };
+      const wrapper = (await import(/* webpackIgnore: true */ wrapperUrl)) as { FFmpeg?: FfmpegConstructor };
       if (!wrapper.FFmpeg) throw new Error("FFmpeg tarayıcı sınıfı yüklenemedi.");
       const ffmpeg = new wrapper.FFmpeg();
       try {
@@ -100,7 +98,7 @@ export async function prepareHlsVideo(
     throw new Error("Geçerli bir MP4 veya MOV video seçin.");
   }
   if (file.size > MAX_SOURCE_BYTES) {
-    throw new Error("Tarayıcıda güvenli işleme sınırı 512 MB. Daha büyük kaynak için sunucu dönüştürme servisi kullanılmalıdır.");
+    throw new Error("Tarayıcıda güvenli işleme sınırı 512 MB.");
   }
 
   const ffmpeg = await getFfmpeg();
@@ -117,12 +115,13 @@ export async function prepareHlsVideo(
     const exitCode = await ffmpeg.exec([
       "-fflags", "+genpts", "-i", inputName,
       "-map", "0:v:0", "-map", "0:a:0?",
-      "-c:v", "libx264", "-preset", "veryfast", "-crf", "24",
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "27",
+      "-maxrate", "3000k", "-bufsize", "3000k",
       "-pix_fmt", "yuv420p", "-sc_threshold", "0",
-      "-force_key_frames", "expr:gte(t,n_forced*6)",
-      "-c:a", "aac", "-b:a", "128k", "-ar", "48000",
+      "-force_key_frames", "expr:gte(t,n_forced*4)",
+      "-c:a", "aac", "-b:a", "96k", "-ar", "44100",
       "-avoid_negative_ts", "make_zero", "-max_muxing_queue_size", "2048",
-      "-f", "hls", "-hls_time", "6", "-start_number", "0",
+      "-f", "hls", "-hls_time", "4", "-start_number", "0",
       "-hls_playlist_type", "vod", "-hls_flags", "independent_segments",
       "-hls_segment_filename", `${workDir}/segment-%05d.ts`,
       `${workDir}/index.m3u8`,
@@ -145,10 +144,11 @@ export async function prepareHlsVideo(
     for (const name of [...segmentNames, "index.m3u8"]) {
       const bytes = await ffmpeg.readFile(`${workDir}/${name}`);
       const contentType = name.endsWith(".m3u8")
-        ? ("application/vnd.apple.mpegurl" as const) : ("video/mp2t" as const);
+        ? ("application/vnd.apple.mpegurl" as const)
+        : ("video/mp2t" as const);
       const blob = new Blob([bytes as BlobPart], { type: contentType });
       if (blob.size > MAX_ASSET_BYTES) {
-        throw new Error(`${name} 45 MB güvenli parça sınırını aşıyor.`);
+        throw new Error(`${name} 3,5 MB güvenli API sınırını aşıyor.`);
       }
       assets.push({ name, blob, contentType });
     }
