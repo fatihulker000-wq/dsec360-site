@@ -26,10 +26,11 @@ export default function EmployeeSelect({
       <select
         value={value}
         disabled={disabled || loading}
-        onChange={(event) => {
+        onChange={(event: any) => {
+          const selectedValue = String(event.currentTarget.value || "");
           const employee =
             employees.find(
-              (item) => item.id === event.target.value
+              (item) => item.id === selectedValue
             ) ?? null;
 
           onChange(employee);
