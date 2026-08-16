@@ -34,14 +34,9 @@ async function getIdentity() {
 
   const employeeId = clean(user?.employee_id);
 
-  if (!employeeId) {
-    return null;
-  }
+  if (!employeeId) return null;
 
-  return {
-    userId,
-    employeeId,
-  };
+  return { userId, employeeId };
 }
 
 async function loadAssignment(
@@ -64,9 +59,7 @@ async function loadAssignment(
     return {
       assignment: null,
       document: null,
-      error:
-        error?.message ||
-        "Belge ataması bulunamadı.",
+      error: error?.message || "Belge ataması bulunamadı.",
     };
   }
 
@@ -86,7 +79,7 @@ async function loadAssignment(
   };
 }
 
-function readRequirementMet(params: {
+function requirementMet(params: {
   activeReadSeconds: number;
   minActiveReadSeconds: number;
   requireLastPage: boolean;
@@ -95,34 +88,37 @@ function readRequirementMet(params: {
   pagesViewed: number[];
   lastPageViewed: number | null;
 }) {
-  const {
-    activeReadSeconds,
-    minActiveReadSeconds,
-    requireLastPage,
-    requireAllPages,
-    pageCount,
-    pagesViewed,
-    lastPageViewed,
-  } = params;
-
-  if (activeReadSeconds < minActiveReadSeconds) {
-    return false;
-  }
-
   if (
-    requireLastPage &&
-    pageCount &&
-    (lastPageViewed || 0) < pageCount
+    params.activeReadSeconds <
+    params.minActiveReadSeconds
   ) {
     return false;
   }
 
   if (
-    requireAllPages &&
-    pageCount &&
-    new Set(pagesViewed).size < pageCount
+    params.requireLastPage &&
+    params.pageCount &&
+    (params.lastPageViewed || 0) <
+      params.pageCount
   ) {
     return false;
+  }
+
+  if (
+    params.requireAllPages &&
+    params.pageCount
+  ) {
+    const seen = new Set(
+      params.pagesViewed.filter(
+        (page) =>
+          page >= 1 &&
+          page <= Number(params.pageCount)
+      )
+    );
+
+    if (seen.size < params.pageCount) {
+      return false;
+    }
   }
 
   return true;
@@ -139,7 +135,6 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
-
   const assignmentId = clean(body.assignmentId);
   const action = clean(body.action).toUpperCase();
 
@@ -169,7 +164,6 @@ export async function POST(request: Request) {
   const assignment = loaded.assignment;
   const document = loaded.document;
   const supabase = getSupabase();
-
   const now = new Date().toISOString();
 
   if (action === "START") {
@@ -190,7 +184,9 @@ export async function POST(request: Request) {
         page_count: document.page_count,
         last_page: assignment.last_page_viewed,
         pages_viewed: assignment.pages_viewed || [],
-        reading_requirement_met: false,
+        reading_requirement_met: Boolean(
+          assignment.reading_completed_at
+        ),
         user_agent:
           request.headers.get("user-agent") || null,
       });
@@ -208,8 +204,8 @@ export async function POST(request: Request) {
     await supabase
       .from("employee_document_assignments")
       .update({
-        status: assignment.first_opened_at
-          ? assignment.status
+        status: assignment.reading_completed_at
+          ? "READ"
           : "OPENED",
         first_opened_at:
           assignment.first_opened_at || now,
@@ -255,6 +251,8 @@ export async function POST(request: Request) {
         assignment.pages_viewed || [],
       lastPageViewed:
         assignment.last_page_viewed || null,
+      pageCount:
+        document.page_count || null,
       requirementMet: Boolean(
         assignment.reading_completed_at
       ),
@@ -289,15 +287,58 @@ export async function POST(request: Request) {
     );
   }
 
+  if (action === "PDF_READY") {
+    const detectedPageCount = Math.max(
+      1,
+      Math.min(10000, Number(body.pageCount || 1))
+    );
+
+    if (
+      !document.page_count ||
+      Number(document.page_count) !== detectedPageCount
+    ) {
+      await supabase
+        .from("employee_documents")
+        .update({
+          page_count: detectedPageCount,
+        })
+        .eq("id", document.id);
+    }
+
+    await supabase
+      .from("employee_document_read_sessions")
+      .update({
+        page_count: detectedPageCount,
+      })
+      .eq("id", sessionId);
+
+    return NextResponse.json({
+      success: true,
+      pageCount: detectedPageCount,
+    });
+  }
+
   if (action === "HEARTBEAT") {
     const active = body.active === true;
+
     const deltaSeconds = Math.max(
       0,
-      Math.min(60, Number(body.deltaSeconds || 0))
+      Math.min(15, Number(body.deltaSeconds || 0))
     );
+
     const pageNo = Math.max(
-      0,
-      Number(body.pageNo || 0)
+      1,
+      Number(body.pageNo || 1)
+    );
+
+    const detectedPageCount = Math.max(
+      1,
+      Number(
+        body.pageCount ||
+          document.page_count ||
+          session.page_count ||
+          1
+      )
     );
 
     const nextSessionOpen =
@@ -316,26 +357,33 @@ export async function POST(request: Request) {
       Number(assignment.active_read_seconds || 0) +
       (active ? deltaSeconds : 0);
 
-    const pages = new Set<number>(
-      Array.isArray(assignment.pages_viewed)
-        ? assignment.pages_viewed.map(Number)
-        : []
-    );
+    const previousPages = Array.isArray(
+      assignment.pages_viewed
+    )
+      ? assignment.pages_viewed.map(Number)
+      : [];
 
-    if (pageNo > 0) {
-      pages.add(pageNo);
-    }
+    const pages = new Set<number>(previousPages);
+    pages.add(pageNo);
 
-    const pagesViewed = Array.from(pages).sort(
-      (a, b) => a - b
+    const pagesViewed = Array.from(pages)
+      .filter(
+        (page) =>
+          page >= 1 &&
+          page <= detectedPageCount
+      )
+      .sort((a, b) => a - b);
+
+    const previousLast = Number(
+      assignment.last_page_viewed || 0
     );
 
     const lastPageViewed = Math.max(
-      Number(assignment.last_page_viewed || 0),
+      previousLast,
       pageNo
     );
 
-    const requirementMet = readRequirementMet({
+    const met = requirementMet({
       activeReadSeconds: nextActiveRead,
       minActiveReadSeconds: Number(
         document.min_active_read_seconds || 0
@@ -344,14 +392,13 @@ export async function POST(request: Request) {
         document.require_last_page !== false,
       requireAllPages:
         document.require_all_pages === true,
-      pageCount:
-        document.page_count == null
-          ? null
-          : Number(document.page_count),
+      pageCount: detectedPageCount,
       pagesViewed,
-      lastPageViewed:
-        lastPageViewed || null,
+      lastPageViewed,
     });
+
+    const firstTimeCompleted =
+      met && !assignment.reading_completed_at;
 
     await supabase
       .from("employee_document_read_sessions")
@@ -359,29 +406,24 @@ export async function POST(request: Request) {
         total_open_seconds: nextSessionOpen,
         active_read_seconds: nextSessionActive,
         last_heartbeat_at: now,
-        last_page:
-          lastPageViewed || null,
+        page_count: detectedPageCount,
+        last_page: lastPageViewed,
         pages_viewed: pagesViewed,
-        reading_requirement_met:
-          requirementMet,
+        reading_requirement_met: met,
       })
       .eq("id", sessionId);
 
     await supabase
       .from("employee_document_assignments")
       .update({
-        status: requirementMet
-          ? "READ"
-          : "READING",
+        status: met ? "READ" : "READING",
         total_open_seconds: nextTotalOpen,
         active_read_seconds: nextActiveRead,
-        last_page_viewed:
-          lastPageViewed || null,
+        last_page_viewed: lastPageViewed,
         pages_viewed: pagesViewed,
-        reading_completed_at:
-          requirementMet
-            ? assignment.reading_completed_at || now
-            : assignment.reading_completed_at,
+        reading_completed_at: met
+          ? assignment.reading_completed_at || now
+          : assignment.reading_completed_at,
       })
       .eq("id", assignment.id);
 
@@ -393,18 +435,19 @@ export async function POST(request: Request) {
         firm_id: assignment.firm_id,
         employee_id: identity.employeeId,
         event_type: "READING_HEARTBEAT",
-        page_no: pageNo || null,
+        page_no: pageNo,
         active_seconds_delta:
           active ? deltaSeconds : 0,
         total_open_seconds_delta: deltaSeconds,
         metadata: {
           active,
+          pageCount: detectedPageCount,
         },
         occurred_at: now,
       },
     ];
 
-    if (pageNo > 0) {
+    if (!previousPages.includes(pageNo)) {
       events.push({
         assignment_id: assignment.id,
         session_id: sessionId,
@@ -413,15 +456,16 @@ export async function POST(request: Request) {
         employee_id: identity.employeeId,
         event_type: "PAGE_VIEWED",
         page_no: pageNo,
-        metadata: {},
+        metadata: {
+          pageCount: detectedPageCount,
+        },
         occurred_at: now,
       });
     }
 
     if (
-      pageNo > 0 &&
-      document.page_count &&
-      pageNo >= Number(document.page_count)
+      pageNo >= detectedPageCount &&
+      previousLast < detectedPageCount
     ) {
       events.push({
         assignment_id: assignment.id,
@@ -431,15 +475,14 @@ export async function POST(request: Request) {
         employee_id: identity.employeeId,
         event_type: "LAST_PAGE_REACHED",
         page_no: pageNo,
-        metadata: {},
+        metadata: {
+          pageCount: detectedPageCount,
+        },
         occurred_at: now,
       });
     }
 
-    if (
-      requirementMet &&
-      !assignment.reading_completed_at
-    ) {
+    if (firstTimeCompleted) {
       events.push({
         assignment_id: assignment.id,
         session_id: sessionId,
@@ -450,6 +493,7 @@ export async function POST(request: Request) {
         metadata: {
           activeReadSeconds: nextActiveRead,
           pagesViewed,
+          pageCount: detectedPageCount,
         },
         occurred_at: now,
       });
@@ -464,12 +508,10 @@ export async function POST(request: Request) {
       activeReadSeconds: nextActiveRead,
       totalOpenSeconds: nextTotalOpen,
       pagesViewed,
-      lastPageViewed:
-        lastPageViewed || null,
-      requirementMet,
-      status: requirementMet
-        ? "READ"
-        : "READING",
+      lastPageViewed,
+      pageCount: detectedPageCount,
+      requirementMet: met,
+      status: met ? "READ" : "READING",
     });
   }
 
@@ -504,17 +546,13 @@ export async function POST(request: Request) {
         occurred_at: now,
       });
 
-    return NextResponse.json({
-      success: true,
-    });
+    return NextResponse.json({ success: true });
   }
 
   if (action === "CLOSE") {
     await supabase
       .from("employee_document_read_sessions")
-      .update({
-        ended_at: now,
-      })
+      .update({ ended_at: now })
       .eq("id", sessionId);
 
     await supabase
@@ -530,9 +568,7 @@ export async function POST(request: Request) {
         occurred_at: now,
       });
 
-    return NextResponse.json({
-      success: true,
-    });
+    return NextResponse.json({ success: true });
   }
 
   return NextResponse.json(
