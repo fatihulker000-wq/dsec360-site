@@ -85,7 +85,6 @@ export default function TrainingVideoManager({
     useState<VideoDraft>(EMPTY_DRAFT);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [showManualUrlForm, setShowManualUrlForm] = useState(false);
 
   const loadVideos = useCallback(async () => {
     if (!trainingId) {
@@ -653,11 +652,14 @@ export default function TrainingVideoManager({
                   lineHeight: 1.6,
                 }}
               >
-                Aşağıdaki yükleyicideki <strong>Video başlığı</strong> alanına
-                alt konu başlığını yazın. Dosyayı seçip yüklediğinizde video
-                otomatik olarak bu <strong>{trainingTitle}</strong> ana
-                eğitimine <strong>{nextSuggestedSortOrder}. alt konu</strong>{" "}
-                olarak eklenir. Video URL&apos;sini elle kopyalamanız gerekmez.
+                Her alt konu videosunu <strong>buradan</strong> yükleyin.
+                Önce <strong>Dosya seç</strong> ile MP4/MOV videoyu seçin,
+                ardından <strong>Video başlığı</strong> alanına alt konu adını
+                yazın ve <strong>Videoyu Hazırla ve Yükle</strong> butonuna
+                basın. Sistem videoyu otomatik olarak{" "}
+                <strong>{trainingTitle}</strong> ana eğitimine{" "}
+                <strong>{nextSuggestedSortOrder}. alt konu</strong> olarak
+                ekler. URL girmeniz gerekmez.
               </p>
             </div>
 
@@ -676,6 +678,63 @@ export default function TrainingVideoManager({
             </div>
           </div>
 
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 10,
+              marginBottom: 14,
+            }}
+          >
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              <div style={{ fontWeight: 900, color: "#0f172a" }}>
+                1. Dosya Seç
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
+                Bilgisayarındaki MP4/MOV eğitim videosunu seç.
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              <div style={{ fontWeight: 900, color: "#0f172a" }}>
+                2. Alt Konu Adını Yaz
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
+                “Video başlığı” alanına alt konu başlığını yaz.
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              <div style={{ fontWeight: 900, color: "#0f172a" }}>
+                3. Yükle
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>
+                “Videoyu Hazırla ve Yükle” ile bu alt konuyu kaydet.
+              </div>
+            </div>
+          </div>
+
           <HlsVideoUploader
             trainingId={trainingId}
             trainingTitle={trainingTitle}
@@ -690,119 +749,6 @@ export default function TrainingVideoManager({
           />
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: showManualUrlForm ? 16 : 0,
-          }}
-        >
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={() => setShowManualUrlForm((current) => !current)}
-          >
-            {showManualUrlForm
-              ? "Manuel URL Alanını Kapat"
-              : "Gelişmiş: Video URL ile Alt Konu Ekle"}
-          </button>
-
-          {!showManualUrlForm ? (
-            <span style={{ fontSize: 12, color: "#64748b" }}>
-              Normal kullanımda yukarıdaki dosya yükleme alanını kullanın.
-            </span>
-          ) : null}
-        </div>
-
-        {showManualUrlForm ? (
-          <>
-        <div className={styles.formGrid}>
-          <label>
-            <span>Alt konu başlığı</span>
-            <input
-              value={draft.title}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
-              }
-              placeholder="Ör. Meslek hastalıklarının nedenleri ve korunma yöntemleri"
-            />
-          </label>
-
-          <label>
-            <span>Alt konu video URL (manuel)</span>
-            <input
-              value={draft.videoUrl}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  videoUrl: event.target.value,
-                }))
-              }
-              placeholder="https://.../video.mp4"
-            />
-          </label>
-
-          <label>
-            <span>Alt konu süresi (saniye)</span>
-            <input
-              type="number"
-              min="0"
-              value={draft.durationSeconds}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  durationSeconds: event.target.value,
-                }))
-              }
-              placeholder="900"
-            />
-          </label>
-
-          <label>
-            <span>Sıra</span>
-            <input
-              type="number"
-              min="1"
-              value={draft.sortOrder}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  sortOrder: event.target.value,
-                }))
-              }
-            />
-          </label>
-        </div>
-
-        <label className={styles.descriptionField}>
-          <span>Alt konu açıklaması</span>
-          <textarea
-            rows={3}
-            value={draft.description}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                description: event.target.value,
-              }))
-            }
-            placeholder="Alt konunun amacı, kapsamı ve öğrenme hedefi"
-          />
-        </label>
-
-        <button
-          type="button"
-          className={styles.primaryButton}
-          disabled={saving}
-          onClick={saveVideo}
-        >
-          {saving ? "Kaydediliyor..." : "URL ile Alt Konu Ekle"}
-        </button>
-          </>
-        ) : null}
       </div>
 
       {editingId ? (
