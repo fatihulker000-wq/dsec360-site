@@ -527,8 +527,10 @@ export default function EmployeeDocumentAssignmentCenter({
 
       setMessage(
         `${Number(json?.inserted || 0)} çalışan için belge ataması oluşturuldu. ` +
-          `${Number(json?.skipped || 0)} mevcut atama atlandı. ` +
-          `${Number(json?.noEmail || 0)} çalışanın e-posta adresi yok.`
+          `${Number(json?.emailed || 0)} e-posta gönderildi. ` +
+          `${Number(json?.mailFailed || 0)} e-posta başarısız. ` +
+          `${Number(json?.noEmail || 0)} çalışanın geçerli e-posta/portal hesabı yok. ` +
+          `${Number(json?.skipped || 0)} mevcut atama atlandı.`
       );
 
       setSelectedEmployeeIds([]);
@@ -1132,7 +1134,7 @@ export default function EmployeeDocumentAssignmentCenter({
 
           <span style={summaryPill}>
             <Mail size={14} />
-            E-posta altyapısı Paket 4
+            Atama sonrası portal bağlantısı e-posta ile gönderilir
           </span>
         </div>
 
