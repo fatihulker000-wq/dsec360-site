@@ -42,7 +42,8 @@ type DocumentationCategory =
   | "INSTRUCTIONS"
   | "BOARD"
   | "EMPLOYEE_REPRESENTATIVE"
-  | "PERIODIC_CONTROL";
+  | "PERIODIC_CONTROL"
+  | "EMPLOYEE_DOCUMENTS";
 
 type CompanyItem = {
   id: string;
@@ -244,6 +245,16 @@ const CATEGORY_DEFINITIONS: CategoryDefinition[] = [
     color: "#3b82f6",
     softColor: "#eff6ff",
     icon: <UserCheck size={25} />,
+  },
+  {
+    value: "EMPLOYEE_DOCUMENTS",
+    title: "Çalışan Belge Yönetimi",
+    description:
+      "Talimat, zimmet, taahhütname ve bilgilendirme belgelerini çalışanlara gönderin; okunma ve onay süreçlerini izleyin",
+    badge: "Çalışan",
+    color: "#7c3aed",
+    softColor: "#f5f3ff",
+    icon: <FileText size={25} />,
   },
   {
     value: "PERIODIC_CONTROL",
@@ -1011,6 +1022,15 @@ export default function DocumentationPage() {
     ) {
       window.location.href =
         "/admin/documentation/employee-representatives";
+      return;
+    }
+
+    if (
+      category ===
+      "EMPLOYEE_DOCUMENTS"
+    ) {
+      window.location.href =
+        "/admin/documentation/employee-documents";
       return;
     }
 
