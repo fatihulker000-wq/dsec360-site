@@ -14,7 +14,6 @@ import AssignmentCenter, {
 import ParticipantImportCenter from "../../../components/training-v2/participants";
 import TrainingCatalog from "../../../components/training-v2/catalog";
 import TrainingExamCenter from "../../../components/training-v2/exams";
-import TrainingExamQuestionManager from "../../../components/training-v2/exams/TrainingExamQuestionManager";
 import TrainingCertificateCenter from "../../../components/training-v2/certificates";
 import TrainingAuditCenter from "../../../components/training-v2/audit";
 import TrainingExecutiveDashboard from "../../../components/training-v2/executive";
@@ -845,17 +844,19 @@ if (companyFilter !== "all") {
           selectedTrainingId={trainingId}
         />
 
-        <TrainingReportCenter
-          trainings={trainings}
-          totalEmployees={totalEmployeeCount}
-          selectedCompanyName={
-            companyFilter === "all"
-              ? "Tüm Firmalar"
-              : companies.find(
-                  (company) => company.id === companyFilter
-                )?.name || "Seçili Firma"
-          }
-        />
+        <div id="training-reports-section" style={{ scrollMarginTop: 24 }}>
+          <TrainingReportCenter
+            trainings={trainings}
+            totalEmployees={totalEmployeeCount}
+            selectedCompanyName={
+              companyFilter === "all"
+                ? "Tüm Firmalar"
+                : companies.find(
+                    (company) => company.id === companyFilter
+                  )?.name || "Seçili Firma"
+            }
+          />
+        </div>
           </>
         ) : (
           <div
@@ -905,25 +906,19 @@ if (companyFilter !== "all") {
 
         {canManageTraining ? (
           <>
-        <TrainingCatalog
-          trainings={trainings}
-          selectedTrainingId={trainingId}
-          onSelectTraining={setTrainingId}
-        />
+        <div id="training-catalog-section" style={{ scrollMarginTop: 24 }}>
+          <TrainingCatalog
+            trainings={trainings}
+            selectedTrainingId={trainingId}
+            onSelectTraining={setTrainingId}
+          />
+        </div>
 
         <TrainingExamCenter
           trainings={trainings}
           selectedTrainingId={trainingId}
           onSelectTraining={setTrainingId}
         />
-
-        {selectedTrainingInfo ? (
-          <TrainingExamQuestionManager
-            trainingId={trainingId}
-            trainingTitle={selectedTrainingInfo.title}
-            onChanged={loadAll}
-          />
-        ) : null}
 
         <TrainingCertificateCenter
           trainings={trainings}
@@ -937,11 +932,13 @@ if (companyFilter !== "all") {
 
 
         {selectedTrainingInfo ? (
-          <TrainingVideoManager
-            trainingId={trainingId}
-            trainingTitle={selectedTrainingInfo.title}
-            onChanged={loadAll}
-          />
+          <div id="training-video-manager-section" style={{ scrollMarginTop: 24 }}>
+            <TrainingVideoManager
+              trainingId={trainingId}
+              trainingTitle={selectedTrainingInfo.title}
+              onChanged={loadAll}
+            />
+          </div>
         ) : null}
           </>
         ) : null}
