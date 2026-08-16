@@ -1,4 +1,4 @@
-import crypto, { randomUUID } from "crypto";
+import crypto, { randomBytes, randomUUID } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -241,6 +241,7 @@ async function sendDocumentInviteEmail(params: {
   dueAt?: string | null;
   tempPassword?: string | null;
   isNewUser: boolean;
+  accessToken: string;
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   const emailFrom = process.env.EMAIL_FROM;
@@ -256,7 +257,10 @@ async function sendDocumentInviteEmail(params: {
     };
   }
 
-  const portalUrl = `${appUrl.replace(/\/$/, "")}/portal/documents`;
+  const portalUrl =
+    `${appUrl.replace(/\/$/, "")}/api/employee-documents/access?token=${encodeURIComponent(
+      params.accessToken
+    )}`;
 
   const dueText = params.dueAt
     ? new Date(params.dueAt).toLocaleString("tr-TR", {
@@ -265,24 +269,11 @@ async function sendDocumentInviteEmail(params: {
       })
     : "Son tarih tanımlanmadı";
 
-  const passwordArea =
-    params.isNewUser && params.tempPassword
-      ? `
-        <div style="margin-top:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px;">
-          <div style="font-size:12px;color:#166534;font-weight:800;">İlk Giriş Şifreniz</div>
-          <div style="font-size:23px;font-weight:900;color:#166534;margin-top:6px;letter-spacing:.5px;">
-            ${escapeHtml(params.tempPassword)}
-          </div>
-          <div style="font-size:11px;color:#4b5563;margin-top:7px;">
-            E-posta adresiniz ve bu şifre ile giriş yapabilirsiniz.
-          </div>
-        </div>
-      `
-      : `
-        <div style="margin-top:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;color:#1e40af;font-size:13px;line-height:1.6;">
-          Mevcut D-SEC Eğitim Portalı kullanıcı bilgileriniz ile giriş yapabilirsiniz.
-        </div>
-      `;
+  const passwordArea = `
+    <div style="margin-top:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;color:#1e40af;font-size:13px;line-height:1.6;">
+      Bu bağlantı size özel güvenli erişim bağlantısıdır. Butona bastığınızda kullanıcı adı veya şifre girmeden doğrudan size atanmış belge açılır.
+    </div>
+  `;
 
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;background:#f3f4f6;padding:30px;color:#111827;">
@@ -731,6 +722,36 @@ export async function POST(request: Request) {
 
     const attemptAt = new Date().toISOString();
 
+    const accessToken = randomBytes(32).toString("hex");
+    const accessTokenHash = sha256(accessToken);
+
+    const dueMs = row.due_at
+      ? new Date(row.due_at).getTime()
+      : 0;
+
+    const fallbackExpiry =
+      Date.now() + 7 * 24 * 60 * 60 * 1000;
+
+    const accessExpiresAt =
+      new Date(
+        Math.max(
+          dueMs > Date.now()
+            ? dueMs
+            : 0,
+          fallbackExpiry
+        )
+      ).toISOString();
+
+    await supabase
+      .from("employee_document_assignments")
+      .update({
+        portal_access_token_hash:
+          accessTokenHash,
+        portal_access_token_expires_at:
+          accessExpiresAt,
+      })
+      .eq("id", row.id);
+
     await supabase
       .from("employee_document_events")
       .insert({
@@ -751,6 +772,7 @@ export async function POST(request: Request) {
       dueAt: row.due_at,
       tempPassword: source.user.tempPassword,
       isNewUser: source.user.isNewUser,
+      accessToken,
     });
 
     if (mail.ok) {
