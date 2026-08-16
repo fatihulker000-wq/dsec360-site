@@ -34,6 +34,12 @@ import {
   useState,
 } from "react";
 
+import EmployeeDocumentFileUploader, {
+  type UploadedEmployeeDocumentFile,
+} from "@/components/documentation/employee-documents/EmployeeDocumentFileUploader";
+
+import EmployeeDocumentAssignmentCenter from "@/components/documentation/employee-documents/EmployeeDocumentAssignmentCenter";
+
 type MainTab =
   | "DASHBOARD"
   | "LIBRARY"
@@ -100,6 +106,9 @@ type CreateForm = {
   description: string;
   fileUrl: string;
   fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  sha256Hash: string;
   versionNo: string;
   versionLabel: string;
   status: "DRAFT" | "PUBLISHED";
@@ -118,6 +127,9 @@ const EMPTY_FORM: CreateForm = {
   description: "",
   fileUrl: "",
   fileName: "",
+  mimeType: "",
+  fileSizeBytes: 0,
+  sha256Hash: "",
   versionNo: "1",
   versionLabel: "V1",
   status: "DRAFT",
@@ -511,6 +523,12 @@ export default function EmployeeDocumentManagementPage() {
             fileUrl: form.fileUrl.trim(),
             fileName:
               form.fileName.trim() || null,
+            mimeType:
+              form.mimeType || null,
+            fileSizeBytes:
+              form.fileSizeBytes || null,
+            sha256Hash:
+              form.sha256Hash || null,
             versionNo:
               Number(form.versionNo || 1),
             versionLabel:
@@ -1471,28 +1489,39 @@ export default function EmployeeDocumentManagementPage() {
                     ]}
                   />
 
-                  <Field
-                    label="Dosya URL"
-                    value={form.fileUrl}
-                    onChange={(value) =>
+                  <EmployeeDocumentFileUploader
+                    firmId={selectedCompanyId}
+                    uploadedFile={
+                      form.fileUrl
+                        ? {
+                            fileUrl: form.fileUrl,
+                            fileName: form.fileName,
+                            mimeType: form.mimeType,
+                            fileSizeBytes: form.fileSizeBytes,
+                            sha256Hash: form.sha256Hash,
+                          }
+                        : null
+                    }
+                    onUploaded={(file) =>
                       setForm((current) => ({
                         ...current,
-                        fileUrl: value,
+                        fileUrl: file.fileUrl,
+                        fileName: file.fileName,
+                        mimeType: file.mimeType,
+                        fileSizeBytes: file.fileSizeBytes,
+                        sha256Hash: file.sha256Hash,
                       }))
                     }
-                    placeholder="https://.../belge.pdf"
-                  />
-
-                  <Field
-                    label="Dosya adı"
-                    value={form.fileName}
-                    onChange={(value) =>
+                    onClear={() =>
                       setForm((current) => ({
                         ...current,
-                        fileName: value,
+                        fileUrl: "",
+                        fileName: "",
+                        mimeType: "",
+                        fileSizeBytes: 0,
+                        sha256Hash: "",
                       }))
                     }
-                    placeholder="kkd-zimmet.pdf"
                   />
 
                   <SelectField
@@ -1713,9 +1742,9 @@ export default function EmployeeDocumentManagementPage() {
                       maxWidth: 720,
                     }}
                   >
-                    Paket 2'de havuz ve belge politikası aktiftir. Gerçek
-                    bilgisayardan PDF yükleme alanını Supabase Storage ile
-                    sonraki pakette bağlayacağız.
+                    Belge dosyası özel Supabase Storage alanına yüklenir.
+                    Dosyanın SHA-256 özeti kayıt altına alınır ve çalışanlara
+                    atanan belge sürümüyle birlikte denetim izi korunur.
                   </div>
 
                   <button
@@ -2035,9 +2064,7 @@ export default function EmployeeDocumentManagementPage() {
                               }}
                             >
                               <a
-                                href={
-                                  item.file_url
-                                }
+                                href={`/api/admin/employee-documents/${item.id}/file`}
                                 target="_blank"
                                 rel="noreferrer"
                                 style={miniButton}
@@ -2161,19 +2188,21 @@ export default function EmployeeDocumentManagementPage() {
           </section>
         ) : null}
 
-        {mainTab === "NEW_ASSIGNMENT"
-          ? renderPlaceholder(
-              "Yeni Gönderim",
-              "Belge seçimi, tüm çalışan / departman / görev / çoklu kişi / tek kişi hedefleme, son okuma tarihi ve toplu gönderim akışı Paket 3'te bu ekranda aktif edilecek."
-            )
-          : null}
+        {mainTab === "NEW_ASSIGNMENT" ? (
+          <EmployeeDocumentAssignmentCenter
+            firmId={selectedCompanyId}
+            documents={documents}
+            initialView="new"
+          />
+        ) : null}
 
-        {mainTab === "ASSIGNMENTS"
-          ? renderPlaceholder(
-              "Gönderimler",
-              "Çalışan bazlı atamalar, e-posta durumu, son tarih ve gönderim batch takibi burada görüntülenecek."
-            )
-          : null}
+        {mainTab === "ASSIGNMENTS" ? (
+          <EmployeeDocumentAssignmentCenter
+            firmId={selectedCompanyId}
+            documents={documents}
+            initialView="list"
+          />
+        ) : null}
 
         {mainTab === "READING"
           ? renderPlaceholder(
