@@ -24,20 +24,32 @@ interface HeroAction {
   label: string;
   icon: React.ReactNode;
   color: string;
+  href: string;
 }
 
 const quickActions: HeroAction[] = [
-  { id: "new", label: "Yeni Eğitim", icon: <Plus size={18} />, color: "#2563EB" },
-  { id: "upload", label: "İçerik Yükle", icon: <Upload size={18} />, color: "#9333EA" },
-  { id: "report", label: "Raporlar", icon: <BarChart3 size={18} />, color: "#EA580C" },
+  {
+    id: "new",
+    label: "Yeni Eğitim",
+    icon: <Plus size={18} />,
+    color: "#2563EB",
+    href: "#training-catalog-section",
+  },
+  {
+    id: "upload",
+    label: "İçerik Yükle",
+    icon: <Upload size={18} />,
+    color: "#9333EA",
+    href: "#training-video-manager-section",
+  },
+  {
+    id: "report",
+    label: "Raporlar",
+    icon: <BarChart3 size={18} />,
+    color: "#EA580C",
+    href: "#training-reports-section",
+  },
 ];
-
-function scrollToTrainingSection(id: string) {
-  const target = document.getElementById(id);
-  if (!target) return false;
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
-  return true;
-}
 
 export default function TrainingExecutiveHero({
   title,
@@ -52,36 +64,6 @@ export default function TrainingExecutiveHero({
   lastSync,
   aiEnabled,
 }: TrainingExecutiveHeroProps) {
-  const handleQuickAction = (actionId: HeroAction["id"]) => {
-    if (actionId === "new") {
-      if (!scrollToTrainingSection("training-catalog-section")) {
-        window.alert("Yeni eğitim alanı bulunamadı. Sayfayı yenileyip tekrar deneyin.");
-      }
-      return;
-    }
-
-    if (actionId === "upload") {
-      if (scrollToTrainingSection("training-video-manager-section")) return;
-
-      if (scrollToTrainingSection("training-catalog-section")) {
-        window.setTimeout(() => {
-          window.alert(
-            "İçerik yüklemek için önce Eğitim Kataloğu bölümünden bir eğitim seçin. Seçimden sonra Eğitim Alt Konuları / Bölümleri alanı açılacaktır."
-          );
-        }, 350);
-        return;
-      }
-
-      window.alert("İçerik yükleme alanı bulunamadı. Sayfayı yenileyip tekrar deneyin.");
-      return;
-    }
-
-    if (actionId === "report") {
-      if (!scrollToTrainingSection("training-reports-section")) {
-        window.alert("Raporlar alanı bulunamadı. Sayfayı yenileyip tekrar deneyin.");
-      }
-    }
-  };
 
   return (
     <section className={styles.hero}>
@@ -149,18 +131,18 @@ export default function TrainingExecutiveHero({
 
         <div className={styles.quickActionsGrid}>
           {quickActions.map((action) => (
-            <button
+            <a
               key={action.id}
               className={styles.quickActionButton}
-              type="button"
-              onClick={() => handleQuickAction(action.id)}
+              href={action.href}
+              style={{ textDecoration: "none" }}
             >
               <div className={styles.quickActionIcon} style={{ background: action.color }}>
                 {action.icon}
               </div>
               <span>{action.label}</span>
               <ArrowUpRight size={18} className={styles.arrowIcon} />
-            </button>
+            </a>
           ))}
         </div>
       </div>

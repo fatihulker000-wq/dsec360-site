@@ -931,15 +931,32 @@ if (companyFilter !== "all") {
         />
 
 
-        {selectedTrainingInfo ? (
-          <div id="training-video-manager-section" style={{ scrollMarginTop: 24 }}>
+        <div
+          id="training-video-manager-section"
+          style={{ scrollMarginTop: 24 }}
+        >
+          {selectedTrainingInfo ? (
             <TrainingVideoManager
               trainingId={trainingId}
               trainingTitle={selectedTrainingInfo.title}
               onChanged={loadAll}
             />
-          </div>
-        ) : null}
+          ) : (
+            <div
+              style={{
+                ...cardStyle(),
+                marginBottom: 20,
+                borderColor: "#ddd6fe",
+                background: "#faf5ff",
+                color: "#6b21a8",
+                fontWeight: 800,
+              }}
+            >
+              İçerik yüklemek için önce yukarıdaki Eğitim Kataloğu bölümünden
+              bir eğitim seçin.
+            </div>
+          )}
+        </div>
           </>
         ) : null}
 
