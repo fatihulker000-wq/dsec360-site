@@ -286,10 +286,10 @@ export default function TrainingAuditCenter({
       params.toString();
 
     router.push(
-      `/admin/training/audit-records${
-        query ? `?${query}` : ""
-      }`
-    );
+  `/admin/trainings/audit-records${
+    query ? `?${query}` : ""
+  }`
+);
   }
 
   return (
