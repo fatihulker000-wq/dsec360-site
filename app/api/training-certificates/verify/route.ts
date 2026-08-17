@@ -57,6 +57,8 @@ export async function GET(request: Request) {
         employee_name,
         company_name,
         duration_minutes,
+        duration_seconds_snapshot,
+        duration_minutes_snapshot,
         final_score,
         document_hash,
         revoked_at,
@@ -86,6 +88,23 @@ export async function GET(request: Request) {
       data.status !== "REVOKED" &&
       !expired;
 
+    const effectiveDurationMinutes =
+      Number(
+        data.duration_minutes_snapshot ??
+        data.duration_minutes ??
+        0
+      ) || null;
+
+    const effectiveDurationSeconds =
+      Number(
+        data.duration_seconds_snapshot ??
+        (
+          effectiveDurationMinutes
+            ? effectiveDurationMinutes * 60
+            : 0
+        )
+      ) || null;
+
     return NextResponse.json({
       valid,
       expired,
@@ -93,14 +112,19 @@ export async function GET(request: Request) {
       data: {
         ...data,
 
-        effective_status: expired
-          ? "EXPIRED"
-          : data.status,
+        duration_minutes:
+          effectiveDurationMinutes,
+
+        duration_seconds:
+          effectiveDurationSeconds,
+
+        effective_status:
+          expired
+            ? "EXPIRED"
+            : data.status,
       },
     });
-
   } catch (error: any) {
-
     console.error(
       "certificate verify:",
       error
