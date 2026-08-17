@@ -37,7 +37,10 @@ type TrainingApiRow = {
   title?: string | null;
   description?: string | null;
   type?: string | null;
+  duration_seconds?: number | null;
   duration_minutes?: number | null;
+  catalog_visible?: boolean | null;
+  catalog_key?: string | null;
   content_url?: string | null;
   topics_text?: string | null;
   assigned_count?: number | null;
@@ -85,7 +88,10 @@ type TrainingRow = {
   title: string;
   description: string;
   type: string;
+  duration_seconds: number;
   duration_minutes: number | null;
+  catalog_visible: boolean;
+  catalog_key: string | null;
   content_url: string;
   topics_text: string;
   assigned_count: number;
@@ -338,8 +344,12 @@ setTotalEmployeeCount(
             title: (t.title || "Adsız Eğitim").trim(),
             description: (t.description || "Açıklama bulunmuyor.").trim(),
             type: (t.type || "online").trim(),
+            duration_seconds:
+              typeof t.duration_seconds === "number" ? t.duration_seconds : 0,
             duration_minutes:
               typeof t.duration_minutes === "number" ? t.duration_minutes : null,
+            catalog_visible: t.catalog_visible !== false,
+            catalog_key: t.catalog_key ? String(t.catalog_key) : null,
             content_url: (t.content_url || "").trim(),
             topics_text: (t.topics_text || "").trim(),
             assigned_count:
@@ -911,6 +921,7 @@ if (companyFilter !== "all") {
             trainings={trainings}
             selectedTrainingId={trainingId}
             onSelectTraining={setTrainingId}
+            onChanged={loadAll}
           />
         </div>
 

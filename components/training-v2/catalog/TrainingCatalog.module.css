@@ -16,6 +16,14 @@
   gap: 18px;
 }
 
+.headerActions {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .eyebrow {
   color: #7c3aed;
   font-size: 9px;
@@ -62,6 +70,196 @@
   color: #1d4ed8;
   font-size: 24px;
   font-weight: 950;
+}
+
+.createButton {
+  min-height: 46px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 950;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.createPanel {
+  margin-top: 16px;
+  padding: 17px;
+  border: 1px solid #ddd6fe;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(124, 58, 237, .08), transparent 30%),
+    #faf5ff;
+}
+
+.createPanelHeader {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.createPanelIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  color: #6d28d9;
+  background: #ede9fe;
+}
+
+.createPanelHeader strong {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.createPanelHeader p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.createGrid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 220px;
+  gap: 11px;
+  margin-top: 14px;
+}
+
+.createGrid label {
+  display: grid;
+  gap: 6px;
+}
+
+.createGrid span {
+  color: #64748b;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.createGrid input,
+.createGrid select,
+.createGrid textarea {
+  width: 100%;
+  border: 1px solid #dbe2ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  outline: none;
+}
+
+.createGrid input,
+.createGrid select {
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.createGrid textarea {
+  padding: 11px 12px;
+  resize: vertical;
+}
+
+.createGrid input:focus,
+.createGrid select:focus,
+.createGrid textarea:focus {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, .12);
+}
+
+.descriptionField {
+  grid-column: 1 / -1;
+}
+
+.durationRule {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 11px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.createActions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancelButton,
+.saveButton {
+  min-height: 39px;
+  padding: 0 13px;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.cancelButton {
+  border: 1px solid #dbe2ea;
+  background: #fff;
+  color: #475569;
+}
+
+.saveButton {
+  border: 0;
+  background: #6d28d9;
+  color: #fff;
+}
+
+.errorBox,
+.successBox {
+  margin-top: 13px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.errorBox {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.successBox {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.spin {
+  animation: trainingCatalogSpin .9s linear infinite;
+}
+
+@keyframes trainingCatalogSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .toolbar {
@@ -323,6 +521,9 @@
   border-radius: 999px;
   font-size: 7px;
   font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .ready {
@@ -373,8 +574,13 @@
 }
 
 @media (max-width: 900px) {
-  .toolbar {
+  .toolbar,
+  .createGrid {
     grid-template-columns: 1fr;
+  }
+
+  .descriptionField {
+    grid-column: auto;
   }
 
   .selectedPanel {
@@ -389,6 +595,10 @@
   .metaGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .headerActions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 600px) {
@@ -401,7 +611,14 @@
     flex-direction: column;
   }
 
-  .headerStat {
+  .headerActions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .headerStat,
+  .createButton {
     width: 100%;
   }
 
@@ -414,6 +631,16 @@
   }
 
   .scoreBox {
+    width: 100%;
+  }
+
+  .createActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .cancelButton,
+  .saveButton {
     width: 100%;
   }
 }
