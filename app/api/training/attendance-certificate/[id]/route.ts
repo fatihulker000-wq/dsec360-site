@@ -67,6 +67,18 @@ type AssignmentRow = {
   started_at: string | null;
   completed_at: string | null;
   training_id: string | null;
+  user_id: string | null;
+};
+
+type UserRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  company_id: string | null;
+};
+
+type VideoRow = {
+  duration_seconds: number | null;
 };
 
 type TrainingRow = {
@@ -75,6 +87,7 @@ type TrainingRow = {
   description: string | null;
   type: string | null;
   topics_text: string | null;
+  duration_minutes: number | null;
 };
 
 export async function GET(
@@ -103,7 +116,7 @@ export async function GET(
 
     let assignmentQuery = supabase
       .from("training_assignments")
-      .select("id, status, started_at, completed_at, training_id")
+      .select("id, status, started_at, completed_at, training_id, user_id")
       .eq("id", id);
 
     if (userId !== "admin-1") {
@@ -125,7 +138,7 @@ export async function GET(
     if (assignment.training_id) {
       const { data: trainingData, error: trainingError } = await supabase
         .from("trainings")
-        .select("id, title, description, type, topics_text")
+        .select("id, title, description, type, topics_text, duration_minutes")
         .eq("id", assignment.training_id)
         .maybeSingle<TrainingRow>();
 
@@ -136,14 +149,101 @@ export async function GET(
       }
     }
 
-    const safeUserEmail = escapeHtml(userEmail);
-    const safeUserFullName = escapeHtml(userFullName);
+    let dbUser: UserRow | null = null;
+
+    if (assignment.user_id) {
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("id, full_name, email, company_id")
+        .eq("id", assignment.user_id)
+        .maybeSingle<UserRow>();
+
+      if (userError) {
+        console.error("ATTENDANCE USER ERROR:", userError);
+      } else {
+        dbUser = userData;
+      }
+    }
+
+    const resolvedUserEmail =
+      String(dbUser?.email || userEmail || "").trim() || "-";
+
+    const resolvedUserFullName =
+      String(dbUser?.full_name || "").trim() ||
+      String(userFullName || "").trim() ||
+      resolvedUserEmail;
+
+    let activeVideoDurationSeconds = 0;
+
+    if (assignment.training_id) {
+      const { data: videos, error: videosError } = await supabase
+        .from("training_videos")
+        .select("duration_seconds")
+        .eq("training_id", assignment.training_id)
+        .eq("is_active", true)
+        .returns<VideoRow[]>();
+
+      if (videosError) {
+        console.error("ATTENDANCE VIDEO DURATION ERROR:", videosError);
+      } else {
+        activeVideoDurationSeconds = (videos || []).reduce(
+          (sum, row) => {
+            const seconds = Number(row.duration_seconds || 0);
+            return sum + (
+              Number.isFinite(seconds) && seconds > 0 ? seconds : 0
+            );
+          },
+          0
+        );
+      }
+    }
+
+    const fallbackDurationMinutes = Number(
+      training?.duration_minutes || 0
+    );
+
+    const durationSeconds =
+      activeVideoDurationSeconds > 0
+        ? Math.round(activeVideoDurationSeconds)
+        : fallbackDurationMinutes > 0
+        ? Math.round(fallbackDurationMinutes * 60)
+        : 0;
+
+    const formatDuration = (totalSeconds: number) => {
+      if (!totalSeconds || totalSeconds <= 0) {
+        return "Süre bilgisi tanımlanmadı";
+      }
+
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      if (hours > 0) {
+        return [
+          `${hours} saat`,
+          minutes > 0 ? `${minutes} dk` : "",
+          seconds > 0 ? `${seconds} sn` : "",
+        ].filter(Boolean).join(" ");
+      }
+
+      if (minutes > 0) {
+        return [
+          `${minutes} dk`,
+          seconds > 0 ? `${seconds} sn` : "",
+        ].filter(Boolean).join(" ");
+      }
+
+      return `${seconds} sn`;
+    };
+
+    const safeUserEmail = escapeHtml(resolvedUserEmail);
+    const safeUserFullName = escapeHtml(resolvedUserFullName);
     const safeCompanyName = escapeHtml(companyName);
 
     const trainingTitle = escapeHtml(training?.title || "Eğitim adı bulunamadı");
     const trainingDescription = escapeHtml(training?.description || "-");
     const trainingType = escapeHtml(training?.type || "online");
-    const durationMinutes = null;
+    const durationText = formatDuration(durationSeconds);
 
     const topics = parseTrainingTopics(training?.topics_text);
     const topicsHtml = topicsToHtml(topics);
@@ -151,9 +251,6 @@ export async function GET(
     const startedDate = formatDateTr(assignment.started_at);
     const completedDate = formatDateTr(assignment.completed_at);
     const issueDate = formatDateTr(new Date().toISOString());
-    const durationText = durationMinutes
-      ? `${durationMinutes} dakika`
-      : "Süre bilgisi tanımlanmadı";
 
     const html = `
       <!doctype html>
@@ -201,7 +298,7 @@ export async function GET(
               background: #fff;
               border: 8px solid #0f766e;
               border-radius: 24px;
-              padding: 32px 34px 28px;
+              padding: 20px 24px 18px;
               box-shadow: 0 20px 40px rgba(15, 23, 42, 0.10);
             }
 
@@ -236,27 +333,27 @@ export async function GET(
 
             h1 {
               margin: 18px 0 0;
-              font-size: 40px;
+              font-size: 32px;
               font-weight: 900;
               text-align: center;
             }
 
             .desc {
-              margin: 14px auto 0;
+              margin: 8px auto 0;
               max-width: 860px;
               text-align: center;
-              font-size: 17px;
-              line-height: 1.7;
+              font-size: 14px;
+              line-height: 1.45;
               color: #4b5563;
             }
 
             .person {
-              margin-top: 26px;
+              margin-top: 14px;
               text-align: center;
             }
 
             .name {
-              font-size: 34px;
+              font-size: 27px;
               font-weight: 900;
             }
 
@@ -272,7 +369,7 @@ export async function GET(
             }
 
             .training-title {
-              font-size: 28px;
+              font-size: 22px;
               font-weight: 800;
               color: #166534;
             }
@@ -280,12 +377,12 @@ export async function GET(
             .training-desc {
               margin-top: 10px;
               font-size: 15px;
-              line-height: 1.75;
+              line-height: 1.4;
               color: #4b5563;
             }
 
             .grid {
-              margin-top: 24px;
+              margin-top: 14px;
               display: grid;
               grid-template-columns: repeat(3, minmax(0, 1fr));
               gap: 14px;
@@ -313,11 +410,11 @@ export async function GET(
             }
 
             .topics {
-              margin-top: 22px;
+              margin-top: 12px;
               background: #f8fafc;
               border: 1px solid #e5e7eb;
               border-radius: 16px;
-              padding: 16px 18px;
+              padding: 10px 12px;
             }
 
             .topics-title {
@@ -358,7 +455,7 @@ export async function GET(
             }
 
             .bottom {
-              margin-top: 28px;
+              margin-top: 16px;
               display: grid;
               grid-template-columns: 1fr 1fr;
               gap: 24px;
@@ -401,7 +498,18 @@ export async function GET(
                 padding: 0;
               }
               .toolbar { display: none; }
-              .doc { box-shadow: none; }
+              .doc {
+                 box-shadow: none;
+                 border-radius: 0;
+                 break-inside: avoid;
+                 page-break-inside: avoid;
+               }
+               .card,
+               .topics,
+               .bottom {
+                 break-inside: avoid;
+                 page-break-inside: avoid;
+               }
             }
           </style>
         </head>
@@ -423,8 +531,8 @@ export async function GET(
               <h1>KATILIM BELGESİ</h1>
 
               <div class="desc">
-                Bu belge, aşağıda bilgileri yer alan katılımcının ilgili eğitime katılım sağladığını
-                ve eğitim kaydının oluşturulduğunu göstermek amacıyla düzenlenmiştir.
+                Bu belge, aşağıda bilgileri yer alan katılımcının belirtilen eğitim içeriğini
+                tamamladığını ve eğitim kaydının oluşturulduğunu göstermek amacıyla düzenlenmiştir.
               </div>
 
               <div class="person">
@@ -447,7 +555,7 @@ export async function GET(
                   <div class="value">${trainingType}</div>
                 </div>
                 <div class="card">
-                  <div class="label">Eğitim Süresi</div>
+                  <div class="label">Eğitim İçerik Süresi</div>
                   <div class="value">${durationText}</div>
                 </div>
                 <div class="card">
