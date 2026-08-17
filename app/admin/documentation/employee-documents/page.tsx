@@ -40,6 +40,8 @@ import EmployeeDocumentFileUploader, {
 
 import EmployeeDocumentAssignmentCenter from "@/components/documentation/employee-documents/EmployeeDocumentAssignmentCenter";
 
+import EmployeeDocumentInsightsCenter from "@/components/documentation/employee-documents/EmployeeDocumentInsightsCenter";
+
 type MainTab =
   | "DASHBOARD"
   | "LIBRARY"
@@ -2204,33 +2206,37 @@ export default function EmployeeDocumentManagementPage() {
           />
         ) : null}
 
-        {mainTab === "READING"
-          ? renderPlaceholder(
-              "Okuma & Onay Takibi",
-              "Belge açılma süresi, aktif okuma süresi, sayfa görüntülemeleri, okundu durumu ve elektronik onay kodları burada izlenecek."
-            )
-          : null}
+        {mainTab === "READING" ? (
+          <EmployeeDocumentInsightsCenter
+            firmId={selectedCompanyId}
+            documents={documents}
+            mode="READING"
+          />
+        ) : null}
 
-        {mainTab === "ANALYTICS"
-          ? renderPlaceholder(
-              "Çalışan Belge Analizi",
-              "Okuyan, okumayan, açıp tamamlamayan, okuduğu halde onaylamayan ve geciken çalışan analizleri burada yer alacak."
-            )
-          : null}
+        {mainTab === "ANALYTICS" ? (
+          <EmployeeDocumentInsightsCenter
+            firmId={selectedCompanyId}
+            documents={documents}
+            mode="ANALYTICS"
+          />
+        ) : null}
 
-        {mainTab === "REPORTS"
-          ? renderPlaceholder(
-              "Belge Raporları",
-              "Çalışan Belge Okuma ve Onay Raporu ile Excel/PDF çıktıları burada üretilecek."
-            )
-          : null}
+        {mainTab === "REPORTS" ? (
+          <EmployeeDocumentInsightsCenter
+            firmId={selectedCompanyId}
+            documents={documents}
+            mode="REPORTS"
+          />
+        ) : null}
 
-        {mainTab === "LOGS"
-          ? renderPlaceholder(
-              "İşlem Logları",
-              "ASSIGNED, EMAIL_SENT, DOCUMENT_OPENED, READING_HEARTBEAT, PAGE_VIEWED, DOCUMENT_ACKNOWLEDGED gibi denetim logları burada gösterilecek."
-            )
-          : null}
+        {mainTab === "LOGS" ? (
+          <EmployeeDocumentInsightsCenter
+            firmId={selectedCompanyId}
+            documents={documents}
+            mode="LOGS"
+          />
+        ) : null}
       </div>
 
       <style jsx>{`
