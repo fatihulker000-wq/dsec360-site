@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { appendTrainingAuditEvent } from "../../../../lib/training-audit";
 
 function sha256(input: string) {
   return crypto.createHash("sha256").update(input).digest("hex");
@@ -40,6 +41,7 @@ type TrainingRow = {
 };
 
 type AssignmentRow = {
+  id?: string;
   user_id: string;
   training_id: string;
 };
@@ -404,7 +406,7 @@ if (usersWithoutEmployee.length > 0) {
 
     const { data: existingRows, error: existingError } = await supabase
       .from("training_assignments")
-      .select("user_id, training_id")
+      .select("id, user_id, training_id")
       .eq("training_id", trainingId)
       .in("user_id", uniqueUserIds);
 
@@ -463,9 +465,10 @@ if (usersWithoutEmployee.length > 0) {
       status: "not_started" as const,
     }));
 
-    const { error: insertError } = await supabase
+    const { data: insertedAssignments, error: insertError } = await supabase
       .from("training_assignments")
-      .insert(inserts);
+      .insert(inserts)
+      .select("id, user_id, training_id");
 
     if (insertError) {
       console.error("ASSIGNMENT INSERT ERROR:", insertError);
@@ -473,6 +476,51 @@ if (usersWithoutEmployee.length > 0) {
         { error: "Atama kaydı başarısız." },
         { status: 500 }
       );
+    }
+
+    const insertedAssignmentRows =
+      (insertedAssignments || []) as AssignmentRow[];
+
+    const assignableUserMap = new Map(
+      assignableUsers.map((item) => [item.user.id, item.user])
+    );
+
+    // Audit kaydı ana atama işlemini asla bozmamalı.
+    // Sadece gerçekten yeni eklenen atamalar için ASSIGNED olayı yazılır.
+    for (const assignment of insertedAssignmentRows) {
+      const user = assignableUserMap.get(assignment.user_id);
+      if (!user) continue;
+
+      try {
+        await appendTrainingAuditEvent({
+          assignmentId: assignment.id || null,
+          trainingId,
+          userId: user.id,
+          employeeId: user.employee_id || null,
+          companyId,
+          eventType: "ASSIGNED",
+          eventLabel: "Eğitim atandı",
+          eventStatus: "info",
+          source: "api/training/assign",
+          metadata: {
+            training_title: training.title || "D-SEC Eğitimi",
+            training_type: training.type || null,
+            employee_name: user.full_name || null,
+            email: user.email || null,
+            company_id: companyId,
+          },
+          currentData: {
+            status: "not_started",
+            training_id: trainingId,
+            user_id: user.id,
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          "TRAINING ASSIGNED AUDIT ERROR:",
+          auditError
+        );
+      }
     }
 
     let emailedCount = 0;
