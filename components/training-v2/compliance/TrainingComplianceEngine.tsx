@@ -14,7 +14,14 @@ export type ComplianceTrainingItem = {
   id: string;
   title: string;
   type: string;
+
+  // Ana süre kaynağı:
+  // Aktif eğitim videolarının toplam gerçek süresi.
+  duration_seconds?: number | null;
+
+  // Eski kayıtlar için geriye dönük uyumluluk.
   duration_minutes: number | null;
+
   assigned_count: number;
   completed_count: number;
   in_progress_count: number;
@@ -48,6 +55,50 @@ function normalizeType(value?: string | null) {
   return "Eğitim";
 }
 
+function getTrainingDurationSeconds(
+  training: ComplianceTrainingItem
+) {
+  const durationSeconds = Number(
+    training.duration_seconds || 0
+  );
+
+  if (
+    Number.isFinite(durationSeconds) &&
+    durationSeconds > 0
+  ) {
+    return Math.max(
+      0,
+      Math.round(durationSeconds)
+    );
+  }
+
+  // Eski eğitim kayıtları için fallback.
+  const durationMinutes = Number(
+    training.duration_minutes || 0
+  );
+
+  if (
+    Number.isFinite(durationMinutes) &&
+    durationMinutes > 0
+  ) {
+    return Math.max(
+      0,
+      Math.round(durationMinutes * 60)
+    );
+  }
+
+  return 0;
+}
+
+function getTrainingDurationMinutes(
+  training: ComplianceTrainingItem
+) {
+  return (
+    getTrainingDurationSeconds(training) /
+    60
+  );
+}
+
 export default function TrainingComplianceEngine({
   trainings,
   totalEmployees,
@@ -67,35 +118,43 @@ export default function TrainingComplianceEngine({
         ? rule.initialMinimumMinutes
         : rule.repeatMinimumMinutes;
 
-    const totalCatalogMinutes = trainings.reduce(
+    const totalCatalogSeconds = trainings.reduce(
       (sum, training) =>
-        sum + Math.max(0, Number(training.duration_minutes || 0)),
+        sum + getTrainingDurationSeconds(training),
       0
     );
 
-    const completedWeightedMinutes = trainings.reduce(
+    const totalCatalogMinutes = Math.round(
+      totalCatalogSeconds / 60
+    );
+
+    const completedWeightedSeconds = trainings.reduce(
       (sum, training) => {
-        if (training.assigned_count <= 0) return sum;
+        if (training.assigned_count <= 0) {
+          return sum;
+        }
 
         const completionRatio =
-          training.completed_count / training.assigned_count;
+          training.completed_count /
+          training.assigned_count;
+
+        const safeCompletionRatio = Math.min(
+          1,
+          Math.max(0, completionRatio)
+        );
 
         return (
           sum +
-          Math.max(
-            0,
-            Number(training.duration_minutes || 0)
-          ) *
-            Math.min(1, Math.max(0, completionRatio))
+          getTrainingDurationSeconds(training) *
+            safeCompletionRatio
         );
       },
       0
     );
 
-    const averageCompletedMinutes =
-      trainings.length > 0
-        ? Math.round(completedWeightedMinutes)
-        : 0;
+    const averageCompletedMinutes = Math.round(
+      completedWeightedSeconds / 60
+    );
 
     const remainingMinutes = Math.max(
       0,
