@@ -228,9 +228,45 @@ function formatTrainingDate(value?: string | null) {
   });
 }
 
-function getTrainingDurationText(value?: number | null) {
-  if (!value || value <= 0) return "Süre yok";
-  return `${value} dk`;
+function getTrainingDurationText(
+  durationSeconds?: number | null,
+  durationMinutes?: number | null
+) {
+  const totalSeconds = Math.max(
+    0,
+    Number(durationSeconds || 0)
+  );
+
+  if (totalSeconds > 0) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+
+    if (hours > 0) {
+      return minutes > 0
+        ? `${hours} sa ${minutes} dk`
+        : `${hours} sa`;
+    }
+
+    if (minutes > 0) {
+      return seconds > 0
+        ? `${minutes} dk ${seconds} sn`
+        : `${minutes} dk`;
+    }
+
+    return `${seconds} sn`;
+  }
+
+  const fallbackMinutes = Math.max(
+    0,
+    Number(durationMinutes || 0)
+  );
+
+  if (fallbackMinutes > 0) {
+    return `${fallbackMinutes} dk`;
+  }
+
+  return "Süre yok";
 }
 
 export default function AdminTrainingPage() {
@@ -563,25 +599,38 @@ if (employeeIds.length > 0) {
   }, [users, selectedUsers]);
 
   const trainingTotals = useMemo(() => {
-    const totalAssigned = trainings.reduce((sum, t) => sum + t.assigned_count, 0);
+    const totalAssigned = trainings.reduce(
+      (sum, t) => sum + t.assigned_count,
+      0
+    );
+
     const totalNotStarted = trainings.reduce(
       (sum, t) => sum + t.not_started_count,
       0
     );
+
     const totalInProgress = trainings.reduce(
       (sum, t) => sum + t.in_progress_count,
       0
     );
+
     const totalCompleted = trainings.reduce(
       (sum, t) => sum + t.completed_count,
       0
     );
+
+    // "Aktif Eğitim" çalışan atama sayısı değildir.
+    // Eğitim kataloğunda görünür/aktif olan eğitim başlıklarının sayısıdır.
+    const activeTrainingCount = trainings.filter(
+      (training) => training.catalog_visible !== false
+    ).length;
 
     return {
       totalAssigned,
       totalNotStarted,
       totalInProgress,
       totalCompleted,
+      activeTrainingCount,
     };
   }, [trainings]);
 
@@ -729,7 +778,10 @@ if (companyFilter !== "all") {
         id: training.id,
         title: training.title,
         type: normalizeTrainingTypeText(training.type),
-        duration: getTrainingDurationText(training.duration_minutes),
+        duration: getTrainingDurationText(
+          training.duration_seconds,
+          training.duration_minutes
+        ),
         assigned: training.assigned_count,
         completed: training.completed_count,
         inProgress: training.in_progress_count,
@@ -784,7 +836,7 @@ if (companyFilter !== "all") {
                 )?.name || "Seçili Firma"
           }
           totalTrainings={trainings.length}
-          activeTrainings={trainingTotals.totalInProgress}
+          activeTrainings={trainingTotals.activeTrainingCount}
           completedTrainings={trainingTotals.totalCompleted}
           pendingTrainings={trainingTotals.totalNotStarted}
           certificatesWaiting={0}
