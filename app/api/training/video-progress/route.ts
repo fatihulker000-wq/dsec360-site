@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { appendTrainingAuditEvent } from "../../../../lib/training-audit";
 
 // HTML5/HLS timeupdate tam saniyede gelmez. İstemci saniyeyi aşağı
 // yuvarlarken sunucu duvar saatini de aşağı yuvarladığı için iki normal
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
 
     const { data: assignment, error: assignmentError } = await supabase
       .from("training_assignments")
-      .select("id, user_id, training_id, pre_exam_completed, final_exam_passed, training_reset_required")
+      .select("id, user_id, training_id, pre_exam_completed, final_exam_passed, training_reset_required, watch_completed, video_chain_completed")
       .eq("id", assignmentId)
       .maybeSingle();
 
@@ -473,6 +474,122 @@ export async function POST(request: Request) {
         { error: "Eğitim toplam ilerlemesi güncellenemedi.", detail: assignmentUpdateError.message },
         { status: 500 }
       );
+    }
+
+    /*
+     * AUDIT KATMANI
+     * Ana video/progress akışını asla bozmaz.
+     * Heartbeat için audit üretilmez.
+     */
+    if (action === "presence") {
+      try {
+        await appendTrainingAuditEvent({
+          assignmentId,
+          trainingId: String(assignment.training_id),
+          userId,
+          eventType: "CHECKPOINT_CONFIRMED",
+          eventLabel: "Ekran başı doğrulaması onaylandı",
+          eventStatus: "success",
+          occurredAt: nowIso,
+          source: "api/training/video-progress",
+          metadata: {
+            video_id: videoId,
+            checkpoint_number: presenceClicks,
+            checkpoint_second: presenceClicks * PRESENCE_INTERVAL_SECONDS,
+            required_presence_clicks: requiredClicks,
+            playback_session_id: sessionId,
+          },
+          currentData: {
+            presence_clicks: presenceClicks,
+            required_presence_clicks: requiredClicks,
+            watch_seconds: watchSeconds,
+            max_watched_seconds: maxWatchedSeconds,
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          "TRAINING CHECKPOINT AUDIT ERROR:",
+          auditError
+        );
+      }
+    }
+
+    const videoWasAlreadyCompleted =
+      existing?.watch_completed === true;
+
+    if (action === "complete" && !videoWasAlreadyCompleted) {
+      try {
+        await appendTrainingAuditEvent({
+          assignmentId,
+          trainingId: String(assignment.training_id),
+          userId,
+          eventType: "WATCH_COMPLETED",
+          eventLabel: "Video izleme tamamlandı",
+          eventStatus: "success",
+          occurredAt: watchCompletedAt || nowIso,
+          source: "api/training/video-progress",
+          metadata: {
+            video_id: videoId,
+            duration_seconds: duration,
+            watch_seconds: watchSeconds,
+            required_presence_clicks: requiredClicks,
+            presence_clicks: presenceClicks,
+            completed_videos: completedVideos,
+            total_videos: totalVideos,
+          },
+          previousData: {
+            watch_completed: false,
+          },
+          currentData: {
+            watch_completed: true,
+            watch_completed_at: watchCompletedAt || nowIso,
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          "TRAINING WATCH COMPLETED AUDIT ERROR:",
+          auditError
+        );
+      }
+    }
+
+    const chainWasAlreadyCompleted =
+      assignment.video_chain_completed === true ||
+      assignment.watch_completed === true;
+
+    if (chainCompleted && !chainWasAlreadyCompleted) {
+      try {
+        await appendTrainingAuditEvent({
+          assignmentId,
+          trainingId: String(assignment.training_id),
+          userId,
+          eventType: "VIDEO_CHAIN_COMPLETED",
+          eventLabel: "Zorunlu video zinciri tamamlandı",
+          eventStatus: "success",
+          occurredAt: nowIso,
+          source: "api/training/video-progress",
+          metadata: {
+            completed_videos: completedVideos,
+            total_videos: totalVideos,
+            verified_watch_seconds: totalWatchSeconds,
+            locked_duration_seconds: totalLockedDuration,
+          },
+          previousData: {
+            video_chain_completed: false,
+            watch_completed: false,
+          },
+          currentData: {
+            video_chain_completed: true,
+            watch_completed: true,
+            watch_completed_at: nowIso,
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          "TRAINING VIDEO CHAIN AUDIT ERROR:",
+          auditError
+        );
+      }
     }
 
     return NextResponse.json({

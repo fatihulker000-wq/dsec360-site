@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
+import { appendTrainingAuditEvent } from "../../../../lib/training-audit";
 
 export const dynamic = "force-dynamic";
 
@@ -330,6 +331,7 @@ export async function POST(request: Request) {
       trainingResult,
       userResult,
       existingResult,
+      videoResult,
     ] = await Promise.all([
 
       supabase
@@ -376,6 +378,15 @@ export async function POST(request: Request) {
         .limit(1)
         .maybeSingle(),
 
+      supabase
+        .from("training_videos")
+        .select("duration_seconds")
+        .eq(
+          "training_id",
+          assignment.training_id
+        )
+        .eq("is_active", true),
+
     ]);
 
     if (
@@ -407,6 +418,68 @@ export async function POST(request: Request) {
         }
       );
     }
+
+    if (videoResult.error) {
+      return NextResponse.json(
+        {
+          error:
+            "Eğitim video süreleri alınamadı.",
+          detail:
+            videoResult.error.message,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    /*
+      Sertifika süre snapshot'ı.
+
+      Kaynak: sertifika oluşturulduğu anda aktif olan
+      training_videos kayıtlarının duration_seconds toplamı.
+
+      Eski/fallback eğitimlerde video süresi bulunamazsa mevcut
+      trainings.duration_minutes değeri korunur.
+    */
+    const activeVideoDurationSeconds =
+      (videoResult.data || []).reduce(
+        (sum: number, row: Row) => {
+          const value = Number(
+            row.duration_seconds || 0
+          );
+
+          return (
+            sum +
+            (Number.isFinite(value) && value > 0
+              ? value
+              : 0)
+          );
+        },
+        0
+      );
+
+    const fallbackDurationMinutes =
+      Number(
+        trainingResult.data.duration_minutes || 0
+      );
+
+    const durationSecondsSnapshot =
+      activeVideoDurationSeconds > 0
+        ? Math.round(activeVideoDurationSeconds)
+        : fallbackDurationMinutes > 0
+        ? Math.round(
+            fallbackDurationMinutes * 60
+          )
+        : null;
+
+    const durationMinutesSnapshot =
+      durationSecondsSnapshot &&
+      durationSecondsSnapshot > 0
+        ? Math.ceil(
+            durationSecondsSnapshot / 60
+          )
+        : null;
 
     /*
       Aynı atama için
@@ -482,7 +555,13 @@ export async function POST(request: Request) {
         user.company || null,
 
       duration_minutes:
-        training.duration_minutes || null,
+        durationMinutesSnapshot,
+
+      duration_seconds_snapshot:
+        durationSecondsSnapshot,
+
+      duration_minutes_snapshot:
+        durationMinutesSnapshot,
 
       final_score:
         assignment.final_exam_score || null,
@@ -567,6 +646,112 @@ export async function POST(request: Request) {
         }
       );
 
+    }
+
+    /*
+      CERTIFICATE_CREATED AUDIT
+
+      Sertifika veritabanına başarıyla yazıldıktan sonra
+      kanıt günlüğüne eklenir. Audit hatası sertifika
+      üretimini asla başarısız yapmaz.
+    */
+    try {
+      await appendTrainingAuditEvent({
+        assignmentId,
+        trainingId:
+          assignment.training_id || null,
+        userId:
+          assignment.user_id || null,
+        employeeId:
+          user.employee_id || null,
+        companyId:
+          user.company_id || null,
+
+        eventType:
+          "CERTIFICATE_CREATED",
+
+        eventLabel:
+          "Sertifika oluşturuldu",
+
+        eventStatus:
+          "success",
+
+        occurredAt:
+          data.issued_at ||
+          certificatePayload.issued_at,
+
+        source:
+          "api/admin/training-certificates-v2",
+
+        metadata: {
+          certificate_id:
+            data.id || null,
+
+          certificate_no:
+            certificateNo,
+
+          verification_code:
+            verificationCode,
+
+          verification_url:
+            verificationUrl,
+
+          document_hash:
+            documentHash,
+
+          revision_no:
+            data.revision_no || 1,
+
+          training_title:
+            training.title || null,
+
+          training_type:
+            training.type || null,
+
+          employee_name:
+            user.full_name || null,
+
+          company_name:
+            user.company || null,
+
+          duration_minutes:
+            durationMinutesSnapshot,
+
+          duration_seconds_snapshot:
+            durationSecondsSnapshot,
+
+          duration_minutes_snapshot:
+            durationMinutesSnapshot,
+
+          final_score:
+            assignment.final_exam_score || null,
+
+          status:
+            "ISSUED",
+        },
+
+        currentData: {
+          certificate_id:
+            data.id || null,
+
+          certificate_no:
+            certificateNo,
+
+          verification_code:
+            verificationCode,
+
+          status:
+            "ISSUED",
+
+          document_hash:
+            documentHash,
+        },
+      });
+    } catch (auditError) {
+      console.error(
+        "TRAINING CERTIFICATE CREATED AUDIT ERROR:",
+        auditError
+      );
     }
 
     /*
@@ -831,6 +1016,12 @@ export async function PATCH(request: Request) {
 
         duration_minutes:
           current.duration_minutes,
+
+        duration_seconds_snapshot:
+          current.duration_seconds_snapshot,
+
+        duration_minutes_snapshot:
+          current.duration_minutes_snapshot,
 
         final_score:
           current.final_score,

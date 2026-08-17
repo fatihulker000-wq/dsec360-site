@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { appendTrainingAuditEvent } from "../../../../../lib/training-audit";
 
 function getSupabase() {
   return createClient(
@@ -301,6 +302,42 @@ export async function POST(request: Request) {
         );
       }
 
+      // Audit katmanı sınav akışını asla durdurmaz.
+      try {
+        await appendTrainingAuditEvent({
+          assignmentId,
+          trainingId: assignment.training_id,
+          userId,
+          eventType: "PRE_EXAM_COMPLETED",
+          eventLabel: "Ön sınav tamamlandı",
+          eventStatus: "success",
+          source: "api/training/exam/submit",
+          metadata: {
+            exam_type: "pre",
+            score,
+            passed: true,
+            correct_count: correctCount,
+            question_count: safeQuestions.length,
+          },
+          previousData: {
+            pre_exam_completed: assignment.pre_exam_completed,
+            pre_exam_score: assignment.pre_exam_score,
+            status: assignment.status,
+          },
+          currentData: {
+            pre_exam_completed: true,
+            pre_exam_score: score,
+            training_reset_required: false,
+            status: "in_progress",
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          "TRAINING PRE EXAM AUDIT ERROR:",
+          auditError
+        );
+      }
+
       return NextResponse.json({
         success: true,
         examType: "pre",
@@ -332,6 +369,84 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { error: "Sınav sonucu kaydedilemedi." },
           { status: 500 }
+        );
+      }
+
+      try {
+        await appendTrainingAuditEvent({
+          assignmentId,
+          trainingId: assignment.training_id,
+          userId,
+          eventType: "FINAL_EXAM_COMPLETED",
+          eventLabel: "Final sınavı tamamlandı",
+          eventStatus: "success",
+          source: "api/training/exam/submit",
+          metadata: {
+            exam_type: "final",
+            score,
+            passed: true,
+            attempt: nextAttempt,
+            attempts_left: Math.max(0, 3 - nextAttempt),
+            correct_count: correctCount,
+            question_count: safeQuestions.length,
+          },
+          previousData: {
+            final_exam_score: assignment.final_exam_score,
+            final_exam_attempts: assignment.final_exam_attempts,
+            final_exam_passed: assignment.final_exam_passed,
+            status: assignment.status,
+          },
+          currentData: {
+            final_exam_score: score,
+            final_exam_attempts: nextAttempt,
+            final_exam_passed: true,
+            training_reset_required: false,
+            status: "completed",
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          "TRAINING FINAL EXAM AUDIT ERROR:",
+          auditError
+        );
+      }
+
+      // Eğitim ancak final başarıyla geçildikten ve assignment "completed"
+      // olarak kaydedildikten sonra tamamlanmış kabul edilir.
+      // Audit hatası ana eğitim akışını asla bozmaz.
+      try {
+        await appendTrainingAuditEvent({
+          assignmentId,
+          trainingId: assignment.training_id,
+          userId,
+          eventType: "COMPLETED",
+          eventLabel: "Eğitim tamamlandı",
+          eventStatus: "success",
+          source: "api/training/exam/submit",
+          metadata: {
+            final_exam_score: score,
+            final_exam_attempt: nextAttempt,
+            final_exam_passed: true,
+            watch_completed: true,
+            video_chain_completed:
+              assignment.video_chain_completed === true,
+          },
+          previousData: {
+            status: assignment.status,
+            final_exam_passed:
+              assignment.final_exam_passed,
+          },
+          currentData: {
+            status: "completed",
+            final_exam_passed: true,
+            training_reset_required: false,
+            watch_completed: true,
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          "TRAINING COMPLETED AUDIT ERROR:",
+          auditError
         );
       }
 
@@ -384,6 +499,49 @@ export async function POST(request: Request) {
         );
       }
 
+      try {
+        await appendTrainingAuditEvent({
+          assignmentId,
+          trainingId: assignment.training_id,
+          userId,
+          eventType: "FINAL_EXAM_COMPLETED",
+          eventLabel: "Final sınavı tamamlandı",
+          eventStatus: "warning",
+          source: "api/training/exam/submit",
+          metadata: {
+            exam_type: "final",
+            score,
+            passed: false,
+            attempt: nextAttempt,
+            attempts_left: 0,
+            reset_required: true,
+            repeat_count: nextRepeatCount,
+            correct_count: correctCount,
+            question_count: safeQuestions.length,
+          },
+          previousData: {
+            final_exam_score: assignment.final_exam_score,
+            final_exam_attempts: assignment.final_exam_attempts,
+            final_exam_passed: assignment.final_exam_passed,
+            training_reset_required: assignment.training_reset_required,
+            status: assignment.status,
+          },
+          currentData: {
+            final_exam_score: score,
+            final_exam_attempts: 0,
+            final_exam_passed: false,
+            training_reset_required: true,
+            status: "not_started",
+            training_repeat_count: nextRepeatCount,
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          "TRAINING FINAL EXAM RESET AUDIT ERROR:",
+          auditError
+        );
+      }
+
       return NextResponse.json({
         success: true,
         examType: "final",
@@ -412,6 +570,45 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Başarısız sınav sonucu kaydedilemedi." },
         { status: 500 }
+      );
+    }
+
+    try {
+      await appendTrainingAuditEvent({
+        assignmentId,
+        trainingId: assignment.training_id,
+        userId,
+        eventType: "FINAL_EXAM_COMPLETED",
+        eventLabel: "Final sınavı tamamlandı",
+        eventStatus: "warning",
+        source: "api/training/exam/submit",
+        metadata: {
+          exam_type: "final",
+          score,
+          passed: false,
+          attempt: nextAttempt,
+          attempts_left: Math.max(0, 3 - nextAttempt),
+          reset_required: false,
+          correct_count: correctCount,
+          question_count: safeQuestions.length,
+        },
+        previousData: {
+          final_exam_score: assignment.final_exam_score,
+          final_exam_attempts: assignment.final_exam_attempts,
+          final_exam_passed: assignment.final_exam_passed,
+          status: assignment.status,
+        },
+        currentData: {
+          final_exam_score: score,
+          final_exam_attempts: nextAttempt,
+          final_exam_passed: false,
+          status: "in_progress",
+        },
+      });
+    } catch (auditError) {
+      console.error(
+        "TRAINING FINAL EXAM AUDIT ERROR:",
+        auditError
       );
     }
 
