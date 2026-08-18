@@ -42,11 +42,14 @@ import EmployeeDocumentAssignmentCenter from "@/components/documentation/employe
 
 import EmployeeDocumentInsightsCenter from "@/components/documentation/employee-documents/EmployeeDocumentInsightsCenter";
 
+import EmployeeDocumentEmployeeCards from "@/components/documentation/employee-documents/EmployeeDocumentEmployeeCards";
+
 type MainTab =
   | "DASHBOARD"
   | "LIBRARY"
   | "NEW_ASSIGNMENT"
   | "ASSIGNMENTS"
+  | "EMPLOYEES"
   | "READING"
   | "ANALYTICS"
   | "REPORTS"
@@ -165,6 +168,7 @@ const tabs: Array<{
   { value: "LIBRARY", label: "Belge Havuzu", icon: <FileSearch size={17} /> },
   { value: "NEW_ASSIGNMENT", label: "Yeni Gönderim", icon: <Send size={17} /> },
   { value: "ASSIGNMENTS", label: "Gönderimler", icon: <MailCheck size={17} /> },
+  { value: "EMPLOYEES", label: "Çalışan Kartları", icon: <Users size={17} /> },
   { value: "READING", label: "Okuma & Onay", icon: <BookOpenCheck size={17} /> },
   { value: "ANALYTICS", label: "Analiz", icon: <BarChart3 size={17} /> },
   { value: "REPORTS", label: "Raporlar", icon: <FileCheck2 size={17} /> },
@@ -2203,6 +2207,12 @@ export default function EmployeeDocumentManagementPage() {
             firmId={selectedCompanyId}
             documents={documents}
             initialView="list"
+          />
+        ) : null}
+
+        {mainTab === "EMPLOYEES" ? (
+          <EmployeeDocumentEmployeeCards
+            firmId={selectedCompanyId}
           />
         ) : null}
 
