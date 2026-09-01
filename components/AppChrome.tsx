@@ -12,7 +12,9 @@ export default function AppChrome({
   const pathname = usePathname();
 
   const hideMainChrome =
-    pathname.startsWith("/admin") || pathname.startsWith("/panel");
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/panel") ||
+    pathname.startsWith("/survey");
 
   if (hideMainChrome) {
     return <>{children}</>;

@@ -12,6 +12,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Loader2,
+  MessageSquareText,
   Plus,
   RefreshCw,
   Search,
@@ -43,7 +44,8 @@ type DocumentationCategory =
   | "BOARD"
   | "EMPLOYEE_REPRESENTATIVE"
   | "PERIODIC_CONTROL"
-  | "EMPLOYEE_DOCUMENTS";
+  | "EMPLOYEE_DOCUMENTS"
+  | "EMPLOYEE_SURVEYS";
 
 type CompanyItem = {
   id: string;
@@ -255,6 +257,16 @@ const CATEGORY_DEFINITIONS: CategoryDefinition[] = [
     color: "#7c3aed",
     softColor: "#f5f3ff",
     icon: <FileText size={25} />,
+  },
+  {
+    value: "EMPLOYEE_SURVEYS",
+    title: "Çalışan Anket & Geri Bildirim Merkezi",
+    description:
+      "Çalışan görüşlerini ölçün, riskli yanıtları analiz edin ve sonuçları aksiyona dönüştürün",
+    badge: "Geri Bildirim",
+    color: "#0f766e",
+    softColor: "#f0fdfa",
+    icon: <MessageSquareText size={25} />,
   },
   {
     value: "PERIODIC_CONTROL",
@@ -1031,6 +1043,15 @@ export default function DocumentationPage() {
     ) {
       window.location.href =
         "/admin/documentation/employee-documents";
+      return;
+    }
+
+    if (
+      category ===
+      "EMPLOYEE_SURVEYS"
+    ) {
+      window.location.href =
+        "/admin/documentation/employee-surveys";
       return;
     }
 
