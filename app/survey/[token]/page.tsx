@@ -8,7 +8,7 @@ import type { FormEvent } from "react";
 type Option = { id: string; label: string; value: string };
 type Question = { id: string; position: number; text: string; type: string; required: boolean; helpText?: string | null; options: Option[] };
 type Survey = { id: string; title: string; description: string; category: string; anonymous: boolean; endsAt?: string | null };
-type Value = { optionIds?: string[]; textValue?: string; numberValue?: number | string; dateValue?: string };
+type Value = { optionIds?: string[]; textValue?: string; commentValue?: string; numberValue?: number | string; dateValue?: string };
 
 export default function SurveyResponsePage() {
   const params = useParams();
@@ -72,6 +72,10 @@ export default function SurveyResponsePage() {
       {questions.map((q) => <section key={q.id} style={card}>
         <div style={{ display: "flex", gap: 12 }}><b style={number}>{q.position}</b><div><h2 style={{ margin: 0, fontSize: 17, lineHeight: 1.45 }}>{q.text}{q.required ? <span style={{ color: "#dc2626" }}> *</span> : null}</h2>{q.helpText ? <p style={{ color: "#64748b", margin: "6px 0 0", fontSize: 13 }}>{q.helpText}</p> : null}</div></div>
         <div style={{ display: "grid", gap: 9, marginTop: 17 }}>{renderQuestion(q, answers[q.id] || {}, setSingle, setMultiple, (value) => setAnswers((x) => ({ ...x, [q.id]: { ...x[q.id], ...value } })))}</div>
+        <label style={{ display: "grid", gap: 6, marginTop: 14, color: "#475569", fontSize: 13, fontWeight: 750 }}>
+          Açıklama / Ek görüş <span style={{ fontWeight: 500, color: "#94a3b8" }}>(isteğe bağlı)</span>
+          <textarea value={answers[q.id]?.commentValue || ""} maxLength={2000} onChange={(e) => setAnswers((x) => ({ ...x, [q.id]: { ...x[q.id], commentValue: e.target.value } }))} style={{ ...input, minHeight: 76 }} placeholder="Bu yanıtınızla ilgili eklemek istediğiniz açıklamayı yazabilirsiniz…"/>
+        </label>
       </section>)}
       <button disabled={saving} style={submitButton}>{saving ? <Loader2 size={18}/> : <Send size={18}/>} {saving ? "Kaydediliyor…" : "Anketi Tamamla"}</button>
     </form>

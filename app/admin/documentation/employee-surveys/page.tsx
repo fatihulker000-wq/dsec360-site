@@ -88,6 +88,7 @@ type ResponseAnswer = {
   answer: string;
   riskLevel: string;
   riskPoints: number;
+  comment?: string;
 };
 
 type SurveyResponse = {
@@ -104,6 +105,23 @@ type SurveyResponse = {
   negativeAnswerCount: number;
   flagged: boolean;
   answers: ResponseAnswer[];
+};
+
+type SurveyParticipant = {
+  id: string;
+  surveyId: string;
+  surveyTitle: string;
+  anonymous: boolean;
+  employeeId: string;
+  fullName: string;
+  email: string;
+  jobTitle: string;
+  registryNo: string;
+  status: string;
+  sentAt?: string | null;
+  openedAt?: string | null;
+  completedAt?: string | null;
+  expiresAt?: string | null;
 };
 
 type OptionDistribution = {
@@ -355,6 +373,18 @@ function statusLabel(value: string) {
   }
 }
 
+function participantStatusLabel(value: string) {
+  const labels: Record<string, string> = {
+    COMPLETED: "Yanıtladı",
+    OPENED: "Açtı / Bitirmedi",
+    SENT: "Gönderildi / Açmadı",
+    EXPIRED: "Süresi Doldu",
+    REVOKED: "Bağlantı İptal",
+    NOT_SENT: "Gönderilemedi",
+  };
+  return labels[value] || value;
+}
+
 function isExpired(survey: Survey) {
   return survey.status === "ACTIVE" && Boolean(survey.endsAt) &&
     new Date(String(survey.endsAt)).getTime() < Date.now();
@@ -375,6 +405,9 @@ export default function EmployeeSurveysPage() {
 
   const [responses, setResponses] =
     useState<SurveyResponse[]>([]);
+
+  const [participants, setParticipants] =
+    useState<SurveyParticipant[]>([]);
 
   const [analytics, setAnalytics] =
     useState<SurveyAnalysis[]>([]);
@@ -488,12 +521,12 @@ export default function EmployeeSurveysPage() {
     useCallback(async () => {
       if (!companyId) return;
 
-      const json: DashboardResponse =
-        await request(
+      const [json, participantJson]: [DashboardResponse, { participants?: SurveyParticipant[]; comments?: Array<{ answerId: string; comment: string }> }] =
+        await Promise.all([request(
           `/api/admin/documentation/employee-surveys/dashboard?firmId=${encodeURIComponent(
             companyId
           )}`
-        );
+        ), request(`/api/admin/documentation/employee-surveys/participants?firmId=${encodeURIComponent(companyId)}`)]);
 
       const nextSurveys =
         Array.isArray(json.surveys)
@@ -502,11 +535,10 @@ export default function EmployeeSurveysPage() {
 
       setSurveys(nextSurveys);
 
-      setResponses(
-        Array.isArray(json.responses)
-          ? json.responses
-          : []
-      );
+      const commentMap = new Map((participantJson.comments || []).map((item) => [item.answerId, item.comment]));
+      setResponses((Array.isArray(json.responses) ? json.responses : []).map((response) => ({ ...response, answers: response.answers.map((answer) => ({ ...answer, comment: commentMap.get(answer.id) || "" })) })));
+
+      setParticipants(Array.isArray(participantJson.participants) ? participantJson.participants : []);
 
       setAnalytics(
         Array.isArray(json.analytics)
@@ -800,6 +832,26 @@ export default function EmployeeSurveysPage() {
         .toISOString()
         .slice(0, 10)}.csv`;
 
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportParticipantCsv() {
+    const rows: string[][] = [["Anket", "Sicil No", "Çalışan", "E-posta", "Görev/Kadro", "Katılım Durumu", "Gönderim", "Açılma", "Tamamlama", "Soru", "Yanıt", "Risk Seviyesi", "Risk Puanı"]];
+    for (const participant of participants) {
+      const matching = participant.anonymous ? null : responses.find((response) => response.surveyId === participant.surveyId && ((participant.email && response.participantEmail.toLowerCase() === participant.email.toLowerCase()) || response.participantName === participant.fullName));
+      const base = [participant.surveyTitle, participant.registryNo, participant.fullName, participant.email, participant.jobTitle, participantStatusLabel(participant.status), formatDate(participant.sentAt), formatDate(participant.openedAt), formatDate(participant.completedAt)];
+      if (matching?.answers.length) {
+        for (const answer of matching.answers) rows.push([...base, answer.question, `${answer.answer}${answer.comment ? ` | Açıklama: ${answer.comment}` : ""}`, answer.riskLevel, String(answer.riskPoints)]);
+      } else {
+        rows.push([...base, participant.anonymous && participant.status === "COMPLETED" ? "Anonim anket" : "", participant.anonymous && participant.status === "COMPLETED" ? "Cevaplar çalışanla eşleştirilmez" : "", "", ""]);
+      }
+    }
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `DSEC_Anket_Katilimci_Raporu_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -1480,6 +1532,7 @@ export default function EmployeeSurveysPage() {
                                     answer.answer
                                   }
                                 </div>
+                                {answer.comment ? <div style={{ marginTop: 7, padding: "8px 10px", borderRadius: 8, background: "#f8fafc", color: "#475569", fontSize: 13 }}><b>Açıklama:</b> {answer.comment}</div> : null}
                               </div>
 
                               {answer.riskLevel !==
@@ -1838,6 +1891,10 @@ export default function EmployeeSurveysPage() {
                 Analiz CSV İndir
               </button>
 
+              <button type="button" onClick={exportParticipantCsv} style={primaryButton}>
+                <Users size={17} /> Kişi Bazlı CSV İndir
+              </button>
+
               <button
                 type="button"
                 onClick={() =>
@@ -1855,6 +1912,15 @@ export default function EmployeeSurveysPage() {
               Anonimlik eşiği dolmayan anketlerin cevap
               ayrıntıları rapora dahil edilmez.
             </div>
+
+            <SectionTitle icon={<Users size={21} />} title="Katılımcı ve Eksik Yanıt Listesi" />
+            <div style={tableWrap}>
+              <table style={tableStyle}>
+                <thead><tr><th style={thStyle}>Anket</th><th style={thStyle}>Çalışan</th><th style={thStyle}>Sicil / Görev</th><th style={thStyle}>Durum</th><th style={thStyle}>Tamamlama</th></tr></thead>
+                <tbody>{participants.map((participant) => <tr key={participant.id}><td style={tdStyle}>{participant.surveyTitle}{participant.anonymous ? <small style={smallStyle}>Anonim — cevaplarla eşleştirilmez</small> : null}</td><td style={tdStyle}><b>{participant.fullName}</b><small style={smallStyle}>{participant.email || "E-posta yok"}</small></td><td style={tdStyle}>{participant.registryNo || "—"}<small style={smallStyle}>{participant.jobTitle || "Görev yok"}</small></td><td style={tdStyle}><span style={pill}>{participantStatusLabel(participant.status)}</span></td><td style={tdStyle}>{formatDate(participant.completedAt)}</td></tr>)}</tbody>
+              </table>
+            </div>
+            {participants.length === 0 ? <Empty text="Henüz katılımcı kaydı bulunmuyor." /> : null}
           </section>
         ) : null}
       </div>
