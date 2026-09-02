@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2, Plus, Save, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, LockKeyhole, Plus, Save, Send, Trash2 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -14,6 +14,7 @@ const newQuestion = (): QuestionDraft => ({ text: "", type: "YES_NO", required: 
 
 export default function SurveyBuilderPage() {
   const id = String(useParams()?.id || "");
+  const [survey, setSurvey] = useState({ title: "", description: "", category: "", status: "DRAFT", endsAt: "", responseCount: 0 });
   const [questions, setQuestions] = useState<QuestionDraft[]>([newQuestion()]);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -26,15 +27,35 @@ export default function SurveyBuilderPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const response = await fetch(`/api/admin/documentation/employee-surveys/${id}/questions`, { cache: "no-store", credentials: "include" });
-        const json = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(json.error || "Anket yüklenemedi.");
-        if (Array.isArray(json.questions) && json.questions.length) setQuestions(json.questions);
+        const [surveyResponse, questionResponse] = await Promise.all([
+          fetch(`/api/admin/documentation/employee-surveys/${id}`, { cache: "no-store", credentials: "include" }),
+          fetch(`/api/admin/documentation/employee-surveys/${id}/questions`, { cache: "no-store", credentials: "include" }),
+        ]);
+        const surveyJson = await surveyResponse.json().catch(() => ({}));
+        const questionJson = await questionResponse.json().catch(() => ({}));
+        if (!surveyResponse.ok) throw new Error(surveyJson.error || "Anket yüklenemedi.");
+        if (!questionResponse.ok) throw new Error(questionJson.error || "Sorular yüklenemedi.");
+        const row = surveyJson.survey || {};
+        setSurvey({ title: row.title || "", description: row.description || "", category: row.category || "", status: row.status || "DRAFT", endsAt: row.ends_at ? new Date(row.ends_at).toISOString().slice(0, 16) : "", responseCount: Number(surveyJson.responseCount || 0) });
+        if (Array.isArray(questionJson.questions) && questionJson.questions.length) setQuestions(questionJson.questions);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Anket yüklenemedi.");
       }
     })();
   }, [id]);
+
+  const questionsLocked = survey.status !== "DRAFT" || survey.responseCount > 0;
+
+  async function saveSurvey() {
+    try {
+      setSaving(true); setError(""); setMessage("");
+      const response = await fetch(`/api/admin/documentation/employee-surveys/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ action: "UPDATE", title: survey.title, description: survey.description, category: survey.category, endsAt: survey.endsAt ? new Date(survey.endsAt).toISOString() : null }) });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || "Anket bilgileri kaydedilemedi.");
+      setMessage("Anket bilgileri güncellendi.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Anket bilgileri kaydedilemedi."); }
+    finally { setSaving(false); }
+  }
 
   function updateQuestion(index: number, patch: Partial<QuestionDraft>) { setQuestions((rows) => rows.map((x, i) => i === index ? { ...x, ...patch } : x)); }
   function changeType(index: number, type: string) {
@@ -50,6 +71,7 @@ export default function SurveyBuilderPage() {
   function updateOption(qi: number, oi: number, patch: Partial<OptionDraft>) { updateQuestion(qi, { options: questions[qi].options.map((x, i) => i === oi ? { ...x, ...patch } : x) }); }
 
   async function saveQuestions() {
+    if (questionsLocked) { setError("Yanıt bütünlüğünü korumak için yayınlanmış veya yanıt alınmış anketlerin soruları değiştirilemez. Anketi kopyalayarak yeni dönem oluşturun."); return; }
     try {
       setSaving(true); setError(""); setMessage("");
       const response = await fetch(`/api/admin/documentation/employee-surveys/${id}/questions`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ questions }) });
@@ -73,12 +95,14 @@ export default function SurveyBuilderPage() {
   return <main style={{ minHeight: "100vh", background: "#f4f7f6", padding: 24, color: "#172033" }}><div style={{ maxWidth: 1100, margin: "auto", display: "grid", gap: 16 }}>
     <header style={{ ...panel, background: "linear-gradient(135deg,#064e3b,#0f766e)", color: "white" }}><button style={ghost} onClick={() => { window.location.href = "/admin/documentation/employee-surveys"; }}><ArrowLeft size={16}/> Ankete Dön</button><h1>Anket Soru ve Gönderim Merkezi</h1><p>Soruları oluşturun, riskli cevapları işaretleyin ve çalışanlara güvenli bağlantı gönderin.</p></header>
     {error ? <div style={{ ...notice, color: "#b91c1c", background: "#fef2f2" }}>{error}</div> : null}{message ? <div style={{ ...notice, color: "#047857", background: "#ecfdf5" }}>{message}</div> : null}
-    {questions.map((q, qi) => <section key={qi} style={panel}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><h2 style={{ margin: 0 }}>Soru {qi + 1}</h2><button style={danger} onClick={() => setQuestions((x) => x.filter((_, i) => i !== qi))}><Trash2 size={16}/> Sil</button></div>
+    <section style={panel}><h2 style={{ marginTop: 0 }}>Anket Bilgileri</h2><div style={grid}><Field label="Anket adı"><input style={input} value={survey.title} onChange={(e) => setSurvey((x) => ({ ...x, title: e.target.value }))}/></Field><Field label="Kategori"><input style={input} value={survey.category} onChange={(e) => setSurvey((x) => ({ ...x, category: e.target.value }))}/></Field><Field label="Bitiş tarihi"><input style={input} type="datetime-local" value={survey.endsAt} onChange={(e) => setSurvey((x) => ({ ...x, endsAt: e.target.value }))}/></Field></div><Field label="Açıklama"><textarea style={{ ...input, minHeight: 80 }} value={survey.description} onChange={(e) => setSurvey((x) => ({ ...x, description: e.target.value }))}/></Field><button style={{ ...primary, marginTop: 14 }} disabled={saving} onClick={() => void saveSurvey()}>{saving ? <Loader2 size={17}/> : <Save size={17}/>} Bilgileri Kaydet</button></section>
+    {questionsLocked ? <div style={{ ...notice, color: "#92400e", background: "#fffbeb", display: "flex", gap: 10, alignItems: "center" }}><LockKeyhole size={22}/><span><b>Sorular kilitli.</b> Bu anket {survey.status === "ACTIVE" ? "yayında" : "taslak dışında"} ve {survey.responseCount} yanıt içeriyor. Metin, süre ve açıklama güncellenebilir; soru değişikliği için ana ekrandan “Kopyala” kullanın.</span></div> : null}
+    {questions.map((q, qi) => <section key={qi} style={{ ...panel, opacity: questionsLocked ? .72 : 1 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><h2 style={{ margin: 0 }}>Soru {qi + 1}</h2><button style={danger} disabled={questionsLocked} onClick={() => setQuestions((x) => x.filter((_, i) => i !== qi))}><Trash2 size={16}/> Sil</button></div>
       <div style={grid}><Field label="Soru metni"><textarea style={{ ...input, minHeight: 85 }} value={q.text} onChange={(e) => updateQuestion(qi, { text: e.target.value })}/></Field><Field label="Cevap tipi"><select style={input} value={q.type} onChange={(e) => changeType(qi, e.target.value)}>{[["YES_NO","Evet / Hayır"],["SINGLE","Tek seçim"],["MULTIPLE","Çoklu seçim"],["LIKERT_5","Likert 5"],["SCALE_10","1–10 ölçeği"],["TEXT","Açık uçlu"],["NUMBER","Sayısal"],["DATE","Tarih"]].map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select></Field><Field label="Önem ağırlığı (1–5)"><input style={input} type="number" min={1} max={5} value={q.weight} onChange={(e) => updateQuestion(qi, { weight: Number(e.target.value) })}/></Field></div>
       {q.options.length ? <div style={{ display: "grid", gap: 8, marginTop: 15 }}>{q.options.map((o, oi) => <div key={oi} style={{ display: "grid", gridTemplateColumns: "1fr 150px 120px 42px", gap: 8 }}><input style={input} value={o.label} onChange={(e) => updateOption(qi, oi, { label: e.target.value, value: e.target.value })}/><select style={input} value={o.riskLevel} onChange={(e) => updateOption(qi, oi, { riskLevel: e.target.value })}>{["NONE","LOW","MEDIUM","HIGH","CRITICAL"].map((x) => <option key={x}>{x}</option>)}</select><input style={input} type="number" min={0} max={100} value={o.riskPoints} onChange={(e) => updateOption(qi, oi, { riskPoints: Number(e.target.value) })}/><button style={danger} onClick={() => updateQuestion(qi, { options: q.options.filter((_, i) => i !== oi) })}><Trash2 size={15}/></button></div>)}<button style={secondary} onClick={() => updateQuestion(qi, { options: [...q.options, { label: `Seçenek ${q.options.length + 1}`, value: String(q.options.length + 1), riskLevel: "NONE", riskPoints: 0 }] })}><Plus size={16}/> Seçenek ekle</button></div> : null}
     </section>)}
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button style={secondary} onClick={() => setQuestions((x) => [...x, newQuestion()])}><Plus size={17}/> Soru Ekle</button><button style={primary} disabled={saving} onClick={() => void saveQuestions()}>{saving ? <Loader2 size={17}/> : <Save size={17}/>} Soruları Kaydet</button></div>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button style={secondary} disabled={questionsLocked} onClick={() => setQuestions((x) => [...x, newQuestion()])}><Plus size={17}/> Soru Ekle</button><button style={primary} disabled={saving || questionsLocked} onClick={() => void saveQuestions()}>{saving ? <Loader2 size={17}/> : <Save size={17}/>} Soruları Kaydet</button></div>
     <section style={panel}><h2>Çalışanlara Gönder</h2><div style={grid}><Field label="Hedef kitle"><select style={input} value={targetType} onChange={(e) => setTargetType(e.target.value)}><option value="ALL">Tüm aktif çalışanlar</option><option value="JOB_TITLE">Görev/kadro</option><option value="PERSON">Çalışan kimlikleri</option><option value="MULTI_PERSON">Çoklu çalışan</option></select></Field>{targetType === "JOB_TITLE" ? <Field label="Görev/kadro"><input style={input} value={jobTitle} onChange={(e) => setJobTitle(e.target.value)}/></Field> : null}{["PERSON","MULTI_PERSON"].includes(targetType) ? <Field label="Çalışan ID'leri (virgülle)"><input style={input} value={employeeIds} onChange={(e) => setEmployeeIds(e.target.value)}/></Field> : null}</div><button style={{ ...primary, marginTop: 15 }} disabled={publishing} onClick={() => void publish()}>{publishing ? <Loader2 size={17}/> : <Send size={17}/>} Yayınla ve E-posta Gönder</button></section>
   </div></main>;
 }

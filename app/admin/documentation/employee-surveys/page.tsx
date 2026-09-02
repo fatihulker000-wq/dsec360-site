@@ -2,12 +2,16 @@
 
 import {
   Activity,
+  Archive,
   AlertTriangle,
   ArrowLeft,
   BarChart3,
   CheckCircle2,
+  CalendarClock,
   ClipboardList,
+  Copy,
   Download,
+  Edit3,
   FileDown,
   LayoutDashboard,
   ListChecks,
@@ -22,6 +26,7 @@ import {
   ShieldAlert,
   Sparkles,
   Target,
+  Trash2,
   Users,
 } from "lucide-react";
 
@@ -350,6 +355,11 @@ function statusLabel(value: string) {
   }
 }
 
+function isExpired(survey: Survey) {
+  return survey.status === "ACTIVE" && Boolean(survey.endsAt) &&
+    new Date(String(survey.endsAt)).getTime() < Date.now();
+}
+
 export default function EmployeeSurveysPage() {
   const [tab, setTab] =
     useState<Tab>("OVERVIEW");
@@ -392,6 +402,9 @@ export default function EmployeeSurveysPage() {
 
   const [saving, setSaving] =
     useState(false);
+
+  const [actionBusyId, setActionBusyId] =
+    useState("");
 
   const [error, setError] =
     useState("");
@@ -673,6 +686,53 @@ export default function EmployeeSurveysPage() {
     }
   }
 
+  async function surveyAction(
+    survey: Survey,
+    action: "EXTEND" | "CLOSE" | "REOPEN" | "ARCHIVE" | "RESTORE" | "DUPLICATE" | "REMIND_NON_RESPONDERS" | "DELETE"
+  ) {
+    let endsAt: string | undefined;
+    if (action === "EXTEND" || action === "REOPEN") {
+      const defaultDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16);
+      const value = window.prompt("Yeni bitiş tarihini girin (YYYY-AA-GG SS:DD):", defaultDate);
+      if (!value) return;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+        setError("Yeni bitiş tarihi gelecekte olmalıdır.");
+        return;
+      }
+      endsAt = parsed.toISOString();
+    }
+
+    const confirmations: Partial<Record<typeof action, string>> = {
+      CLOSE: "Anket kapatılacak ve açık katılım bağlantıları iptal edilecek. Devam edilsin mi?",
+      ARCHIVE: "Anket arşive taşınacak. Sonuçlar korunacaktır. Devam edilsin mi?",
+      DELETE: "Bu anket güvenli şekilde silinecek. Bu işlem geri alınamaz. Devam edilsin mi?",
+      DUPLICATE: "Anket, soruları ve risk ayarlarıyla yeni taslak olarak kopyalansın mı?",
+      REMIND_NON_RESPONDERS: "Yanıtlamayanların eski bağlantıları iptal edilip yeni bağlantı e-postası gönderilsin mi?",
+    };
+    if (confirmations[action] && !window.confirm(confirmations[action])) return;
+
+    try {
+      setActionBusyId(survey.id);
+      setError("");
+      const json = await request(`/api/admin/documentation/employee-surveys/${survey.id}`, {
+        method: action === "DELETE" ? "DELETE" : ["DUPLICATE", "REMIND_NON_RESPONDERS"].includes(action) ? "POST" : "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: action === "DELETE" ? undefined : JSON.stringify({ action, endsAt }),
+      });
+      await loadDashboard();
+      if (action === "DUPLICATE" && json.surveyId) {
+        window.location.href = `/admin/documentation/employee-surveys/${json.surveyId}`;
+      } else if (action === "REMIND_NON_RESPONDERS") {
+        window.alert(`${json.targeted} kişi hedeflendi; ${json.sent} hatırlatma gönderildi, ${json.failed} gönderilemedi.`);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Anket işlemi tamamlanamadı.");
+    } finally {
+      setActionBusyId("");
+    }
+  }
+
   function exportCsv() {
     const rows: string[][] = [
       [
@@ -895,7 +955,7 @@ export default function EmployeeSurveysPage() {
               <Kpi
                 label="Aktif Anket"
                 value={
-                  report.activeSurveyCount
+                  surveys.filter((survey) => survey.status === "ACTIVE" && !isExpired(survey)).length
                 }
                 icon={
                   <Activity size={20} />
@@ -1057,6 +1117,9 @@ export default function EmployeeSurveysPage() {
                     <th style={thStyle}>
                       Bitiş
                     </th>
+                    <th style={thStyle}>
+                      İşlemler
+                    </th>
                   </tr>
                 </thead>
 
@@ -1086,9 +1149,7 @@ export default function EmployeeSurveysPage() {
 
                         <td style={tdStyle}>
                           <span style={pill}>
-                            {statusLabel(
-                              survey.status
-                            )}
+                            {isExpired(survey) ? "Süresi Doldu" : statusLabel(survey.status)}
                           </span>
                         </td>
 
@@ -1134,6 +1195,19 @@ export default function EmployeeSurveysPage() {
                           {formatDate(
                             survey.endsAt
                           )}
+                        </td>
+
+                        <td style={{ ...tdStyle, minWidth: 330 }}>
+                          <div style={rowActionsStyle}>
+                            <button type="button" style={miniButton} disabled={actionBusyId === survey.id} onClick={() => { window.location.href = `/admin/documentation/employee-surveys/${survey.id}`; }}><Edit3 size={14} /> Düzenle</button>
+                            <button type="button" style={miniButton} disabled={actionBusyId === survey.id} onClick={() => void surveyAction(survey, "DUPLICATE")}><Copy size={14} /> Kopyala</button>
+                            {survey.status === "ACTIVE" ? <button type="button" style={miniButton} disabled={actionBusyId === survey.id} onClick={() => void surveyAction(survey, "EXTEND")}><CalendarClock size={14} /> Süre Uzat</button> : null}
+                            {survey.status === "ACTIVE" && !isExpired(survey) && survey.responseCount < survey.targetCount ? <button type="button" style={miniButton} disabled={actionBusyId === survey.id} onClick={() => void surveyAction(survey, "REMIND_NON_RESPONDERS")}><Send size={14} /> Hatırlat</button> : null}
+                            {survey.status === "ACTIVE" ? <button type="button" style={miniButton} disabled={actionBusyId === survey.id} onClick={() => void surveyAction(survey, "CLOSE")}>Kapat</button> : null}
+                            {survey.status === "CLOSED" ? <button type="button" style={miniButton} disabled={actionBusyId === survey.id} onClick={() => void surveyAction(survey, "REOPEN")}>Yeniden Aç</button> : null}
+                            {survey.status !== "ARCHIVED" ? <button type="button" style={miniButton} disabled={actionBusyId === survey.id} onClick={() => void surveyAction(survey, "ARCHIVE")}><Archive size={14} /> Arşivle</button> : <button type="button" style={miniButton} disabled={actionBusyId === survey.id} onClick={() => void surveyAction(survey, "RESTORE")}>Arşivden Çıkar</button>}
+                            {survey.responseCount === 0 ? <button type="button" style={miniDangerButton} disabled={actionBusyId === survey.id} onClick={() => void surveyAction(survey, "DELETE")}><Trash2 size={14} /> Sil</button> : null}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -2507,4 +2581,31 @@ const centerStyle = {
   alignItems: "center",
   justifyContent: "center",
   gap: 11,
+} as const;
+
+const rowActionsStyle = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+} as const;
+
+const miniButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  padding: "7px 9px",
+  background: "#fff",
+  color: "#334155",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+} as const;
+
+const miniDangerButton = {
+  ...miniButton,
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#b91c1c",
 } as const;
