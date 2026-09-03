@@ -448,334 +448,437 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const apiKey = clean(
-      req.headers.get("x-api-key")
-    );
+    const apiKey = clean(req.headers.get("x-api-key"));
 
     if (apiKey !== API_KEY) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Yetkisiz istek.",
-        },
+        { success: false, error: "Yetkisiz istek." },
         { status: 401 }
       );
     }
 
     const url = new URL(req.url);
-
-    const firmId = clean(
-      url.searchParams.get("firmId")
+    const firmId = clean(url.searchParams.get("firmId"));
+    const localFirmIdRaw = clean(
+      url.searchParams.get("localFirmId")
     );
-
     const inspectionRemoteId = clean(
-      url.searchParams.get(
-        "inspectionRemoteId"
-      )
+      url.searchParams.get("inspectionRemoteId")
     );
 
     const supabase = getSupabase();
 
     /*
-     * Önce mevcut gerçek arşiv kayıtlarını getir.
-     * inspection_report_archive.firm_id UUID/text tuttuğu için mevcut
-     * davranışı koruyoruz.
-     */
-    let archiveQuery = supabase
-      .from("inspection_report_archive")
-      .select("*")
-      .order("completed_at", {
-        ascending: false,
-        nullsFirst: false,
-      })
-      .order("created_at", {
-        ascending: false,
-      });
-
-    if (firmId) {
-      archiveQuery = archiveQuery.eq(
-        "firm_id",
-        firmId
-      );
-    }
-
-    if (inspectionRemoteId) {
-      archiveQuery = archiveQuery.eq(
-        "inspection_remote_id",
-        inspectionRemoteId
-      );
-    }
-
-    const { data: archiveRows, error: archiveError } =
-      await archiveQuery;
-
-    if (archiveError) {
-      throw new Error(archiveError.message);
-    }
-
-    const reports: any[] = [...(archiveRows ?? [])];
-
-    /*
-     * Web'deki denetim_runs kayıtlarını da arşiv görünümüne eklemek için
-     * UUID firmId -> companies.local_firm_id eşlemesi yap.
-     * denetim_runs üzerinde varlığı kesin olmayan web_firm_id kolonu KULLANILMAZ.
+     * APP artık remote UUID yanında localFirmId de gönderir.
+     * denetim_runs.firm_id alanı için localFirmId otoritedir.
      */
     let localFirmId: number | null = null;
-    const numericFirmId = Number(firmId);
+    const localNum = Number(localFirmIdRaw);
 
-    if (Number.isFinite(numericFirmId) && numericFirmId > 0) {
-      localFirmId = numericFirmId;
-    } else if (firmId) {
-      const { data: company, error: companyError } = await supabase
-        .from("companies")
-        .select("local_firm_id")
-        .eq("id", firmId)
-        .maybeSingle();
+    if (Number.isFinite(localNum) && localNum > 0) {
+      localFirmId = localNum;
+    } else {
+      const numericFirm = Number(firmId);
 
-      if (!companyError) {
-        const mapped = Number((company as any)?.local_firm_id);
+      if (Number.isFinite(numericFirm) && numericFirm > 0) {
+        localFirmId = numericFirm;
+      } else if (firmId) {
+        const { data: company } = await supabase
+          .from("companies")
+          .select("local_firm_id")
+          .eq("id", firmId)
+          .maybeSingle();
+
+        const mapped = Number(
+          (company as any)?.local_firm_id
+        );
+
         if (Number.isFinite(mapped) && mapped > 0) {
           localFirmId = mapped;
         }
       }
     }
 
+    /*
+     * Önce gerçek denetim_runs snapshot'ını al.
+     * Dokümantasyon arşivinde 1 denetim = 1 rapor prensibi uygulanır.
+     */
+    let runs: any[] = [];
+
     if (localFirmId !== null) {
       let runsQuery = supabase
         .from("denetim_runs")
         .select("*")
         .eq("firm_id", localFirmId)
-        .order("created_at_millis", {
+        .order("audit_date_millis", {
           ascending: false,
           nullsFirst: false,
         });
 
-      if (inspectionRemoteId) {
-        const numericInspectionId =
-          Number(inspectionRemoteId);
+      const { data, error } = await runsQuery;
 
-        if (
-          Number.isFinite(numericInspectionId) &&
-          numericInspectionId > 0
-        ) {
-          runsQuery = runsQuery.eq(
-            "id",
-            numericInspectionId
-          );
-        } else {
-          runsQuery = runsQuery.limit(0);
-        }
-      }
-
-      const { data: runs, error: runsError } =
-        await runsQuery;
-
-      if (runsError) {
-        throw new Error(runsError.message);
-      }
-
-      const safeRuns = runs ?? [];
-      const runIds = safeRuns
-        .map((r: any) => r.id)
-        .filter(
-          (id: any) =>
-            id !== null &&
-            id !== undefined
+      if (error) {
+        throw new Error(
+          `Denetim kayıtları alınamadı: ${error.message}`
         );
-
-      let answers: any[] = [];
-
-      if (runIds.length > 0) {
-        const {
-          data: answerRows,
-          error: answersError,
-        } = await supabase
-          .from("denetim_answers")
-          .select("*")
-          .in("run_remote_id", runIds);
-
-        if (answersError) {
-          throw new Error(
-            answersError.message
-          );
-        }
-
-        answers = answerRows ?? [];
       }
 
-      const existingRemoteIds =
-        new Set(
-          reports
-            .map((r: any) =>
-              clean(
-                r.inspection_remote_id
-              )
-            )
-            .filter(Boolean)
+      runs = data ?? [];
+    }
+
+    const runIds = runs
+      .map((r: any) => r.id)
+      .filter(
+        (id: any) =>
+          id !== null &&
+          id !== undefined
+      );
+
+    let answers: any[] = [];
+
+    if (runIds.length > 0) {
+      const { data, error } = await supabase
+        .from("denetim_answers")
+        .select("*")
+        .in("run_remote_id", runIds);
+
+      if (error) {
+        throw new Error(
+          `Denetim cevapları alınamadı: ${error.message}`
         );
+      }
 
-      for (const run of safeRuns as any[]) {
-        const remoteId = clean(run.id);
+      answers = data ?? [];
+    }
 
-        if (
-          !remoteId ||
-          existingRemoteIds.has(remoteId)
-        ) {
-          continue;
-        }
+    /*
+     * Daha önce gerçekten inspection_report_archive'a kaydedilmiş bir
+     * rapor varsa metadata/PDF alanlarını korumak için bunları da al.
+     */
+    let archiveRows: any[] = [];
+
+    if (firmId) {
+      let archiveQuery = supabase
+        .from("inspection_report_archive")
+        .select("*")
+        .eq("firm_id", firmId)
+        .order("completed_at", {
+          ascending: false,
+          nullsFirst: false,
+        });
+
+      const { data, error } = await archiveQuery;
+
+      if (error) {
+        throw new Error(
+          `Arşiv kayıtları alınamadı: ${error.message}`
+        );
+      }
+
+      archiveRows = data ?? [];
+    }
+
+    const normalizeResult = (
+      raw: unknown
+    ): "OK" | "PARTIAL" | "NOK" | "NA" => {
+      const value = clean(raw)
+        .toUpperCase()
+        .replace(/İ/g, "I");
+
+      if (
+        value === "UYGUN" ||
+        value === "YETERLI" ||
+        value === "EVET" ||
+        value === "OK"
+      ) {
+        return "OK";
+      }
+
+      if (
+        value.includes("KISMEN") ||
+        value.includes("PARTIAL")
+      ) {
+        return "PARTIAL";
+      }
+
+      if (
+        value === "NA" ||
+        value === "N/A" ||
+        value.includes("KAPSAM") ||
+        value.includes("UYGULANAMAZ")
+      ) {
+        return "NA";
+      }
+
+      return "NOK";
+    };
+
+    const reports = runs.map(
+      (run: any) => {
+        const runId = clean(run.id);
+        const appRunId = clean(
+          run.app_run_id
+        );
 
         const runAnswers =
           answers.filter(
             (a: any) =>
-              clean(a.run_remote_id) ===
-              remoteId
+              clean(a.run_remote_id) === runId
           );
 
         let compliant = 0;
         let partial = 0;
         let nonCompliant = 0;
         let notApplicable = 0;
+        let critical = 0;
 
         for (const answer of runAnswers) {
-          const result = clean(
-            answer.result
+          const result =
+            normalizeResult(answer.result);
+
+          if (result === "OK") {
+            compliant += 1;
+          } else if (result === "PARTIAL") {
+            partial += 1;
+          } else if (result === "NA") {
+            notApplicable += 1;
+          } else {
+            nonCompliant += 1;
+          }
+
+          const risk = clean(
+            answer.risk_level ??
+              answer.riskLevel
           ).toUpperCase();
 
           if (
-            result === "UYGUN" ||
-            result === "YETERLI" ||
-            result === "YETERLİ"
+            risk === "CRITICAL" ||
+            risk === "KRITIK" ||
+            risk === "KRİTİK"
           ) {
-            compliant++;
-          } else if (
-            result.includes("KISMEN")
-          ) {
-            partial++;
-          } else if (
-            result === "NA" ||
-            result === "N/A" ||
-            result.includes("KAPSAM")
-          ) {
-            notApplicable++;
-          } else if (result) {
-            nonCompliant++;
+            critical += 1;
           }
         }
 
-        const totalItemCount =
+        const total =
           runAnswers.length;
 
-        const rate =
-          totalItemCount > 0
+        const complianceRate =
+          total > 0
             ? Math.round(
                 (
                   (
                     compliant +
                     partial * 0.5
                   ) /
-                  totalItemCount
+                  total
                 ) *
                   10000
               ) / 100
-            : null;
+            : nullableNumber(
+                run.score
+              );
 
-        const timestamp =
+        /*
+         * App'teki Web'den çekilmiş run.id = app_run_id olduğu için
+         * inspection_remote_id olarak app_run_id kullanmak eşleşmeyi
+         * kararlı hale getirir.
+         */
+        const stableRemoteId =
+          appRunId || runId;
+
+        const existing =
+          archiveRows.find(
+            (row: any) => {
+              const remote = clean(
+                row.inspection_remote_id
+              );
+
+              return (
+                remote === stableRemoteId ||
+                remote === runId
+              );
+            }
+          );
+
+        const millis =
           numberValue(
             run.audit_date_millis ??
               run.created_at_millis,
             Date.now()
           );
 
-        const completedAt =
-          new Date(
-            timestamp
-          ).toISOString();
+        const iso =
+          new Date(millis)
+            .toISOString();
 
-        reports.push({
-          id: `denetim-run-${remoteId}`,
-          firm_id: firmId,
-          form_id: null,
-          form_remote_id: null,
+        const status =
+          clean(run.status)
+            .toUpperCase();
+
+        return {
+          ...(existing ?? {}),
+
+          id:
+            clean(existing?.id) ||
+            `DENETIM-${runId}`,
+
+          firm_id:
+            firmId ||
+            clean(existing?.firm_id),
+
           inspection_remote_id:
-            remoteId,
+            stableRemoteId,
+
           inspection_name:
+            clean(
+              existing?.inspection_name
+            ) ||
             clean(run.template_type) ||
-            `Denetim ${remoteId}`,
+            `Denetim ${runId}`,
+
           form_title:
+            clean(
+              existing?.form_title
+            ) ||
             clean(run.template_type) ||
             "Klasik Denetim",
+
           inspector_name:
             clean(
               run.inspector_name
-            ),
+            ) ||
+            clean(
+              existing?.inspector_name
+            ) ||
+            clean(run.responsible),
+
           inspection_date:
-            completedAt,
-          started_at: null,
+            iso,
+
           completed_at:
-            completedAt,
-          duration_minutes: 0,
-          compliance_rate: rate,
-          score: null,
+            iso,
+
           total_item_count:
-            totalItemCount,
+            total,
+
           compliant_count:
             compliant,
+
           partial_count:
             partial,
+
           non_compliant_count:
             nonCompliant,
+
           not_applicable_count:
             notApplicable,
-          critical_count: 0,
+
+          critical_count:
+            critical,
+
+          compliance_rate:
+            complianceRate,
+
+          score:
+            nullableNumber(
+              run.score
+            ),
+
           report_status:
-            clean(run.status) ||
-            "COMPLETED",
+            (
+              status === "TAMAMLANDI" ||
+              status === "COMPLETED"
+            )
+              ? "COMPLETED"
+              : "IN_PROGRESS",
+
           result_json: {
+            ...jsonObject(
+              existing?.result_json
+            ),
             source: "denetim_runs",
+            runId,
+            appRunId,
             location:
               clean(run.location),
             responsible:
-              clean(
-                run.responsible
-              ),
+              clean(run.responsible),
             reportNo:
               clean(run.report_no),
             generalNote:
-              clean(
-                run.general_note
-              ),
+              clean(run.general_note),
+            answers:
+              runAnswers,
           },
-          photos_json: [],
-          generated_pdf_url: null,
-          signed_pdf_url: null,
-          source: "WEB",
-          sync_version: 1,
-          created_at:
-            completedAt,
-          updated_at:
-            new Date().toISOString(),
-        });
-      }
-    }
 
-    reports.sort(
-      (a: any, b: any) =>
-        new Date(
-          b.completed_at ||
-            b.inspection_date ||
-            0
-        ).getTime() -
-        new Date(
-          a.completed_at ||
-            a.inspection_date ||
-            0
-        ).getTime()
+          photos_json:
+            jsonArray(
+              existing?.photos_json
+            ),
+
+          generated_pdf_url:
+            clean(
+              existing?.generated_pdf_url
+            ) || null,
+
+          signed_pdf_url:
+            clean(
+              existing?.signed_pdf_url
+            ) || null,
+
+          source:
+            clean(
+              existing?.source
+            ) || "WEB",
+
+          sync_version:
+            numberValue(
+              existing?.sync_version,
+              1
+            ),
+
+          created_at:
+            clean(
+              existing?.created_at
+            ) || iso,
+
+          updated_at:
+            new Date()
+              .toISOString(),
+
+          inspection_type:
+            clean(run.eval_mode) ||
+            "KLASIK",
+        };
+      }
     );
+
+    /*
+     * inspectionRemoteId ile tek rapor istenmişse denetim snapshot'ından filtrele.
+     */
+    const filteredReports =
+      inspectionRemoteId
+        ? reports.filter(
+            (report: any) =>
+              clean(
+                report.inspection_remote_id
+              ) ===
+                inspectionRemoteId ||
+              clean(
+                report.result_json?.runId
+              ) ===
+                inspectionRemoteId
+          )
+        : reports;
 
     return NextResponse.json({
       success: true,
-      count: reports.length,
-      reports,
+      count:
+        filteredReports.length,
+      localFirmId,
+      reports:
+        filteredReports,
     });
   } catch (error) {
     return NextResponse.json(
