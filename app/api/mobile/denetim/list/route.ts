@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function getSupabase() {
   return createClient(
@@ -11,18 +12,25 @@ function getSupabase() {
   );
 }
 
+function clean(v: unknown) {
+  return String(v ?? "").trim();
+}
+
 export async function GET(req: Request) {
   try {
     const supabase = getSupabase();
-
     const { searchParams } = new URL(req.url);
 
-    const firmIdRaw = (searchParams.get("firmId") || "").trim();
-    const localFirmIdRaw = (searchParams.get("localFirmId") || "").trim();
-    const firmNameRaw = (searchParams.get("firmName") || "").trim();
+    const firmIdRaw = clean(searchParams.get("firmId"));
+    const localFirmIdRaw = clean(searchParams.get("localFirmId"));
+    const firmNameRaw = clean(searchParams.get("firmName"));
 
-    const firmIdNum = Number(firmIdRaw);
-    const localFirmIdNum = Number(localFirmIdRaw);
+    const numericCandidates = [firmIdRaw, localFirmIdRaw]
+      .map((v) => Number(v))
+      .filter((v) => Number.isFinite(v) && v > 0);
+
+    const textCandidates = [firmIdRaw]
+      .filter((v) => v && Number.isNaN(Number(v)));
 
     let runsQuery = supabase
       .from("denetim_runs")
@@ -31,15 +39,17 @@ export async function GET(req: Request) {
 
     const filters: string[] = [];
 
-    if (firmIdRaw && firmIdRaw !== "0" && !Number.isNaN(firmIdNum)) {
-      filters.push(`firm_id.eq.${firmIdNum}`);
+    for (const n of [...new Set(numericCandidates)]) {
+      filters.push(`firm_id.eq.${n}`);
     }
 
-    if (localFirmIdRaw && localFirmIdRaw !== "0" && !Number.isNaN(localFirmIdNum)) {
-      filters.push(`firm_id.eq.${localFirmIdNum}`);
+    // UUID tabanlı firma eşlemesi olan kayıtlarda web_firm_id kullan.
+    for (const id of [...new Set(textCandidates)]) {
+      filters.push(`web_firm_id.eq.${id}`);
     }
 
-    if (firmNameRaw) {
+    // Sadece ID eşlemesi bulunamıyorsa firma adı fallback olsun.
+    if (filters.length === 0 && firmNameRaw) {
       const safeFirmName = firmNameRaw.replace(/[%_,]/g, "");
       filters.push(`firm_name.ilike.*${safeFirmName}*`);
     }
@@ -58,17 +68,16 @@ export async function GET(req: Request) {
     }
 
     const safeRuns = runs || [];
-
     if (safeRuns.length === 0) {
-      return NextResponse.json({ success: true, runs: [] });
+      return NextResponse.json({ success: true, count: 0, runs: [] });
     }
 
+    // denetim_runs.id tipi bigint/numeric olabilir; JS Number'a zorlamadan string tut.
     const runIds = safeRuns
-      .map((r: any) => Number(r.id))
-      .filter((id) => id > 0);
+      .map((r: any) => clean(r.id))
+      .filter(Boolean);
 
     let safeAnswers: any[] = [];
-
     if (runIds.length > 0) {
       const { data: answers, error: answersError } = await supabase
         .from("denetim_answers")
@@ -81,15 +90,14 @@ export async function GET(req: Request) {
           { status: 500 }
         );
       }
-
       safeAnswers = answers || [];
     }
 
     const runsWithAnswers = safeRuns.map((run: any) => {
-      const runRemoteId = Number(run.id);
+      const runRemoteId = clean(run.id);
 
       const runAnswers = safeAnswers
-        .filter((a: any) => Number(a.run_remote_id) === runRemoteId)
+        .filter((a: any) => clean(a.run_remote_id) === runRemoteId)
         .map((a: any) => ({
           ...a,
           itemTitle: a.item_title || "",
@@ -103,11 +111,11 @@ export async function GET(req: Request) {
 
       return {
         ...run,
-
-        appRunId: run.app_run_id || run.id,
+        appRunId: run.app_run_id || 0,
+        remoteId: run.id,
         firmId: run.firm_id || 0,
         firmName: run.firm_name || "",
-        templateType: run.template_type || "",
+        templateType: run.template_type || run.title || "",
         evalMode: run.eval_mode || "KLASIK",
         location: run.location || "",
         responsible: run.responsible || "",
@@ -118,13 +126,13 @@ export async function GET(req: Request) {
         generalNote: run.general_note || "",
         status: run.status || "TASLAK",
         createdAt: run.created_at_millis || Date.now(),
-
         answers: runAnswers,
       };
     });
 
     return NextResponse.json({
       success: true,
+      count: runsWithAnswers.length,
       runs: runsWithAnswers,
     });
   } catch (e: any) {
