@@ -448,32 +448,55 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const apiKey = clean(req.headers.get("x-api-key"));
+    const apiKey = clean(
+      req.headers.get("x-api-key")
+    );
 
     if (apiKey !== API_KEY) {
       return NextResponse.json(
-        { success: false, error: "Yetkisiz istek." },
+        {
+          success: false,
+          error: "Yetkisiz istek.",
+        },
         { status: 401 }
       );
     }
 
     const url = new URL(req.url);
-    const firmId = clean(url.searchParams.get("firmId"));
+
+    const firmId = clean(
+      url.searchParams.get("firmId")
+    );
+
     const inspectionRemoteId = clean(
-      url.searchParams.get("inspectionRemoteId")
+      url.searchParams.get(
+        "inspectionRemoteId"
+      )
     );
 
     const supabase = getSupabase();
 
-    // 1) Var olan gerçek arşiv kayıtlarını al.
+    /*
+     * Önce mevcut gerçek arşiv kayıtlarını getir.
+     * inspection_report_archive.firm_id UUID/text tuttuğu için mevcut
+     * davranışı koruyoruz.
+     */
     let archiveQuery = supabase
       .from("inspection_report_archive")
       .select("*")
-      .order("completed_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false });
+      .order("completed_at", {
+        ascending: false,
+        nullsFirst: false,
+      })
+      .order("created_at", {
+        ascending: false,
+      });
 
     if (firmId) {
-      archiveQuery = archiveQuery.eq("firm_id", firmId);
+      archiveQuery = archiveQuery.eq(
+        "firm_id",
+        firmId
+      );
     }
 
     if (inspectionRemoteId) {
@@ -483,169 +506,271 @@ export async function GET(req: Request) {
       );
     }
 
-    const { data: archiveRows, error: archiveError } = await archiveQuery;
-    if (archiveError) throw new Error(archiveError.message);
+    const { data: archiveRows, error: archiveError } =
+      await archiveQuery;
+
+    if (archiveError) {
+      throw new Error(archiveError.message);
+    }
 
     const reports: any[] = [...(archiveRows ?? [])];
-    const existingRemoteIds = new Set(
-      reports.map((r: any) => clean(r.inspection_remote_id)).filter(Boolean)
-    );
 
-    // 2) Web Denetim ekranındaki denetim_runs kayıtlarını da arşiv görünümüne dahil et.
-    // Böylece Web'de görülen denetim, ayrı bir App raporu oluşmamış olsa bile
-    // Dokümantasyon > Denetim Arşivi'nde kaybolmaz.
+    /*
+     * Web'deki denetim_runs kayıtlarını da arşiv görünümüne eklemek için
+     * UUID firmId -> companies.local_firm_id eşlemesi yap.
+     * denetim_runs üzerinde varlığı kesin olmayan web_firm_id kolonu KULLANILMAZ.
+     */
+    let localFirmId: number | null = null;
     const numericFirmId = Number(firmId);
 
-    let runsQuery = supabase
-      .from("denetim_runs")
-      .select("*")
-      .order("audit_date_millis", { ascending: false, nullsFirst: false });
+    if (Number.isFinite(numericFirmId) && numericFirmId > 0) {
+      localFirmId = numericFirmId;
+    } else if (firmId) {
+      const { data: company, error: companyError } = await supabase
+        .from("companies")
+        .select("local_firm_id")
+        .eq("id", firmId)
+        .maybeSingle();
 
-    if (firmId) {
-      if (Number.isFinite(numericFirmId) && numericFirmId > 0) {
-        runsQuery = runsQuery.eq("firm_id", numericFirmId);
-      } else {
-        runsQuery = runsQuery.eq("web_firm_id", firmId);
+      if (!companyError) {
+        const mapped = Number((company as any)?.local_firm_id);
+        if (Number.isFinite(mapped) && mapped > 0) {
+          localFirmId = mapped;
+        }
       }
     }
 
-    if (inspectionRemoteId) {
-      const n = Number(inspectionRemoteId);
-      if (Number.isFinite(n)) {
-        runsQuery = runsQuery.eq("id", n);
-      } else {
-        // Supabase bigint id ile eşleşemeyen bir remote id ise denetim_runs fallback üretmez.
-        runsQuery = runsQuery.limit(0);
-      }
-    }
-
-    const { data: runs, error: runsError } = await runsQuery;
-    if (runsError) throw new Error(runsError.message);
-
-    const runList = runs ?? [];
-    const runIds = runList.map((r: any) => clean(r.id)).filter(Boolean);
-
-    let answers: any[] = [];
-    if (runIds.length > 0) {
-      const answerResult = await supabase
-        .from("denetim_answers")
+    if (localFirmId !== null) {
+      let runsQuery = supabase
+        .from("denetim_runs")
         .select("*")
-        .in("run_remote_id", runIds);
+        .eq("firm_id", localFirmId)
+        .order("created_at_millis", {
+          ascending: false,
+          nullsFirst: false,
+        });
 
-      if (answerResult.error) {
-        throw new Error(answerResult.error.message);
-      }
-      answers = answerResult.data ?? [];
-    }
-
-    for (const run of runList as any[]) {
-      const remoteId = clean(run.id);
-      if (!remoteId || existingRemoteIds.has(remoteId)) continue;
-
-      const runAnswers = answers.filter(
-        (a: any) => clean(a.run_remote_id) === remoteId
-      );
-
-      let compliant = 0;
-      let partial = 0;
-      let nonCompliant = 0;
-      let na = 0;
-      let critical = 0;
-
-      for (const a of runAnswers) {
-        const result = clean(a.result).toUpperCase();
-        const risk = clean(a.risk_level ?? a.riskLevel).toUpperCase();
+      if (inspectionRemoteId) {
+        const numericInspectionId =
+          Number(inspectionRemoteId);
 
         if (
-          result === "UYGUN" ||
-          result === "YETERLI" ||
-          result === "YETERLİ"
+          Number.isFinite(numericInspectionId) &&
+          numericInspectionId > 0
         ) {
-          compliant += 1;
-        } else if (result.includes("KISMEN")) {
-          partial += 1;
-        } else if (
-          result.includes("KAPSAM") ||
-          result === "NA" ||
-          result === "N/A"
-        ) {
-          na += 1;
-        } else if (result) {
-          nonCompliant += 1;
-        }
-
-        if (risk === "CRITICAL" || risk === "KRITIK" || risk === "KRİTİK") {
-          critical += 1;
+          runsQuery = runsQuery.eq(
+            "id",
+            numericInspectionId
+          );
+        } else {
+          runsQuery = runsQuery.limit(0);
         }
       }
 
-      const total = runAnswers.length;
-      const rate =
-        total > 0
-          ? Math.round(((compliant + partial * 0.5) / total) * 10000) / 100
-          : nullableNumber(run.score);
+      const { data: runs, error: runsError } =
+        await runsQuery;
 
-      const millis = numberValue(
-        run.audit_date_millis ?? run.created_at_millis,
-        Date.now()
-      );
+      if (runsError) {
+        throw new Error(runsError.message);
+      }
 
-      const dateIso = new Date(millis).toISOString();
-      const status = clean(run.status).toUpperCase();
+      const safeRuns = runs ?? [];
+      const runIds = safeRuns
+        .map((r: any) => r.id)
+        .filter(
+          (id: any) =>
+            id !== null &&
+            id !== undefined
+        );
 
-      reports.push({
-        id: `denetim-run-${remoteId}`,
-        firm_id: firmId || clean(run.web_firm_id) || clean(run.firm_id),
-        form_id: null,
-        form_remote_id: null,
-        inspection_remote_id: remoteId,
-        inspection_name:
-          clean(run.title) ||
-          clean(run.template_type) ||
-          `Denetim ${remoteId}`,
-        form_title:
-          clean(run.template_type) ||
-          clean(run.title) ||
-          "Klasik Denetim",
-        inspector_name: clean(run.inspector_name),
-        inspection_date: dateIso,
-        started_at: null,
-        completed_at: dateIso,
-        duration_minutes: 0,
-        compliance_rate: rate,
-        score: nullableNumber(run.score),
-        total_item_count: total,
-        compliant_count: compliant,
-        partial_count: partial,
-        non_compliant_count: nonCompliant,
-        not_applicable_count: na,
-        critical_count: critical,
-        report_status:
-          status === "TAMAMLANDI" || status === "COMPLETED"
-            ? "COMPLETED"
-            : status || "IN_PROGRESS",
-        result_json: {
-          source: "denetim_runs",
-          location: clean(run.location),
-          responsible: clean(run.responsible),
-          reportNo: clean(run.report_no),
-          generalNote: clean(run.general_note),
-        },
-        photos_json: [],
-        generated_pdf_url: null,
-        signed_pdf_url: null,
-        source: clean(run.source) || "WEB",
-        sync_version: 1,
-        created_at: dateIso,
-        updated_at: new Date().toISOString(),
-      });
+      let answers: any[] = [];
+
+      if (runIds.length > 0) {
+        const {
+          data: answerRows,
+          error: answersError,
+        } = await supabase
+          .from("denetim_answers")
+          .select("*")
+          .in("run_remote_id", runIds);
+
+        if (answersError) {
+          throw new Error(
+            answersError.message
+          );
+        }
+
+        answers = answerRows ?? [];
+      }
+
+      const existingRemoteIds =
+        new Set(
+          reports
+            .map((r: any) =>
+              clean(
+                r.inspection_remote_id
+              )
+            )
+            .filter(Boolean)
+        );
+
+      for (const run of safeRuns as any[]) {
+        const remoteId = clean(run.id);
+
+        if (
+          !remoteId ||
+          existingRemoteIds.has(remoteId)
+        ) {
+          continue;
+        }
+
+        const runAnswers =
+          answers.filter(
+            (a: any) =>
+              clean(a.run_remote_id) ===
+              remoteId
+          );
+
+        let compliant = 0;
+        let partial = 0;
+        let nonCompliant = 0;
+        let notApplicable = 0;
+
+        for (const answer of runAnswers) {
+          const result = clean(
+            answer.result
+          ).toUpperCase();
+
+          if (
+            result === "UYGUN" ||
+            result === "YETERLI" ||
+            result === "YETERLİ"
+          ) {
+            compliant++;
+          } else if (
+            result.includes("KISMEN")
+          ) {
+            partial++;
+          } else if (
+            result === "NA" ||
+            result === "N/A" ||
+            result.includes("KAPSAM")
+          ) {
+            notApplicable++;
+          } else if (result) {
+            nonCompliant++;
+          }
+        }
+
+        const totalItemCount =
+          runAnswers.length;
+
+        const rate =
+          totalItemCount > 0
+            ? Math.round(
+                (
+                  (
+                    compliant +
+                    partial * 0.5
+                  ) /
+                  totalItemCount
+                ) *
+                  10000
+              ) / 100
+            : null;
+
+        const timestamp =
+          numberValue(
+            run.audit_date_millis ??
+              run.created_at_millis,
+            Date.now()
+          );
+
+        const completedAt =
+          new Date(
+            timestamp
+          ).toISOString();
+
+        reports.push({
+          id: `denetim-run-${remoteId}`,
+          firm_id: firmId,
+          form_id: null,
+          form_remote_id: null,
+          inspection_remote_id:
+            remoteId,
+          inspection_name:
+            clean(run.template_type) ||
+            `Denetim ${remoteId}`,
+          form_title:
+            clean(run.template_type) ||
+            "Klasik Denetim",
+          inspector_name:
+            clean(
+              run.inspector_name
+            ),
+          inspection_date:
+            completedAt,
+          started_at: null,
+          completed_at:
+            completedAt,
+          duration_minutes: 0,
+          compliance_rate: rate,
+          score: null,
+          total_item_count:
+            totalItemCount,
+          compliant_count:
+            compliant,
+          partial_count:
+            partial,
+          non_compliant_count:
+            nonCompliant,
+          not_applicable_count:
+            notApplicable,
+          critical_count: 0,
+          report_status:
+            clean(run.status) ||
+            "COMPLETED",
+          result_json: {
+            source: "denetim_runs",
+            location:
+              clean(run.location),
+            responsible:
+              clean(
+                run.responsible
+              ),
+            reportNo:
+              clean(run.report_no),
+            generalNote:
+              clean(
+                run.general_note
+              ),
+          },
+          photos_json: [],
+          generated_pdf_url: null,
+          signed_pdf_url: null,
+          source: "WEB",
+          sync_version: 1,
+          created_at:
+            completedAt,
+          updated_at:
+            new Date().toISOString(),
+        });
+      }
     }
 
-    reports.sort((a: any, b: any) => {
-      const ad = new Date(a.completed_at || a.inspection_date || 0).getTime();
-      const bd = new Date(b.completed_at || b.inspection_date || 0).getTime();
-      return bd - ad;
-    });
+    reports.sort(
+      (a: any, b: any) =>
+        new Date(
+          b.completed_at ||
+            b.inspection_date ||
+            0
+        ).getTime() -
+        new Date(
+          a.completed_at ||
+            a.inspection_date ||
+            0
+        ).getTime()
+    );
 
     return NextResponse.json({
       success: true,
@@ -656,8 +781,12 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: "Denetim raporları alınamadı.",
-        detail: error instanceof Error ? error.message : String(error),
+        error:
+          "Denetim raporları alınamadı.",
+        detail:
+          error instanceof Error
+            ? error.message
+            : String(error),
       },
       { status: 500 }
     );
