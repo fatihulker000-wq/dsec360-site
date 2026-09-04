@@ -5,6 +5,7 @@ export const revalidate = 0;
 
 type TrainingRecord = {
   id: string;
+  sessionKey?: string;
   employeeRemoteId: string;
   employeeName: string;
   employeeRegistryNo: string;
@@ -64,12 +65,21 @@ function formatDate(value: number | null): string {
 }
 
 function sessionKey(record: TrainingRecord): string {
+  // Yeni Web Eğitim Arşivi API'si oturumu training_id üzerinden
+  // kararlı bir anahtarla döndürür: WEB-TRAINING-<trainingId>.
+  // PDF / sertifika route'ları da aynı anahtarı kullanmak zorundadır.
+  const canonicalKey = clean(record.sessionKey);
+  if (canonicalKey) {
+    return canonicalKey;
+  }
+
+  // Eski kayıtlarla geriye dönük uyumluluk.
   return [
-    record.trainingTitle.trim(),
+    clean(record.trainingTitle),
     record.trainingDate ?? 0,
-    record.trainingTimeText.trim(),
-    record.trainerName.trim(),
-    record.trainingPlace.trim(),
+    clean(record.trainingTimeText),
+    clean(record.trainerName),
+    clean(record.trainingPlace),
   ].join("|");
 }
 
