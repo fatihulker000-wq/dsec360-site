@@ -783,7 +783,7 @@ export default function AdminPermissionsPage() {
   const [originalPermissions, setOriginalPermissions] = useState<string[]>([]);
   const [moduleSearch, setModuleSearch] = useState("");
   const [templateChoice, setTemplateChoice] = useState<TemplateKey | "">("");
-  const [quickPresetChoice, setQuickPresetChoice] = useState<"view_only" | "operation" | "report" | "">("");
+  const [quickPresetChoice, setQuickPresetChoice] = useState<"demo" | "view_only" | "operation" | "report" | "">("");
 
   const selectedUser = useMemo(
     () => users.find((u) => u.id === selectedUserId) || null,
@@ -1052,13 +1052,82 @@ const onlyCompanyAssignableKeys = () =>
   });
 
 const applyQuickPreset = (
-  preset: "readonly" | "operation" | "report" | "view_only"
+  preset: "demo" | "readonly" | "operation" | "report" | "view_only"
 ) => {
   if (!selectedUser) return;
 
   const assignableKeys = getAssignableKeys(allPermissionKeys());
 
   let keys: string[] = [];
+
+  if (preset === "demo") {
+    // 🎯 DEMO / TANITIM MODU
+    // Demo müşterisi ürünü ve kayıt detaylarını inceler.
+    // Veri değiştirme, dosya alma/indirme, atama, onay, üretim ve yönetim işlemleri kapalıdır.
+    const blockedModulePrefixes = [
+      "FIRMA_YONETIM.",
+      "KULLANICI_YONETIMI.",
+      "SISTEM_AYARLARI.",
+      "KULLANICI_AKTIVITE.",
+    ];
+
+    const blockedTokens = [
+      ".CREATE",
+      ".EDIT",
+      ".DELETE",
+      ".MANAGE",
+      ".PASSIVE",
+      ".RESET",
+      ".IMPORT",
+      ".EXPORT",
+      ".PDF",
+      ".EXCEL",
+      ".WORD",
+      ".CSV",
+      ".DOWNLOAD",
+      ".UPLOAD",
+      ".GENERATE",
+      ".ASSIGN",
+      ".APPROVE",
+      ".REPLY",
+      ".CLOSE",
+      ".COMPLETE",
+      ".USE",
+      ".BULK",
+      ".SEND",
+      ".SIGN",
+      ".START",
+      ".STOP",
+      ".UPDATE",
+      ".FAVORITE",
+    ];
+
+    keys = assignableKeys.filter((key) => {
+      const k = String(key || "").trim().toUpperCase();
+
+      if (blockedModulePrefixes.some((prefix) => k.startsWith(prefix))) {
+        return false;
+      }
+
+      if (blockedTokens.some((token) => k.includes(token))) {
+        return false;
+      }
+
+      // Demo hesabına yalnızca görüntüleme/inceleme niteliğindeki izinleri ver.
+      return (
+        k.endsWith(".VIEW") ||
+        k.includes(".VIEW.") ||
+        k.includes("VIEW_") ||
+        k.includes(".LIST") ||
+        k.includes(".SUMMARY") ||
+        k.includes(".DASHBOARD") ||
+        k.includes(".KPI") ||
+        k.includes(".CHARTS") ||
+        k.includes(".STATS") ||
+        k.includes(".PROGRESS")
+      );
+    });
+  }
 
   if (preset === "readonly") {
     keys = assignableKeys.filter(
@@ -1699,12 +1768,51 @@ setDraftPermissions(Array.from(new Set(finalKeys)));
                       </select>
                     </label>
                     <label style={{ display:"grid", gap:5 }}>
-                      <span style={{ fontSize:9, textTransform:"uppercase", letterSpacing:".05em", fontWeight:900, color:"#667085" }}>Hızlı yetki</span>
+                      {selectedUser?.role === "demo_user" && (
+                      <div
+                        style={{
+                          gridColumn:"1 / -1",
+                          padding:"10px 12px",
+                          borderRadius:10,
+                          background:"#fff7ed",
+                          border:"1px solid #fed7aa",
+                          color:"#9a3412",
+                          fontSize:11,
+                          lineHeight:1.55,
+                          fontWeight:800,
+                        }}
+                      >
+                        🎯 Demo hesabı satış/tanıtım amaçlıdır. Modülleri ve kayıt detaylarını inceleyebilir;
+                        oluşturma, düzenleme, silme, atama, onaylama, yükleme, indirme ve dışa aktarma işlemleri verilmez.
+                      </div>
+                    )}
+                    <span style={{ fontSize:9, textTransform:"uppercase", letterSpacing:".05em", fontWeight:900, color:"#667085" }}>Hızlı yetki</span>
                       <select value={quickPresetChoice} onChange={(e)=>setQuickPresetChoice(e.target.value as typeof quickPresetChoice)} style={{...fieldStyle(), minHeight:36, padding:"7px 9px"}}>
-                        <option value="">Hızlı seçim...</option><option value="view_only">Sadece Görüntüleme</option><option value="operation">Operasyon Yetkisi</option><option value="report">Sadece Rapor</option>
+                        <option value="">Hızlı seçim...</option><option value="demo">🎯 Demo / Tanıtım Modu</option><option value="view_only">Sadece Görüntüleme</option><option value="operation">Operasyon Yetkisi</option><option value="report">Sadece Rapor</option>
                       </select>
                     </label>
                     <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      <button
+                        type="button"
+                        disabled={!selectedUser || selectedUser.role !== "demo_user"}
+                        onClick={() => applyQuickPreset("demo")}
+                        title={
+                          selectedUser?.role === "demo_user"
+                            ? "Demo hesabına güvenli, sadece inceleme yetkilerini uygular."
+                            : "Bu hızlı profil yalnızca Demo Kullanıcı rolü için uygulanır."
+                        }
+                        style={{
+                          ...presetButton(),
+                          minHeight:36,
+                          background:selectedUser?.role === "demo_user" ? "#fff7ed" : "#f2f4f7",
+                          color:selectedUser?.role === "demo_user" ? "#9a3412" : "#98a2b3",
+                          borderColor:selectedUser?.role === "demo_user" ? "#fdba74" : "#e4e7ec",
+                          fontWeight:900,
+                          opacity:selectedUser?.role === "demo_user" ? 1 : .6,
+                        }}
+                      >
+                        🎯 Demo / Tanıtım Modu
+                      </button>
                       <button type="button" disabled={!templateChoice && !quickPresetChoice} onClick={()=>{ if(templateChoice) applyTemplate(templateChoice); else if(quickPresetChoice) applyQuickPreset(quickPresetChoice); }} style={{...presetButton(), minHeight:36, background:"#101828", color:"#fff", borderColor:"#101828", opacity:(!templateChoice && !quickPresetChoice) ? .45 : 1}}>Uygula</button>
                       <button type="button" onClick={()=>setDraftPermissions([])} style={{...presetButton(), minHeight:36, color:"#b42318", borderColor:"#fecdca", background:"#fff1f0"}}>Temizle</button>
                     </div>
