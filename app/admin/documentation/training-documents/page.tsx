@@ -35,6 +35,10 @@ type Employee = {
 
 type TrainingRecord = {
   id: string;
+  sessionKey?: string;
+  trainingId?: string;
+  assignmentStatus?: string;
+  finalScore?: number | null;
   employeeRemoteId: string;
   employeeName: string;
   employeeRegistryNo: string;
@@ -224,6 +228,15 @@ function isWebUrl(value: string): boolean {
 }
 
 function sessionKey(record: TrainingRecord): string {
+  /*
+   * API, Web trainings.id tabanlı gerçek oturum anahtarını döndürür.
+   * Özellikle asenkron eğitimlerde çalışanların farklı tamamlama tarihleri
+   * aynı eğitimi birden fazla oturum gibi göstermemelidir.
+   */
+  if (record.sessionKey?.trim()) {
+    return record.sessionKey.trim();
+  }
+
   return [
     record.trainingTitle.trim(),
     record.trainingDate ?? 0,
@@ -321,6 +334,7 @@ export default function TrainingDocumentsPage() {
       setEmployees([]);
       setTrainings([]);
       setCertificates([]);
+      setArchiveFiles([]);
       return;
     }
 
@@ -627,15 +641,30 @@ export default function TrainingDocumentsPage() {
         )
       );
 
+    /*
+     * Aynı oturumun katılım formu/dokümanı tüm katılımcı satırlarında
+     * tekrar edebilir. Kartlar kişi satırı değil gerçek benzersiz belge
+     * sayısını göstermelidir.
+     */
     const attendanceFormCount =
-      trainings.filter(
-        (item) => item.attendanceUri
-      ).length;
+      new Set(
+        trainings
+          .map(
+            (item) =>
+              item.attendanceUri
+          )
+          .filter(Boolean)
+      ).size;
 
     const trainingDocumentCount =
-      trainings.filter(
-        (item) => item.documentUri
-      ).length;
+      new Set(
+        trainings
+          .map(
+            (item) =>
+              item.documentUri
+          )
+          .filter(Boolean)
+      ).size;
 
     const expired =
       trainings.filter(
@@ -967,7 +996,7 @@ export default function TrainingDocumentsPage() {
               active={
                 tab === "CERTIFICATES"
               }
-              label={`Sertifikalar (${filteredTrainings.filter((item) => item.completed).length})`}
+              label={`Sertifikalar (${filteredCertificates.length})`}
               onClick={() =>
                 setTab("CERTIFICATES")
               }
