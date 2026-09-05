@@ -11,8 +11,16 @@ function supabaseAdmin() {
   return createClient(url, key);
 }
 function authorized(req: Request) {
-  const expected = (process.env.CBS_MOBILE_SYNC_KEY || FALLBACK_SYNC_KEY).trim();
-  return (req.headers.get("x-dsec-sync-key") || "").trim() === expected;
+  const incoming = (req.headers.get("x-dsec-sync-key") || "").trim();
+  const envKey = (process.env.CBS_MOBILE_SYNC_KEY || "").trim();
+
+  // Geriye uyumluluk: Android uygulamanın mevcut sabit anahtarı ile
+  // Vercel ortam anahtarından herhangi biri geçerlidir.
+  // Böylece env anahtarı tanımlandığında eski App istemcisi 401'e düşmez.
+  return incoming.length > 0 && (
+    incoming === FALLBACK_SYNC_KEY ||
+    (envKey.length > 0 && incoming === envKey)
+  );
 }
 function unauthorized() { return NextResponse.json({ success:false, error:"Yetkisiz." }, { status:401 }); }
 function uuid(v: unknown) {
