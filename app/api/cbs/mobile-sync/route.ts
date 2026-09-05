@@ -151,150 +151,46 @@ export async function GET(req: Request) {
     if (!isAuthorized(req)) return unauthorized();
 
     const url = new URL(req.url);
-    const firmIdParam = String(url.searchParams.get("firmId") || "").trim();
-    const firmaAdiParam = String(url.searchParams.get("firmaAdi") || "").trim();
-    const normalizedFirmaAdi = normalizeFirmName(firmaAdiParam);
+    const firmId = String(url.searchParams.get("firmId") || "").trim();
+    if (!firmId) {
+      return NextResponse.json({ error: "firmId UUID zorunlu." }, { status: 400 });
+    }
 
     const supabase = getSupabase();
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("id", firmId)
+      .maybeSingle();
 
-    const [{ data: companies, error: companiesError }, { data, error }] =
-      await Promise.all([
-        supabase.from("companies").select("id, name").limit(5000),
-        supabase
-          .from("cbs_forms")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(5000),
-      ]);
-
-    if (companiesError) {
-      console.error("mobile-sync GET companies hatası:", companiesError);
-      return NextResponse.json(
-        { error: "Firma listesi alınamadı." },
-        { status: 500 }
-      );
+    if (companyError || !company?.id) {
+      return NextResponse.json({ error: "Firma bulunamadı." }, { status: 404 });
     }
+
+    const { data, error } = await supabase
+      .from("cbs_forms")
+      .select("*")
+      .eq("firm_id", firmId)
+      .order("created_at", { ascending: false })
+      .limit(5000);
 
     if (error) {
-      console.error("mobile-sync GET hata detayı:", error);
       return NextResponse.json(
-        {
-          error: "Kayıtlar alınamadı.",
-          detail: error.message ?? null,
-          code: (error as any)?.code ?? null,
-          hint: (error as any)?.hint ?? null,
-          details: (error as any)?.details ?? null,
-        },
+        { error: "Kayıtlar alınamadı.", detail: error.message ?? null },
         { status: 500 }
       );
     }
-
-    const companyList: CompanyRow[] = companies || [];
-    let requestedCompanyId: string | null = null;
-
-    if (firmIdParam) {
-      const exactCompanyById = companyList.find(
-        (company) => String(company.id || "").trim() === firmIdParam
-      );
-
-      requestedCompanyId = exactCompanyById
-        ? String(exactCompanyById.id || "").trim()
-        : firmIdParam;
-    }
-
-    if (!requestedCompanyId && normalizedFirmaAdi) {
-      const exactByName = companyList.find(
-        (company) =>
-          normalizeFirmName(String(company.name || "")) === normalizedFirmaAdi
-      );
-
-      const includesByName =
-        exactByName ||
-        companyList.find((company) => {
-          const dbName = normalizeFirmName(String(company.name || ""));
-          return (
-            dbName.includes(normalizedFirmaAdi) ||
-            normalizedFirmaAdi.includes(dbName)
-          );
-        });
-
-      if (includesByName?.id) {
-        requestedCompanyId = String(includesByName.id || "").trim();
-      }
-    }
-
-  const filtered = ((data || []) as CbsRow[]).filter((row) => {
-  const rowFirmId = String(row?.firm_id || "").trim();
-  const rowFirmaAdiRaw = String(row?.firma_adi || "").trim();
-  const rowFirmaAdi = normalizeFirmName(rowFirmaAdiRaw);
-
-  const { suggestedFirmId, suggestedFirmName } = findSuggestedCompany(
-    row,
-    companyList
-  );
-
-  // ✅ CBS KURUMSAL KORUMA:
-// App tarafına firma seçimi olmadan asla tüm kayıtlar dönmez.
-// Böylece App Yazılım ekranında diğer firmaların / boş firmaların kayıtları şişme yapmaz.
-if (!firmIdParam && !normalizedFirmaAdi) return false;
-
-  const byDirectFirmId =
-    firmIdParam.length > 0 &&
-    rowFirmId.length > 0 &&
-    rowFirmId === firmIdParam;
-
-  const bySuggestedFirmId =
-    firmIdParam.length > 0 &&
-    String(suggestedFirmId || "").trim() === firmIdParam;
-
-  const byRequestedCompanyId =
-    !!requestedCompanyId &&
-    (rowFirmId === requestedCompanyId ||
-      String(suggestedFirmId || "").trim() === requestedCompanyId);
-
-  const byRawFirmaAdi =
-    normalizedFirmaAdi.length > 0 &&
-    rowFirmaAdi.length > 0 &&
-    (rowFirmaAdi === normalizedFirmaAdi ||
-      rowFirmaAdi.includes(normalizedFirmaAdi) ||
-      normalizedFirmaAdi.includes(rowFirmaAdi));
-
-  const bySuggestedFirmName =
-    normalizedFirmaAdi.length > 0 &&
-    normalizeFirmName(String(suggestedFirmName || "")).length > 0 &&
-    (normalizeFirmName(String(suggestedFirmName || "")) === normalizedFirmaAdi ||
-      normalizeFirmName(String(suggestedFirmName || "")).includes(normalizedFirmaAdi) ||
-      normalizedFirmaAdi.includes(normalizeFirmName(String(suggestedFirmName || ""))));
-
-  return (
-    byDirectFirmId ||
-    bySuggestedFirmId ||
-    byRequestedCompanyId ||
-    byRawFirmaAdi ||
-    bySuggestedFirmName
-  );
-});
-
-   const includeAllIfEmpty =
-      String(url.searchParams.get("includeAllIfEmpty") || "").trim() === "1";
-
-    const finalData = filtered;
-      
 
     return NextResponse.json({
       success: true,
-      count: finalData.length,
-      data: finalData,
-      fallback_used: filtered.length === 0 && includeAllIfEmpty,
+      firmId,
+      count: (data || []).length,
+      data: data || [],
+      fallback_used: false,
     });
   } catch (e: any) {
-    console.error("mobile-sync GET catch hata:", e);
-
     return NextResponse.json(
-      {
-        error: "Sunucu hatası.",
-        detail: e?.message ?? null,
-      },
+      { error: "Sunucu hatası.", detail: e?.message ?? null },
       { status: 500 }
     );
   }
@@ -335,7 +231,7 @@ export async function POST(req: Request) {
       String(body?.rejected_reason || "").trim() || null;
     const created_by = String(body?.created_by || "").trim() || null;
 
-    if (!full_name || !message || (!firm_id && !firma_adi)) {
+    if (!full_name || !message || !firm_id) {
       return NextResponse.json(
         { error: "Eksik alan var." },
         { status: 400 }
@@ -343,6 +239,17 @@ export async function POST(req: Request) {
     }
 
    const supabase = getSupabase();
+
+const { data: company, error: companyError } = await supabase
+  .from("companies")
+  .select("id")
+  .eq("id", firm_id)
+  .maybeSingle();
+
+if (companyError || !company?.id) {
+  return NextResponse.json({ error: "Geçersiz firm_id." }, { status: 400 });
+}
+
 const now = new Date().toISOString();
 
 // ✅ CBS KALICI KORUMA:
@@ -419,8 +326,9 @@ export async function PUT(req: Request) {
     const body = await req.json();
     const id = Number(body?.id);
 
-    if (!id) {
-      return NextResponse.json({ error: "ID zorunlu." }, { status: 400 });
+    const firmId = String(body?.firm_id || "").trim();
+    if (!id || !firmId) {
+      return NextResponse.json({ error: "ID ve firm_id zorunlu." }, { status: 400 });
     }
 
     const supabase = getSupabase();
@@ -483,7 +391,8 @@ export async function PUT(req: Request) {
     const { error } = await supabase
       .from("cbs_forms")
       .update(updatePayload)
-      .eq("id", id);
+      .eq("id", id)
+      .eq("firm_id", firmId);
 
     if (error) {
       console.error("mobile-sync PUT supabase hata:", {

@@ -158,7 +158,8 @@ export async function GET(req: Request) {
      * Modülünün gerçek veri omurgasını okur:
      *
      * companies
-     *   -> users.company_id
+     *   -> employees.firm_id
+     *   -> users.employee_id
      *   -> training_assignments
      *   -> trainings
      *   -> training_certificates_v2
@@ -205,7 +206,6 @@ export async function GET(req: Request) {
           is_active
           `
         )
-        .eq("company_id", firmId)
         .eq("is_active", true),
 
       supabase
@@ -298,9 +298,12 @@ export async function GET(req: Request) {
         )
       );
 
+    // Multi-firm rule: user.company_id is only a primary-company field.
+    // Membership for training archive is derived from employee.firm_id.
     const users: AnyRow[] =
-      usersResult.data ??
-      [];
+      (usersResult.data ?? []).filter((row: AnyRow) =>
+        employeeMap.has(clean(row.employee_id))
+      );
 
     const userIds =
       users

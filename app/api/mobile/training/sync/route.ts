@@ -217,6 +217,17 @@ export async function POST(req: Request) {
     }
 
     const supabase = getSupabase();
+
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("id", firmId)
+      .maybeSingle();
+
+    if (companyError || !company?.id) {
+      return NextResponse.json({ error: "Geçersiz firmId." }, { status: 400 });
+    }
+
     const results: any[] = [];
 
     for (const item of records) {
@@ -239,6 +250,12 @@ const title = String(
     ""
 ).trim();
 
+const itemFirmId = String(item?.firm_id || item?.firmId || firmId).trim();
+if (itemFirmId !== firmId) {
+  results.push({ localId, remoteId: remoteId || null, success: false, error: "Kayıt firma kimliği istek firmasıyla eşleşmiyor." });
+  continue;
+}
+
 const deleted =
   item?.deleted === true ||
   item?.is_deleted === true ||
@@ -253,6 +270,25 @@ if (deleted) {
       success: false,
       error: "Silme için remoteId eksik.",
     });
+    continue;
+  }
+
+  const { data: deleteCandidate } = await supabase
+    .from("training_assignments")
+    .select("id, user_id")
+    .eq("id", remoteId)
+    .maybeSingle();
+
+  const { data: deleteUser } = deleteCandidate?.user_id
+    ? await supabase.from("users").select("employee_id").eq("id", deleteCandidate.user_id).maybeSingle()
+    : { data: null as any };
+
+  const { data: deleteEmployee } = deleteUser?.employee_id
+    ? await supabase.from("employees").select("id").eq("id", deleteUser.employee_id).eq("firm_id", firmId).maybeSingle()
+    : { data: null as any };
+
+  if (!deleteCandidate?.id || !deleteEmployee?.id) {
+    results.push({ localId, remoteId, success: false, error: "Eğitim ataması bu firmaya ait değil." });
     continue;
   }
 
@@ -386,6 +422,18 @@ if (false as boolean) {
 
       let userRow: any = null;
 
+const { data: ownedEmployee, error: ownedEmployeeError } = await supabase
+  .from("employees")
+  .select("id, firm_id, full_name, email, active")
+  .eq("id", employeeRemoteId)
+  .eq("firm_id", firmId)
+  .maybeSingle();
+
+if (ownedEmployeeError || !ownedEmployee?.id) {
+  results.push({ localId, remoteId: remoteId || null, success: false, error: "Çalışan seçili firmaya ait değil." });
+  continue;
+}
+
 const { data: foundUser, error: userError } = await supabase
   .from("users")
   .select("id, employee_id")
@@ -409,6 +457,7 @@ if (!userRow?.id) {
     .from("employees")
     .select("id, firm_id, full_name, email, active")
     .eq("id", employeeRemoteId)
+    .eq("firm_id", firmId)
     .maybeSingle();
 
   if (employeeError || !employeeRow?.id) {
@@ -574,15 +623,47 @@ export async function DELETE(req: Request) {
 
     const url = new URL(req.url);
     const assignmentId = String(url.searchParams.get("assignmentId") || "").trim();
+    const firmId = String(url.searchParams.get("firmId") || "").trim();
 
-    if (!assignmentId) {
+    if (!assignmentId || !firmId) {
       return NextResponse.json(
-        { error: "assignmentId zorunlu." },
+        { error: "assignmentId ve firmId zorunlu." },
         { status: 400 }
       );
     }
 
     const supabase = getSupabase();
+
+    const { data: assignment, error: assignmentError } = await supabase
+      .from("training_assignments")
+      .select("id, user_id")
+      .eq("id", assignmentId)
+      .maybeSingle();
+
+    if (assignmentError || !assignment?.id) {
+      return NextResponse.json({ error: "Eğitim ataması bulunamadı." }, { status: 404 });
+    }
+
+    const { data: user } = await supabase
+      .from("users")
+      .select("employee_id")
+      .eq("id", assignment.user_id)
+      .maybeSingle();
+
+    if (!user?.employee_id) {
+      return NextResponse.json({ error: "Atamanın çalışan bağı bulunamadı." }, { status: 409 });
+    }
+
+    const { data: employee } = await supabase
+      .from("employees")
+      .select("id")
+      .eq("id", user.employee_id)
+      .eq("firm_id", firmId)
+      .maybeSingle();
+
+    if (!employee?.id) {
+      return NextResponse.json({ error: "Bu atama seçili firmaya ait değil." }, { status: 403 });
+    }
 
     const { error } = await supabase
       .from("training_assignments")
@@ -596,10 +677,7 @@ export async function DELETE(req: Request) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      deletedAssignmentId: assignmentId,
-    });
+    return NextResponse.json({ success: true, deletedAssignmentId: assignmentId, firmId });
   } catch (e: any) {
     return NextResponse.json(
       { error: "Sunucu hatası.", detail: e?.message || null },
