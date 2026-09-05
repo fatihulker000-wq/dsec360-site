@@ -55,6 +55,7 @@ type Employee = {
 type Company = {
   id: string;
   name: string;
+  tehlike_sinifi?: string | null;
 };
 
 type EmployeeForm = {
@@ -230,6 +231,36 @@ if (scopedCompanyId && nextCompanies.length === 1) {
   readOnly,
 ]);
 
+  const selectedCompany = useMemo(
+    () =>
+      firmFilter === "all"
+        ? null
+        : companies.find(
+            (company) => String(company.id) === String(firmFilter)
+          ) || null,
+    [companies, firmFilter]
+  );
+
+  const activeEmployeeCount = useMemo(
+    () => data.filter((employee) => employee.active).length,
+    [data]
+  );
+
+  const passiveEmployeeCount = useMemo(
+    () => data.filter((employee) => !employee.active).length,
+    [data]
+  );
+
+  const handleFirmChange = (nextFirmId: string) => {
+    setFirmFilter(nextFirmId);
+    setProfileEmployee(null);
+    setBulkFile(null);
+    setPreviewOpen(false);
+    setPreviewData([]);
+    setPreviewSummary(null);
+    void loadEmployees(nextFirmId);
+  };
+
   const handleAddEmployee = () => {
   if (readOnly) {
     return;
@@ -284,7 +315,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
 
       setAddModal(false);
       setAddForm(emptyForm);
-      await loadEmployees("all");
+      await loadEmployees(firmFilter);
     } finally {
       setActionLoading(false);
     }
@@ -339,7 +370,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
 
       setEditModal(null);
       setEditForm(emptyForm);
-      await loadEmployees("all");
+      await loadEmployees(firmFilter);
     } finally {
       setActionLoading(false);
     }
@@ -367,7 +398,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
         return;
       }
 
-      await loadEmployees("all");
+      await loadEmployees(firmFilter);
     } finally {
       setActionLoading(false);
     }
@@ -396,7 +427,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
         return;
       }
 
-      await loadEmployees("all");
+      await loadEmployees(firmFilter);
     } finally {
       setActionLoading(false);
     }
@@ -429,7 +460,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
         return;
       }
 
-      await loadEmployees("all");
+      await loadEmployees(firmFilter);
     } finally {
       setActionLoading(false);
     }
@@ -481,7 +512,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
         )
       );
 
-      await loadEmployees("all");
+      await loadEmployees(firmFilter);
     } finally {
       setActionLoading(false);
     }
@@ -513,7 +544,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
         )
       );
 
-      await loadEmployees("all");
+      await loadEmployees(firmFilter);
     } finally {
       setActionLoading(false);
     }
@@ -581,7 +612,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
       );
 
       setBulkFile(null);
-      await loadEmployees("all");
+      await loadEmployees(firmFilter);
     } finally {
       setBulkLoading(false);
     }
@@ -663,7 +694,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
       setPreviewSummary(null);
       setBulkFile(null);
 
-      await loadEmployees("all");
+      await loadEmployees(firmFilter);
     } finally {
       setBulkLoading(false);
     }
@@ -677,6 +708,192 @@ if (scopedCompanyId && nextCompanies.length === 1) {
         gap: 20,
       }}
     >
+      <section
+        style={{
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: 28,
+          padding: "28px 30px",
+          color: "#fff",
+          background:
+            "linear-gradient(118deg,#111827 0%,#3a1018 42%,#7f1022 73%,#a11225 100%)",
+          boxShadow: "0 22px 54px rgba(59,16,24,.16)",
+        }}
+      >
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            width: 320,
+            height: 320,
+            borderRadius: "50%",
+            right: -90,
+            top: -170,
+            background: "rgba(255,255,255,.07)",
+          }}
+        />
+        <div style={{ position: "relative", display: "grid", gap: 18 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: 18,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ maxWidth: 760 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  letterSpacing: "0.16em",
+                  fontWeight: 950,
+                  opacity: 0.72,
+                }}
+              >
+                D-SEC • EMPLOYEE INTELLIGENCE
+              </div>
+              <h1
+                style={{
+                  margin: "7px 0 8px",
+                  fontSize: "clamp(27px,3vw,38px)",
+                  lineHeight: 1.08,
+                  fontWeight: 950,
+                  letterSpacing: "-0.035em",
+                }}
+              >
+                Çalışan Yönetim Merkezi
+              </h1>
+              <div
+                style={{
+                  maxWidth: 720,
+                  fontSize: 14,
+                  lineHeight: 1.65,
+                  color: "rgba(255,255,255,.78)",
+                }}
+              >
+                Firma bazlı çalışan verisini, aktiflik durumunu ve operasyonel
+                işlemleri tek merkezden yönetin.
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "9px 13px",
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,.16)",
+                background: "rgba(255,255,255,.09)",
+                fontSize: 12,
+                fontWeight: 900,
+              }}
+            >
+              {readOnly ? "Görüntüleme Yetkisi" : "Yönetim Yetkisi"}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit,minmax(170px,1fr))",
+              gap: 10,
+            }}
+          >
+            <label
+              style={{
+                display: "grid",
+                gap: 7,
+                minWidth: 0,
+                padding: 14,
+                borderRadius: 18,
+                background: "rgba(255,255,255,.10)",
+                border: "1px solid rgba(255,255,255,.14)",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 950,
+                  letterSpacing: ".08em",
+                  opacity: .72,
+                }}
+              >
+                AKTİF FİRMA
+              </span>
+              <select
+                value={firmFilter}
+                disabled={readOnly && companies.length === 1}
+                onChange={(event) =>
+                  handleFirmChange(event.target.value)
+                }
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  padding: "12px 13px",
+                  borderRadius: 13,
+                  border: "1px solid rgba(255,255,255,.18)",
+                  outline: "none",
+                  background: "#fff",
+                  color: "#111827",
+                  fontSize: 14,
+                  fontWeight: 900,
+                }}
+              >
+                {!readOnly && companies.length > 1 ? (
+                  <option value="all">Tüm Firmalar</option>
+                ) : null}
+                {companies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name || "Firma"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <PremiumMetric label="TOPLAM" value={data.length} />
+            <PremiumMetric label="AKTİF" value={activeEmployeeCount} />
+            <PremiumMetric label="PASİF" value={passiveEmployeeCount} />
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "center",
+              fontSize: 12,
+              color: "rgba(255,255,255,.76)",
+            }}
+          >
+            <span
+              style={{
+                padding: "7px 10px",
+                borderRadius: 999,
+                background: "rgba(255,255,255,.08)",
+              }}
+            >
+              Görüntülenen kapsam:{" "}
+              <b style={{ color: "#fff" }}>{selectedCompanyName}</b>
+            </span>
+            {selectedCompany?.tehlike_sinifi ? (
+              <span
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 999,
+                  background: "rgba(255,255,255,.08)",
+                }}
+              >
+                Tehlike sınıfı:{" "}
+                <b style={{ color: "#fff" }}>
+                  {selectedCompany.tehlike_sinifi}
+                </b>
+              </span>
+            ) : null}
+            {loading ? <span>Firma verileri güncelleniyor…</span> : null}
+          </div>
+        </div>
+      </section>
+
       <EmployeeDashboard
         employees={data}
         visibleEmployees={data}
@@ -735,26 +952,38 @@ if (scopedCompanyId && nextCompanies.length === 1) {
             alignItems: "center",
           }}
         >
-          <select
-            value={firmFilter}
-            onChange={(event) =>
-              setFirmFilter(event.target.value)
-            }
-            style={inputStyle}
+          <div
+            style={{
+              minWidth: 260,
+              padding: "12px 14px",
+              borderRadius: 14,
+              border: "1px solid #e5e7eb",
+              background: "#f8fafc",
+              color: "#111827",
+            }}
           >
-            <option value="all">
-              İşlem firması seç
-            </option>
-
-            {companies.map((company) => (
-              <option
-                key={company.id}
-                value={company.id}
-              >
-                {company.name || "Firma"}
-              </option>
-            ))}
-          </select>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 950,
+                letterSpacing: ".08em",
+                color: "#94a3b8",
+              }}
+            >
+              İŞLEM FİRMASI
+            </div>
+            <div
+              style={{
+                marginTop: 3,
+                fontSize: 13,
+                fontWeight: 900,
+              }}
+            >
+              {firmFilter === "all"
+                ? "Üst bölümden firma seçin"
+                : selectedCompanyName}
+            </div>
+          </div>
 
           <button
             type="button"
@@ -818,7 +1047,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
   actionLoading={actionLoading}
   readOnly={readOnly}
           onRefresh={() => {
-            void loadEmployees("all");
+            void loadEmployees(firmFilter);
           }}
           onAdd={handleAddEmployee}
           onOpen={(employee) => {
@@ -1483,6 +1712,47 @@ function FormInput({
         }}
       />
     </label>
+  );
+}
+
+function PremiumMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        padding: "14px 15px",
+        borderRadius: 18,
+        background: "rgba(255,255,255,.10)",
+        border: "1px solid rgba(255,255,255,.14)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 950,
+          letterSpacing: ".08em",
+          opacity: .68,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          marginTop: 5,
+          fontSize: 26,
+          lineHeight: 1,
+          fontWeight: 950,
+        }}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
