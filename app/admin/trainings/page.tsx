@@ -56,6 +56,7 @@ type CompanyApiRow = {
   id?: string | null;
   name?: string | null;
   is_active?: boolean | null;
+  tehlike_sinifi?: string | null;
 };
 
 type MeResponse = {
@@ -81,6 +82,7 @@ type UserRow = {
 type CompanyRow = {
   id: string;
   name: string;
+  tehlike_sinifi: string;
 };
 
 type TrainingRow = {
@@ -228,6 +230,27 @@ function formatTrainingDate(value?: string | null) {
   });
 }
 
+function normalizeHazardClass(value?: string | null) {
+  const raw = String(value || "").trim().toLocaleLowerCase("tr-TR");
+
+  if (!raw) return "";
+  if (raw.includes("çok") && raw.includes("tehlikeli")) return "Çok Tehlikeli";
+  if (raw.includes("az") && raw.includes("tehlikeli")) return "Az Tehlikeli";
+  if (raw.includes("tehlikeli")) return "Tehlikeli";
+
+  return String(value || "").trim();
+}
+
+function getHazardTrainingRule(value?: string | null) {
+  const hazard = normalizeHazardClass(value);
+
+  if (hazard === "Çok Tehlikeli") return { minimumHours: 16, renewalYears: 1 };
+  if (hazard === "Tehlikeli") return { minimumHours: 12, renewalYears: 2 };
+  if (hazard === "Az Tehlikeli") return { minimumHours: 8, renewalYears: 3 };
+
+  return { minimumHours: 0, renewalYears: 0 };
+}
+
 function getTrainingDurationText(
   durationSeconds?: number | null,
   durationMinutes?: number | null
@@ -274,6 +297,7 @@ export default function AdminTrainingPage() {
   const [sessionRole, setSessionRole] = useState("");
   const [users, setUsers] = useState<UserRow[]>([]);
   const [totalEmployeeCount, setTotalEmployeeCount] = useState(0);
+  const [allEmployeeCount, setAllEmployeeCount] = useState(0);
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [employeeTrainingMap, setEmployeeTrainingMap] = useState<Record<string, any[]>>({});
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
@@ -355,11 +379,12 @@ export default function AdminTrainingPage() {
         );
       }
 
-setTotalEmployeeCount(
-  Array.isArray(employeesJson?.data)
-    ? employeesJson.data.filter((e: any) => e.active !== false).length
-    : 0
-);
+const allActiveEmployeeCount = Array.isArray(employeesJson?.data)
+  ? employeesJson.data.filter((e: any) => e.active !== false).length
+  : 0;
+
+setAllEmployeeCount(allActiveEmployeeCount);
+setTotalEmployeeCount(allActiveEmployeeCount);
 
       const normalizedUsers: UserRow[] = Array.isArray(usersJson?.data)
         ? usersJson.data.map((u: UserApiRow) => ({
@@ -411,6 +436,7 @@ final_exam_count:
       .map((c: CompanyApiRow) => ({
         id: String(c?.id || "").trim(),
         name: String(c?.name || "").trim(),
+        tehlike_sinifi: normalizeHazardClass(c?.tehlike_sinifi),
       }))
       .filter((c: CompanyRow) => c.id && c.name)
       .sort((a: CompanyRow, b: CompanyRow) => a.name.localeCompare(b.name, "tr"))
@@ -437,6 +463,8 @@ final_exam_count:
   if (!firmId || firmId === "all") {
     setEmployees([]);
     setSelectedEmployees([]);
+    setEmployeeTrainingMap({});
+    setTotalEmployeeCount(allEmployeeCount);
     return;
   }
 
@@ -471,6 +499,11 @@ final_exam_count:
             active: Boolean(e.active),
           }))
         : []
+    );
+    setTotalEmployeeCount(
+      Array.isArray(json?.data)
+        ? json.data.filter((e: any) => e.active !== false).length
+        : 0
     );
 
   const employeeIds = Array.isArray(json?.data)
@@ -561,11 +594,93 @@ if (employeeIds.length > 0) {
   }, [sessionLoading]);
 
   useEffect(() => {
+    if (sessionLoading || loading) return;
+
+    if (companyFilter === "all") {
+      setEmployees([]);
+      setSelectedEmployees([]);
+      setEmployeeTrainingMap({});
+      setTotalEmployeeCount(allEmployeeCount);
+      return;
+    }
+
+    void loadEmployeesByCompany(companyFilter);
+  }, [companyFilter, sessionLoading, loading, allEmployeeCount]);
+
+  useEffect(() => {
     const found =
       trainings.find((training) => training.id === trainingId) ||
       null;
     setSelectedTrainingInfo(found);
   }, [trainingId, trainings]);
+  const selectedCompany = useMemo(
+    () =>
+      companyFilter === "all"
+        ? null
+        : companies.find((company) => company.id === companyFilter) || null,
+    [companies, companyFilter]
+  );
+
+  const selectedHazardClass = selectedCompany?.tehlike_sinifi || "";
+  const selectedHazardRule = useMemo(
+    () => getHazardTrainingRule(selectedHazardClass),
+    [selectedHazardClass]
+  );
+
+  const displayTrainings = useMemo(() => {
+    if (companyFilter === "all") return trainings;
+
+    const stats = new Map<
+      string,
+      {
+        assigned_count: number;
+        not_started_count: number;
+        in_progress_count: number;
+        completed_count: number;
+      }
+    >();
+
+    Object.values(employeeTrainingMap || {}).forEach((items: any[]) => {
+      (Array.isArray(items) ? items : []).forEach((item: any) => {
+        const itemTrainingId = String(item?.training_id || "").trim();
+        if (!itemTrainingId) return;
+
+        const current = stats.get(itemTrainingId) || {
+          assigned_count: 0,
+          not_started_count: 0,
+          in_progress_count: 0,
+          completed_count: 0,
+        };
+
+        current.assigned_count += 1;
+
+        const status = String(item?.status || "").toLowerCase();
+        if (status === "completed" || status === "app_record") {
+          current.completed_count += 1;
+        } else if (status === "in_progress") {
+          current.in_progress_count += 1;
+        } else {
+          current.not_started_count += 1;
+        }
+
+        stats.set(itemTrainingId, current);
+      });
+    });
+
+    return trainings.map((training) => {
+      const firmStats = stats.get(training.id);
+
+      return {
+        ...training,
+        assigned_count: firmStats?.assigned_count || 0,
+        not_started_count: firmStats?.not_started_count || 0,
+        in_progress_count: firmStats?.in_progress_count || 0,
+        completed_count: firmStats?.completed_count || 0,
+      };
+    });
+  }, [trainings, companyFilter, employeeTrainingMap]);
+
+
 
  const filteredUsers = useMemo(() => {
   return users.filter((u) => {
@@ -599,29 +714,29 @@ if (employeeIds.length > 0) {
   }, [users, selectedUsers]);
 
   const trainingTotals = useMemo(() => {
-    const totalAssigned = trainings.reduce(
+    const totalAssigned = displayTrainings.reduce(
       (sum, t) => sum + t.assigned_count,
       0
     );
 
-    const totalNotStarted = trainings.reduce(
+    const totalNotStarted = displayTrainings.reduce(
       (sum, t) => sum + t.not_started_count,
       0
     );
 
-    const totalInProgress = trainings.reduce(
+    const totalInProgress = displayTrainings.reduce(
       (sum, t) => sum + t.in_progress_count,
       0
     );
 
-    const totalCompleted = trainings.reduce(
+    const totalCompleted = displayTrainings.reduce(
       (sum, t) => sum + t.completed_count,
       0
     );
 
     // "Aktif Eğitim" çalışan atama sayısı değildir.
     // Eğitim kataloğunda görünür/aktif olan eğitim başlıklarının sayısıdır.
-    const activeTrainingCount = trainings.filter(
+    const activeTrainingCount = displayTrainings.filter(
       (training) => training.catalog_visible !== false
     ).length;
 
@@ -632,7 +747,7 @@ if (employeeIds.length > 0) {
       totalCompleted,
       activeTrainingCount,
     };
-  }, [trainings]);
+  }, [displayTrainings]);
 
   const toggleUser = (userId: string, checked: boolean) => {
     if (checked) {
@@ -733,7 +848,7 @@ if (companyFilter !== "all") {
   const trainingTypeDistribution = useMemo(() => {
     const map = new Map<string, number>();
 
-    trainings.forEach((training) => {
+    displayTrainings.forEach((training) => {
       const label = normalizeTrainingTypeText(training.type);
       map.set(label, (map.get(label) || 0) + 1);
     });
@@ -741,10 +856,10 @@ if (companyFilter !== "all") {
     return Array.from(map.entries())
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value);
-  }, [trainings]);
+  }, [displayTrainings]);
 
   const contentReadiness = useMemo(() => {
-    const asyncTrainings = trainings.filter(
+    const asyncTrainings = displayTrainings.filter(
       (training) => normalizeTrainingTypeText(training.type) === "Asenkron"
     );
 
@@ -768,10 +883,10 @@ if (companyFilter !== "all") {
       missingVideo: Math.max(0, asyncTrainings.length - withVideo),
       missingFinalExam: Math.max(0, asyncTrainings.length - withFinalExam),
     };
-  }, [trainings]);
+  }, [displayTrainings]);
 
   const trainingOverviewItems = useMemo(() => {
-    return [...trainings]
+    return [...displayTrainings]
       .sort((a, b) => b.assigned_count - a.assigned_count)
       .slice(0, 6)
       .map((training) => ({
@@ -790,7 +905,7 @@ if (companyFilter !== "all") {
         preExamCount: training.pre_exam_count,
         finalExamCount: training.final_exam_count,
       }));
-  }, [trainings]);
+  }, [displayTrainings]);
 
   // Rol okunmadan alt eğitim bileşenlerini çalıştırma. Bazı yönetim
   // bileşenleri kendi API çağrılarında demo rolünü admin girişine yönlendiriyor.
@@ -826,6 +941,101 @@ if (companyFilter !== "all") {
       }}
     >
       <div style={{ maxWidth: 1400, margin: "0 auto", width: "100%" }}>
+        <div
+          style={{
+            ...cardStyle(),
+            marginBottom: 20,
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: 14,
+            alignItems: "stretch",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 900, marginBottom: 8 }}>
+              Firma Seçimi
+            </div>
+            <select
+              value={companyFilter}
+              onChange={(e) => {
+                setCompanyFilter(e.target.value);
+                setSelectedUsers([]);
+                setSelectedEmployees([]);
+              }}
+              style={{
+                width: "100%",
+                padding: "13px 14px",
+                borderRadius: 12,
+                border: `1px solid ${BRAND.border}`,
+                background: "#fff",
+                fontSize: 14,
+                fontWeight: 800,
+              }}
+            >
+              <option value="all">Tüm Firmalar</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+            <div style={{ marginTop: 8, fontSize: 12, color: BRAND.muted }}>
+              Firma değiştirildiğinde çalışan ve eğitim verileri otomatik yenilenir.
+            </div>
+          </div>
+
+          <div
+            style={{
+              borderRadius: 14,
+              border: `1px solid ${BRAND.border}`,
+              background: "#fffaf8",
+              padding: "14px 16px",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 800, color: BRAND.muted }}>
+              Tehlike Sınıfı
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 20,
+                fontWeight: 900,
+                color: selectedHazardClass ? BRAND.redDark : BRAND.muted,
+              }}
+            >
+              {companyFilter === "all"
+                ? "Firma seçiniz"
+                : selectedHazardClass || "Tanımlı değil"}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 12, color: BRAND.muted }}>
+              Firma kaydından otomatik alınır.
+            </div>
+          </div>
+
+          <div
+            style={{
+              borderRadius: 14,
+              border: `1px solid ${BRAND.border}`,
+              background: "#f8fafc",
+              padding: "14px 16px",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 800, color: BRAND.muted }}>
+              Eğitim Süresi / Yenileme
+            </div>
+            <div style={{ marginTop: 6, fontSize: 18, fontWeight: 900 }}>
+              {selectedHazardRule.minimumHours > 0
+                ? `${selectedHazardRule.minimumHours} saat`
+                : "-"}
+            </div>
+            <div style={{ marginTop: 4, fontSize: 13, color: BRAND.muted }}>
+              {selectedHazardRule.renewalYears > 0
+                ? `${selectedHazardRule.renewalYears} yılda bir`
+                : "Firma seçildiğinde otomatik belirlenir."}
+            </div>
+          </div>
+        </div>
+
         <TrainingExecutiveHero
           title="D-SEC Eğitim Yönetim Merkezi"
           companyName={
@@ -835,7 +1045,7 @@ if (companyFilter !== "all") {
                   (company) => company.id === companyFilter
                 )?.name || "Seçili Firma"
           }
-          totalTrainings={trainings.length}
+          totalTrainings={displayTrainings.length}
           activeTrainings={trainingTotals.activeTrainingCount}
           completedTrainings={trainingTotals.totalCompleted}
           pendingTrainings={trainingTotals.totalNotStarted}
@@ -869,7 +1079,7 @@ if (companyFilter !== "all") {
 
         <TrainingKpiGrid
           totalEmployees={totalEmployeeCount}
-          totalTrainings={trainings.length}
+          totalTrainings={displayTrainings.length}
           totalAssigned={trainingTotals.totalAssigned}
           completed={trainingTotals.totalCompleted}
           inProgress={trainingTotals.totalInProgress}
@@ -879,7 +1089,7 @@ if (companyFilter !== "all") {
         {canManageTraining ? (
           <>
         <TrainingExecutiveDashboard
-          trainings={trainings}
+          trainings={displayTrainings}
           totalEmployees={totalEmployeeCount}
           selectedCompanyName={
             companyFilter === "all"
@@ -891,7 +1101,7 @@ if (companyFilter !== "all") {
         />
 
         <TrainingComplianceEngine
-          trainings={trainings}
+          trainings={displayTrainings}
           totalEmployees={totalEmployeeCount}
           selectedCompanyName={
             companyFilter === "all"
@@ -908,7 +1118,7 @@ if (companyFilter !== "all") {
 
         <div id="training-reports-section" style={{ scrollMarginTop: 24 }}>
           <TrainingReportCenter
-            trainings={trainings}
+            trainings={displayTrainings}
             totalEmployees={totalEmployeeCount}
             selectedCompanyName={
               companyFilter === "all"
@@ -942,12 +1152,12 @@ if (companyFilter !== "all") {
           inProgress={trainingTotals.totalInProgress}
           notStarted={trainingTotals.totalNotStarted}
           typeDistribution={trainingTypeDistribution}
-          totalTrainings={trainings.length}
+          totalTrainings={displayTrainings.length}
         />
 
         <DoraTraining
           totalEmployees={totalEmployeeCount}
-          totalTrainings={trainings.length}
+          totalTrainings={displayTrainings.length}
           totalAssigned={trainingTotals.totalAssigned}
           completed={trainingTotals.totalCompleted}
           inProgress={trainingTotals.totalInProgress}
@@ -970,7 +1180,7 @@ if (companyFilter !== "all") {
           <>
         <div id="training-catalog-section" style={{ scrollMarginTop: 24 }}>
           <TrainingCatalog
-            trainings={trainings}
+            trainings={displayTrainings}
             selectedTrainingId={trainingId}
             onSelectTraining={setTrainingId}
             onChanged={loadAll}
@@ -978,13 +1188,13 @@ if (companyFilter !== "all") {
         </div>
 
         <TrainingExamCenter
-          trainings={trainings}
+          trainings={displayTrainings}
           selectedTrainingId={trainingId}
           onSelectTraining={setTrainingId}
         />
 
         <TrainingCertificateCenter
-          trainings={trainings}
+          trainings={displayTrainings}
           selectedTrainingId={trainingId}
           onSelectTraining={setTrainingId}
         />
@@ -1051,37 +1261,7 @@ if (companyFilter !== "all") {
       }}
     />
   </div>
-
-  <div>
-    <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
-      Firma
-    </div>
-    <select
-      value={companyFilter}
-      onChange={(e) => {
-  const firmId = e.target.value;
-  setCompanyFilter(firmId);
-  void loadEmployeesByCompany(firmId);
-}}
-      style={{
-        width: "100%",
-        padding: "12px 14px",
-        borderRadius: 12,
-        border: `1px solid ${BRAND.border}`,
-        background: "#fff",
-        fontSize: 14,
-      }}
-    >
-      <option value="all">Tüm Firmalar</option>
-      {companies.map((company) => (
-        <option key={company.id} value={company.id}>
-  {company.name}
-</option>
-      ))}
-    </select>
-  </div>
-
-  <div>
+<div>
     <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>
       Durum
     </div>
