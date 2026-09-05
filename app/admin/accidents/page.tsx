@@ -55,6 +55,8 @@ type AccidentRow = {
   description?: string | null;
   source?: string | null;
   firmId?: number | string | null;
+  webFirmId?: string | null;
+  employeeId?: string | null;
 };
 
 type CompanyRow = {
@@ -66,6 +68,8 @@ type CompanyRow = {
   title?: string | null;
   company_name?: string | null;
   localId?: number | string | null;
+  tehlike_sinifi?: string | null;
+  sector?: string | null;
 };
 
 type AccidentPageTab =
@@ -91,6 +95,36 @@ const BRAND = {
   amber: "#92400e",
   blue: "#1d4ed8",
 };
+
+function isUuid(value: unknown) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value ?? "").trim()
+  );
+}
+
+function getRemoteFirmId(firm: CompanyRow) {
+  const candidates = [
+    firm.id,
+    firm.firm_id,
+  ];
+
+  const uuid = candidates
+    .map((value) => String(value ?? "").trim())
+    .find((value) => isUuid(value));
+
+  return uuid || "";
+}
+
+function getCompanyLabel(firm?: CompanyRow | null) {
+  if (!firm) return "Tüm Firmalar";
+
+  return (
+    firm.name ||
+    firm.title ||
+    firm.company_name ||
+    `Firma #${String(firm.id)}`
+  );
+}
 
 export default function AdminAccidentsPage() {
   const [loading, setLoading] =
@@ -262,6 +296,16 @@ export default function AdminAccidentsPage() {
             app_record_id:
               firm.app_record_id ??
               null,
+
+            tehlike_sinifi:
+              firm.tehlike_sinifi ??
+              firm.tehlikeSinifi ??
+              null,
+
+            sector:
+              firm.sector ??
+              firm.sektor ??
+              null,
           };
         });
 
@@ -397,6 +441,34 @@ export default function AdminAccidentsPage() {
   useEffect(() => {
     void loadData();
   }, [selectedFirmId]);
+
+  useEffect(() => {
+    setSelectedIncidentId("");
+    setSelectedRow(null);
+    setEditRow(null);
+  }, [selectedFirmId]);
+
+  const selectedCompany = useMemo(() => {
+    if (selectedFirmId === "all") return null;
+
+    return (
+      companies.find(
+        (firm) =>
+          getRemoteFirmId(firm) ===
+          selectedFirmId
+      ) || null
+    );
+  }, [companies, selectedFirmId]);
+
+  const selectedCompanyName =
+    selectedFirmId === "all"
+      ? "Tüm Firmalar"
+      : getCompanyLabel(selectedCompany);
+
+  const filterStatusText =
+    selectedFirmId === "all"
+      ? "Kurumsal genel görünüm"
+      : `${rows.length} kayıt • Firma bazlı görünüm`;
 
   const stats = useMemo(() => {
     const last30 =
@@ -686,16 +758,7 @@ const investigationIncidents =
         companyName:
           selectedFirmId === "all"
             ? "Tüm Firmalar"
-            : companies.find((firm) => {
-                const key =
-                  firm.local_firm_id ||
-                  firm.localId ||
-                  firm.firm_id ||
-                  firm.id;
-
-                return String(key) ===
-                  selectedFirmId;
-              })?.name || "Seçili Firma",
+            : selectedCompanyName,
         title:
           activeIncident.title ||
           `Kaza/Olay #${activeIncident.id}`,
@@ -739,8 +802,8 @@ const investigationIncidents =
       };
     }, [
       activeIncident,
-      companies,
       selectedFirmId,
+      selectedCompanyName,
     ]);
 
   useEffect(() => {
@@ -777,8 +840,8 @@ const investigationIncidents =
         tcNo: "",
         companyName:
           selectedFirmId === "all"
-            ? "Firma bilgisi bekleniyor"
-            : "Seçili Firma",
+            ? "Tüm Firmalar"
+            : selectedCompanyName,
         incidentDate:
           incidentDate.toISOString(),
         notificationDeadline:
@@ -818,8 +881,8 @@ const investigationIncidents =
           String(row.firmId || selectedFirmId),
         companyName:
           selectedFirmId === "all"
-            ? "Firma bilgisi bekleniyor"
-            : "Seçili Firma",
+            ? "Tüm Firmalar"
+            : selectedCompanyName,
         workplaceSgkNo: "",
         naceCode: "",
         employeeId: "",
@@ -876,7 +939,7 @@ const investigationIncidents =
         companyName:
           selectedFirmId === "all"
             ? "Tüm Firmalar"
-            : "Seçili Firma",
+            : selectedCompanyName,
         action: "INCIDENT_CREATED",
         title: "Kaza/Olay kaydı görüntülendi",
         description:
@@ -900,7 +963,7 @@ const investigationIncidents =
             : now,
       }))
     );
-  }, [rows, selectedFirmId]);
+  }, [rows, selectedFirmId, selectedCompanyName]);
 
   return (
     <div
@@ -956,6 +1019,54 @@ const investigationIncidents =
           ve tehlikeli durum
           kayıtlarını merkezi olarak
           yönetin.
+        </div>
+
+        <div
+          style={{
+            marginTop: 18,
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <span
+            style={{
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              fontSize: 12,
+              fontWeight: 850,
+            }}
+          >
+            Firma: {selectedCompanyName}
+          </span>
+
+          <span
+            style={{
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              fontSize: 12,
+              fontWeight: 850,
+            }}
+          >
+            Kayıt: {rows.length}
+          </span>
+
+          <span
+            style={{
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              fontSize: 12,
+              fontWeight: 850,
+            }}
+          >
+            {selectedFirmId === "all" ? "Genel görünüm" : "Firma filtresi aktif"}
+          </span>
         </div>
       </div>
 
@@ -1027,92 +1138,141 @@ const investigationIncidents =
 
       <div
         style={{
-          background: "#fff",
-          borderRadius: 18,
-          padding: 16,
+          background:
+            "linear-gradient(135deg, #ffffff 0%, #fffafa 100%)",
+          borderRadius: 20,
+          padding: 18,
           border: `1px solid ${BRAND.border}`,
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns:
+            "minmax(260px, 1fr) minmax(280px, 420px)",
           alignItems: "center",
-          justifyContent:
-            "space-between",
-          gap: 12,
-          flexWrap: "wrap",
+          gap: 18,
+          boxShadow:
+            "0 10px 30px rgba(74,13,26,0.05)",
         }}
       >
         <div>
           <div
             style={{
-              fontSize: 13,
-              color: BRAND.muted,
-              fontWeight: 800,
+              fontSize: 12,
+              color: BRAND.red,
+              fontWeight: 950,
+              textTransform: "uppercase",
+              letterSpacing: ".08em",
             }}
           >
-            Firma Filtresi
+            Firma Kapsamı
           </div>
 
           <div
             style={{
-              marginTop: 4,
-              fontSize: 16,
+              marginTop: 6,
+              fontSize: 20,
               color: BRAND.text,
               fontWeight: 950,
             }}
           >
-            Süper Admin kayıt görünümü
+            {selectedCompanyName}
           </div>
+
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 13,
+              color: BRAND.muted,
+              fontWeight: 700,
+            }}
+          >
+            {filterStatusText}
+          </div>
+
+          {selectedCompany?.tehlike_sinifi ? (
+            <div
+              style={{
+                marginTop: 10,
+                display: "inline-flex",
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: "#fff1f2",
+                color: BRAND.red,
+                fontSize: 12,
+                fontWeight: 850,
+              }}
+            >
+              Tehlike sınıfı: {selectedCompany.tehlike_sinifi}
+            </div>
+          ) : null}
         </div>
 
-        <select
-          value={selectedFirmId}
-          onChange={(event: any) =>
-            setSelectedFirmId(
-              event.currentTarget.value
-            )
-          }
-          style={{
-            minWidth: 260,
-            border: `1px solid ${BRAND.border}`,
-            borderRadius: 14,
-            padding: "12px 14px",
-            fontSize: 14,
-            fontWeight: 800,
-            color: BRAND.text,
-            background: "#fff",
-          }}
-        >
-          <option value="all">
-            Tüm Firmalar
-          </option>
+        <div>
+          <label
+            htmlFor="incident-firm-filter"
+            style={{
+              display: "block",
+              marginBottom: 8,
+              fontSize: 12,
+              color: BRAND.muted,
+              fontWeight: 900,
+            }}
+          >
+            Görüntülenecek firma
+          </label>
 
-          {companies.map((firm) => {
-            const filterId =
-              firm.local_firm_id ||
-              firm.localId ||
-              firm.firm_id ||
-              firm.id;
+          <select
+            id="incident-firm-filter"
+            value={selectedFirmId}
+            onChange={(event: any) =>
+              setSelectedFirmId(
+                event.currentTarget.value
+              )
+            }
+            style={{
+              width: "100%",
+              border: `1px solid ${BRAND.border}`,
+              borderRadius: 14,
+              padding: "13px 14px",
+              fontSize: 14,
+              fontWeight: 850,
+              color: BRAND.text,
+              background: "#fff",
+              outline: "none",
+            }}
+          >
+            <option value="all">
+              Tüm Firmalar
+            </option>
 
-            return (
-              <option
-                key={String(firm.id)}
-                value={
-                  filterId
-                    ? String(filterId)
-                    : ""
-                }
-                disabled={!filterId}
-              >
-                {firm.name ||
-                  firm.title ||
-                  firm.company_name ||
-                  `Firma #${firm.id}`}
+            {companies.map((firm) => {
+              const remoteFirmId =
+                getRemoteFirmId(firm);
 
-                {!filterId
-                  ? " - eşleşme yok"
-                  : ""}
-              </option>
-            );
-          })}
-        </select>
+              return (
+                <option
+                  key={String(firm.id)}
+                  value={remoteFirmId}
+                  disabled={!remoteFirmId}
+                >
+                  {getCompanyLabel(firm)}
+                  {!remoteFirmId
+                    ? " - UUID eşleşmesi yok"
+                    : ""}
+                </option>
+              );
+            })}
+          </select>
+
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 12,
+              color: BRAND.muted,
+              lineHeight: 1.5,
+            }}
+          >
+            Firma değiştiğinde tüm sekmeler, analizler ve kayıt listesi aynı firma kapsamına geçer.
+          </div>
+        </div>
       </div>
 
       {loading ? (

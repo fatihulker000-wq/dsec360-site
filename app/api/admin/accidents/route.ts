@@ -14,6 +14,66 @@ function clean(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+async function resolveCompany(
+  firmKey: string
+): Promise<{
+  id: string;
+  localFirmId: string | null;
+} | null> {
+  const key = clean(firmKey);
+
+  if (!key || key === "all" || key === "ALL") {
+    return null;
+  }
+
+  if (isUuid(key)) {
+    const { data, error } = await supabase
+      .from("companies")
+      .select("id, local_firm_id")
+      .eq("id", key)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    return {
+      id: clean(data.id),
+      localFirmId:
+        clean(data.local_firm_id) || null,
+    };
+  }
+
+  const numericLocalId = Number(key);
+
+  if (
+    Number.isFinite(numericLocalId) &&
+    numericLocalId > 0
+  ) {
+    const { data, error } = await supabase
+      .from("companies")
+      .select("id, local_firm_id")
+      .eq("local_firm_id", numericLocalId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    return {
+      id: clean(data.id),
+      localFirmId:
+        clean(data.local_firm_id) || null,
+    };
+  }
+
+  return null;
+}
+
 export async function GET(
   req: NextRequest
 ) {
@@ -94,15 +154,21 @@ export async function GET(
       role === "company_admin" ||
       role === "demo_user";
 
-    let selectedCompanyId: string | null =
+    const requestedFirm =
       firmIdParam &&
       firmIdParam !== "all"
-        ? firmIdParam
+        ? await resolveCompany(firmIdParam)
         : null;
 
+    let selectedCompanyId: string | null =
+      requestedFirm?.id || null;
+
+    let localFirmId: string | null =
+      requestedFirm?.localFirmId || null;
+
     /*
-     * Demo ve firma yöneticisinin firma kapsamı
-     * URL parametresinden değil kullanıcı kaydından alınır.
+     * Firma yöneticisi ve demo kullanıcı çoklu firma erişiminde
+     * URL'den gelen firmayı kullanabilir; ancak erişim hakkı doğrulanır.
      */
     if (companyScoped) {
       if (!userId) {
@@ -154,9 +220,7 @@ export async function GET(
         );
       }
 
-      if (
-        userRow.is_active === false
-      ) {
+      if (userRow.is_active === false) {
         return NextResponse.json(
           {
             success: false,
@@ -180,100 +244,112 @@ export async function GET(
         );
       }
 
-      selectedCompanyId = clean(
-        userRow.company_id
-      );
-
-      if (!selectedCompanyId) {
-        const {
-          data: primaryAccess,
-        } = await supabase
-          .from(
-            "user_firm_access"
-          )
-          .select("firm_id")
-          .eq("user_id", userId)
-          .eq("is_primary", true)
-          .limit(1)
-          .maybeSingle();
-
-        selectedCompanyId = clean(
-          primaryAccess?.firm_id
-        );
-      }
-
-      if (!selectedCompanyId) {
-        selectedCompanyId =
-          companyIdFromCookie;
-      }
-
-      if (
-        !selectedCompanyId ||
-        selectedCompanyId === "ALL"
-      ) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Kullanıcı için firma bilgisi bulunamadı.",
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    /*
-     * UUID şirket kaydı yanında mobil uygulamanın
-     * kullandığı local_firm_id değerini de bul.
-     */
-    let localFirmId: string | null =
-      null;
-
-    if (selectedCompanyId) {
       const {
-        data: companyRow,
-        error: companyError,
+        data: accessRows,
+        error: accessError,
       } = await supabase
-        .from("companies")
-        .select(
-          "id, local_firm_id"
-        )
-        .eq(
-          "id",
-          selectedCompanyId
-        )
-        .maybeSingle();
+        .from("user_firm_access")
+        .select("firm_id, is_primary")
+        .eq("user_id", userId);
 
-      if (companyError) {
+      if (accessError) {
         console.error(
-          "accidents company scope error:",
-          companyError
+          "accidents firm access error:",
+          accessError
         );
 
         return NextResponse.json(
           {
             success: false,
             error:
-              "Firma bilgisi alınamadı.",
+              "Kullanıcı firma yetkileri alınamadı.",
           },
           { status: 500 }
         );
       }
 
-      if (!companyRow) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Firma bulunamadı.",
-          },
-          { status: 404 }
-        );
-      }
+      const allowedFirmIds = new Set(
+        [
+          clean(userRow.company_id),
+          ...(accessRows || []).map(
+            (item: any) =>
+              clean(item.firm_id)
+          ),
+          companyIdFromCookie,
+        ].filter(Boolean)
+      );
 
-      localFirmId = clean(
-        companyRow.local_firm_id
-      ) || null;
+      if (selectedCompanyId) {
+        if (
+          !allowedFirmIds.has(
+            selectedCompanyId
+          )
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              error:
+                "Seçilen firma için erişim yetkiniz bulunmuyor.",
+            },
+            { status: 403 }
+          );
+        }
+      } else {
+        const primaryFirmId =
+          clean(
+            (accessRows || []).find(
+              (item: any) =>
+                item.is_primary === true
+            )?.firm_id
+          ) ||
+          clean(userRow.company_id) ||
+          companyIdFromCookie;
+
+        if (!primaryFirmId) {
+          return NextResponse.json(
+            {
+              success: false,
+              error:
+                "Kullanıcı için firma bilgisi bulunamadı.",
+            },
+            { status: 403 }
+          );
+        }
+
+        const resolvedPrimary =
+          await resolveCompany(
+            primaryFirmId
+          );
+
+        if (!resolvedPrimary) {
+          return NextResponse.json(
+            {
+              success: false,
+              error:
+                "Kullanıcının firma kaydı çözümlenemedi.",
+            },
+            { status: 404 }
+          );
+        }
+
+        selectedCompanyId =
+          resolvedPrimary.id;
+        localFirmId =
+          resolvedPrimary.localFirmId;
+      }
+    } else if (
+      firmIdParam &&
+      firmIdParam !== "all" &&
+      !requestedFirm
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Seçilen firma çözümlenemedi.",
+        },
+        { status: 404 }
+      );
     }
 
     let query = supabase
@@ -360,8 +436,9 @@ export async function GET(
           numericEmployeeId
         )
       ) {
-        query = query.or(
-          `employee_id.eq.${employeeIdParam},app_record_id.eq.${numericEmployeeId}`
+        query = query.eq(
+          "app_record_id",
+          numericEmployeeId
         );
       } else {
         query = query.eq(
