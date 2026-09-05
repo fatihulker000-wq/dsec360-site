@@ -704,622 +704,172 @@ const categoryStats = useMemo(() => {
     cursor: "pointer",
   });
 
+  const selectedCompanyName =
+    selectedFirmId === "all"
+      ? "Tüm Firmalar"
+      : companies.find((company) => company.id === selectedFirmId)?.name || "Seçili Firma";
+
+  const actionButton = (tone: "dark" | "light" | "danger" = "light"): React.CSSProperties => ({
+    border: tone === "light" ? "1px solid #e2e8f0" : "1px solid transparent",
+    background: tone === "dark" ? "#111827" : tone === "danger" ? "#7f1d1d" : "#ffffff",
+    color: tone === "light" ? "#334155" : "#ffffff",
+    borderRadius: 12,
+    padding: "10px 14px",
+    fontSize: 13,
+    fontWeight: 800,
+    cursor: "pointer",
+    boxShadow: tone === "light" ? "0 1px 2px rgba(15,23,42,.04)" : "0 8px 18px rgba(15,23,42,.10)",
+  });
+
   return (
-    <main>
-      <section
-        style={{
-          margin: "18px auto 0",
-          maxWidth: "1440px",
-          borderRadius: "24px",
-          overflow: "hidden",
-          background:
-            "linear-gradient(135deg, #8f1732 0%, #d93422 52%, #9f160d 100%)",
-          boxShadow: "0 18px 42px rgba(127, 23, 52, 0.18)",
-        }}
-      >
+    <main style={{ background: "#f6f7f9", minHeight: "100vh", padding: "20px 16px 48px" }}>
+      <section style={{ maxWidth: 1440, margin: "0 auto" }}>
         <div
           style={{
-            minHeight: "230px",
-            padding: "34px 28px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            textAlign: "center",
-            color: "#ffffff",
+            borderRadius: 24,
+            overflow: "hidden",
+            background: "linear-gradient(120deg, #4a0d1a 0%, #7f1734 48%, #b4232f 100%)",
+            boxShadow: "0 20px 50px rgba(74,13,26,.18)",
+            marginBottom: 18,
           }}
         >
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "7px 12px",
-              borderRadius: "999px",
-              background: "rgba(255,255,255,0.14)",
-              border: "1px solid rgba(255,255,255,0.18)",
-              fontSize: "12px",
-              fontWeight: 800,
-              marginBottom: "14px",
-            }}
-          >
-            D-SEC Yönetim
-          </div>
-
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "clamp(30px, 4vw, 48px)",
-              lineHeight: 1.08,
-              fontWeight: 900,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            ÇBS Başvuru Paneli
-          </h1>
-
-          <p
-            style={{
-              margin: "14px auto 0",
-              maxWidth: "760px",
-              fontSize: "16px",
-              lineHeight: 1.6,
-              color: "rgba(255,255,255,0.9)",
-            }}
-          >
-            Web sitesinden gelen şikayet, öneri ve talepleri tek ekranda takip edin,
-            yönetin ve kapatın.
-          </p>
-        </div>
-      </section>
-
-      <section className="section section-light">
-<div
-  style={{
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 20,
-    flexWrap: "wrap",
-  }}
->
-  <div style={{ fontWeight: 800, fontSize: 18 }}>
-    Operasyon Kontrol Paneli
-  </div>
-
-  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-    <button
-      onClick={loadRecords}
-      className="cbs-button"
-      style={{ background: "#111827" }}
-    >
-      🔄 Yenile
-    </button>
-
-    <button
-      onClick={exportPdfReport}
-      className="cbs-button"
-      style={{ background: "#1d4ed8" }}
-    >
-      📊 PDF Al
-    </button>
-
-    <button
-      onClick={handleLogout}
-      className="cbs-button"
-      style={{ background: "#7f1d1d" }}
-    >
-      🚪 Çıkış
-    </button>
-  </div>
-</div>
-
-
-        <div className="page-container" id="cbs-report-area">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "16px",
-              flexWrap: "wrap",
-              marginBottom: "26px",
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: "34px",
-                  fontWeight: 800,
-                  color: "#111827",
-                }}
-              >
-                Gelen ÇBS Kayıtları
-              </h2>
-
-              <p
-                style={{
-                  marginTop: "10px",
-                  color: "#6b7280",
-                  fontSize: "16px",
-                }}
-              >
-               {loading ? "Kayıtlar yükleniyor..." : "Toplam kayıt: " + countAll}
-              </p>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                flexWrap: "wrap",
-              }}
-            >
-              <button onClick={loadRecords} className="cbs-button">
-                Yenile
-              </button>
-
-              <button
-                onClick={exportPdfReport}
-                className="cbs-button"
-                style={{ background: "#2563eb" }}
-              >
-                PDF Rapor
-              </button>
-
-              <button
-                onClick={handleLogout}
-                className="cbs-button"
-                style={{ background: "#111827" }}
-              >
-                Çıkış Yap
-              </button>
-            </div>
-          </div>
-
-          <div
-            className="card"
-            style={{
-              marginBottom: "24px",
-              display: "grid",
-              gap: "18px",
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                gap: 18,
-              }}
-            >
-              <div
-                style={{
-                  borderRadius: 22,
-                  padding: 22,
-                  background:
-                    "linear-gradient(135deg, #4a0d1a 0%, #7f1734 38%, #c62828 100%)",
-                  color: "#ffffff",
-                  boxShadow: "0 24px 54px rgba(127, 23, 52, 0.22)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "inline-flex",
-                    padding: "8px 12px",
-                    borderRadius: 999,
-                    background: "rgba(255,255,255,0.12)",
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    fontSize: 12,
-                    fontWeight: 800,
-                    marginBottom: 12,
-                  }}
-                >
-                  D-SEC • Premium Dashboard
+          <div style={{ padding: "28px 30px", color: "#fff" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
+              <div style={{ maxWidth: 760 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", opacity: .78 }}>
+                  D-SEC • Çalışan Bildirim Sistemi
                 </div>
-
-                <div
-                  style={{
-                    fontSize: 28,
-                    fontWeight: 900,
-                    lineHeight: 1.15,
-                  }}
-                >
+                <h1 style={{ margin: "8px 0 0", fontSize: "clamp(28px, 3.2vw, 42px)", lineHeight: 1.08, fontWeight: 950, letterSpacing: "-.03em" }}>
                   ÇBS Operasyon Merkezi
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 10,
-                    lineHeight: 1.75,
-                    color: "rgba(255,255,255,0.92)",
-                  }}
-                >
-                  Başvuru akışı, SLA kontrolü, öncelik takibi ve yönetim görünürlüğü
-                  tek panelde izlenir.
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 16,
-                    display: "flex",
-                    gap: 10,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: 999,
-                      background: "rgba(255,255,255,0.12)",
-                      border: "1px solid rgba(255,255,255,0.16)",
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}
-                  >
-                    Toplam: {countAll}
-                  </span>
-                  <span
-                    style={{
-                      padding: "8px 12px",
-                      borderRadius: 999,
-                      background: "rgba(255,255,255,0.12)",
-                      border: "1px solid rgba(255,255,255,0.16)",
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}
-                  >
-                    Kapanış: %{closedRate}
-                  </span>
-                </div>
+                </h1>
+                <p style={{ margin: "10px 0 0", maxWidth: 700, fontSize: 15, lineHeight: 1.65, color: "rgba(255,255,255,.86)" }}>
+                  Çalışan şikayet, öneri ve taleplerini firma bazında yönetin; SLA, öncelik ve kapanış performansını tek ekrandan izleyin.
+                </p>
               </div>
 
-              <div
-                style={{
-                  borderRadius: 22,
-                  padding: 22,
-                  background: "#ffffff",
-                  border: "1px solid #e5e7eb",
-                  boxShadow: "0 16px 38px rgba(15, 23, 42, 0.05)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 900,
-                    color: "#111827",
-                    marginBottom: 12,
-                  }}
-                >
-                  AI Yönetici Özeti
-                </div>
-
-                <div
-                  style={{
-                    background: "#111827",
-                    color: "#ffffff",
-                    padding: 16,
-                    borderRadius: 16,
-                    lineHeight: 1.75,
-                    fontSize: 14,
-                  }}
-                >
-                  <strong>Sistem Durumu</strong>
-                  <br />
-                  {countSlaExceeded > 0
-                    ? `⚠ Kritik uyarı: ${countSlaExceeded} adet SLA aşımı var`
-                    : "✔ Sistem sağlıklı görünüyor"}
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 12,
-                    color: "#6b7280",
-                    lineHeight: 1.8,
-                    fontSize: 14,
-                  }}
-                >
-                  {aiSummary}
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 14,
-                    display: "flex",
-                    gap: 10,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span
-                    style={{
-                      background: "#eff6ff",
-                      color: "#1d4ed8",
-                      border: "1px solid #bfdbfe",
-                      borderRadius: 999,
-                      padding: "8px 12px",
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}
-                  >
-                    Kapanış Oranı: %{closedRate}
-                  </span>
-
-                  <span
-                    style={{
-                      background: "#ecfdf5",
-                      color: "#166534",
-                      border: "1px solid #86efac",
-                      borderRadius: 999,
-                      padding: "8px 12px",
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}
-                  >
-                    SLA Sağlıklı: {slaSafeCount}
-                  </span>
-
-                  <span
-                    style={{
-                      background: "#fff7ed",
-                      color: "#c2410c",
-                      border: "1px solid #fdba74",
-                      borderRadius: 999,
-                      padding: "8px 12px",
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}
-                  >
-                    Yüksek Öncelik: {highCount}
-                  </span>
-
-                  <span
-                    style={{
-                      background: "#fef2f2",
-                      color: "#b91c1c",
-                      border: "1px solid #fca5a5",
-                      borderRadius: 999,
-                      padding: "8px 12px",
-                      fontSize: 12,
-                      fontWeight: 700,
-                    }}
-                  >
-                    Kritik Öncelik: {criticalCount}
-                  </span>
-                </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={loadRecords} style={{ ...actionButton("light"), background: "rgba(255,255,255,.96)" }}>↻&nbsp; Yenile</button>
+                <button onClick={exportPdfReport} style={{ ...actionButton("light"), background: "rgba(255,255,255,.96)" }}>⇩&nbsp; PDF Rapor</button>
+                <button onClick={handleLogout} style={{ ...actionButton("danger"), border: "1px solid rgba(255,255,255,.16)" }}>Çıkış</button>
               </div>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                gap: "14px",
-              }}
-            >
-              <StatusPill
-                label="Toplam"
-                value={countAll}
-                bg="#f8fafc"
-                color="#334155"
-                border="#e5e7eb"
-              />
-              <StatusPill
-                label="Yeni"
-                value={countNew}
-                bg="#fff1f2"
-                color="#9f1239"
-                border="#fecdd3"
-              />
-              <StatusPill
-                label="İşlemde"
-                value={countProcessing}
-                bg="#fffbeb"
-                color="#92400e"
-                border="#fde68a"
-              />
-              <StatusPill
-                label="Okundu"
-                value={countRead}
-                bg="#eff6ff"
-                color="#1d4ed8"
-                border="#bfdbfe"
-              />
-              <StatusPill
-                label="Kapalı"
-                value={countClosed}
-                bg="#ecfdf5"
-                color="#166534"
-                border="#86efac"
-              />
-              <StatusPill
-                label="SLA Aşımı"
-                value={countSlaExceeded}
-                bg="#fef2f2"
-                color="#b91c1c"
-                border="#fca5a5"
-              />
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                gap: 18,
-              }}
-            >
-              <div
-                style={{
-                  background: "#ffffff",
-                  borderRadius: 20,
-                  padding: 20,
-                  border: "1px solid #e5e7eb",
-                }}
-              >
-                <div style={{ fontWeight: 900, marginBottom: 14, color: "#111827" }}>
-                  Durum Dağılımı
+            <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 10 }}>
+              {[
+                ["Toplam", countAll],
+                ["Yeni", countNew],
+                ["İşlemde", countProcessing],
+                ["Okundu", countRead],
+                ["Kapalı", countClosed],
+                ["SLA Aşımı", countSlaExceeded],
+              ].map(([label, value]) => (
+                <div key={String(label)} style={{ padding: "14px 16px", borderRadius: 16, background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.14)", backdropFilter: "blur(8px)" }}>
+                  <div style={{ fontSize: 12, fontWeight: 750, color: "rgba(255,255,255,.72)" }}>{label}</div>
+                  <div style={{ marginTop: 5, fontSize: 24, lineHeight: 1, fontWeight: 950 }}>{value}</div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    alignItems: "end",
-                    height: 170,
-                    paddingTop: 8,
-                  }}
-                >
-                  <TinyBar
-                    label="Yeni"
-                    value={countNew}
-                    max={maxChartValue}
-                    color="#ef4444"
-                  />
-                  <TinyBar
-                    label="İşlemde"
-                    value={countProcessing}
-                    max={maxChartValue}
-                    color="#f59e0b"
-                  />
-                  <TinyBar
-                    label="Okundu"
-                    value={countRead}
-                    max={maxChartValue}
-                    color="#3b82f6"
-                  />
-                  <TinyBar
-                    label="Kapalı"
-                    value={countClosed}
-                    max={maxChartValue}
-                    color="#22c55e"
-                  />
+        <div className="page-container" id="cbs-report-area" style={{ maxWidth: "none", padding: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.35fr) minmax(300px, .65fr)", gap: 16, marginBottom: 16 }}>
+            <div className="card" style={{ margin: 0, borderRadius: 20, padding: 20, border: "1px solid #e5e7eb", boxShadow: "0 8px 24px rgba(15,23,42,.04)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 850, color: "#8f1732", textTransform: "uppercase", letterSpacing: ".08em" }}>Operasyon Görünümü</div>
+                  <div style={{ marginTop: 4, fontSize: 21, fontWeight: 900, color: "#111827" }}>{selectedCompanyName}</div>
+                </div>
+                <div style={{ padding: "8px 11px", borderRadius: 999, background: countSlaExceeded > 0 ? "#fef2f2" : "#ecfdf5", color: countSlaExceeded > 0 ? "#b91c1c" : "#166534", border: `1px solid ${countSlaExceeded > 0 ? "#fecaca" : "#bbf7d0"}`, fontSize: 12, fontWeight: 850 }}>
+                  {countSlaExceeded > 0 ? `${countSlaExceeded} SLA aşımı` : "SLA durumu sağlıklı"}
                 </div>
               </div>
 
-              <div
-                style={{
-                  background: "#ffffff",
-                  borderRadius: 20,
-                  padding: 20,
-                  border: "1px solid #e5e7eb",
-                }}
-              >
-                <div style={{ fontWeight: 900, marginBottom: 14, color: "#111827" }}>
-                  Kategori Yoğunluğu
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+                <StatusPill label="Kapanış Oranı" value={`%${closedRate}`} bg="#f8fafc" color="#0f172a" border="#e2e8f0" />
+                <StatusPill label="SLA Sağlıklı" value={slaSafeCount} bg="#ecfdf5" color="#166534" border="#bbf7d0" />
+                <StatusPill label="Yüksek Öncelik" value={highCount} bg="#fff7ed" color="#c2410c" border="#fed7aa" />
+                <StatusPill label="Kritik" value={criticalCount} bg="#fef2f2" color="#b91c1c" border="#fecaca" />
+              </div>
+
+              <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
+                <div style={{ border: "1px solid #eef2f7", borderRadius: 16, padding: 16, background: "#fbfcfe" }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: "#111827", marginBottom: 12 }}>Durum Dağılımı</div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "end", height: 132 }}>
+                    <TinyBar label="Yeni" value={countNew} max={maxChartValue} color="#ef4444" />
+                    <TinyBar label="İşlemde" value={countProcessing} max={maxChartValue} color="#f59e0b" />
+                    <TinyBar label="Okundu" value={countRead} max={maxChartValue} color="#3b82f6" />
+                    <TinyBar label="Kapalı" value={countClosed} max={maxChartValue} color="#22c55e" />
+                  </div>
                 </div>
 
-                <div style={{ display: "grid", gap: 12 }}>
-                  {categoryStats.length === 0 ? (
-                    <div style={{ color: "#6b7280" }}>Kategori verisi yok.</div>
-                  ) : (
-                    categoryStats.map((item) => (
+                <div style={{ border: "1px solid #eef2f7", borderRadius: 16, padding: 16, background: "#fbfcfe" }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: "#111827", marginBottom: 12 }}>Kategori Yoğunluğu</div>
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {categoryStats.length === 0 ? (
+                      <div style={{ color: "#64748b", fontSize: 13 }}>Kategori verisi yok.</div>
+                    ) : categoryStats.map((item) => (
                       <div key={item.label}>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: 12,
-                            marginBottom: 6,
-                            fontSize: 13,
-                          }}
-                        >
-                          <span style={{ fontWeight: 700, color: "#111827" }}>
-                            {item.label}
-                          </span>
-                          <span style={{ color: "#6b7280" }}>{item.value}</span>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 5, fontSize: 12 }}>
+                          <span style={{ fontWeight: 750, color: "#334155" }}>{item.label}</span><span style={{ color: "#64748b" }}>{item.value}</span>
                         </div>
-
-                        <div
-                          style={{
-                            height: 10,
-                            borderRadius: 999,
-                            background: "#f1f5f9",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: "100%",
-                              width: `${Math.max(
-                                8,
-                                Math.round((item.value / maxCategoryValue) * 100)
-                              )}%`,
-                              background:
-                                "linear-gradient(90deg, #7f1734 0%, #c62828 100%)",
-                              borderRadius: 999,
-                            }}
-                          />
+                        <div style={{ height: 7, borderRadius: 999, background: "#e9edf3", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${Math.max(8, Math.round((item.value / maxCategoryValue) * 100))}%`, background: "linear-gradient(90deg,#7f1734,#c62828)", borderRadius: 999 }} />
                         </div>
                       </div>
-                    ))
-                  )}
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
 
-<select
-  value={selectedFirmId}
-  onChange={(e) => setSelectedFirmId(e.target.value)}
-  className="cbs-input"
-  style={{ marginBottom: "10px" }}
->
-  <option value="all">Tüm Firmalar</option>
+            <div className="card" style={{ margin: 0, borderRadius: 20, padding: 20, border: "1px solid #e5e7eb", boxShadow: "0 8px 24px rgba(15,23,42,.04)", background: "#fff" }}>
+              <div style={{ fontSize: 12, fontWeight: 850, color: "#8f1732", textTransform: "uppercase", letterSpacing: ".08em" }}>Yönetici Özeti</div>
+              <div style={{ marginTop: 8, fontSize: 20, fontWeight: 900, color: "#111827" }}>Operasyon İçgörüsü</div>
+              <div style={{ marginTop: 14, padding: 15, borderRadius: 14, background: countSlaExceeded > 0 ? "#fff7ed" : "#f0fdf4", border: `1px solid ${countSlaExceeded > 0 ? "#fed7aa" : "#bbf7d0"}` }}>
+                <div style={{ fontSize: 13, fontWeight: 900, color: countSlaExceeded > 0 ? "#9a3412" : "#166534" }}>
+                  {countSlaExceeded > 0 ? "Dikkat gerektiren süreçler var" : "Süreç akışı kontrol altında"}
+                </div>
+                <div style={{ marginTop: 7, fontSize: 13, lineHeight: 1.65, color: "#475569" }}>{aiSummary}</div>
+              </div>
+              <div style={{ marginTop: 16, display: "grid", gap: 9 }}>
+                {[
+                  ["Kapanış performansı", `%${closedRate}`],
+                  ["Açık kayıt", Math.max(0, countAll - countClosed)],
+                  ["Kritik öncelik", criticalCount],
+                  ["SLA aşımı", countSlaExceeded],
+                ].map(([label, value]) => (
+                  <div key={String(label)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #eef2f7" }}>
+                    <span style={{ fontSize: 13, color: "#64748b" }}>{label}</span><strong style={{ fontSize: 14, color: "#0f172a" }}>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
-  {companies.map((company) => (
-    <option key={company.id} value={company.id}>
-      {company.name}
-    </option>
-  ))}
-</select>
+          <div className="card" style={{ marginBottom: 18, borderRadius: 20, padding: 18, border: "1px solid #e5e7eb", boxShadow: "0 8px 24px rgba(15,23,42,.04)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: "#111827" }}>Başvuru Yönetimi</div>
+                <div style={{ marginTop: 3, fontSize: 13, color: "#64748b" }}>{loading ? "Kayıtlar yükleniyor..." : `${countAll} kayıt görüntüleniyor`}</div>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 750, color: "#64748b" }}>Firma, durum ve metin filtresi</div>
+            </div>
 
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="İsim, email, kategori, atanan kişi, öncelik veya mesaj içinde ara"
-              className="cbs-input"
-            />
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px,.7fr) minmax(280px,1.3fr)", gap: 10, marginBottom: 12 }}>
+              <select value={selectedFirmId} onChange={(e) => setSelectedFirmId(e.target.value)} className="cbs-input" style={{ margin: 0 }}>
+                <option value="all">Tüm Firmalar</option>
+                {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+              </select>
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="İsim, e-posta, kategori, atanan kişi veya mesaj içinde ara" className="cbs-input" />
+            </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                style={filterButtonStyle(filter === "all")}
-                onClick={() => setFilter("all")}
-              >
-                Tümü
-              </button>
-
-              <button
-                style={filterButtonStyle(filter === "new")}
-                onClick={() => setFilter("new")}
-              >
-                Yeni
-              </button>
-
-              <button
-                style={filterButtonStyle(filter === "processing")}
-                onClick={() => setFilter("processing")}
-              >
-                İşlemde
-              </button>
-
-              <button
-                style={filterButtonStyle(filter === "read")}
-                onClick={() => setFilter("read")}
-              >
-                Okundu
-              </button>
-
-              <button
-                style={filterButtonStyle(filter === "closed")}
-                onClick={() => setFilter("closed")}
-              >
-                Kapalı
-              </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button style={filterButtonStyle(filter === "all")} onClick={() => setFilter("all")}>Tümü</button>
+              <button style={filterButtonStyle(filter === "new")} onClick={() => setFilter("new")}>Yeni</button>
+              <button style={filterButtonStyle(filter === "processing")} onClick={() => setFilter("processing")}>İşlemde</button>
+              <button style={filterButtonStyle(filter === "read")} onClick={() => setFilter("read")}>Okundu</button>
+              <button style={filterButtonStyle(filter === "closed")} onClick={() => setFilter("closed")}>Kapalı</button>
             </div>
           </div>
 
