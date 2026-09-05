@@ -20,6 +20,7 @@ import {
   Search,
   Bell,
   Sparkles,
+  UserRound,
   LogOut,
   Menu,
   X,
@@ -60,6 +61,7 @@ const ACTIVE_LABELS: Record<string, string> = {
   "/admin/documentation": "Dokümantasyon Merkezi",
   "/admin/subcontractors": "Taşeron Yönetimi",
   "/admin/dora": "DORA AI İSG Asistanı",
+  "/admin/profile": "Profil",
 };
 
 export default function AdminLayout({
@@ -251,6 +253,12 @@ export default function AdminLayout({
       },
 
       {
+        name: "Profil",
+        href: "/admin/profile",
+        icon: UserRound,
+      },
+
+      {
         name: "Sistem Kullanıcıları",
         href: "/admin/users",
         icon: Users,
@@ -326,19 +334,25 @@ export default function AdminLayout({
     let visibleItems = items;
 
     if (role === "demo_user") {
-      visibleItems = items.filter((item) =>
-        [
-          "/admin/dashboard",
-          "/admin/trainings",
-          "/admin/health",
-          "/admin/risk",
-          "/admin/denetimler",
-          "/admin/employees",
-          "/admin/reports",
-          "/admin/cbs",
-          "/admin/accidents",
-        ].includes(item.href)
-      );
+      // Demo / Tanıtım: tüm ticari modüller görünür, yönetim alanları gizlidir.
+      const demoVisibleRoutes = new Set([
+        "/admin/dashboard",
+        "/admin/agenda",
+        "/admin/employees",
+        "/admin/cbs",
+        "/admin/dora",
+        "/admin/denetimler",
+        "/admin/documentation",
+        "/admin/trainings",
+        "/admin/accidents",
+        "/admin/reports",
+        "/admin/risk",
+        "/admin/health",
+        "/admin/subcontractors",
+        "/admin/profile",
+      ]);
+
+      visibleItems = items.filter((item) => demoVisibleRoutes.has(item.href));
     }
 
     /*
