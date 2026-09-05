@@ -356,40 +356,21 @@ export default function AdminLayout({
     }
 
     /*
-     * DASHBOARD
-     *
-     * Dashboard alfabetik sıralamaya
-     * dahil edilmez.
-     */
-    const dashboard = visibleItems.find(
-      (item) => item.href === "/admin/dashboard"
-    );
-
-    /*
      * TÜRKÇE ALFABETİK SIRALAMA
      *
+     * Demo dahil tüm roller için menü öğeleri
+     * tamamen alfabetik sıralanır.
+     *
+     * Dashboard artık özel olarak en üste sabitlenmez.
      * localeCompare + "tr" kullanıldığı için
-     * Ç, Ğ, İ, Ö, Ş, Ü gibi Türkçe
-     * karakterler doğru sırada değerlendirilir.
+     * Ç, Ğ, İ, Ö, Ş, Ü gibi Türkçe karakterler
+     * doğru sırada değerlendirilir.
      */
-    const alphabeticalItems = visibleItems
-      .filter(
-        (item) =>
-          item.href !== "/admin/dashboard"
-      )
-      .sort((a, b) =>
-        a.name.localeCompare(b.name, "tr", {
-          sensitivity: "base",
-        })
-      );
-
-    /*
-     * Dashboard en başa alınır,
-     * alfabetik modüller arkasına eklenir.
-     */
-    return dashboard
-      ? [dashboard, ...alphabeticalItems]
-      : alphabeticalItems;
+    return [...visibleItems].sort((a, b) =>
+      a.name.localeCompare(b.name, "tr", {
+        sensitivity: "base",
+      })
+    );
   }, [role]);
 
   const activeLabel =
