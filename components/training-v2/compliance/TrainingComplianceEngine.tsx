@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styles from "./TrainingComplianceEngine.module.css";
 import {
   COMPLIANCE_RULES,
@@ -34,6 +34,7 @@ type TrainingComplianceEngineProps = {
   trainings: ComplianceTrainingItem[];
   totalEmployees: number;
   selectedCompanyName: string;
+  selectedHazardClass?: string | null;
 };
 
 function normalizeType(value?: string | null) {
@@ -99,13 +100,72 @@ function getTrainingDurationMinutes(
   );
 }
 
+function resolveDangerClassFromCompany(
+  value?: string | null
+): DangerClass {
+  const raw = String(value || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR");
+
+  const targetLabel =
+    raw.includes("çok") && raw.includes("tehlikeli")
+      ? "çok tehlikeli"
+      : raw.includes("az") && raw.includes("tehlikeli")
+      ? "az tehlikeli"
+      : raw.includes("tehlikeli")
+      ? "tehlikeli"
+      : "";
+
+  const rules = Object.values(COMPLIANCE_RULES);
+
+  if (targetLabel) {
+    const exact = rules.find(
+      (item) =>
+        String(item.label || "")
+          .trim()
+          .toLocaleLowerCase("tr-TR") === targetLabel
+    );
+
+    if (exact) return exact.dangerClass as DangerClass;
+
+    const contains = rules.find((item) => {
+      const label = String(item.label || "")
+        .trim()
+        .toLocaleLowerCase("tr-TR");
+
+      if (targetLabel === "tehlikeli") {
+        return (
+          label.includes("tehlikeli") &&
+          !label.includes("az tehlikeli") &&
+          !label.includes("çok tehlikeli")
+        );
+      }
+
+      return label.includes(targetLabel);
+    });
+
+    if (contains) return contains.dangerClass as DangerClass;
+  }
+
+  return rules[0]?.dangerClass as DangerClass;
+}
+
 export default function TrainingComplianceEngine({
   trainings,
   totalEmployees,
   selectedCompanyName,
+  selectedHazardClass,
 }: TrainingComplianceEngineProps) {
   const [dangerClass, setDangerClass] =
-    useState<DangerClass>("LOW");
+    useState<DangerClass>(() =>
+      resolveDangerClassFromCompany(selectedHazardClass)
+    );
+
+  useEffect(() => {
+    setDangerClass(
+      resolveDangerClassFromCompany(selectedHazardClass)
+    );
+  }, [selectedHazardClass]);
   const [trainingMode, setTrainingMode] = useState<
     "INITIAL" | "REPEAT"
   >("INITIAL");
@@ -279,21 +339,32 @@ export default function TrainingComplianceEngine({
       <div className={styles.controls}>
         <label>
           <span>Tehlike Sınıfı</span>
-          <select
-            value={dangerClass}
-            onChange={(event) =>
-              setDangerClass(event.target.value as DangerClass)
-            }
+          <div
+            style={{
+              minHeight: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              padding: "10px 12px",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              background: "#f8fafc",
+              color: "#111827",
+              fontWeight: 800,
+            }}
           >
-            {Object.values(COMPLIANCE_RULES).map((item) => (
-              <option
-                key={item.dangerClass}
-                value={item.dangerClass}
-              >
-                {item.label}
-              </option>
-            ))}
-          </select>
+            <span>{rule.label}</span>
+            <small
+              style={{
+                color: "#6b7280",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Firma kaydından otomatik
+            </small>
+          </div>
         </label>
 
         <label>

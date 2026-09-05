@@ -315,6 +315,8 @@ export default function AdminTrainingPage() {
   const [selectedTrainingInfo, setSelectedTrainingInfo] =
     useState<TrainingRow | null>(null);
   const [assignSummary, setAssignSummary] = useState<AssignResponse | null>(null);
+  const [certificatePanelOpen, setCertificatePanelOpen] = useState(false);
+  const [employeeTrainingPanelOpen, setEmployeeTrainingPanelOpen] = useState(false);
 
   const loadAll = async () => {
     try {
@@ -961,6 +963,8 @@ if (companyFilter !== "all") {
                 setCompanyFilter(e.target.value);
                 setSelectedUsers([]);
                 setSelectedEmployees([]);
+                setCertificatePanelOpen(false);
+                setEmployeeTrainingPanelOpen(false);
               }}
               style={{
                 width: "100%",
@@ -1106,15 +1110,104 @@ if (companyFilter !== "all") {
           selectedCompanyName={
             companyFilter === "all"
               ? "Tüm Firmalar"
-              : companies.find(
-                  (company) => company.id === companyFilter
-                )?.name || "Seçili Firma"
+              : selectedCompany?.name || "Seçili Firma"
           }
+          selectedHazardClass={selectedHazardClass}
         />
 
-        <TrainingCertificateEngineV2
-          selectedTrainingId={trainingId}
-        />
+        <section
+          style={{
+            ...cardStyle(),
+            marginBottom: 20,
+            padding: 0,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "18px 20px",
+              display: "flex",
+              gap: 16,
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              background: "linear-gradient(180deg, #ffffff 0%, #fafafa 100%)",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 900,
+                  letterSpacing: 0.4,
+                  color: BRAND.red,
+                  textTransform: "uppercase",
+                }}
+              >
+                Sertifika Yönetimi
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 18,
+                  fontWeight: 900,
+                  color: BRAND.text,
+                }}
+              >
+                Premium Sertifika Motoru V2
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 13,
+                  color: BRAND.muted,
+                  lineHeight: 1.5,
+                }}
+              >
+                Uzun sertifika listesi kurumsal kompakt görünümde tutulur.
+                Detayları yalnızca ihtiyaç halinde açabilirsiniz.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCertificatePanelOpen((prev) => !prev)}
+              style={{
+                border: `1px solid ${
+                  certificatePanelOpen ? "#fecaca" : BRAND.border
+                }`,
+                background: certificatePanelOpen ? "#fff7f7" : BRAND.white,
+                color: certificatePanelOpen ? BRAND.redDark : BRAND.text,
+                borderRadius: 12,
+                padding: "10px 14px",
+                fontSize: 13,
+                fontWeight: 900,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {certificatePanelOpen
+                ? "Detayları Kapat"
+                : "Sertifika Yönetimini Aç"}
+            </button>
+          </div>
+
+          {certificatePanelOpen ? (
+            <div
+              style={{
+                borderTop: `1px solid ${BRAND.border}`,
+                padding: 18,
+                maxHeight: "760px",
+                overflowY: "auto",
+                background: "#fbfcfe",
+              }}
+            >
+              <TrainingCertificateEngineV2
+                selectedTrainingId={trainingId}
+              />
+            </div>
+          ) : null}
+        </section>
 
         <div id="training-reports-section" style={{ scrollMarginTop: 24 }}>
           <TrainingReportCenter
@@ -1291,20 +1384,126 @@ if (companyFilter !== "all") {
           <>
         <ParticipantImportCenter onCompleted={loadAll} />
 
-        <AssignmentCenter
-          companySelected={companyFilter !== "all"}
-          employees={employees}
-          employeesLoading={employeesLoading}
-          search={search}
-          selectedEmployees={selectedEmployees}
-          employeeTrainingMap={employeeTrainingMap}
-          selectedTrainingTitle={selectedTrainingInfo?.title || ""}
-          trainingSelected={Boolean(trainingId)}
-          assigning={assigning}
-          assignSummary={assignSummary}
-          onSelectedEmployeesChange={setSelectedEmployees}
-          onAssign={assign}
-        />
+        <section
+          style={{
+            ...cardStyle(),
+            marginBottom: 20,
+            padding: 0,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              padding: "18px 20px",
+              display: "flex",
+              gap: 16,
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              background: "linear-gradient(180deg, #ffffff 0%, #fafafa 100%)",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 900,
+                  letterSpacing: 0.4,
+                  color: BRAND.red,
+                  textTransform: "uppercase",
+                }}
+              >
+                Çalışan Eğitim Yönetimi
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 18,
+                  fontWeight: 900,
+                  color: BRAND.text,
+                }}
+              >
+                Çalışanlar ve Eğitim Atamaları
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 13,
+                  color: BRAND.muted,
+                  lineHeight: 1.5,
+                }}
+              >
+                {companyFilter === "all"
+                  ? "Çalışan yönetimi için önce üst bölümden firma seçin."
+                  : `${selectedCompany?.name || "Seçili firma"} • ${totalEmployeeCount} çalışan`}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setEmployeeTrainingPanelOpen((prev) => !prev)}
+              disabled={companyFilter === "all"}
+              style={{
+                border: `1px solid ${
+                  companyFilter === "all"
+                    ? "#e5e7eb"
+                    : employeeTrainingPanelOpen
+                    ? "#fecaca"
+                    : BRAND.border
+                }`,
+                background:
+                  companyFilter === "all"
+                    ? "#f3f4f6"
+                    : employeeTrainingPanelOpen
+                    ? "#fff7f7"
+                    : BRAND.white,
+                color:
+                  companyFilter === "all"
+                    ? "#9ca3af"
+                    : employeeTrainingPanelOpen
+                    ? BRAND.redDark
+                    : BRAND.text,
+                borderRadius: 12,
+                padding: "10px 14px",
+                fontSize: 13,
+                fontWeight: 900,
+                cursor: companyFilter === "all" ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {employeeTrainingPanelOpen
+                ? "Çalışan Listesini Kapat"
+                : "Çalışan Eğitim Yönetimini Aç"}
+            </button>
+          </div>
+
+          {employeeTrainingPanelOpen && companyFilter !== "all" ? (
+            <div
+              style={{
+                borderTop: `1px solid ${BRAND.border}`,
+                padding: 18,
+                maxHeight: "820px",
+                overflowY: "auto",
+                background: "#fbfcfe",
+              }}
+            >
+              <AssignmentCenter
+                companySelected={companyFilter !== "all"}
+                employees={employees}
+                employeesLoading={employeesLoading}
+                search={search}
+                selectedEmployees={selectedEmployees}
+                employeeTrainingMap={employeeTrainingMap}
+                selectedTrainingTitle={selectedTrainingInfo?.title || ""}
+                trainingSelected={Boolean(trainingId)}
+                assigning={assigning}
+                assignSummary={assignSummary}
+                onSelectedEmployeesChange={setSelectedEmployees}
+                onAssign={assign}
+              />
+            </div>
+          ) : null}
+        </section>
           </>
         ) : null}
 
