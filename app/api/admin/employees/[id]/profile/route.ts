@@ -270,11 +270,11 @@ export async function GET(
 
       safeSelect(
         supabase
-          .from("accidents")
+          .from("accident_records")
           .select("*")
-          .or(
-            `employee_id.eq.${id},employeeId.eq.${id}`
-          ),
+          .eq("web_employee_id", id)
+          .eq("web_firm_id", String(employee.firm_id))
+          .or("is_deleted.is.null,is_deleted.eq.false"),
         "İş Kazası"
       ),
 
