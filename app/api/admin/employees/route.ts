@@ -17,6 +17,228 @@ function clean(value: unknown) {
   return normalized || null;
 }
 
+
+function normalizeHazardClass(
+  value: unknown
+) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleUpperCase("tr-TR")
+    .replace(/\s+/g, " ");
+}
+
+function getLegalTrainingRule(
+  hazardClass: unknown
+) {
+  const normalized =
+    normalizeHazardClass(hazardClass);
+
+  if (
+    normalized.includes("ÇOK TEHLİKELİ") ||
+    normalized.includes("COK TEHLIKELI")
+  ) {
+    return {
+      requiredMinutes: 16 * 60,
+      validityYears: 1,
+      label: "Çok Tehlikeli",
+    };
+  }
+
+  if (
+    normalized.includes("TEHLİKELİ") ||
+    normalized.includes("TEHLIKELI")
+  ) {
+    return {
+      requiredMinutes: 12 * 60,
+      validityYears: 2,
+      label: "Tehlikeli",
+    };
+  }
+
+  if (
+    normalized.includes("AZ TEHLİKELİ") ||
+    normalized.includes("AZ TEHLIKELI")
+  ) {
+    return {
+      requiredMinutes: 8 * 60,
+      validityYears: 3,
+      label: "Az Tehlikeli",
+    };
+  }
+
+  return {
+    requiredMinutes: 0,
+    validityYears: 0,
+    label: "",
+  };
+}
+
+function isTrainingCompleted(
+  row: any
+) {
+  const status = String(
+    row?.status ?? ""
+  )
+    .trim()
+    .toLocaleUpperCase("tr-TR");
+
+  if (
+    [
+      "COMPLETED",
+      "TAMAMLANDI",
+      "BAŞARILI",
+      "BASARILI",
+      "PASSED",
+    ].includes(status)
+  ) {
+    return true;
+  }
+
+  if (row?.completed_at) {
+    return true;
+  }
+
+  return (
+    row?.watch_completed === true &&
+    row?.final_exam_passed === true
+  );
+}
+
+function getTrainingCompletionDate(
+  row: any
+) {
+  const raw =
+    row?.completed_at ||
+    row?.date ||
+    row?.started_at ||
+    row?.created_at ||
+    null;
+
+  if (!raw) return null;
+
+  const date = new Date(raw);
+
+  return Number.isNaN(date.getTime())
+    ? null
+    : date;
+}
+
+function isTrainingLegallyValid(
+  row: any,
+  validityYears: number,
+  now = new Date()
+) {
+  if (!isTrainingCompleted(row)) {
+    return false;
+  }
+
+  if (validityYears <= 0) {
+    return false;
+  }
+
+  const completedAt =
+    getTrainingCompletionDate(row);
+
+  /*
+   * Yasal uygunlukta tarih bilinmiyorsa güvenli tarafta kal:
+   * süre hesabına dahil etme.
+   */
+  if (!completedAt) {
+    return false;
+  }
+
+  const validUntil =
+    new Date(completedAt);
+
+  validUntil.setFullYear(
+    validUntil.getFullYear() +
+      validityYears
+  );
+
+  return validUntil >= now;
+}
+
+function calculateLegalTrainingSummary(
+  rows: any[],
+  hazardClass: unknown
+) {
+  const rule =
+    getLegalTrainingRule(hazardClass);
+
+  if (rule.requiredMinutes <= 0) {
+    return {
+      status: "UNKNOWN" as const,
+      completionRate: 0,
+      completedMinutes: 0,
+      requiredMinutes: 0,
+      missingMinutes: 0,
+      validityYears: 0,
+      hazardClass:
+        normalizeHazardClass(hazardClass),
+      validTrainingCount: 0,
+    };
+  }
+
+  const validRows =
+    (rows || []).filter((row) =>
+      isTrainingLegallyValid(
+        row,
+        rule.validityYears
+      )
+    );
+
+  const completedMinutes =
+    validRows.reduce(
+      (sum, row) =>
+        sum +
+        Math.max(
+          0,
+          Number(
+            row?.duration_minutes ?? 0
+          ) || 0
+        ),
+      0
+    );
+
+  const completionRate =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          (completedMinutes /
+            rule.requiredMinutes) *
+            100
+        )
+      )
+    );
+
+  const missingMinutes =
+    Math.max(
+      0,
+      rule.requiredMinutes -
+        completedMinutes
+    );
+
+  return {
+    status:
+      completedMinutes >=
+      rule.requiredMinutes
+        ? ("COMPLETE" as const)
+        : ("MISSING" as const),
+    completionRate,
+    completedMinutes,
+    requiredMinutes:
+      rule.requiredMinutes,
+    missingMinutes,
+    validityYears:
+      rule.validityYears,
+    hazardClass: rule.label,
+    validTrainingCount:
+      validRows.length,
+  };
+}
+
 function sha256(input: string) {
   return crypto
     .createHash("sha256")
@@ -706,6 +928,41 @@ export async function GET(request: Request) {
             .in("user_id", trainingUserIds)
         );
 
+        const trainingIds = Array.from(
+          new Set(
+            assignments
+              .map((row) =>
+                String(
+                  row.training_id || ""
+                ).trim()
+              )
+              .filter(Boolean)
+          )
+        );
+
+        const trainingDefinitions =
+          trainingIds.length > 0
+            ? await safeRows(
+                "training definitions",
+                supabase
+                  .from("trainings")
+                  .select(
+                    "id,title,duration_minutes,type,created_at"
+                  )
+                  .in("id", trainingIds)
+              )
+            : [];
+
+        const trainingDefinitionMap =
+          new Map(
+            trainingDefinitions.map(
+              (training) => [
+                String(training.id),
+                training,
+              ]
+            )
+          );
+
         trainingRows = assignments
           .map((row) => {
             const employeeId =
@@ -715,9 +972,31 @@ export async function GET(request: Request) {
 
             if (!employeeId) return null;
 
+            const training =
+              trainingDefinitionMap.get(
+                String(row.training_id)
+              );
+
             return {
               ...row,
               employee_id: employeeId,
+              duration_minutes:
+                Number(
+                  training?.duration_minutes ??
+                    0
+                ) || 0,
+              title:
+                training?.title ||
+                "Eğitim",
+              type:
+                training?.type ||
+                "EĞİTİM",
+              date:
+                row.completed_at ||
+                row.started_at ||
+                row.created_at ||
+                training?.created_at ||
+                null,
             };
           })
           .filter(Boolean);
@@ -794,6 +1073,42 @@ export async function GET(request: Request) {
       ]);
     }
 
+    const employeeFirmIds =
+      Array.from(
+        new Set(
+          allEmployees
+            .map((employee) =>
+              String(
+                employee.firm_id || ""
+              ).trim()
+            )
+            .filter(Boolean)
+        )
+      );
+
+    const companyHazardRows =
+      employeeFirmIds.length > 0
+        ? await safeRows(
+            "company hazard",
+            supabase
+              .from("companies")
+              .select(
+                "id,tehlike_sinifi"
+              )
+              .in("id", employeeFirmIds)
+          )
+        : [];
+
+    const hazardByFirm =
+      new Map(
+        companyHazardRows.map(
+          (company) => [
+            String(company.id),
+            company.tehlike_sinifi,
+          ]
+        )
+      );
+
     const trainingByEmployee =
       groupByEmployee(trainingRows);
 
@@ -862,11 +1177,39 @@ export async function GET(request: Request) {
               )
           );
 
+          const legalTrainingSummary =
+            calculateLegalTrainingSummary(
+              trainings,
+              hazardByFirm.get(
+                String(
+                  employee.firm_id || ""
+                )
+              )
+            );
+
           return {
             ...employee,
 
             training_status:
-              buildModuleStatus(trainings),
+              legalTrainingSummary.status,
+
+            training_completion_rate:
+              legalTrainingSummary.completionRate,
+
+            legal_training_completed_minutes:
+              legalTrainingSummary.completedMinutes,
+
+            legal_training_required_minutes:
+              legalTrainingSummary.requiredMinutes,
+
+            legal_training_missing_minutes:
+              legalTrainingSummary.missingMinutes,
+
+            legal_training_validity_years:
+              legalTrainingSummary.validityYears,
+
+            legal_training_hazard_class:
+              legalTrainingSummary.hazardClass,
 
             health_status:
               buildModuleStatus(health),
@@ -889,7 +1232,7 @@ export async function GET(request: Request) {
 
     let companiesQuery = supabase
       .from("companies")
-      .select("id, name")
+      .select("id, name, tehlike_sinifi")
       .order("name", { ascending: true });
 
     if (access.companyScoped) {
