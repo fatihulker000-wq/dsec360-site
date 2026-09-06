@@ -109,12 +109,27 @@ export async function PATCH(
       );
     }
 
+    const webFirmId = String(
+      req.nextUrl.searchParams.get("firmId") ?? ""
+    ).trim();
+
+    if (!webFirmId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Firma UUID bilgisi zorunludur.",
+        },
+        { status: 400 }
+      );
+    }
+
     const body = await req.json();
 
     const { data: current, error: currentError } = await supabase
       .from("ajanda_tasks")
       .select("*")
       .eq("id", recordId)
+      .eq("web_firm_id", webFirmId)
       .maybeSingle();
 
     if (currentError) {
@@ -173,9 +188,7 @@ export async function PATCH(
         payload.progress = 100;
         payload.completed_at = new Date().toISOString();
       } else {
-        payload.progress =
-          progress !== null ? progress : 0;
-
+        payload.progress = progress !== null ? progress : 0;
         payload.completed_at = null;
       }
     } else if (progress !== null) {
@@ -207,21 +220,15 @@ export async function PATCH(
     }
 
     if (body?.meeting_link !== undefined) {
-      payload.meeting_link = nullableString(
-        body.meeting_link
-      );
+      payload.meeting_link = nullableString(body.meeting_link);
     }
 
     if (body?.assigned_to !== undefined) {
-      payload.assigned_to = nullableString(
-        body.assigned_to
-      );
+      payload.assigned_to = nullableString(body.assigned_to);
     }
 
     if (body?.assigned_by !== undefined) {
-      payload.assigned_by = nullableString(
-        body.assigned_by
-      );
+      payload.assigned_by = nullableString(body.assigned_by);
     }
 
     if (body?.participants_csv !== undefined) {
@@ -235,9 +242,7 @@ export async function PATCH(
     }
 
     if (body?.module_ref !== undefined) {
-      payload.module_ref = nullableString(
-        body.module_ref
-      );
+      payload.module_ref = nullableString(body.module_ref);
     }
 
     if (body?.module_ref_id !== undefined) {
@@ -260,8 +265,9 @@ export async function PATCH(
     }
 
     if (body?.repeat_type !== undefined) {
-      const repeatType = nullableString(body.repeat_type)
-        ?.toUpperCase();
+      const repeatType = nullableString(
+        body.repeat_type
+      )?.toUpperCase();
 
       payload.repeat_type =
         repeatType &&
@@ -273,9 +279,7 @@ export async function PATCH(
     }
 
     if (body?.repeat_until !== undefined) {
-      payload.repeat_until = nullableDate(
-        body.repeat_until
-      );
+      payload.repeat_until = nullableDate(body.repeat_until);
     }
 
     const dueAt =
@@ -308,6 +312,7 @@ export async function PATCH(
       .from("ajanda_tasks")
       .update(payload)
       .eq("id", recordId)
+      .eq("web_firm_id", webFirmId)
       .eq("is_deleted", false)
       .select("*")
       .maybeSingle();
@@ -355,7 +360,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   context: RouteContext
 ) {
   try {
@@ -373,6 +378,20 @@ export async function DELETE(
       );
     }
 
+    const webFirmId = String(
+      req.nextUrl.searchParams.get("firmId") ?? ""
+    ).trim();
+
+    if (!webFirmId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Firma UUID bilgisi zorunludur.",
+        },
+        { status: 400 }
+      );
+    }
+
     const nowIso = new Date().toISOString();
 
     const { data, error } = await supabase
@@ -383,6 +402,7 @@ export async function DELETE(
         app_updated_at: Date.now(),
       })
       .eq("id", recordId)
+      .eq("web_firm_id", webFirmId)
       .eq("is_deleted", false)
       .select("id")
       .maybeSingle();

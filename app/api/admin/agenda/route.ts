@@ -51,8 +51,11 @@ function normalizePriority(value: unknown): number {
   return Math.min(2, Math.max(0, Math.trunc(parsed)));
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const webFirmId = String(req.nextUrl.searchParams.get("firmId") ?? "").trim();
+    if (!webFirmId) return NextResponse.json({ success: false, error: "Firma UUID bilgisi zorunludur." }, { status: 400 });
+
     const { data, error } = await supabase
       .from("ajanda_tasks")
       .select(
@@ -99,6 +102,7 @@ export async function GET() {
           updated_at
         `
       )
+      .eq("web_firm_id", webFirmId)
       .eq("is_deleted", false)
       .eq("is_archived", false)
       .order("status", {
@@ -127,6 +131,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       count: data?.length ?? 0,
+      firmId: webFirmId,
       records: data ?? [],
     });
   } catch (error) {
@@ -150,6 +155,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const firmId = Number(body?.firm_id);
+    const webFirmId = nullableString(body?.web_firm_id);
     const title = String(body?.title ?? "").trim();
 
     if (!Number.isFinite(firmId) || firmId <= 0) {
@@ -160,6 +166,10 @@ export async function POST(req: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    if (!webFirmId) {
+      return NextResponse.json({ success: false, error: "Firma UUID bilgisi zorunludur." }, { status: 400 });
     }
 
     if (!title) {
@@ -195,7 +205,7 @@ export async function POST(req: NextRequest) {
       sync_key: randomUUID(),
 
       firm_id: Math.trunc(firmId),
-      web_firm_id: nullableString(body?.web_firm_id),
+      web_firm_id: webFirmId,
 
       title,
       note: nullableString(body?.note),
