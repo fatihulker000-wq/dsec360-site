@@ -49,6 +49,7 @@ type Employee = {
   disability_status?: string | null;
   education_level?: string | null;
   blood_type?: string | null;
+  accident_count?: number | null;
   active: boolean;
 };
 
@@ -203,7 +204,7 @@ if (scopedCompanyId && nextCompanies.length === 1) {
         ppe_status: "UNKNOWN",
         document_status: "UNKNOWN",
         risk_status: "UNKNOWN",
-        accident_count: 0,
+        accident_count: Number(employee.accident_count || 0),
       })),
     [data, companyMap]
   );

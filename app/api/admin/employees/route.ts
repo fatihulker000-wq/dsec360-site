@@ -395,6 +395,103 @@ export async function GET(request: Request) {
       from += step;
     }
 
+    /*
+     * Çalışan listesi ile çalışan profilindeki iş kazası sayısını
+     * aynı kanonik ilişki üzerinden üret:
+     * accident_records.web_employee_id + accident_records.web_firm_id.
+     *
+     * Böylece listede Kaza=0, profilde İş Kazası=1 gibi tutarsızlık oluşmaz.
+     */
+    const employeeIds = allEmployees
+      .map((employee) => String(employee.id || "").trim())
+      .filter(Boolean);
+
+    const accidentCountByEmployee = new Map<string, number>();
+
+    if (employeeIds.length > 0) {
+      const chunkSize = 500;
+
+      for (let i = 0; i < employeeIds.length; i += chunkSize) {
+        const idChunk = employeeIds.slice(i, i + chunkSize);
+
+        let accidentQuery = supabase
+          .from("accident_records")
+          .select("id, web_employee_id, web_firm_id, is_deleted")
+          .in("web_employee_id", idChunk)
+          .or("is_deleted.is.null,is_deleted.eq.false");
+
+        if (
+          effectiveFirmId &&
+          effectiveFirmId !== "all"
+        ) {
+          accidentQuery = accidentQuery.eq(
+            "web_firm_id",
+            effectiveFirmId
+          );
+        }
+
+        const {
+          data: accidentRows,
+          error: accidentError,
+        } = await accidentQuery;
+
+        if (accidentError) {
+          console.error(
+            "employees accident count GET error:",
+            accidentError
+          );
+
+          return NextResponse.json(
+            {
+              error:
+                "Çalışan iş kazası bilgileri alınamadı.",
+              detail: accidentError.message,
+            },
+            { status: 500 }
+          );
+        }
+
+        for (const accident of accidentRows || []) {
+          const employeeId = String(
+            accident.web_employee_id || ""
+          ).trim();
+
+          if (!employeeId) continue;
+
+          /*
+           * Tüm Firmalar görünümünde dahi kazayı yalnızca
+           * çalışanın kendi firmasıyla eşleşiyorsa say.
+           */
+          const employee = allEmployees.find(
+            (item) =>
+              String(item.id) === employeeId
+          );
+
+          if (
+            !employee ||
+            String(employee.firm_id || "") !==
+              String(accident.web_firm_id || "")
+          ) {
+            continue;
+          }
+
+          accidentCountByEmployee.set(
+            employeeId,
+            (accidentCountByEmployee.get(employeeId) || 0) + 1
+          );
+        }
+      }
+    }
+
+    const employeesWithAccidentCount =
+      allEmployees.map((employee) => ({
+        ...employee,
+        accident_count:
+          accidentCountByEmployee.get(
+            String(employee.id)
+          ) || 0,
+      }));
+
     let companiesQuery = supabase
       .from("companies")
       .select("id, name")
@@ -428,14 +525,14 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      data: allEmployees,
+      data: employeesWithAccidentCount,
       companies: companies || [],
       stats: {
-        total_count: allEmployees.length,
-        active_count: allEmployees.filter(
+        total_count: employeesWithAccidentCount.length,
+        active_count: employeesWithAccidentCount.filter(
           (employee) => employee.active !== false
         ).length,
-        passive_count: allEmployees.filter(
+        passive_count: employeesWithAccidentCount.filter(
           (employee) => employee.active === false
         ).length,
       },
