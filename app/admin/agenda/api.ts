@@ -1,5 +1,6 @@
 import type { AgendaResponse, AgendaTask, CompaniesResponse, CreateAgendaRequest, EmployeesResponse } from "./types";
 async function parseJson<T>(response: Response): Promise<T> { const json = await response.json().catch(() => ({})); if (!response.ok) throw new Error(typeof json?.error === "string" ? json.error : "Sunucu hatası oluştu."); return json as T; }
+function identity(t: AgendaTask){ return `${t.web_firm_id||""}|${t.module_ref||t.source||""}|${t.module_remote_id||t.module_ref_id||t.id}`; }
 export async function getAgenda(webFirmId: string): Promise<AgendaResponse> {
  if (!webFirmId) return { success: true, records: [] };
  const q = new URLSearchParams({ firmId: webFirmId });
@@ -7,8 +8,10 @@ export async function getAgenda(webFirmId: string): Promise<AgendaResponse> {
   parseJson<AgendaResponse>(await fetch(`/api/admin/agenda?${q}`, { credentials:"include", cache:"no-store" })),
   parseJson<AgendaResponse>(await fetch(`/api/admin/agenda/sources?${q}`, { credentials:"include", cache:"no-store" })).catch(() => ({success:true,records:[]} as AgendaResponse))
  ]);
- const records: AgendaTask[] = [...(manual.records ?? []), ...(sources.records ?? [])];
- return { success:true, firmId:webFirmId, records, count:records.length };
+ const map=new Map<string,AgendaTask>();
+ for(const task of [...(manual.records??[]),...(sources.records??[])]){ const key=identity(task); const old=map.get(key); if(!old || (old.source_readonly && !task.source_readonly)) map.set(key,task); }
+ const records=[...map.values()].sort((a,b)=>(b.priority-a.priority)||((a.due_at?new Date(a.due_at).getTime():Number.MAX_SAFE_INTEGER)-(b.due_at?new Date(b.due_at).getTime():Number.MAX_SAFE_INTEGER)));
+ return { success:true, firmId:webFirmId, viewer:sources.viewer??null, records, count:records.length };
 }
 export async function getCompanies(): Promise<CompaniesResponse> { return parseJson(await fetch("/api/admin/companies", { credentials:"include", cache:"no-store" })); }
 export async function getEmployees(webFirmId: string): Promise<EmployeesResponse> { const q = new URLSearchParams({ firmId:webFirmId }); return parseJson(await fetch(`/api/admin/employees?${q}`, { credentials:"include", cache:"no-store" })); }
