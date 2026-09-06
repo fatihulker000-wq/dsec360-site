@@ -12,7 +12,7 @@ export type AgendaTask = {
   is_all_day: boolean; repeat_type: string | null; repeat_until: string | null;
   module_ref?: string | null; module_ref_id?: number | null; module_remote_id?: string | null;
   remind_minutes_csv?: string | null; remind_at?: string | null;
-  source: string; is_archived: boolean; is_deleted: boolean; created_at: string; updated_at: string;
+  source: string; source_url?: string | null; source_readonly?: boolean; is_archived: boolean; is_deleted: boolean; created_at: string; updated_at: string;
 };
 
 export type CompanyItem = { id: string; name: string; local_firm_id: number | null; localId: number | null; is_active?: boolean; };
