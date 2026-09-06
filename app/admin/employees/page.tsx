@@ -49,6 +49,11 @@ type Employee = {
   disability_status?: string | null;
   education_level?: string | null;
   blood_type?: string | null;
+  training_status?: string | null;
+  health_status?: string | null;
+  ppe_status?: string | null;
+  document_status?: string | null;
+  risk_status?: string | null;
   accident_count?: number | null;
   active: boolean;
 };
@@ -90,6 +95,56 @@ const emptyForm: EmployeeForm = {
   education_level: "",
   blood_type: "",
 };
+
+type ComplianceStatus =
+  NonNullable<EmployeeListRow["training_status"]>;
+
+type RiskStatus =
+  NonNullable<EmployeeListRow["risk_status"]>;
+
+function normalizeComplianceStatus(
+  value: unknown
+): ComplianceStatus {
+  const status = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  if (status === "COMPLETE") return "COMPLETE";
+  if (status === "MISSING") return "MISSING";
+  if (status === "EXPIRING") return "EXPIRING";
+
+  return "UNKNOWN";
+}
+
+function normalizeRiskStatus(
+  value: unknown
+): RiskStatus {
+  const status = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  /*
+   * Liste bileşeninin kendi risk union tipini koruyoruz.
+   * API'deki COMPLETE = değerlendirilmiş / yüksek risk yok.
+   * Bu durumda en düşük risk seviyesine normalize edilir.
+   */
+  if (status === "HIGH" || status === "CRITICAL") {
+    return "HIGH" as RiskStatus;
+  }
+
+  if (status === "MEDIUM") {
+    return "MEDIUM" as RiskStatus;
+  }
+
+  if (
+    status === "LOW" ||
+    status === "COMPLETE"
+  ) {
+    return "LOW" as RiskStatus;
+  }
+
+  return "UNKNOWN" as RiskStatus;
+}
 
 export default function EmployeesPage() {
   const [data, setData] = useState<Employee[]>([]);
@@ -199,11 +254,16 @@ if (scopedCompanyId && nextCompanies.length === 1) {
         firm_name: employee.firm_id
           ? companyMap.get(String(employee.firm_id)) || null
           : null,
-        training_status: "UNKNOWN",
-        health_status: "UNKNOWN",
-        ppe_status: "UNKNOWN",
-        document_status: "UNKNOWN",
-        risk_status: "UNKNOWN",
+        training_status:
+          normalizeComplianceStatus(employee.training_status),
+        health_status:
+          normalizeComplianceStatus(employee.health_status),
+        ppe_status:
+          normalizeComplianceStatus(employee.ppe_status),
+        document_status:
+          normalizeComplianceStatus(employee.document_status),
+        risk_status:
+          normalizeRiskStatus(employee.risk_status),
         accident_count: Number(employee.accident_count || 0),
       })),
     [data, companyMap]

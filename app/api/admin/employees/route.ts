@@ -492,6 +492,401 @@ export async function GET(request: Request) {
           ) || 0,
       }));
 
+
+    /*
+     * ÇALIŞAN LİSTE MODÜL ÖZETLERİ
+     * ------------------------------------------------------------
+     * Amaç: ana çalışan tablosunda her satır için /profile çağrısı
+     * yapmadan Eğitim / Sağlık / KKD / Evrak / Risk durumlarını
+     * tek liste isteğinde üretmek.
+     *
+     * Tenant kilidi: çalışan ID'si + çalışanın firm_id'si.
+     */
+    const employeeById = new Map(
+      allEmployees.map((employee) => [
+        String(employee.id),
+        employee,
+      ])
+    );
+
+    type ModuleStatus =
+      | "COMPLETE"
+      | "MISSING"
+      | "EXPIRING"
+      | "UNKNOWN";
+
+    const normalizeModuleStatus = (
+      value: unknown
+    ) =>
+      String(value ?? "")
+        .trim()
+        .toUpperCase();
+
+    const buildModuleStatus = (
+      rows: any[]
+    ): ModuleStatus => {
+      if (!rows.length) return "UNKNOWN";
+
+      const statuses = rows.map((row) =>
+        normalizeModuleStatus(
+          row.status ??
+            row.state ??
+            row.result_status
+        )
+      );
+
+      if (
+        statuses.some((status) =>
+          [
+            "MISSING",
+            "EXPIRED",
+            "OVERDUE",
+            "FAILED",
+            "REJECTED",
+            "EKSİK",
+            "EKSIK",
+            "SÜRESİ_DOLDU",
+            "SURESI_DOLDU",
+          ].includes(status)
+        )
+      ) {
+        return "MISSING";
+      }
+
+      if (
+        statuses.some((status) =>
+          [
+            "EXPIRING",
+            "DUE_SOON",
+            "YAKLAŞIYOR",
+            "YAKLASIYOR",
+          ].includes(status)
+        )
+      ) {
+        return "EXPIRING";
+      }
+
+      return "COMPLETE";
+    };
+
+    const groupByEmployee = (
+      rows: any[],
+      employeeField = "employee_id"
+    ) => {
+      const grouped = new Map<string, any[]>();
+
+      for (const row of rows || []) {
+        const employeeId = String(
+          row?.[employeeField] || ""
+        ).trim();
+
+        if (!employeeId) continue;
+
+        const employee = employeeById.get(employeeId);
+        if (!employee) continue;
+
+        const rowFirmId = String(
+          row?.firm_id ||
+            row?.web_firm_id ||
+            ""
+        ).trim();
+
+        /*
+         * Kayıtta firma alanı varsa mutlaka çalışanın firmasıyla
+         * eşleşmesini isteriz. Firma alanı olmayan legacy tablolarda
+         * employee_id zaten bu listede seçili çalışana kilitlidir.
+         */
+        if (
+          rowFirmId &&
+          rowFirmId !==
+            String(employee.firm_id || "")
+        ) {
+          continue;
+        }
+
+        const bucket =
+          grouped.get(employeeId) || [];
+        bucket.push(row);
+        grouped.set(employeeId, bucket);
+      }
+
+      return grouped;
+    };
+
+    const employeeIdsForModules =
+      allEmployees
+        .map((employee) =>
+          String(employee.id || "").trim()
+        )
+        .filter(Boolean);
+
+    const safeRows = async (
+      label: string,
+      query: PromiseLike<{
+        data: any[] | null;
+        error: any;
+      }>
+    ): Promise<any[]> => {
+      try {
+        const { data, error } = await query;
+
+        if (error) {
+          console.warn(
+            `employees ${label} summary error:`,
+            error
+          );
+          return [];
+        }
+
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.warn(
+          `employees ${label} summary error:`,
+          error
+        );
+        return [];
+      }
+    };
+
+    let trainingRows: any[] = [];
+    let healthRows: any[] = [];
+    let ppeRows: any[] = [];
+    let documentRows: any[] = [];
+    let riskRows: any[] = [];
+
+    if (employeeIdsForModules.length > 0) {
+      /*
+       * EĞİTİM:
+       * employees.id -> users.employee_id -> training_assignments.user_id
+       */
+      const trainingUsers = await safeRows(
+        "training users",
+        supabase
+          .from("users")
+          .select("id,employee_id,company_id")
+          .in(
+            "employee_id",
+            employeeIdsForModules
+          )
+      );
+
+      const userToEmployee = new Map<
+        string,
+        string
+      >();
+
+      for (const user of trainingUsers) {
+        const employeeId = String(
+          user.employee_id || ""
+        ).trim();
+
+        const employee =
+          employeeById.get(employeeId);
+
+        if (!employee) continue;
+
+        userToEmployee.set(
+          String(user.id),
+          employeeId
+        );
+      }
+
+      const trainingUserIds = Array.from(
+        userToEmployee.keys()
+      );
+
+      if (trainingUserIds.length > 0) {
+        const assignments = await safeRows(
+          "training",
+          supabase
+            .from("training_assignments")
+            .select(
+              "id,user_id,training_id,status,watch_completed,final_exam_passed,started_at,completed_at,created_at"
+            )
+            .in("user_id", trainingUserIds)
+        );
+
+        trainingRows = assignments
+          .map((row) => {
+            const employeeId =
+              userToEmployee.get(
+                String(row.user_id)
+              );
+
+            if (!employeeId) return null;
+
+            return {
+              ...row,
+              employee_id: employeeId,
+            };
+          })
+          .filter(Boolean);
+      }
+
+      /*
+       * SAĞLIK / KKD / EVRAK / RİSK:
+       * güncel Web tablolarını doğrudan employee_id ile toplu oku.
+       */
+      [
+        healthRows,
+        ppeRows,
+        documentRows,
+        riskRows,
+      ] = await Promise.all([
+        safeRows(
+          "health",
+          supabase
+            .from("health_records")
+            .select(
+              "id,employee_id,firm_id,status,exam_date_millis,next_due_millis"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+        ),
+
+        safeRows(
+          "ppe",
+          supabase
+            .from(
+              "employee_ppe_assignments"
+            )
+            .select(
+              "id,employee_id,firm_id,status"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+        ),
+
+        safeRows(
+          "documents",
+          supabase
+            .from(
+              "employee_document_assignments"
+            )
+            .select(
+              "id,employee_id,firm_id,status,is_cancelled"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+            .or(
+              "is_cancelled.is.null,is_cancelled.eq.false"
+            )
+        ),
+
+        safeRows(
+          "risks",
+          supabase
+            .from("employee_risks")
+            .select(
+              "id,employee_id,firm_id,status,score,risk_score,risk_level"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+        ),
+      ]);
+    }
+
+    const trainingByEmployee =
+      groupByEmployee(trainingRows);
+
+    const healthByEmployee =
+      groupByEmployee(healthRows);
+
+    const ppeByEmployee =
+      groupByEmployee(ppeRows);
+
+    const documentByEmployee =
+      groupByEmployee(documentRows);
+
+    const riskByEmployee =
+      groupByEmployee(riskRows);
+
+    const employeesWithModuleSummary =
+      employeesWithAccidentCount.map(
+        (employee) => {
+          const employeeId =
+            String(employee.id);
+
+          const trainings =
+            trainingByEmployee.get(employeeId) ||
+            [];
+
+          const health =
+            healthByEmployee.get(employeeId) ||
+            [];
+
+          const ppe =
+            ppeByEmployee.get(employeeId) ||
+            [];
+
+          const documents =
+            documentByEmployee.get(
+              employeeId
+            ) || [];
+
+          const risks =
+            riskByEmployee.get(employeeId) ||
+            [];
+
+          /*
+           * Riskte kayıt var ama açık/yüksek risk yoksa "Veri Yok"
+           * değil COMPLETE dönüyoruz. Böylece UI bunu "Risk Yok"
+           * olarak gösterebilir.
+           */
+          const hasHighRisk = risks.some(
+            (row) =>
+              Number(
+                row.score ??
+                  row.risk_score ??
+                  0
+              ) >= 200 ||
+              [
+                "HIGH",
+                "CRITICAL",
+                "YÜKSEK",
+                "YUKSEK",
+                "ÇOK YÜKSEK",
+                "COK YUKSEK",
+              ].includes(
+                normalizeModuleStatus(
+                  row.risk_level
+                )
+              )
+          );
+
+          return {
+            ...employee,
+
+            training_status:
+              buildModuleStatus(trainings),
+
+            health_status:
+              buildModuleStatus(health),
+
+            ppe_status:
+              buildModuleStatus(ppe),
+
+            document_status:
+              buildModuleStatus(documents),
+
+            risk_status:
+              hasHighRisk
+                ? "HIGH"
+                : risks.length > 0
+                ? "COMPLETE"
+                : "UNKNOWN",
+          };
+        }
+      );
+
     let companiesQuery = supabase
       .from("companies")
       .select("id, name")
@@ -525,14 +920,14 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      data: employeesWithAccidentCount,
+      data: employeesWithModuleSummary,
       companies: companies || [],
       stats: {
-        total_count: employeesWithAccidentCount.length,
-        active_count: employeesWithAccidentCount.filter(
+        total_count: employeesWithModuleSummary.length,
+        active_count: employeesWithModuleSummary.filter(
           (employee) => employee.active !== false
         ).length,
-        passive_count: employeesWithAccidentCount.filter(
+        passive_count: employeesWithModuleSummary.filter(
           (employee) => employee.active === false
         ).length,
       },
