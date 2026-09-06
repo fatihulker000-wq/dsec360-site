@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import EmployeeProfileActivity from "./EmployeeProfileActivity";
 import EmployeeProfileKpis from "./EmployeeProfileKpis";
+import EmployeeProfileHealthPanel from "./EmployeeProfileHealthPanel";
 import EmployeeProfileModulePanel from "./EmployeeProfileModulePanel";
 import EmployeeProfileOverview from "./EmployeeProfileOverview";
 import EmployeeProfileSidebar from "./EmployeeProfileSidebar";
@@ -14,12 +15,14 @@ import type {
   EmployeeProfileEmployee,
   EmployeeProfileModuleItem,
   EmployeeProfileTab,
+  EmployeeHealthAccess,
 } from "./types";
 
 export default function EmployeeProfile({
   employee,
   trainingItems,
   healthItems,
+  healthAccess,
   ppeItems,
   riskItems,
   auditItems,
@@ -37,6 +40,7 @@ onClose,
 
   trainingItems?: EmployeeProfileModuleItem[];
   healthItems?: EmployeeProfileModuleItem[];
+  healthAccess?: EmployeeHealthAccess;
   ppeItems?: EmployeeProfileModuleItem[];
   riskItems?: EmployeeProfileModuleItem[];
   auditItems?: EmployeeProfileModuleItem[];
@@ -175,10 +179,10 @@ onEdit?(): void;
           )}
 
           {activeTab === "HEALTH" && (
-            <EmployeeProfileModulePanel
-              title="Sağlık"
-              description="İşe giriş, periyodik muayene ve sağlık takip kayıtları."
+            <EmployeeProfileHealthPanel
+              employee={employee}
               items={healthItems}
+              access={healthAccess}
             />
           )}
 

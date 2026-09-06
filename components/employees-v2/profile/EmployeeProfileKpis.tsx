@@ -17,8 +17,8 @@ export default function EmployeeProfileKpis({
       accent: "#7c3aed",
     },
     {
-      title: "Sağlık Durumu",
-      value: statusText(employee.health_status),
+      title: "Sağlık Takibi",
+      value: healthStatusText(employee),
       accent: "#0f766e",
     },
     {
@@ -101,16 +101,24 @@ export default function EmployeeProfileKpis({
   );
 }
 
-function statusText(
-  value:
-    | "COMPLETE"
-    | "MISSING"
-    | "EXPIRING"
-    | "UNKNOWN"
-    | undefined
-) {
-  if (value === "COMPLETE") return "Tamam";
-  if (value === "MISSING") return "Eksik";
-  if (value === "EXPIRING") return "Yaklaşıyor";
-  return "Veri Yok";
+function healthStatusText(employee: EmployeeProfileEmployee) {
+  const status = employee.health_status;
+  const hasHealthRecord =
+    (employee.health_record_count || 0) > 0 ||
+    (employee.health_examination_count || 0) > 0 ||
+    (employee.health_ek2_count || 0) > 0;
+
+  if (!hasHealthRecord && status === "UNKNOWN") {
+    return "Kayıt Yok";
+  }
+
+  if (status === "MISSING") return "Süresi Geçmiş";
+  if (status === "EXPIRING") return "Muayene Yaklaşıyor";
+  if (status === "COMPLETE") return "Muayene Geçerli";
+
+  if ((employee.health_ek2_count || 0) > 0) {
+    return "EK-2 Mevcut";
+  }
+
+  return hasHealthRecord ? "Kayıt Mevcut" : "Kayıt Yok";
 }

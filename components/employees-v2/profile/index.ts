@@ -6,6 +6,8 @@ export { default as EmployeeProfileSidebar } from "./EmployeeProfileSidebar";
 
 export { default as EmployeeProfileKpis } from "./EmployeeProfileKpis";
 
+export { default as EmployeeProfileHealthPanel } from "./EmployeeProfileHealthPanel";
+
 export { default as EmployeeProfileTabs } from "./EmployeeProfileTabs";
 
 export { default as EmployeeProfileOverview } from "./EmployeeProfileOverview";

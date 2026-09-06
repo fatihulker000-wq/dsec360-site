@@ -26,6 +26,10 @@ export type EmployeeIntegrationItem = {
 
   source?: string;
 
+  privacy?: "FULL" | "RESTRICTED";
+
+  details?: Record<string, string | number | boolean | null | undefined>;
+
 };
 
 export type EmployeeIntegrationActivity = {
@@ -58,6 +62,16 @@ export type EmployeeIntegrationSummary = {
   training_status: EmployeeIntegrationStatus;
 
   health_status: EmployeeIntegrationStatus;
+
+  health_record_count?: number;
+  health_examination_count?: number;
+  health_ek2_count?: number;
+  health_last_exam_at?: string;
+  health_last_ek2_at?: string;
+  health_next_due_at?: string;
+  health_days_until_due?: number;
+  health_details_allowed?: boolean;
+  health_privacy_level?: "FULL" | "METADATA_ONLY";
 
   ppe_status: EmployeeIntegrationStatus;
 
@@ -110,6 +124,12 @@ export type EmployeeIntegrationData = {
   loadedAt: string;
 
   warnings?: string[];
+
+  access?: {
+    role?: string;
+    health_details_allowed?: boolean;
+    health_privacy_level?: "FULL" | "METADATA_ONLY";
+  };
 
 };
 

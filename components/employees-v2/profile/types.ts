@@ -59,6 +59,17 @@ export type EmployeeProfileEmployee = {
 
   training_status?: EmployeeProfileStatus;
   health_status?: EmployeeProfileStatus;
+
+  health_record_count?: number;
+  health_examination_count?: number;
+  health_ek2_count?: number;
+  health_last_exam_at?: string;
+  health_last_ek2_at?: string;
+  health_next_due_at?: string;
+  health_days_until_due?: number;
+  health_details_allowed?: boolean;
+  health_privacy_level?: "FULL" | "METADATA_ONLY";
+
   ppe_status?: EmployeeProfileStatus;
   document_status?: EmployeeProfileStatus;
   risk_status?: EmployeeProfileRisk;
@@ -84,6 +95,10 @@ export type EmployeeProfileModuleItem = {
   date?: string;
 
   meta?: string;
+
+  privacy?: "FULL" | "RESTRICTED";
+
+  details?: Record<string, string | number | boolean | null | undefined>;
 };
 
 export type EmployeeProfileActivity = {
@@ -107,4 +122,9 @@ export type EmployeeProfileActivity = {
     | "AGENDA"
     | "SGK"
     | "IBYS";
+};
+export type EmployeeHealthAccess = {
+  role?: string;
+  detailsAllowed?: boolean;
+  privacyLevel?: "FULL" | "METADATA_ONLY";
 };

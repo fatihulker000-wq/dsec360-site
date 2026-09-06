@@ -755,6 +755,44 @@ function buildSafeHealthItems(
     });
 }
 
+function buildDetailedHealthItems(rows: any[]) {
+  return [...rows]
+    .sort((a, b) => {
+      const ad = new Date(healthDate(a.exam_date_millis || a.exam_date || a.examination_date || a.created_at) || 0).getTime();
+      const bd = new Date(healthDate(b.exam_date_millis || b.exam_date || b.examination_date || b.created_at) || 0).getTime();
+      return bd - ad;
+    })
+    .map((row, index) => ({
+      id: String(row.id || `HEALTH-${index}`),
+      title: row.form_type || row.exam_type || row.record_type || row.examination_type || "İşyeri Sağlık Muayenesi",
+      description: row.doctor_opinion || row.decision || row.notes || row.result || undefined,
+      status: row.status || (row.next_exam_date && new Date(row.next_exam_date).getTime() < Date.now() ? "EXPIRED" : "ACTIVE"),
+      date: healthDate(row.exam_date_millis || row.exam_date || row.examination_date || row.created_at),
+      meta: healthDate(row.next_due_millis || row.next_due_at || row.next_exam_date || row.next_due)
+        ? `Sonraki muayene: ${healthDate(row.next_due_millis || row.next_due_at || row.next_exam_date || row.next_due)}`
+        : undefined,
+      source: "HEALTH",
+      privacy: "FULL",
+      details: {
+        exam_type: row.exam_type,
+        form_type: row.form_type,
+        exam_date: row.exam_date || row.examination_date,
+        next_exam_date: row.next_exam_date || row.next_due_at,
+        decision: row.decision,
+        doctor_name: row.doctor_name,
+        doctor_opinion: row.doctor_opinion,
+        file_no: row.file_no,
+        revision_no: row.revision_no,
+        status: row.status,
+        blood_group: row.blood_group,
+        workplace_address: row.workplace_address,
+        danger_class: row.danger_class,
+        nace_code: row.nace_code,
+        signature_note: row.signature_note,
+      },
+    }));
+}
+
 export async function GET(
   _request: Request,
   context: {
@@ -1147,9 +1185,8 @@ export async function GET(
 
     const healthItems =
       access.canViewSensitiveHealth
-        ? mapGenericItems(
-            sensitiveHealthRows,
-            "HEALTH"
+        ? buildDetailedHealthItems(
+            sensitiveHealthRows
           )
         : buildSafeHealthItems(
             healthResult.data

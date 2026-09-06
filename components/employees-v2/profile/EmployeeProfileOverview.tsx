@@ -83,9 +83,10 @@ export default function EmployeeProfileOverview({
         />
 
         <ModuleCard
-          title="Sağlık"
+          title="Sağlık Takibi"
           status={employee.health_status}
-          description="Muayene ve sağlık takip durumu."
+          statusLabel={healthStatusText(employee)}
+          description={healthDescription(employee)}
         />
 
         <ModuleCard
@@ -108,9 +109,11 @@ function ModuleCard({
   title,
   description,
   status = "UNKNOWN",
+  statusLabel,
 }: {
   title: string;
   description: string;
+  statusLabel?: string;
   status?:
     | "COMPLETE"
     | "MISSING"
@@ -138,9 +141,24 @@ function ModuleCard({
           {title}
         </strong>
 
-        <EmployeeProfileStatusBadge
-          status={status}
-        />
+        {statusLabel ? (
+          <span
+            style={{
+              padding: "6px 9px",
+              borderRadius: 999,
+              background: "#ecfdf5",
+              color: "#047857",
+              fontSize: 11,
+              fontWeight: 900,
+            }}
+          >
+            {statusLabel}
+          </span>
+        ) : (
+          <EmployeeProfileStatusBadge
+            status={status}
+          />
+        )}
       </div>
 
       <p
@@ -194,4 +212,28 @@ function Info({
       </div>
     </div>
   );
+}
+
+function healthStatusText(employee: EmployeeProfileEmployee) {
+  if (employee.health_status === "MISSING") return "Süresi Geçmiş";
+  if (employee.health_status === "EXPIRING") return "Yaklaşıyor";
+  if (employee.health_status === "COMPLETE") return "Muayene Geçerli";
+  if ((employee.health_ek2_count || 0) > 0) return "EK-2 Mevcut";
+  if ((employee.health_record_count || 0) > 0) return "Kayıt Mevcut";
+  return "Kayıt Yok";
+}
+
+function healthDescription(employee: EmployeeProfileEmployee) {
+  const parts: string[] = [];
+  if ((employee.health_ek2_count || 0) > 0) parts.push(`EK-2: ${employee.health_ek2_count}`);
+  if ((employee.health_examination_count || 0) > 0) parts.push(`Muayene: ${employee.health_examination_count}`);
+  if (employee.health_next_due_at) parts.push(`Sonraki muayene: ${formatDate(employee.health_next_due_at)}`);
+  return parts.length ? parts.join(" • ") : "Muayene ve sağlık takip kayıtları.";
+}
+
+function formatDate(value?: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
