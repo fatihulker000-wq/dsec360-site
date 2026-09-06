@@ -2,9 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  EmployeeDashboard,
-} from "@/components/employees-v2/dashboard";
+import EmployeeExecutiveDashboard from "@/components/employees-v2/dashboard/EmployeeExecutiveDashboard";
 
 import {
   EmployeeListCenter,
@@ -55,6 +53,18 @@ type Employee = {
   document_status?: string | null;
   risk_status?: string | null;
   accident_count?: number | null;
+  training_completion_rate?: number | null;
+  legal_training_completed_minutes?: number | null;
+  legal_training_required_minutes?: number | null;
+  legal_training_missing_minutes?: number | null;
+  legal_training_validity_years?: number | null;
+  legal_training_hazard_class?: string | null;
+  health_record_count?: number | null;
+  health_examination_count?: number | null;
+  health_ek2_count?: number | null;
+  health_last_exam_at?: string | null;
+  health_last_ek2_at?: string | null;
+  health_next_due_at?: string | null;
   active: boolean;
 };
 
@@ -955,9 +965,8 @@ if (scopedCompanyId && nextCompanies.length === 1) {
         </div>
       </section>
 
-      <EmployeeDashboard
+      <EmployeeExecutiveDashboard
         employees={data}
-        visibleEmployees={data}
         selectedCompanyName={selectedCompanyName}
         onEmployeeClick={(employeeId) => {
           const employee =
@@ -1231,7 +1240,64 @@ if (scopedCompanyId && nextCompanies.length === 1) {
                       )
                     ) || null
                   : null,
-              ...summary,
+
+              // Integration summary is the canonical profile status source.
+              // API list fields may contain null, while EmployeeProfileEmployee
+              // intentionally uses undefined for optional profile metrics.
+              training_status: summary.training_status,
+              health_status: summary.health_status,
+              ppe_status: summary.ppe_status,
+              document_status: summary.document_status,
+              risk_status: summary.risk_status,
+
+              health_record_count:
+                summary.health_record_count ??
+                profileEmployee.health_record_count ??
+                undefined,
+              health_examination_count:
+                summary.health_examination_count ??
+                profileEmployee.health_examination_count ??
+                undefined,
+              health_ek2_count:
+                summary.health_ek2_count ??
+                profileEmployee.health_ek2_count ??
+                undefined,
+              health_last_exam_at:
+                summary.health_last_exam_at ??
+                profileEmployee.health_last_exam_at ??
+                undefined,
+              health_last_ek2_at:
+                summary.health_last_ek2_at ??
+                profileEmployee.health_last_ek2_at ??
+                undefined,
+              health_next_due_at:
+                summary.health_next_due_at ??
+                profileEmployee.health_next_due_at ??
+                undefined,
+              health_days_until_due:
+                summary.health_days_until_due ?? undefined,
+              health_details_allowed:
+                summary.health_details_allowed ?? false,
+              health_privacy_level:
+                summary.health_privacy_level ??
+                "METADATA_ONLY",
+
+              training_completion_rate:
+                summary.training_completion_rate ??
+                profileEmployee.training_completion_rate ??
+                undefined,
+              ppe_completion_rate:
+                summary.ppe_completion_rate ?? undefined,
+              open_risk_count:
+                summary.open_risk_count ?? 0,
+              open_action_count:
+                summary.open_action_count ?? 0,
+              accident_count:
+                summary.accident_count ??
+                profileEmployee.accident_count ??
+                0,
+              upcoming_count:
+                summary.upcoming_count ?? 0,
             };
 
             return (
