@@ -53,6 +53,42 @@ async function safeSelect(
 
 }
 
+
+async function firstAvailableSelect(
+  label: string,
+  queries: Array<
+    () => PromiseLike<{
+      data: any[] | null;
+      error: any;
+    }>
+  >
+): Promise<OptionalQueryResult> {
+  const errors: string[] = [];
+
+  for (const makeQuery of queries) {
+    try {
+      const { data, error } = await makeQuery();
+
+      if (!error) {
+        return {
+          data: Array.isArray(data) ? data : [],
+        };
+      }
+
+      errors.push(error.message || String(error));
+    } catch (error: any) {
+      errors.push(error?.message || String(error));
+    }
+  }
+
+  console.warn(`${label} sorguları başarısız`, errors);
+
+  return {
+    data: [],
+    warning: `${label} verisi alınamadı`,
+  };
+}
+
 function normalizeDate(value: unknown) {
   if (!value) return undefined;
 
@@ -94,7 +130,11 @@ function mapGenericItems(rows: any[], source: string) {
           row.created_at ||
           row.updated_at ||
           row.training_date ||
+          row.completed_at ||
+          row.started_at ||
           row.examination_date ||
+          row.exam_date ||
+          row.assigned_at ||
           row.due_date
       ),
 
@@ -103,6 +143,7 @@ function mapGenericItems(rows: any[], source: string) {
       row.category ||
       row.type ||
       row.document_type ||
+      row.risk_level ||
       undefined,
 
     source,
@@ -215,35 +256,215 @@ export async function GET(
         { status: 404 }
       );
     }
-        const [
-      trainingResult,
-      healthResult,
+        const firmId = String(employee.firm_id || "").trim();
+
+    // ============================================================
+    // EĞİTİM — gerçek Web eğitim omurgası:
+    // employees.id -> users.employee_id -> training_assignments.user_id -> trainings
+    // ============================================================
+    const trainingUserResult = await safeSelect(
+      supabase
+        .from("users")
+        .select("id,employee_id,company_id,full_name,email,is_active")
+        .eq("employee_id", id),
+      "Eğitim kullanıcısı"
+    );
+
+    const trainingUserIds = trainingUserResult.data
+      .filter((row) => String(row.employee_id || "") === id)
+      .map((row) => String(row.id || "").trim())
+      .filter(Boolean);
+
+    let trainingResult: OptionalQueryResult = {
+      data: [],
+      warning: trainingUserResult.warning,
+    };
+
+    if (trainingUserIds.length > 0) {
+      const assignmentResult = await safeSelect(
+        supabase
+          .from("training_assignments")
+          .select(
+            "id,user_id,training_id,status,watch_completed,final_exam_passed,started_at,completed_at,final_exam_score,created_at"
+          )
+          .in("user_id", trainingUserIds),
+        "Eğitim atamaları"
+      );
+
+      const trainingIds = Array.from(
+        new Set(
+          assignmentResult.data
+            .map((row) => String(row.training_id || "").trim())
+            .filter(Boolean)
+        )
+      );
+
+      let trainingDefinitions: any[] = [];
+      let trainingDefinitionWarning: string | undefined;
+
+      if (trainingIds.length > 0) {
+        const definitionResult = await safeSelect(
+          supabase
+            .from("trainings")
+            .select(
+              "id,title,type,description,duration_minutes,created_at"
+            )
+            .in("id", trainingIds),
+          "Eğitim detayları"
+        );
+
+        trainingDefinitions = definitionResult.data;
+        trainingDefinitionWarning = definitionResult.warning;
+      }
+
+      const trainingMap = new Map(
+        trainingDefinitions.map((row) => [
+          String(row.id),
+          row,
+        ])
+      );
+
+      trainingResult = {
+        data: assignmentResult.data.map((assignment) => {
+          const training = trainingMap.get(
+            String(assignment.training_id)
+          );
+
+          return {
+            ...assignment,
+            title: training?.title || "Eğitim",
+            training_name: training?.title || "Eğitim",
+            description: training?.description || undefined,
+            type: training?.type || "EĞİTİM",
+            duration_minutes:
+              training?.duration_minutes ?? undefined,
+            date:
+              assignment.completed_at ||
+              assignment.started_at ||
+              assignment.created_at ||
+              training?.created_at,
+          };
+        }),
+        warning:
+          assignmentResult.warning ||
+          trainingDefinitionWarning ||
+          trainingUserResult.warning,
+      };
+    }
+
+    // ============================================================
+    // SAĞLIK — güncel kaynak health_records.
+    // Eski kurulum desteği için health_examinations fallback.
+    // ============================================================
+    const healthResult = await firstAvailableSelect(
+      "Sağlık",
+      [
+        () =>
+          supabase
+            .from("health_records")
+            .select("*")
+            .eq("employee_id", id),
+        () =>
+          supabase
+            .from("health_examinations")
+            .select("*")
+            .eq("employee_id", id),
+      ]
+    );
+
+    // ============================================================
+    // EVRAK — gerçek atama omurgası:
+    // employee_document_assignments -> employee_documents
+    // ============================================================
+    const documentAssignmentResult = await safeSelect(
+      supabase
+        .from("employee_document_assignments")
+        .select(
+          "id,document_id,firm_id,employee_id,employee_full_name,employee_email,department,job_title,assigned_at,due_at,status,email_status,first_opened_at,last_opened_at,reading_completed_at,acknowledgement_at,is_cancelled"
+        )
+        .eq("employee_id", id)
+        .eq("firm_id", firmId)
+        .or("is_cancelled.is.null,is_cancelled.eq.false"),
+      "Evrak atamaları"
+    );
+
+    const documentIds = Array.from(
+      new Set(
+        documentAssignmentResult.data
+          .map((row) => String(row.document_id || "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    let documentDefinitions: any[] = [];
+    let documentDefinitionWarning: string | undefined;
+
+    if (documentIds.length > 0) {
+      const documentDefinitionResult = await safeSelect(
+        supabase
+          .from("employee_documents")
+          .select(
+            "id,title,document_type,description,file_name,mime_type,version_no,version_label,status,is_deleted"
+          )
+          .in("id", documentIds)
+          .or("is_deleted.is.null,is_deleted.eq.false"),
+        "Evrak detayları"
+      );
+
+      documentDefinitions = documentDefinitionResult.data;
+      documentDefinitionWarning =
+        documentDefinitionResult.warning;
+    }
+
+    const documentMap = new Map(
+      documentDefinitions.map((row) => [
+        String(row.id),
+        row,
+      ])
+    );
+
+    const documentResult: OptionalQueryResult = {
+      data: documentAssignmentResult.data.map((assignment) => {
+        const document = documentMap.get(
+          String(assignment.document_id)
+        );
+
+        return {
+          ...assignment,
+          title: document?.title || "Çalışan Evrakı",
+          document_name:
+            document?.title || "Çalışan Evrakı",
+          document_type:
+            document?.document_type || "EVRAK",
+          description:
+            document?.description || undefined,
+          meta:
+            document?.document_type ||
+            document?.version_label ||
+            undefined,
+          date:
+            assignment.acknowledgement_at ||
+            assignment.reading_completed_at ||
+            assignment.assigned_at,
+        };
+      }),
+      warning:
+        documentAssignmentResult.warning ||
+        documentDefinitionWarning,
+    };
+
+    // ============================================================
+    // KKD / RİSK / DENETİM / KAZA / AJANDA / SGK / İBYS
+    // ============================================================
+    const [
       ppeResult,
       riskResult,
       auditResult,
       accidentResult,
-      documentResult,
       agendaResult,
       sgkResult,
       ibysResult,
     ] = await Promise.all([
-
-      safeSelect(
-        supabase
-          .from("employee_trainings")
-          .select("*")
-          .eq("employee_id", id),
-        "Eğitim"
-      ),
-
-      safeSelect(
-        supabase
-          .from("employee_health_records")
-          .select("*")
-          .eq("employee_id", id),
-        "Sağlık"
-      ),
-
       safeSelect(
         supabase
           .from("employee_ppe_assignments")
@@ -273,17 +494,9 @@ export async function GET(
           .from("accident_records")
           .select("*")
           .eq("web_employee_id", id)
-          .eq("web_firm_id", String(employee.firm_id))
+          .eq("web_firm_id", firmId)
           .or("is_deleted.is.null,is_deleted.eq.false"),
         "İş Kazası"
-      ),
-
-      safeSelect(
-        supabase
-          .from("employee_documents")
-          .select("*")
-          .eq("employee_id", id),
-        "Belgeler"
       ),
 
       safeSelect(
@@ -309,7 +522,6 @@ export async function GET(
           .eq("employee_id", id),
         "İBYS"
       ),
-
     ]);
 
     const warnings = [
@@ -451,7 +663,21 @@ export async function GET(
                   row.score ||
                   row.risk_score ||
                   0
-                ) >= 200
+                ) >= 200 ||
+                [
+                  "HIGH",
+                  "CRITICAL",
+                  "YÜKSEK",
+                  "YUKSEK",
+                  "ÇOK YÜKSEK",
+                  "COK YUKSEK",
+                ].includes(
+                  String(
+                    row.risk_level ||
+                    row.level ||
+                    ""
+                  ).toUpperCase()
+                )
             )
               ? "HIGH"
               : riskResult.data.length
@@ -480,10 +706,18 @@ export async function GET(
                   (
                     ppeResult.data.filter(
                       (row) =>
-                        String(
-                          row.status || ""
-                        ).toUpperCase() ===
-                        "COMPLETE"
+                        [
+                          "COMPLETE",
+                          "COMPLETED",
+                          "ACTIVE",
+                          "ASSIGNED",
+                          "ZİMMETLENDİ",
+                          "ZIMMETLENDI",
+                        ].includes(
+                          String(
+                            row.status || ""
+                          ).toUpperCase()
+                        )
                     ).length /
                     ppeResult.data.length
                   ) * 100
