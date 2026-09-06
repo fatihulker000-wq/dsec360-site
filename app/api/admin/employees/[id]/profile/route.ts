@@ -735,8 +735,9 @@ function buildSafeHealthItems(
             `HEALTH-${index}`
         ),
         title:
-          row.record_type ||
+          row.form_type ||
           row.exam_type ||
+          row.record_type ||
           row.examination_type ||
           "İşyeri Sağlık Muayenesi",
         description:
@@ -943,6 +944,7 @@ export async function GET(
     const [
       healthRecordsResult,
       healthExaminationsResult,
+      ek2FormsResult,
     ] = await Promise.all([
       safeSelect(
         supabase
@@ -958,11 +960,22 @@ export async function GET(
         supabase
           .from("health_examinations")
           .select(
-            "id,employee_id,firm_id,status,exam_date,examination_date,next_due_at,next_exam_date,created_at"
+            "id,employee_id,company_id,status,exam_date,next_exam_date,exam_type,decision,created_at"
           )
           .eq("employee_id", id)
-          .eq("firm_id", firmId),
-        "EK-2 / Sağlık muayeneleri"
+          .eq("company_id", firmId),
+        "Sağlık muayeneleri"
+      ),
+      safeSelect(
+        supabase
+          .from("health_ek2_forms")
+          .select(
+            "id,employee_id,company_id,examination_id,form_type,status,exam_date,next_exam_date,file_no,revision_no,is_active,created_at"
+          )
+          .eq("employee_id", id)
+          .eq("company_id", firmId)
+          .or("is_active.is.null,is_active.eq.true"),
+        "EK-2 kayıtları"
       ),
     ]);
 
@@ -970,10 +983,12 @@ export async function GET(
       data: [
         ...healthRecordsResult.data,
         ...healthExaminationsResult.data,
+        ...ek2FormsResult.data,
       ],
       warning:
         healthRecordsResult.warning ||
-        healthExaminationsResult.warning,
+        healthExaminationsResult.warning ||
+        ek2FormsResult.warning,
     };
 
     /*
@@ -986,6 +1001,7 @@ export async function GET(
       const [
         sensitiveHealthRecords,
         sensitiveHealthExaminations,
+        sensitiveEk2Forms,
       ] = await Promise.all([
         safeSelect(
           supabase
@@ -1000,7 +1016,16 @@ export async function GET(
             .from("health_examinations")
             .select("*")
             .eq("employee_id", id)
-            .eq("firm_id", firmId),
+            .eq("company_id", firmId),
+          "Sağlık muayene detayları"
+        ),
+        safeSelect(
+          supabase
+            .from("health_ek2_forms")
+            .select("*")
+            .eq("employee_id", id)
+            .eq("company_id", firmId)
+            .or("is_active.is.null,is_active.eq.true"),
           "EK-2 sağlık detayları"
         ),
       ]);
@@ -1008,6 +1033,7 @@ export async function GET(
       sensitiveHealthRows = [
         ...sensitiveHealthRecords.data,
         ...sensitiveHealthExaminations.data,
+        ...sensitiveEk2Forms.data,
       ];
     }
 
@@ -1313,8 +1339,26 @@ export async function GET(
           health_record_count:
             healthSummary.recordCount,
 
+          health_examination_count:
+            healthExaminationsResult.data.length,
+
+          health_ek2_count:
+            ek2FormsResult.data.length,
+
           health_last_exam_at:
             healthSummary.lastExamAt,
+
+          health_last_ek2_at:
+            ek2FormsResult.data
+              .map((row) =>
+                healthDate(
+                  row.exam_date ||
+                    row.created_at
+                )
+              )
+              .filter(Boolean)
+              .sort()
+              .reverse()[0],
 
           health_next_due_at:
             healthSummary.nextDueAt,

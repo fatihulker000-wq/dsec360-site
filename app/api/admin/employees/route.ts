@@ -934,6 +934,7 @@ export async function GET(request: Request) {
 
         const rowFirmId = String(
           row?.firm_id ||
+            row?.company_id ||
             row?.web_firm_id ||
             ""
         ).trim();
@@ -998,6 +999,7 @@ export async function GET(request: Request) {
     let trainingRows: any[] = [];
     let healthRows: any[] = [];
     let healthExaminationRows: any[] = [];
+    let healthEk2Rows: any[] = [];
     let ppeRows: any[] = [];
     let documentRows: any[] = [];
     let riskRows: any[] = [];
@@ -1135,6 +1137,7 @@ export async function GET(request: Request) {
       [
         healthRows,
         healthExaminationRows,
+        healthEk2Rows,
         ppeRows,
         documentRows,
         riskRows,
@@ -1157,12 +1160,26 @@ export async function GET(request: Request) {
           supabase
             .from("health_examinations")
             .select(
-              "id,employee_id,firm_id,status,exam_date,examination_date,next_due_at,next_exam_date,created_at"
+              "id,employee_id,company_id,status,exam_date,next_exam_date,exam_type,created_at"
             )
             .in(
               "employee_id",
               employeeIdsForModules
             )
+        ),
+
+        safeRows(
+          "health ek2",
+          supabase
+            .from("health_ek2_forms")
+            .select(
+              "id,employee_id,company_id,examination_id,form_type,status,exam_date,next_exam_date,is_active,created_at"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+            .or("is_active.is.null,is_active.eq.true")
         ),
 
         safeRows(
@@ -1256,6 +1273,7 @@ export async function GET(request: Request) {
       groupByEmployee([
         ...healthRows,
         ...healthExaminationRows,
+        ...healthEk2Rows,
       ]);
 
     const ppeByEmployee =
@@ -1280,6 +1298,32 @@ export async function GET(request: Request) {
           const health =
             healthByEmployee.get(employeeId) ||
             [];
+
+          const employeeHealthExaminations =
+            healthExaminationRows.filter(
+              (row) =>
+                String(row.employee_id) ===
+                  employeeId &&
+                String(
+                  row.company_id || ""
+                ) ===
+                  String(
+                    employee.firm_id || ""
+                  )
+            );
+
+          const employeeEk2Forms =
+            healthEk2Rows.filter(
+              (row) =>
+                String(row.employee_id) ===
+                  employeeId &&
+                String(
+                  row.company_id || ""
+                ) ===
+                  String(
+                    employee.firm_id || ""
+                  )
+            );
 
           const ppe =
             ppeByEmployee.get(employeeId) ||
@@ -1364,10 +1408,27 @@ export async function GET(request: Request) {
                 health
               ).recordCount,
 
+            health_examination_count:
+              employeeHealthExaminations.length,
+
+            health_ek2_count:
+              employeeEk2Forms.length,
+
             health_last_exam_at:
               healthSummaryForList(
                 health
               ).lastExamAt,
+
+            health_last_ek2_at:
+              employeeEk2Forms
+                .map((row) =>
+                  row.exam_date ||
+                  row.created_at ||
+                  null
+                )
+                .filter(Boolean)
+                .sort()
+                .reverse()[0] || null,
 
             health_next_due_at:
               healthSummaryForList(
