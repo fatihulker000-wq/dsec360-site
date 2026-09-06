@@ -933,27 +933,48 @@ export async function GET(
     // SAĞLIK — güncel kaynak health_records.
     // Eski kurulum desteği için health_examinations fallback.
     // ============================================================
-    const healthResult = await firstAvailableSelect(
-      "Sağlık",
-      [
-        () =>
-          supabase
-            .from("health_records")
-            .select(
-              "id,employee_id,firm_id,status,exam_date_millis,next_due_millis"
-            )
-            .eq("employee_id", id)
-            .eq("firm_id", firmId),
-        () =>
-          supabase
-            .from("health_examinations")
-            .select(
-              "id,employee_id,firm_id,status,exam_date,examination_date,next_due_at,next_exam_date,created_at"
-            )
-            .eq("employee_id", id)
-            .eq("firm_id", firmId),
-      ]
-    );
+    /*
+     * SAĞLIK KAYNAKLARINI BİRLEŞTİR.
+     *
+     * Önceki firstAvailableSelect yaklaşımı tablo mevcutsa ama sonuç boşsa
+     * ikinci kaynağa geçmiyordu. EK-2 kayıtları bazı sürümlerde
+     * health_examinations içinde tutulduğu için çalışan profilinde görünmüyordu.
+     */
+    const [
+      healthRecordsResult,
+      healthExaminationsResult,
+    ] = await Promise.all([
+      safeSelect(
+        supabase
+          .from("health_records")
+          .select(
+            "id,employee_id,firm_id,status,exam_date_millis,next_due_millis"
+          )
+          .eq("employee_id", id)
+          .eq("firm_id", firmId),
+        "Sağlık kayıtları"
+      ),
+      safeSelect(
+        supabase
+          .from("health_examinations")
+          .select(
+            "id,employee_id,firm_id,status,exam_date,examination_date,next_due_at,next_exam_date,created_at"
+          )
+          .eq("employee_id", id)
+          .eq("firm_id", firmId),
+        "EK-2 / Sağlık muayeneleri"
+      ),
+    ]);
+
+    const healthResult = {
+      data: [
+        ...healthRecordsResult.data,
+        ...healthExaminationsResult.data,
+      ],
+      warning:
+        healthRecordsResult.warning ||
+        healthExaminationsResult.warning,
+    };
 
     /*
      * Hassas sağlık içeriği yalnızca Super Admin ve İşyeri Hekimi için
@@ -962,27 +983,32 @@ export async function GET(
     let sensitiveHealthRows: any[] = [];
 
     if (access.canViewSensitiveHealth) {
-      const sensitiveResult =
-        await firstAvailableSelect(
-          "Sağlık detay",
-          [
-            () =>
-              supabase
-                .from("health_records")
-                .select("*")
-                .eq("employee_id", id)
-                .eq("firm_id", firmId),
-            () =>
-              supabase
-                .from("health_examinations")
-                .select("*")
-                .eq("employee_id", id)
-                .eq("firm_id", firmId),
-          ]
-        );
+      const [
+        sensitiveHealthRecords,
+        sensitiveHealthExaminations,
+      ] = await Promise.all([
+        safeSelect(
+          supabase
+            .from("health_records")
+            .select("*")
+            .eq("employee_id", id)
+            .eq("firm_id", firmId),
+          "Sağlık detay kayıtları"
+        ),
+        safeSelect(
+          supabase
+            .from("health_examinations")
+            .select("*")
+            .eq("employee_id", id)
+            .eq("firm_id", firmId),
+          "EK-2 sağlık detayları"
+        ),
+      ]);
 
-      sensitiveHealthRows =
-        sensitiveResult.data;
+      sensitiveHealthRows = [
+        ...sensitiveHealthRecords.data,
+        ...sensitiveHealthExaminations.data,
+      ];
     }
 
     const healthSummary =

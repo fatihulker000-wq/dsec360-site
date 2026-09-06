@@ -997,6 +997,7 @@ export async function GET(request: Request) {
 
     let trainingRows: any[] = [];
     let healthRows: any[] = [];
+    let healthExaminationRows: any[] = [];
     let ppeRows: any[] = [];
     let documentRows: any[] = [];
     let riskRows: any[] = [];
@@ -1133,6 +1134,7 @@ export async function GET(request: Request) {
        */
       [
         healthRows,
+        healthExaminationRows,
         ppeRows,
         documentRows,
         riskRows,
@@ -1143,6 +1145,19 @@ export async function GET(request: Request) {
             .from("health_records")
             .select(
               "id,employee_id,firm_id,status,exam_date_millis,next_due_millis"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+        ),
+
+        safeRows(
+          "health examinations",
+          supabase
+            .from("health_examinations")
+            .select(
+              "id,employee_id,firm_id,status,exam_date,examination_date,next_due_at,next_exam_date,created_at"
             )
             .in(
               "employee_id",
@@ -1238,7 +1253,10 @@ export async function GET(request: Request) {
       groupByEmployee(trainingRows);
 
     const healthByEmployee =
-      groupByEmployee(healthRows);
+      groupByEmployee([
+        ...healthRows,
+        ...healthExaminationRows,
+      ]);
 
     const ppeByEmployee =
       groupByEmployee(ppeRows);
