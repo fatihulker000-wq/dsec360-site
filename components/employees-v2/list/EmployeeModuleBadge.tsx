@@ -12,9 +12,11 @@ type ModuleStatus =
 export default function EmployeeModuleBadge({
   label,
   status = "UNKNOWN",
+  displayText,
 }: {
   label: string;
   status?: ModuleStatus;
+  displayText?: string;
 }) {
   const config = {
     COMPLETE: ["#dcfce7", "#166534", "Tamam"],
@@ -26,9 +28,11 @@ export default function EmployeeModuleBadge({
     UNKNOWN: ["#f1f5f9", "#64748b", "Veri Yok"],
   }[status];
 
+  const visibleText = displayText?.trim() || config[2];
+
   return (
     <div
-      title={`${label}: ${config[2]}`}
+      title={`${label}: ${visibleText}`}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -43,7 +47,7 @@ export default function EmployeeModuleBadge({
       }}
     >
       <span>{label}</span>
-      <span>{config[2]}</span>
+      <span>{visibleText}</span>
     </div>
   );
 }

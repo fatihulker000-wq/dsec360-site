@@ -41,6 +41,15 @@ export type EmployeeListRow = {
     | "EXPIRING"
     | "UNKNOWN";
 
+  // Sağlık listesinde tıbbi içerik değil, yalnızca güvenli takip metadatası kullanılır.
+  health_record_count?: number | null;
+  health_examination_count?: number | null;
+  health_ek2_count?: number | null;
+  health_last_exam_at?: string | null;
+  health_last_ek2_at?: string | null;
+  health_next_due_at?: string | null;
+  health_days_until_due?: number | null;
+
   ppe_status?:
     | "COMPLETE"
     | "MISSING"

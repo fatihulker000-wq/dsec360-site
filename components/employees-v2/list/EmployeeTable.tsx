@@ -9,6 +9,48 @@ import type {
   EmployeeTableSortKey,
 } from "./types";
 
+
+function healthBadgeText(employee: EmployeeListRow): string {
+  const status = employee.health_status || "UNKNOWN";
+
+  if (status === "MISSING") {
+    return "Takip Gerekli";
+  }
+
+  if (status === "EXPIRING") {
+    return "Muayene Yaklaşıyor";
+  }
+
+  if (status === "COMPLETE") {
+    if (Number(employee.health_ek2_count || 0) > 0) {
+      return "EK-2 Mevcut";
+    }
+
+    if (Number(employee.health_examination_count || 0) > 0) {
+      return "Muayene Geçerli";
+    }
+
+    if (Number(employee.health_record_count || 0) > 0) {
+      return "Kayıt Mevcut";
+    }
+
+    return "Kayıt Mevcut";
+  }
+
+  if (Number(employee.health_ek2_count || 0) > 0) {
+    return "EK-2 Mevcut";
+  }
+
+  if (
+    Number(employee.health_examination_count || 0) > 0 ||
+    Number(employee.health_record_count || 0) > 0
+  ) {
+    return "Kayıt Mevcut";
+  }
+
+  return "Kayıt Yok";
+}
+
 export default function EmployeeTable({
   rows,
   selectedIds,
@@ -299,6 +341,7 @@ export default function EmployeeTable({
                           employee.health_status ||
                           "UNKNOWN"
                         }
+                        displayText={healthBadgeText(employee)}
                       />
                     </Td>
 
