@@ -44,17 +44,8 @@ function getLegalTrainingRule(
     };
   }
 
-  if (
-    normalized.includes("TEHLİKELİ") ||
-    normalized.includes("TEHLIKELI")
-  ) {
-    return {
-      requiredMinutes: 12 * 60,
-      validityYears: 2,
-      label: "Tehlikeli",
-    };
-  }
-
+  // "Az Tehlikeli" ifadesi "Tehlikeli" kelimesini de içerdiği için
+  // önce özel sınıfı kontrol et. Aksi halde 8 saat yerine 12 saat hesaplanır.
   if (
     normalized.includes("AZ TEHLİKELİ") ||
     normalized.includes("AZ TEHLIKELI")
@@ -63,6 +54,17 @@ function getLegalTrainingRule(
       requiredMinutes: 8 * 60,
       validityYears: 3,
       label: "Az Tehlikeli",
+    };
+  }
+
+  if (
+    normalized.includes("TEHLİKELİ") ||
+    normalized.includes("TEHLIKELI")
+  ) {
+    return {
+      requiredMinutes: 12 * 60,
+      validityYears: 2,
+      label: "Tehlikeli",
     };
   }
 
@@ -1448,6 +1450,24 @@ export async function GET(request: Request) {
 
           return {
             ...employee,
+
+            // Organizasyon alanlarında eski/yeni şema adlarını tek çıktıda normalize et.
+            // Kaynakta gerçekten veri yoksa null kalır; sahte departman üretilmez.
+            department:
+              clean(
+                employee.department ??
+                employee.department_name ??
+                employee.departmentName ??
+                employee.birim ??
+                employee.unit_name
+              ),
+            job_title:
+              clean(
+                employee.job_title ??
+                employee.title ??
+                employee.position ??
+                employee.position_name
+              ),
 
             training_status:
               legalTrainingSummary.status,

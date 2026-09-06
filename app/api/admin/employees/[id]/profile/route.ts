@@ -243,17 +243,8 @@ function getLegalTrainingRule(
     };
   }
 
-  if (
-    normalized.includes("TEHLİKELİ") ||
-    normalized.includes("TEHLIKELI")
-  ) {
-    return {
-      requiredMinutes: 12 * 60,
-      validityYears: 2,
-      label: "Tehlikeli",
-    };
-  }
-
+  // "Az Tehlikeli" ifadesi "Tehlikeli" kelimesini de içerdiği için
+  // önce özel sınıfı kontrol et. Aksi halde 8 saat yerine 12 saat hesaplanır.
   if (
     normalized.includes("AZ TEHLİKELİ") ||
     normalized.includes("AZ TEHLIKELI")
@@ -262,6 +253,17 @@ function getLegalTrainingRule(
       requiredMinutes: 8 * 60,
       validityYears: 3,
       label: "Az Tehlikeli",
+    };
+  }
+
+  if (
+    normalized.includes("TEHLİKELİ") ||
+    normalized.includes("TEHLIKELI")
+  ) {
+    return {
+      requiredMinutes: 12 * 60,
+      validityYears: 2,
+      label: "Tehlikeli",
     };
   }
 

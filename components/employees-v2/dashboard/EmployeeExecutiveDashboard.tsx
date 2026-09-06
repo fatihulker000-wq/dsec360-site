@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 type Employee = {
   id: string;
@@ -72,7 +72,34 @@ function statusLabel(e:Employee){
  return issues;
 }
 
+function actionPriority(e:Employee){
+ let score=0;
+ if(norm(e.risk_status)==="CRITICAL") score+=100;
+ else if(norm(e.risk_status)==="HIGH") score+=80;
+ if(norm(e.health_status)==="MISSING") score+=65;
+ else if(norm(e.health_status)==="EXPIRING") score+=40;
+ if(norm(e.training_status)==="MISSING") score+=60;
+ else if(norm(e.training_status)==="EXPIRING") score+=35;
+ if(norm(e.ppe_status)==="MISSING") score+=45;
+ if(norm(e.document_status)==="MISSING") score+=35;
+ score+=Math.min(30,Number(e.accident_count||0)*10);
+ return score;
+}
+
+function healthTrackingLabel(e:Employee){
+ const s=norm(e.health_status);
+ if(s==="MISSING") return "Süresi geçmiş / takip gerekli";
+ if(s==="EXPIRING") return `Muayene yaklaşıyor${e.health_next_due_at?` · ${fmtDate(e.health_next_due_at)}`:""}`;
+ if(s==="COMPLETE"){
+   if(Number(e.health_ek2_count||0)>0) return "EK-2 mevcut";
+   return "Muayene kaydı mevcut";
+ }
+ if(Number(e.health_ek2_count||0)>0) return "EK-2 mevcut";
+ return "Kayıt yok";
+}
+
 export default function EmployeeExecutiveDashboard({employees,selectedCompanyName,onEmployeeClick}:Props){
+ const [showAllActions,setShowAllActions]=useState(false);
  const active=useMemo(()=>employees.filter(e=>e.active!==false),[employees]);
  const analytics=useMemo(()=>{
    const total=active.length;
@@ -82,6 +109,7 @@ export default function EmployeeExecutiveDashboard({employees,selectedCompanyNam
    const docMissing=active.filter(e=>["MISSING","EXPIRING"].includes(norm(e.document_status))).length;
    const highRisk=active.filter(e=>["HIGH","CRITICAL"].includes(norm(e.risk_status))).length;
    const accidentPeople=active.filter(e=>Number(e.accident_count||0)>0).length;
+   const accidentRecords=active.reduce((sum,e)=>sum+Math.max(0,Number(e.accident_count||0)),0);
    const newStarts=active.filter(e=>{const y=years(e.start_date);return y!==null&&y<=0.25}).length;
    const dataMissing=active.filter(e=>missing(e.blood_type)||missing(e.birth_date)||missing(e.start_date)||missing(e.department)||missing(e.job_title));
    const bloodMissing=active.filter(e=>missing(e.blood_type)).length;
@@ -90,8 +118,11 @@ export default function EmployeeExecutiveDashboard({employees,selectedCompanyNam
    const orgMissing=active.filter(e=>missing(e.department)||missing(e.job_title)).length;
    const completeFields=active.reduce((s,e)=>s+[e.blood_type,e.birth_date,e.start_date,e.department,e.job_title].filter(v=>!missing(v)).length,0);
    const quality=pct(completeFields,total*5);
-   const actions=active.map(e=>({e,issues:statusLabel(e)})).filter(x=>x.issues.length).sort((a,b)=>b.issues.length-a.issues.length || Number(b.e.accident_count||0)-Number(a.e.accident_count||0));
-   return {total,trainingMissing,healthFollow,ppeMissing,docMissing,highRisk,accidentPeople,newStarts,bloodMissing,birthMissing,startMissing,orgMissing,quality,actions,dataMissing:dataMissing.length};
+   const actions=active
+     .map(e=>({e,issues:statusLabel(e),priority:actionPriority(e)}))
+     .filter(x=>x.issues.length)
+     .sort((a,b)=>b.priority-a.priority || b.issues.length-a.issues.length || Number(b.e.accident_count||0)-Number(a.e.accident_count||0));
+   return {total,trainingMissing,healthFollow,ppeMissing,docMissing,highRisk,accidentPeople,accidentRecords,newStarts,bloodMissing,birthMissing,startMissing,orgMissing,quality,actions,dataMissing:dataMissing.length};
  },[active]);
 
  const jobs=useMemo(()=>countBy(active,e=>e.job_title||""),[active]);
@@ -114,7 +145,7 @@ export default function EmployeeExecutiveDashboard({employees,selectedCompanyNam
    <Metric label="EĞİTİM AKSİYONU" value={analytics.trainingMissing} detail="Eksik / yaklaşan yasal eğitim" tone={analytics.trainingMissing?"amber":"green"}/>
    <Metric label="SAĞLIK TAKİBİ" value={analytics.healthFollow} detail="Takip veya yenileme gereken" tone={analytics.healthFollow?"amber":"green"}/>
    <Metric label="YÜKSEK RİSK" value={analytics.highRisk} detail="Öncelikli çalışan riskleri" tone={analytics.highRisk?"red":"green"}/>
-   <Metric label="KAZA / OLAY" value={analytics.accidentPeople} detail="Kaydı bulunan çalışan" tone={analytics.accidentPeople?"red":"green"}/>
+   <Metric label="KAZA / OLAY" value={analytics.accidentPeople} detail={`${analytics.accidentRecords} kayıt · ${analytics.accidentPeople} çalışan`} tone={analytics.accidentPeople?"red":"green"}/>
    <Metric label="VERİ KALİTESİ" value={`%${analytics.quality}`} detail={`${analytics.dataMissing} çalışanda temel alan eksiği`} tone={analytics.quality<90?"amber":"green"}/>
   </div>
 
@@ -130,8 +161,8 @@ export default function EmployeeExecutiveDashboard({employees,selectedCompanyNam
   </div>
 
   <section style={{...card,overflow:"hidden"}}>
-   <div style={{padding:18,borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><div style={title}>Aksiyon Gerektiren Çalışanlar</div><div style={{...muted,marginTop:4}}>Eğitim, sağlık takibi, KKD, belge, risk veya kaza/olay nedeniyle öncelikli kontrol gereken çalışanlar.</div></div><div style={{fontSize:12,fontWeight:900,color:"#991b1b"}}>{analytics.actions.length} çalışan</div></div>
-   <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:900,fontSize:12}}><thead><tr style={{background:"#f8fafc",color:"#64748b",textAlign:"left"}}>{["Çalışan","Departman","Yasal Eğitim","Sağlık Takibi","KKD","Belge","Risk","Kaza/Olay","Aksiyon"].map(h=><th key={h} style={{padding:"11px 12px",fontWeight:900}}>{h}</th>)}</tr></thead><tbody>{analytics.actions.slice(0,12).map(({e,issues})=><tr key={e.id} style={{borderTop:"1px solid #f1f5f9"}}><td style={{padding:12,fontWeight:900,color:"#111827"}}>{e.full_name}</td><td style={{padding:12}}>{e.department||"—"}</td><td style={{padding:12}}>{norm(e.training_status)==="COMPLETE"?`${Math.round(Number(e.legal_training_completed_minutes||0)/60)} / ${Math.round(Number(e.legal_training_required_minutes||0)/60)} saat`:norm(e.training_status)==="EXPIRING"?"Yaklaşıyor":norm(e.training_status)==="MISSING"?"Eksik":"Veri yok"}</td><td style={{padding:12}}>{norm(e.health_status)==="EXPIRING"?`Yaklaşıyor · ${fmtDate(e.health_next_due_at)}`:norm(e.health_status)==="MISSING"?"Takip gerekli":Number(e.health_ek2_count||0)>0?"EK-2 mevcut":"Kayıt yok"}</td><td style={{padding:12}}>{norm(e.ppe_status)==="COMPLETE"?"Güncel":norm(e.ppe_status)==="MISSING"?"Eksik":"—"}</td><td style={{padding:12}}>{norm(e.document_status)==="COMPLETE"?"Güncel":norm(e.document_status)==="MISSING"?"Eksik":"—"}</td><td style={{padding:12,fontWeight:850,color:["HIGH","CRITICAL"].includes(norm(e.risk_status))?"#991b1b":"#334155"}}>{norm(e.risk_status)==="HIGH"?"Yüksek":norm(e.risk_status)==="CRITICAL"?"Kritik":norm(e.risk_status)==="LOW"?"Düşük":"—"}</td><td style={{padding:12}}>{Number(e.accident_count||0)}</td><td style={{padding:12}}><button onClick={()=>onEmployeeClick?.(e.id)} style={{border:"1px solid #fecaca",background:"#fff",color:"#991b1b",fontWeight:900,borderRadius:10,padding:"7px 10px",cursor:"pointer"}}>Profili Aç</button><div style={{...muted,marginTop:5}}>{issues.join(" · ")}</div></td></tr>)}</tbody></table></div>
+   <div style={{padding:18,borderBottom:"1px solid #e5e7eb",display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><div style={title}>Aksiyon Gerektiren Çalışanlar</div><div style={{...muted,marginTop:4}}>Eğitim, sağlık takibi, KKD, belge, risk veya kaza/olay nedeniyle öncelikli kontrol gereken çalışanlar.</div></div><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{fontSize:12,fontWeight:900,color:"#991b1b"}}>{analytics.actions.length} çalışan</div>{analytics.actions.length>12?<button onClick={()=>setShowAllActions(v=>!v)} style={{border:"1px solid #e5e7eb",background:"#fff",borderRadius:10,padding:"7px 10px",fontSize:11,fontWeight:900,cursor:"pointer",color:"#334155"}}>{showAllActions?"İlk 12'yi Göster":"Tümünü Göster"}</button>:null}</div></div>
+   <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:900,fontSize:12}}><thead><tr style={{background:"#f8fafc",color:"#64748b",textAlign:"left"}}>{["Çalışan","Departman","Yasal Eğitim","Sağlık Takibi","KKD","Belge","Risk","Kaza/Olay","Aksiyon"].map(h=><th key={h} style={{padding:"11px 12px",fontWeight:900}}>{h}</th>)}</tr></thead><tbody>{(showAllActions?analytics.actions:analytics.actions.slice(0,12)).map(({e,issues})=><tr key={e.id} style={{borderTop:"1px solid #f1f5f9"}}><td style={{padding:12,fontWeight:900,color:"#111827"}}>{e.full_name}</td><td style={{padding:12}}>{e.department||"—"}</td><td style={{padding:12}}>{norm(e.training_status)==="COMPLETE"?`${Math.round(Number(e.legal_training_completed_minutes||0)/60)} / ${Math.round(Number(e.legal_training_required_minutes||0)/60)} saat`:norm(e.training_status)==="EXPIRING"?"Yaklaşıyor":norm(e.training_status)==="MISSING"?"Eksik":"Veri yok"}</td><td style={{padding:12}}>{healthTrackingLabel(e)}</td><td style={{padding:12}}>{norm(e.ppe_status)==="COMPLETE"?"Güncel":norm(e.ppe_status)==="MISSING"?"Eksik":"—"}</td><td style={{padding:12}}>{norm(e.document_status)==="COMPLETE"?"Güncel":norm(e.document_status)==="MISSING"?"Eksik":"—"}</td><td style={{padding:12,fontWeight:850,color:["HIGH","CRITICAL"].includes(norm(e.risk_status))?"#991b1b":"#334155"}}>{norm(e.risk_status)==="HIGH"?"Yüksek":norm(e.risk_status)==="CRITICAL"?"Kritik":norm(e.risk_status)==="LOW"?"Düşük":"—"}</td><td style={{padding:12}}>{Number(e.accident_count||0)}</td><td style={{padding:12}}><button onClick={()=>onEmployeeClick?.(e.id)} style={{border:"1px solid #fecaca",background:"#fff",color:"#991b1b",fontWeight:900,borderRadius:10,padding:"7px 10px",cursor:"pointer"}}>Profili Aç</button><div style={{...muted,marginTop:5}}>{issues.join(" · ")}</div></td></tr>)}</tbody></table></div>
    {analytics.actions.length===0?<div style={{padding:24,textAlign:"center",color:"#64748b",fontSize:13}}>Aksiyon gerektiren çalışan kaydı bulunmuyor.</div>:null}
   </section>
  </div>;
