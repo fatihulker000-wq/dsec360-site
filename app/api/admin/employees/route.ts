@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -11,209 +12,9 @@ function getSupabase() {
   );
 }
 
-type OptionalQueryResult = {
-  data: any[];
-  warning?: string;
-};
-
-async function safeSelect(
-  query: PromiseLike<{
-    data: any[] | null;
-    error: any;
-  }>,
-  label: string
-): Promise<OptionalQueryResult> {
-
-  try {
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.warn(`${label} sorgu hatası`, error);
-
-      return {
-        data: [],
-        warning: `${label} verisi alınamadı`,
-      };
-    }
-
-    return {
-      data: Array.isArray(data) ? data : [],
-    };
-
-  } catch (error) {
-
-    console.warn(`${label} sorgu hatası`, error);
-
-    return {
-      data: [],
-      warning: `${label} verisi alınamadı`,
-    };
-
-  }
-
-}
-
-
-async function firstAvailableSelect(
-  label: string,
-  queries: Array<
-    () => PromiseLike<{
-      data: any[] | null;
-      error: any;
-    }>
-  >
-): Promise<OptionalQueryResult> {
-  const errors: string[] = [];
-
-  for (const makeQuery of queries) {
-    try {
-      const { data, error } = await makeQuery();
-
-      if (!error) {
-        return {
-          data: Array.isArray(data) ? data : [],
-        };
-      }
-
-      errors.push(error.message || String(error));
-    } catch (error: any) {
-      errors.push(error?.message || String(error));
-    }
-  }
-
-  console.warn(`${label} sorguları başarısız`, errors);
-
-  return {
-    data: [],
-    warning: `${label} verisi alınamadı`,
-  };
-}
-
-function normalizeDate(value: unknown) {
-  if (!value) return undefined;
-
-  const d = new Date(String(value));
-
-  if (isNaN(d.getTime())) return undefined;
-
-  return d.toISOString();
-}
-
-function mapGenericItems(rows: any[], source: string) {
-  return rows.map((row, index) => ({
-    id: String(row.id || `${source}-${index}`),
-
-    title:
-      row.title ||
-      row.name ||
-      row.training_name ||
-      row.document_name ||
-      row.description ||
-      `${source} kaydı`,
-
-    description:
-      row.description ||
-      row.notes ||
-      row.result ||
-      row.status_description ||
-      undefined,
-
-    status:
-      row.status ||
-      row.state ||
-      row.result_status ||
-      undefined,
-
-    date:
-      normalizeDate(
-        row.date ||
-          row.created_at ||
-          row.updated_at ||
-          row.training_date ||
-          row.completed_at ||
-          row.started_at ||
-          row.examination_date ||
-          row.exam_date ||
-          row.assigned_at ||
-          row.due_date
-      ),
-
-    meta:
-      row.meta ||
-      row.category ||
-      row.type ||
-      row.document_type ||
-      row.risk_level ||
-      undefined,
-
-    source,
-  }));
-}
-
-function countOpen(rows: any[]) {
-  return rows.filter((row) => {
-    const status = String(
-      row.status ||
-      row.state ||
-      ""
-    ).toUpperCase();
-
-    return ![
-      "COMPLETED",
-      "DONE",
-      "CLOSED",
-      "TAMAMLANDI",
-      "KAPANDI",
-    ].includes(status);
-  }).length;
-}
-
-function buildStatus(
-  rows: any[]
-):
-  | "COMPLETE"
-  | "MISSING"
-  | "EXPIRING"
-  | "UNKNOWN" {
-
-  if (!rows.length) return "UNKNOWN";
-
-  const hasMissing = rows.some((r) => {
-    const s = String(
-      r.status ||
-      r.state ||
-      ""
-    ).toUpperCase();
-
-    return [
-      "MISSING",
-      "EXPIRED",
-      "OVERDUE",
-      "EKSİK",
-      "SÜRESİ_DOLDU",
-    ].includes(s);
-  });
-
-  if (hasMissing) return "MISSING";
-
-  const hasExpiring = rows.some((r) => {
-    const s = String(
-      r.status ||
-      r.state ||
-      ""
-    ).toUpperCase();
-
-    return [
-      "EXPIRING",
-      "DUE_SOON",
-      "YAKLAŞIYOR",
-    ].includes(s);
-  });
-
-  if (hasExpiring) return "EXPIRING";
-
-  return "COMPLETE";
+function clean(value: unknown) {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
 }
 
 
@@ -439,61 +240,158 @@ function calculateLegalTrainingSummary(
 }
 
 
-type ProfileAccessContext = {
+function healthSummaryForList(
+  rows: any[]
+) {
+  if (!rows.length) {
+    return {
+      status: "UNKNOWN" as const,
+      recordCount: 0,
+      lastExamAt: null as string | null,
+      nextDueAt: null as string | null,
+    };
+  }
+
+  const toIso = (
+    value: unknown
+  ): string | null => {
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
+      return null;
+    }
+
+    const numberValue =
+      typeof value === "number"
+        ? value
+        : Number(value);
+
+    const date =
+      Number.isFinite(numberValue) &&
+      numberValue > 10000000000
+        ? new Date(numberValue)
+        : new Date(String(value));
+
+    return Number.isNaN(date.getTime())
+      ? null
+      : date.toISOString();
+  };
+
+  const latest = [...rows].sort(
+    (a, b) => {
+      const aDate = new Date(
+        toIso(
+          a.exam_date_millis ||
+            a.exam_date ||
+            a.examination_date
+        ) || 0
+      ).getTime();
+
+      const bDate = new Date(
+        toIso(
+          b.exam_date_millis ||
+            b.exam_date ||
+            b.examination_date
+        ) || 0
+      ).getTime();
+
+      return bDate - aDate;
+    }
+  )[0];
+
+  const lastExamAt = toIso(
+    latest?.exam_date_millis ||
+      latest?.exam_date ||
+      latest?.examination_date
+  );
+
+  const dueDates = rows
+    .map((row) =>
+      toIso(
+        row.next_due_millis ||
+          row.next_due_at ||
+          row.next_exam_date
+      )
+    )
+    .filter(Boolean) as string[];
+
+  const nextDueAt =
+    dueDates.length > 0
+      ? dueDates.sort(
+          (a, b) =>
+            new Date(a).getTime() -
+            new Date(b).getTime()
+        )[0]
+      : null;
+
+  let status:
+    | "COMPLETE"
+    | "MISSING"
+    | "EXPIRING"
+    | "UNKNOWN" = "COMPLETE";
+
+  if (nextDueAt) {
+    const due =
+      new Date(nextDueAt).getTime();
+    const now = Date.now();
+
+    if (due < now) {
+      status = "MISSING";
+    } else if (
+      due <=
+      now + 30 * 24 * 60 * 60 * 1000
+    ) {
+      status = "EXPIRING";
+    }
+  }
+
+  return {
+    status,
+    recordCount: rows.length,
+    lastExamAt,
+    nextDueAt,
+  };
+}
+
+function sha256(input: string) {
+  return crypto
+    .createHash("sha256")
+    .update(input)
+    .digest("hex");
+}
+
+function generatePassword() {
+  return Math.random().toString(36).slice(-8);
+}
+
+type AccessContext = {
   allowed: boolean;
   role: string;
   companyId: string;
   companyScoped: boolean;
-  canViewSensitiveHealth: boolean;
+  readOnly: boolean;
 };
 
-function normalizeRole(value: unknown) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function isWorkplacePhysicianRole(
-  role: string
-) {
-  return [
-    "workplace_physician",
-    "workplace_doctor",
-    "isyeri_hekimi",
-    "işyeri_hekimi",
-  ].includes(normalizeRole(role));
-}
-
-async function getProfileAccessContext():
-  Promise<ProfileAccessContext> {
-  const store = await cookies();
+async function getAccessContext(): Promise<AccessContext> {
+  const cookieStore = await cookies();
 
   const auth = String(
-    store.get("dsec_admin_auth")?.value ||
-      store.get("dsec_user_auth")?.value ||
+    cookieStore.get("dsec_admin_auth")?.value ||
+      cookieStore.get("dsec_user_auth")?.value ||
       ""
   ).trim();
 
-  const role = normalizeRole(
-    store.get("dsec_admin_role")?.value ||
-      store.get("dsec_user_role")?.value ||
+  const role = String(
+    cookieStore.get("dsec_admin_role")?.value ||
+      cookieStore.get("dsec_user_role")?.value ||
       ""
-  );
+  ).trim();
 
   const companyId = String(
-    store.get("dsec_company_id")?.value ||
-      ""
+    cookieStore.get("dsec_company_id")?.value || ""
   ).trim();
-
-  const companyScoped =
-    [
-      "company_admin",
-      "demo_user",
-      "workplace_physician",
-      "workplace_doctor",
-      "isyeri_hekimi",
-      "işyeri_hekimi",
-    ].includes(role);
 
   const allowedRoles = [
     "admin",
@@ -506,519 +404,874 @@ async function getProfileAccessContext():
     "işyeri_hekimi",
   ];
 
+  const companyScoped =
+    role === "company_admin" ||
+    role === "demo_user" ||
+    role === "workplace_physician" ||
+    role === "workplace_doctor" ||
+    role === "isyeri_hekimi" ||
+    role === "işyeri_hekimi";
+
   const allowed =
     auth === "ok" &&
     allowedRoles.includes(role) &&
-    (
-      !companyScoped ||
-      Boolean(companyId)
-    );
+    (!companyScoped || Boolean(companyId));
 
   return {
     allowed,
     role,
     companyId,
     companyScoped,
-    canViewSensitiveHealth:
-      role === "super_admin" ||
-      isWorkplacePhysicianRole(role),
+    readOnly: role === "demo_user",
   };
 }
 
-function healthDate(
-  value: unknown
-): string | undefined {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-    return undefined;
+async function getScopedEmployee(params: {
+  supabase: ReturnType<typeof getSupabase>;
+  employeeId: string;
+  access: AccessContext;
+}) {
+  const { supabase, employeeId, access } = params;
+
+  let query = supabase
+    .from("employees")
+    .select("id, firm_id, full_name, email, active, exit_date")
+    .eq("id", employeeId);
+
+  if (access.companyScoped) {
+    query = query.eq("firm_id", access.companyId);
   }
 
-  const numeric =
-    typeof value === "number"
-      ? value
-      : Number(value);
-
-  const date =
-    Number.isFinite(numeric) &&
-    numeric > 10000000000
-      ? new Date(numeric)
-      : new Date(String(value));
-
-  if (Number.isNaN(date.getTime())) {
-    return undefined;
-  }
-
-  return date.toISOString();
-}
-
-function buildHealthSummary(
-  rows: any[]
-) {
-  if (!rows.length) {
-    return {
-      status: "UNKNOWN" as const,
-      recordCount: 0,
-      lastExamAt: undefined,
-      nextDueAt: undefined,
-      daysUntilDue: undefined,
-    };
-  }
-
-  const sortedByExam = [...rows].sort(
-    (a, b) => {
-      const aTime =
-        new Date(
-          healthDate(
-            a.exam_date_millis ||
-              a.exam_date ||
-              a.examination_date ||
-              a.created_at
-          ) || 0
-        ).getTime();
-
-      const bTime =
-        new Date(
-          healthDate(
-            b.exam_date_millis ||
-              b.exam_date ||
-              b.examination_date ||
-              b.created_at
-          ) || 0
-        ).getTime();
-
-      return bTime - aTime;
-    }
-  );
-
-  const latest = sortedByExam[0];
-
-  const dueDates = rows
-    .map((row) =>
-      healthDate(
-        row.next_due_millis ||
-          row.next_due_at ||
-          row.next_exam_date ||
-          row.next_due
-      )
-    )
-    .filter(Boolean) as string[];
-
-  const nextDueAt =
-    dueDates.length > 0
-      ? dueDates.sort(
-          (a, b) =>
-            new Date(a).getTime() -
-            new Date(b).getTime()
-        )[0]
-      : undefined;
-
-  const now = Date.now();
-
-  let status:
-    | "COMPLETE"
-    | "MISSING"
-    | "EXPIRING"
-    | "UNKNOWN" = "COMPLETE";
-
-  let daysUntilDue:
-    | number
-    | undefined = undefined;
-
-  if (nextDueAt) {
-    const dueTime =
-      new Date(nextDueAt).getTime();
-
-    daysUntilDue = Math.ceil(
-      (dueTime - now) /
-        (1000 * 60 * 60 * 24)
-    );
-
-    if (dueTime < now) {
-      status = "MISSING";
-    } else if (
-      dueTime <=
-      now + 30 * 24 * 60 * 60 * 1000
-    ) {
-      status = "EXPIRING";
-    } else {
-      status = "COMPLETE";
-    }
-  } else {
-    const rawStatus = String(
-      latest?.status || ""
-    )
-      .trim()
-      .toUpperCase();
-
-    if (
-      [
-        "MISSING",
-        "EXPIRED",
-        "OVERDUE",
-        "EKSİK",
-        "EKSIK",
-      ].includes(rawStatus)
-    ) {
-      status = "MISSING";
-    } else if (
-      [
-        "EXPIRING",
-        "DUE_SOON",
-        "YAKLAŞIYOR",
-        "YAKLASIYOR",
-      ].includes(rawStatus)
-    ) {
-      status = "EXPIRING";
-    }
-  }
+  const { data, error } = await query.maybeSingle();
 
   return {
-    status,
-    recordCount: rows.length,
-    lastExamAt: healthDate(
-      latest?.exam_date_millis ||
-        latest?.exam_date ||
-        latest?.examination_date ||
-        latest?.created_at
-    ),
-    nextDueAt,
-    daysUntilDue,
+    employee: data || null,
+    error,
   };
 }
 
-function buildSafeHealthItems(
-  rows: any[]
-) {
-  return [...rows]
-    .sort((a, b) => {
-      const aDate = new Date(
-        healthDate(
-          a.exam_date_millis ||
-            a.exam_date ||
-            a.examination_date ||
-            a.created_at
-        ) || 0
-      ).getTime();
+async function ensureTrainingUserForEmployee(params: {
+  supabase: ReturnType<typeof getSupabase>;
+  employee: any;
+}) {
+  const { supabase, employee } = params;
 
-      const bDate = new Date(
-        healthDate(
-          b.exam_date_millis ||
-            b.exam_date ||
-            b.examination_date ||
-            b.created_at
-        ) || 0
-      ).getTime();
+  const email = clean(employee.email);
+  const fullName = clean(employee.full_name);
+  const firmId = clean(employee.firm_id);
+  const employeeId = clean(employee.id);
 
-      return bDate - aDate;
-    })
-    .map((row, index) => {
-      const examAt = healthDate(
-        row.exam_date_millis ||
-          row.exam_date ||
-          row.examination_date ||
-          row.created_at
+  if (!email || !fullName || !firmId || !employeeId) {
+    return;
+  }
+
+  const normalizedEmail = email.toLowerCase();
+
+  const { data: existingUser, error: existingUserError } =
+    await supabase
+      .from("users")
+      .select("id, employee_id, company_id")
+      .ilike("email", normalizedEmail)
+      .maybeSingle();
+
+  if (existingUserError) {
+    console.error(
+      "AUTO TRAINING USER CHECK ERROR:",
+      existingUserError
+    );
+    return;
+  }
+
+  if (existingUser?.id) {
+    const existingCompanyId = clean(existingUser.company_id);
+
+    // Aynı e-posta başka firmaya bağlıysa bağlantısını değiştirmiyoruz.
+    if (
+      existingCompanyId &&
+      existingCompanyId !== firmId
+    ) {
+      console.error(
+        "AUTO TRAINING USER COMPANY CONFLICT:",
+        normalizedEmail,
+        existingCompanyId,
+        firmId
       );
+      return;
+    }
 
-      const nextDueAt = healthDate(
-        row.next_due_millis ||
-          row.next_due_at ||
-          row.next_exam_date ||
-          row.next_due
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({
+        full_name: fullName,
+        employee_id: employeeId,
+        company_id: firmId,
+        role: "training_user",
+        is_active: employee.active !== false,
+      })
+      .eq("id", existingUser.id);
+
+    if (updateError) {
+      console.error(
+        "AUTO TRAINING USER UPDATE ERROR:",
+        updateError
       );
+      return;
+    }
 
-      return {
-        id: String(
-          row.id ||
-            `HEALTH-${index}`
-        ),
-        title:
-          row.form_type ||
-          row.exam_type ||
-          row.record_type ||
-          row.examination_type ||
-          "İşyeri Sağlık Muayenesi",
-        description:
-          "Sağlık içeriği gizlidir. Yalnızca muayene ve geçerlilik bilgileri gösterilir.",
-        status:
-          row.status ||
-          undefined,
-        date: examAt,
-        meta: nextDueAt
-          ? `Sonraki muayene: ${nextDueAt}`
-          : "Sonraki muayene tarihi bulunmuyor",
-        source: "HEALTH",
-        privacy: "RESTRICTED",
-      };
-    });
+    const { data: existingFirmAccess } = await supabase
+      .from("user_firm_access")
+      .select("user_id")
+      .eq("user_id", existingUser.id)
+      .eq("firm_id", firmId)
+      .maybeSingle();
+
+    if (!existingFirmAccess) {
+      const { error: firmAccessError } = await supabase
+        .from("user_firm_access")
+        .insert({
+          user_id: existingUser.id,
+          firm_id: firmId,
+          role: "training_user",
+          is_primary: true,
+        });
+
+      if (firmAccessError) {
+        console.error(
+          "AUTO TRAINING USER FIRM ACCESS ERROR:",
+          firmAccessError
+        );
+      }
+    }
+
+    return;
+  }
+
+  const temporaryPassword = generatePassword();
+
+  const { data: insertedUser, error: userError } =
+    await supabase
+      .from("users")
+      .insert({
+        full_name: fullName,
+        email: normalizedEmail,
+        password_hash: sha256(temporaryPassword),
+        role: "training_user",
+        company_id: firmId,
+        employee_id: employeeId,
+        is_active: employee.active !== false,
+      })
+      .select("id")
+      .single();
+
+  if (userError) {
+    console.error(
+      "AUTO TRAINING USER CREATE ERROR:",
+      userError
+    );
+    return;
+  }
+
+  if (insertedUser?.id) {
+    const { error: firmAccessError } = await supabase
+      .from("user_firm_access")
+      .insert({
+        user_id: insertedUser.id,
+        firm_id: firmId,
+        role: "training_user",
+        is_primary: true,
+      });
+
+    if (firmAccessError) {
+      console.error(
+        "AUTO TRAINING USER FIRM ACCESS CREATE ERROR:",
+        firmAccessError
+      );
+    }
+  }
 }
 
-export async function GET(
-  _request: Request,
-  context: {
-    params: Promise<{
-      id: string;
-    }>;
-  }
-) {
-  try {
-    const { id } = await context.params;
+function buildEmployeePayload(body: any) {
+  const payload: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  };
 
-    const access =
-      await getProfileAccessContext();
+  if (body?.firm_id !== undefined) {
+    payload.firm_id = clean(body.firm_id);
+  }
+
+  if (body?.full_name !== undefined) {
+    payload.full_name = clean(body.full_name);
+  }
+
+  if (body?.job_title !== undefined) {
+    payload.job_title = clean(body.job_title);
+  }
+
+  if (body?.phone !== undefined) {
+    payload.phone = clean(body.phone);
+  }
+
+  if (body?.email !== undefined) {
+    payload.email = clean(body.email);
+  }
+
+  if (body?.registry_no !== undefined) {
+    payload.registry_no = clean(body.registry_no);
+  }
+
+  if (body?.tc_no !== undefined) {
+    payload.tc_no = clean(body.tc_no);
+  }
+
+  if (body?.start_date !== undefined) {
+    payload.start_date = clean(body.start_date);
+  }
+
+  if (body?.exit_date !== undefined) {
+    payload.exit_date = clean(body.exit_date);
+  }
+
+  if (body?.gender !== undefined) {
+    payload.gender = clean(body.gender);
+  }
+
+  if (body?.disability_status !== undefined) {
+    payload.disability_status = clean(
+      body.disability_status
+    );
+  }
+
+  if (body?.birth_date !== undefined) {
+    payload.birth_date = clean(body.birth_date);
+  }
+
+  if (body?.education_level !== undefined) {
+    payload.education_level = clean(
+      body.education_level
+    );
+  }
+
+  if (body?.blood_type !== undefined) {
+    payload.blood_type = clean(body.blood_type);
+  }
+
+  if (body?.active !== undefined) {
+    payload.active = Boolean(body.active);
+  }
+
+  return payload;
+}
+
+// ======================================================
+// GET — ÇALIŞAN LİSTESİ
+// ======================================================
+
+export async function GET(request: Request) {
+  try {
+    const access = await getAccessContext();
 
     if (!access.allowed) {
       return NextResponse.json(
         {
-          success: false,
           error:
-            "Çalışan profil bilgilerine erişim yetkiniz yok.",
+            "Yetkisiz erişim veya firma bilgisi eksik.",
         },
         { status: 401 }
       );
     }
 
-    if (!id) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Çalışan bulunamadı.",
-        },
-        { status: 400 }
-      );
-    }
+    const { searchParams } = new URL(request.url);
+
+    const requestedFirmId = String(
+      searchParams.get("firmId") || ""
+    ).trim();
+
+    /*
+     * Demo ve firma yöneticileri URL üzerinden
+     * firmId=all veya başka firma gönderse bile
+     * yalnızca kendi firmalarını okuyabilir.
+     */
+    const effectiveFirmId = access.companyScoped
+      ? access.companyId
+      : requestedFirmId;
 
     const supabase = getSupabase();
 
-    let employeeQuery = supabase
-      .from("employees")
-      .select("*")
-      .eq("id", id);
+    const allEmployees: any[] = [];
+    let from = 0;
+    const step = 1000;
 
-    if (access.companyScoped) {
-      employeeQuery = employeeQuery.eq(
-        "firm_id",
-        access.companyId
-      );
+    while (true) {
+      let pagedQuery = supabase
+        .from("employees")
+        .select("*")
+        .order("full_name", { ascending: true })
+        .range(from, from + step - 1);
+
+      if (
+        effectiveFirmId &&
+        effectiveFirmId !== "all"
+      ) {
+        pagedQuery = pagedQuery.eq(
+          "firm_id",
+          effectiveFirmId
+        );
+      }
+
+      const { data, error } = await pagedQuery;
+
+      if (error) {
+        console.error("employees GET error:", error);
+
+        return NextResponse.json(
+          {
+            error: "Çalışanlar alınamadı.",
+            detail: error.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      const rows = data || [];
+      allEmployees.push(...rows);
+
+      if (rows.length < step) {
+        break;
+      }
+
+      from += step;
     }
 
-    const {
-      data: employee,
-      error: employeeError,
-    } = await employeeQuery.maybeSingle();
-
-    if (employeeError || !employee) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Çalışan bulunamadı.",
-        },
-        { status: 404 }
-      );
-    }
-        const firmId = String(employee.firm_id || "").trim();
-
-    const {
-      data: employeeCompany,
-      error: employeeCompanyError,
-    } = await supabase
-      .from("companies")
-      .select("id,name,tehlike_sinifi")
-      .eq("id", firmId)
-      .maybeSingle();
-
-    if (employeeCompanyError) {
-      console.warn(
-        "Çalışan firma tehlike sınıfı alınamadı:",
-        employeeCompanyError
-      );
-    }
-
-    // ============================================================
-    // EĞİTİM — gerçek Web eğitim omurgası:
-    // employees.id -> users.employee_id -> training_assignments.user_id -> trainings
-    // ============================================================
-    const trainingUserResult = await safeSelect(
-      supabase
-        .from("users")
-        .select("id,employee_id,company_id,full_name,email,is_active")
-        .eq("employee_id", id),
-      "Eğitim kullanıcısı"
-    );
-
-    const trainingUserIds = trainingUserResult.data
-      .filter((row) => String(row.employee_id || "") === id)
-      .map((row) => String(row.id || "").trim())
+    /*
+     * Çalışan listesi ile çalışan profilindeki iş kazası sayısını
+     * aynı kanonik ilişki üzerinden üret:
+     * accident_records.web_employee_id + accident_records.web_firm_id.
+     *
+     * Böylece listede Kaza=0, profilde İş Kazası=1 gibi tutarsızlık oluşmaz.
+     */
+    const employeeIds = allEmployees
+      .map((employee) => String(employee.id || "").trim())
       .filter(Boolean);
 
-    let trainingResult: OptionalQueryResult = {
-      data: [],
-      warning: trainingUserResult.warning,
-    };
+    const accidentCountByEmployee = new Map<string, number>();
 
-    if (trainingUserIds.length > 0) {
-      const assignmentResult = await safeSelect(
-        supabase
-          .from("training_assignments")
-          .select(
-            "id,user_id,training_id,status,watch_completed,final_exam_passed,started_at,completed_at,final_exam_score,created_at"
-          )
-          .in("user_id", trainingUserIds),
-        "Eğitim atamaları"
+    if (employeeIds.length > 0) {
+      const chunkSize = 500;
+
+      for (let i = 0; i < employeeIds.length; i += chunkSize) {
+        const idChunk = employeeIds.slice(i, i + chunkSize);
+
+        let accidentQuery = supabase
+          .from("accident_records")
+          .select("id, web_employee_id, web_firm_id, is_deleted")
+          .in("web_employee_id", idChunk)
+          .or("is_deleted.is.null,is_deleted.eq.false");
+
+        if (
+          effectiveFirmId &&
+          effectiveFirmId !== "all"
+        ) {
+          accidentQuery = accidentQuery.eq(
+            "web_firm_id",
+            effectiveFirmId
+          );
+        }
+
+        const {
+          data: accidentRows,
+          error: accidentError,
+        } = await accidentQuery;
+
+        if (accidentError) {
+          console.error(
+            "employees accident count GET error:",
+            accidentError
+          );
+
+          return NextResponse.json(
+            {
+              error:
+                "Çalışan iş kazası bilgileri alınamadı.",
+              detail: accidentError.message,
+            },
+            { status: 500 }
+          );
+        }
+
+        for (const accident of accidentRows || []) {
+          const employeeId = String(
+            accident.web_employee_id || ""
+          ).trim();
+
+          if (!employeeId) continue;
+
+          /*
+           * Tüm Firmalar görünümünde dahi kazayı yalnızca
+           * çalışanın kendi firmasıyla eşleşiyorsa say.
+           */
+          const employee = allEmployees.find(
+            (item) =>
+              String(item.id) === employeeId
+          );
+
+          if (
+            !employee ||
+            String(employee.firm_id || "") !==
+              String(accident.web_firm_id || "")
+          ) {
+            continue;
+          }
+
+          accidentCountByEmployee.set(
+            employeeId,
+            (accidentCountByEmployee.get(employeeId) || 0) + 1
+          );
+        }
+      }
+    }
+
+    const employeesWithAccidentCount =
+      allEmployees.map((employee) => ({
+        ...employee,
+        accident_count:
+          accidentCountByEmployee.get(
+            String(employee.id)
+          ) || 0,
+      }));
+
+
+    /*
+     * ÇALIŞAN LİSTE MODÜL ÖZETLERİ
+     * ------------------------------------------------------------
+     * Amaç: ana çalışan tablosunda her satır için /profile çağrısı
+     * yapmadan Eğitim / Sağlık / KKD / Evrak / Risk durumlarını
+     * tek liste isteğinde üretmek.
+     *
+     * Tenant kilidi: çalışan ID'si + çalışanın firm_id'si.
+     */
+    const employeeById = new Map(
+      allEmployees.map((employee) => [
+        String(employee.id),
+        employee,
+      ])
+    );
+
+    type ModuleStatus =
+      | "COMPLETE"
+      | "MISSING"
+      | "EXPIRING"
+      | "UNKNOWN";
+
+    const normalizeModuleStatus = (
+      value: unknown
+    ) =>
+      String(value ?? "")
+        .trim()
+        .toUpperCase();
+
+    const buildModuleStatus = (
+      rows: any[]
+    ): ModuleStatus => {
+      if (!rows.length) return "UNKNOWN";
+
+      const statuses = rows.map((row) =>
+        normalizeModuleStatus(
+          row.status ??
+            row.state ??
+            row.result_status
+        )
       );
 
-      const trainingIds = Array.from(
+      if (
+        statuses.some((status) =>
+          [
+            "MISSING",
+            "EXPIRED",
+            "OVERDUE",
+            "FAILED",
+            "REJECTED",
+            "EKSİK",
+            "EKSIK",
+            "SÜRESİ_DOLDU",
+            "SURESI_DOLDU",
+          ].includes(status)
+        )
+      ) {
+        return "MISSING";
+      }
+
+      if (
+        statuses.some((status) =>
+          [
+            "EXPIRING",
+            "DUE_SOON",
+            "YAKLAŞIYOR",
+            "YAKLASIYOR",
+          ].includes(status)
+        )
+      ) {
+        return "EXPIRING";
+      }
+
+      return "COMPLETE";
+    };
+
+    const groupByEmployee = (
+      rows: any[],
+      employeeField = "employee_id"
+    ) => {
+      const grouped = new Map<string, any[]>();
+
+      for (const row of rows || []) {
+        const employeeId = String(
+          row?.[employeeField] || ""
+        ).trim();
+
+        if (!employeeId) continue;
+
+        const employee = employeeById.get(employeeId);
+        if (!employee) continue;
+
+        const rowFirmId = String(
+          row?.firm_id ||
+            row?.company_id ||
+            row?.web_firm_id ||
+            ""
+        ).trim();
+
+        /*
+         * Kayıtta firma alanı varsa mutlaka çalışanın firmasıyla
+         * eşleşmesini isteriz. Firma alanı olmayan legacy tablolarda
+         * employee_id zaten bu listede seçili çalışana kilitlidir.
+         */
+        if (
+          rowFirmId &&
+          rowFirmId !==
+            String(employee.firm_id || "")
+        ) {
+          continue;
+        }
+
+        const bucket =
+          grouped.get(employeeId) || [];
+        bucket.push(row);
+        grouped.set(employeeId, bucket);
+      }
+
+      return grouped;
+    };
+
+    const employeeIdsForModules =
+      allEmployees
+        .map((employee) =>
+          String(employee.id || "").trim()
+        )
+        .filter(Boolean);
+
+    const safeRows = async (
+      label: string,
+      query: PromiseLike<{
+        data: any[] | null;
+        error: any;
+      }>
+    ): Promise<any[]> => {
+      try {
+        const { data, error } = await query;
+
+        if (error) {
+          console.warn(
+            `employees ${label} summary error:`,
+            error
+          );
+          return [];
+        }
+
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.warn(
+          `employees ${label} summary error:`,
+          error
+        );
+        return [];
+      }
+    };
+
+    let trainingRows: any[] = [];
+    let healthRows: any[] = [];
+    let healthExaminationRows: any[] = [];
+    let healthEk2Rows: any[] = [];
+    let ppeRows: any[] = [];
+    let documentRows: any[] = [];
+    let riskRows: any[] = [];
+
+    if (employeeIdsForModules.length > 0) {
+      /*
+       * EĞİTİM:
+       * employees.id -> users.employee_id -> training_assignments.user_id
+       */
+      const trainingUsers = await safeRows(
+        "training users",
+        supabase
+          .from("users")
+          .select("id,employee_id,company_id")
+          .in(
+            "employee_id",
+            employeeIdsForModules
+          )
+      );
+
+      const userToEmployee = new Map<
+        string,
+        string
+      >();
+
+      for (const user of trainingUsers) {
+        const employeeId = String(
+          user.employee_id || ""
+        ).trim();
+
+        const employee =
+          employeeById.get(employeeId);
+
+        if (!employee) continue;
+
+        userToEmployee.set(
+          String(user.id),
+          employeeId
+        );
+      }
+
+      const trainingUserIds = Array.from(
+        userToEmployee.keys()
+      );
+
+      if (trainingUserIds.length > 0) {
+        const assignments = await safeRows(
+          "training",
+          supabase
+            .from("training_assignments")
+            .select(
+              "id,user_id,training_id,status,watch_completed,final_exam_passed,started_at,completed_at,created_at"
+            )
+            .in("user_id", trainingUserIds)
+        );
+
+        const trainingIds = Array.from(
+          new Set(
+            assignments
+              .map((row) =>
+                String(
+                  row.training_id || ""
+                ).trim()
+              )
+              .filter(Boolean)
+          )
+        );
+
+        const trainingDefinitions =
+          trainingIds.length > 0
+            ? await safeRows(
+                "training definitions",
+                supabase
+                  .from("trainings")
+                  .select(
+                    "id,title,duration_minutes,type,created_at"
+                  )
+                  .in("id", trainingIds)
+              )
+            : [];
+
+        const trainingDefinitionMap =
+          new Map(
+            trainingDefinitions.map(
+              (training) => [
+                String(training.id),
+                training,
+              ]
+            )
+          );
+
+        trainingRows = assignments
+          .map((row) => {
+            const employeeId =
+              userToEmployee.get(
+                String(row.user_id)
+              );
+
+            if (!employeeId) return null;
+
+            const training =
+              trainingDefinitionMap.get(
+                String(row.training_id)
+              );
+
+            return {
+              ...row,
+              employee_id: employeeId,
+              duration_minutes:
+                Number(
+                  training?.duration_minutes ??
+                    0
+                ) || 0,
+              title:
+                training?.title ||
+                "Eğitim",
+              type:
+                training?.type ||
+                "EĞİTİM",
+              date:
+                row.completed_at ||
+                row.started_at ||
+                row.created_at ||
+                training?.created_at ||
+                null,
+            };
+          })
+          .filter(Boolean);
+      }
+
+      /*
+       * SAĞLIK / KKD / EVRAK / RİSK:
+       * güncel Web tablolarını doğrudan employee_id ile toplu oku.
+       */
+      [
+        healthRows,
+        healthExaminationRows,
+        healthEk2Rows,
+        ppeRows,
+        documentRows,
+        riskRows,
+      ] = await Promise.all([
+        safeRows(
+          "health",
+          supabase
+            .from("health_records")
+            .select(
+              "id,employee_id,firm_id,status,exam_date_millis,next_due_millis"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+        ),
+
+        safeRows(
+          "health examinations",
+          supabase
+            .from("health_examinations")
+            .select(
+              "id,employee_id,company_id,exam_date,next_exam_date,decision,exam_type,is_deleted"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+            .eq("is_deleted", false)
+        ),
+
+        safeRows(
+          "health ek2",
+          supabase
+            .from("health_ek2_forms")
+            .select(
+              "id,employee_id,company_id,examination_id,form_type,status,exam_date,next_exam_date,is_active,created_at"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+            .or("is_active.is.null,is_active.eq.true")
+        ),
+
+        safeRows(
+          "ppe",
+          supabase
+            .from(
+              "employee_ppe_assignments"
+            )
+            .select(
+              "id,employee_id,firm_id,status"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+        ),
+
+        safeRows(
+          "documents",
+          supabase
+            .from(
+              "employee_document_assignments"
+            )
+            .select(
+              "id,employee_id,firm_id,status,is_cancelled"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+            .or(
+              "is_cancelled.is.null,is_cancelled.eq.false"
+            )
+        ),
+
+        safeRows(
+          "risks",
+          supabase
+            .from("employee_risks")
+            .select(
+              "id,employee_id,firm_id,status,score,risk_score,risk_level"
+            )
+            .in(
+              "employee_id",
+              employeeIdsForModules
+            )
+        ),
+      ]);
+    }
+
+    const employeeFirmIds =
+      Array.from(
         new Set(
-          assignmentResult.data
-            .map((row) => String(row.training_id || "").trim())
+          allEmployees
+            .map((employee) =>
+              String(
+                employee.firm_id || ""
+              ).trim()
+            )
             .filter(Boolean)
         )
       );
 
-      let trainingDefinitions: any[] = [];
-      let trainingDefinitionWarning: string | undefined;
+    const companyHazardRows =
+      employeeFirmIds.length > 0
+        ? await safeRows(
+            "company hazard",
+            supabase
+              .from("companies")
+              .select(
+                "id,tehlike_sinifi"
+              )
+              .in("id", employeeFirmIds)
+          )
+        : [];
 
-      if (trainingIds.length > 0) {
-        const definitionResult = await safeSelect(
-          supabase
-            .from("trainings")
-            .select(
-              "id,title,type,description,duration_minutes,created_at"
-            )
-            .in("id", trainingIds),
-          "Eğitim detayları"
-        );
-
-        trainingDefinitions = definitionResult.data;
-        trainingDefinitionWarning = definitionResult.warning;
-      }
-
-      const trainingMap = new Map(
-        trainingDefinitions.map((row) => [
-          String(row.id),
-          row,
-        ])
+    const hazardByFirm =
+      new Map(
+        companyHazardRows.map(
+          (company) => [
+            String(company.id),
+            company.tehlike_sinifi,
+          ]
+        )
       );
 
-      trainingResult = {
-        data: assignmentResult.data.map((assignment) => {
-          const training = trainingMap.get(
-            String(assignment.training_id)
-          );
+    const trainingByEmployee =
+      groupByEmployee(trainingRows);
 
-          return {
-            ...assignment,
-            title: training?.title || "Eğitim",
-            training_name: training?.title || "Eğitim",
-            description: training?.description || undefined,
-            type: training?.type || "EĞİTİM",
-            duration_minutes:
-              training?.duration_minutes ?? undefined,
-            date:
-              assignment.completed_at ||
-              assignment.started_at ||
-              assignment.created_at ||
-              training?.created_at,
-          };
-        }),
-        warning:
-          assignmentResult.warning ||
-          trainingDefinitionWarning ||
-          trainingUserResult.warning,
-      };
-    }
-
-    // ============================================================
-    // SAĞLIK — güncel kaynak health_records.
-    // Eski kurulum desteği için health_examinations fallback.
-    // ============================================================
-    /*
-     * SAĞLIK KAYNAKLARINI BİRLEŞTİR.
-     *
-     * Önceki firstAvailableSelect yaklaşımı tablo mevcutsa ama sonuç boşsa
-     * ikinci kaynağa geçmiyordu. EK-2 kayıtları bazı sürümlerde
-     * health_examinations içinde tutulduğu için çalışan profilinde görünmüyordu.
-     */
-    /*
-     * SAĞLIK — Sağlık modülünün GERÇEK şemasıyla birebir.
-     *
-     * health_examinations:
-     *   id, employee_id, company_id, exam_date, next_exam_date,
-     *   decision, exam_type, is_deleted
-     *
-     * EK-2 kaydı ayrıca health_ek2_forms içinde de tutulabilir.
-     * İki tablo aynı muayeneyi temsil edebildiği için özetlerde
-     * çift sayım yapılmaz.
-     */
-    const [
-      healthRecordsResult,
-      healthExaminationsResult,
-      ek2FormsResult,
-    ] = await Promise.all([
-      safeSelect(
-        supabase
-          .from("health_records")
-          .select(
-            "id,employee_id,firm_id,status,exam_date_millis,next_due_millis"
-          )
-          .eq("employee_id", id)
-          .eq("firm_id", firmId),
-        "Sağlık kayıtları"
-      ),
-
-      safeSelect(
-        supabase
-          .from("health_examinations")
-          .select(
-            "id,employee_id,company_id,exam_date,next_exam_date,decision,exam_type,is_deleted"
-          )
-          .eq("employee_id", id)
-          .eq("company_id", firmId)
-          .eq("is_deleted", false)
-          .order("exam_date", {
-            ascending: false,
-          }),
-        "Sağlık muayeneleri"
-      ),
-
-      safeSelect(
-        supabase
-          .from("health_ek2_forms")
-          .select(
-            "id,employee_id,company_id,examination_id,form_type,status,exam_date,next_exam_date,file_no,revision_no,is_active,created_at"
-          )
-          .eq("employee_id", id)
-          .eq("company_id", firmId)
-          .or(
-            "is_active.is.null,is_active.eq.true"
-          )
-          .order("exam_date", {
-            ascending: false,
-          }),
-        "EK-2 kayıtları"
-      ),
-    ]);
-
-    const isEk2Examination = (row: any) => {
-      const raw = String(
-        row?.exam_type || ""
-      ).trim();
-
-      const upper =
-        raw.toLocaleUpperCase("tr-TR");
-
-      return (
-        upper === "EK2_ISE_GIRIS" ||
-        upper === "EK2_PERIYODIK" ||
-        raw === "İşe Giriş" ||
-        raw === "Periyodik"
-      );
-    };
-
-    const examinationRows =
-      healthExaminationsResult.data.map(
+    const normalizedHealthExaminations =
+      healthExaminationRows.map(
         (row) => ({
           ...row,
           status:
@@ -1028,657 +1281,747 @@ export async function GET(
             ).getTime() < Date.now()
               ? "EXPIRED"
               : "COMPLETE",
-          date: row.exam_date,
+          exam_date:
+            row.exam_date,
           next_due_at:
             row.next_exam_date,
-          title: isEk2Examination(row)
-            ? "Ek-2 İşe Giriş / Periyodik Muayene"
-            : "İşyeri Sağlık Muayenesi",
-          meta:
-            row.decision ||
-            undefined,
         })
       );
 
-    const ek2ExamRows =
-      examinationRows.filter(
-        isEk2Examination
+    const normalizedEk2Rows =
+      healthEk2Rows.map(
+        (row) => ({
+          ...row,
+          status:
+            row.status ||
+            (row.next_exam_date &&
+            new Date(
+              row.next_exam_date
+            ).getTime() < Date.now()
+              ? "EXPIRED"
+              : "COMPLETE"),
+          exam_date:
+            row.exam_date ||
+            row.created_at,
+          next_due_at:
+            row.next_exam_date,
+        })
       );
 
-    /*
-     * health_ek2_forms varsa onu kanonik EK-2 kayıt kümesi kabul et.
-     * Eski kayıtlar yalnız health_examinations içindeyse fallback olarak
-     * exam_type üzerinden bulunan EK-2'leri kullan.
-     */
-    const canonicalEk2Rows =
-      ek2FormsResult.data.length > 0
-        ? ek2FormsResult.data.map(
-            (row) => ({
-              ...row,
-              status:
-                row.status ||
-                (row.next_exam_date &&
-                new Date(
-                  row.next_exam_date
-                ).getTime() < Date.now()
-                  ? "EXPIRED"
-                  : "COMPLETE"),
-              date:
-                row.exam_date ||
-                row.created_at,
-              next_due_at:
-                row.next_exam_date,
-              title:
-                row.form_type ||
-                "Ek-2 İşe Giriş / Periyodik Muayene",
-            })
-          )
-        : ek2ExamRows;
-
-    const nonEk2Examinations =
-      examinationRows.filter(
-        (row) =>
-          !isEk2Examination(row)
-      );
-
-    const healthResult = {
-      data: [
-        ...healthRecordsResult.data,
-        ...nonEk2Examinations,
-        ...canonicalEk2Rows,
-      ],
-      warning:
-        healthRecordsResult.warning ||
-        healthExaminationsResult.warning ||
-        ek2FormsResult.warning,
-    };
-
-    let sensitiveHealthRows: any[] = [];
-
-    if (access.canViewSensitiveHealth) {
-      const [
-        sensitiveHealthRecords,
-        sensitiveHealthExaminations,
-        sensitiveEk2Forms,
-      ] = await Promise.all([
-        safeSelect(
-          supabase
-            .from("health_records")
-            .select("*")
-            .eq("employee_id", id)
-            .eq("firm_id", firmId),
-          "Sağlık detay kayıtları"
-        ),
-
-        safeSelect(
-          supabase
-            .from("health_examinations")
-            .select("*")
-            .eq("employee_id", id)
-            .eq("company_id", firmId)
-            .eq("is_deleted", false),
-          "Sağlık muayene detayları"
-        ),
-
-        safeSelect(
-          supabase
-            .from("health_ek2_forms")
-            .select("*")
-            .eq("employee_id", id)
-            .eq("company_id", firmId)
-            .or(
-              "is_active.is.null,is_active.eq.true"
-            ),
-          "EK-2 sağlık detayları"
-        ),
+    const healthByEmployee =
+      groupByEmployee([
+        ...healthRows,
+        ...normalizedHealthExaminations,
+        ...normalizedEk2Rows,
       ]);
 
-      sensitiveHealthRows = [
-        ...sensitiveHealthRecords.data,
-        ...sensitiveHealthExaminations.data,
-        ...sensitiveEk2Forms.data,
-      ];
-    }
+    const ppeByEmployee =
+      groupByEmployee(ppeRows);
 
-    const healthSummary =
-      buildHealthSummary(
-        healthResult.data
-      );
+    const documentByEmployee =
+      groupByEmployee(documentRows);
 
-    const healthItems =
-      access.canViewSensitiveHealth
-        ? mapGenericItems(
-            sensitiveHealthRows,
-            "HEALTH"
-          )
-        : buildSafeHealthItems(
-            healthResult.data
+    const riskByEmployee =
+      groupByEmployee(riskRows);
+
+    const employeesWithModuleSummary =
+      employeesWithAccidentCount.map(
+        (employee) => {
+          const employeeId =
+            String(employee.id);
+
+          const trainings =
+            trainingByEmployee.get(employeeId) ||
+            [];
+
+          const health =
+            healthByEmployee.get(employeeId) ||
+            [];
+
+          const employeeHealthExaminations =
+            normalizedHealthExaminations.filter(
+              (row) =>
+                String(row.employee_id) ===
+                  employeeId &&
+                String(
+                  row.company_id || ""
+                ) ===
+                  String(
+                    employee.firm_id || ""
+                  )
+            );
+
+          const isEk2Exam = (row: any) => {
+            const raw = String(
+              row.exam_type || ""
+            ).trim();
+            const upper =
+              raw.toLocaleUpperCase(
+                "tr-TR"
+              );
+
+            return (
+              upper === "EK2_ISE_GIRIS" ||
+              upper === "EK2_PERIYODIK" ||
+              raw === "İşe Giriş" ||
+              raw === "Periyodik"
+            );
+          };
+
+          const employeeEk2Forms =
+            normalizedEk2Rows.filter(
+              (row) =>
+                String(row.employee_id) ===
+                  employeeId &&
+                String(
+                  row.company_id || ""
+                ) ===
+                  String(
+                    employee.firm_id || ""
+                  )
+            );
+
+          const employeeEk2Examinations =
+            employeeHealthExaminations.filter(
+              isEk2Exam
+            );
+
+          const employeeNonEk2Examinations =
+            employeeHealthExaminations.filter(
+              (row) =>
+                !isEk2Exam(row)
+            );
+
+          const canonicalEmployeeEk2 =
+            employeeEk2Forms.length > 0
+              ? employeeEk2Forms
+              : employeeEk2Examinations;
+
+          const ppe =
+            ppeByEmployee.get(employeeId) ||
+            [];
+
+          const documents =
+            documentByEmployee.get(
+              employeeId
+            ) || [];
+
+          const risks =
+            riskByEmployee.get(employeeId) ||
+            [];
+
+          /*
+           * Riskte kayıt var ama açık/yüksek risk yoksa "Veri Yok"
+           * değil COMPLETE dönüyoruz. Böylece UI bunu "Risk Yok"
+           * olarak gösterebilir.
+           */
+          const hasHighRisk = risks.some(
+            (row) =>
+              Number(
+                row.score ??
+                  row.risk_score ??
+                  0
+              ) >= 200 ||
+              [
+                "HIGH",
+                "CRITICAL",
+                "YÜKSEK",
+                "YUKSEK",
+                "ÇOK YÜKSEK",
+                "COK YUKSEK",
+              ].includes(
+                normalizeModuleStatus(
+                  row.risk_level
+                )
+              )
           );
 
-    const lastEk2At =
-      canonicalEk2Rows
-        .map((row) =>
-          healthDate(
-            row.exam_date ||
-              row.date ||
-              row.created_at
-          )
-        )
-        .filter(Boolean)
-        .sort()
-        .reverse()[0];
+          const legalTrainingSummary =
+            calculateLegalTrainingSummary(
+              trainings,
+              hazardByFirm.get(
+                String(
+                  employee.firm_id || ""
+                )
+              )
+            );
 
-    const nextHealthDueAt =
-      [
-        ...canonicalEk2Rows,
-        ...nonEk2Examinations,
-      ]
-        .map((row) =>
-          healthDate(
-            row.next_exam_date ||
-              row.next_due_at
-          )
-        )
-        .filter(Boolean)
-        .sort()[0];
+          return {
+            ...employee,
 
-    // ============================================================
-    // EVRAK — gerçek atama omurgası:
-    // employee_document_assignments -> employee_documents
-    // ============================================================
-    const documentAssignmentResult = await safeSelect(
-      supabase
-        .from("employee_document_assignments")
-        .select(
-          "id,document_id,firm_id,employee_id,employee_full_name,employee_email,department,job_title,assigned_at,due_at,status,email_status,first_opened_at,last_opened_at,reading_completed_at,acknowledgement_at,is_cancelled"
-        )
-        .eq("employee_id", id)
-        .eq("firm_id", firmId)
-        .or("is_cancelled.is.null,is_cancelled.eq.false"),
-      "Evrak atamaları"
-    );
+            training_status:
+              legalTrainingSummary.status,
 
-    const documentIds = Array.from(
-      new Set(
-        documentAssignmentResult.data
-          .map((row) => String(row.document_id || "").trim())
-          .filter(Boolean)
-      )
-    );
+            training_completion_rate:
+              legalTrainingSummary.completionRate,
 
-    let documentDefinitions: any[] = [];
-    let documentDefinitionWarning: string | undefined;
+            legal_training_completed_minutes:
+              legalTrainingSummary.completedMinutes,
 
-    if (documentIds.length > 0) {
-      const documentDefinitionResult = await safeSelect(
-        supabase
-          .from("employee_documents")
-          .select(
-            "id,title,document_type,description,file_name,mime_type,version_no,version_label,status,is_deleted"
-          )
-          .in("id", documentIds)
-          .or("is_deleted.is.null,is_deleted.eq.false"),
-        "Evrak detayları"
+            legal_training_required_minutes:
+              legalTrainingSummary.requiredMinutes,
+
+            legal_training_missing_minutes:
+              legalTrainingSummary.missingMinutes,
+
+            legal_training_validity_years:
+              legalTrainingSummary.validityYears,
+
+            legal_training_hazard_class:
+              legalTrainingSummary.hazardClass,
+
+            health_status:
+              healthSummaryForList(
+                health
+              ).status,
+
+            health_record_count:
+              healthSummaryForList(
+                health
+              ).recordCount,
+
+            health_examination_count:
+              employeeNonEk2Examinations.length,
+
+            health_ek2_count:
+              canonicalEmployeeEk2.length,
+
+            health_last_exam_at:
+              healthSummaryForList(
+                health
+              ).lastExamAt,
+
+            health_last_ek2_at:
+              canonicalEmployeeEk2
+                .map((row) =>
+                  row.exam_date ||
+                  row.created_at ||
+                  null
+                )
+                .filter(Boolean)
+                .sort()
+                .reverse()[0] || null,
+
+            health_next_due_at:
+              healthSummaryForList(
+                health
+              ).nextDueAt,
+
+            ppe_status:
+              buildModuleStatus(ppe),
+
+            document_status:
+              buildModuleStatus(documents),
+
+            risk_status:
+              hasHighRisk
+                ? "HIGH"
+                : risks.length > 0
+                ? "COMPLETE"
+                : "UNKNOWN",
+          };
+        }
       );
 
-      documentDefinitions = documentDefinitionResult.data;
-      documentDefinitionWarning =
-        documentDefinitionResult.warning;
+    let companiesQuery = supabase
+      .from("companies")
+      .select("id, name, tehlike_sinifi")
+      .order("name", { ascending: true });
+
+    if (access.companyScoped) {
+      companiesQuery = companiesQuery.eq(
+        "id",
+        access.companyId
+      );
     }
 
-    const documentMap = new Map(
-      documentDefinitions.map((row) => [
-        String(row.id),
-        row,
-      ])
-    );
+    const {
+      data: companies,
+      error: companiesError,
+    } = await companiesQuery;
 
-    const documentResult: OptionalQueryResult = {
-      data: documentAssignmentResult.data.map((assignment) => {
-        const document = documentMap.get(
-          String(assignment.document_id)
-        );
-
-        return {
-          ...assignment,
-          title: document?.title || "Çalışan Evrakı",
-          document_name:
-            document?.title || "Çalışan Evrakı",
-          document_type:
-            document?.document_type || "EVRAK",
-          description:
-            document?.description || undefined,
-          meta:
-            document?.document_type ||
-            document?.version_label ||
-            undefined,
-          date:
-            assignment.acknowledgement_at ||
-            assignment.reading_completed_at ||
-            assignment.assigned_at,
-        };
-      }),
-      warning:
-        documentAssignmentResult.warning ||
-        documentDefinitionWarning,
-    };
-
-    // ============================================================
-    // KKD / RİSK / DENETİM / KAZA / AJANDA / SGK / İBYS
-    // ============================================================
-    const [
-      ppeResult,
-      riskResult,
-      auditResult,
-      accidentResult,
-      agendaResult,
-      sgkResult,
-      ibysResult,
-    ] = await Promise.all([
-      safeSelect(
-        supabase
-          .from("employee_ppe_assignments")
-          .select("*")
-          .eq("employee_id", id),
-        "KKD"
-      ),
-
-      safeSelect(
-        supabase
-          .from("employee_risks")
-          .select("*")
-          .eq("employee_id", id),
-        "Risk"
-      ),
-
-      safeSelect(
-        supabase
-          .from("employee_audits")
-          .select("*")
-          .eq("employee_id", id),
-        "Denetim"
-      ),
-
-      safeSelect(
-        supabase
-          .from("accident_records")
-          .select("*")
-          .eq("web_employee_id", id)
-          .eq("web_firm_id", firmId)
-          .or("is_deleted.is.null,is_deleted.eq.false"),
-        "İş Kazası"
-      ),
-
-      safeSelect(
-        supabase
-          .from("agenda_items")
-          .select("*")
-          .eq("employee_id", id),
-        "Ajanda"
-      ),
-
-      safeSelect(
-        supabase
-          .from("employee_sgk_records")
-          .select("*")
-          .eq("employee_id", id),
-        "SGK"
-      ),
-
-      safeSelect(
-        supabase
-          .from("employee_ibys_records")
-          .select("*")
-          .eq("employee_id", id),
-        "İBYS"
-      ),
-    ]);
-
-    const legalTrainingSummary =
-      calculateLegalTrainingSummary(
-        trainingResult.data,
-        employeeCompany?.tehlike_sinifi
+    if (companiesError) {
+      console.error(
+        "employee companies GET error:",
+        companiesError
       );
 
-    const warnings = [
+      return NextResponse.json(
+        {
+          error: "Firma bilgileri alınamadı.",
+          detail: companiesError.message,
+        },
+        { status: 500 }
+      );
+    }
 
-      trainingResult.warning,
-
-      healthResult.warning,
-
-      ppeResult.warning,
-
-      riskResult.warning,
-
-      auditResult.warning,
-
-      accidentResult.warning,
-
-      documentResult.warning,
-
-      agendaResult.warning,
-
-      sgkResult.warning,
-
-      ibysResult.warning,
-
-    ].filter(Boolean) as string[];
-
-    const activityItems = [
-
-      {
-        id: `employee-${employee.id}`,
-
-        title: "Çalışan oluşturuldu",
-
-        description:
-          employee.full_name,
-
-        date:
-          employee.created_at ||
-          new Date().toISOString(),
-
-        category: "EMPLOYEE",
+    return NextResponse.json({
+      data: employeesWithModuleSummary,
+      companies: companies || [],
+      stats: {
+        total_count: employeesWithModuleSummary.length,
+        active_count: employeesWithModuleSummary.filter(
+          (employee) => employee.active !== false
+        ).length,
+        passive_count: employeesWithModuleSummary.filter(
+          (employee) => employee.active === false
+        ).length,
       },
-
-      ...trainingResult.data.map((x, i) => ({
-
-        id: `training-${x.id || i}`,
-
-        title:
-          x.title ||
-          x.training_name ||
-          "Eğitim",
-
-        description:
-          x.description ||
-          x.status,
-
-        date:
-          normalizeDate(
-            x.training_date ||
-            x.created_at
-          ) ||
-          new Date().toISOString(),
-
-        category: "TRAINING",
-
-      })),
-
-      ...healthResult.data.map((x, i) => ({
-
-        id: `health-${x.id || i}`,
-
-        title:
-          x.title ||
-          x.examination_type ||
-          "Sağlık",
-
-        description:
-          x.result ||
-          x.status,
-
-        date:
-          normalizeDate(
-            x.examination_date ||
-            x.created_at
-          ) ||
-          new Date().toISOString(),
-
-        category: "HEALTH",
-
-      })),
-
-      ...accidentResult.data.map((x, i) => ({
-
-        id: `accident-${x.id || i}`,
-
-        title:
-          x.title ||
-          x.event_type ||
-          "İş Kazası",
-
-        description:
-          x.description,
-
-        date:
-          normalizeDate(
-            x.event_date ||
-            x.created_at
-          ) ||
-          new Date().toISOString(),
-
-        category: "ACCIDENT",
-
-      })),
-
-    ];
-        return NextResponse.json({
-      success: true,
-
-      data: {
-        employeeId: id,
-
-        summary: {
-          training_status:
-            legalTrainingSummary.status,
-
-          health_status:
-            healthSummary.status,
-
-          health_record_count:
-            healthSummary.recordCount,
-
-          health_examination_count:
-            nonEk2Examinations.length,
-
-          health_ek2_count:
-            canonicalEk2Rows.length,
-
-          health_last_exam_at:
-            healthSummary.lastExamAt,
-
-          health_last_ek2_at:
-            lastEk2At,
-
-          health_next_due_at:
-            nextHealthDueAt ||
-            healthSummary.nextDueAt,
-
-          health_days_until_due:
-            healthSummary.daysUntilDue,
-
-          health_details_allowed:
-            access.canViewSensitiveHealth,
-
-          health_privacy_level:
-            access.canViewSensitiveHealth
-              ? "FULL"
-              : "METADATA_ONLY",
-
-          ppe_status:
-            buildStatus(ppeResult.data),
-
-          document_status:
-            buildStatus(documentResult.data),
-
-          risk_status:
-            riskResult.data.some(
-              (row) =>
-                Number(
-                  row.score ||
-                  row.risk_score ||
-                  0
-                ) >= 200 ||
-                [
-                  "HIGH",
-                  "CRITICAL",
-                  "YÜKSEK",
-                  "YUKSEK",
-                  "ÇOK YÜKSEK",
-                  "COK YUKSEK",
-                ].includes(
-                  String(
-                    row.risk_level ||
-                    row.level ||
-                    ""
-                  ).toUpperCase()
-                )
-            )
-              ? "HIGH"
-              : riskResult.data.length
-              ? "MEDIUM"
-              : "UNKNOWN",
-
-          training_completion_rate:
-            legalTrainingSummary.completionRate,
-
-          legal_training_completed_minutes:
-            legalTrainingSummary.completedMinutes,
-
-          legal_training_required_minutes:
-            legalTrainingSummary.requiredMinutes,
-
-          legal_training_missing_minutes:
-            legalTrainingSummary.missingMinutes,
-
-          legal_training_validity_years:
-            legalTrainingSummary.validityYears,
-
-          legal_training_hazard_class:
-            legalTrainingSummary.hazardClass,
-
-          legal_training_valid_count:
-            legalTrainingSummary.validTrainingCount,
-
-          ppe_completion_rate:
-            ppeResult.data.length
-              ? Math.round(
-                  (
-                    ppeResult.data.filter(
-                      (row) =>
-                        [
-                          "COMPLETE",
-                          "COMPLETED",
-                          "ACTIVE",
-                          "ASSIGNED",
-                          "ZİMMETLENDİ",
-                          "ZIMMETLENDI",
-                        ].includes(
-                          String(
-                            row.status || ""
-                          ).toUpperCase()
-                        )
-                    ).length /
-                    ppeResult.data.length
-                  ) * 100
-                )
-              : undefined,
-
-          open_risk_count:
-            countOpen(riskResult.data),
-
-          open_action_count:
-            countOpen(agendaResult.data),
-
-          accident_count:
-            accidentResult.data.length,
-
-          upcoming_count:
-            agendaResult.data.length,
-        },
-
-        trainingItems:
-          mapGenericItems(
-            trainingResult.data,
-            "TRAINING"
-          ),
-
-        healthItems,
-
-        ppeItems:
-          mapGenericItems(
-            ppeResult.data,
-            "PPE"
-          ),
-
-        riskItems:
-          mapGenericItems(
-            riskResult.data,
-            "RISK"
-          ),
-
-        auditItems:
-          mapGenericItems(
-            auditResult.data,
-            "AUDIT"
-          ),
-
-        accidentItems:
-          mapGenericItems(
-            accidentResult.data,
-            "ACCIDENT"
-          ),
-
-        documentItems:
-          mapGenericItems(
-            documentResult.data,
-            "DOCUMENT"
-          ),
-
-        agendaItems:
-          mapGenericItems(
-            agendaResult.data,
-            "AGENDA"
-          ),
-
-        sgkItems:
-          mapGenericItems(
-            sgkResult.data,
-            "SGK"
-          ),
-
-        ibysItems:
-          mapGenericItems(
-            ibysResult.data,
-            "IBYS"
-          ),
-
-        activityItems,
-
-        loadedAt:
-          new Date().toISOString(),
-
-        access: {
-          role: access.role,
-          health_details_allowed:
-            access.canViewSensitiveHealth,
-          health_privacy_level:
-            access.canViewSensitiveHealth
-              ? "FULL"
-              : "METADATA_ONLY",
-        },
-
-        warnings,
+      scope: {
+        role: access.role,
+        company_id: access.companyScoped
+          ? access.companyId
+          : effectiveFirmId || null,
+        read_only: access.readOnly,
       },
     });
-      } catch (error: any) {
+  } catch (errorValue: any) {
     console.error(
-      "Employee Profile Integration Error:",
-      error
+      "employees GET genel hata:",
+      errorValue
     );
 
     return NextResponse.json(
       {
-        success: false,
-
         error:
-          error?.message ||
-          "Çalışan profil verileri yüklenemedi.",
+          errorValue?.message || "Sunucu hatası.",
       },
+      { status: 500 }
+    );
+  }
+}
+
+// ======================================================
+// POST — ÇALIŞAN EKLEME
+// ======================================================
+
+export async function POST(req: Request) {
+  try {
+    const access = await getAccessContext();
+
+    if (!access.allowed) {
+      return NextResponse.json(
+        { error: "Yetkisiz erişim." },
+        { status: 401 }
+      );
+    }
+
+    if (access.readOnly) {
+      return NextResponse.json(
+        {
+          error:
+            "Demo kullanıcısı çalışan ekleyemez.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+    const supabase = getSupabase();
+
+    /*
+     * Firma yöneticisi body içinde başka bir firma
+     * gönderse bile kendi firması kullanılır.
+     */
+    const firmId = access.companyScoped
+      ? access.companyId
+      : clean(body?.firm_id);
+
+    const fullName = clean(body?.full_name);
+
+    if (!firmId || !fullName) {
+      return NextResponse.json(
+        {
+          error:
+            "firm_id ve full_name zorunludur.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const payload = {
+      ...buildEmployeePayload(body),
+      firm_id: firmId,
+      full_name: fullName,
+      active:
+        body?.active !== undefined
+          ? Boolean(body.active)
+          : true,
+      exit_date:
+        body?.exit_date !== undefined
+          ? clean(body.exit_date)
+          : null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from("employees")
+      .insert([payload])
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("employee POST error:", error);
+
+      return NextResponse.json(
+        {
+          error: "Çalışan eklenemedi.",
+          detail: error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    await ensureTrainingUserForEmployee({
+      supabase,
+      employee: data,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data,
+    });
+  } catch (errorValue: any) {
+    console.error(
+      "employees POST genel hata:",
+      errorValue
+    );
+
+    return NextResponse.json(
       {
-        status: 500,
+        error: "Sunucu hatası.",
+        detail: errorValue?.message || null,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// ======================================================
+// PUT — ÇALIŞAN GÜNCELLEME
+// ======================================================
+
+export async function PUT(req: Request) {
+  try {
+    const access = await getAccessContext();
+
+    if (!access.allowed) {
+      return NextResponse.json(
+        { error: "Yetkisiz erişim." },
+        { status: 401 }
+      );
+    }
+
+    if (access.readOnly) {
+      return NextResponse.json(
+        {
+          error:
+            "Demo kullanıcısı çalışan güncelleyemez.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+    const supabase = getSupabase();
+
+    const id = clean(body?.id);
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "id zorunludur." },
+        { status: 400 }
+      );
+    }
+
+    const {
+      employee: existingEmployee,
+      error: existingEmployeeError,
+    } = await getScopedEmployee({
+      supabase,
+      employeeId: id,
+      access,
+    });
+
+    if (existingEmployeeError) {
+      console.error(
+        "employee scope check error:",
+        existingEmployeeError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Çalışan erişimi kontrol edilemedi.",
+          detail: existingEmployeeError.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!existingEmployee) {
+      return NextResponse.json(
+        {
+          error:
+            "Çalışan bulunamadı veya bu firmaya ait değil.",
+        },
+        { status: 404 }
+      );
+    }
+
+    const payload = buildEmployeePayload(body);
+
+    /*
+     * Firma yöneticisi çalışanı başka firmaya taşıyamaz.
+     */
+    if (access.companyScoped) {
+      payload.firm_id = access.companyId;
+    }
+
+    let updateQuery = supabase
+      .from("employees")
+      .update(payload)
+      .eq("id", id);
+
+    if (access.companyScoped) {
+      updateQuery = updateQuery.eq(
+        "firm_id",
+        access.companyId
+      );
+    }
+
+    const { data, error } = await updateQuery
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("employee PUT error:", error);
+
+      return NextResponse.json(
+        {
+          error: "Çalışan güncellenemedi.",
+          detail: error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    await ensureTrainingUserForEmployee({
+      supabase,
+      employee: data,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data,
+    });
+  } catch (errorValue: any) {
+    console.error(
+      "employees PUT genel hata:",
+      errorValue
+    );
+
+    return NextResponse.json(
+      {
+        error: "Sunucu hatası.",
+        detail: errorValue?.message || null,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// ======================================================
+// DELETE — PASİFE ALMA / KALICI SİLME
+// ======================================================
+
+export async function DELETE(req: Request) {
+  try {
+    const access = await getAccessContext();
+
+    if (!access.allowed) {
+      return NextResponse.json(
+        { error: "Yetkisiz erişim." },
+        { status: 401 }
+      );
+    }
+
+    if (access.readOnly) {
+      return NextResponse.json(
+        {
+          error:
+            "Demo kullanıcısı çalışan silemez veya pasife alamaz.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(req.url);
+
+    const id = clean(searchParams.get("id"));
+    const mode = clean(searchParams.get("mode"));
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "id zorunludur." },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getSupabase();
+
+    const {
+      employee: existingEmployee,
+      error: existingEmployeeError,
+    } = await getScopedEmployee({
+      supabase,
+      employeeId: id,
+      access,
+    });
+
+    if (existingEmployeeError) {
+      console.error(
+        "employee delete scope check error:",
+        existingEmployeeError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Çalışan erişimi kontrol edilemedi.",
+          detail: existingEmployeeError.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!existingEmployee) {
+      return NextResponse.json(
+        {
+          error:
+            "Çalışan bulunamadı veya bu firmaya ait değil.",
+        },
+        { status: 404 }
+      );
+    }
+
+    /*
+     * Kalıcı silme yalnızca admin/super_admin için açıktır.
+     * Firma yöneticisi sadece pasife alabilir.
+     */
+    const canHardDelete =
+      access.role === "admin" ||
+      access.role === "super_admin";
+
+    if (mode === "hard") {
+      if (!canHardDelete) {
+        return NextResponse.json(
+          {
+            error:
+              "Kalıcı silme işlemi için süper admin yetkisi gerekir.",
+          },
+          { status: 403 }
+        );
       }
+
+      const { error } = await supabase
+        .from("employees")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        console.error(
+          "employee hard DELETE error:",
+          error
+        );
+
+        return NextResponse.json(
+          {
+            error:
+              "Çalışan kalıcı olarak silinemedi.",
+            detail: error.message,
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        deleted: true,
+      });
+    }
+
+    let passiveQuery = supabase
+      .from("employees")
+      .update({
+        active: false,
+        exit_date:
+          existingEmployee.exit_date || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (access.companyScoped) {
+      passiveQuery = passiveQuery.eq(
+        "firm_id",
+        access.companyId
+      );
+    }
+
+    const { data, error } = await passiveQuery
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error(
+        "employee passive DELETE error:",
+        error
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Çalışan pasife alınamadı.",
+          detail: error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    /*
+     * Çalışana bağlı eğitim kullanıcısını da pasifleştir.
+     */
+    const { error: userUpdateError } = await supabase
+      .from("users")
+      .update({
+        is_active: false,
+      })
+      .eq("employee_id", id);
+
+    if (userUpdateError) {
+      console.error(
+        "employee user passive error:",
+        userUpdateError
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data,
+    });
+  } catch (errorValue: any) {
+    console.error(
+      "employees DELETE genel hata:",
+      errorValue
+    );
+
+    return NextResponse.json(
+      {
+        error: "Sunucu hatası.",
+        detail: errorValue?.message || null,
+      },
+      { status: 500 }
     );
   }
 }

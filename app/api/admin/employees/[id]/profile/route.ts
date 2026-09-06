@@ -941,6 +941,17 @@ export async function GET(
      * ikinci kaynağa geçmiyordu. EK-2 kayıtları bazı sürümlerde
      * health_examinations içinde tutulduğu için çalışan profilinde görünmüyordu.
      */
+    /*
+     * SAĞLIK — Sağlık modülünün GERÇEK şemasıyla birebir.
+     *
+     * health_examinations:
+     *   id, employee_id, company_id, exam_date, next_exam_date,
+     *   decision, exam_type, is_deleted
+     *
+     * EK-2 kaydı ayrıca health_ek2_forms içinde de tutulabilir.
+     * İki tablo aynı muayeneyi temsil edebildiği için özetlerde
+     * çift sayım yapılmaz.
+     */
     const [
       healthRecordsResult,
       healthExaminationsResult,
@@ -956,16 +967,22 @@ export async function GET(
           .eq("firm_id", firmId),
         "Sağlık kayıtları"
       ),
+
       safeSelect(
         supabase
           .from("health_examinations")
           .select(
-            "id,employee_id,company_id,status,exam_date,next_exam_date,exam_type,decision,created_at"
+            "id,employee_id,company_id,exam_date,next_exam_date,decision,exam_type,is_deleted"
           )
           .eq("employee_id", id)
-          .eq("company_id", firmId),
+          .eq("company_id", firmId)
+          .eq("is_deleted", false)
+          .order("exam_date", {
+            ascending: false,
+          }),
         "Sağlık muayeneleri"
       ),
+
       safeSelect(
         supabase
           .from("health_ek2_forms")
@@ -974,16 +991,101 @@ export async function GET(
           )
           .eq("employee_id", id)
           .eq("company_id", firmId)
-          .or("is_active.is.null,is_active.eq.true"),
+          .or(
+            "is_active.is.null,is_active.eq.true"
+          )
+          .order("exam_date", {
+            ascending: false,
+          }),
         "EK-2 kayıtları"
       ),
     ]);
 
+    const isEk2Examination = (row: any) => {
+      const raw = String(
+        row?.exam_type || ""
+      ).trim();
+
+      const upper =
+        raw.toLocaleUpperCase("tr-TR");
+
+      return (
+        upper === "EK2_ISE_GIRIS" ||
+        upper === "EK2_PERIYODIK" ||
+        raw === "İşe Giriş" ||
+        raw === "Periyodik"
+      );
+    };
+
+    const examinationRows =
+      healthExaminationsResult.data.map(
+        (row) => ({
+          ...row,
+          status:
+            row.next_exam_date &&
+            new Date(
+              row.next_exam_date
+            ).getTime() < Date.now()
+              ? "EXPIRED"
+              : "COMPLETE",
+          date: row.exam_date,
+          next_due_at:
+            row.next_exam_date,
+          title: isEk2Examination(row)
+            ? "Ek-2 İşe Giriş / Periyodik Muayene"
+            : "İşyeri Sağlık Muayenesi",
+          meta:
+            row.decision ||
+            undefined,
+        })
+      );
+
+    const ek2ExamRows =
+      examinationRows.filter(
+        isEk2Examination
+      );
+
+    /*
+     * health_ek2_forms varsa onu kanonik EK-2 kayıt kümesi kabul et.
+     * Eski kayıtlar yalnız health_examinations içindeyse fallback olarak
+     * exam_type üzerinden bulunan EK-2'leri kullan.
+     */
+    const canonicalEk2Rows =
+      ek2FormsResult.data.length > 0
+        ? ek2FormsResult.data.map(
+            (row) => ({
+              ...row,
+              status:
+                row.status ||
+                (row.next_exam_date &&
+                new Date(
+                  row.next_exam_date
+                ).getTime() < Date.now()
+                  ? "EXPIRED"
+                  : "COMPLETE"),
+              date:
+                row.exam_date ||
+                row.created_at,
+              next_due_at:
+                row.next_exam_date,
+              title:
+                row.form_type ||
+                "Ek-2 İşe Giriş / Periyodik Muayene",
+            })
+          )
+        : ek2ExamRows;
+
+    const nonEk2Examinations =
+      examinationRows.filter(
+        (row) =>
+          !isEk2Examination(row)
+      );
+
     const healthResult = {
       data: [
         ...healthRecordsResult.data,
-        ...healthExaminationsResult.data,
-        ...ek2FormsResult.data,
+        ...nonEk2Examinations,
+        ...canonicalEk2Rows,
       ],
       warning:
         healthRecordsResult.warning ||
@@ -991,10 +1093,6 @@ export async function GET(
         ek2FormsResult.warning,
     };
 
-    /*
-     * Hassas sağlık içeriği yalnızca Super Admin ve İşyeri Hekimi için
-     * ayrıca okunur. Diğer rollere API seviyesinde hiç gönderilmez.
-     */
     let sensitiveHealthRows: any[] = [];
 
     if (access.canViewSensitiveHealth) {
@@ -1011,21 +1109,26 @@ export async function GET(
             .eq("firm_id", firmId),
           "Sağlık detay kayıtları"
         ),
+
         safeSelect(
           supabase
             .from("health_examinations")
             .select("*")
             .eq("employee_id", id)
-            .eq("company_id", firmId),
+            .eq("company_id", firmId)
+            .eq("is_deleted", false),
           "Sağlık muayene detayları"
         ),
+
         safeSelect(
           supabase
             .from("health_ek2_forms")
             .select("*")
             .eq("employee_id", id)
             .eq("company_id", firmId)
-            .or("is_active.is.null,is_active.eq.true"),
+            .or(
+              "is_active.is.null,is_active.eq.true"
+            ),
           "EK-2 sağlık detayları"
         ),
       ]);
@@ -1051,6 +1154,33 @@ export async function GET(
         : buildSafeHealthItems(
             healthResult.data
           );
+
+    const lastEk2At =
+      canonicalEk2Rows
+        .map((row) =>
+          healthDate(
+            row.exam_date ||
+              row.date ||
+              row.created_at
+          )
+        )
+        .filter(Boolean)
+        .sort()
+        .reverse()[0];
+
+    const nextHealthDueAt =
+      [
+        ...canonicalEk2Rows,
+        ...nonEk2Examinations,
+      ]
+        .map((row) =>
+          healthDate(
+            row.next_exam_date ||
+              row.next_due_at
+          )
+        )
+        .filter(Boolean)
+        .sort()[0];
 
     // ============================================================
     // EVRAK — gerçek atama omurgası:
@@ -1340,27 +1470,19 @@ export async function GET(
             healthSummary.recordCount,
 
           health_examination_count:
-            healthExaminationsResult.data.length,
+            nonEk2Examinations.length,
 
           health_ek2_count:
-            ek2FormsResult.data.length,
+            canonicalEk2Rows.length,
 
           health_last_exam_at:
             healthSummary.lastExamAt,
 
           health_last_ek2_at:
-            ek2FormsResult.data
-              .map((row) =>
-                healthDate(
-                  row.exam_date ||
-                    row.created_at
-                )
-              )
-              .filter(Boolean)
-              .sort()
-              .reverse()[0],
+            lastEk2At,
 
           health_next_due_at:
+            nextHealthDueAt ||
             healthSummary.nextDueAt,
 
           health_days_until_due:
