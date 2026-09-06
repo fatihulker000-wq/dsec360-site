@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -437,6 +438,322 @@ function calculateLegalTrainingSummary(
   };
 }
 
+
+type ProfileAccessContext = {
+  allowed: boolean;
+  role: string;
+  companyId: string;
+  companyScoped: boolean;
+  canViewSensitiveHealth: boolean;
+};
+
+function normalizeRole(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function isWorkplacePhysicianRole(
+  role: string
+) {
+  return [
+    "workplace_physician",
+    "workplace_doctor",
+    "isyeri_hekimi",
+    "işyeri_hekimi",
+  ].includes(normalizeRole(role));
+}
+
+async function getProfileAccessContext():
+  Promise<ProfileAccessContext> {
+  const store = await cookies();
+
+  const auth = String(
+    store.get("dsec_admin_auth")?.value ||
+      store.get("dsec_user_auth")?.value ||
+      ""
+  ).trim();
+
+  const role = normalizeRole(
+    store.get("dsec_admin_role")?.value ||
+      store.get("dsec_user_role")?.value ||
+      ""
+  );
+
+  const companyId = String(
+    store.get("dsec_company_id")?.value ||
+      ""
+  ).trim();
+
+  const companyScoped =
+    [
+      "company_admin",
+      "demo_user",
+      "workplace_physician",
+      "workplace_doctor",
+      "isyeri_hekimi",
+      "işyeri_hekimi",
+    ].includes(role);
+
+  const allowedRoles = [
+    "admin",
+    "super_admin",
+    "company_admin",
+    "demo_user",
+    "workplace_physician",
+    "workplace_doctor",
+    "isyeri_hekimi",
+    "işyeri_hekimi",
+  ];
+
+  const allowed =
+    auth === "ok" &&
+    allowedRoles.includes(role) &&
+    (
+      !companyScoped ||
+      Boolean(companyId)
+    );
+
+  return {
+    allowed,
+    role,
+    companyId,
+    companyScoped,
+    canViewSensitiveHealth:
+      role === "super_admin" ||
+      isWorkplacePhysicianRole(role),
+  };
+}
+
+function healthDate(
+  value: unknown
+): string | undefined {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return undefined;
+  }
+
+  const numeric =
+    typeof value === "number"
+      ? value
+      : Number(value);
+
+  const date =
+    Number.isFinite(numeric) &&
+    numeric > 10000000000
+      ? new Date(numeric)
+      : new Date(String(value));
+
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date.toISOString();
+}
+
+function buildHealthSummary(
+  rows: any[]
+) {
+  if (!rows.length) {
+    return {
+      status: "UNKNOWN" as const,
+      recordCount: 0,
+      lastExamAt: undefined,
+      nextDueAt: undefined,
+      daysUntilDue: undefined,
+    };
+  }
+
+  const sortedByExam = [...rows].sort(
+    (a, b) => {
+      const aTime =
+        new Date(
+          healthDate(
+            a.exam_date_millis ||
+              a.exam_date ||
+              a.examination_date ||
+              a.created_at
+          ) || 0
+        ).getTime();
+
+      const bTime =
+        new Date(
+          healthDate(
+            b.exam_date_millis ||
+              b.exam_date ||
+              b.examination_date ||
+              b.created_at
+          ) || 0
+        ).getTime();
+
+      return bTime - aTime;
+    }
+  );
+
+  const latest = sortedByExam[0];
+
+  const dueDates = rows
+    .map((row) =>
+      healthDate(
+        row.next_due_millis ||
+          row.next_due_at ||
+          row.next_exam_date ||
+          row.next_due
+      )
+    )
+    .filter(Boolean) as string[];
+
+  const nextDueAt =
+    dueDates.length > 0
+      ? dueDates.sort(
+          (a, b) =>
+            new Date(a).getTime() -
+            new Date(b).getTime()
+        )[0]
+      : undefined;
+
+  const now = Date.now();
+
+  let status:
+    | "COMPLETE"
+    | "MISSING"
+    | "EXPIRING"
+    | "UNKNOWN" = "COMPLETE";
+
+  let daysUntilDue:
+    | number
+    | undefined = undefined;
+
+  if (nextDueAt) {
+    const dueTime =
+      new Date(nextDueAt).getTime();
+
+    daysUntilDue = Math.ceil(
+      (dueTime - now) /
+        (1000 * 60 * 60 * 24)
+    );
+
+    if (dueTime < now) {
+      status = "MISSING";
+    } else if (
+      dueTime <=
+      now + 30 * 24 * 60 * 60 * 1000
+    ) {
+      status = "EXPIRING";
+    } else {
+      status = "COMPLETE";
+    }
+  } else {
+    const rawStatus = String(
+      latest?.status || ""
+    )
+      .trim()
+      .toUpperCase();
+
+    if (
+      [
+        "MISSING",
+        "EXPIRED",
+        "OVERDUE",
+        "EKSİK",
+        "EKSIK",
+      ].includes(rawStatus)
+    ) {
+      status = "MISSING";
+    } else if (
+      [
+        "EXPIRING",
+        "DUE_SOON",
+        "YAKLAŞIYOR",
+        "YAKLASIYOR",
+      ].includes(rawStatus)
+    ) {
+      status = "EXPIRING";
+    }
+  }
+
+  return {
+    status,
+    recordCount: rows.length,
+    lastExamAt: healthDate(
+      latest?.exam_date_millis ||
+        latest?.exam_date ||
+        latest?.examination_date ||
+        latest?.created_at
+    ),
+    nextDueAt,
+    daysUntilDue,
+  };
+}
+
+function buildSafeHealthItems(
+  rows: any[]
+) {
+  return [...rows]
+    .sort((a, b) => {
+      const aDate = new Date(
+        healthDate(
+          a.exam_date_millis ||
+            a.exam_date ||
+            a.examination_date ||
+            a.created_at
+        ) || 0
+      ).getTime();
+
+      const bDate = new Date(
+        healthDate(
+          b.exam_date_millis ||
+            b.exam_date ||
+            b.examination_date ||
+            b.created_at
+        ) || 0
+      ).getTime();
+
+      return bDate - aDate;
+    })
+    .map((row, index) => {
+      const examAt = healthDate(
+        row.exam_date_millis ||
+          row.exam_date ||
+          row.examination_date ||
+          row.created_at
+      );
+
+      const nextDueAt = healthDate(
+        row.next_due_millis ||
+          row.next_due_at ||
+          row.next_exam_date ||
+          row.next_due
+      );
+
+      return {
+        id: String(
+          row.id ||
+            `HEALTH-${index}`
+        ),
+        title:
+          row.record_type ||
+          row.exam_type ||
+          row.examination_type ||
+          "İşyeri Sağlık Muayenesi",
+        description:
+          "Sağlık içeriği gizlidir. Yalnızca muayene ve geçerlilik bilgileri gösterilir.",
+        status:
+          row.status ||
+          undefined,
+        date: examAt,
+        meta: nextDueAt
+          ? `Sonraki muayene: ${nextDueAt}`
+          : "Sonraki muayene tarihi bulunmuyor",
+        source: "HEALTH",
+        privacy: "RESTRICTED",
+      };
+    });
+}
+
 export async function GET(
   _request: Request,
   context: {
@@ -447,6 +764,20 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
+
+    const access =
+      await getProfileAccessContext();
+
+    if (!access.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Çalışan profil bilgilerine erişim yetkiniz yok.",
+        },
+        { status: 401 }
+      );
+    }
 
     if (!id) {
       return NextResponse.json(
@@ -460,14 +791,22 @@ export async function GET(
 
     const supabase = getSupabase();
 
+    let employeeQuery = supabase
+      .from("employees")
+      .select("*")
+      .eq("id", id);
+
+    if (access.companyScoped) {
+      employeeQuery = employeeQuery.eq(
+        "firm_id",
+        access.companyId
+      );
+    }
+
     const {
       data: employee,
       error: employeeError,
-    } = await supabase
-      .from("employees")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
+    } = await employeeQuery.maybeSingle();
 
     if (employeeError || !employee) {
       return NextResponse.json(
@@ -600,15 +939,66 @@ export async function GET(
         () =>
           supabase
             .from("health_records")
-            .select("*")
-            .eq("employee_id", id),
+            .select(
+              "id,employee_id,firm_id,status,exam_date_millis,next_due_millis"
+            )
+            .eq("employee_id", id)
+            .eq("firm_id", firmId),
         () =>
           supabase
             .from("health_examinations")
-            .select("*")
-            .eq("employee_id", id),
+            .select(
+              "id,employee_id,firm_id,status,exam_date,examination_date,next_due_at,next_exam_date,created_at"
+            )
+            .eq("employee_id", id)
+            .eq("firm_id", firmId),
       ]
     );
+
+    /*
+     * Hassas sağlık içeriği yalnızca Super Admin ve İşyeri Hekimi için
+     * ayrıca okunur. Diğer rollere API seviyesinde hiç gönderilmez.
+     */
+    let sensitiveHealthRows: any[] = [];
+
+    if (access.canViewSensitiveHealth) {
+      const sensitiveResult =
+        await firstAvailableSelect(
+          "Sağlık detay",
+          [
+            () =>
+              supabase
+                .from("health_records")
+                .select("*")
+                .eq("employee_id", id)
+                .eq("firm_id", firmId),
+            () =>
+              supabase
+                .from("health_examinations")
+                .select("*")
+                .eq("employee_id", id)
+                .eq("firm_id", firmId),
+          ]
+        );
+
+      sensitiveHealthRows =
+        sensitiveResult.data;
+    }
+
+    const healthSummary =
+      buildHealthSummary(
+        healthResult.data
+      );
+
+    const healthItems =
+      access.canViewSensitiveHealth
+        ? mapGenericItems(
+            sensitiveHealthRows,
+            "HEALTH"
+          )
+        : buildSafeHealthItems(
+            healthResult.data
+          );
 
     // ============================================================
     // EVRAK — gerçek atama omurgası:
@@ -892,7 +1282,27 @@ export async function GET(
             legalTrainingSummary.status,
 
           health_status:
-            buildStatus(healthResult.data),
+            healthSummary.status,
+
+          health_record_count:
+            healthSummary.recordCount,
+
+          health_last_exam_at:
+            healthSummary.lastExamAt,
+
+          health_next_due_at:
+            healthSummary.nextDueAt,
+
+          health_days_until_due:
+            healthSummary.daysUntilDue,
+
+          health_details_allowed:
+            access.canViewSensitiveHealth,
+
+          health_privacy_level:
+            access.canViewSensitiveHealth
+              ? "FULL"
+              : "METADATA_ONLY",
 
           ppe_status:
             buildStatus(ppeResult.data),
@@ -992,11 +1402,7 @@ export async function GET(
             "TRAINING"
           ),
 
-        healthItems:
-          mapGenericItems(
-            healthResult.data,
-            "HEALTH"
-          ),
+        healthItems,
 
         ppeItems:
           mapGenericItems(
@@ -1050,6 +1456,16 @@ export async function GET(
 
         loadedAt:
           new Date().toISOString(),
+
+        access: {
+          role: access.role,
+          health_details_allowed:
+            access.canViewSensitiveHealth,
+          health_privacy_level:
+            access.canViewSensitiveHealth
+              ? "FULL"
+              : "METADATA_ONLY",
+        },
 
         warnings,
       },

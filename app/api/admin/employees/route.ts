@@ -239,6 +239,122 @@ function calculateLegalTrainingSummary(
   };
 }
 
+
+function healthSummaryForList(
+  rows: any[]
+) {
+  if (!rows.length) {
+    return {
+      status: "UNKNOWN" as const,
+      recordCount: 0,
+      lastExamAt: null as string | null,
+      nextDueAt: null as string | null,
+    };
+  }
+
+  const toIso = (
+    value: unknown
+  ): string | null => {
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
+      return null;
+    }
+
+    const numberValue =
+      typeof value === "number"
+        ? value
+        : Number(value);
+
+    const date =
+      Number.isFinite(numberValue) &&
+      numberValue > 10000000000
+        ? new Date(numberValue)
+        : new Date(String(value));
+
+    return Number.isNaN(date.getTime())
+      ? null
+      : date.toISOString();
+  };
+
+  const latest = [...rows].sort(
+    (a, b) => {
+      const aDate = new Date(
+        toIso(
+          a.exam_date_millis ||
+            a.exam_date ||
+            a.examination_date
+        ) || 0
+      ).getTime();
+
+      const bDate = new Date(
+        toIso(
+          b.exam_date_millis ||
+            b.exam_date ||
+            b.examination_date
+        ) || 0
+      ).getTime();
+
+      return bDate - aDate;
+    }
+  )[0];
+
+  const lastExamAt = toIso(
+    latest?.exam_date_millis ||
+      latest?.exam_date ||
+      latest?.examination_date
+  );
+
+  const dueDates = rows
+    .map((row) =>
+      toIso(
+        row.next_due_millis ||
+          row.next_due_at ||
+          row.next_exam_date
+      )
+    )
+    .filter(Boolean) as string[];
+
+  const nextDueAt =
+    dueDates.length > 0
+      ? dueDates.sort(
+          (a, b) =>
+            new Date(a).getTime() -
+            new Date(b).getTime()
+        )[0]
+      : null;
+
+  let status:
+    | "COMPLETE"
+    | "MISSING"
+    | "EXPIRING"
+    | "UNKNOWN" = "COMPLETE";
+
+  if (nextDueAt) {
+    const due =
+      new Date(nextDueAt).getTime();
+    const now = Date.now();
+
+    if (due < now) {
+      status = "MISSING";
+    } else if (
+      due <=
+      now + 30 * 24 * 60 * 60 * 1000
+    ) {
+      status = "EXPIRING";
+    }
+  }
+
+  return {
+    status,
+    recordCount: rows.length,
+    lastExamAt,
+    nextDueAt,
+  };
+}
+
 function sha256(input: string) {
   return crypto
     .createHash("sha256")
@@ -282,10 +398,19 @@ async function getAccessContext(): Promise<AccessContext> {
     "super_admin",
     "company_admin",
     "demo_user",
+    "workplace_physician",
+    "workplace_doctor",
+    "isyeri_hekimi",
+    "işyeri_hekimi",
   ];
 
   const companyScoped =
-    role === "company_admin" || role === "demo_user";
+    role === "company_admin" ||
+    role === "demo_user" ||
+    role === "workplace_physician" ||
+    role === "workplace_doctor" ||
+    role === "isyeri_hekimi" ||
+    role === "işyeri_hekimi";
 
   const allowed =
     auth === "ok" &&
@@ -1212,7 +1337,24 @@ export async function GET(request: Request) {
               legalTrainingSummary.hazardClass,
 
             health_status:
-              buildModuleStatus(health),
+              healthSummaryForList(
+                health
+              ).status,
+
+            health_record_count:
+              healthSummaryForList(
+                health
+              ).recordCount,
+
+            health_last_exam_at:
+              healthSummaryForList(
+                health
+              ).lastExamAt,
+
+            health_next_due_at:
+              healthSummaryForList(
+                health
+              ).nextDueAt,
 
             ppe_status:
               buildModuleStatus(ppe),
