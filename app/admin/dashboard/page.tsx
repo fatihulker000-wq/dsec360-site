@@ -38,6 +38,31 @@ const display=(v:number|null|undefined,suffix="")=>v==null?"Veri yok":`${v}${suf
 const state=(v:number|null,good=85,warn=70)=>v==null?"neutral":v>=good?"good":v>=warn?"warning":"critical";
 const PERIODS=[{value:"7d",label:"Son 7 Gün"},{value:"30d",label:"Son 30 Gün"},{value:"90d",label:"Son 3 Ay"},{value:"180d",label:"Son 6 Ay"},{value:"365d",label:"Son 12 Ay"}];
 
+const readJsonResponse=async<T,>(response:Response,context:string):Promise<T>=>{
+  const contentType=response.headers.get("content-type")||"";
+  const raw=await response.text();
+
+  if(!raw.trim()){
+    throw new Error(`${context}: Sunucu boş yanıt döndürdü (HTTP ${response.status}).`);
+  }
+
+  if(!contentType.toLowerCase().includes("application/json")){
+    const preview=raw.replace(/\s+/g," ").trim().slice(0,180);
+    throw new Error(
+      `${context}: JSON yerine geçersiz yanıt alındı (HTTP ${response.status})${preview?` · ${preview}`:""}.`
+    );
+  }
+
+  try{
+    return JSON.parse(raw) as T;
+  }catch{
+    const preview=raw.replace(/\s+/g," ").trim().slice(0,180);
+    throw new Error(
+      `${context}: Sunucudan bozuk JSON yanıtı geldi (HTTP ${response.status})${preview?` · ${preview}`:""}.`
+    );
+  }
+};
+
 export default function AdminDashboardPage(){
   const [data,setData]=useState<ExecutiveResponse|null>(null);
   const [firms,setFirms]=useState<Firm[]>([]);
@@ -49,8 +74,8 @@ export default function AdminDashboardPage(){
 
   const loadFirmContext=useCallback(async()=>{
     const r=await fetch("/api/admin/dashboard/firm-context",{cache:"no-store"});
-    const j=await r.json();
-    if(!r.ok||!j.success) throw new Error(j.error||"Firma bağlamı alınamadı.");
+    const j=await readJsonResponse<{success:boolean;firms?:Firm[];activeFirmId?:string;error?:string}>(r,"Firma bağlamı");
+    if(!r.ok||!j.success) throw new Error(j.error||`Firma bağlamı alınamadı (HTTP ${r.status}).`);
     setFirms(Array.isArray(j.firms)?j.firms:[]);
     setActiveFirmId(String(j.activeFirmId||""));
     return String(j.activeFirmId||"");
@@ -61,9 +86,9 @@ export default function AdminDashboardPage(){
     try{
       const firm=firmOverride||activeFirmId||await loadFirmContext();
       if(!firm) throw new Error("Aktif firma seçilemedi.");
-      const r=await fetch(`/api/admin/dashboard/executive?period=${encodeURIComponent(period)}`,{cache:"no-store"});
-      const j:ExecutiveResponse=await r.json();
-      if(!r.ok||!j.success) throw new Error(j.error||"Dashboard verileri alınamadı.");
+      const r=await fetch(`/api/admin/dashboard/executive?period=${encodeURIComponent(period)}&firmId=${encodeURIComponent(firm)}`,{cache:"no-store"});
+      const j=await readJsonResponse<ExecutiveResponse>(r,"Dashboard API");
+      if(!r.ok||!j.success) throw new Error(j.error||`Dashboard verileri alınamadı (HTTP ${r.status}).`);
       if(j.firmId!==firm) throw new Error("Firma doğrulama hatası: Dashboard farklı firma UUID'si döndürdü.");
       setData(j);
     }catch(e){setError(e instanceof Error?e.message:"Dashboard yüklenemedi.");}
@@ -77,8 +102,8 @@ export default function AdminDashboardPage(){
     setSwitching(true);setError("");
     try{
       const r=await fetch("/api/admin/dashboard/firm-context",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({firmId:nextFirmId})});
-      const j=await r.json();
-      if(!r.ok||!j.success)throw new Error(j.error||"Firma değiştirilemedi.");
+      const j=await readJsonResponse<{success:boolean;activeFirmId?:string;error?:string}>(r,"Firma değiştirme");
+      if(!r.ok||!j.success)throw new Error(j.error||`Firma değiştirilemedi (HTTP ${r.status}).`);
       setActiveFirmId(nextFirmId);
       await load(nextFirmId);
     }catch(e){setError(e instanceof Error?e.message:"Firma değiştirilemedi.");}
