@@ -71,54 +71,59 @@ export default function AdminDashboardPage(){
   const [loading,setLoading]=useState(true);
   const [switching,setSwitching]=useState(false);
   const [error,setError]=useState("");
-  const [bootstrapped,setBootstrapped]=useState(false);
 
   const loadFirmContext=useCallback(async()=>{
     const r=await fetch("/api/admin/dashboard/firm-context",{cache:"no-store"});
     const j=await readJsonResponse<{success:boolean;firms?:Firm[];activeFirmId?:string;error?:string}>(r,"Firma bağlamı");
     if(!r.ok||!j.success) throw new Error(j.error||`Firma bağlamı alınamadı (HTTP ${r.status}).`);
-    setFirms(Array.isArray(j.firms)?j.firms:[]);
-    setActiveFirmId(String(j.activeFirmId||""));
-    return String(j.activeFirmId||"");
+    const list=Array.isArray(j.firms)?j.firms:[];
+    const active=String(j.activeFirmId||"");
+    setFirms(list);
+    setActiveFirmId(active);
+    return {firms:list,activeFirmId:active};
   },[]);
 
-  const load=useCallback(async(firmOverride?:string,periodOverride?:string)=>{
+  const loadExecutive=useCallback(async(firm:string)=>{
+    if(!firm) throw new Error("Aktif firma seçilemedi.");
+    const r=await fetch(`/api/admin/dashboard/executive?period=${encodeURIComponent(period)}&firmId=${encodeURIComponent(firm)}`,{cache:"no-store"});
+    const j=await readJsonResponse<ExecutiveResponse>(r,"Dashboard API");
+    if(!r.ok||!j.success) throw new Error(j.error||`Dashboard verileri alınamadı (HTTP ${r.status}).`);
+    if(j.firmId!==firm) throw new Error("Firma doğrulama hatası: Dashboard farklı firma UUID'si döndürdü.");
+    return j;
+  },[period]);
+
+  const loadInitial=useCallback(async()=>{
     setLoading(true);setError("");
     try{
-      const firm=firmOverride||activeFirmId;
-      if(!firm) throw new Error("Aktif firma seçilemedi.");
-      const selectedPeriod=periodOverride||period;
-      const r=await fetch(`/api/admin/dashboard/executive?period=${encodeURIComponent(selectedPeriod)}&firmId=${encodeURIComponent(firm)}`,{cache:"no-store"});
-      const j=await readJsonResponse<ExecutiveResponse>(r,"Dashboard API");
-      if(!r.ok||!j.success) throw new Error(j.error||`Dashboard verileri alınamadı (HTTP ${r.status}).`);
-      if(j.firmId!==firm) throw new Error("Firma doğrulama hatası: Dashboard farklı firma UUID'si döndürdü.");
+      // Kritik performans düzeltmesi: firma bağlamı ve Executive API artık SERİ değil PARALEL çağrılır.
+      // Executive API tenant bilgisini güvenli cookie UUID'sinden okuduğu için ilk yüklemede firm-context'i beklemesi gerekmez.
+      const contextPromise=loadFirmContext();
+      const executivePromise=(async()=>{
+        const r=await fetch(`/api/admin/dashboard/executive?period=${encodeURIComponent(period)}`,{cache:"no-store"});
+        const j=await readJsonResponse<ExecutiveResponse>(r,"Dashboard API");
+        if(!r.ok||!j.success) throw new Error(j.error||`Dashboard verileri alınamadı (HTTP ${r.status}).`);
+        return j;
+      })();
+      const [context,j]=await Promise.all([contextPromise,executivePromise]);
+      if(!context.activeFirmId) throw new Error("Aktif firma seçilemedi.");
+      if(j.firmId!==context.activeFirmId) throw new Error("Firma doğrulama hatası: Dashboard farklı firma UUID'si döndürdü.");
       setData(j);
     }catch(e){setError(e instanceof Error?e.message:"Dashboard yüklenemedi.");}
     finally{setLoading(false);}
-  },[activeFirmId,period]);
+  },[loadFirmContext,period]);
+
+  const load=useCallback(async(firmOverride?:string)=>{
+    const firm=firmOverride||activeFirmId;
+    if(!firm){await loadInitial();return;}
+    setLoading(true);setError("");
+    try{setData(await loadExecutive(firm));}
+    catch(e){setError(e instanceof Error?e.message:"Dashboard yüklenemedi.");}
+    finally{setLoading(false);}
+  },[activeFirmId,loadExecutive,loadInitial]);
 
   useEffect(()=>{
-    let cancelled=false;
-    const bootstrap=async()=>{
-      setLoading(true);setError("");
-      try{
-        const firm=await loadFirmContext();
-        if(cancelled)return;
-        if(!firm) throw new Error("Aktif firma seçilemedi.");
-        await load(firm,period);
-      }catch(e){
-        if(!cancelled)setError(e instanceof Error?e.message:"Dashboard yüklenemedi.");
-      }finally{
-        if(!cancelled){setLoading(false);setBootstrapped(true);}
-      }
-    };
-    void bootstrap();
-    return()=>{cancelled=true;};
-  },[loadFirmContext]); // İlk açılışta firma bağlamı yalnızca bir kez alınır.
-
-  useEffect(()=>{
-    if(!bootstrapped||!activeFirmId)return;
-    void load(activeFirmId,period);
+    if(activeFirmId) void load(activeFirmId);
+    else void loadInitial();
   },[period]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchFirm=async(nextFirmId:string)=>{
@@ -129,7 +134,7 @@ export default function AdminDashboardPage(){
       const j=await readJsonResponse<{success:boolean;activeFirmId?:string;error?:string}>(r,"Firma değiştirme");
       if(!r.ok||!j.success)throw new Error(j.error||`Firma değiştirilemedi (HTTP ${r.status}).`);
       setActiveFirmId(nextFirmId);
-      await load(nextFirmId,period);
+      await load(nextFirmId);
     }catch(e){setError(e instanceof Error?e.message:"Firma değiştirilemedi.");}
     finally{setSwitching(false);}
   };
@@ -143,18 +148,31 @@ export default function AdminDashboardPage(){
 
   const cards=useMemo(()=>[
     {label:"Yüksek / Kabul Edilemez Risk",value:m?.risk?(m.risk.critical+m.risk.high):null,sub:m?.risk?`${m.risk.critical} kabul edilemez · ${m.risk.high} yüksek · ${m.risk.total} toplam`:"Risk kaydı yok",icon:ShieldAlert,href:"/admin/risk",tone:((m?.risk?.critical??0)+(m?.risk?.high??0))>0?"critical":"good"},
-    {label:"Açık / Geciken DÖF",value:m?.dof?Math.max(0,m.dof.total-m.dof.closed):null,sub:m?.dof?`${m.dof.overdue} termin aşımı · ${m.dof.closed}/${m.dof.total} kapalı`:"DÖF verisi alınamadı veya entegrasyon henüz doğrulanmadı",icon:Target,href:"/admin/denetimler?tab=dof&status=open#dof",tone:m?.dof?((m.dof.overdue??0)>0?"critical":"good"):"neutral"},
+    {label:"Açık / Geciken DÖF",value:m?.dof?Math.max(0,m.dof.total-m.dof.closed):0,sub:m?.dof?`${m.dof.overdue} termin aşımı · ${m.dof.closed}/${m.dof.total} kapalı`:"0 kayıt · açık DÖF bulunmuyor",icon:Target,href:"/admin/denetimler?tab=dof&status=open#dof",tone:(m?.dof?.overdue??0)>0?"critical":"good"},
     {label:"Yasal Eğitim Uyumu",value:trainingRate==null?null:`%${trainingRate}`,sub:m?.training?`${m.training.compliantEmployees}/${m.training.totalEmployees} çalışan uygun · ${m.training.hazardClass}`:"Yasal eğitim verisi yok",icon:BookOpenCheck,href:"/admin/trainings",tone:state(trainingRate)},
-    {label:"Denetim Uyumu",value:inspectionRate==null?null:`%${inspectionRate}`,sub:m?.inspection?`${m.inspection.total} kontrol maddesi · önceki döneme göre ${data?.trend?.inspection?.delta===undefined?"—":data.trend.inspection.delta>=0?`+${data.trend.inspection.delta}`:data.trend.inspection.delta}`:"Denetim verisi alınamadı veya seçili dönem için hesaplanamadı",icon:ClipboardCheck,href:"/admin/denetimler",tone:state(inspectionRate)},
+    {label:"Denetim Uyumu",value:inspectionRate==null?0:`%${inspectionRate}`,sub:m?.inspection?`${m.inspection.total} kontrol maddesi · önceki döneme göre ${data?.trend?.inspection?.delta===undefined?"—":data.trend.inspection.delta>=0?`+${data.trend.inspection.delta}`:data.trend.inspection.delta}`:"0 kayıt · seçili dönemde denetim yok",icon:ClipboardCheck,href:"/admin/denetimler",tone:state(inspectionRate)},
     {label:"Sağlık Gözetimi",value:healthRate==null?null:`%${healthRate}`,sub:m?.health?`${m.health.overdue} geçmiş · ${m.health.missing} tarih/veri eksik · ${m.health.approaching} yaklaşıyor`:"Sağlık verisi yok",icon:Stethoscope,href:"/admin/health",tone:(m?.health?.overdue??0)>0?"critical":(m?.health?.missing??0)>0?"warning":state(healthRate)},
-    {label:"Kaza / Olay",value:m?.incident?.total??null,sub:m?.incident?`${m.incident.lostTime} kayıp günlü · önceki döneme göre ${data?.trend?.incident?.delta===undefined?"—":data.trend.incident.delta>=0?`+${data.trend.incident.delta}`:data.trend.incident.delta}`:"Kaza / olay verisi alınamadı",icon:Siren,href:"/admin/accidents",tone:(m?.incident?.lostTime??0)>0?"critical":"neutral"},
+    {label:"Kaza / Olay",value:m?.incident?.total??0,sub:m?.incident?`${m.incident.lostTime} kayıp günlü · önceki döneme göre ${data?.trend?.incident?.delta===undefined?"—":data.trend.incident.delta>=0?`+${data.trend.incident.delta}`:data.trend.incident.delta}`:"0 kayıt · seçili dönemde kaza/olay yok",icon:Siren,href:"/admin/accidents",tone:(m?.incident?.lostTime??0)>0?"critical":"neutral"},
     {label:"Periyodik Kontrol",value:periodicRate==null?null:`%${periodicRate}`,sub:m?.periodic?`${m.periodic.overdue} gecikmiş · ${m.periodic.valid}/${m.periodic.total} geçerli`:"Periyodik kontrol verisi yok",icon:Wrench,href:"/admin/documentation/periodic-controls",tone:(m?.periodic?.overdue??0)>0?"warning":state(periodicRate)},
-    {label:"ÇBS / SLA",value:m?.cbs?(m.cbs.actionRequired??m.cbs.open):null,sub:m?.cbs?`${m.cbs.slaExceeded} SLA aşımı · ${m.cbs.critical} kritik · ${m.cbs.open} açık`:"ÇBS verisi alınamadı",icon:MessageSquareWarning,href:"/admin/cbs",tone:(m?.cbs?.slaExceeded??0)>0?"critical":"neutral"},
+    {label:"ÇBS / SLA",value:m?.cbs?(m.cbs.actionRequired??m.cbs.open):0,sub:m?.cbs?`${m.cbs.slaExceeded} SLA aşımı · ${m.cbs.critical} kritik · ${m.cbs.open} açık`:"0 kayıt · aksiyon gerektiren ÇBS yok",icon:MessageSquareWarning,href:"/admin/cbs",tone:(m?.cbs?.slaExceeded??0)>0?"critical":"neutral"},
   ],[m,trainingRate,inspectionRate,healthRate,periodicRate]);
 
-  if(loading&&!data)return <div className={styles.loading}><div className={styles.spinner}/><strong>D-SEC Yönetim Merkezi hazırlanıyor</strong><span>Aktif firmanın HSE verileri analiz ediliyor.</span></div>;
-  if(error&&!data)return <div className={styles.error}><AlertTriangle/><div><strong>Dashboard yüklenemedi</strong><p>{error}</p></div><button onClick={()=>void load()}><RefreshCw size={16}/>Yeniden dene</button></div>;
-  if(!data)return null;
+  if(!data){
+    return <main className={styles.page}>
+      <section className={styles.topbar}>
+        <div><div className={styles.eyebrow}><ShieldCheck size={15}/> D-SEC · EXECUTIVE HSE COMMAND CENTER</div><h1>İş Sağlığı ve Güvenliği Genel Görünümü</h1><p>Riskleri, yasal uyumu ve operasyonel öncelikleri tek yönetim ekranından izleyin.</p></div>
+        <div className={styles.topActions}>
+          <label className={styles.selectBox}><Building2 size={17}/><span><small>Aktif firma</small><select value={activeFirmId} disabled><option>{firms.find(x=>x.id===activeFirmId)?.name||"Firma bağlamı yükleniyor…"}</option></select></span><ChevronDown size={15}/></label>
+          <label className={styles.selectBox}><CalendarDays size={17}/><span><small>Operasyon dönemi</small><select value={period} onChange={e=>setPeriod(e.target.value)}>{PERIODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></span><ChevronDown size={15}/></label>
+        </div>
+      </section>
+      {error?<div className={styles.error}><AlertTriangle/><div><strong>Dashboard yüklenemedi</strong><p>{error}</p></div><button onClick={()=>void loadInitial()}><RefreshCw size={16}/>Yeniden dene</button></div>:
+      <section className={styles.loadingShell}>
+        <div className={styles.loadingBanner}><div className={styles.spinner}/><div><strong>D-SEC Yönetim Merkezi hazırlanıyor</strong><span>Dashboard açıldı; HSE göstergeleri paralel olarak hazırlanıyor.</span></div></div>
+        <div className={styles.skeletonHero}/><div className={styles.skeletonGrid}>{Array.from({length:8}).map((_,i)=><div className={styles.skeletonCard} key={i}/>)}</div>
+      </section>}
+    </main>;
+  }
 
   const score=data.performance.score;const grade=data.performance.grade;const actions=data.priorityActions||[];
   const currentFirm=firms.find(x=>x.id===activeFirmId)||{id:data.firm.id,name:data.firm.name,localFirmId:data.firm.localFirmId};
@@ -169,6 +187,7 @@ export default function AdminDashboardPage(){
       </div>
     </section>
     {error&&<div className={styles.inlineError}><AlertTriangle size={16}/>{error}</div>}
+    {loading&&<div className={styles.refreshingBar}><RefreshCw size={14} className={styles.spin}/><span>Veriler güncelleniyor; mevcut dashboard kullanılmaya devam edebilir.</span></div>}
 
     <section className={styles.hero}>
       <div className={styles.scoreBlock}><div className={styles.scoreRing} style={{"--score":score??0} as React.CSSProperties}><div><strong>{score??"—"}</strong><span>/100</span></div></div><div className={styles.scoreCopy}><span>D-SEC HSE PERFORMANCE INDEX</span><h2>{score==null?"Henüz yeterli veri yok":grade==="A"?"Güçlü HSE performansı":grade==="B"?"Kontrollü HSE performansı":grade==="C"?"Gelişim gerektiren performans":"Yönetim müdahalesi gerekli"}</h2><p>Skor yalnız doğrulanabilir firma verilerinden hesaplanır. Yasal eğitim tehlike sınıfı ve geçerlilik süresine göre; sağlık göstergesi geçerli muayene kapsamına göre değerlendirilir.</p><div className={styles.heroFirm}><Building2 size={14}/>{currentFirm.name}<span>•</span><code>{data.firmId.slice(0,8)}…</code></div></div></div>

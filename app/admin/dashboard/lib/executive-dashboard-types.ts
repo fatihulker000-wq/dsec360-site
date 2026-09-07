@@ -1,18 +1,4 @@
-export type MetricState =
-  | "good"
-  | "warning"
-  | "critical"
-  | "neutral"
-  | "no_data"
-  | "unavailable"
-  | "error";
-
-export type DataState =
-  | "available"
-  | "no_records"
-  | "insufficient"
-  | "unavailable"
-  | "error";
+export type MetricState = "good" | "warning" | "critical" | "neutral" | "no_data";
 
 export type DashboardMetric = {
   key: string;
@@ -20,24 +6,13 @@ export type DashboardMetric = {
   value: number | null;
   unit?: "%" | "adet" | "puan";
   state: MetricState;
-  dataState?: DataState;
   href: string;
   detail?: string;
 };
 
 export type ScoreInput = {
-  risk?: {
-    total: number;
-    critical: number;
-    high: number;
-  };
-
-  inspection?: {
-    total: number;
-    compliant: number;
-    partial: number;
-  };
-
+  risk?: { total: number; critical: number; high: number };
+  inspection?: { total: number; compliant: number; partial: number };
   training?: {
     totalEmployees: number;
     compliantEmployees: number;
@@ -45,19 +20,8 @@ export type ScoreInput = {
     requiredMinutes: number;
     hazardClass: string;
   };
-
-  dof?: {
-    total: number;
-    closed: number;
-    overdue: number;
-  };
-
-  incident?: {
-    total: number;
-    lostTime: number;
-    openInvestigations: number;
-  };
-
+  dof?: { total: number; closed: number; overdue: number };
+  incident?: { total: number; lostTime: number; openInvestigations: number };
   health?: {
     totalEmployees: number;
     valid: number;
@@ -66,26 +30,9 @@ export type ScoreInput = {
     missing: number;
     ek2Employees: number;
   };
-
-  periodic?: {
-    total: number;
-    valid: number;
-    overdue: number;
-  };
-
-  environment?: {
-    total: number;
-    valid: number;
-    overdue: number;
-  };
-
-  cbs?: {
-    total: number;
-    open: number;
-    critical: number;
-    slaExceeded: number;
-    actionRequired: number;
-  };
+  periodic?: { total: number; valid: number; overdue: number };
+  environment?: { total: number; valid: number; overdue: number };
+  cbs?: { total: number; open: number; critical: number; slaExceeded: number; actionRequired?: number };
 };
 
 export type ScoreComponent = {

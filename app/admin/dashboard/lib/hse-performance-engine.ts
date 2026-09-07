@@ -38,26 +38,19 @@ function incidentScore(x: ScoreInput["incident"]): number | null {
 
 function healthScore(x: ScoreInput["health"]): number | null {
   if (!x || x.totalEmployees <= 0) return null;
+  // Geçerli sağlık gözetimi oranı. Geciken ve tarih/veri eksiği zaten paydada kaldığı
+  // için ayrıca ikinci kez ceza uygulanmaz.
   return ratio(x.valid, x.totalEmployees);
 }
 
 function complianceScore(x?: { total: number; valid: number; overdue: number }): number | null {
   if (!x || x.total <= 0) return null;
-
-  /*
-   * "valid / total" oranı gecikmiş kayıtları zaten paydada başarısız olarak
-   * hesaba katar. Eski sürüm overdue değerini ikinci kez ceza olarak düşüyordu.
-   * Bu da özellikle periyodik kontrol ve ortam ölçümünde mükerrer ceza üretiyordu.
-   */
-  return ratio(x.valid, x.total);
+  const base = ratio(x.valid, x.total) ?? 0;
+  const overduePenalty = Math.min(30, (x.overdue / x.total) * 100);
+  return clamp(base - overduePenalty);
 }
 
 export function calculateHsePerformance(input: ScoreInput): HsePerformanceResult {
-  /*
-   * Toplam nominal ağırlık = %100.
-   * Veri olmayan bileşenler 0 kabul edilmez; yalnız veri bulunan bileşenlerin
-   * ağırlıkları kendi içinde normalize edilir.
-   */
   const definitions = [
     ["risk", "Risk Yönetimi", 22, riskScore(input.risk)],
     ["inspection", "Denetim", 16, inspectionScore(input.inspection)],
@@ -69,41 +62,32 @@ export function calculateHsePerformance(input: ScoreInput): HsePerformanceResult
     ["environment", "Ortam Ölçümleri", 6, complianceScore(input.environment)],
   ] as const;
 
-  const components: ScoreComponent[] = definitions.map(([key, label, weight, score]) => ({
+  const baseComponents = definitions.map(([key, label, weight, score]) => ({
     key,
     label,
     weight,
     score,
-    weightedScore: score == null ? null : Math.round(((score * weight) / 100) * 10) / 10,
-    normalizedContribution: null,
+    weightedScore: score == null ? null : (score * weight) / 100,
     available: score != null,
   }));
 
-  const available = components.filter(x => x.available);
-  const availableWeight = available.reduce((sum, x) => sum + x.weight, 0);
+  const availableWeight = baseComponents
+    .filter((x) => x.available)
+    .reduce((sum, x) => sum + x.weight, 0);
 
-  // Ağırlıkların nominal toplamı 100 olduğu için bu değer doğrudan veri kapsamıdır.
-  const coverage = clamp(availableWeight);
-
-  const rawScore =
-    availableWeight === 0
-      ? null
-      : available.reduce((sum, x) => sum + ((x.score ?? 0) * x.weight), 0) / availableWeight;
-
-  const score = rawScore == null ? null : clamp(rawScore);
-
-  /*
-   * Dashboard'da her bileşenin nihai 100 puan içindeki gerçek katkısını göster.
-   * Örnek:
-   * availableWeight = 72, bileşen score=80, weight=22
-   * katkı = 80*22/72 = 24.4 puan.
-   */
-  for (const component of components) {
-    component.normalizedContribution =
+  const components: ScoreComponent[] = baseComponents.map((component) => ({
+    ...component,
+    normalizedContribution:
       component.available && availableWeight > 0
         ? Math.round((((component.score ?? 0) * component.weight) / availableWeight) * 10) / 10
-        : null;
-  }
+        : null,
+  }));
+
+  const available = components.filter((x) => x.available);
+  const coverage = Math.round(availableWeight);
+  const score = availableWeight === 0
+    ? null
+    : clamp(available.reduce((sum, x) => sum + ((x.score ?? 0) * x.weight), 0) / availableWeight);
 
   const grade: HsePerformanceResult["grade"] =
     score == null ? "NO_DATA" :
