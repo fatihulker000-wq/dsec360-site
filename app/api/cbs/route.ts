@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
@@ -71,6 +72,8 @@ export async function POST(request:Request){
     if(companyError||!company) return Response.json({error:"Firma bulunamadı veya ÇBS bağlantısı geçersiz."},{status:404});
 
     const p=priority(message,applicationType,categoryCode);
+    const trackingCode=randomBytes(6).toString("hex").toUpperCase();
+    const trackingCodeHash=createHash("sha256").update(trackingCode).digest("hex");
     const now=new Date();
     const due=new Date(now.getTime()+slaHours(p,categoryCode)*3600000);
 
@@ -92,6 +95,7 @@ export async function POST(request:Request){
       created_at:now.toISOString(),
       updated_at:now.toISOString(),
       last_status_at:now.toISOString(),
+      tracking_code_hash:trackingCodeHash,
     };
 
     const {data,error}=await db.from("cbs_forms").insert(payload).select("*").single();
@@ -129,6 +133,7 @@ export async function POST(request:Request){
     return Response.json({
       success:true,
       reference_no:referenceNo,
+      tracking_code:trackingCode,
       data:{id:data.id,reference_no:referenceNo,status:"new",firm_id:firmId,category:CATEGORY_LABELS[categoryCode],application_type:applicationType,priority:p,sla_due_at:due.toISOString()}
     });
   }catch(e){
