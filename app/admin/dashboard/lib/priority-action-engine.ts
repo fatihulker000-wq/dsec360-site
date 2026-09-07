@@ -4,9 +4,9 @@ export function buildPriorityActions(input: ScoreInput): PriorityAction[] {
   const actions: PriorityAction[] = [];
   const add = (x: PriorityAction) => { if (x.count > 0) actions.push(x); };
 
-  add({ id:"risk-critical", severity:"critical", title:"Kritik riskler açık",
-    description:"Kritik riskler için kontroller ve aksiyonlar gecikmeden gözden geçirilmelidir.",
-    count:input.risk?.critical ?? 0, href:"/admin/risk", source:"Risk" });
+  add({ id:"risk-critical", severity:"critical", title:"Yüksek / kabul edilemez riskler açık",
+    description:"Yüksek ve kabul edilemez riskler için kontroller ve aksiyonlar gecikmeden gözden geçirilmelidir.",
+    count:(input.risk?.critical ?? 0) + (input.risk?.high ?? 0), href:"/admin/risk", source:"Risk" });
 
   add({ id:"dof-overdue", severity:"critical", title:"DÖF terminleri geçmiş",
     description:"Termin süresi geçen düzeltici/önleyici faaliyetler bulunuyor.",

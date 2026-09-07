@@ -41,6 +41,7 @@ export type ScoreComponent = {
   score: number | null;
   weight: number;
   weightedScore: number | null;
+  normalizedContribution: number | null;
   available: boolean;
 };
 
@@ -52,6 +53,7 @@ export type HsePerformanceResult = {
   availableWeight: number;
   availableComponents: number;
   totalComponents: number;
+  formula: "AVAILABLE_WEIGHT_NORMALIZED";
 };
 
 export type PriorityAction = {

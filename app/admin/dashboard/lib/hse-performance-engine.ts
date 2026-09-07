@@ -63,8 +63,12 @@ export function calculateHsePerformance(input: ScoreInput): HsePerformanceResult
   ] as const;
 
   const components: ScoreComponent[] = definitions.map(([key, label, weight, score]) => ({
-    key, label, weight, score,
+    key,
+    label,
+    weight,
+    score,
     weightedScore: score == null ? null : (score * weight) / 100,
+    normalizedContribution: null,
     available: score != null,
   }));
 
@@ -74,6 +78,16 @@ export function calculateHsePerformance(input: ScoreInput): HsePerformanceResult
   const score = availableWeight === 0
     ? null
     : clamp(available.reduce((s, x) => s + (x.score! * x.weight), 0) / availableWeight);
+
+  // Yönetici ekranında formülün şeffaf gösterilebilmesi için,
+  // mevcut bileşenlerin normalize edilmiş toplam puana katkısını da döndür.
+  // Veri olmayan bileşenler sıfır sayılmaz; mevcut ağırlıklar kendi içinde normalize edilir.
+  for (const component of components) {
+    component.normalizedContribution =
+      component.available && availableWeight > 0
+        ? Math.round((((component.score ?? 0) * component.weight) / availableWeight) * 10) / 10
+        : null;
+  }
 
   const grade: HsePerformanceResult["grade"] =
     score == null ? "NO_DATA" :
@@ -90,5 +104,6 @@ export function calculateHsePerformance(input: ScoreInput): HsePerformanceResult
     availableWeight,
     availableComponents: available.length,
     totalComponents: components.length,
+    formula: "AVAILABLE_WEIGHT_NORMALIZED",
   };
 }
