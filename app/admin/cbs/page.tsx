@@ -21,6 +21,12 @@ type CbsRecord = {
   priority?: "low" | "normal" | "high" | "critical" | string;
   sla_due_at?: string | null;
   closed_at?: string | null;
+  reference_no?: string | null;
+  application_type?: string | null;
+  privacy_mode?: "identified" | "confidential" | "anonymous" | string;
+  category_code?: string | null;
+  first_response_at?: string | null;
+  assigned_at?: string | null;
 };
 
 type FilterType = "all" | "new" | "read" | "processing" | "closed";
@@ -105,6 +111,42 @@ function getPriorityStyle(priority?: string): React.CSSProperties {
         border: "1px solid #cbd5e1",
       };
   }
+}
+
+
+function getApplicationTypeLabel(value?: string | null) {
+  switch ((value || "").toUpperCase()) {
+    case "ONERI": return "Öneri";
+    case "TALEP": return "Talep";
+    case "BILGI": return "Bilgi Bildirimi";
+    default: return "Şikâyet";
+  }
+}
+
+function getPrivacyLabel(value?: string | null) {
+  switch ((value || "").toLowerCase()) {
+    case "anonymous": return "Anonim";
+    case "confidential": return "Gizli";
+    default: return "Kimlikli";
+  }
+}
+
+function getPrivacyStyle(value?: string | null): React.CSSProperties {
+  const v=(value||"").toLowerCase();
+  if(v==="anonymous") return {background:"#f1f5f9",color:"#334155",border:"1px solid #cbd5e1"};
+  if(v==="confidential") return {background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a"};
+  return {background:"#eff6ff",color:"#1d4ed8",border:"1px solid #bfdbfe"};
+}
+
+function getFirstResponseText(created?: string | null, first?: string | null) {
+  if (!created) return "-";
+  if (!first) return "Henüz yanıt yok";
+  const a=new Date(created).getTime(), b=new Date(first).getTime();
+  if(Number.isNaN(a)||Number.isNaN(b)) return "-";
+  const mins=Math.max(0,Math.round((b-a)/60000));
+  if(mins<60) return `${mins} dk`;
+  const hours=Math.floor(mins/60), rem=mins%60;
+  return rem ? `${hours} sa ${rem} dk` : `${hours} saat`;
 }
 
 async function readSafeJson(response: Response) {
@@ -692,6 +734,27 @@ const categoryStats = useMemo(() => {
 }, [filteredRecords]);
 
   const maxCategoryValue = Math.max(...categoryStats.map((x) => x.value), 1);
+  const typeStats = useMemo(() => {
+    const map = new Map<string, number>();
+    records.forEach((item) => {
+      const key = getApplicationTypeLabel(item.application_type);
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
+  }, [records]);
+
+  const privacyStats = useMemo(() => {
+    const map = new Map<string, number>();
+    records.forEach((item) => {
+      const key = getPrivacyLabel(item.privacy_mode);
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
+  }, [records]);
+
+  const unansweredCount = records.filter(item => !item.first_response_at && item.status !== "closed").length;
+  const assignedCount = records.filter(item => !!item.assignedTo).length;
+
 
   const filterButtonStyle = (active: boolean): React.CSSProperties => ({
     border: "1px solid #e5e7eb",
@@ -788,6 +851,8 @@ const categoryStats = useMemo(() => {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
                 <StatusPill label="Kapanış Oranı" value={`%${closedRate}`} bg="#f8fafc" color="#0f172a" border="#e2e8f0" />
                 <StatusPill label="SLA Sağlıklı" value={slaSafeCount} bg="#ecfdf5" color="#166534" border="#bbf7d0" />
+                <StatusPill label="Yanıt Bekleyen" value={unansweredCount} bg="#fff7ed" color="#9a3412" border="#fed7aa" />
+                <StatusPill label="Atanmış" value={assignedCount} bg="#eff6ff" color="#1d4ed8" border="#bfdbfe" />
                 <StatusPill label="Yüksek Öncelik" value={highCount} bg="#fff7ed" color="#c2410c" border="#fed7aa" />
                 <StatusPill label="Kritik" value={criticalCount} bg="#fef2f2" color="#b91c1c" border="#fecaca" />
               </div>
@@ -850,6 +915,21 @@ const categoryStats = useMemo(() => {
           <div className="card" style={{ marginBottom: 18, borderRadius: 20, padding: 18, border: "1px solid #e5e7eb", boxShadow: "0 8px 24px rgba(15,23,42,.04)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
               <div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:12,marginBottom:16}}>
+                  <div style={{border:"1px solid #e5e7eb",borderRadius:16,padding:14,background:"#fff"}}>
+                    <div style={{fontSize:11,fontWeight:900,color:"#64748b",letterSpacing:".06em",marginBottom:9}}>BAŞVURU TÜRLERİ</div>
+                    <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                      {typeStats.map(x=><span key={x.label} style={{padding:"6px 9px",borderRadius:999,background:"#fff1f2",color:"#9f1239",fontSize:11,fontWeight:900}}>{x.label} · {x.value}</span>)}
+                    </div>
+                  </div>
+                  <div style={{border:"1px solid #e5e7eb",borderRadius:16,padding:14,background:"#fff"}}>
+                    <div style={{fontSize:11,fontWeight:900,color:"#64748b",letterSpacing:".06em",marginBottom:9}}>GİZLİLİK DAĞILIMI</div>
+                    <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                      {privacyStats.map(x=><span key={x.label} style={{padding:"6px 9px",borderRadius:999,background:"#f8fafc",color:"#334155",fontSize:11,fontWeight:900}}>{x.label} · {x.value}</span>)}
+                    </div>
+                  </div>
+                </div>
+
                 <div style={{ fontSize: 18, fontWeight: 900, color: "#111827" }}>Başvuru Yönetimi</div>
                 <div style={{ marginTop: 3, fontSize: 13, color: "#64748b" }}>{loading ? "Kayıtlar yükleniyor..." : `${countAll} kayıt görüntüleniyor`}</div>
               </div>
@@ -929,8 +1009,21 @@ const categoryStats = useMemo(() => {
                         className="card-title"
                         style={{ marginBottom: "6px" }}
                       >
-                        {item.full_name || "Adsız kayıt"}
+                        {item.privacy_mode === "anonymous"
+                          ? "Anonim Başvuru"
+                          : item.full_name || "Adsız kayıt"}
                       </h3>
+                      <div style={{display:"flex",gap:7,flexWrap:"wrap",margin:"7px 0 2px"}}>
+                        <span style={{padding:"5px 8px",borderRadius:999,background:"#111827",color:"#fff",fontSize:11,fontWeight:900}}>
+                          {item.reference_no || `#${item.id}`}
+                        </span>
+                        <span style={{padding:"5px 8px",borderRadius:999,background:"#fff1f2",color:"#9f1239",border:"1px solid #fecdd3",fontSize:11,fontWeight:900}}>
+                          {getApplicationTypeLabel(item.application_type)}
+                        </span>
+                        <span style={{...getPrivacyStyle(item.privacy_mode),padding:"5px 8px",borderRadius:999,fontSize:11,fontWeight:900}}>
+                          {getPrivacyLabel(item.privacy_mode)}
+                        </span>
+                      </div>
 
                       <div
                         style={{
@@ -940,13 +1033,17 @@ const categoryStats = useMemo(() => {
                         }}
                       >
                         <div>
-                          <strong>Email:</strong> {item.email}
+                          <strong>Email:</strong>{" "}
+                          {item.privacy_mode === "anonymous" ? "Kaydedilmedi" : (item.email || "-")}
                         </div>
                         <div>
                           <strong>Tarih:</strong> {formatDate(item.created_at)}
                         </div>
                         <div>
-                          <strong>ID:</strong> #{item.id}
+                          <strong>Kategori:</strong> {item.category || "Genel"}
+                        </div>
+                        <div>
+                          <strong>İlk Yanıt:</strong> {getFirstResponseText(item.created_at, item.first_response_at)}
                         </div>
 
                         {item.firma_adi && (
@@ -964,6 +1061,7 @@ const categoryStats = useMemo(() => {
                         {item.assignedTo && (
                           <div>
                             <strong>Atanan:</strong> {item.assignedTo}
+                            {item.assigned_at ? ` • ${formatDate(item.assigned_at)}` : ""}
                           </div>
                         )}
 
