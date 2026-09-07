@@ -106,39 +106,27 @@ type CbsRow = {
 
 async function getAdminSession():
   Promise<AdminSession | null> {
-  const cookieStore =
-    await cookies();
+  const cookieStore = await cookies();
 
   const auth = clean(
-    cookieStore.get(
-      "dsec_admin_auth"
-    )?.value ||
-      cookieStore.get(
-        "dsec_user_auth"
-      )?.value
+    cookieStore.get("dsec_admin_auth")?.value ||
+    cookieStore.get("dsec_user_auth")?.value
   );
 
   const role = clean(
-    cookieStore.get(
-      "dsec_admin_role"
-    )?.value ||
-      cookieStore.get(
-        "dsec_user_role"
-      )?.value
+    cookieStore.get("dsec_admin_role")?.value ||
+    cookieStore.get("dsec_user_role")?.value
   );
 
   const userId = clean(
-    cookieStore.get(
-      "dsec_user_id"
-    )?.value
+    cookieStore.get("dsec_user_id")?.value
   );
 
-  const companyIdFromCookie =
-    clean(
-      cookieStore.get(
-        "dsec_company_id"
-      )?.value
-    );
+  // Canonical tenant = kullanıcının o anda seçili remote firma UUID'si.
+  // users.company_id / primary firm / firma adı fallback YOK.
+  const activeCompanyId = clean(
+    cookieStore.get("dsec_company_id")?.value
+  );
 
   const allowedRoles = [
     "super_admin",
@@ -155,111 +143,59 @@ async function getAdminSession():
 
   if (role === "super_admin") {
     return {
-      userId:
-        userId || "cookie-admin",
+      userId: userId || "cookie-admin",
       role: "super_admin",
-      companyId: "",
+      companyId: activeCompanyId,
       readOnly: false,
     };
   }
 
-  if (!userId) {
-    if (!companyIdFromCookie) {
-      return null;
-    }
-
-    return {
-      userId: "cookie-user",
-      role:
-        role === "demo_user"
-          ? "demo_user"
-          : "company_admin",
-      companyId:
-        companyIdFromCookie,
-      readOnly:
-        role === "demo_user",
-    };
-  }
-
-  try {
-    const supabase =
-      getSupabase();
-
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("users")
-      .select(
-        "id, role, company_id, is_active"
-      )
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (
-      error ||
-      !data ||
-      data.is_active === false
-    ) {
-      return null;
-    }
-
-    const databaseRole =
-      clean(data.role);
-
-    if (databaseRole !== role) {
-      return null;
-    }
-
-    let companyId = clean(
-      data.company_id
-    );
-
-    if (!companyId) {
-      const {
-        data: primaryAccess,
-      } = await supabase
-        .from(
-          "user_firm_access"
-        )
-        .select("firm_id")
-        .eq("user_id", userId)
-        .eq("is_primary", true)
-        .limit(1)
-        .maybeSingle();
-
-      companyId = clean(
-        primaryAccess?.firm_id
-      );
-    }
-
-    if (!companyId) {
-      companyId =
-        companyIdFromCookie;
-    }
-
-    if (!companyId) {
-      return null;
-    }
-
-    return {
-      userId: clean(data.id),
-      role:
-        role === "demo_user"
-          ? "demo_user"
-          : "company_admin",
-      companyId,
-      readOnly:
-        role === "demo_user",
-    };
-  } catch (error) {
-    console.error(
-      "getAdminSession hata:",
-      error
-    );
-
+  if (!activeCompanyId) {
     return null;
   }
+
+  // Remote company UUID zorunlu.
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  if (!uuidRegex.test(activeCompanyId)) {
+    return null;
+  }
+
+  // Kullanıcı kimliği varsa rol/aktiflik doğrulamasını koru.
+  if (userId) {
+    try {
+      const supabase = getSupabase();
+
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, role, is_active")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (
+        error ||
+        !data ||
+        data.is_active === false ||
+        clean(data.role) !== role
+      ) {
+        return null;
+      }
+    } catch (error) {
+      console.error("getAdminSession hata:", error);
+      return null;
+    }
+  }
+
+  return {
+    userId: userId || "cookie-user",
+    role:
+      role === "demo_user"
+        ? "demo_user"
+        : "company_admin",
+    companyId: activeCompanyId,
+    readOnly: role === "demo_user",
+  };
 }
 
 function unauthorized() {
@@ -424,6 +360,39 @@ function findSuggestedCompany(
   };
 }
 
+
+function getVisibleIdentity(
+  item: CbsRow,
+  role: AdminSession["role"]
+) {
+  const privacyMode = clean(
+    item.privacy_mode || "identified"
+  ).toLowerCase();
+
+  if (privacyMode === "anonymous") {
+    return {
+      fullName: "Anonim Başvuru",
+      email: "",
+    };
+  }
+
+  if (
+    privacyMode === "confidential" &&
+    role !== "super_admin"
+  ) {
+    return {
+      fullName: "Gizli Başvuru",
+      email: "••••••••",
+    };
+  }
+
+  return {
+    fullName: item.full_name || "",
+    email: item.email || "",
+  };
+}
+
+
 /* =========================
    GET
 ========================= */
@@ -450,6 +419,22 @@ export async function GET(
         "firmId"
       )
     );
+
+    if (
+      session.role !== "super_admin" &&
+      firmIdParam &&
+      firmIdParam !== "all" &&
+      firmIdParam !== session.companyId
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Aktif firma ile istenen firma uyuşmuyor.",
+        },
+        { status: 403 }
+      );
+    }
 
     let query = supabase
       .from("cbs_forms")
@@ -538,6 +523,12 @@ export async function GET(
     const formatted = (
       (data || []) as CbsRow[]
     ).map((item) => {
+      const visibleIdentity =
+        getVisibleIdentity(
+          item,
+          session.role
+        );
+
       const directFirmId =
         clean(item.firm_id) ||
         null;
@@ -554,9 +545,9 @@ export async function GET(
       return {
         id: item.id,
         full_name:
-          item.full_name || "",
+          visibleIdentity.fullName,
         email:
-          item.email || "",
+          visibleIdentity.email,
         message:
           item.message || "",
         created_at:
@@ -731,7 +722,8 @@ export async function PATCH(
       await supabase
         .from("cbs_forms")
         .update(updatePayload)
-        .eq("id", id);
+        .eq("id", id)
+        .eq("firm_id", record.firm_id);
 
     if (error) {
       return NextResponse.json(
@@ -891,15 +883,12 @@ export async function PUT(
 
       if (
         session.role !==
-          "super_admin" &&
-        firmId &&
-        firmId !==
-          session.companyId
+        "super_admin"
       ) {
         return NextResponse.json(
           {
             error:
-              "Sadece kendi firmanı bağlayabilirsin.",
+              "Firma değişikliği yalnızca Super Admin tarafından yapılabilir.",
           },
           { status: 403 }
         );
@@ -941,7 +930,8 @@ export async function PUT(
       await supabase
         .from("cbs_forms")
         .update(updatePayload)
-        .eq("id", id);
+        .eq("id", id)
+        .eq("firm_id", record.firm_id);
 
     if (error) {
       return NextResponse.json(
@@ -1029,7 +1019,8 @@ export async function DELETE(
       await supabase
         .from("cbs_forms")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("firm_id", record.firm_id);
 
     if (error) {
       return NextResponse.json(
