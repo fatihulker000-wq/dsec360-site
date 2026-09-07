@@ -1,388 +1,138 @@
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
-function getSupabase() {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+export const dynamic = "force-dynamic";
 
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error("Supabase yapılandırması eksik.");
-  }
+const APPLICATION_TYPES = new Set(["SIKAYET", "ONERI", "TALEP", "BILGI"]);
+const CATEGORY_CODES = new Set([
+  "ISG","CALISMA_KOSULLARI","INSAN_KAYNAKLARI","CEVRE",
+  "TESIS_TEKNIK","YEMEKHANE","SERVIS_ULASIM","DIGER"
+]);
+const PRIVACY_MODES = new Set(["identified","confidential","anonymous"]);
 
-  return createClient(supabaseUrl, supabaseServiceRoleKey);
+const CATEGORY_LABELS: Record<string,string> = {
+  ISG:"İSG", CALISMA_KOSULLARI:"Çalışma Koşulları",
+  INSAN_KAYNAKLARI:"İnsan Kaynakları", CEVRE:"Çevre",
+  TESIS_TEKNIK:"Tesis / Teknik", YEMEKHANE:"Yemekhane",
+  SERVIS_ULASIM:"Servis / Ulaşım", DIGER:"Diğer"
+};
+
+function supabase() {
+  const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!key) throw new Error("Supabase yapılandırması eksik.");
+  return createClient(url,key);
 }
-
-function getResend() {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return null;
-  return new Resend(apiKey);
-}
-
-function detectCategory(message: string) {
-  const lowerMsg = message.toLowerCase();
-
-  if (lowerMsg.includes("maaş") || lowerMsg.includes("ücret")) {
-    return "İK";
-  }
-
-  if (
-    lowerMsg.includes("iş güvenliği") ||
-    lowerMsg.includes("kaza") ||
-    lowerMsg.includes("ramak kala") ||
-    lowerMsg.includes("yangın")
-  ) {
-    return "İSG";
-  }
-
-  if (lowerMsg.includes("öneri")) {
-    return "Öneri";
-  }
-
-  if (lowerMsg.includes("şikayet")) {
-    return "Şikayet";
-  }
-
-  if (lowerMsg.includes("risk") || lowerMsg.includes("tehlike")) {
-    return "Risk";
-  }
-
-  return "Genel";
-}
-
-function detectPriority(message: string) {
-  const text = message.toLowerCase();
-
-  if (
-    text.includes("ölüm") ||
-    text.includes("yaralanma") ||
-    text.includes("yangın") ||
-    text.includes("patlama") ||
-    text.includes("kaza")
-  ) {
-    return "critical";
-  }
-
-  if (
-    text.includes("risk") ||
-    text.includes("tehlike") ||
-    text.includes("acil") ||
-    text.includes("iş güvenliği")
-  ) {
-    return "high";
-  }
-
-  if (text.includes("öneri")) {
-    return "low";
-  }
-
+function resend(){ const k=process.env.RESEND_API_KEY; return k?new Resend(k):null; }
+function clean(v:unknown,max:number){ return String(v??"").replace(/\s+/g," ").trim().slice(0,max); }
+function email(v:unknown){ return String(v??"").trim().toLowerCase().slice(0,180); }
+function uuid(v:unknown){ const s=String(v??"").trim(); return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)?s:null; }
+function esc(v:unknown){ return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;"); }
+function priority(message:string, type:string, category:string){
+  const t=message.toLocaleLowerCase("tr-TR");
+  if(["ölüm","yaralanma","yangın","patlama","ciddi kaza"].some(x=>t.includes(x))) return "critical";
+  if(category==="ISG" && ["acil","risk","tehlike","ramak kala"].some(x=>t.includes(x))) return "high";
+  if(type==="ONERI") return "low";
   return "normal";
 }
-
-function resolveSlaHours(category: string, priority: string) {
-  if (priority === "critical") return 4;
-  if (priority === "high") return 8;
-
-  if (category === "İSG") return 8;
-  if (category === "Risk") return 8;
-  if (category === "Öneri") return 48;
-
-  return 24;
+function slaHours(p:string,category:string){
+  if(p==="critical") return 4;
+  if(p==="high") return 8;
+  if(category==="ISG") return 8;
+  return p==="low"?48:24;
 }
 
-function escapeHtml(value: string) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+export async function POST(request:Request){
+  try{
+    const body=await request.json();
+    const url=new URL(request.url);
 
-function normalizeFirmId(value: unknown): string | null {
-  const v = String(value || "").trim();
-  return v || null;
-}
+    // Canonical tenant: yalnızca gerçek remote company UUID.
+    const firmId=uuid(body?.firm_id) || uuid(url.searchParams.get("firm"));
+    if(!firmId) return Response.json({error:"Geçerli firma bağlantısı bulunamadı. Başvuruyu firmanıza ait ÇBS bağlantısından açın."},{status:400});
 
-function normalizeText(value: unknown): string {
-  return String(value || "").trim();
-}
+    const applicationType=String(body?.application_type||"SIKAYET").trim().toUpperCase();
+    const categoryCode=String(body?.category||"DIGER").trim().toUpperCase();
+    const privacyMode=String(body?.privacy_mode||"identified").trim().toLowerCase();
+    if(!APPLICATION_TYPES.has(applicationType)) return Response.json({error:"Geçersiz başvuru türü."},{status:400});
+    if(!CATEGORY_CODES.has(categoryCode)) return Response.json({error:"Geçersiz konu kategorisi."},{status:400});
+    if(!PRIVACY_MODES.has(privacyMode)) return Response.json({error:"Geçersiz gizlilik seçimi."},{status:400});
 
-function normalizeKey(value: string) {
-  return value
-    .toLocaleLowerCase("tr-TR")
-    .replace(/ı/g, "i")
-    .replace(/ğ/g, "g")
-    .replace(/ü/g, "u")
-    .replace(/ş/g, "s")
-    .replace(/ö/g, "o")
-    .replace(/ç/g, "c")
-    .trim();
-}
+    const isAnonymous=privacyMode==="anonymous";
+    const fullName=isAnonymous?"Anonim Başvuru":clean(body?.full_name,120);
+    const mail=isAnonymous?"":email(body?.email);
+    const message=clean(body?.message,5000);
 
-function normalizeFirmName(value: string) {
-  return normalizeKey(value)
-    .replace(/\s+/g, " ")
-    .replace(/a\.s\./g, "as")
-    .replace(/a\.ş\./g, "as")
-    .replace(/anonim sirketi/g, "")
-    .replace(/limited sirketi/g, "")
-    .replace(/ltd\.sti\./g, "")
-    .replace(/ltd/g, "")
-    .replace(/sti/g, "")
-    .trim();
-}
+    if(!message || message.length<10) return Response.json({error:"Başvuru açıklaması en az 10 karakter olmalıdır."},{status:400});
+    if(!isAnonymous && fullName.length<2) return Response.json({error:"Ad Soyad zorunludur."},{status:400});
+    if(!isAnonymous && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return Response.json({error:"Geçerli e-posta adresi girin."},{status:400});
 
-function detectSourceType(value: unknown) {
-  const raw = String(value || "").trim().toUpperCase();
+    const db=supabase();
+    const {data:company,error:companyError}=await db.from("companies").select("id,name").eq("id",firmId).maybeSingle();
+    if(companyError||!company) return Response.json({error:"Firma bulunamadı veya ÇBS bağlantısı geçersiz."},{status:404});
 
-  if (raw === "APP") return "APP";
-  return "WEB";
-}
+    const p=priority(message,applicationType,categoryCode);
+    const now=new Date();
+    const due=new Date(now.getTime()+slaHours(p,categoryCode)*3600000);
 
-async function resolveCompanyIdByName(
-  supabase: ReturnType<typeof getSupabase>,
-  firmaAdi: string
-): Promise<string | null> {
-  const normalizedTarget = normalizeFirmName(firmaAdi);
-  if (!normalizedTarget) return null;
-
-  const { data, error } = await supabase
-    .from("companies")
-    .select("id, name")
-    .limit(500);
-
-  if (error || !data?.length) {
-    return null;
-  }
-
-  const exact = data.find((item) => {
-    return normalizeFirmName(String(item.name || "")) === normalizedTarget;
-  });
-
-  if (exact?.id) {
-    return String(exact.id);
-  }
-
-  const includes = data.find((item) => {
-    const dbName = normalizeFirmName(String(item.name || ""));
-    return dbName.includes(normalizedTarget) || normalizedTarget.includes(dbName);
-  });
-
-  if (includes?.id) {
-    return String(includes.id);
-  }
-
-  return null;
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-
-    const full_name = normalizeText(body?.full_name);
-    const email = normalizeText(body?.email);
-    const firma_adi = normalizeText(body?.firma_adi);
-    const message = normalizeText(body?.message);
-
-    if (!full_name || !email || !firma_adi || !message) {
-      return Response.json(
-        { error: "Tüm alanlar zorunludur." },
-        { status: 400 }
-      );
-    }
-
-    const cleanFullName = full_name;
-    const cleanEmail = email;
-    const cleanFirmaAdi = firma_adi;
-    const cleanMessage = message;
-
-    const url = new URL(request.url);
-
-    const rawFirmId =
-      normalizeFirmId(body?.firm_id) ??
-      normalizeFirmId(url.searchParams.get("firm"));
-
-    const source_type =
-      body?.source_type != null
-        ? detectSourceType(body.source_type)
-        : rawFirmId
-        ? "APP"
-        : "WEB";
-
-    const supabase = getSupabase();
-
-    const resolvedFirmId =
-      rawFirmId || (await resolveCompanyIdByName(supabase, cleanFirmaAdi));
-
-    const category = detectCategory(cleanMessage);
-    const priority = detectPriority(cleanMessage);
-
-    const now = new Date();
-    const slaHours = resolveSlaHours(category, priority);
-    const slaDue = new Date(now.getTime() + slaHours * 60 * 60 * 1000);
-
-    const insertPayload = {
-      full_name: cleanFullName,
-      email: cleanEmail,
-      firma_adi: cleanFirmaAdi,
-      message: cleanMessage,
-      firm_id: resolvedFirmId,
-      status: "new",
-      category: resolvedFirmId ? category : "Firma Eşleşmesi Bekliyor",
-      priority,
-      sla_due_at: slaDue.toISOString(),
-      source_type,
-      mail_sent_count: 0,
-      created_at: now.toISOString(),
-      updated_at: now.toISOString(),
+    const payload={
+      full_name:fullName,
+      email:mail||null,
+      firma_adi:String(company.name||"").trim(),
+      message,
+      firm_id:firmId,
+      status:"new",
+      category:CATEGORY_LABELS[categoryCode]||"Diğer",
+      category_code:categoryCode,
+      application_type:applicationType,
+      privacy_mode:privacyMode,
+      priority:p,
+      sla_due_at:due.toISOString(),
+      source_type:"WEB",
+      mail_sent_count:0,
+      created_at:now.toISOString(),
+      updated_at:now.toISOString(),
+      last_status_at:now.toISOString(),
     };
 
-    const { data, error } = await supabase
-      .from("cbs_forms")
-      .insert([insertPayload])
-      .select("*")
-      .single();
-
-    if (error || !data) {
-      console.error("CBS kayıt hatası:", error);
-      return Response.json(
-        { error: "Kayıt oluşturulamadı." },
-        { status: 500 }
-      );
+    const {data,error}=await db.from("cbs_forms").insert(payload).select("*").single();
+    if(error||!data){
+      console.error("CBS insert:",error);
+      return Response.json({error:"Başvuru kaydedilemedi."},{status:500});
     }
 
-    const resend = getResend();
-    const notifyEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
-    const fromEmail =
-      process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-
-    let sentCount =
-      typeof data.mail_sent_count === "number" ? data.mail_sent_count : 0;
-
-    if (resend && notifyEmail) {
-      try {
-        await resend.emails.send({
-          from: fromEmail,
-          to: [notifyEmail],
-          subject: `🚨 Yeni ÇBS Başvurusu #${data.id}`,
-          html: `
-            <h2>D-SEC Yeni ÇBS Başvurusu</h2>
-            <p><strong>ID:</strong> #${data.id}</p>
-            <p><strong>Kategori:</strong> ${escapeHtml(data.category || "-")}</p>
-            <p><strong>Öncelik:</strong> ${escapeHtml(data.priority || "-")}</p>
-            <p><strong>Kaynak:</strong> ${escapeHtml(data.source_type || "-")}</p>
-            <p><strong>Firma / Kurum:</strong> ${escapeHtml(String(data.firma_adi || "-"))}</p>
-            <p><strong>Firma ID:</strong> ${escapeHtml(String(data.firm_id || "-"))}</p>
-            <p><strong>Ad Soyad:</strong> ${escapeHtml(data.full_name || "-")}</p>
-            <p><strong>Email:</strong> ${escapeHtml(data.email || "-")}</p>
-            <p><strong>Durum:</strong> ${escapeHtml(data.status || "-")}</p>
-            <p><strong>SLA:</strong> ${escapeHtml(data.sla_due_at || "-")}</p>
-            <hr />
-            <p><strong>Mesaj:</strong></p>
-            <p>${escapeHtml(data.message || "").replace(/\n/g, "<br/>")}</p>
-          `,
-        });
-
-        await supabase.from("cbs_mail_logs").insert({
-          cbs_form_id: data.id,
-          direction: "outbound",
-          subject: "Yeni başvuru bildirimi",
-          recipient_email: notifyEmail,
-          sender_email: fromEmail,
-          body: `Yeni ÇBS başvurusu #${data.id}`,
-          status: "sent",
-        });
-
-        sentCount += 1;
-
-        await supabase
-          .from("cbs_forms")
-          .update({
-            mail_sent_count: sentCount,
-            last_mail_sent_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", data.id);
-      } catch (mailError) {
-        console.error("CBS admin mail gönderim hatası:", mailError);
-
-        await supabase.from("cbs_mail_logs").insert({
-          cbs_form_id: data.id,
-          direction: "outbound",
-          subject: "Yeni başvuru bildirimi",
-          recipient_email: notifyEmail,
-          sender_email: fromEmail,
-          body: `Yeni ÇBS başvurusu #${data.id}`,
-          status: "failed",
-          error_message: String(mailError),
-        });
-      }
+    // Trigger sonrası reference_no görünmüyorsa güvenli fallback.
+    const referenceNo=String(data.reference_no||`CBS-${now.getFullYear()}-${String(data.id).padStart(6,"0")}`);
+    if(!data.reference_no){
+      await db.from("cbs_forms").update({reference_no:referenceNo}).eq("id",data.id);
     }
 
-    if (resend) {
-      try {
-        await resend.emails.send({
-          from: fromEmail,
-          to: [cleanEmail],
-          subject: "Başvurunuz alındı",
-          html: `
-            <h2>D-SEC Bildirim</h2>
-            <p>Sayın ${escapeHtml(cleanFullName)},</p>
-            <p>Başvurunuz başarıyla alınmıştır.</p>
-            <p>Talebiniz kayıt altına alınmış olup en kısa sürede değerlendirilecektir.</p>
-            <hr />
-            <p><strong>Başvuru No:</strong> #${data.id}</p>
-            <p><strong>Firma / Kurum:</strong> ${escapeHtml(cleanFirmaAdi)}</p>
-            <p><strong>Kategori:</strong> ${escapeHtml(String(data.category || category))}</p>
-            <p><strong>Öncelik:</strong> ${escapeHtml(priority)}</p>
-          `,
+    const mailer=resend(), from=process.env.RESEND_FROM_EMAIL||"onboarding@resend.dev";
+    const notify=process.env.ADMIN_NOTIFICATION_EMAIL;
+    if(mailer&&notify){
+      try{
+        await mailer.emails.send({
+          from,to:[notify],
+          subject:`Yeni ÇBS • ${referenceNo} • ${CATEGORY_LABELS[categoryCode]||categoryCode}`,
+          html:`<h2>D-SEC ÇBS</h2><p><strong>Başvuru:</strong> ${esc(referenceNo)}</p><p><strong>Firma:</strong> ${esc(company.name)}</p><p><strong>Tür:</strong> ${esc(applicationType)}</p><p><strong>Kategori:</strong> ${esc(CATEGORY_LABELS[categoryCode])}</p><p><strong>Öncelik:</strong> ${esc(p)}</p><hr/><p>${esc(message)}</p>`
         });
-
-        await supabase.from("cbs_mail_logs").insert({
-          cbs_form_id: data.id,
-          direction: "outbound",
-          subject: "Kullanıcı bilgilendirme",
-          recipient_email: cleanEmail,
-          sender_email: fromEmail,
-          body: `Başvurunuz alındı #${data.id}`,
-          status: "sent",
+      }catch(e){ console.error("CBS admin mail:",e); }
+    }
+    if(mailer&&mail){
+      try{
+        await mailer.emails.send({
+          from,to:[mail],subject:`Başvurunuz alındı • ${referenceNo}`,
+          html:`<h2>Başvurunuz alındı</h2><p>Başvuru numaranız: <strong>${esc(referenceNo)}</strong></p><p>Durum: Yeni</p>`
         });
-
-        sentCount += 1;
-
-        await supabase
-          .from("cbs_forms")
-          .update({
-            mail_sent_count: sentCount,
-            last_mail_sent_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", data.id);
-      } catch (mailError) {
-        console.error("Kullanıcı mail hatası:", mailError);
-
-        await supabase.from("cbs_mail_logs").insert({
-          cbs_form_id: data.id,
-          direction: "outbound",
-          subject: "Kullanıcı bilgilendirme",
-          recipient_email: cleanEmail,
-          sender_email: fromEmail,
-          body: `Başvurunuz alındı #${data.id}`,
-          status: "failed",
-          error_message: String(mailError),
-        });
-      }
+      }catch(e){ console.error("CBS kullanıcı mail:",e); }
     }
 
     return Response.json({
-      success: true,
-      data,
+      success:true,
+      reference_no:referenceNo,
+      data:{id:data.id,reference_no:referenceNo,status:"new",firm_id:firmId,category:CATEGORY_LABELS[categoryCode],application_type:applicationType,priority:p,sla_due_at:due.toISOString()}
     });
-  } catch (error) {
-    console.error("CBS POST hata:", error);
-    return Response.json(
-      { error: "Sunucu hatası." },
-      { status: 500 }
-    );
+  }catch(e){
+    console.error("CBS POST:",e);
+    return Response.json({error:"Sunucu hatası."},{status:500});
   }
 }

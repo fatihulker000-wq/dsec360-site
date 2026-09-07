@@ -135,13 +135,13 @@ export async function POST(req: Request) {
         await resend.emails.send({
           from: fromEmail,
           to: [data.email],
-          subject: `Başvurunuz hakkında geri dönüş #${data.id}`,
+          subject: `Başvurunuz hakkında geri dönüş • ${data.reference_no || `#${data.id}`}`,
           html: `
             <h2>Başvurunuza Yanıt</h2>
             <p>Sayın ${escapeHtml(data.full_name || "Kullanıcı")},</p>
             <p>${escapeHtml(replyMessage).replace(/\n/g, "<br/>")}</p>
             <hr/>
-            <p><strong>Başvuru No:</strong> #${data.id}</p>
+            <p><strong>Başvuru No:</strong> ${escapeHtml(data.reference_no || `#${data.id}`)}</p>
           `,
         });
 
@@ -159,6 +159,8 @@ export async function POST(req: Request) {
       resolution_note: replyMessage,
       closed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      last_status_at: new Date().toISOString(),
+      first_response_at: data.first_response_at || new Date().toISOString(),
     };
 
     if (mailStatus === "sent") {

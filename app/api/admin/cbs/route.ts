@@ -96,6 +96,12 @@ type CbsRow = {
   priority: string | null;
   sla_due_at: string | null;
   closed_at: string | null;
+  reference_no?: string | null;
+  application_type?: string | null;
+  privacy_mode?: string | null;
+  category_code?: string | null;
+  first_response_at?: string | null;
+  assigned_at?: string | null;
 };
 
 async function getAdminSession():
@@ -579,6 +585,18 @@ export async function GET(
         closed_at:
           item.closed_at ||
           null,
+        reference_no:
+          item.reference_no || `CBS-${new Date(item.created_at || Date.now()).getFullYear()}-${String(item.id).padStart(6, "0")}`,
+        application_type:
+          item.application_type || "SIKAYET",
+        privacy_mode:
+          item.privacy_mode || "identified",
+        category_code:
+          item.category_code || null,
+        first_response_at:
+          item.first_response_at || null,
+        assigned_at:
+          item.assigned_at || null,
         suggestedFirmId,
         suggestedFirmName,
       };
@@ -701,6 +719,8 @@ export async function PATCH(
       status,
       updated_at:
         new Date().toISOString(),
+      last_status_at:
+        new Date().toISOString(),
       closed_at:
         status === "closed"
           ? new Date().toISOString()
@@ -816,6 +836,8 @@ export async function PUT(
       updatePayload.assigned_to =
         clean(body.assignedTo) ||
         null;
+      updatePayload.assigned_at =
+        clean(body.assignedTo) ? new Date().toISOString() : null;
     }
 
     if (
