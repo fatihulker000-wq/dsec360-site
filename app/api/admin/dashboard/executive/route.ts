@@ -8,290 +8,190 @@ import type { ScoreInput } from "@/app/admin/dashboard/lib/executive-dashboard-t
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const clean=(v:unknown)=>String(v??"").trim();
+const lower=(v:unknown)=>clean(v).toLocaleLowerCase("tr-TR");
+const validUuid=(v:unknown)=>UUID_RE.test(clean(v))?clean(v):"";
+const num=(v:unknown)=>{const n=Number(v);return Number.isFinite(n)?n:0};
+const DAY=24*60*60*1000;
 
-const clean = (v: unknown) => String(v ?? "").trim();
-const lower = (v: unknown) => clean(v).toLowerCase();
-const validUuid = (v: unknown) => {
-  const x = clean(v);
-  return UUID_RE.test(x) ? x : "";
-};
-
-function db() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Supabase yapılandırması eksik.");
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+function db(){
+  const url=process.env.SUPABASE_URL;
+  const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!key) throw new Error("Supabase yapılandırması eksik.");
+  return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
 }
 
-async function session() {
-  const c = await cookies();
-  const auth = clean(c.get("dsec_admin_auth")?.value || c.get("dsec_user_auth")?.value);
-  const role = clean(c.get("dsec_admin_role")?.value || c.get("dsec_user_role")?.value);
-  const firmId = validUuid(c.get("dsec_company_id")?.value);
-  if (auth !== "ok") return null;
-  if (!["super_admin", "company_admin", "demo_user"].includes(role)) return null;
-  if (!firmId) return null;
-  return { role, firmId };
+async function session(){
+  const c=await cookies();
+  const auth=clean(c.get("dsec_admin_auth")?.value||c.get("dsec_user_auth")?.value);
+  const role=clean(c.get("dsec_admin_role")?.value||c.get("dsec_user_role")?.value).toLowerCase();
+  const firmId=validUuid(c.get("dsec_company_id")?.value);
+  if(auth!=="ok"||!["super_admin","company_admin","demo_user"].includes(role)||!firmId) return null;
+  return {role,firmId};
 }
 
-const num = (v: unknown) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+const isClosed=(v:unknown)=>["closed","resolved","rejected","duplicate","cancelled","tamamlandi","tamamlandı","closed_ok","completed"].includes(lower(v));
+const isTrainingCompleted=(r:any)=>{
+  const s=clean(r?.status).toLocaleUpperCase("tr-TR");
+  return ["COMPLETED","TAMAMLANDI","BAŞARILI","BASARILI","PASSED"].includes(s)||Boolean(r?.completed_at)||(r?.watch_completed===true&&r?.final_exam_passed===true);
 };
-
-const isClosed = (v: unknown) =>
-  ["closed","resolved","rejected","duplicate","cancelled","tamamlandi","tamamlandı","closed_ok"]
-    .includes(lower(v));
-
-const isCompletedTraining = (r: any) => {
-  const s = lower(r?.status);
-  return s === "completed" || s === "tamamlandi" || s === "tamamlandı" ||
-    r?.final_exam_passed === true || r?.watch_completed === true && s === "completed";
-};
-
-async function safe<T>(promise: PromiseLike<{ data: T | null; error: any }>): Promise<T | null> {
-  try {
-    const r = await promise;
-    if (r.error) {
-      console.error("Executive dashboard source error:", r.error);
-      return null;
-    }
-    return r.data;
-  } catch (e) {
-    console.error("Executive dashboard source exception:", e);
-    return null;
-  }
+function completionDate(r:any){
+  const raw=r?.completed_at||r?.started_at||r?.created_at||null;
+  if(!raw) return null;
+  const d=new Date(raw); return Number.isNaN(d.getTime())?null:d;
+}
+function normalizeHazard(v:unknown){return clean(v).toLocaleUpperCase("tr-TR").replace(/\s+/g," ")}
+function trainingRule(v:unknown){
+  const h=normalizeHazard(v);
+  if(h.includes("ÇOK TEHLİKELİ")||h.includes("COK TEHLIKELI")) return {minutes:960,years:1,label:"Çok Tehlikeli"};
+  if(h.includes("AZ TEHLİKELİ")||h.includes("AZ TEHLIKELI")) return {minutes:480,years:3,label:"Az Tehlikeli"};
+  if(h.includes("TEHLİKELİ")||h.includes("TEHLIKELI")) return {minutes:720,years:2,label:"Tehlikeli"};
+  return {minutes:0,years:0,label:"Belirsiz"};
+}
+function legallyValid(row:any,years:number,now:Date){
+  if(!isTrainingCompleted(row)||years<=0) return false;
+  const d=completionDate(row); if(!d) return false;
+  const until=new Date(d); until.setFullYear(until.getFullYear()+years);
+  return until>=now;
+}
+async function safe<T>(promise:PromiseLike<{data:T|null;error:any}>):Promise<T|null>{
+  try{const r=await promise;if(r.error){console.error("Executive dashboard source error:",r.error);return null}return r.data}
+  catch(e){console.error("Executive dashboard source exception:",e);return null}
+}
+function uniqueById(rows:any[]){const m=new Map<string,any>();for(const x of rows||[]){const id=clean(x?.id);if(id)m.set(id,x)}return [...m.values()]}
+function parsePeriod(request:Request){
+  const p=new URL(request.url).searchParams.get("period")||"30d";
+  const days=p==="7d"?7:p==="90d"?90:p==="180d"?180:p==="365d"?365:30;
+  return {key:p,days,from:Date.now()-days*DAY};
 }
 
-export async function GET() {
-  try {
-    const s = await session();
-    if (!s) {
-      return NextResponse.json(
-        { success:false, error:"Aktif firma oturumu bulunamadı veya yetkisiz erişim." },
-        { status:401, headers:{ "Cache-Control":"no-store" } }
-      );
-    }
+export async function GET(request:Request){
+  try{
+    const s=await session();
+    if(!s) return NextResponse.json({success:false,error:"Aktif firma oturumu bulunamadı veya yetkisiz erişim."},{status:401,headers:{"Cache-Control":"no-store"}});
+    const supabase=db(); const firmId=s.firmId; const now=Date.now(); const nowDate=new Date(); const period=parsePeriod(request);
 
-    const supabase = db();
-    const firmId = s.firmId;
-    const now = Date.now();
+    const company=await safe<any>(supabase.from("companies").select("id,name,local_firm_id,tehlike_sinifi").eq("id",firmId).maybeSingle());
+    if(!company) return NextResponse.json({success:false,error:"Aktif firma bulunamadı."},{status:404});
+    const localFirmId=company.local_firm_id==null?"":clean(company.local_firm_id);
 
-    // Önce aktif firmaya ait çalışan/kullanıcı kimlikleri alınır.
-    const [employees, users] = await Promise.all([
-      safe<any[]>(supabase.from("employees").select("id").eq("firm_id", firmId)),
-      safe<any[]>(supabase.from("users").select("id").eq("company_id", firmId)),
+    const employeesAll=await safe<any[]>(supabase.from("employees").select("id,active").eq("firm_id",firmId));
+    const employees=(employeesAll||[]).filter(x=>x.active!==false);
+    const employeeIds=employees.map(x=>clean(x.id)).filter(Boolean);
+
+    const users=employeeIds.length?await safe<any[]>(supabase.from("users").select("id,employee_id,company_id").eq("company_id",firmId).in("employee_id",employeeIds)):[];
+    const userIds=(users||[]).map(x=>clean(x.id)).filter(Boolean);
+    const userToEmployee=new Map((users||[]).map(x=>[clean(x.id),clean(x.employee_id)]));
+
+    const denetimFirmValue=localFirmId||firmId;
+    const [matrixRisks,kinneyRisks,inspectionRuns,trainingAssignments,healthExams,healthEk2,periodic,environment,cbs,accidentsWeb,accidentsLocal]=await Promise.all([
+      safe<any[]>(supabase.from("risk_items").select("id,score,is_deleted,company_id,dof_status").eq("company_id",firmId).eq("is_deleted",false)),
+      safe<any[]>(supabase.from("fine_kinney_risks").select("id,score,is_deleted,company_id,dof_status").eq("company_id",firmId).eq("is_deleted",false)),
+      safe<any[]>(supabase.from("denetim_runs").select("id,firm_id,status,inserted_at").eq("firm_id",denetimFirmValue)),
+      userIds.length?safe<any[]>(supabase.from("training_assignments").select("id,user_id,training_id,status,watch_completed,final_exam_passed,started_at,completed_at,created_at").in("user_id",userIds)):Promise.resolve([]),
+      employeeIds.length?safe<any[]>(supabase.from("health_examinations").select("id,employee_id,exam_date,next_exam_date,is_deleted").eq("company_id",firmId).eq("is_deleted",false).in("employee_id",employeeIds)):Promise.resolve([]),
+      employeeIds.length?safe<any[]>(supabase.from("health_ek2_forms").select("id,employee_id,is_active,next_exam_date").eq("company_id",firmId).eq("is_active",true).in("employee_id",employeeIds)):Promise.resolve([]),
+      safe<any[]>(supabase.from("periodic_control_equipments").select("id,firm_id,next_due_millis,status,deleted").eq("firm_id",firmId).eq("deleted",false)),
+      safe<any[]>(supabase.from("environment_measurements").select("id,firm_id,next_due_millis,status,deleted").eq("firm_id",firmId).eq("deleted",false)),
+      safe<any[]>(supabase.from("cbs_forms").select("id,firm_id,status,priority,sla_due_at").eq("firm_id",firmId)),
+      safe<any[]>(supabase.from("accident_records").select("id,web_firm_id,firm_id,event_date,lost_work_days,is_active,is_deleted,created_at").eq("web_firm_id",firmId).or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0")),
+      localFirmId?safe<any[]>(supabase.from("accident_records").select("id,web_firm_id,firm_id,event_date,lost_work_days,is_active,is_deleted,created_at").eq("firm_id",localFirmId).or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0")):Promise.resolve([]),
     ]);
 
-    const employeeIds = (employees || []).map(x => clean(x.id)).filter(Boolean);
-    const userIds = (users || []).map(x => clean(x.id)).filter(Boolean);
+    const trainingIds=Array.from(new Set((trainingAssignments||[]).map(x=>clean(x.training_id)).filter(Boolean)));
+    const trainingDefs=trainingIds.length?await safe<any[]>(supabase.from("trainings").select("id,duration_minutes,title,type,created_at").in("id",trainingIds)):[];
+    const trainingMap=new Map((trainingDefs||[]).map(x=>[clean(x.id),x]));
 
-    const [
-      matrixRisks,
-      kinneyRisks,
-      inspectionRuns,
-      trainingAssignments,
-      healthExams,
-      accidents,
-      periodic,
-      environment,
-      cbs,
-    ] = await Promise.all([
-      safe<any[]>(supabase.from("risk_items")
-        .select("id,score,is_deleted,company_id")
-        .eq("company_id", firmId)
-        .eq("is_deleted", false)),
-      safe<any[]>(supabase.from("fine_kinney_risks")
-        .select("id,score,is_deleted,company_id")
-        .eq("company_id", firmId)
-        .eq("is_deleted", false)),
-      safe<any[]>(supabase.from("denetim_runs")
-        .select("id,firm_id,status")
-        .eq("firm_id", firmId)),
-      userIds.length
-        ? safe<any[]>(supabase.from("training_assignments")
-            .select("id,user_id,status,watch_completed,final_exam_passed")
-            .in("user_id", userIds))
-        : Promise.resolve([]),
-      employeeIds.length
-        ? safe<any[]>(supabase.from("health_examinations")
-            .select("id,employee_id,next_exam_date,is_deleted")
-            .eq("company_id", firmId)
-            .eq("is_deleted", false))
-        : Promise.resolve([]),
-      safe<any[]>(supabase.from("accident_records")
-        .select("id,firm_id,event_type,severity,lost_work_days,is_active,is_deleted")
-        .eq("firm_id", firmId)
-        .or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0")),
-      safe<any[]>(supabase.from("periodic_control_equipments")
-        .select("id,firm_id,next_due_millis,status,deleted")
-        .eq("firm_id", firmId)
-        .eq("deleted", false)),
-      safe<any[]>(supabase.from("environment_measurements")
-        .select("id,firm_id,next_due_millis,status,deleted")
-        .eq("firm_id", firmId)
-        .eq("deleted", false)),
-      safe<any[]>(supabase.from("cbs_forms")
-        .select("id,firm_id,status,priority,sla_due_at")
-        .eq("firm_id", firmId)),
-    ]);
-
-    // Denetim cevapları yalnız bu firmaya ait run ID'leri üzerinden alınır.
-    const runIds = (inspectionRuns || []).map(x => clean(x.id)).filter(Boolean);
-    const inspectionAnswers = runIds.length
-      ? await safe<any[]>(supabase.from("denetim_answers")
-          .select("id,run_id,result,dof_status,dof_due_date")
-          .in("run_id", runIds))
-      : [];
-
-    const matrixLevels = { critical:0, high:0 };
-    for (const r of matrixRisks || []) {
-      const score = num(r.score);
-      if (score >= 20) matrixLevels.critical++;
-      else if (score >= 15) matrixLevels.high++;
-    }
-    for (const r of kinneyRisks || []) {
-      const score = num(r.score);
-      if (score > 400) matrixLevels.critical++;
-      else if (score >= 200) matrixLevels.high++;
-    }
-    const riskTotal = (matrixRisks?.length || 0) + (kinneyRisks?.length || 0);
-
-    const answers = inspectionAnswers || [];
-    const suitable = answers.filter(x =>
-      ["uygun","suitable","compliant","yes","evet"].includes(lower(x.result))
-    ).length;
-    const partial = answers.filter(x =>
-      ["kismen","kısmen","partial","partially"].includes(lower(x.result))
-    ).length;
-
-    const dofRows = answers.filter(x => clean(x.dof_status));
-    const dofClosed = dofRows.filter(x => isClosed(x.dof_status)).length;
-    const dofOverdue = dofRows.filter(x => {
-      if (isClosed(x.dof_status) || !x.dof_due_date) return false;
-      const t = new Date(x.dof_due_date).getTime();
-      return Number.isFinite(t) && t < now;
-    }).length;
-
-    const trainingRows = trainingAssignments || [];
-    const completedTraining = trainingRows.filter(isCompletedTraining).length;
-
-    // Sağlık: yalnız en güncel muayene / çalışan bazında uygunluk sayılır.
-    // Hassas sağlık alanları bu endpoint'e hiç seçilmez.
-    const latestExam = new Map<string, any>();
-    for (const x of healthExams || []) {
-      const id = clean(x.employee_id);
-      if (!id) continue;
-      const old = latestExam.get(id);
-      const nt = x.next_exam_date ? new Date(x.next_exam_date).getTime() : 0;
-      const ot = old?.next_exam_date ? new Date(old.next_exam_date).getTime() : 0;
-      if (!old || nt > ot) latestExam.set(id, x);
-    }
-    let healthValid = 0, healthOverdue = 0;
-    for (const x of latestExam.values()) {
-      const due = x.next_exam_date ? new Date(x.next_exam_date).getTime() : NaN;
-      if (!Number.isFinite(due)) continue;
-      if (due < now) healthOverdue++;
-      else healthValid++;
-    }
-
-    const accidentRows = accidents || [];
-    const lostTime = accidentRows.filter(x => num(x.lost_work_days) > 0).length;
-    // Mevcut accident_records şemasında güvenilir "investigation_status" yoksa
-    // sahte açık araştırma sayısı üretilmez.
-    const openInvestigations = 0;
-
-    const summarizeDue = (rows: any[] | null) => {
-      const all = rows || [];
-      let valid = 0, overdue = 0;
-      for (const x of all) {
-        const due = num(x.next_due_millis);
-        if (due > 0) {
-          if (due < now) overdue++; else valid++;
-          continue;
-        }
-        const st = lower(x.status);
-        if (["valid","uygun","ok","gecerli","geçerli"].includes(st)) valid++;
-        else if (["overdue","expired","gecikmis","gecikmiş","suresi_gecmis","süresi geçmiş"].includes(st)) overdue++;
+    const activeRuns=(inspectionRuns||[]).filter(x=>{const t=x.inserted_at?new Date(x.inserted_at).getTime():NaN;return !Number.isFinite(t)||t>=period.from});
+    const runIds=activeRuns.map(x=>clean(x.id)).filter(Boolean);
+    let inspectionAnswers:any[]=[];
+    if(runIds.length){
+      const byRemote=await safe<any[]>(supabase.from("denetim_answers").select("id,run_id,run_remote_id,result,dof_status,dof_due_date").in("run_remote_id",runIds));
+      inspectionAnswers=byRemote||[];
+      if(inspectionAnswers.length===0){
+        inspectionAnswers=(await safe<any[]>(supabase.from("denetim_answers").select("id,run_id,run_remote_id,result,dof_status,dof_due_date").in("run_id",runIds)))||[];
       }
-      return { total:all.length, valid, overdue };
+    }
+
+    const matrixLevels={critical:0,high:0};
+    for(const r of matrixRisks||[]){const score=num(r.score);if(score>=20)matrixLevels.critical++;else if(score>=15)matrixLevels.high++}
+    for(const r of kinneyRisks||[]){const score=num(r.score);if(score>400)matrixLevels.critical++;else if(score>=200)matrixLevels.high++}
+    const riskTotal=(matrixRisks?.length||0)+(kinneyRisks?.length||0);
+
+    const answers=inspectionAnswers||[];
+    const suitable=answers.filter(x=>["uygun","suitable","compliant","yes","evet"].includes(lower(x.result))).length;
+    const partial=answers.filter(x=>["kismen","kısmen","partial","partially"].includes(lower(x.result))).length;
+    const dofRows=answers.filter(x=>clean(x.dof_status));
+    const dofClosed=dofRows.filter(x=>isClosed(x.dof_status)).length;
+    const dofOverdue=dofRows.filter(x=>{if(isClosed(x.dof_status)||!x.dof_due_date)return false;const t=new Date(x.dof_due_date).getTime();return Number.isFinite(t)&&t<now}).length;
+
+    const rule=trainingRule(company.tehlike_sinifi);
+    const employeeTrainingMinutes=new Map<string,number>();
+    if(rule.minutes>0){
+      for(const a of trainingAssignments||[]){
+        const employeeId=userToEmployee.get(clean(a.user_id)); if(!employeeId)continue;
+        const def=trainingMap.get(clean(a.training_id));
+        const enriched={...a,duration_minutes:num(def?.duration_minutes)};
+        if(!legallyValid(enriched,rule.years,nowDate))continue;
+        employeeTrainingMinutes.set(employeeId,(employeeTrainingMinutes.get(employeeId)||0)+Math.max(0,num(def?.duration_minutes)));
+      }
+    }
+    const trainingCompliant=rule.minutes>0?employeeIds.filter(id=>(employeeTrainingMinutes.get(id)||0)>=rule.minutes).length:0;
+    const trainingMissing=rule.minutes>0?Math.max(0,employeeIds.length-trainingCompliant):0;
+
+    const latestExam=new Map<string,any>();
+    for(const x of healthExams||[]){
+      const id=clean(x.employee_id);if(!id)continue;
+      const old=latestExam.get(id);
+      const nt=x.exam_date?new Date(x.exam_date).getTime():(x.next_exam_date?new Date(x.next_exam_date).getTime():0);
+      const ot=old?.exam_date?new Date(old.exam_date).getTime():(old?.next_exam_date?new Date(old.next_exam_date).getTime():0);
+      if(!old||nt>ot)latestExam.set(id,x);
+    }
+    let healthValid=0,healthOverdue=0,healthApproaching=0,healthMissing=0;
+    for(const id of employeeIds){
+      const x=latestExam.get(id);
+      if(!x||!x.next_exam_date){healthMissing++;continue}
+      const due=new Date(x.next_exam_date).getTime();
+      if(!Number.isFinite(due)){healthMissing++;continue}
+      if(due<now)healthOverdue++;
+      else{healthValid++;if(due-now<=30*DAY)healthApproaching++}
+    }
+    const ek2Employees=new Set((healthEk2||[]).map(x=>clean(x.employee_id)).filter(Boolean)).size;
+
+    const allAccidents=uniqueById([...(accidentsWeb||[]),...(accidentsLocal||[])]).filter(x=>x.is_active!==false);
+    const accidentRows=allAccidents.filter(x=>{const raw=x.event_date||x.created_at; if(!raw)return true; const t=new Date(raw).getTime(); return !Number.isFinite(t)||t>=period.from});
+    const lostTime=accidentRows.filter(x=>num(x.lost_work_days)>0).length;
+    const openInvestigations=0;
+
+    const summarizeDue=(rows:any[]|null)=>{const all=rows||[];let valid=0,overdue=0;for(const x of all){const due=num(x.next_due_millis);if(due>0){if(due<now)overdue++;else valid++;continue}const st=lower(x.status);if(["valid","uygun","ok","gecerli","geçerli"].includes(st))valid++;else if(["overdue","expired","gecikmis","gecikmiş","suresi_gecmis","süresi geçmiş"].includes(st))overdue++}return{total:all.length,valid,overdue}};
+    const periodicSummary=summarizeDue(periodic); const environmentSummary=summarizeDue(environment);
+
+    const cbsRows=cbs||[]; const cbsOpen=cbsRows.filter(x=>!isClosed(x.status)).length;
+    const cbsCritical=cbsRows.filter(x=>!isClosed(x.status)&&lower(x.priority)==="critical").length;
+    const cbsSla=cbsRows.filter(x=>{if(isClosed(x.status)||!x.sla_due_at)return false;const t=new Date(x.sla_due_at).getTime();return Number.isFinite(t)&&t<now}).length;
+
+    const scoreInput:ScoreInput={
+      risk:riskTotal>0?{total:riskTotal,critical:matrixLevels.critical,high:matrixLevels.high}:undefined,
+      inspection:answers.length>0?{total:answers.length,compliant:suitable,partial}:undefined,
+      training:employeeIds.length>0&&rule.minutes>0?{totalEmployees:employeeIds.length,compliantEmployees:trainingCompliant,nonCompliantEmployees:trainingMissing,requiredMinutes:rule.minutes,hazardClass:rule.label}:undefined,
+      dof:dofRows.length>0?{total:dofRows.length,closed:dofClosed,overdue:dofOverdue}:undefined,
+      incident:accidentRows.length>0?{total:accidentRows.length,lostTime,openInvestigations}:undefined,
+      health:employeeIds.length>0?{totalEmployees:employeeIds.length,valid:healthValid,approaching:healthApproaching,overdue:healthOverdue,missing:healthMissing,ek2Employees}:undefined,
+      periodic:periodicSummary.total>0?periodicSummary:undefined,
+      environment:environmentSummary.total>0?environmentSummary:undefined,
+      cbs:cbsRows.length>0?{total:cbsRows.length,open:cbsOpen,critical:cbsCritical,slaExceeded:cbsSla}:undefined,
     };
 
-    const periodicSummary = summarizeDue(periodic);
-    const environmentSummary = summarizeDue(environment);
-
-    const cbsRows = cbs || [];
-    const cbsOpen = cbsRows.filter(x => !isClosed(x.status)).length;
-    const cbsCritical = cbsRows.filter(x => !isClosed(x.status) && lower(x.priority) === "critical").length;
-    const cbsSla = cbsRows.filter(x => {
-      if (isClosed(x.status) || !x.sla_due_at) return false;
-      const t = new Date(x.sla_due_at).getTime();
-      return Number.isFinite(t) && t < now;
-    }).length;
-
-    const scoreInput: ScoreInput = {
-      risk: riskTotal > 0
-        ? { total:riskTotal, critical:matrixLevels.critical, high:matrixLevels.high }
-        : undefined,
-      inspection: answers.length > 0
-        ? { total:answers.length, compliant:suitable, partial }
-        : undefined,
-      training: trainingRows.length > 0
-        ? { assigned:trainingRows.length, completed:completedTraining }
-        : undefined,
-      dof: dofRows.length > 0
-        ? { total:dofRows.length, closed:dofClosed, overdue:dofOverdue }
-        : undefined,
-      incident: accidentRows.length > 0
-        ? { total:accidentRows.length, lostTime, openInvestigations }
-        : undefined,
-      health: employeeIds.length > 0 && latestExam.size > 0
-        ? { totalEmployees:employeeIds.length, valid:healthValid, overdue:healthOverdue }
-        : undefined,
-      periodic: periodicSummary.total > 0 ? periodicSummary : undefined,
-      environment: environmentSummary.total > 0 ? environmentSummary : undefined,
-      cbs: cbsRows.length > 0
-        ? { total:cbsRows.length, open:cbsOpen, critical:cbsCritical, slaExceeded:cbsSla }
-        : undefined,
-    };
-
-    const performance = calculateHsePerformance(scoreInput);
-    const priorityActions = buildPriorityActions(scoreInput);
-
+    const performance=calculateHsePerformance(scoreInput); const priorityActions=buildPriorityActions(scoreInput);
     return NextResponse.json({
-      success:true,
-      firmId,
-      generatedAt:new Date().toISOString(),
-      performance,
-      priorityActions,
-      modules:{
-        risk: scoreInput.risk ?? null,
-        inspection: scoreInput.inspection ?? null,
-        dof: scoreInput.dof ?? null,
-        training: scoreInput.training ?? null,
-        incident: scoreInput.incident ?? null,
-        health: scoreInput.health ?? null,
-        periodic: scoreInput.periodic ?? null,
-        environment: scoreInput.environment ?? null,
-        cbs: scoreInput.cbs ?? null,
-      },
-      integrity:{
-        tenant:"ACTIVE_REMOTE_UUID",
-        syntheticTrend:false,
-        syntheticRiskMatrix:false,
-        sensitiveHealthData:false,
-        doraIncluded:false,
-      },
-    }, { headers:{ "Cache-Control":"no-store" } });
-  } catch (e) {
-    console.error("Executive dashboard error:", e);
-    return NextResponse.json(
-      { success:false, error:e instanceof Error ? e.message : "Executive Dashboard oluşturulamadı." },
-      { status:500, headers:{ "Cache-Control":"no-store" } }
-    );
+      success:true,firmId,firm:{id:firmId,name:clean(company.name)||"Aktif Firma",localFirmId:company.local_firm_id??null,hazardClass:rule.label},
+      generatedAt:new Date().toISOString(),period:{key:period.key,days:period.days},performance,priorityActions,
+      modules:{risk:scoreInput.risk??null,inspection:scoreInput.inspection??null,dof:scoreInput.dof??null,training:scoreInput.training??null,incident:scoreInput.incident??null,health:scoreInput.health??null,periodic:scoreInput.periodic??null,environment:scoreInput.environment??null,cbs:scoreInput.cbs??null},
+      integrity:{tenant:"ACTIVE_REMOTE_UUID",tenantVerified:true,syntheticTrend:false,syntheticRiskMatrix:false,sensitiveHealthData:false,doraIncluded:false},
+    },{headers:{"Cache-Control":"no-store"}});
+  }catch(e){
+    console.error("Executive dashboard error:",e);
+    return NextResponse.json({success:false,error:e instanceof Error?e.message:"Executive Dashboard oluşturulamadı."},{status:500,headers:{"Cache-Control":"no-store"}});
   }
 }

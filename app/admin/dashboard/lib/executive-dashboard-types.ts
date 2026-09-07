@@ -13,10 +13,23 @@ export type DashboardMetric = {
 export type ScoreInput = {
   risk?: { total: number; critical: number; high: number };
   inspection?: { total: number; compliant: number; partial: number };
-  training?: { assigned: number; completed: number };
+  training?: {
+    totalEmployees: number;
+    compliantEmployees: number;
+    nonCompliantEmployees: number;
+    requiredMinutes: number;
+    hazardClass: string;
+  };
   dof?: { total: number; closed: number; overdue: number };
   incident?: { total: number; lostTime: number; openInvestigations: number };
-  health?: { totalEmployees: number; valid: number; overdue: number };
+  health?: {
+    totalEmployees: number;
+    valid: number;
+    approaching: number;
+    overdue: number;
+    missing: number;
+    ek2Employees: number;
+  };
   periodic?: { total: number; valid: number; overdue: number };
   environment?: { total: number; valid: number; overdue: number };
   cbs?: { total: number; open: number; critical: number; slaExceeded: number };
@@ -37,6 +50,8 @@ export type HsePerformanceResult = {
   grade: "A" | "B" | "C" | "D" | "E" | "NO_DATA";
   components: ScoreComponent[];
   availableWeight: number;
+  availableComponents: number;
+  totalComponents: number;
 };
 
 export type PriorityAction = {

@@ -19,8 +19,8 @@ function inspectionScore(x: ScoreInput["inspection"]): number | null {
 }
 
 function trainingScore(x: ScoreInput["training"]): number | null {
-  if (!x || x.assigned <= 0) return null;
-  return ratio(x.completed, x.assigned);
+  if (!x || x.totalEmployees <= 0) return null;
+  return ratio(x.compliantEmployees, x.totalEmployees);
 }
 
 function dofScore(x: ScoreInput["dof"]): number | null {
@@ -38,9 +38,9 @@ function incidentScore(x: ScoreInput["incident"]): number | null {
 
 function healthScore(x: ScoreInput["health"]): number | null {
   if (!x || x.totalEmployees <= 0) return null;
-  const base = ratio(x.valid, x.totalEmployees) ?? 0;
-  const overduePenalty = Math.min(25, (x.overdue / x.totalEmployees) * 100);
-  return clamp(base - overduePenalty);
+  // Geçerli sağlık gözetimi oranı. Geciken ve tarih/veri eksiği zaten paydada kaldığı
+  // için ayrıca ikinci kez ceza uygulanmaz.
+  return ratio(x.valid, x.totalEmployees);
 }
 
 function complianceScore(x?: { total: number; valid: number; overdue: number }): number | null {
@@ -54,7 +54,7 @@ export function calculateHsePerformance(input: ScoreInput): HsePerformanceResult
   const definitions = [
     ["risk", "Risk Yönetimi", 22, riskScore(input.risk)],
     ["inspection", "Denetim", 16, inspectionScore(input.inspection)],
-    ["training", "Eğitim", 14, trainingScore(input.training)],
+    ["training", "Yasal Eğitim", 14, trainingScore(input.training)],
     ["dof", "DÖF", 12, dofScore(input.dof)],
     ["incident", "Kaza / Olay", 12, incidentScore(input.incident)],
     ["health", "Sağlık Gözetimi", 10, healthScore(input.health)],
@@ -70,7 +70,7 @@ export function calculateHsePerformance(input: ScoreInput): HsePerformanceResult
 
   const available = components.filter(x => x.available);
   const availableWeight = available.reduce((s, x) => s + x.weight, 0);
-  const coverage = Math.round(availableWeight); // ağırlıkların toplamı 100
+  const coverage = Math.round(availableWeight);
   const score = availableWeight === 0
     ? null
     : clamp(available.reduce((s, x) => s + (x.score! * x.weight), 0) / availableWeight);
@@ -82,5 +82,13 @@ export function calculateHsePerformance(input: ScoreInput): HsePerformanceResult
     score >= 70 ? "C" :
     score >= 60 ? "D" : "E";
 
-  return { score, coverage, grade, components, availableWeight };
+  return {
+    score,
+    coverage,
+    grade,
+    components,
+    availableWeight,
+    availableComponents: available.length,
+    totalComponents: components.length,
+  };
 }
