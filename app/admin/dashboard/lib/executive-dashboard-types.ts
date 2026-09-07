@@ -11,8 +11,16 @@ export type DashboardMetric = {
 };
 
 export type ScoreInput = {
-  risk?: { total: number; critical: number; high: number };
-  inspection?: { total: number; compliant: number; partial: number };
+  risk?: {
+    total: number;
+    critical: number;
+    intolerable: number;
+    veryHigh: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  inspection?: { total: number; compliant: number; partial: number; nonCompliant: number };
   training?: {
     totalEmployees: number;
     compliantEmployees: number;
@@ -20,7 +28,18 @@ export type ScoreInput = {
     requiredMinutes: number;
     hazardClass: string;
   };
-  dof?: { total: number; closed: number; overdue: number };
+  dof?: {
+    total: number;
+    open: number;
+    closed: number;
+    overdue: number;
+    riskTotal: number;
+    riskOpen: number;
+    riskClosed: number;
+    inspectionTotal: number;
+    inspectionOpen: number;
+    inspectionClosed: number;
+  };
   incident?: { total: number; lostTime: number; openInvestigations: number };
   health?: {
     totalEmployees: number;

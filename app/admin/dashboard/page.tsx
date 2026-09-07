@@ -15,9 +15,9 @@ type ComponentScore={key:string;label:string;score:number|null;weight:number;wei
 type Action={id:string;severity:Severity;title:string;description:string;count:number;href:string;source:string};
 type Firm={id:string;name:string;localFirmId:number|null;hazardClass?:string;isPrimary?:boolean};
 type Modules={
-  risk?:{total:number;critical:number;high:number}|null;
-  inspection?:{total:number;compliant:number;partial:number}|null;
-  dof?:{total:number;closed:number;overdue:number}|null;
+  risk?:{total:number;critical:number;intolerable:number;veryHigh:number;high:number;medium:number;low:number}|null;
+  inspection?:{total:number;compliant:number;partial:number;nonCompliant:number}|null;
+  dof?:{total:number;open:number;closed:number;overdue:number;riskTotal:number;riskOpen:number;riskClosed:number;inspectionTotal:number;inspectionOpen:number;inspectionClosed:number}|null;
   training?:{totalEmployees:number;compliantEmployees:number;nonCompliantEmployees:number;requiredMinutes:number;hazardClass:string}|null;
   incident?:{total:number;lostTime:number;openInvestigations:number}|null;
   health?:{totalEmployees:number;valid:number;approaching:number;overdue:number;missing:number;ek2Employees:number}|null;
@@ -28,7 +28,7 @@ type Modules={
 type ExecutiveResponse={
   success:boolean;firmId:string;firm:{id:string;name:string;localFirmId:number|null;hazardClass:string};generatedAt:string;period:{key:string;days:number};
   performance:{score:number|null;coverage:number;grade:string;components:ComponentScore[];availableComponents:number;totalComponents:number;formula?:string};
-  priorityActions:Action[];modules:Modules;
+  priorityActions:Action[];modules:Modules;scope?:{periodBased:string[];snapshot:string[]};
   trend?:{periodDays:number;inspection:{current:number;previous:number;delta:number};incident:{current:number;previous:number;delta:number}};
   integrity:{tenantVerified:boolean;strictFirmIsolation?:boolean;syntheticTrend:boolean;syntheticRiskMatrix:boolean;sensitiveHealthData:boolean;doraIncluded:boolean};error?:string;
 };
@@ -147,8 +147,8 @@ export default function AdminDashboardPage(){
   const dofRate=m?.dof?pct(m.dof.closed,m.dof.total):null;
 
   const cards=useMemo(()=>[
-    {label:"Yüksek / Kabul Edilemez Risk",value:m?.risk?(m.risk.critical+m.risk.high):null,sub:m?.risk?`${m.risk.critical} kabul edilemez · ${m.risk.high} yüksek · ${m.risk.total} toplam`:"Risk kaydı yok",icon:ShieldAlert,href:"/admin/risk",tone:((m?.risk?.critical??0)+(m?.risk?.high??0))>0?"critical":"good"},
-    {label:"Açık / Geciken DÖF",value:m?.dof?Math.max(0,m.dof.total-m.dof.closed):0,sub:m?.dof?`${m.dof.overdue} termin aşımı · ${m.dof.closed}/${m.dof.total} kapalı`:"0 kayıt · açık DÖF bulunmuyor",icon:Target,href:"/admin/denetimler?tab=dof&status=open#dof",tone:(m?.dof?.overdue??0)>0?"critical":"good"},
+    {label:"Kritik / Yüksek Risk",value:m?.risk?(m.risk.critical+m.risk.high):null,sub:m?.risk?`${m.risk.intolerable} kabul edilemez · ${m.risk.veryHigh} çok yüksek · ${m.risk.high} yüksek · ${m.risk.total} toplam`:"Risk kaydı yok",icon:ShieldAlert,href:"/admin/risk",tone:((m?.risk?.critical??0)+(m?.risk?.high??0))>0?"critical":"good"},
+    {label:"Açık / Geciken DÖF",value:m?.dof?m.dof.open:0,sub:m?.dof?`${m.dof.overdue} termin aşımı · ${m.dof.riskOpen} risk · ${m.dof.inspectionOpen} denetim · ${m.dof.closed}/${m.dof.total} kapalı`:"0 kayıt · açık DÖF bulunmuyor",icon:Target,href:"/admin/denetimler?tab=dof&status=open#dof",tone:(m?.dof?.overdue??0)>0?"critical":"good"},
     {label:"Yasal Eğitim Uyumu",value:trainingRate==null?null:`%${trainingRate}`,sub:m?.training?`${m.training.compliantEmployees}/${m.training.totalEmployees} çalışan uygun · ${m.training.hazardClass}`:"Yasal eğitim verisi yok",icon:BookOpenCheck,href:"/admin/trainings",tone:state(trainingRate)},
     {label:"Denetim Uyumu",value:inspectionRate==null?0:`%${inspectionRate}`,sub:m?.inspection?`${m.inspection.total} kontrol maddesi · önceki döneme göre ${data?.trend?.inspection?.delta===undefined?"—":data.trend.inspection.delta>=0?`+${data.trend.inspection.delta}`:data.trend.inspection.delta}`:"0 kayıt · seçili dönemde denetim yok",icon:ClipboardCheck,href:"/admin/denetimler",tone:state(inspectionRate)},
     {label:"Sağlık Gözetimi",value:healthRate==null?null:`%${healthRate}`,sub:m?.health?`${m.health.overdue} geçmiş · ${m.health.missing} tarih/veri eksik · ${m.health.approaching} yaklaşıyor`:"Sağlık verisi yok",icon:Stethoscope,href:"/admin/health",tone:(m?.health?.overdue??0)>0?"critical":(m?.health?.missing??0)>0?"warning":state(healthRate)},
@@ -198,7 +198,7 @@ export default function AdminDashboardPage(){
       </div>
     </section>
 
-    <section><div className={styles.sectionHead}><div><span>YÖNETİM GÖSTERGELERİ</span><h2>HSE performansının anlık fotoğrafı</h2></div><small><DatabaseZap size={14}/> Firma UUID doğrulandı · {PERIODS.find(x=>x.value===period)?.label}</small></div><div className={styles.kpis}>{cards.map(c=>{const Icon=c.icon;return <Link href={c.href} key={c.label} className={`${styles.kpi} ${styles[c.tone]}`}><div className={styles.kpiTop}><span className={styles.icon}><Icon size={20}/></span><ArrowRight size={16}/></div><span>{c.label}</span><strong>{c.value??"Veri yok"}</strong><small>{c.sub}</small></Link>})}</div></section>
+    <section><div className={styles.sectionHead}><div><span>YÖNETİM GÖSTERGELERİ</span><h2>HSE performansının anlık fotoğrafı</h2></div><small><DatabaseZap size={14}/> Firma UUID doğrulandı · {PERIODS.find(x=>x.value===period)?.label} (Denetim/Kaza) · diğer KPI’lar anlık durum</small></div><div className={styles.kpis}>{cards.map(c=>{const Icon=c.icon;return <Link href={c.href} key={c.label} className={`${styles.kpi} ${styles[c.tone]}`}><div className={styles.kpiTop}><span className={styles.icon}><Icon size={20}/></span><ArrowRight size={16}/></div><span>{c.label}</span><strong>{c.value??"Veri yok"}</strong><small>{c.sub}</small></Link>})}</div></section>
 
     <section className={styles.grid}>
       <div className={styles.panel}><div className={styles.panelHead}><div><span>ÖNCELİKLİ YÖNETİM AKSİYONLARI</span><h2>Bugün müdahale gerektirenler</h2></div><Activity size={22}/></div>{actions.length===0?<div className={styles.empty}><CheckCircle2/><strong>Kritik aksiyon görünmüyor</strong><span>Mevcut verilerde öncelik motorunu tetikleyen açık konu bulunamadı.</span></div>:<div className={styles.actionList}>{actions.map((a,i)=><Link href={a.href} className={styles.action} key={a.id}><div className={`${styles.severity} ${styles[a.severity]}`}>{i+1}</div><div><div className={styles.actionTitle}><strong>{a.title}</strong><span>{a.source}</span></div><p>{a.description}</p></div><b className={styles.count}>{a.count}</b><ArrowRight size={17}/></Link>)}</div>}</div>

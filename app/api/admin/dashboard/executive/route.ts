@@ -49,6 +49,28 @@ function trainingRule(v:unknown){
   if(h.includes("TEHLİKELİ")||h.includes("TEHLIKELI")) return {minutes:720,years:2,label:"Tehlikeli"};
   return {minutes:0,years:0,label:"Belirsiz"};
 }
+function matrixLevel(score:number){if(score>=25)return "INTOLERABLE";if(score>=20)return "VERY_HIGH";if(score>=15)return "HIGH";if(score>=8)return "MEDIUM";return "LOW";}
+function fineKinneyLevel(score:number){if(score>=400)return "INTOLERABLE";if(score>=200)return "VERY_HIGH";if(score>=70)return "HIGH";if(score>=20)return "MEDIUM";return "LOW";}
+function resultRequiresDof(raw:unknown){
+  const v=clean(raw).toLocaleUpperCase("tr-TR");
+  if(["UYGUNSUZ","KISMEN","KISMEN UYGUN","KISMEN_UYGUN","KISMEN UYGUNDUR","KISMEN UYGUN DEĞİL","KISMEN UYGUN DEGIL"].includes(v))return true;
+  if(v.includes("YETERSİZ")||v.includes("YETERSIZ")||v.includes("EKSİK")||v.includes("EKSIK"))return true;
+  if(v.startsWith("SCORE:")){const n=Number(v.replace("SCORE:",""));return Number.isFinite(n)&&n<100;}
+  if(v.startsWith("ELMERI:")){const p=v.split(":");const wrong=Number(p[2]||0);return Number.isFinite(wrong)&&wrong>0;}
+  return false;
+}
+function inspectionDofStatus(x:any){
+  const s=clean(x?.dof_status||x?.dofStatus).toLocaleUpperCase("tr-TR");
+  if(["CLOSED","KAPALI","TAMAMLANDI","COMPLETED","DONE"].includes(s))return "CLOSED";
+  if(["OPEN","IN_PROGRESS","AÇIK","ACIK","DEVAM_EDIYOR","DEVAM EDİYOR"].includes(s))return "OPEN";
+  return resultRequiresDof(x?.result)?"OPEN":"NONE";
+}
+function riskDofStatus(x:any){
+  const s=clean(x?.dof_status).toLocaleUpperCase("tr-TR");
+  return ["CLOSED","KAPALI","TAMAMLANDI","COMPLETED","DONE"].includes(s)?"CLOSED":"OPEN";
+}
+function dofDueOf(x:any){return x?.dof_due_date_millis??x?.dof_due_date??x?.dof_due_at??x?.corrective_action_due_date??x?.action_due_date??x?.capa_due_date??null;}
+function toMillis(raw:any){if(raw==null||raw==="")return null;const n=Number(raw);if(Number.isFinite(n)&&n>1e11)return n;const t=new Date(raw).getTime();return Number.isFinite(t)?t:null;}
 function legallyValid(row:any,years:number,now:Date){
   if(!isTrainingCompleted(row)||years<=0) return false;
   const d=completionDate(row); if(!d) return false;
@@ -185,7 +207,7 @@ export async function GET(request:Request){
     const inspectionRuns=uniqueById([...(inspectionRunsRemote||[]),...(inspectionRunsLocal||[])]);
 
     const trainingIds: string[] = Array.from(new Set<string>(trainingAssignments.map((x: any) => clean(x.training_id)).filter((id: string) => Boolean(id))));
-    const activeRuns=(inspectionRuns||[]).filter(x=>{const t=x.inserted_at?new Date(x.inserted_at).getTime():NaN;return !Number.isFinite(t)||t>=period.from});
+    const activeRuns=(inspectionRuns||[]).filter(x=>{const t=toMillis(x.inserted_at);return t!=null&&t>=period.from&&t<=now;});
     const runIds=activeRuns.map(x=>clean(x.id)).filter(Boolean);
 
     const trainingDefsPromise=trainingIds.length
@@ -194,46 +216,48 @@ export async function GET(request:Request){
 
     const inspectionAnswersPromise=(async()=>{
       if(!runIds.length)return [] as any[];
-      const byRemote=await safe<any[]>(supabase.from("denetim_answers").select("*").in("run_remote_id",runIds));
-      if((byRemote||[]).length>0)return byRemote||[];
-      return (await safe<any[]>(supabase.from("denetim_answers").select("*").in("run_id",runIds)))||[];
+      const [byRemote,byLocal]=await Promise.all([
+        safe<any[]>(supabase.from("denetim_answers").select("*").in("run_remote_id",runIds)),
+        safe<any[]>(supabase.from("denetim_answers").select("*").in("run_id",runIds)),
+      ]);
+      return uniqueById([...(byRemote||[]),...(byLocal||[])]);
     })();
 
     const [trainingDefs,inspectionAnswers]=await Promise.all([trainingDefsPromise,inspectionAnswersPromise]);
     const trainingMap = new Map<string, any>((trainingDefs || []).map((x: any): [string, any] => [clean(x.id), x]));
 
-    // Risk modülünün kendi sınıflandırma eşikleriyle birebir aynı hesap.
-    // 5x5: 25 INTOLERABLE, 20 VERY_HIGH, 15 HIGH.
-    // Fine Kinney: >=400 INTOLERABLE, >=200 VERY_HIGH, >=70 HIGH.
-    const matrixLevels={critical:0,high:0};
-    for(const r of matrixRisks||[]){
-      const score=num(r.score);
-      if(score>=25) matrixLevels.critical++;
-      else if(score>=15) matrixLevels.high++;
-    }
-    for(const r of kinneyRisks||[]){
-      const score=num(r.score);
-      if(score>=400) matrixLevels.critical++;
-      else if(score>=70) matrixLevels.high++;
-    }
+    // RİSK: Risk modülünün KANONİK seviye sınıflandırması birebir kullanılır.
+    const riskLevels={intolerable:0,veryHigh:0,high:0,medium:0,low:0};
+    for(const row of matrixRisks||[]){const level=matrixLevel(num(row.score)||num(row.probability)*num(row.severity));(riskLevels as any)[level==="INTOLERABLE"?"intolerable":level==="VERY_HIGH"?"veryHigh":level==="HIGH"?"high":level==="MEDIUM"?"medium":"low"]++;}
+    for(const row of kinneyRisks||[]){const level=fineKinneyLevel(num(row.score)||num(row.probability_value)*num(row.frequency_value)*num(row.severity_value));(riskLevels as any)[level==="INTOLERABLE"?"intolerable":level==="VERY_HIGH"?"veryHigh":level==="HIGH"?"high":level==="MEDIUM"?"medium":"low"]++;}
     const riskTotal=(matrixRisks?.length||0)+(kinneyRisks?.length||0);
+    const riskCritical=riskLevels.intolerable+riskLevels.veryHigh;
 
+    // DENETİM: seçili operasyon dönemindeki run'ların gerçek cevapları.
     const answers=inspectionAnswers||[];
-    const suitable=answers.filter(x=>["uygun","suitable","compliant","yes","evet"].includes(lower(x.result))).length;
-    const partial=answers.filter(x=>["kismen","kısmen","partial","partially"].includes(lower(x.result))).length;
-    // DÖF alanları modüllerde tarihsel olarak farklı adlarla tutulmuş olabilir.
-    // select("*") ile gerçek kaydı alıp yalnız gerçekten var olan DÖF alanlarını normalize ediyoruz.
-    const dofStatusOf=(x:any)=>clean(x?.dof_status||x?.corrective_action_status||x?.action_status||x?.capa_status);
-    const dofDueOf=(x:any)=>x?.dof_due_date||x?.dof_due_at||x?.corrective_action_due_date||x?.action_due_date||x?.capa_due_date||null;
-    const inspectionDofRows=answers.filter(x=>dofStatusOf(x));
-    const riskDofRows=[...(matrixRisks||[]),...(kinneyRisks||[])].filter(x=>dofStatusOf(x));
-    const dofRows=[...inspectionDofRows,...riskDofRows];
-    const dofClosed=dofRows.filter(x=>isClosed(dofStatusOf(x))).length;
-    const dofOverdue=dofRows.filter(x=>{
-      const status=dofStatusOf(x); const raw=dofDueOf(x);
-      if(isClosed(status)||!raw)return false;
-      const n=Number(raw);const t=Number.isFinite(n)&&n>1e11?n:new Date(raw).getTime();
-      return Number.isFinite(t)&&t<now;
+    const suitable=answers.filter(x=>clean(x.result).toLocaleUpperCase("tr-TR")==="UYGUN").length;
+    const partial=answers.filter(x=>["KISMEN","KISMEN UYGUN","KISMEN_UYGUN"].includes(clean(x.result).toLocaleUpperCase("tr-TR"))).length;
+    const nonCompliant=answers.filter(x=>clean(x.result).toLocaleUpperCase("tr-TR")==="UYGUNSUZ").length;
+
+    // DÖF: Risk ve Denetim modüllerinin kendi kanonik mantığı ayrı ayrı hesaplanır, sonra birleştirilir.
+    // Risk modülünde her risk kaydı DÖF durumuna sahiptir: CLOSED ise kapalı, diğerleri açık.
+    const riskRows=[...(matrixRisks||[]),...(kinneyRisks||[])];
+    const riskDofTotal=riskRows.length;
+    const riskDofClosed=riskRows.filter(x=>riskDofStatus(x)==="CLOSED").length;
+    const riskDofOpen=Math.max(0,riskDofTotal-riskDofClosed);
+
+    // Denetim modülünde explicit DÖF durumu veya sonucu DÖF gerektiren maddeler kapsama girer.
+    const inspectionDofRows=answers.filter(x=>inspectionDofStatus(x)!=="NONE");
+    const inspectionDofClosed=inspectionDofRows.filter(x=>inspectionDofStatus(x)==="CLOSED").length;
+    const inspectionDofOpen=Math.max(0,inspectionDofRows.length-inspectionDofClosed);
+
+    const dofTotal=riskDofTotal+inspectionDofRows.length;
+    const dofClosed=riskDofClosed+inspectionDofClosed;
+    const dofOpen=riskDofOpen+inspectionDofOpen;
+    const dofOverdue=[...riskRows.map(x=>({row:x,status:riskDofStatus(x)})),...inspectionDofRows.map(x=>({row:x,status:inspectionDofStatus(x)}))].filter(({row,status})=>{
+      if(status==="CLOSED")return false;
+      const t=toMillis(dofDueOf(row));
+      return t!=null&&t<now;
     }).length;
 
     const rule=trainingRule(company.tehlike_sinifi);
@@ -275,7 +299,7 @@ export async function GET(request:Request){
     const ek2Employees=new Set((healthEk2||[]).map(x=>clean(x.employee_id)).filter(Boolean)).size;
 
     const allAccidents=uniqueById([...(accidentsWeb||[]),...(accidentsLocal||[])]).filter(x=>x.is_active!==false);
-    const accidentRows=allAccidents.filter(x=>{const raw=x.event_date||x.created_at; if(!raw)return true; const t=new Date(raw).getTime(); return !Number.isFinite(t)||t>=period.from});
+    const accidentRows=allAccidents.filter(x=>{const t=toMillis(x.event_date||x.created_at);return t!=null&&t>=period.from&&t<=now;});
     const lostTime=accidentRows.filter(x=>num(x.lost_work_days)>0).length;
     const openInvestigations=0;
 
@@ -293,10 +317,10 @@ export async function GET(request:Request){
     }).map(x=>clean(x.id))).size;
 
     const scoreInput:ScoreInput={
-      risk:riskTotal>0?{total:riskTotal,critical:matrixLevels.critical,high:matrixLevels.high}:undefined,
-      inspection:answers.length>0?{total:answers.length,compliant:suitable,partial}:undefined,
+      risk:riskTotal>0?{total:riskTotal,critical:riskCritical,intolerable:riskLevels.intolerable,veryHigh:riskLevels.veryHigh,high:riskLevels.high,medium:riskLevels.medium,low:riskLevels.low}:undefined,
+      inspection:answers.length>0?{total:answers.length,compliant:suitable,partial,nonCompliant}:undefined,
       training:employeeIds.length>0&&rule.minutes>0?{totalEmployees:employeeIds.length,compliantEmployees:trainingCompliant,nonCompliantEmployees:trainingMissing,requiredMinutes:rule.minutes,hazardClass:rule.label}:undefined,
-      dof:dofRows.length>0?{total:dofRows.length,closed:dofClosed,overdue:dofOverdue}:undefined,
+      dof:dofTotal>0?{total:dofTotal,open:dofOpen,closed:dofClosed,overdue:dofOverdue,riskTotal:riskDofTotal,riskOpen:riskDofOpen,riskClosed:riskDofClosed,inspectionTotal:inspectionDofRows.length,inspectionOpen:inspectionDofOpen,inspectionClosed:inspectionDofClosed}:undefined,
       incident:accidentRows.length>0?{total:accidentRows.length,lostTime,openInvestigations}:undefined,
       health:employeeIds.length>0?{totalEmployees:employeeIds.length,valid:healthValid,approaching:healthApproaching,overdue:healthOverdue,missing:healthMissing,ek2Employees}:undefined,
       periodic:periodicSummary.total>0?periodicSummary:undefined,
@@ -327,7 +351,7 @@ export async function GET(request:Request){
     const performance=calculateHsePerformance(scoreInput); const priorityActions=buildPriorityActions(scoreInput);
     return NextResponse.json({
       success:true,firmId,firm:{id:firmId,name:clean(company.name)||"Aktif Firma",localFirmId:company.local_firm_id??null,hazardClass:rule.label},
-      generatedAt:new Date().toISOString(),period:{key:period.key,days:period.days},performance,priorityActions,trend,
+      generatedAt:new Date().toISOString(),period:{key:period.key,days:period.days},scope:{periodBased:["inspection","incident"],snapshot:["risk","dof","training","health","periodic","environment","cbs"]},performance,priorityActions,trend,
       modules:{risk:scoreInput.risk??null,inspection:scoreInput.inspection??null,dof:scoreInput.dof??null,training:scoreInput.training??null,incident:scoreInput.incident??null,health:scoreInput.health??null,periodic:scoreInput.periodic??null,environment:scoreInput.environment??null,cbs:scoreInput.cbs??null},
       integrity:{tenant:"ACTIVE_REMOTE_UUID",tenantVerified:true,strictFirmIsolation:true,syntheticTrend:false,syntheticRiskMatrix:false,sensitiveHealthData:false,doraIncluded:false},
     },{headers:{"Cache-Control":"no-store"}});
