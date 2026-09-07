@@ -120,8 +120,8 @@ export async function GET(request:Request){
         any[] | null
       ]
     > = Promise.all([
-      safe<any[]>(supabase.from("risk_items").select("id,score,is_deleted,company_id,dof_status,dof_due_date").eq("company_id",firmId).eq("is_deleted",false)),
-      safe<any[]>(supabase.from("fine_kinney_risks").select("id,score,is_deleted,company_id,dof_status,dof_due_date").eq("company_id",firmId).eq("is_deleted",false)),
+      safe<any[]>(supabase.from("risk_items").select("*").eq("company_id",firmId).eq("is_deleted",false)),
+      safe<any[]>(supabase.from("fine_kinney_risks").select("*").eq("company_id",firmId).eq("is_deleted",false)),
       safe<any[]>(supabase.from("denetim_runs").select("id,firm_id,status,inserted_at").eq("firm_id",firmId)),
       localFirmId
         ? safe<any[]>(supabase.from("denetim_runs").select("id,firm_id,status,inserted_at").eq("firm_id",localFirmId))
@@ -130,7 +130,7 @@ export async function GET(request:Request){
         ? safe<any[]>(supabase.from("health_examinations").select("id,employee_id,exam_date,next_exam_date,is_deleted").eq("company_id",firmId).eq("is_deleted",false).in("employee_id",employeeIds))
         : Promise.resolve([]),
       employeeIds.length
-        ? safe<any[]>(supabase.from("health_ek2_forms").select("id,employee_id,is_active,next_exam_date").eq("company_id",firmId).eq("is_active",true).in("employee_id",employeeIds))
+        ? safe<any[]>(supabase.from("health_ek2_forms").select("id,employee_id,examination_id,form_type,status,exam_date,next_exam_date,is_active,created_at").eq("company_id",firmId).or("is_active.is.null,is_active.eq.true").in("employee_id",employeeIds))
         : Promise.resolve([]),
       safe<any[]>(supabase.from("periodic_control_equipments").select("id,firm_id,next_due_millis,status,deleted").eq("firm_id",firmId).eq("deleted",false)),
       safe<any[]>(supabase.from("environment_measurements").select("id,firm_id,next_due_millis,status,deleted").eq("firm_id",firmId).eq("deleted",false)),
@@ -194,27 +194,47 @@ export async function GET(request:Request){
 
     const inspectionAnswersPromise=(async()=>{
       if(!runIds.length)return [] as any[];
-      const byRemote=await safe<any[]>(supabase.from("denetim_answers").select("id,run_id,run_remote_id,result,dof_status,dof_due_date").in("run_remote_id",runIds));
+      const byRemote=await safe<any[]>(supabase.from("denetim_answers").select("*").in("run_remote_id",runIds));
       if((byRemote||[]).length>0)return byRemote||[];
-      return (await safe<any[]>(supabase.from("denetim_answers").select("id,run_id,run_remote_id,result,dof_status,dof_due_date").in("run_id",runIds)))||[];
+      return (await safe<any[]>(supabase.from("denetim_answers").select("*").in("run_id",runIds)))||[];
     })();
 
     const [trainingDefs,inspectionAnswers]=await Promise.all([trainingDefsPromise,inspectionAnswersPromise]);
     const trainingMap = new Map<string, any>((trainingDefs || []).map((x: any): [string, any] => [clean(x.id), x]));
 
+    // Risk modülünün kendi sınıflandırma eşikleriyle birebir aynı hesap.
+    // 5x5: 25 INTOLERABLE, 20 VERY_HIGH, 15 HIGH.
+    // Fine Kinney: >=400 INTOLERABLE, >=200 VERY_HIGH, >=70 HIGH.
     const matrixLevels={critical:0,high:0};
-    for(const r of matrixRisks||[]){const score=num(r.score);if(score>=20)matrixLevels.critical++;else if(score>=15)matrixLevels.high++}
-    for(const r of kinneyRisks||[]){const score=num(r.score);if(score>400)matrixLevels.critical++;else if(score>=200)matrixLevels.high++}
+    for(const r of matrixRisks||[]){
+      const score=num(r.score);
+      if(score>=25) matrixLevels.critical++;
+      else if(score>=15) matrixLevels.high++;
+    }
+    for(const r of kinneyRisks||[]){
+      const score=num(r.score);
+      if(score>=400) matrixLevels.critical++;
+      else if(score>=70) matrixLevels.high++;
+    }
     const riskTotal=(matrixRisks?.length||0)+(kinneyRisks?.length||0);
 
     const answers=inspectionAnswers||[];
     const suitable=answers.filter(x=>["uygun","suitable","compliant","yes","evet"].includes(lower(x.result))).length;
     const partial=answers.filter(x=>["kismen","kısmen","partial","partially"].includes(lower(x.result))).length;
-    const inspectionDofRows=answers.filter(x=>clean(x.dof_status));
-    const riskDofRows=[...(matrixRisks||[]),...(kinneyRisks||[])].filter(x=>clean(x.dof_status));
+    // DÖF alanları modüllerde tarihsel olarak farklı adlarla tutulmuş olabilir.
+    // select("*") ile gerçek kaydı alıp yalnız gerçekten var olan DÖF alanlarını normalize ediyoruz.
+    const dofStatusOf=(x:any)=>clean(x?.dof_status||x?.corrective_action_status||x?.action_status||x?.capa_status);
+    const dofDueOf=(x:any)=>x?.dof_due_date||x?.dof_due_at||x?.corrective_action_due_date||x?.action_due_date||x?.capa_due_date||null;
+    const inspectionDofRows=answers.filter(x=>dofStatusOf(x));
+    const riskDofRows=[...(matrixRisks||[]),...(kinneyRisks||[])].filter(x=>dofStatusOf(x));
     const dofRows=[...inspectionDofRows,...riskDofRows];
-    const dofClosed=dofRows.filter(x=>isClosed(x.dof_status)).length;
-    const dofOverdue=dofRows.filter(x=>{if(isClosed(x.dof_status)||!x.dof_due_date)return false;const raw=x.dof_due_date;const n=Number(raw);const t=Number.isFinite(n)&&n>1e11?n:new Date(raw).getTime();return Number.isFinite(t)&&t<now}).length;
+    const dofClosed=dofRows.filter(x=>isClosed(dofStatusOf(x))).length;
+    const dofOverdue=dofRows.filter(x=>{
+      const status=dofStatusOf(x); const raw=dofDueOf(x);
+      if(isClosed(status)||!raw)return false;
+      const n=Number(raw);const t=Number.isFinite(n)&&n>1e11?n:new Date(raw).getTime();
+      return Number.isFinite(t)&&t<now;
+    }).length;
 
     const rule=trainingRule(company.tehlike_sinifi);
     const employeeTrainingMinutes=new Map<string,number>();
@@ -230,22 +250,27 @@ export async function GET(request:Request){
     const trainingCompliant=rule.minutes>0?employeeIds.filter(id=>(employeeTrainingMinutes.get(id)||0)>=rule.minutes).length:0;
     const trainingMissing=rule.minutes>0?Math.max(0,employeeIds.length-trainingCompliant):0;
 
-    const latestExam=new Map<string,any>();
-    for(const x of healthExams||[]){
-      const id=clean(x.employee_id);if(!id)continue;
-      const old=latestExam.get(id);
-      const nt=x.exam_date?new Date(x.exam_date).getTime():(x.next_exam_date?new Date(x.next_exam_date).getTime():0);
-      const ot=old?.exam_date?new Date(old.exam_date).getTime():(old?.next_exam_date?new Date(old.next_exam_date).getTime():0);
-      if(!old||nt>ot)latestExam.set(id,x);
-    }
+    // Sağlık gözetimi: health_examinations + EK-2 tek kanonik akışta değerlendirilir.
+    // Bir çalışanın güncel EK-2 kaydı varsa dashboard bunu yok saymaz.
+    const latestHealth=new Map<string,{examAt:number;dueAt:number|null}>();
+    const putHealth=(employeeIdRaw:any,examRaw:any,dueRaw:any)=>{
+      const employeeId=clean(employeeIdRaw); if(!employeeId)return;
+      const examAt=examRaw?new Date(examRaw).getTime():0;
+      const dueAt=dueRaw?new Date(dueRaw).getTime():NaN;
+      const normalizedExam=Number.isFinite(examAt)?examAt:0;
+      const normalizedDue=Number.isFinite(dueAt)?dueAt:null;
+      const old=latestHealth.get(employeeId);
+      if(!old||normalizedExam>=old.examAt) latestHealth.set(employeeId,{examAt:normalizedExam,dueAt:normalizedDue});
+    };
+    for(const x of healthExams||[]) putHealth(x.employee_id,x.exam_date,x.next_exam_date);
+    for(const x of healthEk2||[]) putHealth(x.employee_id,x.exam_date||x.created_at,x.next_exam_date);
+
     let healthValid=0,healthOverdue=0,healthApproaching=0,healthMissing=0;
     for(const id of employeeIds){
-      const x=latestExam.get(id);
-      if(!x||!x.next_exam_date){healthMissing++;continue}
-      const due=new Date(x.next_exam_date).getTime();
-      if(!Number.isFinite(due)){healthMissing++;continue}
-      if(due<now)healthOverdue++;
-      else{healthValid++;if(due-now<=30*DAY)healthApproaching++}
+      const x=latestHealth.get(id);
+      if(!x||x.dueAt==null){healthMissing++;continue}
+      if(x.dueAt<now)healthOverdue++;
+      else{healthValid++;if(x.dueAt-now<=30*DAY)healthApproaching++}
     }
     const ek2Employees=new Set((healthEk2||[]).map(x=>clean(x.employee_id)).filter(Boolean)).size;
 
