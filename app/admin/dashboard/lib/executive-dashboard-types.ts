@@ -3,7 +3,16 @@ export type MetricState =
   | "warning"
   | "critical"
   | "neutral"
-  | "no_data";
+  | "no_data"
+  | "unavailable"
+  | "error";
+
+export type DataState =
+  | "available"
+  | "no_records"
+  | "insufficient"
+  | "unavailable"
+  | "error";
 
 export type DashboardMetric = {
   key: string;
@@ -11,6 +20,7 @@ export type DashboardMetric = {
   value: number | null;
   unit?: "%" | "adet" | "puan";
   state: MetricState;
+  dataState?: DataState;
   href: string;
   detail?: string;
 };

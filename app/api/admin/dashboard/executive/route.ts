@@ -83,51 +83,124 @@ export async function GET(request:Request){
 
     const supabase=db(); const firmId=s.firmId; const now=Date.now(); const nowDate=new Date(); const period=parsePeriod(request);
 
-    const company=await safe<any>(supabase.from("companies").select("id,name,local_firm_id,tehlike_sinifi").eq("id",firmId).maybeSingle());
-    if(!company) return NextResponse.json({success:false,error:"Aktif firma bulunamadı."},{status:404});
+    // Firma ve çalışan listesi birbirinden bağımsızdır; ilk iki DB çağrısını paralel başlat.
+    const [company,employeesAll]=await Promise.all([
+      safe<any>(supabase.from("companies").select("id,name,local_firm_id,tehlike_sinifi").eq("id",firmId).maybeSingle()),
+      safe<any[]>(supabase.from("employees").select("id,active").eq("firm_id",firmId)),
+    ]);
+    if(!company) return NextResponse.json({success:false,error:"Aktif firma bulunamadı."},{status:404,headers:{"Cache-Control":"no-store"}});
     const localFirmId=company.local_firm_id==null?"":clean(company.local_firm_id);
-
-    const employeesAll=await safe<any[]>(supabase.from("employees").select("id,active").eq("firm_id",firmId));
     const employees=(employeesAll||[]).filter(x=>x.active!==false);
     const employeeIds=employees.map(x=>clean(x.id)).filter(Boolean);
 
-    const users=employeeIds.length?await safe<any[]>(supabase.from("users").select("id,employee_id,company_id").eq("company_id",firmId).in("employee_id",employeeIds)):[];
-    const userIds=(users||[]).map(x=>clean(x.id)).filter(Boolean);
-    const userToEmployee=new Map((users||[]).map(x=>[clean(x.id),clean(x.employee_id)]));
+    // Kullanıcı eşlemesi eğitim modülüne bağımlıdır.
+    // Bağımsız HSE kaynakları bu sorguyu beklemeden paralel başlatılır.
+    const usersPromise: Promise<any[] | null> = employeeIds.length
+      ? safe<any[]>(
+          supabase
+            .from("users")
+            .select("id,employee_id,company_id")
+            .eq("company_id", firmId)
+            .in("employee_id", employeeIds)
+        )
+      : Promise.resolve([]);
 
-    const [matrixRisks,kinneyRisks,inspectionRunsRemote,inspectionRunsLocal,trainingAssignments,healthExams,healthEk2,periodic,environment,cbs,accidentsWeb,accidentsLocal]=await Promise.all([
+    const independentPromise: Promise<
+      [
+        any[] | null,
+        any[] | null,
+        any[] | null,
+        any[] | null,
+        any[] | null,
+        any[] | null,
+        any[] | null,
+        any[] | null,
+        any[] | null,
+        any[] | null,
+        any[] | null
+      ]
+    > = Promise.all([
       safe<any[]>(supabase.from("risk_items").select("id,score,is_deleted,company_id,dof_status,dof_due_date").eq("company_id",firmId).eq("is_deleted",false)),
       safe<any[]>(supabase.from("fine_kinney_risks").select("id,score,is_deleted,company_id,dof_status,dof_due_date").eq("company_id",firmId).eq("is_deleted",false)),
       safe<any[]>(supabase.from("denetim_runs").select("id,firm_id,status,inserted_at").eq("firm_id",firmId)),
-      localFirmId?safe<any[]>(supabase.from("denetim_runs").select("id,firm_id,status,inserted_at").eq("firm_id",localFirmId)):Promise.resolve([]),
-      userIds.length?safe<any[]>(supabase.from("training_assignments").select("id,user_id,training_id,status,watch_completed,final_exam_passed,started_at,completed_at,created_at").in("user_id",userIds)):Promise.resolve([]),
-      employeeIds.length?safe<any[]>(supabase.from("health_examinations").select("id,employee_id,exam_date,next_exam_date,is_deleted").eq("company_id",firmId).eq("is_deleted",false).in("employee_id",employeeIds)):Promise.resolve([]),
-      employeeIds.length?safe<any[]>(supabase.from("health_ek2_forms").select("id,employee_id,is_active,next_exam_date").eq("company_id",firmId).eq("is_active",true).in("employee_id",employeeIds)):Promise.resolve([]),
+      localFirmId
+        ? safe<any[]>(supabase.from("denetim_runs").select("id,firm_id,status,inserted_at").eq("firm_id",localFirmId))
+        : Promise.resolve([]),
+      employeeIds.length
+        ? safe<any[]>(supabase.from("health_examinations").select("id,employee_id,exam_date,next_exam_date,is_deleted").eq("company_id",firmId).eq("is_deleted",false).in("employee_id",employeeIds))
+        : Promise.resolve([]),
+      employeeIds.length
+        ? safe<any[]>(supabase.from("health_ek2_forms").select("id,employee_id,is_active,next_exam_date").eq("company_id",firmId).eq("is_active",true).in("employee_id",employeeIds))
+        : Promise.resolve([]),
       safe<any[]>(supabase.from("periodic_control_equipments").select("id,firm_id,next_due_millis,status,deleted").eq("firm_id",firmId).eq("deleted",false)),
       safe<any[]>(supabase.from("environment_measurements").select("id,firm_id,next_due_millis,status,deleted").eq("firm_id",firmId).eq("deleted",false)),
       safe<any[]>(supabase.from("cbs_forms").select("id,firm_id,status,priority,sla_due_at").eq("firm_id",firmId)),
       safe<any[]>(supabase.from("accident_records").select("id,web_firm_id,firm_id,event_date,lost_work_days,is_active,is_deleted,created_at").eq("web_firm_id",firmId).or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0")),
-      localFirmId?safe<any[]>(supabase.from("accident_records").select("id,web_firm_id,firm_id,event_date,lost_work_days,is_active,is_deleted,created_at").eq("firm_id",localFirmId).or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0")):Promise.resolve([]),
+      localFirmId
+        ? safe<any[]>(supabase.from("accident_records").select("id,web_firm_id,firm_id,event_date,lost_work_days,is_active,is_deleted,created_at").eq("firm_id",localFirmId).or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0"))
+        : Promise.resolve([]),
     ]);
+
+    const [independent, usersRaw] = await Promise.all([
+      independentPromise,
+      usersPromise,
+    ]);
+
+    const [
+      matrixRisks,
+      kinneyRisks,
+      inspectionRunsRemote,
+      inspectionRunsLocal,
+      healthExams,
+      healthEk2,
+      periodic,
+      environment,
+      cbs,
+      accidentsWeb,
+      accidentsLocal,
+    ] = independent;
+
+    const users: any[] = usersRaw ?? [];
+    const userIds: string[] = users
+      .map((x: any) => clean(x.id))
+      .filter((id: string) => Boolean(id));
+
+    const userToEmployee = new Map<string, string>(
+      users
+        .map((x: any): [string, string] => [clean(x.id), clean(x.employee_id)])
+        .filter(([userId, employeeId]: [string, string]) => Boolean(userId && employeeId))
+    );
+
+    const trainingAssignments: any[] = userIds.length
+      ? (await safe<any[]>(
+          supabase
+            .from("training_assignments")
+            .select("id,user_id,training_id,status,watch_completed,final_exam_passed,started_at,completed_at,created_at")
+            .in("user_id",userIds)
+        )) ?? []
+      : [];
 
     // Denetim kayıtları yalnız aktif firmanın remote UUID'si veya companies.local_firm_id
     // eşlemesiyle kabul edilir. Firma adı / global fallback YOK.
     const inspectionRuns=uniqueById([...(inspectionRunsRemote||[]),...(inspectionRunsLocal||[])]);
 
-    const trainingIds=Array.from(new Set((trainingAssignments||[]).map(x=>clean(x.training_id)).filter(Boolean)));
-    const trainingDefs=trainingIds.length?await safe<any[]>(supabase.from("trainings").select("id,duration_minutes,title,type,created_at").in("id",trainingIds)):[];
-    const trainingMap=new Map((trainingDefs||[]).map(x=>[clean(x.id),x]));
-
+    const trainingIds: string[] = Array.from(new Set<string>(trainingAssignments.map((x: any) => clean(x.training_id)).filter((id: string) => Boolean(id))));
     const activeRuns=(inspectionRuns||[]).filter(x=>{const t=x.inserted_at?new Date(x.inserted_at).getTime():NaN;return !Number.isFinite(t)||t>=period.from});
     const runIds=activeRuns.map(x=>clean(x.id)).filter(Boolean);
-    let inspectionAnswers:any[]=[];
-    if(runIds.length){
+
+    const trainingDefsPromise=trainingIds.length
+      ? safe<any[]>(supabase.from("trainings").select("id,duration_minutes,title,type,created_at").in("id",trainingIds))
+      : Promise.resolve<any[]>([]);
+
+    const inspectionAnswersPromise=(async()=>{
+      if(!runIds.length)return [] as any[];
       const byRemote=await safe<any[]>(supabase.from("denetim_answers").select("id,run_id,run_remote_id,result,dof_status,dof_due_date").in("run_remote_id",runIds));
-      inspectionAnswers=byRemote||[];
-      if(inspectionAnswers.length===0){
-        inspectionAnswers=(await safe<any[]>(supabase.from("denetim_answers").select("id,run_id,run_remote_id,result,dof_status,dof_due_date").in("run_id",runIds)))||[];
-      }
-    }
+      if((byRemote||[]).length>0)return byRemote||[];
+      return (await safe<any[]>(supabase.from("denetim_answers").select("id,run_id,run_remote_id,result,dof_status,dof_due_date").in("run_id",runIds)))||[];
+    })();
+
+    const [trainingDefs,inspectionAnswers]=await Promise.all([trainingDefsPromise,inspectionAnswersPromise]);
+    const trainingMap = new Map<string, any>((trainingDefs || []).map((x: any): [string, any] => [clean(x.id), x]));
 
     const matrixLevels={critical:0,high:0};
     for(const r of matrixRisks||[]){const score=num(r.score);if(score>=20)matrixLevels.critical++;else if(score>=15)matrixLevels.high++}

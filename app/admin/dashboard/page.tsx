@@ -71,6 +71,7 @@ export default function AdminDashboardPage(){
   const [loading,setLoading]=useState(true);
   const [switching,setSwitching]=useState(false);
   const [error,setError]=useState("");
+  const [bootstrapped,setBootstrapped]=useState(false);
 
   const loadFirmContext=useCallback(async()=>{
     const r=await fetch("/api/admin/dashboard/firm-context",{cache:"no-store"});
@@ -81,21 +82,44 @@ export default function AdminDashboardPage(){
     return String(j.activeFirmId||"");
   },[]);
 
-  const load=useCallback(async(firmOverride?:string)=>{
+  const load=useCallback(async(firmOverride?:string,periodOverride?:string)=>{
     setLoading(true);setError("");
     try{
-      const firm=firmOverride||activeFirmId||await loadFirmContext();
+      const firm=firmOverride||activeFirmId;
       if(!firm) throw new Error("Aktif firma seçilemedi.");
-      const r=await fetch(`/api/admin/dashboard/executive?period=${encodeURIComponent(period)}&firmId=${encodeURIComponent(firm)}`,{cache:"no-store"});
+      const selectedPeriod=periodOverride||period;
+      const r=await fetch(`/api/admin/dashboard/executive?period=${encodeURIComponent(selectedPeriod)}&firmId=${encodeURIComponent(firm)}`,{cache:"no-store"});
       const j=await readJsonResponse<ExecutiveResponse>(r,"Dashboard API");
       if(!r.ok||!j.success) throw new Error(j.error||`Dashboard verileri alınamadı (HTTP ${r.status}).`);
       if(j.firmId!==firm) throw new Error("Firma doğrulama hatası: Dashboard farklı firma UUID'si döndürdü.");
       setData(j);
     }catch(e){setError(e instanceof Error?e.message:"Dashboard yüklenemedi.");}
     finally{setLoading(false);}
-  },[activeFirmId,loadFirmContext,period]);
+  },[activeFirmId,period]);
 
-  useEffect(()=>{void load();},[period]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{
+    let cancelled=false;
+    const bootstrap=async()=>{
+      setLoading(true);setError("");
+      try{
+        const firm=await loadFirmContext();
+        if(cancelled)return;
+        if(!firm) throw new Error("Aktif firma seçilemedi.");
+        await load(firm,period);
+      }catch(e){
+        if(!cancelled)setError(e instanceof Error?e.message:"Dashboard yüklenemedi.");
+      }finally{
+        if(!cancelled){setLoading(false);setBootstrapped(true);}
+      }
+    };
+    void bootstrap();
+    return()=>{cancelled=true;};
+  },[loadFirmContext]); // İlk açılışta firma bağlamı yalnızca bir kez alınır.
+
+  useEffect(()=>{
+    if(!bootstrapped||!activeFirmId)return;
+    void load(activeFirmId,period);
+  },[period]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchFirm=async(nextFirmId:string)=>{
     if(!nextFirmId||nextFirmId===activeFirmId)return;
@@ -105,7 +129,7 @@ export default function AdminDashboardPage(){
       const j=await readJsonResponse<{success:boolean;activeFirmId?:string;error?:string}>(r,"Firma değiştirme");
       if(!r.ok||!j.success)throw new Error(j.error||`Firma değiştirilemedi (HTTP ${r.status}).`);
       setActiveFirmId(nextFirmId);
-      await load(nextFirmId);
+      await load(nextFirmId,period);
     }catch(e){setError(e instanceof Error?e.message:"Firma değiştirilemedi.");}
     finally{setSwitching(false);}
   };
@@ -119,13 +143,13 @@ export default function AdminDashboardPage(){
 
   const cards=useMemo(()=>[
     {label:"Yüksek / Kabul Edilemez Risk",value:m?.risk?(m.risk.critical+m.risk.high):null,sub:m?.risk?`${m.risk.critical} kabul edilemez · ${m.risk.high} yüksek · ${m.risk.total} toplam`:"Risk kaydı yok",icon:ShieldAlert,href:"/admin/risk",tone:((m?.risk?.critical??0)+(m?.risk?.high??0))>0?"critical":"good"},
-    {label:"Açık / Geciken DÖF",value:m?.dof?Math.max(0,m.dof.total-m.dof.closed):0,sub:m?.dof?`${m.dof.overdue} termin aşımı · ${m.dof.closed}/${m.dof.total} kapalı`:"0 kayıt · açık DÖF bulunmuyor",icon:Target,href:"/admin/denetimler?tab=dof&status=open#dof",tone:(m?.dof?.overdue??0)>0?"critical":"good"},
+    {label:"Açık / Geciken DÖF",value:m?.dof?Math.max(0,m.dof.total-m.dof.closed):null,sub:m?.dof?`${m.dof.overdue} termin aşımı · ${m.dof.closed}/${m.dof.total} kapalı`:"DÖF verisi alınamadı veya entegrasyon henüz doğrulanmadı",icon:Target,href:"/admin/denetimler?tab=dof&status=open#dof",tone:m?.dof?((m.dof.overdue??0)>0?"critical":"good"):"neutral"},
     {label:"Yasal Eğitim Uyumu",value:trainingRate==null?null:`%${trainingRate}`,sub:m?.training?`${m.training.compliantEmployees}/${m.training.totalEmployees} çalışan uygun · ${m.training.hazardClass}`:"Yasal eğitim verisi yok",icon:BookOpenCheck,href:"/admin/trainings",tone:state(trainingRate)},
-    {label:"Denetim Uyumu",value:inspectionRate==null?0:`%${inspectionRate}`,sub:m?.inspection?`${m.inspection.total} kontrol maddesi · önceki döneme göre ${data?.trend?.inspection?.delta===undefined?"—":data.trend.inspection.delta>=0?`+${data.trend.inspection.delta}`:data.trend.inspection.delta}`:"0 kayıt · seçili dönemde denetim yok",icon:ClipboardCheck,href:"/admin/denetimler",tone:state(inspectionRate)},
+    {label:"Denetim Uyumu",value:inspectionRate==null?null:`%${inspectionRate}`,sub:m?.inspection?`${m.inspection.total} kontrol maddesi · önceki döneme göre ${data?.trend?.inspection?.delta===undefined?"—":data.trend.inspection.delta>=0?`+${data.trend.inspection.delta}`:data.trend.inspection.delta}`:"Denetim verisi alınamadı veya seçili dönem için hesaplanamadı",icon:ClipboardCheck,href:"/admin/denetimler",tone:state(inspectionRate)},
     {label:"Sağlık Gözetimi",value:healthRate==null?null:`%${healthRate}`,sub:m?.health?`${m.health.overdue} geçmiş · ${m.health.missing} tarih/veri eksik · ${m.health.approaching} yaklaşıyor`:"Sağlık verisi yok",icon:Stethoscope,href:"/admin/health",tone:(m?.health?.overdue??0)>0?"critical":(m?.health?.missing??0)>0?"warning":state(healthRate)},
-    {label:"Kaza / Olay",value:m?.incident?.total??0,sub:m?.incident?`${m.incident.lostTime} kayıp günlü · önceki döneme göre ${data?.trend?.incident?.delta===undefined?"—":data.trend.incident.delta>=0?`+${data.trend.incident.delta}`:data.trend.incident.delta}`:"0 kayıt · seçili dönemde kaza/olay yok",icon:Siren,href:"/admin/accidents",tone:(m?.incident?.lostTime??0)>0?"critical":"neutral"},
+    {label:"Kaza / Olay",value:m?.incident?.total??null,sub:m?.incident?`${m.incident.lostTime} kayıp günlü · önceki döneme göre ${data?.trend?.incident?.delta===undefined?"—":data.trend.incident.delta>=0?`+${data.trend.incident.delta}`:data.trend.incident.delta}`:"Kaza / olay verisi alınamadı",icon:Siren,href:"/admin/accidents",tone:(m?.incident?.lostTime??0)>0?"critical":"neutral"},
     {label:"Periyodik Kontrol",value:periodicRate==null?null:`%${periodicRate}`,sub:m?.periodic?`${m.periodic.overdue} gecikmiş · ${m.periodic.valid}/${m.periodic.total} geçerli`:"Periyodik kontrol verisi yok",icon:Wrench,href:"/admin/documentation/periodic-controls",tone:(m?.periodic?.overdue??0)>0?"warning":state(periodicRate)},
-    {label:"ÇBS / SLA",value:m?.cbs?(m.cbs.actionRequired??m.cbs.open):0,sub:m?.cbs?`${m.cbs.slaExceeded} SLA aşımı · ${m.cbs.critical} kritik · ${m.cbs.open} açık`:"0 kayıt · aksiyon gerektiren ÇBS yok",icon:MessageSquareWarning,href:"/admin/cbs",tone:(m?.cbs?.slaExceeded??0)>0?"critical":"neutral"},
+    {label:"ÇBS / SLA",value:m?.cbs?(m.cbs.actionRequired??m.cbs.open):null,sub:m?.cbs?`${m.cbs.slaExceeded} SLA aşımı · ${m.cbs.critical} kritik · ${m.cbs.open} açık`:"ÇBS verisi alınamadı",icon:MessageSquareWarning,href:"/admin/cbs",tone:(m?.cbs?.slaExceeded??0)>0?"critical":"neutral"},
   ],[m,trainingRate,inspectionRate,healthRate,periodicRate]);
 
   if(loading&&!data)return <div className={styles.loading}><div className={styles.spinner}/><strong>D-SEC Yönetim Merkezi hazırlanıyor</strong><span>Aktif firmanın HSE verileri analiz ediliyor.</span></div>;
