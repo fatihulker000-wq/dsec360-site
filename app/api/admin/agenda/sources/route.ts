@@ -112,8 +112,53 @@ export async function GET(req:NextRequest){
   }
 
 
+  // 8) ÇBS: Ajandayı kalabalıklaştırmamak için yalnızca kritik, SLA aşılmış
+  // veya SLA bitimine 8 saatten az kalmış AÇIK kayıtlar.
+  if(canOperational){
+    const cbsRows=await safe(
+      s.from("cbs_forms")
+       .select("id,reference_no,application_type,category,category_code,priority,status,sla_due_at,created_at,updated_at,firm_id")
+       .eq("firm_id",firmId)
+    );
+    const closedCbs=new Set(["closed","resolved","rejected","duplicate","cancelled"]);
+    const slaSoonMs=8*60*60*1000;
+    for(const c of cbsRows as Row[]){
+      const st=text(c.status).toLowerCase();
+      if(closedCbs.has(st)) continue;
+
+      const p=text(c.priority).toLowerCase();
+      const dueIso=iso(c.sla_due_at);
+      const dueMs=dueIso?new Date(dueIso).getTime():NaN;
+      const overdue=Number.isFinite(dueMs)&&dueMs<now();
+      const approaching=Number.isFinite(dueMs)&&dueMs>=now()&&(dueMs-now())<=slaSoonMs;
+      const critical=p==="critical";
+
+      if(!critical&&!overdue&&!approaching) continue;
+
+      const ref=text(c.reference_no)||`#${text(c.id)}`;
+      const reason=overdue
+        ?"SLA süresi aşıldı"
+        : critical
+          ?"Kritik öncelikli ÇBS kaydı"
+          :"SLA bitimine 8 saatten az kaldı";
+      const categoryLabel=text(c.category)||text(c.category_code)||"Genel";
+
+      records.push(base(firmId,"CBS",c.id,{
+        title:`ÇBS • ${ref} • ${reason}`,
+        note:`Kategori: ${categoryLabel}. Başvuru operasyon merkezinde takip edilmelidir.`,
+        type:"TASK",
+        category:overdue?"CBS_SLA_OVERDUE":critical?"CBS_CRITICAL":"CBS_SLA_APPROACHING",
+        due_at:dueIso||iso(c.created_at)||new Date().toISOString(),
+        priority:2,
+        module_ref:"CBS",
+        module_remote_id:text(c.id),
+        source_url:`/admin/cbs?search=${encodeURIComponent(ref)}`
+      }));
+    }
+  }
+
   records.sort((a,b)=>(b.priority-a.priority)||((a.due_at?new Date(a.due_at).getTime():9e15)-(b.due_at?new Date(b.due_at).getTime():9e15)));
-  return NextResponse.json({success:true,firmId,records,count:records.length,viewer:{employeeId:viewerEmployeeId||null,name:viewerName||null,role},sources:{board:records.filter(x=>x.category.startsWith("BOARD")).length,periodic:records.filter(x=>x.category==="PERIODIC_CONTROL").length,measurement:records.filter(x=>x.category==="ENVIRONMENT_MEASUREMENT").length,health:records.filter(x=>x.category==="HEALTH").length,risk:records.filter(x=>x.category==="RISK").length,inspection:records.filter(x=>x.category==="INSPECTION").length,training:records.filter(x=>x.category.startsWith("TRAINING")).length}},{headers:{"Cache-Control":"no-store"}});
+  return NextResponse.json({success:true,firmId,records,count:records.length,viewer:{employeeId:viewerEmployeeId||null,name:viewerName||null,role},sources:{board:records.filter(x=>x.category.startsWith("BOARD")).length,periodic:records.filter(x=>x.category==="PERIODIC_CONTROL").length,measurement:records.filter(x=>x.category==="ENVIRONMENT_MEASUREMENT").length,health:records.filter(x=>x.category==="HEALTH").length,risk:records.filter(x=>x.category==="RISK").length,inspection:records.filter(x=>x.category==="INSPECTION").length,training:records.filter(x=>x.category.startsWith("TRAINING")).length,cbs:records.filter(x=>x.category.startsWith("CBS")).length}},{headers:{"Cache-Control":"no-store"}});
  }catch(e){console.error("Agenda sources GET:",e);
 
 return NextResponse.json({success:false,error:e instanceof Error?e.message:"Ajanda kaynakları alınamadı."},{status:500})}
