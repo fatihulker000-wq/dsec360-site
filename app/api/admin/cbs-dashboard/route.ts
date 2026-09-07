@@ -2,131 +2,201 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-type AdminSession = {
-  userId: string;
-  role: "super_admin" | "company_admin";
-  companyId: string;
+type DashboardRole =
+  | "super_admin"
+  | "company_admin"
+  | "demo_user";
+
+type DashboardSession = {
+  role: DashboardRole;
+  firmId: string;
 };
 
-async function getAdminSession(): Promise<AdminSession | null> {
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function clean(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function uuid(value: unknown) {
+  const valueText = clean(value);
+  return UUID_RE.test(valueText) ? valueText : "";
+}
+
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("Supabase yapılandırması eksik.");
+  }
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+async function getDashboardSession(): Promise<DashboardSession | null> {
   const cookieStore = await cookies();
 
-  const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-  const adminRole = cookieStore.get("dsec_admin_role")?.value;
-  const userId = String(cookieStore.get("dsec_user_id")?.value || "").trim();
+  const auth = clean(
+    cookieStore.get("dsec_admin_auth")?.value ||
+      cookieStore.get("dsec_user_auth")?.value
+  );
 
-  const isAllowedRole =
-    adminRole === "super_admin" || adminRole === "company_admin";
+  const role = clean(
+    cookieStore.get("dsec_admin_role")?.value ||
+      cookieStore.get("dsec_user_role")?.value
+  ) as DashboardRole;
 
-  if (adminAuth !== "ok" || !isAllowedRole || !userId) {
+  const firmId = uuid(
+    cookieStore.get("dsec_company_id")?.value
+  );
+
+  if (auth !== "ok") return null;
+
+  if (
+    !["super_admin", "company_admin", "demo_user"].includes(role)
+  ) {
     return null;
   }
 
-  const supabase = getSupabase();
+  // Dashboard daima aktif firma bağlamında çalışır.
+  // Super admin dahil hiçbir rol için "tüm firmalar" fallback'i yoktur.
+  if (!firmId) return null;
 
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, role, company_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error || !data) {
-    return null;
-  }
-
-  const role =
-    String(data.role || "").trim() === "super_admin"
-      ? "super_admin"
-      : "company_admin";
-
-  return {
-    userId: String(data.id || "").trim(),
-    role,
-    companyId: String(data.company_id || "").trim(),
-  };
+  return { role, firmId };
 }
 
 export async function GET() {
   try {
-    const session = await getAdminSession();
+    const session = await getDashboardSession();
 
     if (!session) {
       return NextResponse.json(
-        { error: "Yetkisiz erişim." },
-        { status: 401 }
+        {
+          success: false,
+          error:
+            "Aktif firma oturumu bulunamadı veya yetkisiz erişim.",
+        },
+        {
+          status: 401,
+          headers: { "Cache-Control": "no-store" },
+        }
       );
     }
 
     const supabase = getSupabase();
 
-    let query = supabase
+    const { data, error } = await supabase
       .from("cbs_forms")
-      .select("id, status, priority, sla_due_at, closed_at, firm_id, created_at");
-
-    if (session.role === "company_admin") {
-      query = query.eq("firm_id", session.companyId);
-    }
-
-    const { data, error } = await query;
+      .select(
+        "id,status,priority,sla_due_at,closed_at,firm_id,created_at"
+      )
+      .eq("firm_id", session.firmId);
 
     if (error) {
       console.error("CBS dashboard GET hatası:", error);
       return NextResponse.json(
-        { error: "Veri alınamadı." },
-        { status: 500 }
+        { success: false, error: "ÇBS verisi alınamadı." },
+        {
+          status: 500,
+          headers: { "Cache-Control": "no-store" },
+        }
       );
     }
 
     const records = data || [];
+    const closedStatuses = new Set([
+      "closed",
+      "resolved",
+      "rejected",
+      "duplicate",
+      "cancelled",
+    ]);
 
-    const countAll = records.length;
-    const countNew = records.filter((x) => x.status === "new").length;
-    const countProcessing = records.filter((x) => x.status === "processing").length;
-    const countRead = records.filter((x) => x.status === "read").length;
-    const countClosed = records.filter((x) => x.status === "closed").length;
+    const now = Date.now();
 
-    const countSlaExceeded = records.filter((x) => {
-      if (!x.sla_due_at || x.status === "closed") return false;
-      return new Date(x.sla_due_at).getTime() < Date.now();
-    }).length;
-
-    const criticalCount = records.filter(
-      (x) => String(x.priority || "").toLowerCase() === "critical"
+    const total = records.length;
+    const countNew = records.filter(
+      (x) => clean(x.status).toLowerCase() === "new"
+    ).length;
+    const countProcessing = records.filter(
+      (x) => clean(x.status).toLowerCase() === "processing"
+    ).length;
+    const countRead = records.filter(
+      (x) => clean(x.status).toLowerCase() === "read"
+    ).length;
+    const countClosed = records.filter((x) =>
+      closedStatuses.has(clean(x.status).toLowerCase())
     ).length;
 
-    const highCount = records.filter(
-      (x) => String(x.priority || "").toLowerCase() === "high"
+    const open = records.filter(
+      (x) => !closedStatuses.has(clean(x.status).toLowerCase())
+    ).length;
+
+    const slaExceeded = records.filter((x) => {
+      if (
+        !x.sla_due_at ||
+        closedStatuses.has(clean(x.status).toLowerCase())
+      ) {
+        return false;
+      }
+
+      const due = new Date(x.sla_due_at).getTime();
+      return Number.isFinite(due) && due < now;
+    }).length;
+
+    const critical = records.filter(
+      (x) => clean(x.priority).toLowerCase() === "critical"
+    ).length;
+
+    const high = records.filter(
+      (x) => clean(x.priority).toLowerCase() === "high"
     ).length;
 
     const closedRate =
-      countAll > 0 ? Math.round((countClosed / countAll) * 100) : 0;
+      total > 0
+        ? Math.round((countClosed / total) * 100)
+        : null;
 
-    return NextResponse.json({
-      success: true,
-      summary: {
-        total: countAll,
-        new: countNew,
-        processing: countProcessing,
-        read: countRead,
-        closed: countClosed,
-        slaExceeded: countSlaExceeded,
-        critical: criticalCount,
-        high: highCount,
-        closedRate,
-      },
-    });
-  } catch (err) {
-    console.error("CBS dashboard genel hata:", err);
     return NextResponse.json(
-      { error: "Sunucu hatası." },
-      { status: 500 }
+      {
+        success: true,
+        firmId: session.firmId,
+        summary: {
+          total,
+          open,
+          new: countNew,
+          processing: countProcessing,
+          read: countRead,
+          closed: countClosed,
+          slaExceeded,
+          critical,
+          high,
+          closedRate,
+        },
+      },
+      {
+        headers: { "Cache-Control": "no-store" },
+      }
+    );
+  } catch (error) {
+    console.error("CBS dashboard genel hata:", error);
+
+    return NextResponse.json(
+      { success: false, error: "Sunucu hatası." },
+      {
+        status: 500,
+        headers: { "Cache-Control": "no-store" },
+      }
     );
   }
 }
