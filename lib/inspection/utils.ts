@@ -1,18 +1,12 @@
 export function modeLabel(mode?: string | null) {
   const m = String(mode || "").toUpperCase();
 
-  if (m.includes("FOTO") || m.includes("PHOTO"))
-    return "Fotoğraflı";
+  if (m.includes("FOTO") || m.includes("PHOTO")) return "Fotoğraflı";
 
-  if (
-    m.includes("PUAN") ||
-    m.includes("SKOR") ||
-    m.includes("SCORE")
-  )
+  if (m.includes("PUAN") || m.includes("SKOR") || m.includes("SCORE"))
     return "Puanlamalı";
 
-  if (m.includes("ELMERI"))
-    return "ELMERI";
+  if (m.includes("ELMERI")) return "ELMERI";
 
   return "Klasik";
 }
@@ -20,52 +14,26 @@ export function modeLabel(mode?: string | null) {
 export function modeColor(mode?: string | null) {
   switch (modeLabel(mode)) {
     case "Fotoğraflı":
-      return {
-        bg: "#DBEAFE",
-        color: "#2563EB",
-      };
-
+      return { bg: "#DBEAFE", color: "#2563EB" };
     case "Puanlamalı":
-      return {
-        bg: "#FFEDD5",
-        color: "#EA580C",
-      };
-
+      return { bg: "#FFEDD5", color: "#EA580C" };
     case "ELMERI":
-      return {
-        bg: "#DCFCE7",
-        color: "#16A34A",
-      };
-
+      return { bg: "#DCFCE7", color: "#16A34A" };
     default:
-      return {
-        bg: "#F1F5F9",
-        color: "#475569",
-      };
+      return { bg: "#F1F5F9", color: "#475569" };
   }
 }
 
 export function formatDate(value?: string | number | null) {
   if (!value) return "-";
-
-  const date =
-    typeof value === "number"
-      ? new Date(value)
-      : new Date(value);
-
-  if (Number.isNaN(date.getTime()))
-    return "-";
-
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleDateString("tr-TR");
 }
 
 export function cleanFirmName(name?: string | null) {
   const value = String(name ?? "").trim();
-
-  if (!value)
-    return "Firma Yok";
-
-  return value;
+  return value || "Firma Yok";
 }
 
 export function normalizeFirmKey(value?: string | null) {
@@ -76,9 +44,7 @@ export function normalizeFirmKey(value?: string | null) {
 }
 
 export function normalizeText(value?: string | null) {
-  return String(value ?? "")
-    .trim()
-    .toUpperCase();
+  return String(value ?? "").trim().toUpperCase();
 }
 
 export function calculateInspectionScore(
@@ -86,50 +52,28 @@ export function calculateInspectionScore(
   partial: number,
   unsuitable: number
 ) {
-  const total =
-    suitable + partial + unsuitable;
-
-  if (!total)
-    return 100;
-
-  return Math.round(
-    ((suitable + partial * 0.5) /
-      total) *
-      100
-  );
+  const total = suitable + partial + unsuitable;
+  if (!total) return 100;
+  return Math.round(((suitable + partial * 0.5) / total) * 100);
 }
 
-export function calculateDofRate(
-  open: number,
-  closed: number
-) {
+export function calculateDofRate(open: number, closed: number) {
   const total = open + closed;
-
-  if (!total)
-    return 100;
-
-  return Math.round(
-    (closed / total) * 100
-  );
+  if (!total) return 100;
+  return Math.round((closed / total) * 100);
 }
 
-export function makeQuery(
-  type: string,
-  firm: string
-) {
+function baseParams(type: string, firm: string) {
   const params = new URLSearchParams();
+  if (type !== "ALL") params.set("type", type);
+  if (firm !== "ALL") params.set("firmId", firm);
+  return params;
+}
 
-  if (type !== "ALL")
-    params.set("type", type);
-
-  if (firm !== "ALL")
-    params.set("firm", firm);
-
+export function makeQuery(type: string, firm: string) {
+  const params = baseParams(type, firm);
   const query = params.toString();
-
-  return query
-    ? `/admin/denetimler?${query}`
-    : "/admin/denetimler";
+  return query ? `/admin/denetimler?${query}` : "/admin/denetimler";
 }
 
 export function makePagedQuery(
@@ -141,59 +85,31 @@ export function makePagedQuery(
   status = "",
   priority = ""
 ) {
-  const params = new URLSearchParams();
+  const params = baseParams(type, firm);
 
-  if (type !== "ALL")
-    params.set("type", type);
+  if (dofPage > 1) params.set("dofPage", String(dofPage));
+  if (runPage > 1) params.set("runPage", String(runPage));
+  if (tab) params.set("tab", tab);
+  if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
 
-  if (firm !== "ALL")
-    params.set("firm", firm);
-
-  if (dofPage > 1)
-    params.set(
-      "dofPage",
-      String(dofPage)
-    );
-
-  if (runPage > 1)
-    params.set(
-      "runPage",
-      String(runPage)
-    );
-
-  if (tab)
-    params.set("tab", tab);
-
-  if (status)
-    params.set("status", status);
-
-  if (priority)
-    params.set("priority", priority);
-
-  return `/admin/denetimler?${params.toString()}`;
+  const query = params.toString();
+  return query ? `/admin/denetimler?${query}` : "/admin/denetimler";
 }
 
 export function makeDofQuery(
   type: string,
   firm: string,
   status = "",
-  priority = ""
+  priority = "",
+  due = ""
 ) {
-  const params = new URLSearchParams();
-
-  if (type !== "ALL")
-    params.set("type", type);
-
-  if (firm !== "ALL")
-    params.set("firm", firm);
-
+  const params = baseParams(type, firm);
   params.set("tab", "dof");
 
-  if (status)
-    params.set("status", status);
-
-  if (priority)
-    params.set("priority", priority);
+  if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
+  if (due) params.set("due", due);
 
   return `/admin/denetimler?${params.toString()}#dof`;
 }

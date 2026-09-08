@@ -53,9 +53,19 @@ async function deleteDenetimAction(formData: FormData) {
   if (role === "demo_user") return;
 
   const remoteId = Number(formData.get("remoteId") || 0);
-  if (!remoteId) return;
+  const firmId = String(formData.get("firmId") || "").trim();
+  if (!remoteId || !firmId) return;
 
   const supabase = getSupabase();
+
+  const { data: run } = await supabase
+    .from("denetim_runs")
+    .select("id, web_firm_id, firm_id")
+    .eq("id", remoteId)
+    .maybeSingle();
+
+  const runFirmId = String(run?.web_firm_id || run?.firm_id || "").trim();
+  if (!run || runFirmId !== firmId) return;
 
   await supabase.from("denetim_answers").delete().eq("run_remote_id", remoteId);
   await supabase.from("denetim_runs").delete().eq("id", remoteId);
@@ -110,19 +120,22 @@ export default async function AdminDenetimlerPage({
   searchParams?: Promise<{
     type?: string;
     firm?: string;
+    firmId?: string;
     dofPage?: string;
     runPage?: string;
     tab?: string;
     status?: string;
     priority?: string;
+    due?: string;
   }>;
 }) {
   const sp = await searchParams;
   const activeType = String(sp?.type || "ALL").toUpperCase();
-  const activeFirm = String(sp?.firm || "ALL");
+  const activeFirm = String(sp?.firmId || sp?.firm || "ALL").trim();
   const activeTab = String(sp?.tab || "").trim().toLowerCase();
   const activeDofStatus = String(sp?.status || "").trim().toUpperCase();
   const activeDofPriority = String(sp?.priority || "").trim().toUpperCase();
+  const activeDofDue = String(sp?.due || "").trim().toUpperCase();
 
   const activeDofPage = Math.max(1, Number(sp?.dofPage || 1));
   const activeRunPage = Math.max(1, Number(sp?.runPage || 1));
@@ -316,24 +329,20 @@ function isCriticalDof(a: any) {
   }
 
   if (
-    result === "UYGUNSUZ" ||
-    result.includes("YETERSIZ") ||
-    result.includes("YETERSİZ") ||
-    result.includes("EKSIK") ||
-    result.includes("EKSİK")
+    priority === "HIGH" ||
+    priority === "YUKSEK" ||
+    priority === "YÜKSEK" ||
+    priority === "CRITICAL" ||
+    priority === "KRITIK" ||
+    priority === "KRİTİK" ||
+    priority === "VERY_HIGH" ||
+    priority === "COK_YUKSEK" ||
+    priority === "ÇOK YÜKSEK" ||
+    priority === "INTOLERABLE" ||
+    priority === "KABUL_EDILEMEZ" ||
+    priority === "KABUL EDİLEMEZ"
   ) {
     return true;
-  }
-
-  if (result.startsWith("SCORE:")) {
-    const score = Number(result.replace("SCORE:", ""));
-    return Number.isFinite(score) && score < 70;
-  }
-
-  if (result.startsWith("ELMERI:")) {
-    const parts = result.split(":");
-    const wrong = Number(parts[2] || 0);
-    return Number.isFinite(wrong) && wrong > 0;
   }
 
   return false;
@@ -410,6 +419,62 @@ const closedDofItems = dofItems.filter(
   (a: any) => normalizeDofStatusFromAnswer(a) === "CLOSED"
 );
 
+const criticalFindingItems = scopedAnswers.filter((a: any) => isCriticalDof(a));
+const criticalOpenDofItems = openDofItems.filter((a: any) => isCriticalDof(a));
+
+function readDofDueValue(a: any) {
+  return (
+    a.dof_due_at ??
+    a.dof_due_date ??
+    a.due_at ??
+    a.due_date ??
+    a.deadline ??
+    a.deadline_at ??
+    a.target_date ??
+    a.termin_tarihi ??
+    null
+  );
+}
+
+function toDateMillis(value: any): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") {
+    const ms = value < 10_000_000_000 ? value * 1000 : value;
+    return Number.isFinite(ms) ? ms : null;
+  }
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && String(value).trim() !== "") {
+    const ms = numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+    return ms;
+  }
+  const parsed = new Date(String(value)).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function startOfTodayMillis() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function isOverdueDof(a: any) {
+  if (normalizeDofStatusFromAnswer(a) !== "OPEN") return false;
+  const due = toDateMillis(readDofDueValue(a));
+  return due !== null && due < startOfTodayMillis();
+}
+
+function isUpcomingDof(a: any) {
+  if (normalizeDofStatusFromAnswer(a) !== "OPEN") return false;
+  const due = toDateMillis(readDofDueValue(a));
+  if (due === null) return false;
+  const today = startOfTodayMillis();
+  const limit = today + 7 * 24 * 60 * 60 * 1000;
+  return due >= today && due <= limit;
+}
+
+const overdueDofItems = openDofItems.filter((a: any) => isOverdueDof(a));
+const upcomingDofItems = openDofItems.filter((a: any) => isUpcomingDof(a));
+
 const filteredDofItems = dofItems.filter((a: any) => {
   const status = normalizeDofStatusFromAnswer(a);
 
@@ -424,7 +489,13 @@ const filteredDofItems = dofItems.filter((a: any) => {
     activeDofPriority === "ALL" ||
     (activeDofPriority === "CRITICAL" && isCriticalDof(a));
 
-  return statusOk && priorityOk;
+  const dueOk =
+    !activeDofDue ||
+    activeDofDue === "ALL" ||
+    (activeDofDue === "OVERDUE" && isOverdueDof(a)) ||
+    (activeDofDue === "UPCOMING" && isUpcomingDof(a));
+
+  return statusOk && priorityOk && dueOk;
 });
 
 const dofCountByRun = new Map<number, number>();
@@ -576,7 +647,7 @@ const topFirmStats = scopedFirmStatsSource
     { title: "Toplam Madde", value: totalAnswers, description: "Aktarılan bulgu", href: makeQuery(activeType, activeFirm), tone: "purple" },
     { title: "Uygun", value: uygunCount, description: "Pozitif bulgu", href: makeQuery(activeType, activeFirm), tone: "green" },
     { title: "Kısmen", value: kismenCount, description: "Geliştirilmeli", href: makeQuery(activeType, activeFirm), tone: "amber" },
-    { title: "Uygunsuz", value: uygunsuzCount, description: "Kritik bulgu", href: makeQuery(activeType, activeFirm), tone: "red" },
+    { title: "Uygunsuz", value: uygunsuzCount, description: "Uygunsuz bulgu", href: makeQuery(activeType, activeFirm), tone: "red" },
     { title: "Açık DÖF", value: openDofItems.length, description: "Takip bekliyor", href: makeDofQuery(activeType, activeFirm, "open"), tone: "red", badge: openDofItems.length > 0 ? "Aksiyon" : "Kontrollü" },
     { title: "Kapalı DÖF", value: closedDofItems.length, description: "Tamamlanan faaliyet", href: makeDofQuery(activeType, activeFirm, "closed"), tone: "green" },
   ];
@@ -684,6 +755,25 @@ const topFirmStats = scopedFirmStatsSource
           | "OPEN"
           | "CLOSED",
         critical: isCriticalDof(answer),
+        responsible: String(
+          answer.dof_responsible ||
+          answer.responsible ||
+          answer.action_responsible ||
+          answer.owner_name ||
+          answer.assignee_name ||
+          ""
+        ).trim(),
+        dueDate: readDofDueValue(answer),
+        overdue: isOverdueDof(answer),
+        upcoming: isUpcomingDof(answer),
+        riskLevel: String(
+          answer.dof_priority ||
+          answer.priority ||
+          answer.risk_level ||
+          answer.riskLevel ||
+          ""
+        ).trim(),
+        firmId: relatedRun ? getRunFirmId(relatedRun) : "",
       };
     }
   );
@@ -816,7 +906,7 @@ const topFirmStats = scopedFirmStatsSource
         </div>
         <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
           <Link
-            href={`/admin/denetimler/yeni${activeFirm !== "ALL" ? `?firm=${encodeURIComponent(activeFirm)}` : ""}`}
+            href={`/admin/denetimler/yeni${activeFirm !== "ALL" ? `?firmId=${encodeURIComponent(activeFirm)}` : ""}`}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -841,7 +931,7 @@ const topFirmStats = scopedFirmStatsSource
         openDof={openDofItems.length}
         closedDof={closedDofItems.length}
         conformityRate={conformityRate}
-        criticalFindings={uygunsuzCount}
+        criticalFindings={criticalFindingItems.length}
       />
 
       {error && (
@@ -987,6 +1077,11 @@ const topFirmStats = scopedFirmStatsSource
           "",
           "critical"
         )}
+        overdueHref={`${makeDofQuery(activeType, activeFirm, "open").replace("#dof", "")}&due=OVERDUE#dof`}
+        upcomingHref={`${makeDofQuery(activeType, activeFirm, "open").replace("#dof", "")}&due=UPCOMING#dof`}
+        overdueCount={overdueDofItems.length}
+        upcomingCount={upcomingDofItems.length}
+        activeDue={activeDofDue}
         closeAction={closeDofAction}
         pagination={
           dofTotalPages > 1 ? (
