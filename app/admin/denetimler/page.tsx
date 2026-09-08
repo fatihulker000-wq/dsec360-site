@@ -1023,6 +1023,13 @@ const topFirmStats = scopedFirmStatsSource
         background:
           "radial-gradient(circle at top right, rgba(198,40,40,0.08), transparent 34%), #fafafa",
         minHeight: "100vh",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+        overflowX: "hidden",
+        fontFamily:
+          'var(--font-inter), var(--font-geist-sans), Inter, "Segoe UI", Arial, sans-serif',
       }}
     >
       <section style={{ marginBottom: 18 }}>
@@ -1265,7 +1272,7 @@ const topFirmStats = scopedFirmStatsSource
           <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".08em", color: "#7f1d1d" }}>
             YÖNETİM KARAR DESTEK
           </div>
-          <h2 style={{ margin: "6px 0 4px", fontSize: 24 }}>Denetim Yönetim Skoru</h2>
+          <h2 style={{ margin: "6px 0 4px", fontSize: 24, lineHeight: 1.2, fontWeight: 900, letterSpacing: "-0.025em", color: "#1f2937", fontFamily: "inherit" }}>Denetim Yönetim Skoru</h2>
           <p style={{ margin: 0, color: "#64748b", fontWeight: 600 }}>
             Skorun hangi veriden oluştuğu açıkça gösterilir; veri yokluğu başarı olarak değerlendirilmez.
           </p>
@@ -1274,7 +1281,7 @@ const topFirmStats = scopedFirmStatsSource
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12 }}>
           <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
             <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>YÖNETİM SKORU</span>
-            <div style={{ marginTop: 7, fontSize: 30, fontWeight: 1000, color: executiveScore !== null && executiveScore < 50 ? "#b91c1c" : "#1f2937" }}>
+            <div style={{ marginTop: 7, fontSize: 30, fontWeight: 900, color: executiveScore !== null && executiveScore < 50 ? "#b91c1c" : "#1f2937" }}>
               {executiveScore === null ? "—" : `${executiveScore}/100`}
             </div>
             <div style={{ marginTop: 6, fontWeight: 800, color: "#64748b" }}>{executiveScoreLabel}</div>
@@ -1282,25 +1289,25 @@ const topFirmStats = scopedFirmStatsSource
 
           <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
             <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>UYGUNLUK · %50 AĞIRLIK</span>
-            <div style={{ marginTop: 7, fontSize: 26, fontWeight: 1000 }}>%{conformityRate}</div>
+            <div style={{ marginTop: 7, fontSize: 26, fontWeight: 900 }}>%{conformityRate}</div>
             <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>Uygun / değerlendirilen madde</div>
           </article>
 
           <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
             <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>DÖF KAPANMA · %30 AĞIRLIK</span>
-            <div style={{ marginTop: 7, fontSize: 26, fontWeight: 1000 }}>%{dofClosureRate}</div>
+            <div style={{ marginTop: 7, fontSize: 26, fontWeight: 900 }}>%{dofClosureRate}</div>
             <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>{closedDofItems.length}/{dofItems.length} DÖF kapalı</div>
           </article>
 
           <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
             <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>KRİTİK KONTROL · %20 AĞIRLIK</span>
-            <div style={{ marginTop: 7, fontSize: 26, fontWeight: 1000 }}>%{criticalControlRate}</div>
+            <div style={{ marginTop: 7, fontSize: 26, fontWeight: 900 }}>%{criticalControlRate}</div>
             <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>{criticalOpenCount} kritik açık DÖF</div>
           </article>
 
           <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
             <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>VERİ DURUMU</span>
-            <div style={{ marginTop: 7, fontSize: 20, fontWeight: 1000 }}>
+            <div style={{ marginTop: 7, fontSize: 20, fontWeight: 900 }}>
               {dataHealthState === "OK" ? "Hesaplanabilir" : dataHealthState === "NO_DATA" ? "Kayıt yok" : "Yetersiz veri"}
             </div>
             <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
@@ -1320,7 +1327,7 @@ const topFirmStats = scopedFirmStatsSource
           <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".08em", color: "#7f1d1d" }}>
             DENETİM SONUÇLARI MERKEZİ
           </div>
-          <h2 style={{ margin: "6px 0 4px", fontSize: 24 }}>Dört denetim tipinin sonuç görünümü</h2>
+          <h2 style={{ margin: "6px 0 4px", fontSize: 24, lineHeight: 1.2, fontWeight: 900, letterSpacing: "-0.025em", color: "#1f2937", fontFamily: "inherit" }}>Dört denetim tipinin sonuç görünümü</h2>
           <p style={{ margin: 0, color: "#64748b", fontWeight: 600 }}>
             Klasik ve fotoğraflı sonuçlar, puanlamalı skorlar ve ELMERI gözlemleri ayrı metodolojiyle gösterilir.
           </p>
@@ -1329,7 +1336,7 @@ const topFirmStats = scopedFirmStatsSource
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
           <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
             <strong style={{ display: "block", marginBottom: 10 }}>Klasik / Fotoğraflı</strong>
-            <div style={{ fontSize: 28, fontWeight: 1000 }}>%{conformityRate}</div>
+            <div style={{ fontSize: 28, fontWeight: 900 }}>%{conformityRate}</div>
             <div style={{ marginTop: 8, color: "#475569", fontWeight: 700 }}>
               {uygunCount} Uygun · {kismenCount} Kısmen · {uygunsuzCount} Uygunsuz
             </div>
@@ -1340,7 +1347,7 @@ const topFirmStats = scopedFirmStatsSource
 
           <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
             <strong style={{ display: "block", marginBottom: 10 }}>Puanlamalı Denetim</strong>
-            <div style={{ fontSize: 28, fontWeight: 1000 }}>
+            <div style={{ fontSize: 28, fontWeight: 900 }}>
               {scoringAverage === null ? "Veri yok" : `${scoringAverage}/100`}
             </div>
             <div style={{ marginTop: 8, color: "#475569", fontWeight: 700 }}>
@@ -1353,7 +1360,7 @@ const topFirmStats = scopedFirmStatsSource
 
           <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
             <strong style={{ display: "block", marginBottom: 10 }}>ELMERI Denetimi</strong>
-            <div style={{ fontSize: 28, fontWeight: 1000 }}>
+            <div style={{ fontSize: 28, fontWeight: 900 }}>
               {elmeriSuccessRate === null ? "Veri yok" : `%${elmeriSuccessRate}`}
             </div>
             <div style={{ marginTop: 8, color: "#475569", fontWeight: 700 }}>
@@ -1542,6 +1549,29 @@ const topFirmStats = scopedFirmStatsSource
       )}
 
       <style>{`
+main,
+main button,
+main input,
+main select,
+main textarea {
+  font-family: var(--font-inter), var(--font-geist-sans), Inter, "Segoe UI", Arial, sans-serif;
+}
+
+main h1,
+main h2,
+main h3,
+main h4,
+main h5,
+main h6,
+main p,
+main span,
+main strong,
+main a,
+main div,
+main article {
+  font-family: inherit;
+}
+
 @media (max-width:900px){
 
 main{
