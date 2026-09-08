@@ -4,9 +4,6 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import ExecutiveHero from "../../../components/inspection-v2/ExecutiveHero";
-import FilterToolbar, {
-  type InspectionFirmOption,
-} from "../../../components/inspection-v2/FilterToolbar";
 import KPISection, {
   type InspectionKpiItem,
 } from "../../../components/inspection-v2/KPISection";
@@ -18,7 +15,6 @@ import DofCommandCenter, {
 import InspectionCards, {
   type InspectionViewItem,
 } from "../../../components/inspection-v2/InspectionCards";
-import Pagination from "../../../components/inspection-v2/Pagination";
 import AnalysisCard from "../../../components/inspection-v2/AnalysisCard";
 import {
   cleanFirmName,
@@ -31,6 +27,12 @@ import {
   normalizeFirmKey,
   normalizeText,
 } from "../../../lib/inspection/utils";
+
+
+type InspectionFirmOption = {
+  id: string;
+  name: string;
+};
 
 function getSupabase() {
   return createClient(
@@ -680,16 +682,97 @@ const topFirmStats = scopedFirmStatsSource
         <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 900, letterSpacing: ".08em", color: "#7f1d1d" }}>
           DENETİM KAPSAMI · FİRMA UUID
         </div>
-        <FilterToolbar
-        activeFirm={activeFirm}
-        activeFirmName={activeFirmName}
-        activeType={activeType}
-        firms={firmOptions}
-        makeFirmHref={(firm: string) => makeQuery(activeType, firm)}
-        isActiveFirm={(firm: InspectionFirmOption) =>
-          normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.id)
-        }
-      />
+        <div
+          style={{
+            border: "1px solid #eadede",
+            borderRadius: 24,
+            background: "#ffffff",
+            padding: 18,
+            boxShadow: "0 12px 34px rgba(127,29,29,0.06)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+              marginBottom: 14,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 950, color: "#1f2937" }}>
+                Firma ve kapsam filtresi
+              </div>
+              <div style={{ marginTop: 5, fontSize: 13, color: "#6b7280", fontWeight: 700 }}>
+                Seçtiğiniz firma tüm KPI, DÖF, analitik ve denetim kayıtlarına uygulanır.
+              </div>
+            </div>
+
+            <div style={{ textAlign: "right", minWidth: 220 }}>
+              <div style={{ fontSize: 10, letterSpacing: ".08em", fontWeight: 900, color: "#9ca3af" }}>
+                AKTİF KAPSAM
+              </div>
+              <div style={{ marginTop: 4, fontSize: 14, fontWeight: 950, color: "#374151" }}>
+                {activeFirmName}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <Link
+              href={makeQuery(activeType, "ALL")}
+              style={{
+                textDecoration: "none",
+                padding: "10px 16px",
+                borderRadius: 999,
+                fontSize: 13,
+                fontWeight: 900,
+                border: activeFirm === "ALL" ? "1px solid #991b1b" : "1px solid #e5e7eb",
+                background: activeFirm === "ALL" ? "linear-gradient(135deg,#7f1d1d,#dc2626)" : "#fff",
+                color: activeFirm === "ALL" ? "#fff" : "#374151",
+                boxShadow: activeFirm === "ALL" ? "0 8px 18px rgba(153,27,27,.18)" : "none",
+              }}
+            >
+              Tüm Firmalar
+            </Link>
+
+            {firmOptions.map((firm) => {
+              const selected =
+                normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.id);
+
+              return (
+                <Link
+                  key={firm.id}
+                  href={makeQuery(activeType, firm.id)}
+                  style={{
+                    textDecoration: "none",
+                    padding: "10px 16px",
+                    borderRadius: 999,
+                    fontSize: 13,
+                    fontWeight: 900,
+                    border: selected ? "1px solid #991b1b" : "1px solid #e5e7eb",
+                    background: selected
+                      ? "linear-gradient(135deg,#7f1d1d,#ef4444)"
+                      : "#fff",
+                    color: selected ? "#fff" : "#374151",
+                    boxShadow: selected ? "0 8px 18px rgba(153,27,27,.18)" : "none",
+                  }}
+                >
+                  {firm.name}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       </section>
 
       <ExecutiveHero
@@ -795,21 +878,54 @@ const topFirmStats = scopedFirmStatsSource
         )}
         closeAction={closeDofAction}
         pagination={
-          <Pagination
-            currentPage={safeDofPage}
-            totalPages={dofTotalPages}
-            makeHref={(page: number) =>
-              makePagedQuery(
-                activeType,
-                activeFirm,
-                page,
-                safeRunPage,
-                activeTab || "dof",
-                activeDofStatus,
-                activeDofPriority
-              )
-            }
-          />
+          dofTotalPages > 1 ? (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+                marginTop: 18,
+              }}
+            >
+              {Array.from({ length: dofTotalPages }, (_, index) => index + 1).map(
+                (page) => {
+                  const selected = page === safeDofPage;
+                  return (
+                    <Link
+                      key={page}
+                      href={makePagedQuery(
+                        activeType,
+                        activeFirm,
+                        page,
+                        safeRunPage,
+                        activeTab || "dof",
+                        activeDofStatus,
+                        activeDofPriority
+                      )}
+                      style={{
+                        minWidth: 36,
+                        height: 36,
+                        padding: "0 10px",
+                        borderRadius: 10,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        textDecoration: "none",
+                        fontWeight: 900,
+                        border: selected ? "1px solid #991b1b" : "1px solid #e5e7eb",
+                        background: selected ? "#b91c1c" : "#fff",
+                        color: selected ? "#fff" : "#374151",
+                      }}
+                    >
+                      {page}
+                    </Link>
+                  );
+                }
+              )}
+            </div>
+          ) : null
         }
       />
 
@@ -817,21 +933,54 @@ const topFirmStats = scopedFirmStatsSource
         items={inspectionViewItems}
         deleteAction={deleteDenetimAction}
         pagination={
-          <Pagination
-            currentPage={safeRunPage}
-            totalPages={runTotalPages}
-            makeHref={(page: number) =>
-              makePagedQuery(
-                activeType,
-                activeFirm,
-                safeDofPage,
-                page,
-                activeTab,
-                activeDofStatus,
-                activeDofPriority
-              )
-            }
-          />
+          runTotalPages > 1 ? (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+                marginTop: 18,
+              }}
+            >
+              {Array.from({ length: runTotalPages }, (_, index) => index + 1).map(
+                (page) => {
+                  const selected = page === safeRunPage;
+                  return (
+                    <Link
+                      key={page}
+                      href={makePagedQuery(
+                        activeType,
+                        activeFirm,
+                        safeDofPage,
+                        page,
+                        activeTab,
+                        activeDofStatus,
+                        activeDofPriority
+                      )}
+                      style={{
+                        minWidth: 36,
+                        height: 36,
+                        padding: "0 10px",
+                        borderRadius: 10,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        textDecoration: "none",
+                        fontWeight: 900,
+                        border: selected ? "1px solid #991b1b" : "1px solid #e5e7eb",
+                        background: selected ? "#b91c1c" : "#fff",
+                        color: selected ? "#fff" : "#374151",
+                      }}
+                    >
+                      {page}
+                    </Link>
+                  );
+                }
+              )}
+            </div>
+          ) : null
         }
       />
 
