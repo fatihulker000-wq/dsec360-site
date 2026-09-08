@@ -41,6 +41,8 @@ export default function NewWebInspectionPage() {
   const [error, setError] = useState("");
   const [readOnly, setReadOnly] = useState(false);
   const [started, setStarted] = useState(false);
+  const [photoFiles, setPhotoFiles] = useState<Record<string, File | null>>({});
+  const [photoPreviews, setPhotoPreviews] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -88,16 +90,49 @@ export default function NewWebInspectionPage() {
     setAnswers(prev => ({ ...prev, [id]: { ...(prev[id] || {}), ...data } }));
   }
 
+  function choosePhoto(itemId: string, file: File | null) {
+    const oldPreview = photoPreviews[itemId];
+    if (oldPreview) URL.revokeObjectURL(oldPreview);
+    setPhotoFiles(prev => ({ ...prev, [itemId]: file }));
+    setPhotoPreviews(prev => {
+      const next = { ...prev };
+      if (file) next[itemId] = URL.createObjectURL(file);
+      else delete next[itemId];
+      return next;
+    });
+  }
+
+  async function uploadPhoto(itemId: string, file: File) {
+    const fd = new FormData();
+    fd.append("firmId", firmId);
+    fd.append("formId", formId);
+    fd.append("itemId", itemId);
+    fd.append("file", file);
+    const r = await fetch("/api/admin/denetimler/web-entry/photo", { method: "POST", body: fd });
+    const j = await readJsonResponse(r);
+    if (!r.ok || !j.success) throw new Error(j.detail || j.error || "Fotoğraf yüklenemedi.");
+    return { photoPath: j.photoPath as string, photoUrl: j.photoUrl as string };
+  }
+
   async function save() {
     if (!firmId || !formId) return setError("Firma ve denetim formu seçilmelidir.");
     setLoading(true); setError("");
 
-    const payloadAnswers = items.map(item => ({
-      itemId: item.id,
-      ...(answers[item.id] || {}),
-    }));
-
     try {
+      const uploaded: Record<string, { photoPath: string; photoUrl: string }> = {};
+      if (mode === "PHOTO") {
+        for (const item of items) {
+          const file = photoFiles[item.id];
+          if (file) uploaded[item.id] = await uploadPhoto(item.id, file);
+        }
+      }
+
+      const payloadAnswers = items.map(item => ({
+        itemId: item.id,
+        ...(answers[item.id] || {}),
+        ...(uploaded[item.id] || {}),
+      }));
+
       const r = await fetch("/api/admin/denetimler/web-entry", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -182,10 +217,30 @@ export default function NewWebInspectionPage() {
                   )}
 
                   {mode === "SCORING" && (
-                    <label style={{ display:"block", maxWidth: 240 }}>
-                      <b>Puan (0–100)</b>
-                      <input type="number" min={0} max={100} value={a.score ?? ""} onChange={e => patch(item.id,{score:e.target.value})} style={field} />
-                    </label>
+                    <div>
+                      <b style={{ display: "block", marginBottom: 8 }}>Puan</b>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {[0, 25, 50, 75, 100].map(score => (
+                          <button
+                            type="button"
+                            key={score}
+                            onClick={() => patch(item.id, { score })}
+                            style={{
+                              ...pill,
+                              minWidth: 62,
+                              background: Number(a.score) === score ? "#991b1b" : "#fff",
+                              color: Number(a.score) === score ? "#fff" : "#334155",
+                              borderColor: Number(a.score) === score ? "#991b1b" : "#cbd5e1",
+                            }}
+                          >
+                            {score}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: 7, color: "#64748b", fontSize: 12 }}>
+                        0 Tamamen Uygunsuz · 25 Büyük Ölçüde Uygunsuz · 50 Kısmen Uygun · 75 Büyük Ölçüde Uygun · 100 Tam Uygun
+                      </div>
+                    </div>
                   )}
 
                   {mode === "ELMERI" && (
@@ -202,8 +257,19 @@ export default function NewWebInspectionPage() {
                   </div>
 
                   {mode === "PHOTO" && (
-                    <div style={{ marginTop: 9, fontSize: 12, color: "#92400e", fontWeight: 700 }}>
-                      Fotoğraf kanıt alanı bu akışın ikinci adımında mevcut Supabase Storage yapısına bağlanmalıdır; sonuç kaydı PHOTO modu ile ayrıştırılır.
+                    <div style={{ marginTop: 12, padding: 14, border: "1px dashed #cbd5e1", borderRadius: 14, background: "#f8fafc" }}>
+                      <div style={{ fontWeight: 900, marginBottom: 8 }}>Fotoğraf Kanıtı</div>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={e => choosePhoto(item.id, e.target.files?.[0] || null)}
+                      />
+                      {photoPreviews[item.id] && (
+                        <div style={{ marginTop: 10, display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                          <img src={photoPreviews[item.id]} alt="Denetim kanıtı önizleme" style={{ width: 180, height: 120, objectFit: "cover", borderRadius: 12, border: "1px solid #e2e8f0" }} />
+                          <button type="button" onClick={() => choosePhoto(item.id, null)} style={{ ...pill, background: "#fff" }}>Fotoğrafı Kaldır</button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -170,8 +170,10 @@ export async function POST(req: Request) {
       const a = incoming.get(clean(item.id)) || {};
       let result = clean(a.result);
       if (mode === "SCORING") {
-        const score = Math.max(0, Math.min(100, Number(a.score || 0)));
-        result = `SCORE:${Number.isFinite(score) ? score : 0}`;
+        const rawScore = Number(a.score);
+        const allowedScores = [0, 25, 50, 75, 100];
+        const score = allowedScores.includes(rawScore) ? rawScore : 0;
+        result = `SCORE:${score}`;
       } else if (mode === "ELMERI") {
         const correct = Math.max(0, Number(a.correct || 0));
         const wrong = Math.max(0, Number(a.wrong || 0));
@@ -185,8 +187,8 @@ export async function POST(req: Request) {
         legal_ref: clean(item.legal_reference),
         result,
         note: clean(a.note),
-        photo_path: null,
-        photo_url: null,
+        photo_path: clean(a.photoPath) || null,
+        photo_url: clean(a.photoUrl) || null,
         recommended_action: clean(a.recommendedAction) || clean(item.required_action),
         dof_status: calculateDofStatus(result),
         dof_closed_at: null,
