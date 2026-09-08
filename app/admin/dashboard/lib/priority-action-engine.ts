@@ -5,15 +5,10 @@ const pct = (part: number, total: number) =>
 
 export function buildPriorityActions(input: ScoreInput): PriorityAction[] {
   const actions: PriorityAction[] = [];
-
   const add = (x: PriorityAction) => {
     if (Number.isFinite(x.count) && x.count > 0) actions.push(x);
   };
 
-  /*
-   * Riskler iki ayrı yönetim seviyesi olarak gösterilir.
-   * Böylece "yüksek" riskler kritik risk sayısına karışmaz.
-   */
   add({
     id: "risk-critical",
     severity: "critical",
@@ -34,10 +29,6 @@ export function buildPriorityActions(input: ScoreInput): PriorityAction[] {
     source: "Risk",
   });
 
-  /*
-   * DÖF: termin aşımı kritik önceliktir.
-   * Termin aşımı yoksa fakat açık DÖF varsa yönetim ekranında orta öncelikle gösterilir.
-   */
   const openDof = input.dof?.open ?? 0;
 
   add({
@@ -62,10 +53,6 @@ export function buildPriorityActions(input: ScoreInput): PriorityAction[] {
     });
   }
 
-  /*
-   * ÇBS: SLA aşımı ve kritik öncelik aynı kayıtta kesişebileceği için
-   * iki ayrı aksiyon satırıyla mükerrer sayı üretmek yerine tek yönetim aksiyonu gösterilir.
-   */
   const cbsActionRequired = input.cbs?.actionRequired ?? 0;
   if (cbsActionRequired > 0) {
     actions.push({
@@ -130,6 +117,16 @@ export function buildPriorityActions(input: ScoreInput): PriorityAction[] {
   });
 
   add({
+    id: "periodic-approaching",
+    severity: "medium",
+    title: "Periyodik kontrol süresi yaklaşıyor",
+    description: "Önümüzdeki 30 gün içinde yenilenmesi gereken periyodik kontrol kayıtları bulunuyor.",
+    count: input.periodic?.approaching ?? 0,
+    href: "/admin/documentation/periodic-controls",
+    source: "Periyodik Kontrol",
+  });
+
+  add({
     id: "environment-overdue",
     severity: "medium",
     title: "Ortam ölçümleri yenilenmeli",
@@ -139,27 +136,26 @@ export function buildPriorityActions(input: ScoreInput): PriorityAction[] {
     source: "Ortam Ölçümleri",
   });
 
-  /*
-   * Denetim verisi varsa ve uygunsuz/kısmi sonuç oranı anlamlı düzeydeyse,
-   * yönetim aksiyon listesine eklenir. Veri yoksa aksiyon üretilmez.
-   */
+  add({
+    id: "environment-approaching",
+    severity: "medium",
+    title: "Ortam ölçümü yenileme tarihi yaklaşıyor",
+    description: "Önümüzdeki 30 gün içinde yenilenmesi gereken ortam ölçümü kayıtları bulunuyor.",
+    count: input.environment?.approaching ?? 0,
+    href: "/admin/documentation/periodic-controls",
+    source: "Ortam Ölçümleri",
+  });
+
   if (input.inspection && input.inspection.total > 0) {
-    const effectiveCompliant =
-      input.inspection.compliant + input.inspection.partial * 0.5;
-    const compliance = pct(effectiveCompliant, input.inspection.total);
-    const affected = Math.max(
-      0,
-      input.inspection.total -
-        input.inspection.compliant -
-        input.inspection.partial
-    );
+    const compliance = pct(input.inspection.compliant, input.inspection.total);
+    const affected = (input.inspection.partial ?? 0) + (input.inspection.nonCompliant ?? 0);
 
     if (compliance != null && compliance < 70) {
       add({
         id: "inspection-low-compliance",
         severity: "high",
         title: "Denetim uyumu düşük",
-        description: `Seçili dönemde denetim uyumu %${compliance}. Uygunsuz bulgular ve aksiyonlar gözden geçirilmelidir.`,
+        description: `Seçili dönemde denetim uyumu %${compliance}. Uygunsuz ve kısmi uygun bulgular gözden geçirilmelidir.`,
         count: affected > 0 ? affected : input.inspection.total,
         href: "/admin/denetimler",
         source: "Denetim",
@@ -169,8 +165,8 @@ export function buildPriorityActions(input: ScoreInput): PriorityAction[] {
         id: "inspection-followup",
         severity: "medium",
         title: "Denetim sonuçlarında iyileştirme gerekli",
-        description: `Seçili dönemde denetim uyumu %${compliance}. Kısmi uygunluklar ve açık bulgular takip edilmelidir.`,
-        count: affected > 0 ? affected : input.inspection.partial,
+        description: `Seçili dönemde denetim uyumu %${compliance}. Kısmi uygunluklar ve uygunsuz bulgular takip edilmelidir.`,
+        count: affected,
         href: "/admin/denetimler",
         source: "Denetim",
       });
@@ -178,13 +174,11 @@ export function buildPriorityActions(input: ScoreInput): PriorityAction[] {
   }
 
   const order = { critical: 0, high: 1, medium: 2 };
-
   return actions
-    .sort(
-      (a, b) =>
-        order[a.severity] - order[b.severity] ||
-        b.count - a.count ||
-        a.title.localeCompare(b.title, "tr")
+    .sort((a, b) =>
+      order[a.severity] - order[b.severity] ||
+      b.count - a.count ||
+      a.title.localeCompare(b.title, "tr")
     )
     .slice(0, 8);
 }

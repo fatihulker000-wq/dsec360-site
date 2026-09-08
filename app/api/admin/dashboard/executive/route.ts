@@ -65,7 +65,14 @@ function inspectionDofStatus(x:any){
   if(["OPEN","IN_PROGRESS","AÇIK","ACIK","DEVAM_EDIYOR","DEVAM EDİYOR"].includes(s))return "OPEN";
   return resultRequiresDof(x?.result)?"OPEN":"NONE";
 }
+function riskHasDof(x:any){
+  const status=clean(x?.dof_status);
+  const due=x?.dof_due_date_millis??x?.dof_due_date??x?.dof_due_at??x?.corrective_action_due_date??x?.action_due_date??x?.capa_due_date??null;
+  const action=clean(x?.corrective_action)||clean(x?.action_plan)||clean(x?.dof_action)||clean(x?.capa_action)||clean(x?.measure)||clean(x?.onlem);
+  return Boolean(status||due||action);
+}
 function riskDofStatus(x:any){
+  if(!riskHasDof(x)) return "NONE";
   const s=clean(x?.dof_status).toLocaleUpperCase("tr-TR");
   return ["CLOSED","KAPALI","TAMAMLANDI","COMPLETED","DONE"].includes(s)?"CLOSED":"OPEN";
 }
@@ -241,10 +248,10 @@ export async function GET(request:Request){
 
     // DÖF: Risk ve Denetim modüllerinin kendi kanonik mantığı ayrı ayrı hesaplanır, sonra birleştirilir.
     // Risk modülünde her risk kaydı DÖF durumuna sahiptir: CLOSED ise kapalı, diğerleri açık.
-    const riskRows=[...(matrixRisks||[]),...(kinneyRisks||[])];
+    const riskRows=[...(matrixRisks||[]),...(kinneyRisks||[])].filter(x=>riskHasDof(x));
     const riskDofTotal=riskRows.length;
     const riskDofClosed=riskRows.filter(x=>riskDofStatus(x)==="CLOSED").length;
-    const riskDofOpen=Math.max(0,riskDofTotal-riskDofClosed);
+    const riskDofOpen=riskRows.filter(x=>riskDofStatus(x)==="OPEN").length;
 
     // Denetim modülünde explicit DÖF durumu veya sonucu DÖF gerektiren maddeler kapsama girer.
     const inspectionDofRows=answers.filter(x=>inspectionDofStatus(x)!=="NONE");
@@ -303,7 +310,7 @@ export async function GET(request:Request){
     const lostTime=accidentRows.filter(x=>num(x.lost_work_days)>0).length;
     const openInvestigations=0;
 
-    const summarizeDue=(rows:any[]|null)=>{const all=rows||[];let valid=0,overdue=0;for(const x of all){const due=num(x.next_due_millis);if(due>0){if(due<now)overdue++;else valid++;continue}const st=lower(x.status);if(["valid","uygun","ok","gecerli","geçerli"].includes(st))valid++;else if(["overdue","expired","gecikmis","gecikmiş","suresi_gecmis","süresi geçmiş"].includes(st))overdue++}return{total:all.length,valid,overdue}};
+    const summarizeDue=(rows:any[]|null)=>{const all=rows||[];let valid=0,approaching=0,overdue=0;for(const x of all){const due=num(x.next_due_millis);if(due>0){if(due<now)overdue++;else if(due-now<=30*DAY)approaching++;else valid++;continue}const st=lower(x.status);if(["overdue","expired","gecikmis","gecikmiş","suresi_gecmis","süresi geçmiş"].includes(st))overdue++;else if(["approaching","yaklasiyor","yaklaşıyor","due_soon"].includes(st))approaching++;else if(["valid","uygun","ok","gecerli","geçerli"].includes(st))valid++}return{total:all.length,valid,approaching,overdue}};
     const periodicSummary=summarizeDue(periodic); const environmentSummary=summarizeDue(environment);
 
     const cbsRows=cbs||[]; const cbsOpen=cbsRows.filter(x=>!isClosed(x.status)).length;

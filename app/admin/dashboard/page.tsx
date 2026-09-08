@@ -21,8 +21,8 @@ type Modules={
   training?:{totalEmployees:number;compliantEmployees:number;nonCompliantEmployees:number;requiredMinutes:number;hazardClass:string}|null;
   incident?:{total:number;lostTime:number;openInvestigations:number}|null;
   health?:{totalEmployees:number;valid:number;approaching:number;overdue:number;missing:number;ek2Employees:number}|null;
-  periodic?:{total:number;valid:number;overdue:number}|null;
-  environment?:{total:number;valid:number;overdue:number}|null;
+  periodic?:{total:number;valid:number;approaching:number;overdue:number}|null;
+  environment?:{total:number;valid:number;approaching:number;overdue:number}|null;
   cbs?:{total:number;open:number;critical:number;slaExceeded:number;actionRequired?:number}|null;
 };
 type ExecutiveResponse={
@@ -141,19 +141,19 @@ export default function AdminDashboardPage(){
 
   const m=data?.modules;
   const trainingRate=m?.training?pct(m.training.compliantEmployees,m.training.totalEmployees):null;
-  const inspectionRate=m?.inspection?.total?Math.round((((m.inspection.compliant??0)+(m.inspection.partial??0)*.5)/m.inspection.total)*100):null;
+  const inspectionRate=m?.inspection?.total?Math.round(((m.inspection.compliant??0)/m.inspection.total)*100):null;
   const healthRate=m?.health?pct(m.health.valid,m.health.totalEmployees):null;
   const periodicRate=m?.periodic?pct(m.periodic.valid,m.periodic.total):null;
   const dofRate=m?.dof?pct(m.dof.closed,m.dof.total):null;
 
   const cards=useMemo(()=>[
-    {label:"Kritik / Yüksek Risk",value:m?.risk?(m.risk.critical+m.risk.high):null,sub:m?.risk?`${m.risk.intolerable} kabul edilemez · ${m.risk.veryHigh} çok yüksek · ${m.risk.high} yüksek · ${m.risk.total} toplam`:"Risk kaydı yok",icon:ShieldAlert,href:"/admin/risk",tone:((m?.risk?.critical??0)+(m?.risk?.high??0))>0?"critical":"good"},
+    {label:"Kritik Risk",value:m?.risk?m.risk.critical:null,sub:m?.risk?`${m.risk.intolerable} kabul edilemez · ${m.risk.veryHigh} çok yüksek · ${m.risk.high} yüksek · ${m.risk.total} toplam`:"Risk kaydı yok",icon:ShieldAlert,href:"/admin/risk",tone:(m?.risk?.critical??0)>0?"critical":"good"},
     {label:"Açık / Geciken DÖF",value:m?.dof?m.dof.open:0,sub:m?.dof?`${m.dof.overdue} termin aşımı · ${m.dof.riskOpen} risk · ${m.dof.inspectionOpen} denetim · ${m.dof.closed}/${m.dof.total} kapalı`:"0 kayıt · açık DÖF bulunmuyor",icon:Target,href:"/admin/denetimler?tab=dof&status=open#dof",tone:(m?.dof?.overdue??0)>0?"critical":"good"},
     {label:"Yasal Eğitim Uyumu",value:trainingRate==null?null:`%${trainingRate}`,sub:m?.training?`${m.training.compliantEmployees}/${m.training.totalEmployees} çalışan uygun · ${m.training.hazardClass}`:"Yasal eğitim verisi yok",icon:BookOpenCheck,href:"/admin/trainings",tone:state(trainingRate)},
     {label:"Denetim Uyumu",value:inspectionRate==null?0:`%${inspectionRate}`,sub:m?.inspection?`${m.inspection.total} kontrol maddesi · önceki döneme göre ${data?.trend?.inspection?.delta===undefined?"—":data.trend.inspection.delta>=0?`+${data.trend.inspection.delta}`:data.trend.inspection.delta}`:"0 kayıt · seçili dönemde denetim yok",icon:ClipboardCheck,href:"/admin/denetimler",tone:state(inspectionRate)},
     {label:"Sağlık Gözetimi",value:healthRate==null?null:`%${healthRate}`,sub:m?.health?`${m.health.overdue} geçmiş · ${m.health.missing} tarih/veri eksik · ${m.health.approaching} yaklaşıyor`:"Sağlık verisi yok",icon:Stethoscope,href:"/admin/health",tone:(m?.health?.overdue??0)>0?"critical":(m?.health?.missing??0)>0?"warning":state(healthRate)},
     {label:"Kaza / Olay",value:m?.incident?.total??0,sub:m?.incident?`${m.incident.lostTime} kayıp günlü · önceki döneme göre ${data?.trend?.incident?.delta===undefined?"—":data.trend.incident.delta>=0?`+${data.trend.incident.delta}`:data.trend.incident.delta}`:"0 kayıt · seçili dönemde kaza/olay yok",icon:Siren,href:"/admin/accidents",tone:(m?.incident?.lostTime??0)>0?"critical":"neutral"},
-    {label:"Periyodik Kontrol",value:periodicRate==null?null:`%${periodicRate}`,sub:m?.periodic?`${m.periodic.overdue} gecikmiş · ${m.periodic.valid}/${m.periodic.total} geçerli`:"Periyodik kontrol verisi yok",icon:Wrench,href:"/admin/documentation/periodic-controls",tone:(m?.periodic?.overdue??0)>0?"warning":state(periodicRate)},
+    {label:"Periyodik Kontrol",value:periodicRate==null?null:`%${periodicRate}`,sub:m?.periodic?`${m.periodic.valid} uygun · ${m.periodic.approaching} yaklaşan · ${m.periodic.overdue} gecikmiş · ${m.periodic.total} toplam`:"Periyodik kontrol verisi yok",icon:Wrench,href:"/admin/documentation/periodic-controls",tone:(m?.periodic?.overdue??0)>0?"warning":state(periodicRate)},
     {label:"ÇBS / SLA",value:m?.cbs?(m.cbs.actionRequired??m.cbs.open):0,sub:m?.cbs?`${m.cbs.slaExceeded} SLA aşımı · ${m.cbs.critical} kritik · ${m.cbs.open} açık`:"0 kayıt · aksiyon gerektiren ÇBS yok",icon:MessageSquareWarning,href:"/admin/cbs",tone:(m?.cbs?.slaExceeded??0)>0?"critical":"neutral"},
   ],[m,trainingRate,inspectionRate,healthRate,periodicRate]);
 
