@@ -127,6 +127,7 @@ export default async function AdminDenetimlerPage({
     status?: string;
     priority?: string;
     due?: string;
+    period?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -136,6 +137,7 @@ export default async function AdminDenetimlerPage({
   const activeDofStatus = String(sp?.status || "").trim().toUpperCase();
   const activeDofPriority = String(sp?.priority || "").trim().toUpperCase();
   const activeDofDue = String(sp?.due || "").trim().toUpperCase();
+  const activePeriod = String(sp?.period || "ALL").trim().toUpperCase();
 
   const activeDofPage = Math.max(1, Number(sp?.dofPage || 1));
   const activeRunPage = Math.max(1, Number(sp?.runPage || 1));
@@ -375,6 +377,51 @@ const activeFirmName =
         (firm) => normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm)
       )?.name || "Firma seçilmedi";
 
+function runDateMillis(run: any): number | null {
+  const value =
+    run.audit_date_millis ??
+    run.created_at_millis ??
+    run.inserted_at ??
+    run.created_at ??
+    null;
+
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") {
+    const ms = value < 10_000_000_000 ? value * 1000 : value;
+    return Number.isFinite(ms) ? ms : null;
+  }
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && String(value).trim() !== "") {
+    return numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+  }
+
+  const parsed = new Date(String(value)).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function periodStartMillis(period: string): number | null {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (period === "7D") return today.getTime() - 6 * 86_400_000;
+  if (period === "30D") return today.getTime() - 29 * 86_400_000;
+  if (period === "90D") return today.getTime() - 89 * 86_400_000;
+  if (period === "YEAR") return new Date(now.getFullYear(), 0, 1).getTime();
+  return null;
+}
+
+const periodStart = periodStartMillis(activePeriod);
+
+function periodHref(period: string) {
+  const params = new URLSearchParams();
+  if (activeType !== "ALL") params.set("type", activeType);
+  if (activeFirm !== "ALL") params.set("firmId", activeFirm);
+  if (period !== "ALL") params.set("period", period);
+  const q = params.toString();
+  return q ? `/admin/denetimler?${q}` : "/admin/denetimler";
+}
+
 const filteredRuns = safeRuns.filter((r: any) => {
   const label = modeLabel(r.eval_mode).toUpperCase();
   const firmId = getRunFirmId(r);
@@ -391,11 +438,16 @@ const filteredRuns = safeRuns.filter((r: any) => {
 
   const firmName = getRunFirmName(r);
 
-const firmOk =
-  activeFirm === "ALL" ||
-  normalizeFirmKey(firmId) === normalizeFirmKey(activeFirm);
+  const firmOk =
+    activeFirm === "ALL" ||
+    normalizeFirmKey(firmId) === normalizeFirmKey(activeFirm);
 
-  return typeOk && firmOk;
+  const dateMs = runDateMillis(r);
+  const periodOk =
+    periodStart === null ||
+    (dateMs !== null && dateMs >= periodStart && dateMs <= Date.now());
+
+  return typeOk && firmOk && periodOk;
 });
 
 const scopedRunIds = new Set(
@@ -638,25 +690,94 @@ const topFirmStats = scopedFirmStatsSource
   .slice(0, 5);
 
 
-  const premiumKpis: InspectionKpiItem[] = [
-    { title: "Toplam Denetim", value: filteredRuns.length, description: activeFirm === "ALL" ? "Tüm kayıtlar" : `${activeFirmName} kayıtları`, href: makeQuery("ALL", activeFirm), tone: "slate", badge: "Canlı" },
-    { title: "Klasik", value: klasikCount, description: "Standart kontrol", href: makeQuery("KLASIK", activeFirm), tone: "slate" },
-    { title: "Fotoğraflı", value: fotografliCount, description: "Görsel kanıtlı", href: makeQuery("FOTO", activeFirm), tone: "blue" },
-    { title: "Puanlamalı", value: puanCount, description: "Skor bazlı denetim", href: makeQuery("PUAN", activeFirm), tone: "amber" },
-    { title: "ELMERI", value: elmeriCount, description: "Gözlemsel analiz", href: makeQuery("ELMERI", activeFirm), tone: "green" },
-    { title: "Toplam Madde", value: totalAnswers, description: "Aktarılan bulgu", href: makeQuery(activeType, activeFirm), tone: "purple" },
-    { title: "Uygun", value: uygunCount, description: "Pozitif bulgu", href: makeQuery(activeType, activeFirm), tone: "green" },
-    { title: "Kısmen", value: kismenCount, description: "Geliştirilmeli", href: makeQuery(activeType, activeFirm), tone: "amber" },
-    { title: "Uygunsuz", value: uygunsuzCount, description: "Uygunsuz bulgu", href: makeQuery(activeType, activeFirm), tone: "red" },
-    { title: "Açık DÖF", value: openDofItems.length, description: "Takip bekliyor", href: makeDofQuery(activeType, activeFirm, "open"), tone: "red", badge: openDofItems.length > 0 ? "Aksiyon" : "Kontrollü" },
-    { title: "Kapalı DÖF", value: closedDofItems.length, description: "Tamamlanan faaliyet", href: makeDofQuery(activeType, activeFirm, "closed"), tone: "green" },
-  ];
-
   const evaluatedAnswerCount = uygunCount + kismenCount + uygunsuzCount;
   const conformityRate =
     evaluatedAnswerCount > 0
       ? Math.round((uygunCount / evaluatedAnswerCount) * 100)
       : 0;
+
+  const premiumKpis: InspectionKpiItem[] = [
+    {
+      title: "Toplam Denetim",
+      value: filteredRuns.length,
+      description: activeFirm === "ALL" ? "Seçili dönemde tüm firmalar" : `${activeFirmName} · seçili dönem`,
+      href: makeQuery("ALL", activeFirm),
+      tone: "slate",
+      badge: "Canlı",
+    },
+    {
+      title: "Denetim Uyumu",
+      value: `%${conformityRate}`,
+      description: `${uygunCount}/${evaluatedAnswerCount || 0} madde uygun`,
+      href: makeQuery(activeType, activeFirm),
+      tone: conformityRate >= 85 ? "green" : conformityRate >= 70 ? "amber" : "red",
+    },
+    {
+      title: "Açık DÖF",
+      value: openDofItems.length,
+      description: `${overdueDofItems.length} geciken faaliyet`,
+      href: makeDofQuery(activeType, activeFirm, "open"),
+      tone: openDofItems.length > 0 ? "red" : "green",
+      badge: openDofItems.length > 0 ? "Aksiyon" : "Kontrollü",
+    },
+    {
+      title: "Kritik Bulgu",
+      value: criticalFindingItems.length,
+      description: `${criticalOpenDofItems.length} kritik açık DÖF`,
+      href: makeDofQuery(activeType, activeFirm, "", "critical"),
+      tone: criticalFindingItems.length > 0 ? "red" : "green",
+    },
+    {
+      title: "DÖF Kapanma",
+      value: `%${dofClosureRate}`,
+      description: `${closedDofItems.length}/${dofItems.length || 0} faaliyet kapalı`,
+      href: makeDofQuery(activeType, activeFirm, "closed"),
+      tone: dofClosureRate >= 85 ? "green" : dofClosureRate >= 60 ? "amber" : "red",
+    },
+    {
+      title: "Geciken DÖF",
+      value: overdueDofItems.length,
+      description: upcomingDofItems.length > 0 ? `${upcomingDofItems.length} termin yaklaşıyor` : "Yaklaşan termin yok",
+      href: `${makeDofQuery(activeType, activeFirm, "open").replace("#dof", "")}&due=OVERDUE#dof`,
+      tone: overdueDofItems.length > 0 ? "red" : "green",
+    },
+  ];
+
+
+  // Şeffaf yönetim skoru: Uygunluk %50 + DÖF kapanma %30 + kritik kontrol %20.
+  // Veri yoksa "0 başarı" gibi yorumlanmaması için ayrıca dataHealthState üretilir.
+  const criticalOpenCount = criticalOpenDofItems.length;
+  const criticalControlRate =
+    openDofItems.length > 0
+      ? Math.max(0, Math.round(((openDofItems.length - criticalOpenCount) / openDofItems.length) * 100))
+      : 100;
+
+  const executiveScore =
+    filteredRuns.length === 0 || evaluatedAnswerCount === 0
+      ? null
+      : Math.round(
+          conformityRate * 0.5 +
+          dofClosureRate * 0.3 +
+          criticalControlRate * 0.2
+        );
+
+  const dataHealthState =
+    filteredRuns.length === 0
+      ? "NO_DATA"
+      : evaluatedAnswerCount === 0
+        ? "INSUFFICIENT"
+        : "OK";
+
+  const executiveScoreLabel =
+    executiveScore === null
+      ? "Veri yok"
+      : executiveScore >= 85
+        ? "Güçlü"
+        : executiveScore >= 70
+          ? "Kontrollü"
+          : executiveScore >= 50
+            ? "Gelişim gerekli"
+            : "Kritik aksiyon";
 
 
   const typeDistribution = [
@@ -796,6 +917,29 @@ const topFirmStats = scopedFirmStatsSource
         answerCount: countByRun.get(Number(run.id)) || 0,
         dofCount: dofCountByRun.get(Number(run.id)) || 0,
         appRunId: run.app_run_id,
+        firmId: getRunFirmId(run),
+        suitableCount: scopedAnswers.filter((a: any) =>
+          Number(a.run_remote_id) === Number(run.id) &&
+          normalizeText(a.result) === "UYGUN"
+        ).length,
+        partialCount: scopedAnswers.filter((a: any) =>
+          Number(a.run_remote_id) === Number(run.id) &&
+          normalizeText(a.result) === "KISMEN"
+        ).length,
+        unsuitableCount: scopedAnswers.filter((a: any) =>
+          Number(a.run_remote_id) === Number(run.id) &&
+          normalizeText(a.result) === "UYGUNSUZ"
+        ).length,
+        criticalCount: scopedAnswers.filter((a: any) =>
+          Number(a.run_remote_id) === Number(run.id) && isCriticalDof(a)
+        ).length,
+        openDofCount: scopedAnswers.filter((a: any) =>
+          Number(a.run_remote_id) === Number(run.id) &&
+          normalizeDofStatusFromAnswer(a) === "OPEN"
+        ).length,
+        overdueDofCount: scopedAnswers.filter((a: any) =>
+          Number(a.run_remote_id) === Number(run.id) && isOverdueDof(a)
+        ).length,
       };
     }
   );
@@ -904,6 +1048,59 @@ const topFirmStats = scopedFirmStatsSource
             })}
           </div>
         </div>
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            padding: "12px 14px",
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            background: "#fff",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: ".08em", color: "#9ca3af" }}>
+              TARİH KAPSAMI
+            </div>
+            <div style={{ marginTop: 3, fontSize: 13, fontWeight: 800, color: "#475569" }}>
+              Tüm KPI, DÖF, analitik ve kayıtlar aynı döneme göre hesaplanır.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {[
+              ["7D", "7 Gün"],
+              ["30D", "30 Gün"],
+              ["90D", "90 Gün"],
+              ["YEAR", "Bu Yıl"],
+              ["ALL", "Tümü"],
+            ].map(([value, label]) => {
+              const selected = activePeriod === value;
+              return (
+                <Link
+                  key={value}
+                  href={periodHref(value)}
+                  style={{
+                    textDecoration: "none",
+                    padding: "8px 13px",
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 900,
+                    border: selected ? "1px solid #991b1b" : "1px solid #e5e7eb",
+                    background: selected ? "#991b1b" : "#fff",
+                    color: selected ? "#fff" : "#475569",
+                  }}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
           <Link
             href={`/admin/denetimler/yeni${activeFirm !== "ALL" ? `?firmId=${encodeURIComponent(activeFirm)}` : ""}`}
@@ -924,6 +1121,41 @@ const topFirmStats = scopedFirmStatsSource
           </Link>
         </div>
       </section>
+
+      <div
+        style={{
+          marginBottom: 16,
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          alignItems: "center",
+          padding: "10px 14px",
+          borderRadius: 14,
+          background: "#fff",
+          border: "1px solid #e5e7eb",
+          color: "#475569",
+          fontSize: 12,
+          fontWeight: 800,
+        }}
+      >
+        <span style={{ color: "#991b1b", fontWeight: 950 }}>AKTİF YÖNETİM KAPSAMI</span>
+        <span>•</span>
+        <span>{activeFirmName}</span>
+        <span>•</span>
+        <span>
+          {activePeriod === "7D"
+            ? "Son 7 Gün"
+            : activePeriod === "30D"
+              ? "Son 30 Gün"
+              : activePeriod === "90D"
+                ? "Son 90 Gün"
+                : activePeriod === "YEAR"
+                  ? "Bu Yıl"
+                  : "Tüm Zamanlar"}
+        </span>
+        <span>•</span>
+        <span>{modeLabel(activeType === "ALL" ? "" : activeType)}{activeType === "ALL" ? "Tüm Denetim Tipleri" : ""}</span>
+      </div>
 
       <ExecutiveHero
         activeFirmName={activeFirmName}
@@ -952,35 +1184,64 @@ const topFirmStats = scopedFirmStatsSource
 
       <KPISection items={premiumKpis} />
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          gap: 16,
-          marginBottom: 22,
-        }}
-      >
-        <AnalysisCard
-          title="Kayıt Sağlığı"
-          value={emptyRunCount === 0 ? "Temiz" : `${emptyRunCount} uyarı`}
-          description={emptyRunCount === 0 ? "Bulgu boş kayıt görünmüyor" : "Bulgu sayısı 0 olan kayıt var"}
-          tone={emptyRunCount === 0 ? "good" : "bad"}
-        />
-        <AnalysisCard
-          title="Firma Kapsamı"
-          value={`${firmCount} firma`}
-          description={activeFirm === "ALL" ? "Tüm firmalar izleniyor" : `${activeFirmName} filtresi aktif`}
-          tone="neutral"
-        />
-        <AnalysisCard
-          title="Ortalama Madde"
-          value={`${avgAnswerPerRun}`}
-          description="Denetim başına ortalama bulgu/madde"
-          tone="neutral"
-        />
+
+
+
+
+      <section style={{ marginBottom: 22 }}>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".08em", color: "#7f1d1d" }}>
+            YÖNETİM KARAR DESTEK
+          </div>
+          <h2 style={{ margin: "6px 0 4px", fontSize: 24 }}>Denetim Yönetim Skoru</h2>
+          <p style={{ margin: 0, color: "#64748b", fontWeight: 600 }}>
+            Skorun hangi veriden oluştuğu açıkça gösterilir; veri yokluğu başarı olarak değerlendirilmez.
+          </p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12 }}>
+          <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
+            <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>YÖNETİM SKORU</span>
+            <div style={{ marginTop: 7, fontSize: 30, fontWeight: 1000, color: executiveScore !== null && executiveScore < 50 ? "#b91c1c" : "#1f2937" }}>
+              {executiveScore === null ? "—" : `${executiveScore}/100`}
+            </div>
+            <div style={{ marginTop: 6, fontWeight: 800, color: "#64748b" }}>{executiveScoreLabel}</div>
+          </article>
+
+          <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
+            <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>UYGUNLUK · %50 AĞIRLIK</span>
+            <div style={{ marginTop: 7, fontSize: 26, fontWeight: 1000 }}>%{conformityRate}</div>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>Uygun / değerlendirilen madde</div>
+          </article>
+
+          <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
+            <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>DÖF KAPANMA · %30 AĞIRLIK</span>
+            <div style={{ marginTop: 7, fontSize: 26, fontWeight: 1000 }}>%{dofClosureRate}</div>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>{closedDofItems.length}/{dofItems.length} DÖF kapalı</div>
+          </article>
+
+          <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
+            <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>KRİTİK KONTROL · %20 AĞIRLIK</span>
+            <div style={{ marginTop: 7, fontSize: 26, fontWeight: 1000 }}>%{criticalControlRate}</div>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>{criticalOpenCount} kritik açık DÖF</div>
+          </article>
+
+          <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
+            <span style={{ fontSize: 11, fontWeight: 900, color: "#94a3b8" }}>VERİ DURUMU</span>
+            <div style={{ marginTop: 7, fontSize: 20, fontWeight: 1000 }}>
+              {dataHealthState === "OK" ? "Hesaplanabilir" : dataHealthState === "NO_DATA" ? "Kayıt yok" : "Yetersiz veri"}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
+              {filteredRuns.length} denetim · {evaluatedAnswerCount} değerlendirilen madde
+            </div>
+          </article>
+        </div>
+
+        <div style={{ marginTop: 10, padding: "11px 14px", borderRadius: 14, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#64748b", fontSize: 12, fontWeight: 700 }}>
+          Formül: Uygunluk × 0,50 + DÖF Kapanma × 0,30 + Kritik Kontrol × 0,20.
+          Kapsam: {activeFirmName} · {activePeriod === "7D" ? "Son 7 Gün" : activePeriod === "30D" ? "Son 30 Gün" : activePeriod === "90D" ? "Son 90 Gün" : activePeriod === "YEAR" ? "Bu Yıl" : "Tüm Zamanlar"}.
+        </div>
       </section>
-
-
 
       <section style={{ marginBottom: 22 }}>
         <div style={{ marginBottom: 12 }}>
