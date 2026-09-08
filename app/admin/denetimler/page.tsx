@@ -185,7 +185,7 @@ export default async function AdminDenetimlerPage({
 
   let companiesQuery = supabase
     .from("companies")
-    .select("id, name")
+    .select("id, name, local_firm_id")
     .order("name", { ascending: true });
 
   if (isCompanyScoped) {
@@ -197,19 +197,41 @@ export default async function AdminDenetimlerPage({
 const companyList = companies || [];
 
 const companyNameById = new Map<string, string>();
+const companyUuidByAnyFirmKey = new Map<string, string>();
+
 companyList.forEach((c: any) => {
-  const id = String(c.id || "").trim();
+  const uuid = String(c.id || "").trim();
+  const localId = String(c.local_firm_id ?? "").trim();
   const name = cleanFirmName(c.name);
-  if (id) companyNameById.set(id, name);
+
+  if (!uuid) return;
+
+  companyNameById.set(uuid, name);
+  companyUuidByAnyFirmKey.set(normalizeFirmKey(uuid), uuid);
+  if (localId) companyUuidByAnyFirmKey.set(normalizeFirmKey(localId), uuid);
+  if (name) companyUuidByAnyFirmKey.set(normalizeFirmKey(name), uuid);
 });
 
+function getRunStoredFirmKey(run: any) {
+  return String(run.web_firm_id || run.firm_id || "").trim();
+}
+
 function getRunFirmId(run: any) {
-  return String(run.firm_id || "").trim();
+  const storedKey = getRunStoredFirmKey(run);
+  const byStoredKey = companyUuidByAnyFirmKey.get(normalizeFirmKey(storedKey));
+  if (byStoredKey) return byStoredKey;
+
+  const byName = companyUuidByAnyFirmKey.get(
+    normalizeFirmKey(cleanFirmName(run.firm_name || run.firma_adi))
+  );
+  return byName || "";
 }
 
 function getRunFirmName(run: any) {
-  const firmId = getRunFirmId(run);
-  return cleanFirmName(companyNameById.get(firmId) || run.firm_name);
+  const canonicalFirmId = getRunFirmId(run);
+  return cleanFirmName(
+    companyNameById.get(canonicalFirmId) || run.firm_name || run.firma_adi
+  );
 }
 
 
@@ -299,42 +321,22 @@ function isCriticalDof(a: any) {
   return false;
 }
 
-const firmMap = new Map<string, { id: string; name: string }>();
-
-safeRuns.forEach((r: any) => {
-  const firmId = String(r.firm_id || "").trim();
-
-  let firmName =
-    cleanFirmName(
-      companyNameById.get(firmId) ||
-      r.firm_name ||
-      r.firma_adi
-    );
-
-  if (!firmName || firmName === "Firma Ünvanı Yok") return;
-
-  const key = firmId || firmName;
-
-  if (!firmMap.has(key)) {
-    firmMap.set(key, {
-      id: key,
-      name: firmName,
-    });
-  }
-});
-
-const firmOptions = Array.from(firmMap.values()).sort((a, b) =>
-  a.name.localeCompare(b.name, "tr")
-);
+const firmOptions: InspectionFirmOption[] = companyList
+  .map((c: any) => ({
+    id: String(c.id || "").trim(),
+    name: cleanFirmName(c.name),
+  }))
+  .filter((firm: InspectionFirmOption) => Boolean(firm.id && firm.name))
+  .sort((a: InspectionFirmOption, b: InspectionFirmOption) =>
+    a.name.localeCompare(b.name, "tr")
+  );
 
 const activeFirmName =
   activeFirm === "ALL"
     ? "Tüm Firmalar"
     : firmOptions.find(
-        (firm) =>
-          normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm) ||
-          normalizeFirmKey(firm.name) === normalizeFirmKey(activeFirm)
-      )?.name || activeFirm;
+        (firm) => normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm)
+      )?.name || "Firma seçilmedi";
 
 const filteredRuns = safeRuns.filter((r: any) => {
   const label = modeLabel(r.eval_mode).toUpperCase();
@@ -351,8 +353,7 @@ const filteredRuns = safeRuns.filter((r: any) => {
 
 const firmOk =
   activeFirm === "ALL" ||
-  normalizeFirmKey(firmId) === normalizeFirmKey(activeFirm) ||
-  normalizeFirmKey(firmName) === normalizeFirmKey(activeFirm);
+  normalizeFirmKey(firmId) === normalizeFirmKey(activeFirm);
 
   return typeOk && firmOk;
 });
@@ -459,9 +460,7 @@ const scopedFirmStatsSource =
   activeFirm === "ALL"
     ? firmOptions
     : firmOptions.filter(
-        (firm) =>
-          normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm) ||
-          normalizeFirmKey(firm.name) === normalizeFirmKey(activeFirm)
+        (firm) => normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm)
       );
 
 const topFirmStats = scopedFirmStatsSource
@@ -510,8 +509,11 @@ const topFirmStats = scopedFirmStatsSource
     { title: "Kapalı DÖF", value: closedDofItems.length, description: "Tamamlanan faaliyet", href: makeDofQuery(activeType, activeFirm, "closed"), tone: "green" },
   ];
 
+  const evaluatedAnswerCount = uygunCount + kismenCount + uygunsuzCount;
   const conformityRate =
-    totalAnswers > 0 ? Math.round((uygunCount / totalAnswers) * 100) : 100;
+    evaluatedAnswerCount > 0
+      ? Math.round((uygunCount / evaluatedAnswerCount) * 100)
+      : 0;
 
 
   const typeDistribution = [
@@ -563,11 +565,15 @@ const topFirmStats = scopedFirmStatsSource
       inspections: company.count,
       answers: company.answers,
       conformity:
-        matchingAnswers.length > 0
-          ? Math.round(
-              (matchingSuitable / matchingAnswers.length) * 100
-            )
-          : 100,
+        (() => {
+          const evaluated = matchingAnswers.filter((answer: any) => {
+            const result = normalizeText(answer.result);
+            return result === "UYGUN" || result === "KISMEN" || result === "UYGUNSUZ";
+          }).length;
+          return evaluated > 0
+            ? Math.round((matchingSuitable / evaluated) * 100)
+            : 0;
+        })(),
     };
   });
 
@@ -641,6 +647,22 @@ const topFirmStats = scopedFirmStatsSource
         minHeight: "100vh",
       }}
     >
+      <section style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 10, fontSize: 12, fontWeight: 900, letterSpacing: ".08em", color: "#7f1d1d" }}>
+          DENETİM KAPSAMI · FİRMA UUID
+        </div>
+        <FilterToolbar
+        activeFirm={activeFirm}
+        activeFirmName={activeFirmName}
+        activeType={activeType}
+        firms={firmOptions}
+        makeFirmHref={(firm: string) => makeQuery(activeType, firm)}
+        isActiveFirm={(firm: InspectionFirmOption) =>
+          normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.id)
+        }
+      />
+      </section>
+
       <ExecutiveHero
         activeFirmName={activeFirmName}
         totalInspections={filteredRuns.length}
@@ -696,17 +718,7 @@ const topFirmStats = scopedFirmStatsSource
         />
       </section>
 
-      <FilterToolbar
-        activeFirm={activeFirm}
-        activeFirmName={activeFirmName}
-        activeType={activeType}
-        firms={firmOptions}
-        makeFirmHref={(firm: string) => makeQuery(activeType, firm)}
-        isActiveFirm={(firm: InspectionFirmOption) =>
-          normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.id) ||
-          normalizeFirmKey(activeFirm) === normalizeFirmKey(firm.name)
-        }
-      />
+
 
       <AnalyticsSection
         totalInspections={filteredRuns.length}

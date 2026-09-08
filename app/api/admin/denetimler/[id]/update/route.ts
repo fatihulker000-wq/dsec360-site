@@ -1,31 +1,24 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { assertInspectionRunScope } from "@/lib/inspection/routeScope";
 
 export const runtime = "nodejs";
 
 function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const remoteId = Number(id);
-
-    if (!remoteId) {
-      return NextResponse.json({ error: "Geçersiz denetim ID." }, { status: 400 });
-    }
-
-    const body = await req.json();
+    if (!remoteId) return NextResponse.json({ error: "Geçersiz denetim ID." }, { status: 400 });
 
     const supabase = getSupabase();
+    const scope = await assertInspectionRunScope(supabase, remoteId);
+    if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status });
 
+    const body = await req.json();
     const { error } = await supabase
       .from("denetim_runs")
       .update({
@@ -38,17 +31,12 @@ export async function PATCH(
         report_no: body.report_no,
         general_note: body.general_note,
       })
-      .eq("id", remoteId);
+      .eq("id", remoteId)
+      .eq("firm_id", scope.run.firm_id);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message || "Denetim güncelleme hatası." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error?.message || "Denetim güncelleme hatası." }, { status: 500 });
   }
 }
