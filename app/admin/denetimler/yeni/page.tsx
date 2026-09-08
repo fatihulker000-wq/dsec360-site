@@ -8,6 +8,16 @@ type Firm = { id: string; name: string };
 type Item = { id: string; order_no: number; title: string; question: string; photo_required?: boolean };
 type Form = { id: string; title: string; code: string; category: string; audit_modes?: string[]; items?: Item[] };
 
+
+async function readJsonResponse(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+  if (!contentType.includes("application/json")) {
+    throw new Error(`Sunucu JSON yerine ${response.status} yanıtı döndürdü. API route/deploy kontrol edilmeli.`);
+  }
+  try { return JSON.parse(text); } catch { throw new Error("Sunucudan geçersiz JSON yanıtı geldi."); }
+}
+
 const modeLabel: Record<Mode, string> = {
   CLASSIC: "Klasik",
   PHOTO: "Fotoğraflı",
@@ -30,6 +40,7 @@ export default function NewWebInspectionPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [readOnly, setReadOnly] = useState(false);
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -39,7 +50,7 @@ export default function NewWebInspectionPage() {
 
   useEffect(() => {
     fetch("/api/admin/denetimler/web-entry/firms", { cache: "no-store" })
-      .then(r => r.json())
+      .then(readJsonResponse)
       .then(j => {
         if (!j.success) throw new Error(j.error || "Firmalar alınamadı.");
         setFirms(j.firms || []);
@@ -57,13 +68,14 @@ export default function NewWebInspectionPage() {
     if (!firmId) { setForms([]); setFormId(""); return; }
     setLoading(true); setError("");
     fetch(`/api/admin/denetimler/web-entry?firmId=${encodeURIComponent(firmId)}&mode=${mode}`, { cache: "no-store" })
-      .then(r => r.json())
+      .then(readJsonResponse)
       .then(j => {
         if (!j.success) throw new Error(j.error || "Formlar alınamadı.");
         setForms(j.forms || []);
         setReadOnly(Boolean(j.readOnly));
         setFormId("");
         setAnswers({});
+        setStarted(false);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -94,7 +106,7 @@ export default function NewWebInspectionPage() {
           answers: payloadAnswers,
         }),
       });
-      const j = await r.json();
+      const j = await readJsonResponse(r);
       if (!j.success) throw new Error(j.detail || j.error || "Denetim kaydedilemedi.");
       router.push(`/admin/denetimler?firmId=${encodeURIComponent(firmId)}`);
       router.refresh();
@@ -124,7 +136,7 @@ export default function NewWebInspectionPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
             <label><b>Firma</b><select value={firmId} onChange={e => setFirmId(e.target.value)} style={field}><option value="">Firma seçin</option>{firms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
             <label><b>Denetim Tipi</b><select value={mode} onChange={e => setMode(e.target.value as Mode)} style={field}>{Object.entries(modeLabel).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-            <label><b>Denetim Formu</b><select value={formId} onChange={e => { setFormId(e.target.value); setAnswers({}); }} style={field}><option value="">{loading ? "Yükleniyor..." : "Yayınlanmış form seçin"}</option>{forms.map(f => <option key={f.id} value={f.id}>{f.title} {f.code ? `• ${f.code}` : ""}</option>)}</select></label>
+            <label><b>Denetim Formu</b><select value={formId} onChange={e => { setFormId(e.target.value); setAnswers({}); setStarted(false); }} style={field}><option value="">{loading ? "Yükleniyor..." : "Yayınlanmış form seçin"}</option>{forms.map(f => <option key={f.id} value={f.id}>{f.title} {f.code ? `• ${f.code}` : ""}</option>)}</select></label>
             <label><b>Denetim Tarihi</b><input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} style={field} /></label>
             <label><b>Denetçi</b><input value={inspectorName} onChange={e => setInspectorName(e.target.value)} style={field} placeholder="Ad Soyad" /></label>
             <label><b>Lokasyon / Bölüm</b><input value={location} onChange={e => setLocation(e.target.value)} style={field} placeholder="Örn. Depo A" /></label>
@@ -132,7 +144,20 @@ export default function NewWebInspectionPage() {
           </div>
         </section>
 
-        {selectedForm && (
+        {selectedForm && !started && (
+          <section style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 20, padding: 20, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 900, color: "#991b1b", letterSpacing: ".06em" }}>DENETİM HAZIR</div>
+              <div style={{ fontSize: 20, fontWeight: 900, marginTop: 4 }}>{selectedForm.title}</div>
+              <div style={{ color: "#64748b", marginTop: 4 }}>{items.length} madde · {modeLabel[mode]} değerlendirme</div>
+            </div>
+            <button disabled={loading || readOnly || items.length === 0} onClick={() => setStarted(true)} style={{ ...saveBtn, opacity: loading || readOnly || items.length === 0 ? .55 : 1 }}>
+              {items.length === 0 ? "Formda Madde Yok" : "Denetimi Başlat →"}
+            </button>
+          </section>
+        )}
+
+        {selectedForm && started && (
           <section style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 20, overflow: "hidden" }}>
             <div style={{ padding: 18, borderBottom: "1px solid #e2e8f0" }}>
               <strong style={{ fontSize: 20 }}>{selectedForm.title}</strong>
