@@ -31,19 +31,53 @@ type DistributionItem = {
 
 function percent(value: number, total: number) {
   if (total <= 0) return 0;
+
   return Math.round((value / total) * 100);
+}
+
+function safeNumber(value: unknown) {
+  if (typeof value !== "number") return 0;
+
+  if (!Number.isFinite(value)) return 0;
+
+  return Math.max(0, value);
 }
 
 export default function RiskDistributionChart({
   totals,
   loading = false,
 }: Props) {
+  /**
+   * =========================================================
+   * V2 RISK DISTRIBUTION
+   *
+   * RiskDashboardTotals artık her risk seviyesini:
+   *
+   * {
+   *   open,
+   *   closed,
+   *   total
+   * }
+   *
+   * şeklinde döndürüyor.
+   *
+   * Bu nedenle eski:
+   * lowRisk
+   * mediumRisk
+   * highRisk
+   * criticalRisk
+   * intolerableRisk
+   *
+   * alanları kullanılmıyor.
+   * =========================================================
+   */
+
   const items = useMemo<DistributionItem[]>(
     () => [
       {
         key: "LOW",
         label: "Düşük",
-        value: totals.lowRisk,
+        value: safeNumber(totals.low?.total),
         color: "#16a34a",
         background: "#dcfce7",
         text: "#166534",
@@ -51,7 +85,7 @@ export default function RiskDistributionChart({
       {
         key: "MEDIUM",
         label: "Orta",
-        value: totals.mediumRisk,
+        value: safeNumber(totals.medium?.total),
         color: "#eab308",
         background: "#fef9c3",
         text: "#854d0e",
@@ -59,7 +93,7 @@ export default function RiskDistributionChart({
       {
         key: "HIGH",
         label: "Yüksek",
-        value: totals.highRisk,
+        value: safeNumber(totals.high?.total),
         color: "#f97316",
         background: "#ffedd5",
         text: "#9a3412",
@@ -67,10 +101,7 @@ export default function RiskDistributionChart({
       {
         key: "VERY_HIGH",
         label: "Çok Yüksek",
-        value: Math.max(
-          totals.criticalRisk - totals.intolerableRisk,
-          0
-        ),
+        value: safeNumber(totals.veryHigh?.total),
         color: "#dc2626",
         background: "#fee2e2",
         text: "#991b1b",
@@ -78,7 +109,9 @@ export default function RiskDistributionChart({
       {
         key: "INTOLERABLE",
         label: "Kabul Edilemez",
-        value: totals.intolerableRisk,
+        value: safeNumber(
+          totals.intolerable?.total
+        ),
         color: "#7f1d1d",
         background: "#fecaca",
         text: "#7f1d1d",
@@ -87,13 +120,68 @@ export default function RiskDistributionChart({
     [totals]
   );
 
-  const total = totals.totalRisk;
+  /**
+   * totalRisk API tarafından gönderilen ana toplamdır.
+   *
+   * Güvenlik amacıyla sayı değilse veya negatifse 0 kabul edilir.
+   */
+  const total = safeNumber(totals.totalRisk);
+
+  /**
+   * Grafikteki dağılım toplamı.
+   *
+   * Normal şartlarda totalRisk ile aynı olmalıdır.
+   * Ancak backend geçişlerinde veri tutarsızlığı olması halinde
+   * SVG oranlarının bozulmaması için grafik toplamı ayrıca tutulur.
+   */
+  const distributionTotal = useMemo(
+    () =>
+      items.reduce(
+        (sum, item) => sum + item.value,
+        0
+      ),
+    [items]
+  );
+
+  /**
+   * Görsel yüzdelerde risk seviyelerinin gerçek toplamını
+   * esas alıyoruz.
+   *
+   * Eğer dağılım henüz oluşmamış ancak totalRisk gelmişse
+   * totalRisk fallback olarak kullanılır.
+   */
+  const chartTotal =
+    distributionTotal > 0
+      ? distributionTotal
+      : total;
 
   const dominant = useMemo(() => {
     return [...items].sort(
       (a, b) => b.value - a.value
     )[0];
   }, [items]);
+
+  /**
+   * V2 modelinde:
+   *
+   * criticalIntervention =
+   * Açık Çok Yüksek + Açık Kabul Edilemez
+   *
+   * Bu sayı yönetim müdahalesi gerektiren aktif kritik riskleri
+   * temsil eder.
+   */
+  const criticalIntervention = safeNumber(
+    totals.criticalIntervention
+  );
+
+  /**
+   * Risk kapanma yüzdesi backend tarafından hesaplanıyor.
+   * Değeri 0-100 sınırında tutuyoruz.
+   */
+  const closureRate = Math.min(
+    100,
+    safeNumber(totals.closureRate)
+  );
 
   const circumference = 2 * Math.PI * 78;
 
@@ -110,6 +198,10 @@ export default function RiskDistributionChart({
           "0 14px 35px rgba(15,23,42,0.05)",
       }}
     >
+      {/* =====================================================
+          HEADER
+      ====================================================== */}
+
       <div
         style={{
           display: "flex",
@@ -130,7 +222,11 @@ export default function RiskDistributionChart({
               fontWeight: 900,
             }}
           >
-            <PieChart size={19} color="#6d28d9" />
+            <PieChart
+              size={19}
+              color="#6d28d9"
+            />
+
             Risk Dağılımı
           </div>
 
@@ -141,7 +237,8 @@ export default function RiskDistributionChart({
               fontSize: 13,
             }}
           >
-            Risk seviyelerinin kurumsal dağılım görünümü
+            Risk seviyelerinin kurumsal dağılım
+            görünümü
           </p>
         </div>
 
@@ -156,9 +253,15 @@ export default function RiskDistributionChart({
             fontWeight: 850,
           }}
         >
-          {loading ? "Yükleniyor" : `${total} kayıt`}
+          {loading
+            ? "Yükleniyor"
+            : `${total} kayıt`}
         </span>
       </div>
+
+      {/* =====================================================
+          LOADING
+      ====================================================== */}
 
       {loading ? (
         <div
@@ -171,7 +274,12 @@ export default function RiskDistributionChart({
             backgroundSize: "200% 100%",
           }}
         />
-      ) : total === 0 ? (
+      ) : total === 0 &&
+        distributionTotal === 0 ? (
+        /* =================================================
+           EMPTY STATE
+        ================================================== */
+
         <div
           style={{
             height: 320,
@@ -186,27 +294,38 @@ export default function RiskDistributionChart({
         >
           <div>
             <CircleDot size={36} />
+
             <p
               style={{
                 margin: "10px 0 0",
                 fontWeight: 800,
               }}
             >
-              Dağılım oluşturacak risk kaydı yok.
+              Dağılım oluşturacak risk kaydı
+              yok.
             </p>
           </div>
         </div>
       ) : (
+        /* =================================================
+           DISTRIBUTION CONTENT
+        ================================================== */
+
         <div
           className="distributionGrid"
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr)",
+            gridTemplateColumns:
+              "minmax(0, 1fr)",
             gap: 18,
             alignItems: "start",
             minWidth: 0,
           }}
         >
+          {/* =================================================
+              DONUT
+          ================================================== */}
+
           <div
             style={{
               display: "grid",
@@ -238,8 +357,9 @@ export default function RiskDistributionChart({
 
                 {items.map((item) => {
                   const ratio =
-                    total > 0
-                      ? item.value / total
+                    chartTotal > 0
+                      ? item.value /
+                        chartTotal
                       : 0;
 
                   const segmentLength =
@@ -248,7 +368,8 @@ export default function RiskDistributionChart({
                   const dashOffset =
                     -runningOffset;
 
-                  runningOffset += segmentLength;
+                  runningOffset +=
+                    segmentLength;
 
                   return (
                     <circle
@@ -260,15 +381,20 @@ export default function RiskDistributionChart({
                       stroke={item.color}
                       strokeWidth="22"
                       strokeDasharray={`${segmentLength} ${
-                        circumference - segmentLength
+                        circumference -
+                        segmentLength
                       }`}
-                      strokeDashoffset={dashOffset}
+                      strokeDashoffset={
+                        dashOffset
+                      }
                       strokeLinecap="butt"
                       transform="rotate(-90 100 100)"
                     />
                   );
                 })}
               </svg>
+
+              {/* CENTER */}
 
               <div
                 style={{
@@ -289,7 +415,8 @@ export default function RiskDistributionChart({
                       lineHeight: 1,
                     }}
                   >
-                    {total}
+                    {total ||
+                      distributionTotal}
                   </div>
 
                   <div
@@ -306,12 +433,17 @@ export default function RiskDistributionChart({
               </div>
             </div>
 
+            {/* =================================================
+                DOMINANT LEVEL
+            ================================================== */}
+
             <div
               style={{
                 marginTop: 16,
                 width: "100%",
                 borderRadius: 16,
-                background: dominant.background,
+                background:
+                  dominant.background,
                 border: `1px solid ${dominant.color}33`,
                 padding: 13,
               }}
@@ -320,7 +452,8 @@ export default function RiskDistributionChart({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
+                  justifyContent:
+                    "space-between",
                   gap: 12,
                 }}
               >
@@ -354,11 +487,19 @@ export default function RiskDistributionChart({
                     fontWeight: 950,
                   }}
                 >
-                  %{percent(dominant.value, total)}
+                  %
+                  {percent(
+                    dominant.value,
+                    chartTotal
+                  )}
                 </div>
               </div>
             </div>
           </div>
+
+          {/* =================================================
+              DISTRIBUTION LIST
+          ================================================== */}
 
           <div
             style={{
@@ -368,10 +509,11 @@ export default function RiskDistributionChart({
             }}
           >
             {items.map((item) => {
-              const itemPercent = percent(
-                item.value,
-                total
-              );
+              const itemPercent =
+                percent(
+                  item.value,
+                  chartTotal
+                );
 
               return (
                 <div
@@ -385,14 +527,16 @@ export default function RiskDistributionChart({
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "space-between",
+                      justifyContent:
+                        "space-between",
                       gap: 10,
                     }}
                   >
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "center",
+                        alignItems:
+                          "center",
                         gap: 8,
                       }}
                     >
@@ -401,7 +545,9 @@ export default function RiskDistributionChart({
                           width: 11,
                           height: 11,
                           borderRadius: 999,
-                          background: item.color,
+                          background:
+                            item.color,
+                          flex: "0 0 auto",
                         }}
                       />
 
@@ -411,7 +557,8 @@ export default function RiskDistributionChart({
                           fontSize: 12,
                           fontWeight: 850,
                           minWidth: 0,
-                          overflowWrap: "anywhere",
+                          overflowWrap:
+                            "anywhere",
                         }}
                       >
                         {item.label}
@@ -427,7 +574,8 @@ export default function RiskDistributionChart({
                         flex: "0 0 auto",
                       }}
                     >
-                      {item.value} · %{itemPercent}
+                      {item.value} · %
+                      {itemPercent}
                     </div>
                   </div>
 
@@ -443,17 +591,25 @@ export default function RiskDistributionChart({
                       style={{
                         width: `${itemPercent}%`,
                         minWidth:
-                          item.value > 0 ? 8 : 0,
+                          item.value > 0
+                            ? 8
+                            : 0,
                         height: "100%",
                         borderRadius: 999,
-                        background: item.color,
-                        transition: "width .25s ease",
+                        background:
+                          item.color,
+                        transition:
+                          "width .25s ease",
                       }}
                     />
                   </div>
                 </div>
               );
             })}
+
+            {/* =================================================
+                MANAGEMENT KPI CARDS
+            ================================================== */}
 
             <div
               style={{
@@ -464,12 +620,15 @@ export default function RiskDistributionChart({
                 gap: 10,
               }}
             >
+              {/* CLOSURE RATE */}
+
               <div
                 style={{
                   borderRadius: 15,
                   padding: 13,
                   background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
+                  border:
+                    "1px solid #e2e8f0",
                 }}
               >
                 <Gauge
@@ -485,7 +644,9 @@ export default function RiskDistributionChart({
                     fontWeight: 950,
                   }}
                 >
-                  {totals.averageScore}
+                  %{Math.round(
+                    closureRate
+                  )}
                 </div>
 
                 <div
@@ -495,32 +656,53 @@ export default function RiskDistributionChart({
                     fontWeight: 800,
                   }}
                 >
-                  Ortalama skor
+                  Risk kapanma oranı
                 </div>
               </div>
+
+              {/* CRITICAL INTERVENTION */}
 
               <div
                 style={{
                   borderRadius: 15,
                   padding: 13,
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
+                  background:
+                    criticalIntervention >
+                    0
+                      ? "#fff7f7"
+                      : "#f8fafc",
+                  border:
+                    criticalIntervention >
+                    0
+                      ? "1px solid #fecaca"
+                      : "1px solid #e2e8f0",
                 }}
               >
                 <BarChart3
                   size={17}
-                  color="#475569"
+                  color={
+                    criticalIntervention >
+                    0
+                      ? "#b91c1c"
+                      : "#475569"
+                  }
                 />
 
                 <div
                   style={{
                     marginTop: 8,
-                    color: "#0f172a",
+                    color:
+                      criticalIntervention >
+                      0
+                        ? "#991b1b"
+                        : "#0f172a",
                     fontSize: 22,
                     fontWeight: 950,
                   }}
                 >
-                  {totals.criticalRisk}
+                  {
+                    criticalIntervention
+                  }
                 </div>
 
                 <div
@@ -530,7 +712,19 @@ export default function RiskDistributionChart({
                     fontWeight: 800,
                   }}
                 >
-                  Kritik toplamı
+                  Kritik müdahale
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 3,
+                    color: "#94a3b8",
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}
+                >
+                  Açık Çok Yüksek +
+                  Kabul Edilemez
                 </div>
               </div>
             </div>
@@ -540,8 +734,8 @@ export default function RiskDistributionChart({
 
       <style jsx>{`
         .distributionSkeleton {
-          animation: distribution-loading 1.2s
-            linear infinite;
+          animation: distribution-loading
+            1.2s linear infinite;
         }
 
         @keyframes distribution-loading {
