@@ -83,6 +83,9 @@ function RiskLevelCard({
   return (
     <article
       style={{
+        minWidth: 0,
+        width: "100%",
+        boxSizing: "border-box",
         minHeight: 178,
         borderRadius: 22,
         border: "1px solid #e5e7eb",
@@ -93,7 +96,7 @@ function RiskLevelCard({
         gap: 14,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, minWidth: 0 }}>
         <div
           style={{
             width: 44,
@@ -145,7 +148,7 @@ function RiskLevelCard({
           style={{
             marginTop: 12,
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
             gap: 8,
           }}
         >
@@ -157,7 +160,7 @@ function RiskLevelCard({
               border: "1px solid #fed7aa",
             }}
           >
-            <div style={{ fontSize: 10, fontWeight: 900, color: "#9a3412" }}>
+            <div style={{ fontSize: 10, fontWeight: 900, color: "#9a3412", overflowWrap: "anywhere" }}>
               AÇIK
             </div>
             <div style={{ marginTop: 2, fontSize: 18, fontWeight: 950, color: "#9a3412" }}>
@@ -173,7 +176,7 @@ function RiskLevelCard({
               border: "1px solid #a7f3d0",
             }}
           >
-            <div style={{ fontSize: 10, fontWeight: 900, color: "#047857" }}>
+            <div style={{ fontSize: 10, fontWeight: 900, color: "#047857", overflowWrap: "anywhere" }}>
               KAPALI
             </div>
             <div style={{ marginTop: 2, fontSize: 18, fontWeight: 950, color: "#047857" }}>
@@ -210,6 +213,9 @@ function ManagementCard({
   return (
     <article
       style={{
+        minWidth: 0,
+        width: "100%",
+        boxSizing: "border-box",
         minHeight: 128,
         borderRadius: 20,
         border: `1px solid ${selectedTone.border}`,
@@ -217,9 +223,9 @@ function ManagementCard({
         padding: 16,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
         <div style={{ color: selectedTone.color }}>{icon}</div>
-        <div style={{ color: selectedTone.color, fontSize: 12, fontWeight: 900 }}>
+        <div style={{ color: selectedTone.color, fontSize: 12, fontWeight: 900, minWidth: 0, overflowWrap: "anywhere" }}>
           {title}
         </div>
       </div>
@@ -244,7 +250,16 @@ export default function DashboardCards({ risk, emergency, loading = false }: Pro
   };
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
+    <div
+      style={{
+        display: "grid",
+        gap: 18,
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+      }}
+    >
       <section>
         <div style={{ marginBottom: 10 }}>
           <div style={{ color: "#0f172a", fontSize: 16, fontWeight: 950 }}>
@@ -259,8 +274,11 @@ export default function DashboardCards({ risk, emergency, loading = false }: Pro
           className="riskLevelGrid"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(6, minmax(190px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
             gap: 12,
+            width: "100%",
+            maxWidth: "100%",
+            minWidth: 0,
           }}
         >
           <RiskLevelCard title="Toplam Risk" description="Tüm sınıflandırılmış risk kayıtları" values={risk.total} tone="blue" icon={<BarChart3 size={21} />} loading={loading} />
@@ -286,8 +304,11 @@ export default function DashboardCards({ risk, emergency, loading = false }: Pro
           className="managementGrid"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(5, minmax(180px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
             gap: 12,
+            width: "100%",
+            maxWidth: "100%",
+            minWidth: 0,
           }}
         >
           <ManagementCard title="Kritik Müdahale" value={risk.criticalIntervention} subtitle="Açık Çok Yüksek + Açık Kabul Edilemez riskler" tone="red" icon={<ShieldAlert size={19} />} loading={loading} />
@@ -308,8 +329,11 @@ export default function DashboardCards({ risk, emergency, loading = false }: Pro
           className="emergencyGrid"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(5, minmax(180px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
             gap: 12,
+            width: "100%",
+            maxWidth: "100%",
+            minWidth: 0,
           }}
         >
           <ManagementCard title="Acil Durum Planı" value={emergencyStats.totalPlans} subtitle="Firma için oluşturulan eylem planları" tone="blue" icon={<ClipboardCheck size={19} />} loading={loading} />
@@ -328,17 +352,19 @@ export default function DashboardCards({ risk, emergency, loading = false }: Pro
           0%, 100% { opacity: 0.55; }
           50% { opacity: 1; }
         }
-        @media (max-width: 1450px) {
-          .riskLevelGrid {
-            grid-template-columns: repeat(3, minmax(210px, 1fr)) !important;
-          }
+        /*
+         * Bu gridler viewport genişliğine değil, içinde bulundukları gerçek
+         * panel genişliğine göre otomatik kolon kırar. Böylece sol menü açıkken
+         * sağdaki son kart ekrandan taşmaz.
+         */
+        .riskLevelGrid,
+        .managementGrid,
+        .emergencyGrid {
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
         }
-        @media (max-width: 1100px) {
-          .managementGrid,
-          .emergencyGrid {
-            grid-template-columns: repeat(2, minmax(220px, 1fr)) !important;
-          }
-        }
+
         @media (max-width: 760px) {
           .riskLevelGrid,
           .managementGrid,
@@ -350,4 +376,3 @@ export default function DashboardCards({ risk, emergency, loading = false }: Pro
     </div>
   );
 }
-
