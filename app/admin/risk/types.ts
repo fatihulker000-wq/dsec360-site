@@ -21,6 +21,14 @@ export type RiskLevel =
   | "VERY_HIGH"
   | "INTOLERABLE";
 
+export type RiskStatus = "OPEN" | "CLOSED";
+
+export interface RiskStatusBreakdown {
+  open: number;
+  closed: number;
+  total: number;
+}
+
 export interface RiskRecord {
   id: UUID;
 
@@ -48,6 +56,10 @@ export interface RiskRecord {
 
   completed: boolean;
 
+  /** Risk kaydının kendi yaşam döngüsü. DÖF durumundan bağımsızdır. */
+  riskStatus: RiskStatus;
+  riskClosedAtMillis: number | null;
+
   probability: number;
 
   frequency: number;
@@ -72,20 +84,23 @@ export interface RiskRecord {
 export interface RiskDashboardTotals {
   totalRisk: number;
 
-  criticalRisk: number;
+  total: RiskStatusBreakdown;
+  low: RiskStatusBreakdown;
+  medium: RiskStatusBreakdown;
+  high: RiskStatusBreakdown;
+  veryHigh: RiskStatusBreakdown;
+  intolerable: RiskStatusBreakdown;
 
-  intolerableRisk: number;
+  /** Açık Çok Yüksek + Açık Kabul Edilemez */
+  criticalIntervention: number;
 
-  highRisk: number;
+  /** Termin tarihi geçmiş ve DÖF'ü açık kayıtlar */
+  overdueAction: number;
 
-  mediumRisk: number;
-
-  lowRisk: number;
-
-  averageScore: number;
+  /** Kapalı risk / toplam risk */
+  closureRate: number;
 
   openDof: number;
-
   closedDof: number;
 }
 

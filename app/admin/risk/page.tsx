@@ -58,14 +58,19 @@ type CompaniesResponse = {
   error?: string;
 };
 
+const EMPTY_BUCKET = { open: 0, closed: 0, total: 0 };
+
 const EMPTY_RISK_TOTALS: RiskDashboardTotals = {
   totalRisk: 0,
-  criticalRisk: 0,
-  intolerableRisk: 0,
-  highRisk: 0,
-  mediumRisk: 0,
-  lowRisk: 0,
-  averageScore: 0,
+  total: { ...EMPTY_BUCKET },
+  low: { ...EMPTY_BUCKET },
+  medium: { ...EMPTY_BUCKET },
+  high: { ...EMPTY_BUCKET },
+  veryHigh: { ...EMPTY_BUCKET },
+  intolerable: { ...EMPTY_BUCKET },
+  criticalIntervention: 0,
+  overdueAction: 0,
+  closureRate: 0,
   openDof: 0,
   closedDof: 0,
 };
@@ -126,76 +131,98 @@ export default function RiskManagementPage() {
       return records;
     }
 
-    return records.filter((record) => {
-      if (String(record.firmId || "") === selectedCompanyId) return true;
-      return normalizeCompany(record.company) === normalizeCompany(selectedCompanyName);
-    });
-  }, [records, selectedCompanyId, selectedCompanyName]);
+    // Sadece seçili remote firma UUID'si. Firma adı/local id fallback kullanılmaz.
+    return records.filter(
+      (record) => String(record.firmId || "") === selectedCompanyId
+    );
+  }, [records, selectedCompanyId]);
 
-  const riskTotals = useMemo<RiskDashboardTotals>(
-    () => {
-      if (filteredRecords.length === 0) {
-        return EMPTY_RISK_TOTALS;
-      }
+  const riskTotals = useMemo<RiskDashboardTotals>(() => {
+    if (filteredRecords.length === 0) {
+      return EMPTY_RISK_TOTALS;
+    }
 
-      const totalRisk = filteredRecords.length;
+    const now = Date.now();
 
-      const intolerableRisk = filteredRecords.filter(
-        (record) =>
-          record.level === "INTOLERABLE"
+    const bucket = (level?: RiskRecord["level"]) => {
+      const rows = level
+        ? filteredRecords.filter((record) => record.level === level)
+        : filteredRecords;
+
+      const open = rows.filter(
+        (record) => (record.riskStatus || "OPEN") === "OPEN"
       ).length;
 
-      const veryHighRisk = filteredRecords.filter(
-        (record) =>
-          record.level === "VERY_HIGH"
+      const closed = rows.filter(
+        (record) => (record.riskStatus || "OPEN") === "CLOSED"
       ).length;
 
-      const criticalRisk =
-        veryHighRisk + intolerableRisk;
+      return { open, closed, total: rows.length };
+    };
 
-      const highRisk = filteredRecords.filter(
-        (record) => record.level === "HIGH"
-      ).length;
+    const total = bucket();
+    const low = bucket("LOW");
+    const medium = bucket("MEDIUM");
+    const high = bucket("HIGH");
+    const veryHigh = bucket("VERY_HIGH");
+    const intolerable = bucket("INTOLERABLE");
 
-      const mediumRisk = filteredRecords.filter(
-        (record) =>
-          record.level === "MEDIUM"
-      ).length;
+    const openDof = filteredRecords.filter(
+      (record) => !record.completed
+    ).length;
 
-      const lowRisk = filteredRecords.filter(
-        (record) => record.level === "LOW"
-      ).length;
+    const closedDof = filteredRecords.filter(
+      (record) => record.completed
+    ).length;
 
-      const averageScore = Math.round(
-        filteredRecords.reduce(
-          (sum, record) =>
-            sum + Number(record.score || 0),
-          0
-        ) / totalRisk
+    const overdueAction = filteredRecords.filter(
+      (record) =>
+        !record.completed &&
+        typeof record.dueDateMillis === "number" &&
+        record.dueDateMillis > 0 &&
+        record.dueDateMillis < now
+    ).length;
+
+    const criticalIntervention =
+      veryHigh.open + intolerable.open;
+
+    const closureRate =
+      total.total > 0
+        ? Math.round((total.closed / total.total) * 100)
+        : 0;
+
+    const classifiedTotal =
+      low.total +
+      medium.total +
+      high.total +
+      veryHigh.total +
+      intolerable.total;
+
+    if (
+      process.env.NODE_ENV !== "production" &&
+      classifiedTotal !== total.total
+    ) {
+      console.warn(
+        "[Risk Dashboard] Sınıflandırma toplamı genel toplamla eşleşmiyor.",
+        { classifiedTotal, totalRisk: total.total }
       );
+    }
 
-      const openDof = filteredRecords.filter(
-        (record) => !record.completed
-      ).length;
-
-      const closedDof = filteredRecords.filter(
-        (record) => record.completed
-      ).length;
-
-      return {
-        totalRisk,
-        criticalRisk,
-        intolerableRisk,
-        highRisk,
-        mediumRisk,
-        lowRisk,
-        averageScore,
-        openDof,
-        closedDof,
-      };
-    },
-    [filteredRecords]
-  );
+    return {
+      totalRisk: total.total,
+      total,
+      low,
+      medium,
+      high,
+      veryHigh,
+      intolerable,
+      criticalIntervention,
+      overdueAction,
+      closureRate,
+      openDof,
+      closedDof,
+    };
+  }, [filteredRecords]);
 
   const emergencyTotals =
     useMemo<EmergencyDashboard>(() => {

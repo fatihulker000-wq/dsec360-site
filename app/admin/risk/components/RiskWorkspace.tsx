@@ -63,6 +63,8 @@ const EMPTY_FORM: RiskFormState = {
   responsible: "",
   dueDateMillis: null,
   completed: false,
+  riskStatus: "OPEN",
+  riskClosedAtMillis: null,
   probability: 1,
   frequency: 1,
   severity: 1,
@@ -295,6 +297,8 @@ export default function RiskWorkspace({
       responsible: record.responsible,
       dueDateMillis: record.dueDateMillis,
       completed: record.completed,
+      riskStatus: record.riskStatus || "OPEN",
+      riskClosedAtMillis: record.riskClosedAtMillis ?? null,
       probability: record.probability,
       frequency: record.frequency,
       severity: record.severity,
@@ -1198,6 +1202,7 @@ console.log("JSON :", json);
                   "Yöntem",
                   "Skor",
                   "Seviye",
+                  "Risk Durumu",
                   "DÖF",
                   "Sorumlu",
                   "İşlemler",
@@ -1284,6 +1289,29 @@ console.log("JSON :", json);
                         {riskLabel(
                           record.level
                         )}
+                      </span>
+                    </td>
+
+                    <td style={{ padding: 14 }}>
+                      <span
+                        style={{
+                          borderRadius: 999,
+                          padding: "5px 9px",
+                          background:
+                            (record.riskStatus || "OPEN") === "CLOSED"
+                              ? "#ecfdf5"
+                              : "#fff7ed",
+                          color:
+                            (record.riskStatus || "OPEN") === "CLOSED"
+                              ? "#047857"
+                              : "#c2410c",
+                          fontSize: 11,
+                          fontWeight: 900,
+                        }}
+                      >
+                        {(record.riskStatus || "OPEN") === "CLOSED"
+                          ? "Kapalı"
+                          : "Açık"}
                       </span>
                     </td>
 

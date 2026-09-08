@@ -17,6 +17,7 @@ import {
 import type {
   RiskLevel,
   RiskMethod,
+  RiskStatus,
 } from "../types";
 
 import RiskGeneralTab from "./RiskGeneralTab";
@@ -39,6 +40,8 @@ export type RiskFormState = {
   responsible: string;
   dueDateMillis: number | null;
   completed: boolean;
+  riskStatus: RiskStatus;
+  riskClosedAtMillis: number | null;
   probability: number;
   frequency: number;
   severity: number;
@@ -426,6 +429,53 @@ export default function RiskDialog({
             level={draft.level}
             legislation={[]}
           />
+        </div>
+
+        <div
+          style={{
+            margin: "0 20px 16px",
+            padding: 14,
+            borderRadius: 16,
+            border: "1px solid #e2e8f0",
+            background: "#f8fafc",
+            display: "grid",
+            gridTemplateColumns: "minmax(0,1fr) 220px",
+            gap: 14,
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <div style={{ color: "#0f172a", fontSize: 13, fontWeight: 950 }}>
+              Risk Yaşam Döngüsü
+            </div>
+            <div style={{ marginTop: 3, color: "#64748b", fontSize: 11, lineHeight: 1.45 }}>
+              Riskin açık/kapalı durumu DÖF durumundan bağımsız izlenir.
+            </div>
+          </div>
+
+          <select
+            value={draft.riskStatus}
+            onChange={(event) => {
+              const nextStatus = event.target.value as RiskStatus;
+              commitUiField("riskStatus", nextStatus);
+              commitUiField(
+                "riskClosedAtMillis",
+                nextStatus === "CLOSED" ? Date.now() : null
+              );
+            }}
+            style={{
+              width: "100%",
+              border: "1px solid #cbd5e1",
+              borderRadius: 12,
+              background: "#fff",
+              padding: "10px 12px",
+              fontWeight: 900,
+              color: "#0f172a",
+            }}
+          >
+            <option value="OPEN">Açık Risk</option>
+            <option value="CLOSED">Kapalı Risk</option>
+          </select>
         </div>
 
         <footer

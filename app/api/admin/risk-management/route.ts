@@ -45,6 +45,9 @@ type MatrixRiskRow = {
   dof_closed_at_millis: number | null;
   dof_note: string;
 
+  risk_status: "OPEN" | "CLOSED";
+  risk_closed_at_millis: number | null;
+
   source: "APP" | "WEB" | "MERGED" | "SYSTEM";
   sync_status: "PENDING" | "SYNCING" | "SYNCED" | "FAILED";
   sync_error: string | null;
@@ -87,6 +90,9 @@ type FineKinneyRiskRow = {
   dof_due_date_millis: number | null;
   dof_closed_at_millis: number | null;
   dof_note: string;
+
+  risk_status: "OPEN" | "CLOSED";
+  risk_closed_at_millis: number | null;
 
   source: "APP" | "WEB" | "MERGED" | "SYSTEM";
   sync_status: "PENDING" | "SYNCING" | "SYNCED" | "FAILED";
@@ -145,6 +151,11 @@ type RiskWritePayload = {
   responsible?: string | null;
 
   completed?: boolean;
+
+  /** Risk yaşam döngüsü DÖF'ten bağımsızdır. */
+  riskStatus?: "OPEN" | "CLOSED";
+  riskClosedAtMillis?: number | null;
+
   dofStatus?: "OPEN" | "CLOSED";
   dofAction?: string | null;
   dofResponsible?: string | null;
@@ -291,6 +302,15 @@ function normalizeDofStatus(
     : "OPEN";
 }
 
+function normalizeRiskStatus(
+  payload: RiskWritePayload,
+  fallback: "OPEN" | "CLOSED" = "OPEN"
+): "OPEN" | "CLOSED" {
+  if (payload.riskStatus === "CLOSED") return "CLOSED";
+  if (payload.riskStatus === "OPEN") return "OPEN";
+  return fallback;
+}
+
 function titleFromPayload(payload: RiskWritePayload) {
   return String(
     payload.title ||
@@ -348,6 +368,9 @@ function matrixRecord(
     responsible: row.responsible || "",
     dueDateMillis: row.dof_due_date_millis,
     completed: row.dof_status === "CLOSED",
+
+    riskStatus: row.risk_status || "OPEN",
+    riskClosedAtMillis: row.risk_closed_at_millis,
 
     probability: Number(row.probability || 0),
     frequency: 1,
@@ -408,6 +431,9 @@ function fineKinneyRecord(
     responsible: row.responsible || "",
     dueDateMillis: row.dof_due_date_millis,
     completed: row.dof_status === "CLOSED",
+
+    riskStatus: row.risk_status || "OPEN",
+    riskClosedAtMillis: row.risk_closed_at_millis,
 
     probability: Number(
       row.probability_value || 0
@@ -833,30 +859,28 @@ export async function GET(request: Request) {
       );
     });
 
-    const totalRisk = records.length;
+    const bucket = (level?: RiskLevel) => {
+      const rows = level
+        ? records.filter((record) => record.level === level)
+        : records;
 
-    const criticalRisk = records.filter(
-      (record) =>
-        record.level === "VERY_HIGH" ||
-        record.level === "INTOLERABLE"
-    ).length;
+      const open = rows.filter(
+        (record) => (record.riskStatus || "OPEN") === "OPEN"
+      ).length;
 
-    const intolerableRisk = records.filter(
-      (record) =>
-        record.level === "INTOLERABLE"
-    ).length;
+      const closed = rows.filter(
+        (record) => (record.riskStatus || "OPEN") === "CLOSED"
+      ).length;
 
-    const highRisk = records.filter(
-      (record) => record.level === "HIGH"
-    ).length;
+      return { open, closed, total: rows.length };
+    };
 
-    const mediumRisk = records.filter(
-      (record) => record.level === "MEDIUM"
-    ).length;
-
-    const lowRisk = records.filter(
-      (record) => record.level === "LOW"
-    ).length;
+    const total = bucket();
+    const low = bucket("LOW");
+    const medium = bucket("MEDIUM");
+    const high = bucket("HIGH");
+    const veryHigh = bucket("VERY_HIGH");
+    const intolerable = bucket("INTOLERABLE");
 
     const openDof = records.filter(
       (record) => !record.completed
@@ -866,38 +890,37 @@ export async function GET(request: Request) {
       (record) => record.completed
     ).length;
 
-    const averageScore =
-      totalRisk > 0
-        ? Math.round(
-            records.reduce(
-              (sum, record) =>
-                sum + Number(record.score || 0),
-              0
-            ) / totalRisk
-          )
+    const now = Date.now();
+
+    const overdueAction = records.filter(
+      (record) =>
+        !record.completed &&
+        typeof record.dueDateMillis === "number" &&
+        record.dueDateMillis > 0 &&
+        record.dueDateMillis < now
+    ).length;
+
+    const criticalIntervention =
+      veryHigh.open + intolerable.open;
+
+    const closureRate =
+      total.total > 0
+        ? Math.round((total.closed / total.total) * 100)
         : 0;
 
-    const riskScore = Math.max(
-      0,
-      Math.min(
-        100,
-        100 -
-          (intolerableRisk * 20 +
-            (criticalRisk - intolerableRisk) *
-              12 +
-            highRisk * 6 +
-            mediumRisk * 2)
-      )
-    );
-
+    // Bu API artık ham 5x5/Fine-Kinney puanlarını birbirine karıştırıp
+    // "ortalama risk skoru" üretmez. Yönetim KPI'ları normalize seviyelerden gelir.
     const totals = {
-      totalRisk,
-      criticalRisk,
-      intolerableRisk,
-      highRisk,
-      mediumRisk,
-      lowRisk,
-      averageScore,
+      totalRisk: total.total,
+      total,
+      low,
+      medium,
+      high,
+      veryHigh,
+      intolerable,
+      criticalIntervention,
+      overdueAction,
+      closureRate,
       openDof,
       closedDof,
     };
@@ -916,7 +939,6 @@ export async function GET(request: Request) {
         ...totals,
         matrixCount: matrixRecords.length,
         fineKinneyCount: fineRecords.length,
-        riskScore,
       },
     });
   } catch (error) {
@@ -1033,6 +1055,14 @@ export async function POST(request: Request) {
     const dofStatus =
       normalizeDofStatus(payload);
 
+    const riskStatus =
+      normalizeRiskStatus(payload, "OPEN");
+
+    const riskClosedAtMillis =
+      riskStatus === "CLOSED"
+        ? payload.riskClosedAtMillis || Date.now()
+        : null;
+
     if (method === "FINE_KINNEY") {
       const probability = Number(
         payload.probabilityValue ??
@@ -1135,6 +1165,9 @@ export async function POST(request: Request) {
 
           dof_note:
             cleanText(payload.dofNote) || "",
+
+          risk_status: riskStatus,
+          risk_closed_at_millis: riskClosedAtMillis,
 
           source: "WEB",
           sync_status: "SYNCED",
@@ -1256,6 +1289,9 @@ export async function POST(request: Request) {
 
         dof_note:
           cleanText(payload.dofNote) || "",
+
+        risk_status: riskStatus,
+        risk_closed_at_millis: riskClosedAtMillis,
 
         source: "WEB",
         sync_status: "SYNCED",
@@ -1379,6 +1415,14 @@ export async function PATCH(request: Request) {
     const dofStatus =
       normalizeDofStatus(payload);
 
+    const riskStatus =
+      normalizeRiskStatus(payload, "OPEN");
+
+    const riskClosedAtMillis =
+      riskStatus === "CLOSED"
+        ? payload.riskClosedAtMillis || Date.now()
+        : null;
+
     if (method === "FINE_KINNEY") {
       const probability = Number(
         payload.probabilityValue ??
@@ -1477,6 +1521,9 @@ export async function PATCH(request: Request) {
 
           dof_note:
             cleanText(payload.dofNote) || "",
+
+          risk_status: riskStatus,
+          risk_closed_at_millis: riskClosedAtMillis,
 
           source: "WEB",
           sync_status: "SYNCED",
@@ -1610,6 +1657,9 @@ export async function PATCH(request: Request) {
 
         dof_note:
           cleanText(payload.dofNote) || "",
+
+        risk_status: riskStatus,
+        risk_closed_at_millis: riskClosedAtMillis,
 
         source: "WEB",
         sync_status: "SYNCED",

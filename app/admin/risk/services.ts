@@ -146,39 +146,30 @@ export async function getDashboard(
   firmId?: string
 ): Promise<RiskDashboardTotals> {
   const records = await getRisks(firmId);
+  const now = Date.now();
 
-  const totalRisk = records.length;
-  const criticalRisk = records.filter(
-    (record) =>
-      record.level === "VERY_HIGH" ||
-      record.level === "INTOLERABLE"
-  ).length;
+  const bucket = (level?: RiskRecord["level"]) => {
+    const rows = level
+      ? records.filter((record) => record.level === level)
+      : records;
 
-  const intolerableRisk = records.filter(
-    (record) => record.level === "INTOLERABLE"
-  ).length;
+    const open = rows.filter(
+      (record) => (record.riskStatus || "OPEN") === "OPEN"
+    ).length;
 
-  const highRisk = records.filter(
-    (record) => record.level === "HIGH"
-  ).length;
+    const closed = rows.filter(
+      (record) => (record.riskStatus || "OPEN") === "CLOSED"
+    ).length;
 
-  const mediumRisk = records.filter(
-    (record) => record.level === "MEDIUM"
-  ).length;
+    return { open, closed, total: rows.length };
+  };
 
-  const lowRisk = records.filter(
-    (record) => record.level === "LOW"
-  ).length;
-
-  const averageScore =
-    totalRisk > 0
-      ? Math.round(
-          records.reduce(
-            (sum, record) => sum + Number(record.score || 0),
-            0
-          ) / totalRisk
-        )
-      : 0;
+  const total = bucket();
+  const low = bucket("LOW");
+  const medium = bucket("MEDIUM");
+  const high = bucket("HIGH");
+  const veryHigh = bucket("VERY_HIGH");
+  const intolerable = bucket("INTOLERABLE");
 
   const openDof = records.filter(
     (record) => !record.completed
@@ -188,14 +179,28 @@ export async function getDashboard(
     (record) => record.completed
   ).length;
 
+  const overdueAction = records.filter(
+    (record) =>
+      !record.completed &&
+      typeof record.dueDateMillis === "number" &&
+      record.dueDateMillis > 0 &&
+      record.dueDateMillis < now
+  ).length;
+
   return {
-    totalRisk,
-    criticalRisk,
-    intolerableRisk,
-    highRisk,
-    mediumRisk,
-    lowRisk,
-    averageScore,
+    totalRisk: total.total,
+    total,
+    low,
+    medium,
+    high,
+    veryHigh,
+    intolerable,
+    criticalIntervention: veryHigh.open + intolerable.open,
+    overdueAction,
+    closureRate:
+      total.total > 0
+        ? Math.round((total.closed / total.total) * 100)
+        : 0,
     openDof,
     closedDof,
   };
