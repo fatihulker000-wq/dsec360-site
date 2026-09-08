@@ -475,6 +475,47 @@ const uygunsuzCount = scopedAnswers.filter(
   (a: any) => String(a.result || "").toUpperCase() === "UYGUNSUZ"
 ).length;
 
+const scoringAnswers = scopedAnswers
+  .map((a: any) => normalizeText(a.result))
+  .filter((r: string) => r.startsWith("SCORE:"))
+  .map((r: string) => Number(r.replace("SCORE:", "")))
+  .filter((n: number) => Number.isFinite(n));
+
+const scoringAverage =
+  scoringAnswers.length > 0
+    ? Math.round(
+        scoringAnswers.reduce((sum: number, n: number) => sum + n, 0) /
+          scoringAnswers.length
+      )
+    : null;
+
+const scoringFullCount = scoringAnswers.filter((n: number) => n >= 100).length;
+const scoringImprovementCount = scoringAnswers.filter((n: number) => n < 100).length;
+
+const elmeriResults = scopedAnswers
+  .map((a: any) => normalizeText(a.result))
+  .filter((r: string) => r.startsWith("ELMERI:"))
+  .map((r: string) => {
+    const parts = r.split(":");
+    return {
+      correct: Number(parts[1] || 0),
+      wrong: Number(parts[2] || 0),
+      outOfScope: Number(parts[3] || 0),
+    };
+  });
+
+const elmeriCorrect = elmeriResults.reduce((s: number, x: any) => s + (Number.isFinite(x.correct) ? x.correct : 0), 0);
+const elmeriWrong = elmeriResults.reduce((s: number, x: any) => s + (Number.isFinite(x.wrong) ? x.wrong : 0), 0);
+const elmeriOutOfScope = elmeriResults.reduce((s: number, x: any) => s + (Number.isFinite(x.outOfScope) ? x.outOfScope : 0), 0);
+const elmeriEvaluated = elmeriCorrect + elmeriWrong;
+const elmeriSuccessRate =
+  elmeriEvaluated > 0 ? Math.round((elmeriCorrect / elmeriEvaluated) * 100) : null;
+
+const photoAnswerCount = scopedAnswers.filter((a: any) => {
+  const run = filteredRuns.find((r: any) => Number(r.id) === Number(a.run_remote_id));
+  return modeLabel(run?.eval_mode) === "Fotoğraflı";
+}).length;
+
 const emptyRunCount = filteredRuns.filter((r: any) => {
   return (countByRun.get(Number(r.id)) || 0) === 0;
 }).length;
@@ -773,6 +814,25 @@ const topFirmStats = scopedFirmStatsSource
             })}
           </div>
         </div>
+        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+          <Link
+            href={`/admin/denetimler/yeni${activeFirm !== "ALL" ? `?firm=${encodeURIComponent(activeFirm)}` : ""}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "11px 16px",
+              borderRadius: 12,
+              background: "#991b1b",
+              color: "#fff",
+              textDecoration: "none",
+              fontWeight: 900,
+              boxShadow: "0 8px 18px rgba(153,27,27,.18)",
+            }}
+          >
+            + Web'den Yeni Denetim
+          </Link>
+        </div>
       </section>
 
       <ExecutiveHero
@@ -831,6 +891,57 @@ const topFirmStats = scopedFirmStatsSource
       </section>
 
 
+
+      <section style={{ marginBottom: 22 }}>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".08em", color: "#7f1d1d" }}>
+            DENETİM SONUÇLARI MERKEZİ
+          </div>
+          <h2 style={{ margin: "6px 0 4px", fontSize: 24 }}>Dört denetim tipinin sonuç görünümü</h2>
+          <p style={{ margin: 0, color: "#64748b", fontWeight: 600 }}>
+            Klasik ve fotoğraflı sonuçlar, puanlamalı skorlar ve ELMERI gözlemleri ayrı metodolojiyle gösterilir.
+          </p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
+          <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
+            <strong style={{ display: "block", marginBottom: 10 }}>Klasik / Fotoğraflı</strong>
+            <div style={{ fontSize: 28, fontWeight: 1000 }}>%{conformityRate}</div>
+            <div style={{ marginTop: 8, color: "#475569", fontWeight: 700 }}>
+              {uygunCount} Uygun · {kismenCount} Kısmen · {uygunsuzCount} Uygunsuz
+            </div>
+            <div style={{ marginTop: 6, color: "#64748b", fontSize: 13 }}>
+              Fotoğraflı modda {photoAnswerCount} madde kaydı
+            </div>
+          </article>
+
+          <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
+            <strong style={{ display: "block", marginBottom: 10 }}>Puanlamalı Denetim</strong>
+            <div style={{ fontSize: 28, fontWeight: 1000 }}>
+              {scoringAverage === null ? "Veri yok" : `${scoringAverage}/100`}
+            </div>
+            <div style={{ marginTop: 8, color: "#475569", fontWeight: 700 }}>
+              {scoringFullCount} tam puan · {scoringImprovementCount} geliştirme gerekli
+            </div>
+            <div style={{ marginTop: 6, color: "#64748b", fontSize: 13 }}>
+              {scoringAnswers.length} puanlanmış madde
+            </div>
+          </article>
+
+          <article style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 18, padding: 18 }}>
+            <strong style={{ display: "block", marginBottom: 10 }}>ELMERI Denetimi</strong>
+            <div style={{ fontSize: 28, fontWeight: 1000 }}>
+              {elmeriSuccessRate === null ? "Veri yok" : `%${elmeriSuccessRate}`}
+            </div>
+            <div style={{ marginTop: 8, color: "#475569", fontWeight: 700 }}>
+              {elmeriCorrect} doğru · {elmeriWrong} hatalı · {elmeriOutOfScope} kapsam dışı
+            </div>
+            <div style={{ marginTop: 6, color: "#64748b", fontSize: 13 }}>
+              {elmeriResults.length} ELMERI madde kaydı
+            </div>
+          </article>
+        </div>
+      </section>
 
       <AnalyticsSection
         totalInspections={filteredRuns.length}
