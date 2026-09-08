@@ -11,6 +11,8 @@ export type InspectionViewItem = {
   modeColor: string;
   template: string;
   inspector: string;
+  location?: string;
+  responsible?: string;
   date: string;
   answerCount: number;
   dofCount: number;
@@ -21,6 +23,18 @@ export type InspectionViewItem = {
   criticalCount?: number;
   openDofCount?: number;
   overdueDofCount?: number;
+  photoEvidenceCount?: number;
+  scoringAverage?: number | null;
+  scoringCount?: number;
+  score100Count?: number;
+  score75Count?: number;
+  score50Count?: number;
+  score25Count?: number;
+  score0Count?: number;
+  elmeriCorrect?: number;
+  elmeriWrong?: number;
+  elmeriOutOfScope?: number;
+  elmeriRate?: number | null;
 };
 
 type Props = {
@@ -45,6 +59,94 @@ function processStatus(item: InspectionViewItem) {
   return "Tamamlandı";
 }
 
+function normalizedMode(item: InspectionViewItem) {
+  return String(item.mode || "").toLocaleUpperCase("tr-TR");
+}
+
+function modeMetrics(item: InspectionViewItem) {
+  const mode = normalizedMode(item);
+  const rate = conformity(item);
+
+  if (mode.includes("FOTO")) {
+    return [
+      { label: "Madde", value: item.answerCount },
+      { label: "Tam Uygunluk", value: rate === null ? "Veri yok" : `%${rate}` },
+      { label: "Uygun", value: item.suitableCount || 0 },
+      { label: "Kısmen", value: item.partialCount || 0 },
+      { label: "Uygunsuz", value: item.unsuitableCount || 0 },
+      { label: "Fotoğraf Kanıtı", value: item.photoEvidenceCount || 0 },
+      { label: "Kritik", value: item.criticalCount || 0 },
+      { label: "Açık DÖF", value: item.openDofCount || 0 },
+      { label: "Geciken", value: item.overdueDofCount || 0 },
+    ];
+  }
+
+  if (mode.includes("PUAN")) {
+    return [
+      { label: "Madde", value: item.answerCount },
+      {
+        label: "Ortalama Puan",
+        value:
+          item.scoringAverage == null ? "Veri yok" : `${item.scoringAverage}/100`,
+      },
+      { label: "Puanlanan", value: item.scoringCount || 0 },
+      { label: "100 Puan", value: item.score100Count || 0 },
+      { label: "75 Puan", value: item.score75Count || 0 },
+      { label: "50 Puan", value: item.score50Count || 0 },
+      { label: "25 Puan", value: item.score25Count || 0 },
+      { label: "0 Puan", value: item.score0Count || 0 },
+      { label: "Kritik", value: item.criticalCount || 0 },
+      { label: "Açık DÖF", value: item.openDofCount || 0 },
+      { label: "Geciken", value: item.overdueDofCount || 0 },
+    ];
+  }
+
+  if (mode.includes("ELMERI")) {
+    return [
+      { label: "Madde", value: item.answerCount },
+      {
+        label: "ELMERI Endeksi",
+        value: item.elmeriRate == null ? "Veri yok" : `%${item.elmeriRate}`,
+      },
+      { label: "Doğru", value: item.elmeriCorrect || 0 },
+      { label: "Hatalı", value: item.elmeriWrong || 0 },
+      { label: "Kapsam Dışı", value: item.elmeriOutOfScope || 0 },
+      { label: "Kritik", value: item.criticalCount || 0 },
+      { label: "Açık DÖF", value: item.openDofCount || 0 },
+      { label: "Geciken", value: item.overdueDofCount || 0 },
+    ];
+  }
+
+  return [
+    { label: "Madde", value: item.answerCount },
+    { label: "Tam Uygunluk", value: rate === null ? "Veri yok" : `%${rate}` },
+    { label: "Uygun", value: item.suitableCount || 0 },
+    { label: "Kısmen", value: item.partialCount || 0 },
+    { label: "Uygunsuz", value: item.unsuitableCount || 0 },
+    { label: "Kritik", value: item.criticalCount || 0 },
+    { label: "Açık DÖF", value: item.openDofCount || 0 },
+    { label: "Geciken", value: item.overdueDofCount || 0 },
+  ];
+}
+
+function resultSummary(item: InspectionViewItem) {
+  const mode = normalizedMode(item);
+
+  if (mode.includes("FOTO")) {
+    return `${item.photoEvidenceCount || 0} fotoğraf kanıtı · ${item.partialCount || 0} kısmen · ${item.unsuitableCount || 0} uygunsuz`;
+  }
+
+  if (mode.includes("PUAN")) {
+    return `${item.scoringCount || 0} puanlanmış madde · ${item.score100Count || 0} tam puan · ${(item.score25Count || 0) + (item.score0Count || 0)} düşük puan`;
+  }
+
+  if (mode.includes("ELMERI")) {
+    return `${item.elmeriCorrect || 0} doğru · ${item.elmeriWrong || 0} hatalı · ${item.elmeriOutOfScope || 0} kapsam dışı`;
+  }
+
+  return `${item.suitableCount || 0} uygun · ${item.partialCount || 0} kısmen · ${item.unsuitableCount || 0} uygunsuz`;
+}
+
 export default function InspectionCards({
   items,
   deleteAction,
@@ -57,7 +159,8 @@ export default function InspectionCards({
           <span className={styles.sectionEyebrow}>Inspection Records</span>
           <h2>Denetim Kayıtları</h2>
           <p>
-            Uygunluk, kritik bulgu ve DÖF sürecini denetim bazında izleyin.
+            Dört denetim metodolojisinin sonucu, uygunluk/puan/ELMERI kırılımı
+            ve DÖF süreciyle birlikte denetim bazında izlenir.
           </p>
         </div>
         <div className={styles.moduleCount}>
@@ -73,8 +176,8 @@ export default function InspectionCards({
       ) : (
         <div className={styles.inspectionGrid}>
           {items.map((item) => {
-            const rate = conformity(item);
             const status = processStatus(item);
+            const metrics = modeMetrics(item);
 
             return (
               <article key={item.id} className={styles.inspectionCard}>
@@ -100,33 +203,35 @@ export default function InspectionCards({
 
                 <div
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit,minmax(105px,1fr))",
-                    gap: 8,
-                    margin: "14px 0",
+                    marginTop: 12,
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    background: "#f8fafc",
+                    border: "1px solid #e5e7eb",
+                    color: "#475569",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    lineHeight: 1.45,
                   }}
                 >
-                  <Metric label="Madde" value={item.answerCount} />
-                  <Metric
-                    label="Uygunluk"
-                    value={rate === null ? "Veri yok" : `%${rate}`}
-                  />
-                  <Metric
-                    label="Uygunsuz"
-                    value={item.unsuitableCount || 0}
-                  />
-                  <Metric
-                    label="Kritik"
-                    value={item.criticalCount || 0}
-                  />
-                  <Metric
-                    label="Açık DÖF"
-                    value={item.openDofCount || 0}
-                  />
-                  <Metric
-                    label="Geciken"
-                    value={item.overdueDofCount || 0}
-                  />
+                  {resultSummary(item)}
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))",
+                    gap: 8,
+                    margin: "12px 0 14px",
+                  }}
+                >
+                  {metrics.map((metric) => (
+                    <Metric
+                      key={`${item.id}-${metric.label}`}
+                      label={metric.label}
+                      value={metric.value}
+                    />
+                  ))}
                 </div>
 
                 <div className={styles.inspectionStats}>
@@ -139,14 +244,16 @@ export default function InspectionCards({
                     <strong>{item.dofCount}</strong>
                   </div>
                   <div>
-                    <span>Kısmen</span>
-                    <strong>{item.partialCount || 0}</strong>
+                    <span>Açık DÖF</span>
+                    <strong>{item.openDofCount || 0}</strong>
                   </div>
                 </div>
 
                 <div className={styles.inspectionInfo}>
                   <span>Şablon: {item.template}</span>
                   <span>Denetçi: {item.inspector}</span>
+                  <span>Lokasyon / Bölüm: {item.location || "-"}</span>
+                  <span>Sorumlu: {item.responsible || "-"}</span>
                   <span>Tarih: {item.date}</span>
                 </div>
 

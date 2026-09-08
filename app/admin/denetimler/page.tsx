@@ -902,6 +902,78 @@ const topFirmStats = scopedFirmStatsSource
   const inspectionViewItems: InspectionViewItem[] = pagedRuns.map(
     (run: any) => {
       const colors = modeColor(run.eval_mode);
+      const runAnswers = scopedAnswers.filter(
+        (a: any) => Number(a.run_remote_id) === Number(run.id)
+      );
+
+      const suitableCount = runAnswers.filter(
+        (a: any) => normalizeText(a.result) === "UYGUN"
+      ).length;
+      const partialCount = runAnswers.filter(
+        (a: any) => normalizeText(a.result) === "KISMEN"
+      ).length;
+      const unsuitableCount = runAnswers.filter(
+        (a: any) => normalizeText(a.result) === "UYGUNSUZ"
+      ).length;
+
+      const scoreValues = runAnswers
+        .map((a: any) => normalizeText(a.result))
+        .filter((result: string) => result.startsWith("SCORE:"))
+        .map((result: string) => Number(result.replace("SCORE:", "")))
+        .filter((score: number) => Number.isFinite(score));
+
+      const scoringAverage =
+        scoreValues.length > 0
+          ? Math.round(
+              scoreValues.reduce((sum: number, score: number) => sum + score, 0) /
+                scoreValues.length
+            )
+          : null;
+
+      const elmeriRows = runAnswers
+        .map((a: any) => normalizeText(a.result))
+        .filter((result: string) => result.startsWith("ELMERI:"))
+        .map((result: string) => {
+          const parts = result.split(":");
+          return {
+            correct: Number(parts[1] || 0),
+            wrong: Number(parts[2] || 0),
+            outOfScope: Number(parts[3] || 0),
+          };
+        });
+
+      const elmeriCorrect = elmeriRows.reduce(
+        (sum: number, row: any) =>
+          sum + (Number.isFinite(row.correct) ? row.correct : 0),
+        0
+      );
+      const elmeriWrong = elmeriRows.reduce(
+        (sum: number, row: any) =>
+          sum + (Number.isFinite(row.wrong) ? row.wrong : 0),
+        0
+      );
+      const elmeriOutOfScope = elmeriRows.reduce(
+        (sum: number, row: any) =>
+          sum + (Number.isFinite(row.outOfScope) ? row.outOfScope : 0),
+        0
+      );
+      const elmeriEvaluated = elmeriCorrect + elmeriWrong;
+      const elmeriRate =
+        elmeriEvaluated > 0
+          ? Math.round((elmeriCorrect / elmeriEvaluated) * 100)
+          : null;
+
+      const photoEvidenceCount = runAnswers.filter((a: any) => {
+        const singlePhoto = String(
+          a.photo_url || a.photo_path || a.photoUrl || a.photoPath || ""
+        ).trim();
+        const photoUrls = Array.isArray(a.photo_urls)
+          ? a.photo_urls
+          : Array.isArray(a.photoUrls)
+            ? a.photoUrls
+            : [];
+        return Boolean(singlePhoto || photoUrls.length > 0);
+      }).length;
 
       return {
         id: run.id,
@@ -911,6 +983,8 @@ const topFirmStats = scopedFirmStatsSource
         modeColor: colors.color,
         template: run.template_type || "-",
         inspector: run.inspector_name || "-",
+        location: run.location || "-",
+        responsible: run.responsible || "-",
         date: formatDate(
           run.audit_date_millis || run.created_at_millis
         ),
@@ -918,28 +992,26 @@ const topFirmStats = scopedFirmStatsSource
         dofCount: dofCountByRun.get(Number(run.id)) || 0,
         appRunId: run.app_run_id,
         firmId: getRunFirmId(run),
-        suitableCount: scopedAnswers.filter((a: any) =>
-          Number(a.run_remote_id) === Number(run.id) &&
-          normalizeText(a.result) === "UYGUN"
+        suitableCount,
+        partialCount,
+        unsuitableCount,
+        criticalCount: runAnswers.filter((a: any) => isCriticalDof(a)).length,
+        openDofCount: runAnswers.filter(
+          (a: any) => normalizeDofStatusFromAnswer(a) === "OPEN"
         ).length,
-        partialCount: scopedAnswers.filter((a: any) =>
-          Number(a.run_remote_id) === Number(run.id) &&
-          normalizeText(a.result) === "KISMEN"
-        ).length,
-        unsuitableCount: scopedAnswers.filter((a: any) =>
-          Number(a.run_remote_id) === Number(run.id) &&
-          normalizeText(a.result) === "UYGUNSUZ"
-        ).length,
-        criticalCount: scopedAnswers.filter((a: any) =>
-          Number(a.run_remote_id) === Number(run.id) && isCriticalDof(a)
-        ).length,
-        openDofCount: scopedAnswers.filter((a: any) =>
-          Number(a.run_remote_id) === Number(run.id) &&
-          normalizeDofStatusFromAnswer(a) === "OPEN"
-        ).length,
-        overdueDofCount: scopedAnswers.filter((a: any) =>
-          Number(a.run_remote_id) === Number(run.id) && isOverdueDof(a)
-        ).length,
+        overdueDofCount: runAnswers.filter((a: any) => isOverdueDof(a)).length,
+        photoEvidenceCount,
+        scoringAverage,
+        scoringCount: scoreValues.length,
+        score100Count: scoreValues.filter((score: number) => score === 100).length,
+        score75Count: scoreValues.filter((score: number) => score === 75).length,
+        score50Count: scoreValues.filter((score: number) => score === 50).length,
+        score25Count: scoreValues.filter((score: number) => score === 25).length,
+        score0Count: scoreValues.filter((score: number) => score === 0).length,
+        elmeriCorrect,
+        elmeriWrong,
+        elmeriOutOfScope,
+        elmeriRate,
       };
     }
   );
