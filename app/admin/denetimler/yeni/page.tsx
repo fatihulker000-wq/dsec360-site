@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 type Mode = "CLASSIC" | "PHOTO" | "SCORING" | "ELMERI";
 type Firm = { id: string; name: string };
@@ -17,10 +17,8 @@ const modeLabel: Record<Mode, string> = {
 
 export default function NewWebInspectionPage() {
   const router = useRouter();
-  const sp = useSearchParams();
-
   const [firms, setFirms] = useState<Firm[]>([]);
-  const [firmId, setFirmId] = useState(sp.get("firm") || "");
+  const [firmId, setFirmId] = useState("");
   const [mode, setMode] = useState<Mode>("CLASSIC");
   const [forms, setForms] = useState<Form[]>([]);
   const [formId, setFormId] = useState("");
@@ -34,17 +32,28 @@ export default function NewWebInspectionPage() {
   const [readOnly, setReadOnly] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlFirmId = (params.get("firmId") || params.get("firm") || "").trim();
+    if (urlFirmId) setFirmId(urlFirmId);
+  }, []);
+
+  useEffect(() => {
     fetch("/api/admin/denetimler/web-entry/firms", { cache: "no-store" })
       .then(r => r.json())
       .then(j => {
         if (!j.success) throw new Error(j.error || "Firmalar alınamadı.");
         setFirms(j.firms || []);
-        if (!firmId && j.firms?.length === 1) setFirmId(j.firms[0].id);
       })
       .catch(e => setError(e.message));
   }, []);
 
   useEffect(() => {
+    if (firmId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("firmId", firmId);
+      url.searchParams.delete("firm");
+      window.history.replaceState({}, "", url.toString());
+    }
     if (!firmId) { setForms([]); setFormId(""); return; }
     setLoading(true); setError("");
     fetch(`/api/admin/denetimler/web-entry?firmId=${encodeURIComponent(firmId)}&mode=${mode}`, { cache: "no-store" })
@@ -87,7 +96,7 @@ export default function NewWebInspectionPage() {
       });
       const j = await r.json();
       if (!j.success) throw new Error(j.detail || j.error || "Denetim kaydedilemedi.");
-      router.push(`/admin/denetimler?firm=${encodeURIComponent(firmId)}`);
+      router.push(`/admin/denetimler?firmId=${encodeURIComponent(firmId)}`);
       router.refresh();
     } catch (e: any) {
       setError(e?.message || String(e));
