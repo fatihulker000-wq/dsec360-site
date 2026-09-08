@@ -1,183 +1,1274 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
+
 import { calculateHsePerformance } from "@/app/admin/dashboard/lib/hse-performance-engine";
 import { buildPriorityActions } from "@/app/admin/dashboard/lib/priority-action-engine";
+
 import type { ScoreInput } from "@/app/admin/dashboard/lib/executive-dashboard-types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const clean=(v:unknown)=>String(v??"").trim();
-const lower=(v:unknown)=>clean(v).toLocaleLowerCase("tr-TR");
-const validUuid=(v:unknown)=>UUID_RE.test(clean(v))?clean(v):"";
-const num=(v:unknown)=>{const n=Number(v);return Number.isFinite(n)?n:0};
-const DAY=24*60*60*1000;
+/* =========================================================
+   CONSTANTS
+========================================================= */
 
-function db(){
-  const url=process.env.SUPABASE_URL;
-  const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if(!url||!key) throw new Error("Supabase yapılandırması eksik.");
-  return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
-}
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function session(){
-  const c=await cookies();
-  const auth=clean(c.get("dsec_admin_auth")?.value||c.get("dsec_user_auth")?.value);
-  const role=clean(c.get("dsec_admin_role")?.value||c.get("dsec_user_role")?.value).toLowerCase();
-  const firmId=validUuid(c.get("dsec_company_id")?.value);
-  if(auth!=="ok"||!["super_admin","company_admin","demo_user"].includes(role)||!firmId) return null;
-  return {role,firmId};
-}
+const DAY = 24 * 60 * 60 * 1000;
 
-const isClosed=(v:unknown)=>["closed","resolved","rejected","duplicate","cancelled","tamamlandi","tamamlandı","closed_ok","completed"].includes(lower(v));
-const isTrainingCompleted=(r:any)=>{
-  const s=clean(r?.status).toLocaleUpperCase("tr-TR");
-  return ["COMPLETED","TAMAMLANDI","BAŞARILI","BASARILI","PASSED"].includes(s)||Boolean(r?.completed_at)||(r?.watch_completed===true&&r?.final_exam_passed===true);
+/* =========================================================
+   BASIC HELPERS
+========================================================= */
+
+const clean = (value: unknown) =>
+  String(value ?? "").trim();
+
+const lower = (value: unknown) =>
+  clean(value).toLocaleLowerCase("tr-TR");
+
+const upper = (value: unknown) =>
+  clean(value).toLocaleUpperCase("tr-TR");
+
+const validUuid = (value: unknown) =>
+  UUID_RE.test(clean(value))
+    ? clean(value)
+    : "";
+
+const num = (value: unknown) => {
+  const n = Number(value);
+
+  return Number.isFinite(n)
+    ? n
+    : 0;
 };
-function completionDate(r:any){
-  const raw=r?.completed_at||r?.started_at||r?.created_at||null;
-  if(!raw) return null;
-  const d=new Date(raw); return Number.isNaN(d.getTime())?null:d;
+
+const clampScore = (value: number) =>
+  Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(value)
+    )
+  );
+
+/* =========================================================
+   SUPABASE
+========================================================= */
+
+function db() {
+  const url =
+    process.env.SUPABASE_URL;
+
+  const key =
+    process.env
+      .SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error(
+      "Supabase yapılandırması eksik."
+    );
+  }
+
+  return createClient(
+    url,
+    key,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    }
+  );
 }
-function normalizeHazard(v:unknown){return clean(v).toLocaleUpperCase("tr-TR").replace(/\s+/g," ")}
-function trainingRule(v:unknown){
-  const h=normalizeHazard(v);
-  if(h.includes("ÇOK TEHLİKELİ")||h.includes("COK TEHLIKELI")) return {minutes:960,years:1,label:"Çok Tehlikeli"};
-  if(h.includes("AZ TEHLİKELİ")||h.includes("AZ TEHLIKELI")) return {minutes:480,years:3,label:"Az Tehlikeli"};
-  if(h.includes("TEHLİKELİ")||h.includes("TEHLIKELI")) return {minutes:720,years:2,label:"Tehlikeli"};
-  return {minutes:0,years:0,label:"Belirsiz"};
+
+/* =========================================================
+   SESSION
+========================================================= */
+
+async function session() {
+  const cookieStore =
+    await cookies();
+
+  const auth = clean(
+    cookieStore.get(
+      "dsec_admin_auth"
+    )?.value ||
+      cookieStore.get(
+        "dsec_user_auth"
+      )?.value
+  );
+
+  const role = clean(
+    cookieStore.get(
+      "dsec_admin_role"
+    )?.value ||
+      cookieStore.get(
+        "dsec_user_role"
+      )?.value
+  ).toLowerCase();
+
+  const firmId = validUuid(
+    cookieStore.get(
+      "dsec_company_id"
+    )?.value
+  );
+
+  if (
+    auth !== "ok" ||
+    ![
+      "super_admin",
+      "company_admin",
+      "demo_user",
+    ].includes(role) ||
+    !firmId
+  ) {
+    return null;
+  }
+
+  return {
+    role,
+    firmId,
+  };
 }
-function matrixLevel(score:number){if(score>=25)return "INTOLERABLE";if(score>=20)return "VERY_HIGH";if(score>=15)return "HIGH";if(score>=8)return "MEDIUM";return "LOW";}
-function fineKinneyLevel(score:number){if(score>=400)return "INTOLERABLE";if(score>=200)return "VERY_HIGH";if(score>=70)return "HIGH";if(score>=20)return "MEDIUM";return "LOW";}
-function resultRequiresDof(raw:unknown){
-  const v=clean(raw).toLocaleUpperCase("tr-TR");
-  if(["UYGUNSUZ","KISMEN","KISMEN UYGUN","KISMEN_UYGUN","KISMEN UYGUNDUR","KISMEN UYGUN DEĞİL","KISMEN UYGUN DEGIL"].includes(v))return true;
-  if(v.includes("YETERSİZ")||v.includes("YETERSIZ")||v.includes("EKSİK")||v.includes("EKSIK"))return true;
-  if(v.startsWith("SCORE:")){const n=Number(v.replace("SCORE:",""));return Number.isFinite(n)&&n<100;}
-  if(v.startsWith("ELMERI:")){const p=v.split(":");const wrong=Number(p[2]||0);return Number.isFinite(wrong)&&wrong>0;}
+
+/* =========================================================
+   STATUS HELPERS
+========================================================= */
+
+const isClosed = (
+  value: unknown
+) =>
+  [
+    "closed",
+    "resolved",
+    "rejected",
+    "duplicate",
+    "cancelled",
+    "tamamlandi",
+    "tamamlandı",
+    "closed_ok",
+    "completed",
+  ].includes(lower(value));
+
+/* =========================================================
+   PERIOD
+========================================================= */
+
+function parsePeriod(
+  request: Request
+) {
+  const raw =
+    new URL(
+      request.url
+    ).searchParams.get(
+      "period"
+    ) || "30d";
+
+  const allowed = new Set([
+    "7d",
+    "30d",
+    "90d",
+    "180d",
+    "365d",
+  ]);
+
+  const key = allowed.has(raw)
+    ? raw
+    : "30d";
+
+  const days =
+    key === "7d"
+      ? 7
+      : key === "90d"
+        ? 90
+        : key === "180d"
+          ? 180
+          : key === "365d"
+            ? 365
+            : 30;
+
+  const to = Date.now();
+
+  const from =
+    to -
+    days * DAY;
+
+  return {
+    key,
+    days,
+    from,
+    to,
+  };
+}
+
+/* =========================================================
+   DATE HELPERS
+========================================================= */
+
+function toMillis(
+  raw: any
+): number | null {
+  if (
+    raw == null ||
+    raw === ""
+  ) {
+    return null;
+  }
+
+  const numeric =
+    Number(raw);
+
+  if (
+    Number.isFinite(numeric)
+  ) {
+    if (
+      numeric >
+      1e11
+    ) {
+      return numeric;
+    }
+
+    if (
+      numeric >
+      1e9
+    ) {
+      return numeric * 1000;
+    }
+  }
+
+  const parsed =
+    new Date(
+      raw
+    ).getTime();
+
+  return Number.isFinite(
+    parsed
+  )
+    ? parsed
+    : null;
+}
+
+function inWindowMillis(
+  millis: number | null,
+  from: number,
+  to: number
+) {
+  return (
+    millis != null &&
+    millis >= from &&
+    millis <= to
+  );
+}
+
+function riskCreatedAt(
+  row: any
+) {
+  return toMillis(
+    row?.created_at_millis ??
+      row?.created_at ??
+      row?.inserted_at ??
+      row?.createdAtMillis ??
+      row?.createdAt ??
+      row?.risk_date_millis ??
+      row?.risk_date ??
+      null
+  );
+}
+
+function riskDofCreatedAt(
+  row: any
+) {
+  return toMillis(
+    row?.dof_created_at_millis ??
+      row?.dof_created_at ??
+      row?.dofCreatedAtMillis ??
+      row?.dofCreatedAt ??
+      row?.corrective_action_created_at ??
+      row?.capa_created_at ??
+      row?.action_created_at ??
+      riskCreatedAt(row)
+  );
+}
+
+/* =========================================================
+   TRAINING
+========================================================= */
+
+const isTrainingCompleted = (
+  row: any
+) => {
+  const status = upper(
+    row?.status
+  );
+
+  return (
+    [
+      "COMPLETED",
+      "TAMAMLANDI",
+      "BAŞARILI",
+      "BASARILI",
+      "PASSED",
+    ].includes(status) ||
+    Boolean(
+      row?.completed_at
+    ) ||
+    (
+      row?.watch_completed ===
+        true &&
+      row?.final_exam_passed ===
+        true
+    )
+  );
+};
+
+function completionDate(
+  row: any
+) {
+  const raw =
+    row?.completed_at ||
+    row?.started_at ||
+    row?.created_at ||
+    null;
+
+  if (!raw) {
+    return null;
+  }
+
+  const date =
+    new Date(raw);
+
+  return Number.isNaN(
+    date.getTime()
+  )
+    ? null
+    : date;
+}
+
+function normalizeHazard(
+  value: unknown
+) {
+  return clean(value)
+    .toLocaleUpperCase(
+      "tr-TR"
+    )
+    .replace(
+      /\s+/g,
+      " "
+    );
+}
+
+function trainingRule(
+  value: unknown
+) {
+  const hazard =
+    normalizeHazard(
+      value
+    );
+
+  /*
+   * SIRALAMA ÖNEMLİ:
+   * Çok Tehlikeli
+   * Az Tehlikeli
+   * Tehlikeli
+   */
+
+  if (
+    hazard.includes(
+      "ÇOK TEHLİKELİ"
+    ) ||
+    hazard.includes(
+      "COK TEHLIKELI"
+    )
+  ) {
+    return {
+      minutes: 960,
+      years: 1,
+      label:
+        "Çok Tehlikeli",
+    };
+  }
+
+  if (
+    hazard.includes(
+      "AZ TEHLİKELİ"
+    ) ||
+    hazard.includes(
+      "AZ TEHLIKELI"
+    )
+  ) {
+    return {
+      minutes: 480,
+      years: 3,
+      label:
+        "Az Tehlikeli",
+    };
+  }
+
+  if (
+    hazard.includes(
+      "TEHLİKELİ"
+    ) ||
+    hazard.includes(
+      "TEHLIKELI"
+    )
+  ) {
+    return {
+      minutes: 720,
+      years: 2,
+      label:
+        "Tehlikeli",
+    };
+  }
+
+  return {
+    minutes: 0,
+    years: 0,
+    label:
+      "Belirsiz",
+  };
+}
+
+function legallyValid(
+  row: any,
+  years: number,
+  now: Date
+) {
+  if (
+    !isTrainingCompleted(
+      row
+    ) ||
+    years <= 0
+  ) {
+    return false;
+  }
+
+  const completed =
+    completionDate(row);
+
+  if (!completed) {
+    return false;
+  }
+
+  const validUntil =
+    new Date(
+      completed
+    );
+
+  validUntil.setFullYear(
+    validUntil.getFullYear() +
+      years
+  );
+
+  return (
+    validUntil >= now
+  );
+}
+
+/* =========================================================
+   RISK
+========================================================= */
+
+type CanonicalRiskLevel =
+  | "LOW"
+  | "MEDIUM"
+  | "HIGH"
+  | "VERY_HIGH"
+  | "INTOLERABLE";
+
+function matrixLevel(
+  score: number
+): CanonicalRiskLevel {
+  if (score >= 25) {
+    return "INTOLERABLE";
+  }
+
+  if (score >= 20) {
+    return "VERY_HIGH";
+  }
+
+  if (score >= 15) {
+    return "HIGH";
+  }
+
+  if (score >= 8) {
+    return "MEDIUM";
+  }
+
+  return "LOW";
+}
+
+function fineKinneyLevel(
+  score: number
+): CanonicalRiskLevel {
+  if (score >= 400) {
+    return "INTOLERABLE";
+  }
+
+  if (score >= 200) {
+    return "VERY_HIGH";
+  }
+
+  if (score >= 70) {
+    return "HIGH";
+  }
+
+  if (score >= 20) {
+    return "MEDIUM";
+  }
+
+  return "LOW";
+}
+
+function matrixRowLevel(
+  row: any
+) {
+  const score =
+    num(row?.score) ||
+    num(
+      row?.probability
+    ) *
+      num(
+        row?.severity
+      );
+
+  return matrixLevel(
+    score
+  );
+}
+
+function kinneyRowLevel(
+  row: any
+) {
+  const score =
+    num(row?.score) ||
+    num(
+      row?.probability_value
+    ) *
+      num(
+        row?.frequency_value
+      ) *
+      num(
+        row?.severity_value
+      );
+
+  return fineKinneyLevel(
+    score
+  );
+}
+
+/* =========================================================
+   DÖF
+========================================================= */
+
+function resultRequiresDof(
+  raw: unknown
+) {
+  const value =
+    upper(raw);
+
+  if (
+    [
+      "UYGUNSUZ",
+      "KISMEN",
+      "KISMEN UYGUN",
+      "KISMEN_UYGUN",
+      "KISMEN UYGUNDUR",
+      "KISMEN UYGUN DEĞİL",
+      "KISMEN UYGUN DEGIL",
+    ].includes(value)
+  ) {
+    return true;
+  }
+
+  if (
+    value.includes(
+      "YETERSİZ"
+    ) ||
+    value.includes(
+      "YETERSIZ"
+    ) ||
+    value.includes(
+      "EKSİK"
+    ) ||
+    value.includes(
+      "EKSIK"
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    value.startsWith(
+      "SCORE:"
+    )
+  ) {
+    const score =
+      Number(
+        value.replace(
+          "SCORE:",
+          ""
+        )
+      );
+
+    return (
+      Number.isFinite(
+        score
+      ) &&
+      score < 100
+    );
+  }
+
+  if (
+    value.startsWith(
+      "ELMERI:"
+    )
+  ) {
+    const parts =
+      value.split(":");
+
+    const wrong =
+      Number(
+        parts[2] || 0
+      );
+
+    return (
+      Number.isFinite(
+        wrong
+      ) &&
+      wrong > 0
+    );
+  }
+
   return false;
 }
-function inspectionDofStatus(x:any){
-  const s=clean(x?.dof_status||x?.dofStatus).toLocaleUpperCase("tr-TR");
-  if(["CLOSED","KAPALI","TAMAMLANDI","COMPLETED","DONE"].includes(s))return "CLOSED";
-  if(["OPEN","IN_PROGRESS","AÇIK","ACIK","DEVAM_EDIYOR","DEVAM EDİYOR"].includes(s))return "OPEN";
-  return resultRequiresDof(x?.result)?"OPEN":"NONE";
-}
-function riskHasDof(x:any){
-  const status=clean(x?.dof_status);
-  const due=x?.dof_due_date_millis??x?.dof_due_date??x?.dof_due_at??x?.corrective_action_due_date??x?.action_due_date??x?.capa_due_date??null;
-  const action=clean(x?.corrective_action)||clean(x?.action_plan)||clean(x?.dof_action)||clean(x?.capa_action)||clean(x?.measure)||clean(x?.onlem);
-  return Boolean(status||due||action);
-}
-function riskDofStatus(x:any){
-  if(!riskHasDof(x)) return "NONE";
-  const s=clean(x?.dof_status).toLocaleUpperCase("tr-TR");
-  return ["CLOSED","KAPALI","TAMAMLANDI","COMPLETED","DONE"].includes(s)?"CLOSED":"OPEN";
-}
-function dofDueOf(x:any){return x?.dof_due_date_millis??x?.dof_due_date??x?.dof_due_at??x?.corrective_action_due_date??x?.action_due_date??x?.capa_due_date??null;}
-function toMillis(raw:any){if(raw==null||raw==="")return null;const n=Number(raw);if(Number.isFinite(n)&&n>1e11)return n;const t=new Date(raw).getTime();return Number.isFinite(t)?t:null;}
-function legallyValid(row:any,years:number,now:Date){
-  if(!isTrainingCompleted(row)||years<=0) return false;
-  const d=completionDate(row); if(!d) return false;
-  const until=new Date(d); until.setFullYear(until.getFullYear()+years);
-  return until>=now;
-}
-async function safe<T>(promise:PromiseLike<{data:T|null;error:any}>):Promise<T|null>{
-  try{const r=await promise;if(r.error){console.error("Executive dashboard source error:",r.error);return null}return r.data}
-  catch(e){console.error("Executive dashboard source exception:",e);return null}
-}
-function uniqueById(rows:any[]){const m=new Map<string,any>();for(const x of rows||[]){const id=clean(x?.id);if(id)m.set(id,x)}return [...m.values()]}
-function parsePeriod(request:Request){
-  const p=new URL(request.url).searchParams.get("period")||"30d";
-  const days=p==="7d"?7:p==="90d"?90:p==="180d"?180:p==="365d"?365:30;
-  return {key:p,days,from:Date.now()-days*DAY};
+
+function inspectionDofStatus(
+  row: any
+) {
+  const status =
+    upper(
+      row?.dof_status ??
+        row?.dofStatus
+    );
+
+  if (
+    [
+      "CLOSED",
+      "KAPALI",
+      "TAMAMLANDI",
+      "COMPLETED",
+      "DONE",
+    ].includes(status)
+  ) {
+    return "CLOSED";
+  }
+
+  if (
+    [
+      "OPEN",
+      "IN_PROGRESS",
+      "AÇIK",
+      "ACIK",
+      "DEVAM_EDIYOR",
+      "DEVAM EDİYOR",
+    ].includes(status)
+  ) {
+    return "OPEN";
+  }
+
+  return resultRequiresDof(
+    row?.result
+  )
+    ? "OPEN"
+    : "NONE";
 }
 
-export async function GET(request:Request){
-  try{
-    const s=await session();
-    if(!s) return NextResponse.json({success:false,error:"Aktif firma oturumu bulunamadı veya yetkisiz erişim."},{status:401,headers:{"Cache-Control":"no-store"}});
+function riskHasDof(
+  row: any
+) {
+  const status =
+    clean(
+      row?.dof_status
+    );
 
-    // İstemciden gönderilen firmId yalnız doğrulama amacıyla kullanılır.
-    // Tenant kaynağı her zaman sunucu tarafındaki aktif firma cookie UUID'sidir.
-    const requestedFirmId=validUuid(new URL(request.url).searchParams.get("firmId"));
-    if(requestedFirmId && requestedFirmId!==s.firmId){
+  const due =
+    row?.dof_due_date_millis ??
+    row?.dof_due_date ??
+    row?.dof_due_at ??
+    row?.corrective_action_due_date ??
+    row?.action_due_date ??
+    row?.capa_due_date ??
+    null;
+
+  const action =
+    clean(
+      row?.corrective_action
+    ) ||
+    clean(
+      row?.action_plan
+    ) ||
+    clean(
+      row?.dof_action
+    ) ||
+    clean(
+      row?.capa_action
+    ) ||
+    clean(
+      row?.measure
+    ) ||
+    clean(
+      row?.onlem
+    );
+
+  return Boolean(
+    status ||
+      due ||
+      action
+  );
+}
+
+function riskDofStatus(
+  row: any
+) {
+  if (
+    !riskHasDof(row)
+  ) {
+    return "NONE";
+  }
+
+  const status =
+    upper(
+      row?.dof_status
+    );
+
+  if (
+    [
+      "CLOSED",
+      "KAPALI",
+      "TAMAMLANDI",
+      "COMPLETED",
+      "DONE",
+    ].includes(status)
+  ) {
+    return "CLOSED";
+  }
+
+  return "OPEN";
+}
+
+function dofDueOf(
+  row: any
+) {
+  return (
+    row?.dof_due_date_millis ??
+    row?.dof_due_date ??
+    row?.dof_due_at ??
+    row?.corrective_action_due_date ??
+    row?.action_due_date ??
+    row?.capa_due_date ??
+    null
+  );
+}
+
+/* =========================================================
+   GENERIC
+========================================================= */
+
+async function safe<T>(
+  promise: PromiseLike<{
+    data: T | null;
+    error: any;
+  }>
+): Promise<T | null> {
+  try {
+    const result =
+      await promise;
+
+    if (result.error) {
+      console.error(
+        "Executive dashboard source error:",
+        result.error
+      );
+
+      return null;
+    }
+
+    return result.data;
+  } catch (error) {
+    console.error(
+      "Executive dashboard source exception:",
+      error
+    );
+
+    return null;
+  }
+}
+
+function uniqueById(
+  rows: any[]
+) {
+  const map =
+    new Map<
+      string,
+      any
+    >();
+
+  for (
+    const row of rows || []
+  ) {
+    const id =
+      clean(
+        row?.id
+      );
+
+    if (id) {
+      map.set(
+        id,
+        row
+      );
+    }
+  }
+
+  return [
+    ...map.values(),
+  ];
+}
+
+/* =========================================================
+   GET
+========================================================= */
+
+export async function GET(
+  request: Request
+) {
+  try {
+    /* =====================================================
+       AUTH / TENANT
+    ====================================================== */
+
+    const auth =
+      await session();
+
+    if (!auth) {
       return NextResponse.json(
-        {success:false,error:"Firma doğrulama hatası: İstenen firma aktif oturum firmasıyla eşleşmiyor."},
-        {status:409,headers:{"Cache-Control":"no-store"}}
+        {
+          success: false,
+          error:
+            "Aktif firma oturumu bulunamadı veya yetkisiz erişim.",
+        },
+        {
+          status: 401,
+          headers: {
+            "Cache-Control":
+              "no-store",
+          },
+        }
       );
     }
 
-    const supabase=db(); const firmId=s.firmId; const now=Date.now(); const nowDate=new Date(); const period=parsePeriod(request);
+    /*
+     * İstemci firmId yalnız doğrulama içindir.
+     * Tenant kaynağı cookie UUID'sidir.
+     */
 
-    // Firma ve çalışan listesi birbirinden bağımsızdır; ilk iki DB çağrısını paralel başlat.
-    const [company,employeesAll]=await Promise.all([
-      safe<any>(supabase.from("companies").select("id,name,local_firm_id,tehlike_sinifi").eq("id",firmId).maybeSingle()),
-      safe<any[]>(supabase.from("employees").select("id,active").eq("firm_id",firmId)),
-    ]);
-    if(!company) return NextResponse.json({success:false,error:"Aktif firma bulunamadı."},{status:404,headers:{"Cache-Control":"no-store"}});
-    const localFirmId=company.local_firm_id==null?"":clean(company.local_firm_id);
-    const employees=(employeesAll||[]).filter(x=>x.active!==false);
-    const employeeIds=employees.map(x=>clean(x.id)).filter(Boolean);
-
-    // Kullanıcı eşlemesi eğitim modülüne bağımlıdır.
-    // Bağımsız HSE kaynakları bu sorguyu beklemeden paralel başlatılır.
-    const usersPromise: Promise<any[] | null> = employeeIds.length
-      ? safe<any[]>(
-          supabase
-            .from("users")
-            .select("id,employee_id,company_id")
-            .eq("company_id", firmId)
-            .in("employee_id", employeeIds)
+    const requestedFirmId =
+      validUuid(
+        new URL(
+          request.url
+        ).searchParams.get(
+          "firmId"
         )
-      : Promise.resolve([]);
+      );
 
-    const independentPromise: Promise<
-      [
-        any[] | null,
-        any[] | null,
-        any[] | null,
-        any[] | null,
-        any[] | null,
-        any[] | null,
-        any[] | null,
-        any[] | null,
-        any[] | null,
-        any[] | null,
-        any[] | null
-      ]
-    > = Promise.all([
-      safe<any[]>(supabase.from("risk_items").select("*").eq("company_id",firmId).eq("is_deleted",false)),
-      safe<any[]>(supabase.from("fine_kinney_risks").select("*").eq("company_id",firmId).eq("is_deleted",false)),
-      safe<any[]>(supabase.from("denetim_runs").select("id,firm_id,status,inserted_at").eq("firm_id",firmId)),
-      localFirmId
-        ? safe<any[]>(supabase.from("denetim_runs").select("id,firm_id,status,inserted_at").eq("firm_id",localFirmId))
-        : Promise.resolve([]),
-      employeeIds.length
-        ? safe<any[]>(supabase.from("health_examinations").select("id,employee_id,exam_date,next_exam_date,is_deleted").eq("company_id",firmId).eq("is_deleted",false).in("employee_id",employeeIds))
-        : Promise.resolve([]),
-      employeeIds.length
-        ? safe<any[]>(supabase.from("health_ek2_forms").select("id,employee_id,examination_id,form_type,status,exam_date,next_exam_date,is_active,created_at").eq("company_id",firmId).or("is_active.is.null,is_active.eq.true").in("employee_id",employeeIds))
-        : Promise.resolve([]),
-      safe<any[]>(supabase.from("periodic_control_equipments").select("id,firm_id,next_due_millis,status,deleted").eq("firm_id",firmId).eq("deleted",false)),
-      safe<any[]>(supabase.from("environment_measurements").select("id,firm_id,next_due_millis,status,deleted").eq("firm_id",firmId).eq("deleted",false)),
-      safe<any[]>(supabase.from("cbs_forms").select("id,firm_id,status,priority,sla_due_at").eq("firm_id",firmId)),
-      safe<any[]>(supabase.from("accident_records").select("id,web_firm_id,firm_id,event_date,lost_work_days,is_active,is_deleted,created_at").eq("web_firm_id",firmId).or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0")),
-      localFirmId
-        ? safe<any[]>(supabase.from("accident_records").select("id,web_firm_id,firm_id,event_date,lost_work_days,is_active,is_deleted,created_at").eq("firm_id",localFirmId).or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0"))
-        : Promise.resolve([]),
-    ]);
+    if (
+      requestedFirmId &&
+      requestedFirmId !==
+        auth.firmId
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Firma doğrulama hatası: İstenen firma aktif oturum firmasıyla eşleşmiyor.",
+        },
+        {
+          status: 409,
+          headers: {
+            "Cache-Control":
+              "no-store",
+          },
+        }
+      );
+    }
 
-    const [independent, usersRaw] = await Promise.all([
-      independentPromise,
-      usersPromise,
-    ]);
+    const supabase =
+      db();
+
+    const firmId =
+      auth.firmId;
+
+    const now =
+      Date.now();
+
+    const nowDate =
+      new Date();
+
+    const period =
+      parsePeriod(
+        request
+      );
+
+    /* =====================================================
+       COMPANY + EMPLOYEE
+    ====================================================== */
 
     const [
-      matrixRisks,
-      kinneyRisks,
+      company,
+      employeesAll,
+    ] =
+      await Promise.all([
+        safe<any>(
+          supabase
+            .from(
+              "companies"
+            )
+            .select(
+              "id,name,local_firm_id,tehlike_sinifi"
+            )
+            .eq(
+              "id",
+              firmId
+            )
+            .maybeSingle()
+        ),
+
+        safe<any[]>(
+          supabase
+            .from(
+              "employees"
+            )
+            .select(
+              "id,active"
+            )
+            .eq(
+              "firm_id",
+              firmId
+            )
+        ),
+      ]);
+
+    if (!company) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Aktif firma bulunamadı.",
+        },
+        {
+          status: 404,
+          headers: {
+            "Cache-Control":
+              "no-store",
+          },
+        }
+      );
+    }
+
+    const localFirmId =
+      company.local_firm_id ==
+      null
+        ? ""
+        : clean(
+            company.local_firm_id
+          );
+
+    const employees = (
+      employeesAll || []
+    ).filter(
+      (row) =>
+        row.active !== false
+    );
+
+    const employeeIds =
+      employees
+        .map(
+          (row) =>
+            clean(row.id)
+        )
+        .filter(Boolean);
+
+    /* =====================================================
+       USER MAPPING
+    ====================================================== */
+
+    const usersPromise =
+      employeeIds.length
+        ? safe<any[]>(
+            supabase
+              .from(
+                "users"
+              )
+              .select(
+                "id,employee_id,company_id"
+              )
+              .eq(
+                "company_id",
+                firmId
+              )
+              .in(
+                "employee_id",
+                employeeIds
+              )
+          )
+        : Promise.resolve(
+            []
+          );
+
+    /* =====================================================
+       PARALLEL SOURCES
+    ====================================================== */
+
+    const independentPromise =
+      Promise.all([
+        /*
+         * Risk:
+         * full rows because canonical
+         * level + DÖF + tarih lazım.
+         */
+
+        safe<any[]>(
+          supabase
+            .from(
+              "risk_items"
+            )
+            .select("*")
+            .eq(
+              "company_id",
+              firmId
+            )
+            .eq(
+              "is_deleted",
+              false
+            )
+        ),
+
+        safe<any[]>(
+          supabase
+            .from(
+              "fine_kinney_risks"
+            )
+            .select("*")
+            .eq(
+              "company_id",
+              firmId
+            )
+            .eq(
+              "is_deleted",
+              false
+            )
+        ),
+
+        /* DENETİM */
+
+        safe<any[]>(
+          supabase
+            .from(
+              "denetim_runs"
+            )
+            .select(
+              "id,firm_id,status,inserted_at"
+            )
+            .eq(
+              "firm_id",
+              firmId
+            )
+        ),
+
+        localFirmId
+          ? safe<any[]>(
+              supabase
+                .from(
+                  "denetim_runs"
+                )
+                .select(
+                  "id,firm_id,status,inserted_at"
+                )
+                .eq(
+                  "firm_id",
+                  localFirmId
+                )
+            )
+          : Promise.resolve(
+              []
+            ),
+
+        /* HEALTH */
+
+        employeeIds.length
+          ? safe<any[]>(
+              supabase
+                .from(
+                  "health_examinations"
+                )
+                .select(
+                  "id,employee_id,exam_date,next_exam_date,is_deleted"
+                )
+                .eq(
+                  "company_id",
+                  firmId
+                )
+                .eq(
+                  "is_deleted",
+                  false
+                )
+                .in(
+                  "employee_id",
+                  employeeIds
+                )
+            )
+          : Promise.resolve(
+              []
+            ),
+
+        employeeIds.length
+          ? safe<any[]>(
+              supabase
+                .from(
+                  "health_ek2_forms"
+                )
+                .select(
+                  "id,employee_id,examination_id,form_type,status,exam_date,next_exam_date,is_active,created_at"
+                )
+                .eq(
+                  "company_id",
+                  firmId
+                )
+                .or(
+                  "is_active.is.null,is_active.eq.true"
+                )
+                .in(
+                  "employee_id",
+                  employeeIds
+                )
+            )
+          : Promise.resolve(
+              []
+            ),
+
+        /* PERIODIC */
+
+        safe<any[]>(
+          supabase
+            .from(
+              "periodic_control_equipments"
+            )
+            .select(
+              "id,firm_id,next_due_millis,status,deleted"
+            )
+            .eq(
+              "firm_id",
+              firmId
+            )
+            .eq(
+              "deleted",
+              false
+            )
+        ),
+
+        /* ENVIRONMENT */
+
+        safe<any[]>(
+          supabase
+            .from(
+              "environment_measurements"
+            )
+            .select(
+              "id,firm_id,next_due_millis,status,deleted"
+            )
+            .eq(
+              "firm_id",
+              firmId
+            )
+            .eq(
+              "deleted",
+              false
+            )
+        ),
+
+        /* CBS */
+
+        safe<any[]>(
+          supabase
+            .from(
+              "cbs_forms"
+            )
+            .select(
+              "id,firm_id,status,priority,sla_due_at"
+            )
+            .eq(
+              "firm_id",
+              firmId
+            )
+        ),
+
+        /* ACCIDENT WEB UUID */
+
+        safe<any[]>(
+          supabase
+            .from(
+              "accident_records"
+            )
+            .select(
+              "id,web_firm_id,firm_id,event_date,lost_work_days,is_active,is_deleted,created_at"
+            )
+            .eq(
+              "web_firm_id",
+              firmId
+            )
+            .or(
+              "is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0"
+            )
+        ),
+
+        /* ACCIDENT LOCAL FIRM */
+
+        localFirmId
+          ? safe<any[]>(
+              supabase
+                .from(
+                  "accident_records"
+                )
+                .select(
+                  "id,web_firm_id,firm_id,event_date,lost_work_days,is_active,is_deleted,created_at"
+                )
+                .eq(
+                  "firm_id",
+                  localFirmId
+                )
+                .or(
+                  "is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0"
+                )
+            )
+          : Promise.resolve(
+              []
+            ),
+      ]);
+
+    const [
+      independent,
+      usersRaw,
+    ] =
+      await Promise.all([
+        independentPromise,
+        usersPromise,
+      ]);
+
+    const [
+      matrixRisksRaw,
+      kinneyRisksRaw,
       inspectionRunsRemote,
       inspectionRunsLocal,
       healthExams,
@@ -187,194 +1278,1766 @@ export async function GET(request:Request){
       cbs,
       accidentsWeb,
       accidentsLocal,
-    ] = independent;
+    ] =
+      independent;
 
-    const users: any[] = usersRaw ?? [];
-    const userIds: string[] = users
-      .map((x: any) => clean(x.id))
-      .filter((id: string) => Boolean(id));
+    /* =====================================================
+       USERS
+    ====================================================== */
 
-    const userToEmployee = new Map<string, string>(
+    const users =
+      usersRaw ?? [];
+
+    const userIds =
       users
-        .map((x: any): [string, string] => [clean(x.id), clean(x.employee_id)])
-        .filter(([userId, employeeId]: [string, string]) => Boolean(userId && employeeId))
-    );
+        .map(
+          (row: any) =>
+            clean(row.id)
+        )
+        .filter(Boolean);
 
-    const trainingAssignments: any[] = userIds.length
-      ? (await safe<any[]>(
-          supabase
-            .from("training_assignments")
-            .select("id,user_id,training_id,status,watch_completed,final_exam_passed,started_at,completed_at,created_at")
-            .in("user_id",userIds)
-        )) ?? []
-      : [];
+    const userToEmployee =
+      new Map<
+        string,
+        string
+      >(
+        users
+          .map(
+            (
+              row: any
+            ): [
+              string,
+              string,
+            ] => [
+              clean(row.id),
+              clean(
+                row.employee_id
+              ),
+            ]
+          )
+          .filter(
+            ([
+              userId,
+              employeeId,
+            ]) =>
+              Boolean(
+                userId &&
+                  employeeId
+              )
+          )
+      );
 
-    // Denetim kayıtları yalnız aktif firmanın remote UUID'si veya companies.local_firm_id
-    // eşlemesiyle kabul edilir. Firma adı / global fallback YOK.
-    const inspectionRuns=uniqueById([...(inspectionRunsRemote||[]),...(inspectionRunsLocal||[])]);
+    /* =====================================================
+       TRAINING ASSIGNMENTS
+    ====================================================== */
 
-    const trainingIds: string[] = Array.from(new Set<string>(trainingAssignments.map((x: any) => clean(x.training_id)).filter((id: string) => Boolean(id))));
-    const activeRuns=(inspectionRuns||[]).filter(x=>{const t=toMillis(x.inserted_at);return t!=null&&t>=period.from&&t<=now;});
-    const runIds=activeRuns.map(x=>clean(x.id)).filter(Boolean);
+    const trainingAssignments =
+      userIds.length
+        ? (
+            (await safe<any[]>(
+              supabase
+                .from(
+                  "training_assignments"
+                )
+                .select(
+                  "id,user_id,training_id,status,watch_completed,final_exam_passed,started_at,completed_at,created_at"
+                )
+                .in(
+                  "user_id",
+                  userIds
+                )
+            )) ?? []
+          )
+        : [];
 
-    const trainingDefsPromise=trainingIds.length
-      ? safe<any[]>(supabase.from("trainings").select("id,duration_minutes,title,type,created_at").in("id",trainingIds))
-      : Promise.resolve<any[]>([]);
+    /* =====================================================
+       DENETİM RUN
+    ====================================================== */
 
-    const inspectionAnswersPromise=(async()=>{
-      if(!runIds.length)return [] as any[];
-      const [byRemote,byLocal]=await Promise.all([
-        safe<any[]>(supabase.from("denetim_answers").select("*").in("run_remote_id",runIds)),
-        safe<any[]>(supabase.from("denetim_answers").select("*").in("run_id",runIds)),
+    const inspectionRuns =
+      uniqueById([
+        ...(
+          inspectionRunsRemote ||
+          []
+        ),
+
+        ...(
+          inspectionRunsLocal ||
+          []
+        ),
       ]);
-      return uniqueById([...(byRemote||[]),...(byLocal||[])]);
-    })();
 
-    const [trainingDefs,inspectionAnswers]=await Promise.all([trainingDefsPromise,inspectionAnswersPromise]);
-    const trainingMap = new Map<string, any>((trainingDefs || []).map((x: any): [string, any] => [clean(x.id), x]));
+    /*
+     * Seçili dönem:
+     * 7 / 30 / 90 / 180 / 365
+     */
 
-    // RİSK: Risk modülünün KANONİK seviye sınıflandırması birebir kullanılır.
-    const riskLevels={intolerable:0,veryHigh:0,high:0,medium:0,low:0};
-    for(const row of matrixRisks||[]){const level=matrixLevel(num(row.score)||num(row.probability)*num(row.severity));(riskLevels as any)[level==="INTOLERABLE"?"intolerable":level==="VERY_HIGH"?"veryHigh":level==="HIGH"?"high":level==="MEDIUM"?"medium":"low"]++;}
-    for(const row of kinneyRisks||[]){const level=fineKinneyLevel(num(row.score)||num(row.probability_value)*num(row.frequency_value)*num(row.severity_value));(riskLevels as any)[level==="INTOLERABLE"?"intolerable":level==="VERY_HIGH"?"veryHigh":level==="HIGH"?"high":level==="MEDIUM"?"medium":"low"]++;}
-    const riskTotal=(matrixRisks?.length||0)+(kinneyRisks?.length||0);
-    const riskCritical=riskLevels.intolerable+riskLevels.veryHigh;
+    const activeRuns =
+      inspectionRuns.filter(
+        (row) => {
+          const time =
+            toMillis(
+              row.inserted_at
+            );
 
-    // DENETİM: seçili operasyon dönemindeki run'ların gerçek cevapları.
-    const answers=inspectionAnswers||[];
-    const suitable=answers.filter(x=>clean(x.result).toLocaleUpperCase("tr-TR")==="UYGUN").length;
-    const partial=answers.filter(x=>["KISMEN","KISMEN UYGUN","KISMEN_UYGUN"].includes(clean(x.result).toLocaleUpperCase("tr-TR"))).length;
-    const nonCompliant=answers.filter(x=>clean(x.result).toLocaleUpperCase("tr-TR")==="UYGUNSUZ").length;
+          return inWindowMillis(
+            time,
+            period.from,
+            period.to
+          );
+        }
+      );
 
-    // DÖF: Risk ve Denetim modüllerinin kendi kanonik mantığı ayrı ayrı hesaplanır, sonra birleştirilir.
-    // Risk modülünde her risk kaydı DÖF durumuna sahiptir: CLOSED ise kapalı, diğerleri açık.
-    const riskRows=[...(matrixRisks||[]),...(kinneyRisks||[])].filter(x=>riskHasDof(x));
-    const riskDofTotal=riskRows.length;
-    const riskDofClosed=riskRows.filter(x=>riskDofStatus(x)==="CLOSED").length;
-    const riskDofOpen=riskRows.filter(x=>riskDofStatus(x)==="OPEN").length;
+    const runIds =
+      activeRuns
+        .map(
+          (row) =>
+            clean(row.id)
+        )
+        .filter(Boolean);
 
-    // Denetim modülünde explicit DÖF durumu veya sonucu DÖF gerektiren maddeler kapsama girer.
-    const inspectionDofRows=answers.filter(x=>inspectionDofStatus(x)!=="NONE");
-    const inspectionDofClosed=inspectionDofRows.filter(x=>inspectionDofStatus(x)==="CLOSED").length;
-    const inspectionDofOpen=Math.max(0,inspectionDofRows.length-inspectionDofClosed);
+    /* =====================================================
+       TRAINING DEFINITIONS
+    ====================================================== */
 
-    const dofTotal=riskDofTotal+inspectionDofRows.length;
-    const dofClosed=riskDofClosed+inspectionDofClosed;
-    const dofOpen=riskDofOpen+inspectionDofOpen;
-    const dofOverdue=[...riskRows.map(x=>({row:x,status:riskDofStatus(x)})),...inspectionDofRows.map(x=>({row:x,status:inspectionDofStatus(x)}))].filter(({row,status})=>{
-      if(status==="CLOSED")return false;
-      const t=toMillis(dofDueOf(row));
-      return t!=null&&t<now;
-    }).length;
+    const trainingIds =
+      Array.from(
+        new Set(
+          trainingAssignments
+            .map(
+              (row: any) =>
+                clean(
+                  row.training_id
+                )
+            )
+            .filter(Boolean)
+        )
+      );
 
-    const rule=trainingRule(company.tehlike_sinifi);
-    const employeeTrainingMinutes=new Map<string,number>();
-    if(rule.minutes>0){
-      for(const a of trainingAssignments||[]){
-        const employeeId=userToEmployee.get(clean(a.user_id)); if(!employeeId)continue;
-        const def=trainingMap.get(clean(a.training_id));
-        const enriched={...a,duration_minutes:num(def?.duration_minutes)};
-        if(!legallyValid(enriched,rule.years,nowDate))continue;
-        employeeTrainingMinutes.set(employeeId,(employeeTrainingMinutes.get(employeeId)||0)+Math.max(0,num(def?.duration_minutes)));
+    const trainingDefsPromise =
+      trainingIds.length
+        ? safe<any[]>(
+            supabase
+              .from(
+                "trainings"
+              )
+              .select(
+                "id,duration_minutes,title,type,created_at"
+              )
+              .in(
+                "id",
+                trainingIds
+              )
+          )
+        : Promise.resolve(
+            []
+          );
+
+    /* =====================================================
+       INSPECTION ANSWERS
+    ====================================================== */
+
+    const inspectionAnswersPromise =
+      (async () => {
+        if (
+          !runIds.length
+        ) {
+          return [];
+        }
+
+        const [
+          byRemote,
+          byLocal,
+        ] =
+          await Promise.all([
+            safe<any[]>(
+              supabase
+                .from(
+                  "denetim_answers"
+                )
+                .select("*")
+                .in(
+                  "run_remote_id",
+                  runIds
+                )
+            ),
+
+            safe<any[]>(
+              supabase
+                .from(
+                  "denetim_answers"
+                )
+                .select("*")
+                .in(
+                  "run_id",
+                  runIds
+                )
+            ),
+          ]);
+
+        return uniqueById([
+          ...(byRemote ||
+            []),
+
+          ...(byLocal ||
+            []),
+        ]);
+      })();
+
+    const [
+      trainingDefs,
+      inspectionAnswers,
+    ] =
+      await Promise.all([
+        trainingDefsPromise,
+        inspectionAnswersPromise,
+      ]);
+
+    const trainingMap =
+      new Map<
+        string,
+        any
+      >(
+        (
+          trainingDefs ||
+          []
+        ).map(
+          (
+            row: any
+          ): [
+            string,
+            any,
+          ] => [
+            clean(row.id),
+            row,
+          ]
+        )
+      );
+
+    /* =====================================================
+       RISK
+       DÖNEM BAZLI
+    ====================================================== */
+
+    const matrixRisks =
+      (
+        matrixRisksRaw ||
+        []
+      )
+        .map((row) => ({
+          row,
+          level:
+            matrixRowLevel(
+              row
+            ),
+          createdAt:
+            riskCreatedAt(
+              row
+            ),
+        }))
+        .filter((entry) =>
+          inWindowMillis(
+            entry.createdAt,
+            period.from,
+            period.to
+          )
+        );
+
+    const kinneyRisks =
+      (
+        kinneyRisksRaw ||
+        []
+      )
+        .map((row) => ({
+          row,
+          level:
+            kinneyRowLevel(
+              row
+            ),
+          createdAt:
+            riskCreatedAt(
+              row
+            ),
+        }))
+        .filter((entry) =>
+          inWindowMillis(
+            entry.createdAt,
+            period.from,
+            period.to
+          )
+        );
+
+    const riskEntries = [
+      ...matrixRisks,
+      ...kinneyRisks,
+    ];
+
+    const riskLevels = {
+      intolerable: 0,
+      veryHigh: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
+
+    for (
+      const entry of
+      riskEntries
+    ) {
+      switch (
+        entry.level
+      ) {
+        case "INTOLERABLE":
+          riskLevels.intolerable++;
+          break;
+
+        case "VERY_HIGH":
+          riskLevels.veryHigh++;
+          break;
+
+        case "HIGH":
+          riskLevels.high++;
+          break;
+
+        case "MEDIUM":
+          riskLevels.medium++;
+          break;
+
+        case "LOW":
+          riskLevels.low++;
+          break;
       }
     }
-    const trainingCompliant=rule.minutes>0?employeeIds.filter(id=>(employeeTrainingMinutes.get(id)||0)>=rule.minutes).length:0;
-    const trainingMissing=rule.minutes>0?Math.max(0,employeeIds.length-trainingCompliant):0;
 
-    // Sağlık gözetimi: health_examinations + EK-2 tek kanonik akışta değerlendirilir.
-    // Bir çalışanın güncel EK-2 kaydı varsa dashboard bunu yok saymaz.
-    const latestHealth=new Map<string,{examAt:number;dueAt:number|null}>();
-    const putHealth=(employeeIdRaw:any,examRaw:any,dueRaw:any)=>{
-      const employeeId=clean(employeeIdRaw); if(!employeeId)return;
-      const examAt=examRaw?new Date(examRaw).getTime():0;
-      const dueAt=dueRaw?new Date(dueRaw).getTime():NaN;
-      const normalizedExam=Number.isFinite(examAt)?examAt:0;
-      const normalizedDue=Number.isFinite(dueAt)?dueAt:null;
-      const old=latestHealth.get(employeeId);
-      if(!old||normalizedExam>=old.examAt) latestHealth.set(employeeId,{examAt:normalizedExam,dueAt:normalizedDue});
-    };
-    for(const x of healthExams||[]) putHealth(x.employee_id,x.exam_date,x.next_exam_date);
-    for(const x of healthEk2||[]) putHealth(x.employee_id,x.exam_date||x.created_at,x.next_exam_date);
+    const riskTotal =
+      riskEntries.length;
 
-    let healthValid=0,healthOverdue=0,healthApproaching=0,healthMissing=0;
-    for(const id of employeeIds){
-      const x=latestHealth.get(id);
-      if(!x||x.dueAt==null){healthMissing++;continue}
-      if(x.dueAt<now)healthOverdue++;
-      else{healthValid++;if(x.dueAt-now<=30*DAY)healthApproaching++}
+    /* =====================================================
+       KRİTİK RİSK
+       
+       YENİ KURAL:
+       
+       SADECE DÖF'Ü AÇIK OLAN:
+       HIGH
+       + VERY_HIGH
+       + INTOLERABLE
+    ====================================================== */
+
+    const openHigh =
+      riskEntries.filter(
+        ({ row, level }) =>
+          level ===
+            "HIGH" &&
+          riskDofStatus(
+            row
+          ) === "OPEN"
+      ).length;
+
+    const openVeryHigh =
+      riskEntries.filter(
+        ({ row, level }) =>
+          level ===
+            "VERY_HIGH" &&
+          riskDofStatus(
+            row
+          ) === "OPEN"
+      ).length;
+
+    const openIntolerable =
+      riskEntries.filter(
+        ({ row, level }) =>
+          level ===
+            "INTOLERABLE" &&
+          riskDofStatus(
+            row
+          ) === "OPEN"
+      ).length;
+
+    const riskCritical =
+      openHigh +
+      openVeryHigh +
+      openIntolerable;
+
+    /*
+     * Dashboard istemcisine gönderilecek zengin Risk modeli.
+     */
+
+    const riskModule =
+      riskTotal > 0
+        ? {
+            total:
+              riskTotal,
+
+            critical:
+              riskCritical,
+
+            intolerable:
+              riskLevels.intolerable,
+
+            veryHigh:
+              riskLevels.veryHigh,
+
+            high:
+              riskLevels.high,
+
+            medium:
+              riskLevels.medium,
+
+            low:
+              riskLevels.low,
+
+            openHigh,
+
+            openVeryHigh,
+
+            openIntolerable,
+          }
+        : undefined;
+
+    /* =====================================================
+       DENETİM UYUMU
+       
+       UYGUN /
+       DEĞERLENDİRİLEN MADDE
+       
+       N/A / BOŞ HARİÇ
+    ====================================================== */
+
+    const answers =
+      inspectionAnswers ||
+      [];
+
+    const suitable =
+      answers.filter(
+        (row) =>
+          upper(
+            row?.result
+          ) === "UYGUN"
+      ).length;
+
+    const partial =
+      answers.filter(
+        (row) =>
+          [
+            "KISMEN",
+            "KISMEN UYGUN",
+            "KISMEN_UYGUN",
+          ].includes(
+            upper(
+              row?.result
+            )
+          )
+      ).length;
+
+    const nonCompliant =
+      answers.filter(
+        (row) =>
+          upper(
+            row?.result
+          ) ===
+          "UYGUNSUZ"
+      ).length;
+
+    /*
+     * Sadece gerçekten değerlendirilen maddeler.
+     *
+     * UYGUN
+     * KISMEN
+     * UYGUNSUZ
+     */
+
+    const evaluatedTotal =
+      suitable +
+      partial +
+      nonCompliant;
+
+    const inspectionComplianceScore =
+      evaluatedTotal > 0
+        ? clampScore(
+            (
+              suitable /
+              evaluatedTotal
+            ) * 100
+          )
+        : null;
+
+    const inspectionModule =
+      evaluatedTotal > 0
+        ? {
+            total:
+              evaluatedTotal,
+
+            evaluatedTotal,
+
+            compliant:
+              suitable,
+
+            partial,
+
+            nonCompliant,
+
+            complianceScore:
+              inspectionComplianceScore,
+          }
+        : undefined;
+
+    /* =====================================================
+       DÖF
+       
+       RİSK + DENETİM
+       
+       SEÇİLİ DÖNEM
+    ====================================================== */
+
+    /*
+     * Risk DÖF:
+     *
+     * DÖF oluşturulma tarihi
+     * yoksa risk oluşturulma tarihi
+     * fallback edilir.
+     */
+
+    const allRiskEntries =
+      [
+        ...(
+          matrixRisksRaw ||
+          []
+        ).map(
+          (row) => ({
+            row,
+            level:
+              matrixRowLevel(
+                row
+              ),
+          })
+        ),
+
+        ...(
+          kinneyRisksRaw ||
+          []
+        ).map(
+          (row) => ({
+            row,
+            level:
+              kinneyRowLevel(
+                row
+              ),
+          })
+        ),
+      ];
+
+    const periodRiskDofRows =
+      allRiskEntries
+        .filter(
+          ({ row }) =>
+            riskHasDof(
+              row
+            )
+        )
+        .filter(
+          ({ row }) =>
+            inWindowMillis(
+              riskDofCreatedAt(
+                row
+              ),
+              period.from,
+              period.to
+            )
+        );
+
+    const riskDofTotal =
+      periodRiskDofRows.length;
+
+    const riskDofClosed =
+      periodRiskDofRows.filter(
+        ({ row }) =>
+          riskDofStatus(
+            row
+          ) === "CLOSED"
+      ).length;
+
+    const riskDofOpen =
+      periodRiskDofRows.filter(
+        ({ row }) =>
+          riskDofStatus(
+            row
+          ) === "OPEN"
+      ).length;
+
+    /*
+     * Denetim cevapları zaten seçilen run döneminden geliyor.
+     */
+
+    const inspectionDofRows =
+      answers.filter(
+        (row) =>
+          inspectionDofStatus(
+            row
+          ) !== "NONE"
+      );
+
+    const inspectionDofClosed =
+      inspectionDofRows.filter(
+        (row) =>
+          inspectionDofStatus(
+            row
+          ) === "CLOSED"
+      ).length;
+
+    const inspectionDofOpen =
+      inspectionDofRows.filter(
+        (row) =>
+          inspectionDofStatus(
+            row
+          ) === "OPEN"
+      ).length;
+
+    const dofTotal =
+      riskDofTotal +
+      inspectionDofRows.length;
+
+    const dofClosed =
+      riskDofClosed +
+      inspectionDofClosed;
+
+    const dofOpen =
+      riskDofOpen +
+      inspectionDofOpen;
+
+    /*
+     * Geciken açık DÖF
+     */
+
+    const dofOverdue =
+      [
+        ...periodRiskDofRows.map(
+          ({ row }) => ({
+            row,
+            status:
+              riskDofStatus(
+                row
+              ),
+          })
+        ),
+
+        ...inspectionDofRows.map(
+          (row) => ({
+            row,
+            status:
+              inspectionDofStatus(
+                row
+              ),
+          })
+        ),
+      ].filter(
+        ({
+          row,
+          status,
+        }) => {
+          if (
+            status !==
+            "OPEN"
+          ) {
+            return false;
+          }
+
+          const due =
+            toMillis(
+              dofDueOf(row)
+            );
+
+          return (
+            due != null &&
+            due < now
+          );
+        }
+      ).length;
+
+    const dofModule =
+      dofTotal > 0
+        ? {
+            total:
+              dofTotal,
+
+            open:
+              dofOpen,
+
+            closed:
+              dofClosed,
+
+            overdue:
+              dofOverdue,
+
+            riskTotal:
+              riskDofTotal,
+
+            riskOpen:
+              riskDofOpen,
+
+            riskClosed:
+              riskDofClosed,
+
+            inspectionTotal:
+              inspectionDofRows.length,
+
+            inspectionOpen:
+              inspectionDofOpen,
+
+            inspectionClosed:
+              inspectionDofClosed,
+          }
+        : undefined;
+
+    /* =====================================================
+       LEGAL TRAINING
+    ====================================================== */
+
+    const rule =
+      trainingRule(
+        company.tehlike_sinifi
+      );
+
+    const employeeTrainingMinutes =
+      new Map<
+        string,
+        number
+      >();
+
+    if (
+      rule.minutes > 0
+    ) {
+      for (
+        const assignment of
+        trainingAssignments
+      ) {
+        const employeeId =
+          userToEmployee.get(
+            clean(
+              assignment.user_id
+            )
+          );
+
+        if (!employeeId) {
+          continue;
+        }
+
+        const definition =
+          trainingMap.get(
+            clean(
+              assignment.training_id
+            )
+          );
+
+        const enriched = {
+          ...assignment,
+
+          duration_minutes:
+            num(
+              definition?.duration_minutes
+            ),
+        };
+
+        /*
+         * Yalnız mevzuat açısından halen geçerli eğitimler.
+         */
+
+        if (
+          !legallyValid(
+            enriched,
+            rule.years,
+            nowDate
+          )
+        ) {
+          continue;
+        }
+
+        const previous =
+          employeeTrainingMinutes.get(
+            employeeId
+          ) || 0;
+
+        employeeTrainingMinutes.set(
+          employeeId,
+          previous +
+            Math.max(
+              0,
+              num(
+                definition?.duration_minutes
+              )
+            )
+        );
+      }
     }
-    const ek2Employees=new Set((healthEk2||[]).map(x=>clean(x.employee_id)).filter(Boolean)).size;
 
-    const allAccidents=uniqueById([...(accidentsWeb||[]),...(accidentsLocal||[])]).filter(x=>x.is_active!==false);
-    const accidentRows=allAccidents.filter(x=>{const t=toMillis(x.event_date||x.created_at);return t!=null&&t>=period.from&&t<=now;});
-    const lostTime=accidentRows.filter(x=>num(x.lost_work_days)>0).length;
-    const openInvestigations=0;
+    /*
+     * Tam mevzuat uyumlu çalışan:
+     * gerekli dakikayı tamamlamış.
+     */
 
-    const summarizeDue=(rows:any[]|null)=>{const all=rows||[];let valid=0,approaching=0,overdue=0;for(const x of all){const due=num(x.next_due_millis);if(due>0){if(due<now)overdue++;else if(due-now<=30*DAY)approaching++;else valid++;continue}const st=lower(x.status);if(["overdue","expired","gecikmis","gecikmiş","suresi_gecmis","süresi geçmiş"].includes(st))overdue++;else if(["approaching","yaklasiyor","yaklaşıyor","due_soon"].includes(st))approaching++;else if(["valid","uygun","ok","gecerli","geçerli"].includes(st))valid++}return{total:all.length,valid,approaching,overdue}};
-    const periodicSummary=summarizeDue(periodic); const environmentSummary=summarizeDue(environment);
+    const trainingCompliant =
+      rule.minutes > 0
+        ? employeeIds.filter(
+            (employeeId) =>
+              (
+                employeeTrainingMinutes.get(
+                  employeeId
+                ) || 0
+              ) >=
+              rule.minutes
+          ).length
+        : 0;
 
-    const cbsRows=cbs||[]; const cbsOpen=cbsRows.filter(x=>!isClosed(x.status)).length;
-    const cbsCritical=cbsRows.filter(x=>!isClosed(x.status)&&lower(x.priority)==="critical").length;
-    const cbsSla=cbsRows.filter(x=>{if(isClosed(x.status)||!x.sla_due_at)return false;const t=new Date(x.sla_due_at).getTime();return Number.isFinite(t)&&t<now}).length;
-    const cbsActionRequired=new Set(cbsRows.filter(x=>{
-      if(isClosed(x.status))return false;
-      const critical=lower(x.priority)==="critical";
-      const t=x.sla_due_at?new Date(x.sla_due_at).getTime():NaN;
-      return critical||(Number.isFinite(t)&&t<now);
-    }).map(x=>clean(x.id))).size;
+    const trainingMissing =
+      rule.minutes > 0
+        ? Math.max(
+            0,
+            employeeIds.length -
+              trainingCompliant
+          )
+        : 0;
 
-    const scoreInput:ScoreInput={
-      risk:riskTotal>0?{total:riskTotal,critical:riskCritical,intolerable:riskLevels.intolerable,veryHigh:riskLevels.veryHigh,high:riskLevels.high,medium:riskLevels.medium,low:riskLevels.low}:undefined,
-      inspection:answers.length>0?{total:answers.length,compliant:suitable,partial,nonCompliant}:undefined,
-      training:employeeIds.length>0&&rule.minutes>0?{totalEmployees:employeeIds.length,compliantEmployees:trainingCompliant,nonCompliantEmployees:trainingMissing,requiredMinutes:rule.minutes,hazardClass:rule.label}:undefined,
-      dof:dofTotal>0?{total:dofTotal,open:dofOpen,closed:dofClosed,overdue:dofOverdue,riskTotal:riskDofTotal,riskOpen:riskDofOpen,riskClosed:riskDofClosed,inspectionTotal:inspectionDofRows.length,inspectionOpen:inspectionDofOpen,inspectionClosed:inspectionDofClosed}:undefined,
-      incident:accidentRows.length>0?{total:accidentRows.length,lostTime,openInvestigations}:undefined,
-      health:employeeIds.length>0?{totalEmployees:employeeIds.length,valid:healthValid,approaching:healthApproaching,overdue:healthOverdue,missing:healthMissing,ek2Employees}:undefined,
-      periodic:periodicSummary.total>0?periodicSummary:undefined,
-      environment:environmentSummary.total>0?environmentSummary:undefined,
-      cbs:cbsRows.length>0?{total:cbsRows.length,open:cbsOpen,critical:cbsCritical,slaExceeded:cbsSla,actionRequired:cbsActionRequired}:undefined,
+    /*
+     * =====================================================
+     * EĞİTİM UYGUNLUK SKORU
+     *
+     * Her çalışanın:
+     *
+     * geçerli eğitim dakikası /
+     * gerekli yasal dakika
+     *
+     * oranı alınır.
+     *
+     * Her kişi maksimum %100.
+     *
+     * Sonra firma ortalaması hesaplanır.
+     *
+     * Örnek:
+     * 12 saat gerekli
+     * çalışan 6 saat tamamladı
+     * firma skoruna %50 katkı sağlar.
+     * =====================================================
+     */
+
+    let trainingComplianceScore:
+      | number
+      | null = null;
+
+    if (
+      employeeIds.length >
+        0 &&
+      rule.minutes > 0
+    ) {
+      let earnedMinutes =
+        0;
+
+      const maximumMinutes =
+        employeeIds.length *
+        rule.minutes;
+
+      for (
+        const employeeId of
+        employeeIds
+      ) {
+        const completed =
+          employeeTrainingMinutes.get(
+            employeeId
+          ) || 0;
+
+        earnedMinutes +=
+          Math.min(
+            completed,
+            rule.minutes
+          );
+      }
+
+      trainingComplianceScore =
+        maximumMinutes > 0
+          ? clampScore(
+              (
+                earnedMinutes /
+                maximumMinutes
+              ) * 100
+            )
+          : null;
+    }
+
+    const trainingModule =
+      employeeIds.length >
+        0 &&
+      rule.minutes > 0
+        ? {
+            totalEmployees:
+              employeeIds.length,
+
+            compliantEmployees:
+              trainingCompliant,
+
+            nonCompliantEmployees:
+              trainingMissing,
+
+            requiredMinutes:
+              rule.minutes,
+
+            hazardClass:
+              rule.label,
+
+            complianceScore:
+              trainingComplianceScore,
+          }
+        : undefined;
+
+    /* =====================================================
+       HEALTH
+       SNAPSHOT
+    ====================================================== */
+
+    const latestHealth =
+      new Map<
+        string,
+        {
+          examAt: number;
+          dueAt:
+            | number
+            | null;
+        }
+      >();
+
+    const putHealth = (
+      employeeIdRaw: any,
+      examRaw: any,
+      dueRaw: any
+    ) => {
+      const employeeId =
+        clean(
+          employeeIdRaw
+        );
+
+      if (!employeeId) {
+        return;
+      }
+
+      const examAt =
+        examRaw
+          ? new Date(
+              examRaw
+            ).getTime()
+          : 0;
+
+      const dueAt =
+        dueRaw
+          ? new Date(
+              dueRaw
+            ).getTime()
+          : NaN;
+
+      const normalizedExam =
+        Number.isFinite(
+          examAt
+        )
+          ? examAt
+          : 0;
+
+      const normalizedDue =
+        Number.isFinite(
+          dueAt
+        )
+          ? dueAt
+          : null;
+
+      const old =
+        latestHealth.get(
+          employeeId
+        );
+
+      if (
+        !old ||
+        normalizedExam >=
+          old.examAt
+      ) {
+        latestHealth.set(
+          employeeId,
+          {
+            examAt:
+              normalizedExam,
+            dueAt:
+              normalizedDue,
+          }
+        );
+      }
     };
 
+    for (
+      const exam of
+      healthExams || []
+    ) {
+      putHealth(
+        exam.employee_id,
+        exam.exam_date,
+        exam.next_exam_date
+      );
+    }
 
+    for (
+      const form of
+      healthEk2 || []
+    ) {
+      putHealth(
+        form.employee_id,
+        form.exam_date ||
+          form.created_at,
+        form.next_exam_date
+      );
+    }
 
-    // Gerçek dönem karşılaştırması: seçili dönem ile hemen önceki eşit dönem.
-    // Yasal eğitim/sağlık gibi snapshot metriklerinde sahte tarihsel veri üretilmez.
-    const previousFrom=period.from-period.days*DAY;
-    const previousTo=period.from;
-    const inWindow=(raw:any,from:number,to:number)=>{
-      if(!raw)return false;
-      const t=new Date(raw).getTime();
-      return Number.isFinite(t)&&t>=from&&t<to;
+    let healthValid = 0;
+    let healthOverdue = 0;
+    let healthApproaching = 0;
+    let healthMissing = 0;
+
+    for (
+      const employeeId of
+      employeeIds
+    ) {
+      const health =
+        latestHealth.get(
+          employeeId
+        );
+
+      if (
+        !health ||
+        health.dueAt ==
+          null
+      ) {
+        healthMissing++;
+        continue;
+      }
+
+      if (
+        health.dueAt <
+        now
+      ) {
+        healthOverdue++;
+        continue;
+      }
+
+      healthValid++;
+
+      if (
+        health.dueAt -
+          now <=
+        30 * DAY
+      ) {
+        healthApproaching++;
+      }
+    }
+
+    const ek2Employees =
+      new Set(
+        (
+          healthEk2 || []
+        )
+          .map((row) =>
+            clean(
+              row.employee_id
+            )
+          )
+          .filter(Boolean)
+      ).size;
+
+    const healthModule =
+      employeeIds.length > 0
+        ? {
+            totalEmployees:
+              employeeIds.length,
+
+            valid:
+              healthValid,
+
+            approaching:
+              healthApproaching,
+
+            overdue:
+              healthOverdue,
+
+            missing:
+              healthMissing,
+
+            ek2Employees,
+          }
+        : undefined;
+
+    /* =====================================================
+       ACCIDENT / INCIDENT
+       DÖNEM BAZLI
+    ====================================================== */
+
+    const allAccidents =
+      uniqueById([
+        ...(
+          accidentsWeb ||
+          []
+        ),
+
+        ...(
+          accidentsLocal ||
+          []
+        ),
+      ]).filter(
+        (row) =>
+          row.is_active !==
+          false
+      );
+
+    const accidentRows =
+      allAccidents.filter(
+        (row) =>
+          inWindowMillis(
+            toMillis(
+              row.event_date ||
+                row.created_at
+            ),
+            period.from,
+            period.to
+          )
+      );
+
+    const lostTime =
+      accidentRows.filter(
+        (row) =>
+          num(
+            row.lost_work_days
+          ) > 0
+      ).length;
+
+    const openInvestigations =
+      0;
+
+    const incidentModule =
+      accidentRows.length > 0
+        ? {
+            total:
+              accidentRows.length,
+
+            lostTime,
+
+            openInvestigations,
+          }
+        : undefined;
+
+    /* =====================================================
+       PERIODIC / ENVIRONMENT
+       SNAPSHOT
+    ====================================================== */
+
+    const summarizeDue = (
+      rows:
+        | any[]
+        | null
+    ) => {
+      const all =
+        rows || [];
+
+      let valid = 0;
+      let approaching = 0;
+      let overdue = 0;
+
+      for (
+        const row of all
+      ) {
+        const due =
+          num(
+            row.next_due_millis
+          );
+
+        if (due > 0) {
+          if (
+            due < now
+          ) {
+            overdue++;
+          } else if (
+            due -
+              now <=
+            30 * DAY
+          ) {
+            approaching++;
+          } else {
+            valid++;
+          }
+
+          continue;
+        }
+
+        const status =
+          lower(
+            row.status
+          );
+
+        if (
+          [
+            "overdue",
+            "expired",
+            "gecikmis",
+            "gecikmiş",
+            "suresi_gecmis",
+            "süresi geçmiş",
+          ].includes(
+            status
+          )
+        ) {
+          overdue++;
+        } else if (
+          [
+            "approaching",
+            "yaklasiyor",
+            "yaklaşıyor",
+            "due_soon",
+          ].includes(
+            status
+          )
+        ) {
+          approaching++;
+        } else if (
+          [
+            "valid",
+            "uygun",
+            "ok",
+            "gecerli",
+            "geçerli",
+          ].includes(
+            status
+          )
+        ) {
+          valid++;
+        }
+      }
+
+      return {
+        total:
+          all.length,
+
+        valid,
+
+        approaching,
+
+        overdue,
+      };
     };
-    const currentRunCount=activeRuns.filter(x=>inWindow(x.inserted_at,period.from,now+1)).length;
-    const previousRunCount=inspectionRuns.filter(x=>inWindow(x.inserted_at,previousFrom,previousTo)).length;
-    const currentIncidentCount=accidentRows.length;
-    const previousIncidentCount=allAccidents.filter(x=>inWindow(x.event_date||x.created_at,previousFrom,previousTo)).length;
-    const trend={
-      periodDays:period.days,
-      inspection:{current:currentRunCount,previous:previousRunCount,delta:currentRunCount-previousRunCount},
-      incident:{current:currentIncidentCount,previous:previousIncidentCount,delta:currentIncidentCount-previousIncidentCount},
+
+    const periodicSummary =
+      summarizeDue(
+        periodic
+      );
+
+    const environmentSummary =
+      summarizeDue(
+        environment
+      );
+
+    /* =====================================================
+       CBS
+       SNAPSHOT
+    ====================================================== */
+
+    const cbsRows =
+      cbs || [];
+
+    const cbsOpen =
+      cbsRows.filter(
+        (row) =>
+          !isClosed(
+            row.status
+          )
+      ).length;
+
+    const cbsCritical =
+      cbsRows.filter(
+        (row) =>
+          !isClosed(
+            row.status
+          ) &&
+          lower(
+            row.priority
+          ) ===
+            "critical"
+      ).length;
+
+    const cbsSla =
+      cbsRows.filter(
+        (row) => {
+          if (
+            isClosed(
+              row.status
+            ) ||
+            !row.sla_due_at
+          ) {
+            return false;
+          }
+
+          const time =
+            new Date(
+              row.sla_due_at
+            ).getTime();
+
+          return (
+            Number.isFinite(
+              time
+            ) &&
+            time < now
+          );
+        }
+      ).length;
+
+    const cbsActionRequired =
+      new Set(
+        cbsRows
+          .filter(
+            (row) => {
+              if (
+                isClosed(
+                  row.status
+                )
+              ) {
+                return false;
+              }
+
+              const critical =
+                lower(
+                  row.priority
+                ) ===
+                "critical";
+
+              const due =
+                row.sla_due_at
+                  ? new Date(
+                      row.sla_due_at
+                    ).getTime()
+                  : NaN;
+
+              return (
+                critical ||
+                (
+                  Number.isFinite(
+                    due
+                  ) &&
+                  due < now
+                )
+              );
+            }
+          )
+          .map((row) =>
+            clean(row.id)
+          )
+      ).size;
+
+    const cbsModule =
+      cbsRows.length > 0
+        ? {
+            total:
+              cbsRows.length,
+
+            open:
+              cbsOpen,
+
+            critical:
+              cbsCritical,
+
+            slaExceeded:
+              cbsSla,
+
+            actionRequired:
+              cbsActionRequired,
+          }
+        : undefined;
+
+    /* =====================================================
+       SCORE INPUT
+    ====================================================== */
+
+    /*
+     * complianceScore / evaluatedTotal alanları
+     * mevcut ScoreInput tipi henüz bilmese bile
+     * API ve yeni engine kullanımına hazır.
+     */
+
+    const scoreInput: ScoreInput =
+      {
+        risk:
+          riskModule
+            ? ({
+                total:
+                  riskModule.total,
+
+                critical:
+                  riskModule.critical,
+
+                intolerable:
+                  riskModule.intolerable,
+
+                veryHigh:
+                  riskModule.veryHigh,
+
+                high:
+                  riskModule.high,
+
+                medium:
+                  riskModule.medium,
+
+                low:
+                  riskModule.low,
+
+                openHigh:
+                  riskModule.openHigh,
+
+                openVeryHigh:
+                  riskModule.openVeryHigh,
+
+                openIntolerable:
+                  riskModule.openIntolerable,
+              } as any)
+            : undefined,
+
+        inspection:
+          inspectionModule
+            ? ({
+                total:
+                  inspectionModule.total,
+
+                compliant:
+                  inspectionModule.compliant,
+
+                partial:
+                  inspectionModule.partial,
+
+                nonCompliant:
+                  inspectionModule.nonCompliant,
+
+                evaluatedTotal:
+                  inspectionModule.evaluatedTotal,
+
+                complianceScore:
+                  inspectionModule.complianceScore,
+              } as any)
+            : undefined,
+
+        training:
+          trainingModule
+            ? ({
+                totalEmployees:
+                  trainingModule.totalEmployees,
+
+                compliantEmployees:
+                  trainingModule.compliantEmployees,
+
+                nonCompliantEmployees:
+                  trainingModule.nonCompliantEmployees,
+
+                requiredMinutes:
+                  trainingModule.requiredMinutes,
+
+                hazardClass:
+                  trainingModule.hazardClass,
+
+                complianceScore:
+                  trainingModule.complianceScore,
+              } as any)
+            : undefined,
+
+        dof:
+          dofModule,
+
+        incident:
+          incidentModule,
+
+        health:
+          healthModule,
+
+        periodic:
+          periodicSummary.total >
+          0
+            ? periodicSummary
+            : undefined,
+
+        environment:
+          environmentSummary.total >
+          0
+            ? environmentSummary
+            : undefined,
+
+        cbs:
+          cbsModule,
+      };
+
+    /* =====================================================
+       REAL TREND
+    ====================================================== */
+
+    const previousFrom =
+      period.from -
+      period.days *
+        DAY;
+
+    const previousTo =
+      period.from;
+
+    const currentRunCount =
+      activeRuns.length;
+
+    const previousRunCount =
+      inspectionRuns.filter(
+        (row) =>
+          inWindowMillis(
+            toMillis(
+              row.inserted_at
+            ),
+            previousFrom,
+            previousTo
+          )
+      ).length;
+
+    const currentIncidentCount =
+      accidentRows.length;
+
+    const previousIncidentCount =
+      allAccidents.filter(
+        (row) =>
+          inWindowMillis(
+            toMillis(
+              row.event_date ||
+                row.created_at
+            ),
+            previousFrom,
+            previousTo
+          )
+      ).length;
+
+    const trend = {
+      periodDays:
+        period.days,
+
+      inspection: {
+        current:
+          currentRunCount,
+
+        previous:
+          previousRunCount,
+
+        delta:
+          currentRunCount -
+          previousRunCount,
+      },
+
+      incident: {
+        current:
+          currentIncidentCount,
+
+        previous:
+          previousIncidentCount,
+
+        delta:
+          currentIncidentCount -
+          previousIncidentCount,
+      },
     };
-    const performance=calculateHsePerformance(scoreInput); const priorityActions=buildPriorityActions(scoreInput);
-    return NextResponse.json({
-      success:true,firmId,firm:{id:firmId,name:clean(company.name)||"Aktif Firma",localFirmId:company.local_firm_id??null,hazardClass:rule.label},
-      generatedAt:new Date().toISOString(),period:{key:period.key,days:period.days},scope:{periodBased:["inspection","incident"],snapshot:["risk","dof","training","health","periodic","environment","cbs"]},performance,priorityActions,trend,
-      modules:{risk:scoreInput.risk??null,inspection:scoreInput.inspection??null,dof:scoreInput.dof??null,training:scoreInput.training??null,incident:scoreInput.incident??null,health:scoreInput.health??null,periodic:scoreInput.periodic??null,environment:scoreInput.environment??null,cbs:scoreInput.cbs??null},
-      integrity:{tenant:"ACTIVE_REMOTE_UUID",tenantVerified:true,strictFirmIsolation:true,syntheticTrend:false,syntheticRiskMatrix:false,sensitiveHealthData:false,doraIncluded:false},
-    },{headers:{"Cache-Control":"no-store"}});
-  }catch(e){
-    console.error("Executive dashboard error:",e);
-    return NextResponse.json({success:false,error:e instanceof Error?e.message:"Executive Dashboard oluşturulamadı."},{status:500,headers:{"Cache-Control":"no-store"}});
+
+    /* =====================================================
+       PERFORMANCE + ACTIONS
+    ====================================================== */
+
+    const performance =
+      calculateHsePerformance(
+        scoreInput
+      );
+
+    const priorityActions =
+      buildPriorityActions(
+        scoreInput
+      );
+
+    /* =====================================================
+       RESPONSE
+    ====================================================== */
+
+    return NextResponse.json(
+      {
+        success: true,
+
+        firmId,
+
+        firm: {
+          id:
+            firmId,
+
+          name:
+            clean(
+              company.name
+            ) ||
+            "Aktif Firma",
+
+          localFirmId:
+            company.local_firm_id ??
+            null,
+
+          hazardClass:
+            rule.label,
+        },
+
+        generatedAt:
+          new Date().toISOString(),
+
+        period: {
+          key:
+            period.key,
+
+          days:
+            period.days,
+        },
+
+        /*
+         * Artık Risk + DÖF de dönem bazlı.
+         *
+         * Training / Health / Periodic / Environment / CBS
+         * bugünkü geçerlilik durumunu gösteren snapshot KPI'lardır.
+         */
+
+        scope: {
+          periodBased: [
+            "risk",
+            "dof",
+            "inspection",
+            "incident",
+          ],
+
+          snapshot: [
+            "training",
+            "health",
+            "periodic",
+            "environment",
+            "cbs",
+          ],
+        },
+
+        performance,
+
+        priorityActions,
+
+        trend,
+
+        modules: {
+          risk:
+            riskModule ??
+            null,
+
+          inspection:
+            inspectionModule ??
+            null,
+
+          dof:
+            dofModule ??
+            null,
+
+          training:
+            trainingModule ??
+            null,
+
+          incident:
+            incidentModule ??
+            null,
+
+          health:
+            healthModule ??
+            null,
+
+          periodic:
+            periodicSummary.total >
+            0
+              ? periodicSummary
+              : null,
+
+          environment:
+            environmentSummary.total >
+            0
+              ? environmentSummary
+              : null,
+
+          cbs:
+            cbsModule ??
+            null,
+        },
+
+        integrity: {
+          tenant:
+            "ACTIVE_REMOTE_UUID",
+
+          tenantVerified:
+            true,
+
+          strictFirmIsolation:
+            true,
+
+          syntheticTrend:
+            false,
+
+          syntheticRiskMatrix:
+            false,
+
+          sensitiveHealthData:
+            false,
+
+          doraIncluded:
+            false,
+        },
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      }
+    );
+  } catch (error) {
+    console.error(
+      "Executive dashboard error:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+
+        error:
+          error instanceof Error
+            ? error.message
+            : "Executive Dashboard oluşturulamadı.",
+      },
+      {
+        status: 500,
+
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      }
+    );
   }
 }
 
+/* =========================================================
+   OPTIONS
+========================================================= */
 
-export async function OPTIONS(){
-  return new Response(null,{
-    status:204,
-    headers:{
-      "Allow":"GET, OPTIONS",
-      "Cache-Control":"no-store",
-    },
-  });
+export async function OPTIONS() {
+  return new Response(
+    null,
+    {
+      status: 204,
+
+      headers: {
+        Allow:
+          "GET, OPTIONS",
+
+        "Cache-Control":
+          "no-store",
+      },
+    }
+  );
 }
