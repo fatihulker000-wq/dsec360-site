@@ -350,3 +350,4 @@ export default function DashboardCards({ risk, emergency, loading = false }: Pro
     </div>
   );
 }
+
