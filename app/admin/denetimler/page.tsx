@@ -139,37 +139,22 @@ export default async function AdminDenetimlerPage({
   const sessionCompanyId = String(
     cookieStore.get("dsec_company_id")?.value || ""
   ).trim();
+  const sessionUserId = String(
+    cookieStore.get("dsec_user_id")?.value || ""
+  ).trim();
   const isCompanyScoped =
     sessionRole === "company_admin" || sessionRole === "demo_user";
 
-  if (isCompanyScoped && !sessionCompanyId) {
+  if (isCompanyScoped && !sessionUserId) {
     redirect("/login");
   }
 
-  let scopedRunFirmId = sessionCompanyId;
-
-  if (isCompanyScoped) {
-    const { data: scopedCompany } = await supabase
-      .from("companies")
-      .select("id, local_firm_id")
-      .eq("id", sessionCompanyId)
-      .maybeSingle();
-
-    scopedRunFirmId = String(
-      scopedCompany?.local_firm_id ?? scopedCompany?.id ?? sessionCompanyId
-    ).trim();
-  }
-
-  let runsQuery = supabase
+  // Denetim kayıtlarını server tarafında alıyoruz; aşağıda erişilebilir firma UUID
+  // listesi ile kesin olarak scope ediyoruz. Firma adı / ilk firma fallback'i yoktur.
+  const { data: runs, error } = await supabase
     .from("denetim_runs")
     .select("*")
     .order("inserted_at", { ascending: false });
-
-  if (isCompanyScoped) {
-    runsQuery = runsQuery.eq("firm_id", scopedRunFirmId);
-  }
-
-  const { data: runs, error } = await runsQuery;
 
   const safeRuns = runs || [];
   const runIds = safeRuns.map((r: any) => r.id);
@@ -183,13 +168,43 @@ export default async function AdminDenetimlerPage({
 
   const answerList = answers || [];
 
+  let accessibleCompanyIds: string[] | null = null;
+
+  if (isCompanyScoped) {
+    const [{ data: accessRows }, { data: userRow }] = await Promise.all([
+      supabase
+        .from("user_firm_access")
+        .select("firm_id")
+        .eq("user_id", sessionUserId),
+      supabase
+        .from("users")
+        .select("company_id")
+        .eq("id", sessionUserId)
+        .maybeSingle(),
+    ]);
+
+    accessibleCompanyIds = Array.from(
+      new Set(
+        [
+          ...(accessRows || []).map((row: any) => String(row.firm_id || "").trim()),
+          String(userRow?.company_id || "").trim(),
+          sessionCompanyId,
+        ].filter(Boolean)
+      )
+    );
+
+    if (accessibleCompanyIds.length === 0) {
+      redirect("/login");
+    }
+  }
+
   let companiesQuery = supabase
     .from("companies")
     .select("id, name, local_firm_id")
     .order("name", { ascending: true });
 
-  if (isCompanyScoped) {
-    companiesQuery = companiesQuery.eq("id", sessionCompanyId);
+  if (accessibleCompanyIds) {
+    companiesQuery = companiesQuery.in("id", accessibleCompanyIds);
   }
 
   const { data: companies } = await companiesQuery;
@@ -212,6 +227,10 @@ companyList.forEach((c: any) => {
   if (name) companyUuidByAnyFirmKey.set(normalizeFirmKey(name), uuid);
 });
 
+const accessibleFirmUuidSet = new Set(
+  companyList.map((c: any) => String(c.id || "").trim()).filter(Boolean)
+);
+
 function getRunStoredFirmKey(run: any) {
   return String(run.web_firm_id || run.firm_id || "").trim();
 }
@@ -221,10 +240,7 @@ function getRunFirmId(run: any) {
   const byStoredKey = companyUuidByAnyFirmKey.get(normalizeFirmKey(storedKey));
   if (byStoredKey) return byStoredKey;
 
-  const byName = companyUuidByAnyFirmKey.get(
-    normalizeFirmKey(cleanFirmName(run.firm_name || run.firma_adi))
-  );
-  return byName || "";
+  return "";
 }
 
 function getRunFirmName(run: any) {
@@ -331,6 +347,16 @@ const firmOptions: InspectionFirmOption[] = companyList
     a.name.localeCompare(b.name, "tr")
   );
 
+// URL ile yetkisiz / bilinmeyen firma UUID enjekte edilirse veri göstermeyiz.
+if (
+  activeFirm !== "ALL" &&
+  !firmOptions.some(
+    (firm) => normalizeFirmKey(firm.id) === normalizeFirmKey(activeFirm)
+  )
+) {
+  redirect("/admin/denetimler?firm=ALL");
+}
+
 const activeFirmName =
   activeFirm === "ALL"
     ? "Tüm Firmalar"
@@ -341,6 +367,9 @@ const activeFirmName =
 const filteredRuns = safeRuns.filter((r: any) => {
   const label = modeLabel(r.eval_mode).toUpperCase();
   const firmId = getRunFirmId(r);
+
+  // Fail closed: erişilebilir firmaya canonical UUID ile bağlanamayan kayıt gösterilmez.
+  if (!firmId || !accessibleFirmUuidSet.has(firmId)) return false;
 
   const typeOk =
     activeType === "ALL" ||
