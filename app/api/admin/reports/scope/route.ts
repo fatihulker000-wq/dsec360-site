@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+export const dynamic = "force-dynamic";
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL!,
@@ -9,275 +11,144 @@ function getSupabase() {
   );
 }
 
+function text(v: unknown) {
+  return String(v ?? "").trim();
+}
+
 export async function GET() {
   try {
-    const cookieStore = await cookies();
+    const store = await cookies();
 
-    const auth = String(
-      cookieStore.get("dsec_admin_auth")?.value ||
-        cookieStore.get("dsec_user_auth")?.value ||
-        ""
-    ).trim();
+    const auth = text(
+      store.get("dsec_admin_auth")?.value ||
+        store.get("dsec_user_auth")?.value
+    );
 
-    const role = String(
-      cookieStore.get("dsec_admin_role")?.value ||
-        cookieStore.get("dsec_user_role")?.value ||
-        ""
-    ).trim();
+    const role = text(
+      store.get("dsec_admin_role")?.value ||
+        store.get("dsec_user_role")?.value
+    );
 
-    const userId = String(
-      cookieStore.get("dsec_user_id")?.value || ""
-    ).trim();
+    const userId = text(store.get("dsec_user_id")?.value);
 
-    const companyIdFromCookie = String(
-      cookieStore.get("dsec_company_id")?.value || ""
-    ).trim();
+    const global = role === "admin" || role === "super_admin";
+    const companyRole = role === "company_admin" || role === "demo_user";
 
-    if (auth !== "ok" || !role) {
+    if (auth !== "ok" || (!global && !companyRole)) {
       return NextResponse.json(
-        { error: "Yetkisiz erişim." },
+        { success: false, error: "Yetkisiz erişim." },
         { status: 401 }
       );
     }
 
-    const allowedRoles = [
-      "admin",
-      "super_admin",
-      "company_admin",
-      "demo_user",
-    ];
-
-    if (!allowedRoles.includes(role)) {
-      return NextResponse.json(
-        { error: "Bu rol erişemez." },
-        { status: 403 }
-      );
-    }
-
-    /*
-     * Admin ve süper admin bütün firmaları seçebilir.
-     */
-    if (
-      role === "super_admin" ||
-      role === "admin"
-    ) {
+    if (global) {
       return NextResponse.json({
         success: true,
         role,
         can_select_company: true,
+        can_view_all_companies: true,
         allowed_company_id: null,
-        allowed_company_name: null,
-        read_only: false,
-        is_demo: false,
+        allowed_company_ids: [],
+        allowed_companies: [],
       });
-    }
-
-    /*
-     * Firma yöneticisi ve demo kullanıcı
-     * yalnızca kendisine bağlı firmayı görebilir.
-     */
-    if (
-      role !== "company_admin" &&
-      role !== "demo_user"
-    ) {
-      return NextResponse.json(
-        { error: "Bu rol erişemez." },
-        { status: 403 }
-      );
     }
 
     if (!userId) {
       return NextResponse.json(
-        { error: "Kullanıcı bilgisi yok." },
+        { success: false, error: "Kullanıcı bilgisi bulunamadı." },
         { status: 401 }
       );
     }
 
     const supabase = getSupabase();
 
-    const {
-      data: userRow,
-      error: userError,
-    } = await supabase
+    const { data: userRow, error: userError } = await supabase
       .from("users")
-      .select(
-        "id, role, company_id, is_active"
-      )
+      .select("role,company_id,is_active")
       .eq("id", userId)
       .maybeSingle();
 
     if (userError) {
-      console.error(
-        "reports scope user error:",
-        userError
-      );
-
       return NextResponse.json(
-        {
-          error:
-            "Kullanıcı bilgisi alınamadı.",
-        },
+        { success: false, error: "Kullanıcı bilgisi alınamadı." },
         { status: 500 }
       );
     }
 
-    if (!userRow) {
+    if (
+      !userRow ||
+      userRow.is_active === false ||
+      text(userRow.role) !== role
+    ) {
       return NextResponse.json(
-        { error: "Kullanıcı bulunamadı." },
-        { status: 404 }
-      );
-    }
-
-    if (userRow.is_active === false) {
-      return NextResponse.json(
-        { error: "Kullanıcı pasif durumda." },
+        { success: false, error: "Kullanıcı yetkisi doğrulanamadı." },
         { status: 403 }
       );
     }
 
-    const databaseRole = String(
-      userRow.role || ""
-    ).trim();
+    const ids = new Set<string>();
 
-    if (databaseRole !== role) {
+    const direct = text(userRow.company_id);
+    if (direct && direct !== "ALL") ids.add(direct);
+
+    const { data: accesses, error: accessError } = await supabase
+      .from("user_firm_access")
+      .select("firm_id")
+      .eq("user_id", userId);
+
+    if (accessError) {
       return NextResponse.json(
-        {
-          error:
-            "Oturum rolü ile kullanıcı rolü uyuşmuyor.",
-        },
+        { success: false, error: "Firma erişim yetkileri alınamadı." },
+        { status: 500 }
+      );
+    }
+
+    for (const row of accesses ?? []) {
+      const id = text(row?.firm_id);
+      if (id && id !== "ALL") ids.add(id);
+    }
+
+    const allowedIds = [...ids];
+
+    if (!allowedIds.length) {
+      return NextResponse.json(
+        { success: false, error: "Firma atanmamış." },
         { status: 403 }
       );
     }
 
-    /*
-     * Öncelik:
-     * 1. users.company_id
-     * 2. user_firm_access içindeki primary firma
-     * 3. Oturum cookie firma bilgisi
-     */
-    let companyId = String(
-      userRow.company_id || ""
-    ).trim();
-
-    if (!companyId) {
-      const {
-        data: primaryAccess,
-        error: primaryAccessError,
-      } = await supabase
-        .from("user_firm_access")
-        .select("firm_id")
-        .eq("user_id", userId)
-        .eq("is_primary", true)
-        .limit(1)
-        .maybeSingle();
-
-      if (primaryAccessError) {
-        console.error(
-          "reports scope primary access error:",
-          primaryAccessError
-        );
-      }
-
-      companyId = String(
-        primaryAccess?.firm_id || ""
-      ).trim();
-    }
-
-    if (!companyId) {
-      const {
-        data: firstAccess,
-        error: firstAccessError,
-      } = await supabase
-        .from("user_firm_access")
-        .select("firm_id")
-        .eq("user_id", userId)
-        .limit(1)
-        .maybeSingle();
-
-      if (firstAccessError) {
-        console.error(
-          "reports scope first access error:",
-          firstAccessError
-        );
-      }
-
-      companyId = String(
-        firstAccess?.firm_id || ""
-      ).trim();
-    }
-
-    if (!companyId) {
-      companyId = companyIdFromCookie;
-    }
-
-    if (!companyId || companyId === "ALL") {
-      return NextResponse.json(
-        { error: "Firma atanmamış." },
-        { status: 403 }
-      );
-    }
-
-    const {
-      data: companyRow,
-      error: companyError,
-    } = await supabase
+    const { data: companyRows, error: companyError } = await supabase
       .from("companies")
-      .select("id, name, is_active")
-      .eq("id", companyId)
-      .maybeSingle();
+      .select("id,name,is_active")
+      .in("id", allowedIds)
+      .eq("is_active", true);
 
     if (companyError) {
-      console.error(
-        "reports scope company error:",
-        companyError
-      );
-
       return NextResponse.json(
-        {
-          error:
-            "Firma bilgisi alınamadı.",
-        },
+        { success: false, error: "Firma bilgileri alınamadı." },
         { status: 500 }
       );
     }
 
-    if (!companyRow) {
-      return NextResponse.json(
-        { error: "Firma bulunamadı." },
-        { status: 404 }
-      );
-    }
-
-    if (companyRow.is_active === false) {
-      return NextResponse.json(
-        { error: "Firma pasif durumda." },
-        { status: 403 }
-      );
-    }
-
-    const isDemo = role === "demo_user";
+    const allowedCompanies = (companyRows ?? []).map((x: any) => ({
+      id: String(x.id),
+      name: String(x.name || ""),
+    }));
 
     return NextResponse.json({
       success: true,
       role,
-      can_select_company: false,
-      allowed_company_id: String(
-        companyRow.id
-      ),
-      allowed_company_name:
-        String(companyRow.name || "").trim() ||
-        "Bağlı Firma",
-      read_only: isDemo,
-      is_demo: isDemo,
+      can_select_company: allowedCompanies.length > 1,
+      can_view_all_companies: false,
+      allowed_company_id:
+        allowedCompanies.length === 1 ? allowedCompanies[0].id : null,
+      allowed_company_ids: allowedCompanies.map((x: any) => x.id),
+      allowed_companies: allowedCompanies,
     });
-  } catch (error) {
-    console.error(
-      "reports scope general error:",
-      error
-    );
-
+  } catch (e) {
+    console.error("reports scope error:", e);
     return NextResponse.json(
-      { error: "Sunucu hatası." },
+      { success: false, error: "Rapor yetki bilgisi alınamadı." },
       { status: 500 }
     );
   }

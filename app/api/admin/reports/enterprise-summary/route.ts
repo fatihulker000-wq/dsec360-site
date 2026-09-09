@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { resolveReportScope } from "../_auth";
 
 export const dynamic = "force-dynamic";
 
@@ -398,7 +399,7 @@ export async function GET(
 
       rowsByEmployeeIds(
         supabase,
-        "employee_health_records",
+        "health_records",
         employeeIds,
         "Sağlık"
       ),

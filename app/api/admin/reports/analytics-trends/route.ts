@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { resolveReportScope } from "../_auth";
 
 export const dynamic = "force-dynamic";
 

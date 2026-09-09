@@ -4,6 +4,7 @@ import {
   NextResponse,
 } from "next/server";
 import { cookies } from "next/headers";
+import { resolveReportScope } from "../_auth";
 
 function getSupabase() {
   return createClient(
@@ -144,181 +145,24 @@ export async function GET(
 
     let requestedCompanyId =
       String(
-        req.nextUrl.searchParams.get(
-          "companyId"
-        ) || ""
+        req.nextUrl.searchParams.get("companyId") || ""
       ).trim();
 
-    const companyScoped =
-      resolvedRole ===
-        "company_admin" ||
-      resolvedRole === "demo_user";
+    const reportScope =
+      await resolveReportScope(
+        supabase,
+        requestedCompanyId
+      );
 
-    /*
-     * Firma yöneticisi ve demo kullanıcısı
-     * URL'den başka firma gönderse bile kendi
-     * firmasına sabitlenir.
-     */
-    if (companyScoped) {
-      if (!userId) {
-        return NextResponse.json(
-          {
-            error:
-              "Kullanıcı bilgisi bulunamadı.",
-          },
-          { status: 401 }
-        );
-      }
-
-      const {
-        data: userRow,
-        error: userError,
-      } = await supabase
-        .from("users")
-        .select(
-          "id, role, company_id, is_active"
-        )
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (userError) {
-        console.error(
-          "training matrix user error:",
-          userError
-        );
-
-        return NextResponse.json(
-          {
-            error:
-              "Kullanıcı firma bilgisi alınamadı.",
-          },
-          { status: 500 }
-        );
-      }
-
-      if (!userRow) {
-        return NextResponse.json(
-          {
-            error:
-              "Kullanıcı bulunamadı.",
-          },
-          { status: 404 }
-        );
-      }
-
-      if (
-        userRow.is_active === false
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Kullanıcı pasif durumda.",
-          },
-          { status: 403 }
-        );
-      }
-
-      if (
-        String(
-          userRow.role || ""
-        ).trim() !== resolvedRole
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Oturum rolü uyuşmuyor.",
-          },
-          { status: 403 }
-        );
-      }
-
-      let ownCompanyId = String(
-        userRow.company_id || ""
-      ).trim();
-
-      if (!ownCompanyId) {
-        const {
-          data: primaryAccess,
-        } = await supabase
-          .from(
-            "user_firm_access"
-          )
-          .select("firm_id")
-          .eq("user_id", userId)
-          .eq("is_primary", true)
-          .limit(1)
-          .maybeSingle();
-
-        ownCompanyId = String(
-          primaryAccess?.firm_id ||
-            ""
-        ).trim();
-      }
-
-      if (!ownCompanyId) {
-        const {
-          data: firstAccess,
-        } = await supabase
-          .from(
-            "user_firm_access"
-          )
-          .select("firm_id")
-          .eq("user_id", userId)
-          .limit(1)
-          .maybeSingle();
-
-        ownCompanyId = String(
-          firstAccess?.firm_id || ""
-        ).trim();
-      }
-
-      if (!ownCompanyId) {
-        ownCompanyId =
-          companyIdFromCookie;
-      }
-
-      if (
-        !ownCompanyId ||
-        ownCompanyId === "ALL"
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Bu kullanıcıya bağlı firma bulunamadı.",
-          },
-          { status: 403 }
-        );
-      }
-
-      requestedCompanyId =
-        ownCompanyId;
-    }
-
-    if (!requestedCompanyId) {
+    if (!reportScope.ok) {
       return NextResponse.json(
-        {
-          error: "Firma seçilmedi.",
-        },
-        { status: 400 }
+        { error: reportScope.error },
+        { status: reportScope.status }
       );
     }
 
-    /*
-     * Demo ve firma yöneticisine ALL kapsamı
-     * hiçbir durumda verilmez.
-     */
-    if (
-      companyScoped &&
-      requestedCompanyId === "ALL"
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Bu kullanıcı tüm firmaları görüntüleyemez.",
-        },
-        { status: 403 }
-      );
-    }
+    requestedCompanyId =
+      reportScope.scope.selectedCompanyId;
 
     let companyRow: CompanyAnyRow;
 

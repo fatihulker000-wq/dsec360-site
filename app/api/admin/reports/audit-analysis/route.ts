@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { resolveReportScope } from "../_auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -201,118 +202,21 @@ if (
 
 const supabase = getSupabase();
 
-const companyScoped =
-  role === "company_admin" ||
-  role === "demo_user";
+const reportScope =
+  await resolveReportScope(
+    supabase,
+    companyIdFromQuery
+  );
+
+if (!reportScope.ok) {
+  return NextResponse.json(
+    { error: reportScope.error },
+    { status: reportScope.status }
+  );
+}
 
 let requestedCompanyId =
-  companyIdFromQuery;
-
-if (companyScoped) {
-  if (!userId) {
-    return NextResponse.json(
-      { error: "Kullanıcı bilgisi bulunamadı." },
-      { status: 401 }
-    );
-  }
-
-  const {
-    data: userRow,
-    error: userError,
-  } = await supabase
-    .from("users")
-    .select(
-      "id, role, company_id, is_active"
-    )
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (userError) {
-    console.error(
-      "audit user scope error:",
-      userError
-    );
-
-    return NextResponse.json(
-      {
-        error:
-          "Kullanıcı firma bilgisi alınamadı.",
-      },
-      { status: 500 }
-    );
-  }
-
-  if (!userRow) {
-    return NextResponse.json(
-      { error: "Kullanıcı bulunamadı." },
-      { status: 404 }
-    );
-  }
-
-  if (userRow.is_active === false) {
-    return NextResponse.json(
-      { error: "Kullanıcı pasif durumda." },
-      { status: 403 }
-    );
-  }
-
-  if (
-    text(userRow.role) !== role
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "Oturum rolü ile kullanıcı rolü uyuşmuyor.",
-      },
-      { status: 403 }
-    );
-  }
-
-  requestedCompanyId = text(
-    userRow.company_id
-  );
-
-  if (!requestedCompanyId) {
-    const {
-      data: primaryAccess,
-    } = await supabase
-      .from("user_firm_access")
-      .select("firm_id")
-      .eq("user_id", userId)
-      .eq("is_primary", true)
-      .limit(1)
-      .maybeSingle();
-
-    requestedCompanyId = text(
-      primaryAccess?.firm_id
-    );
-  }
-
-  if (!requestedCompanyId) {
-    requestedCompanyId =
-      companyIdFromCookie;
-  }
-}
-
-if (!requestedCompanyId) {
-  return NextResponse.json(
-    { error: "Firma seçilmedi." },
-    { status: 400 }
-  );
-}
-
-if (
-  companyScoped &&
-  requestedCompanyId === "ALL"
-) {
-  return NextResponse.json(
-    {
-      error:
-        "Bu kullanıcı tüm firmaları görüntüleyemez.",
-    },
-    { status: 403 }
-  );
-}
+  reportScope.scope.selectedCompanyId;
 
     const showAllCompanies = requestedCompanyId === "ALL";
 
