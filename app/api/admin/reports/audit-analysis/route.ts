@@ -381,12 +381,34 @@ const runs = showAllCompanies
           )
         : 0;
 
-    const completedRuns = runs.filter(
-      (r: AnyRow) => text(r.status).toUpperCase() === "TAMAMLANDI"
+    const normalizedRunStatus = (r: AnyRow) =>
+      text(r.status).trim().toUpperCase();
+
+    const completedRuns = runs.filter((r: AnyRow) =>
+      ["TAMAMLANDI", "COMPLETED", "DONE", "CLOSED"].includes(
+        normalizedRunStatus(r)
+      )
     ).length;
 
-    const draftRuns = runs.filter(
-      (r: AnyRow) => text(r.status).toUpperCase() === "TASLAK"
+    const draftRuns = runs.filter((r: AnyRow) =>
+      ["TASLAK", "DRAFT"].includes(normalizedRunStatus(r))
+    ).length;
+
+    // Toplam denetim ile tamamlanan denetim arasındaki farkı ayrıca göster.
+    // Böylece örn. 10 toplam / 8 tamamlanan kayıtta kalan 2 kayıt görünür olur.
+    const unfinishedRuns = Math.max(0, runs.length - completedRuns);
+
+    const inProgressRuns = runs.filter((r: AnyRow) =>
+      [
+        "DEVAM_EDIYOR",
+        "DEVAM EDİYOR",
+        "DEVAM EDIYOR",
+        "IN_PROGRESS",
+        "STARTED",
+        "PLANLANDI",
+        "PLANNED",
+        "OPEN",
+      ].includes(normalizedRunStatus(r))
     ).length;
 
     const topNonconformities = Array.from(nonconformityMap.entries())
@@ -410,6 +432,8 @@ const runs = showAllCompanies
       summary: {
         total_audits: runs.length,
         completed_audits: completedRuns,
+        unfinished_audits: unfinishedRuns,
+        in_progress_audits: inProgressRuns,
         draft_audits: draftRuns,
         total_items: totalItems,
         uygun_count: uygunCount,

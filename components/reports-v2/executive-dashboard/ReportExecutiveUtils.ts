@@ -460,7 +460,7 @@ export function buildExecutiveReportDashboard(
           totalAudits,
 
         subtitle:
-          `${completedAudits} tamamlandı · ${draftAudits} taslak`,
+          `${completedAudits} tamamlandı · ${draftAudits} tamamlanmadı`,
 
         tone:
           auditScore >= 70

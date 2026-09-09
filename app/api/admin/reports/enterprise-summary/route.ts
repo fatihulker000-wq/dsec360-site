@@ -372,6 +372,26 @@ export async function GET(
 
     const effectiveCompanyId = authResult.scope.selectedCompanyId;
 
+    // accident_records mobil kayıtlarında firm_id yerel/sayısal firma kimliğidir;
+    // web_firm_id ise companies.id UUID değeridir. Seçili firmanın local_firm_id
+    // bilgisini çözmeden firm_id alanına UUID göndermek kayıtların kaçmasına veya
+    // Postgres tip hatasına yol açabilir.
+    let localFirmId = "";
+
+    if (effectiveCompanyId !== "ALL" && effectiveCompanyId !== "all") {
+      const { data: companyRow, error: companyRowError } = await supabase
+        .from("companies")
+        .select("id, local_firm_id")
+        .eq("id", effectiveCompanyId)
+        .maybeSingle();
+
+      if (companyRowError) {
+        console.warn("Kaza/Olay firma eşleme hatası", companyRowError);
+      } else {
+        localFirmId = String(companyRow?.local_firm_id ?? "").trim();
+      }
+    }
+
     let employeeQuery =
       supabase
         .from("employees")
@@ -416,9 +436,22 @@ export async function GET(
       ? supabase.from("health_examinations").select("*").or("is_deleted.is.null,is_deleted.eq.false")
       : supabase.from("health_examinations").select("*").eq("company_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false");
 
-    const accidentQuery = isAll
-      ? supabase.from("accident_records").select("*").or("is_deleted.is.null,is_deleted.eq.false")
-      : supabase.from("accident_records").select("*").or(`firm_id.eq.${effectiveCompanyId},web_firm_id.eq.${effectiveCompanyId}`).or("is_deleted.is.null,is_deleted.eq.false");
+    let accidentQuery = supabase
+      .from("accident_records")
+      .select("*")
+      .or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0");
+
+    if (!isAll) {
+      const numericLocalFirmId = Number(localFirmId);
+
+      if (localFirmId && Number.isFinite(numericLocalFirmId)) {
+        accidentQuery = accidentQuery.or(
+          `web_firm_id.eq.${effectiveCompanyId},firm_id.eq.${numericLocalFirmId}`
+        );
+      } else {
+        accidentQuery = accidentQuery.eq("web_firm_id", effectiveCompanyId);
+      }
+    }
 
     const [
       matrixRiskResult,

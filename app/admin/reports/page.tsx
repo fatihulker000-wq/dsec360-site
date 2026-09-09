@@ -62,6 +62,8 @@ type AuditReport = {
   summary?: {
     total_audits: number;
     completed_audits: number;
+    unfinished_audits?: number;
+    in_progress_audits?: number;
     draft_audits: number;
     total_items: number;
     uygun_count: number;
@@ -199,7 +201,8 @@ export default function AdminReportsPage(){
     inProgressTrainings:ts?.in_progress_count || 0,
     totalAudits:as?.total_audits || 0,
     completedAudits:as?.completed_audits || 0,
-    draftAudits:as?.draft_audits || 0,
+    // Executive ekranda "taslak" yerine tamamlanmamış tüm denetimleri gösteriyoruz.
+    draftAudits:as?.unfinished_audits ?? Math.max(0,(as?.total_audits||0)-(as?.completed_audits||0)),
     complianceScore:as?.compliance_score || 0,
     nonconformityCount:as?.uygunsuz_count || 0,
     openDofCount:as?.open_dof_count || 0,
@@ -325,7 +328,7 @@ export default function AdminReportsPage(){
         {center==="AUDIT" && !loading ? <section style={{display:"grid",gap:14}}>
           <div style={card}><Header title="Denetim & DÖF Raporları" sub="Denetim uyumu, uygunsuzluk ve aksiyon kapanışını birlikte izleyin."/></div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10}}>
-            <Metric title="Toplam Denetim" value={as?.total_audits||0} sub={`${as?.completed_audits||0} tamamlandı`}/>
+            <Metric title="Toplam Denetim" value={as?.total_audits||0} sub={`${as?.completed_audits||0} tamamlandı · ${as?.unfinished_audits ?? Math.max(0,(as?.total_audits||0)-(as?.completed_audits||0))} tamamlanmadı`}/>
             <Metric title="Uyum" value={`%${as?.compliance_score||0}`} sub={`${as?.total_items||0} madde`}/>
             <Metric title="Uygunsuz" value={as?.uygunsuz_count||0} sub={`${as?.kismen_count||0} kısmen`} danger={(as?.uygunsuz_count||0)>0}/>
             <Metric title="Açık DÖF" value={as?.open_dof_count||0} sub={`${as?.closed_dof_count||0} kapalı`} danger={(as?.open_dof_count||0)>0}/>
