@@ -625,7 +625,9 @@ export async function GET(
                   "WORK_ACCIDENT",
                   "ACCIDENT",
                   "İŞ_KAZASI",
+                  "İŞ KAZASI",
                   "IS_KAZASI",
+                  "IS KAZASI",
                 ].includes(type)
             ).length,
 
