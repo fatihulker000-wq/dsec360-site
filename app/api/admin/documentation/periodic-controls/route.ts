@@ -1,11 +1,86 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type RecordType = "EQUIPMENT" | "MEASUREMENT";
 type JsonRecord = Record<string, unknown>;
+
+type AccessContext = {
+  allowed: boolean;
+  role: string;
+  companyId: string;
+  companyScoped: boolean;
+};
+
+async function getAccessContext(): Promise<AccessContext> {
+  const cookieStore = await cookies();
+
+  const auth = clean(
+    cookieStore.get("dsec_admin_auth")?.value ||
+      cookieStore.get("dsec_user_auth")?.value
+  );
+
+  const role = clean(
+    cookieStore.get("dsec_admin_role")?.value ||
+      cookieStore.get("dsec_user_role")?.value
+  ).toLowerCase();
+
+  const companyId = clean(
+    cookieStore.get("dsec_company_id")?.value
+  );
+
+  const allowedRoles = new Set([
+    "admin",
+    "super_admin",
+    "company_admin",
+    "demo_user",
+  ]);
+
+  const companyScoped =
+    role === "company_admin" || role === "demo_user";
+
+  return {
+    allowed:
+      auth === "ok" &&
+      allowedRoles.has(role) &&
+      (!companyScoped || Boolean(companyId)),
+    role,
+    companyId,
+    companyScoped,
+  };
+}
+
+async function firmAccessError(
+  firmId: string
+): Promise<NextResponse | null> {
+  const access = await getAccessContext();
+
+  if (!access.allowed) {
+    return NextResponse.json(
+      { success: false, error: "Yetkisiz erişim." },
+      { status: 401 }
+    );
+  }
+
+  if (
+    access.companyScoped &&
+    (!firmId || firmId !== access.companyId)
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Bu firma için yetkiniz bulunmuyor.",
+      },
+      { status: 403 }
+    );
+  }
+
+  return null;
+}
+
 
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -245,6 +320,9 @@ export async function GET(req: Request) {
       );
     }
 
+    const accessError = await firmAccessError(firmId);
+    if (accessError) return accessError;
+
     const supabase = getSupabase();
 
     const [
@@ -379,6 +457,9 @@ export async function POST(req: Request) {
         );
       }
 
+      const accessError = await firmAccessError(payload.firm_id);
+      if (accessError) return accessError;
+
       const { data, error } =
         await supabase
           .from(
@@ -435,6 +516,9 @@ export async function POST(req: Request) {
         }
       );
     }
+
+    const accessError = await firmAccessError(payload.firm_id);
+    if (accessError) return accessError;
 
     const { data, error } =
       await supabase
@@ -550,6 +634,9 @@ export async function PUT(req: Request) {
         );
       }
 
+      const accessError = await firmAccessError(payload.firm_id);
+      if (accessError) return accessError;
+
       const { data, error } =
         await supabase
           .from(
@@ -560,6 +647,7 @@ export async function PUT(req: Request) {
             deleted: false,
           })
           .eq("id", id)
+          .eq("firm_id", payload.firm_id)
           .select("*")
           .maybeSingle();
 
@@ -617,6 +705,9 @@ export async function PUT(req: Request) {
       );
     }
 
+    const accessError = await firmAccessError(payload.firm_id);
+    if (accessError) return accessError;
+
     const { data, error } =
       await supabase
         .from(
@@ -627,6 +718,7 @@ export async function PUT(req: Request) {
           deleted: false,
         })
         .eq("id", id)
+        .eq("firm_id", payload.firm_id)
         .select("*")
         .maybeSingle();
 
@@ -727,6 +819,35 @@ export async function DELETE(req: Request) {
         ? "periodic_control_equipments"
         : "environment_measurements";
 
+    const { data: existing, error: existingError } =
+      await supabase
+        .from(tableName)
+        .select("id, firm_id")
+        .eq("id", id)
+        .maybeSingle();
+
+    if (existingError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Kayıt doğrulanamadı.",
+          detail: existingError.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: "Silinecek kayıt bulunamadı." },
+        { status: 404 }
+      );
+    }
+
+    const recordFirmId = clean(existing.firm_id);
+    const accessError = await firmAccessError(recordFirmId);
+    if (accessError) return accessError;
+
     const now = Date.now();
 
     const { data, error } =
@@ -739,6 +860,7 @@ export async function DELETE(req: Request) {
             new Date().toISOString(),
         })
         .eq("id", id)
+        .eq("firm_id", recordFirmId)
         .select("id")
         .maybeSingle();
 
