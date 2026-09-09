@@ -80,6 +80,8 @@ export default function DoraPage(){
   const [answerTitle,setAnswerTitle]=useState("DORA hazır");
   const [activeTab,setActiveTab]=useState<"XRAY"|"GAPS"|"SIGNALS"|"RADAR"|"DATA">("XRAY");
   const [detail,setDetail]=useState<DetailPanel|null>(null);
+  const [thinking,setThinking]=useState(false);
+  const [reasonTrail,setReasonTrail]=useState<string[]>([]);
 
   const load=useCallback(async()=>{
     try{
@@ -235,14 +237,81 @@ export default function DoraPage(){
   };
 
   const askCustom=()=>{
-    const q=question.trim().toLocaleLowerCase("tr-TR");
+    const raw=question.trim();
+    const q=raw.toLocaleLowerCase("tr-TR");
     if(!q||!a)return;
-    if(q.includes("kaza")||q.includes("olay")) quickAsk("ACCIDENT");
-    else if(q.includes("30")||q.includes("yaklaş")||q.includes("süre")) quickAsk("30D");
-    else if(q.includes("eksik")||q.includes("boşluk")) quickAsk("GAPS");
-    else if(q.includes("neden")||q.includes("kanıt")) quickAsk("WHY");
-    else quickAsk("CRITICAL");
-    setQuestion("");
+
+    setThinking(true);
+    setAnswerTitle("DORA düşünüyor…");
+    setReasonTrail(["Soruyu anlamlandırıyorum…","İlgili modülleri seçiyorum…","Kanıt ve çapraz sinyalleri karşılaştırıyorum…"]);
+    setAnswer([]);
+
+    window.setTimeout(()=>{
+      const words=q.split(/\s+/).filter(w=>w.length>2);
+      const scoreText=(textValue:string)=>{
+        const z=textValue.toLocaleLowerCase("tr-TR");
+        return words.reduce((n,w)=>n+(z.includes(w)?1:0),0);
+      };
+
+      const gapHits=(a.silentGaps?.items||[])
+        .map(g=>({g,score:scoreText(`${g.domain} ${g.title} ${g.summary} ${g.reasoning} ${g.recommendation}`)}))
+        .filter(x=>x.score>0).sort((x,y)=>y.score-x.score);
+
+      const findingHits=findings
+        .map(f=>({f,score:scoreText(`${f.moduleLabel} ${f.title} ${f.description} ${f.recommendation} ${(f.evidence||[]).join(" ")}`)}))
+        .filter(x=>x.score>0).sort((x,y)=>y.score-x.score);
+
+      const crossHits=(a.crossAnalyses||[])
+        .map(c=>({c,score:scoreText(`${c.title} ${c.interpretation} ${c.recommendation} ${c.modules.join(" ")}`)}))
+        .filter(x=>x.score>0).sort((x,y)=>y.score-x.score);
+
+      const topicHits=topics
+        .map(t=>({t,score:scoreText(`${t.title} ${t.interpretation} ${t.recommendation} ${t.modules.join(" ")}`)}))
+        .filter(x=>x.score>0).sort((x,y)=>y.score-x.score);
+
+      let result:string[]=[];
+      let title=`DORA analizi: “${raw}”`;
+
+      if(q.includes("kaza")||q.includes("olay")){
+        const rel=(a.crossAnalyses||[]).filter(v=>/kaza|olay/i.test(`${v.title} ${v.interpretation}`));
+        result=rel.length
+          ? rel.slice(0,5).map(v=>`${v.title}: ${v.interpretation} Öneri: ${v.recommendation}`)
+          : ["Kaza/olay kayıtlarında bu soruyu destekleyecek yeterli çapraz ilişki sinyali oluşmadı."];
+      }else if(q.includes("30")||q.includes("yaklaş")||q.includes("süre")||q.includes("bit")){
+        const h=(a.horizon?.items||[]).filter(v=>v.days<=30).sort((x,y)=>x.days-y.days).slice(0,10);
+        result=h.length?h.map(v=>`${v.days===0?"Bugün":v.days+" gün"} • ${v.module}: ${v.label}`):["Önümüzdeki 30 gün için kayıtlı yaklaşan yükümlülük görünmüyor."];
+      }else if(q.includes("neden")||q.includes("kanıt")||q.includes("niye")){
+        result=[
+          `${a.summary?.scannedModules??0} modül birlikte değerlendirildi; ${a.summary?.unavailableModules??0} modülde veri erişim/kapsama sınırlaması bulunuyor.`,
+          `Veri güvenilirliği ${a.dataQuality?.overallScore??0}/100. Eksik sistem kaydı doğrudan mevzuata aykırılık olarak yorumlanmıyor.`,
+          `${topics.length} yönetim önceliği, ${(a.crossAnalyses||[]).filter(v=>v.status==="SIGNAL").length} çapraz inceleme sinyali ve ${a.silentGaps?.summary?.scanned??0} gereklilik kontrolü değerlendirildi.`,
+          "DORA korelasyonları nedensellik olarak değil, doğrulanması gereken araştırma sinyali olarak kullanıyor."
+        ];
+      }else{
+        result=[
+          ...gapHits.slice(0,3).map(x=>`${x.g.domain}: ${x.g.title} — ${x.g.summary} Öneri: ${x.g.recommendation}`),
+          ...crossHits.slice(0,2).map(x=>`Çapraz sinyal: ${x.c.title} — ${x.c.interpretation}`),
+          ...findingHits.slice(0,2).map(x=>`${x.f.moduleLabel}: ${x.f.title} — ${x.f.recommendation}`),
+          ...topicHits.slice(0,2).map(x=>`Yönetim önceliği ${x.t.score}/100: ${x.t.title} — ${x.t.interpretation}`)
+        ].slice(0,7);
+
+        if(!result.length){
+          title="DORA yönetim değerlendirmesi";
+          result=topics.slice(0,5).map((t,i)=>`${i+1}. ${t.title} — ${t.interpretation} Öneri: ${t.recommendation}`);
+        }
+      }
+
+      setReasonTrail([
+        `${a.summary?.scannedModules??0} modül tarandı.`,
+        `${gapHits.length+findingHits.length} doğrudan eşleşen bulgu/eksiklik bulundu.`,
+        `${crossHits.length} ilgili çapraz modül sinyali karşılaştırıldı.`,
+        `Yanıt veri güveni ${a.dataQuality?.overallScore??0}/100 dikkate alınarak oluşturuldu.`
+      ]);
+      setAnswerTitle(title);
+      setAnswer(result.length?result:["Bu soru için mevcut firma verilerinden güvenilir bir sonuç üretilemedi."]);
+      setThinking(false);
+      setQuestion("");
+    },650);
   };
 
   return <main style={{minHeight:"100vh",background:C.bg,padding:"16px 14px 60px",color:C.ink,fontFamily:"Inter,system-ui,-apple-system,'Segoe UI',sans-serif"}}>
@@ -341,13 +410,23 @@ export default function DoraPage(){
                 <Quick onClick={()=>quickAsk("ACCIDENT")}>Kazaları analiz et</Quick>
                 <Quick onClick={()=>quickAsk("30D")}>30 günlük radar</Quick>
                 <Quick onClick={()=>quickAsk("WHY")}>Bu sonucu neden verdin?</Quick>
+                <Quick onClick={()=>{setQuestion("Eğitim, sağlık ve risk arasında hangi ortak zayıflıklar var?");}}>Ortak zayıflıkları bul</Quick>
+                <Quick onClick={()=>{setQuestion("Yönetici olsam bugün ilk hangi konuya bakmalıyım?");}}>Bugün neye bakmalıyım?</Quick>
               </div>
             </div>
           </div>
           <div style={{marginTop:13,padding:"14px 16px",borderRadius:14,background:"#f8fafc",border:`1px solid ${C.line}`}}>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{width:9,height:9,borderRadius:99,background:C.green,boxShadow:"0 0 0 5px #ecfdf3"}}/><b style={{fontSize:12}}>{answerTitle}</b></div>
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{width:9,height:9,borderRadius:99,background:thinking?C.blue:C.green,boxShadow:thinking?"0 0 0 5px #eff8ff":"0 0 0 5px #ecfdf3"}}/><b style={{fontSize:12}}>{answerTitle}</b></div>
+              <span style={{...badge,background:thinking?"#eff8ff":"#ecfdf3",color:thinking?C.blue:C.green}}>{thinking?"DÜŞÜNÜYOR":"KANITA DAYALI"}</span>
+            </div>
+            {reasonTrail.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
+              {reasonTrail.map((r,i)=><span key={`${i}-${r}`} style={{...badge,background:"#fff",color:C.muted,border:`1px solid ${C.line}`}}>{i+1}. {r}</span>)}
+            </div>}
             <div style={{display:"grid",gap:7,marginTop:10}}>
-              {answer.map((v,i)=><div key={`${i}-${v.slice(0,12)}`} style={{fontSize:12,lineHeight:1.6,color:C.ink}}><b style={{color:C.burgundy}}>DORA {i+1}.</b> {v}</div>)}
+              {thinking
+                ? <div style={{fontSize:12,color:C.muted,lineHeight:1.7}}>DORA firma verilerini, sessiz eksiklikleri ve çapraz modül sinyallerini birlikte değerlendiriyor…</div>
+                : answer.map((v,i)=><div key={`${i}-${v.slice(0,12)}`} style={{fontSize:12,lineHeight:1.6,color:C.ink}}><b style={{color:C.burgundy}}>DORA {i+1}.</b> {v}</div>)}
             </div>
           </div>
         </section>
