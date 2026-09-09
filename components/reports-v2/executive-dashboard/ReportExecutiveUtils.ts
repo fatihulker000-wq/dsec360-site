@@ -227,17 +227,26 @@ export function buildExecutiveReportDashboard(
   const accidentTotal =
     accidentCount + nearMissCount + occupationalDiseaseCount;
 
-  const accidentScore =
-    accidentTotal > 0
-      ? clamp(
+  // Kaza performansını ham kayıt adediyle değil çalışan sayısına göre normalize et.
+  // Böylece örneğin 50 çalışanlı bir firmadaki 10 kaza doğrudan 0/100'e düşmez;
+  // yine de güçlü bir performans cezası üretir. Veri hiç alınamadığında modül skora dahil edilmez.
+  const employeeBase = Math.max(1, employeeCount);
+  const accidentRate = accidentCount / employeeBase;
+  const nearMissRate = nearMissCount / employeeBase;
+  const occupationalDiseaseRate = occupationalDiseaseCount / employeeBase;
+
+  const accidentScore = accidentAvailable
+    ? clamp(
+        Math.round(
           100 -
-            accidentCount * 18 -
-            nearMissCount * 7 -
-            occupationalDiseaseCount * 25,
-          0,
-          100
-        )
-      : 0;
+            accidentRate * 180 -
+            nearMissRate * 60 -
+            occupationalDiseaseRate * 220
+        ),
+        0,
+        100
+      )
+    : 0;
 
   // -------------------------------------------------
   // İBYS Skoru
@@ -460,7 +469,7 @@ export function buildExecutiveReportDashboard(
           totalAudits,
 
         subtitle:
-          `${completedAudits} tamamlandı · ${draftAudits} tamamlanmadı`,
+          `${completedAudits} tamamlandı · ${draftAudits} taslak`,
 
         tone:
           auditScore >= 70
