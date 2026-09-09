@@ -275,7 +275,7 @@ export async function GET(req: NextRequest) {
 
     const { data: company, error: companyError } = await supabase
       .from("companies")
-      .select("id,name,local_firm_id,calisan_sayisi,nace_kodu,tehlike_sinifi,sektor")
+      .select("id,name,local_firm_id,calisan_sayisi,nace_kodu,tehlike_sinifi,sektor,sgk_sicil_no,yetkili,address,phone,email,isg_uzmani,isyeri_hekimi,dsp")
       .eq("id", effectiveCompanyId)
       .maybeSingle();
 
@@ -1100,6 +1100,574 @@ export async function GET(req: NextRequest) {
       items: horizonItems.slice(0, 30),
     };
 
+
+    // ============================================================
+    // DORA SESSİZ EKSİKLİK / REQUIREMENT ENGINE — READ ONLY
+    // "Olması gereken ↔ sistemde görülen" farkını hesaplar.
+    // Kesin mevzuat kararı için yeterli veri yoksa VERIFY üretir.
+    // ============================================================
+    const [representativesResult, boardMembersResult, emergencyPlansResult, emergencyTeamsResult, emergencyDrillsResult, documentsResult] =
+      await Promise.all([
+        safeRows(
+          "Çalışan Temsilcileri",
+          supabase.from("employee_representatives").select("*").eq("firm_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false")
+        ),
+        safeRows(
+          "İSG Kurulu",
+          supabase.from("documentation_board_members").select("*").eq("firm_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false")
+        ),
+        safeRows(
+          "Acil Durum Planları",
+          supabase.from("emergency_action_plans").select("*").eq("company_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false")
+        ),
+        safeRows(
+          "Acil Durum Ekipleri",
+          supabase.from("emergency_support_teams").select("*").eq("company_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false")
+        ),
+        safeRows(
+          "Acil Durum Tatbikatları",
+          supabase.from("emergency_drills").select("*").eq("company_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false")
+        ),
+        safeRows(
+          "Dokümantasyon",
+          supabase.from("documentation_records").select("*").eq("firm_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false")
+        ),
+      ]);
+
+    type RequirementState = "MISSING" | "SHORTAGE" | "WARNING" | "OK" | "VERIFY" | "UNAVAILABLE";
+    type RequirementItem = {
+      id: string;
+      domain: string;
+      title: string;
+      state: RequirementState;
+      severity: Severity;
+      required?: number | null;
+      current?: number | null;
+      missing?: number | null;
+      summary: string;
+      reasoning: string;
+      recommendation: string;
+      sourceUrl: string;
+      evidence: string[];
+      confidence: "HIGH" | "MEDIUM" | "LOW";
+    };
+
+    const requirementItems: RequirementItem[] = [];
+    const employeeCountForRules = Math.max(activeEmployees.length, numberValue(company.calisan_sayisi, 0));
+    const dangerText = normalize(company.tehlike_sinifi);
+    const dangerKind =
+      dangerText.includes("COK") || dangerText.includes("ÇOK") ? "VERY_DANGEROUS" :
+      dangerText.includes("TEHLIKELI") || dangerText.includes("TEHLİKELİ") ? "DANGEROUS" :
+      dangerText.includes("AZ") ? "LESS_DANGEROUS" : "UNKNOWN";
+
+    const requiredRepresentativeCount = (n: number) =>
+      n < 2 ? 0 : n <= 50 ? 1 : n <= 100 ? 2 : n <= 500 ? 3 : n <= 1000 ? 4 : n <= 2000 ? 5 : 6;
+
+    const activeRepresentatives = representativesResult.rows.filter((r) => {
+      const status = normalize(r.status);
+      const type = normalize(r.representative_type);
+      const end = safeDateMillis(r.duty_end_date);
+      return type !== "SUBSTITUTE" && type !== "YEDEK" &&
+        (!status || status === "ACTIVE" || status === "AKTIF") &&
+        (!end || end >= Date.now());
+    });
+    const requiredReps = requiredRepresentativeCount(employeeCountForRules);
+    const missingReps = Math.max(0, requiredReps - activeRepresentatives.length);
+    requirementItems.push({
+      id: "employee-representatives",
+      domain: "Çalışan Katılımı",
+      title: "Çalışan temsilcisi yeterliliği",
+      state: representativesResult.warning ? "UNAVAILABLE" : missingReps > 0 ? "SHORTAGE" : "OK",
+      severity: missingReps > 0 ? "HIGH" : "INFO",
+      required: requiredReps,
+      current: activeRepresentatives.length,
+      missing: missingReps,
+      summary: missingReps > 0
+        ? `${requiredReps} asıl temsilci ihtiyacına karşı ${activeRepresentatives.length} aktif kayıt görüldü; ${missingReps} kişi eksik.`
+        : `${requiredReps} asıl temsilci ihtiyacına karşı ${activeRepresentatives.length} aktif kayıt görüldü.`,
+      reasoning: "DORA aktif çalışan sayısını çalışan temsilcisi kayıtlarıyla karşılaştırdı.",
+      recommendation: missingReps > 0 ? "Eksik temsilci yapısının doğrulanması ve tamamlanması önerilir." : "Mevcut yapı sayı açısından yeterli görünüyor; görev süreleri ayrıca izlenmelidir.",
+      sourceUrl: "/admin/documentation/employee-representatives",
+      evidence: [`Aktif çalışan: ${employeeCountForRules}`, `Gerekli asıl temsilci: ${requiredReps}`, `Aktif asıl temsilci: ${activeRepresentatives.length}`],
+      confidence: representativesResult.warning ? "LOW" : "HIGH",
+    });
+
+    // İSG Kurulu: 50+ çalışan güçlü sinyal; "6 aydan fazla sürekli iş" verisi sistemde yoksa kesin hüküm kurulmaz.
+    const boardNeededByCount = employeeCountForRules >= 50;
+    const activeBoard = boardMembersResult.rows.filter((r) => r.is_active !== false);
+    const boardRoles = new Set(activeBoard.map((r) => normalize(r.board_role)));
+    const expectedBoardRoles = ["BASKAN", "ISG_UZMANI", "ISYERI_HEKIMI", "CALISAN_TEMSILCISI"];
+    const missingBoardRoles = expectedBoardRoles.filter((role) => ![...boardRoles].some((x) => x.includes(role)));
+    requirementItems.push({
+      id: "isg-board",
+      domain: "İSG Kurulu",
+      title: "İSG Kurulu yapısı",
+      state: boardMembersResult.warning ? "UNAVAILABLE" :
+        !boardNeededByCount ? "OK" :
+        activeBoard.length === 0 ? "MISSING" :
+        missingBoardRoles.length > 0 ? "SHORTAGE" : "VERIFY",
+      severity: boardNeededByCount && activeBoard.length === 0 ? "CRITICAL" :
+        boardNeededByCount && missingBoardRoles.length > 0 ? "HIGH" : "INFO",
+      current: activeBoard.length,
+      summary: !boardNeededByCount
+        ? "Çalışan sayısı 50'nin altında; DORA sayı kriterinden kurul zorunluluğu sinyali üretmedi."
+        : activeBoard.length === 0
+          ? "50+ çalışan bulunmasına rağmen aktif kurul üyesi kaydı görülmedi."
+          : missingBoardRoles.length
+            ? `Kurul kaydı var ancak temel rol taramasında ${missingBoardRoles.length} rol eşleşmedi.`
+            : "Kurul üye yapısı mevcut. Sürekli işin 6 aydan fazla sürmesi kriteri sistem verisiyle ayrıca doğrulanmalıdır.",
+      reasoning: "DORA çalışan sayısını aktif kurul üyeleri ve kurul rolleriyle karşılaştırdı. Sürekli iş süresi verisi bulunmadığı için yalnızca çalışan sayısından kesin yasal hüküm üretmez.",
+      recommendation: boardNeededByCount ? "Kurulun kapsam, rol dağılımı ve 6 aydan fazla sürekli iş kriteri birlikte doğrulanmalıdır." : "Firma yapısı değişirse kurul gerekliliği yeniden hesaplanmalıdır.",
+      sourceUrl: "/admin/documentation/board",
+      evidence: [`Aktif çalışan: ${employeeCountForRules}`, `Aktif kurul üyesi: ${activeBoard.length}`, missingBoardRoles.length ? `Eşleşmeyen temel roller: ${missingBoardRoles.join(", ")}` : "Temel roller eşleşti"],
+      confidence: boardMembersResult.warning ? "LOW" : boardNeededByCount ? "MEDIUM" : "HIGH",
+    });
+
+    const emergencyDivisor = dangerKind === "VERY_DANGEROUS" ? 30 : dangerKind === "DANGEROUS" ? 40 : dangerKind === "LESS_DANGEROUS" ? 50 : 0;
+    const firstAidDivisor = dangerKind === "VERY_DANGEROUS" ? 10 : dangerKind === "DANGEROUS" ? 15 : dangerKind === "LESS_DANGEROUS" ? 20 : 0;
+    const requiredEmergencyEach = emergencyDivisor ? Math.max(1, Math.ceil(employeeCountForRules / emergencyDivisor)) : 0;
+    const requiredFirstAid = firstAidDivisor ? Math.max(1, Math.ceil(employeeCountForRules / firstAidDivisor)) : 0;
+    const activeEmergency = emergencyTeamsResult.rows.filter((r) => r.is_active !== false);
+
+    const teamCount = (patterns: string[]) => activeEmergency.filter((r) => {
+      const t = normalize(r.team_type);
+      return patterns.some((p) => t.includes(p));
+    }).length;
+
+    const fireCount = teamCount(["YANGIN", "SONDUR"]);
+    const rescueCount = teamCount(["KURTAR", "TAHLIYE", "TAHLİYE"]);
+    const protectionCount = teamCount(["KORUMA"]);
+    const firstAidCount = activeEmergency.filter((r) => {
+      const t = normalize(r.team_type);
+      const cert = normalize(r.certificate_info);
+      return t.includes("ILK") || t.includes("İLK") || t.includes("FIRST") || cert.includes("ILK") || cert.includes("İLK");
+    }).length;
+
+    const addEmergencyRequirement = (id:string, title:string, current:number, required:number, source:string) => {
+      const missing = Math.max(0, required-current);
+      requirementItems.push({
+        id, domain:"Acil Durum", title,
+        state: emergencyTeamsResult.warning ? "UNAVAILABLE" : dangerKind==="UNKNOWN" ? "VERIFY" : missing>0 ? "SHORTAGE" : "OK",
+        severity: missing>0 ? "HIGH" : "INFO",
+        required: dangerKind==="UNKNOWN" ? null : required,
+        current,
+        missing: dangerKind==="UNKNOWN" ? null : missing,
+        summary: dangerKind==="UNKNOWN"
+          ? "Tehlike sınıfı güvenilir şekilde okunamadığı için gerekli ekip sayısı hesaplanamadı."
+          : `${required} kişi ihtiyacına karşı ${current} aktif kayıt görüldü${missing>0?`; ${missing} kişi eksik`:""}.`,
+        reasoning: `DORA çalışan sayısı (${employeeCountForRules}) ve tehlike sınıfını (${text(company.tehlike_sinifi)||"belirsiz"}) mevcut ekip kayıtlarıyla karşılaştırdı.`,
+        recommendation: missing>0 ? `${title} için eksik ${missing} kişinin görevlendirilme ihtiyacı doğrulanmalıdır.` : "Ekip sayısı uygun görünüyor; eğitim, yedekleme ve görev geçerliliği ayrıca kontrol edilmelidir.",
+        sourceUrl: source,
+        evidence:[`Çalışan: ${employeeCountForRules}`, `Mevcut: ${current}`, dangerKind==="UNKNOWN"?"Tehlike sınıfı: belirsiz":`Hesaplanan ihtiyaç: ${required}`],
+        confidence: emergencyTeamsResult.warning || dangerKind==="UNKNOWN" ? "LOW" : "HIGH",
+      });
+    };
+
+    addEmergencyRequirement("fire-team","Söndürme ekibi",fireCount,requiredEmergencyEach,"/admin/emergency");
+    addEmergencyRequirement("rescue-team","Kurtarma / tahliye ekibi",rescueCount,requiredEmergencyEach,"/admin/emergency");
+    addEmergencyRequirement("protection-team","Koruma ekibi",protectionCount,requiredEmergencyEach,"/admin/emergency");
+    addEmergencyRequirement("first-aid","Sertifikalı ilkyardımcı yeterliliği",firstAidCount,requiredFirstAid,"/admin/emergency");
+
+    const activePlans = emergencyPlansResult.rows.filter((r) => {
+      const until = numberValue(r.valid_until_millis, 0);
+      return !until || until >= Date.now();
+    });
+    requirementItems.push({
+      id:"emergency-plan",domain:"Acil Durum",title:"Acil durum planı",
+      state: emergencyPlansResult.warning ? "UNAVAILABLE" : activePlans.length ? "OK" : "MISSING",
+      severity: activePlans.length ? "INFO" : "CRITICAL",
+      current:activePlans.length,
+      summary: activePlans.length ? `${activePlans.length} aktif/geçerli plan kaydı görüldü.` : "Aktif/geçerli acil durum planı kaydı tespit edilemedi.",
+      reasoning:"DORA acil durum planı tablosunu doğrudan taradı.",
+      recommendation:activePlans.length?"Planın kapsam ve revizyon tarihi izlenmelidir.":"Acil durum planı varlığı ve güncelliği doğrulanmalıdır.",
+      sourceUrl:"/admin/emergency",
+      evidence:[`Plan kaydı: ${emergencyPlansResult.rows.length}`,`Aktif/geçerli: ${activePlans.length}`],
+      confidence:emergencyPlansResult.warning?"LOW":"HIGH",
+    });
+
+    const currentYear = new Date().getFullYear();
+    const drillsThisYear = emergencyDrillsResult.rows.filter((r)=> {
+      const ms = numberValue(r.drill_date_millis,0);
+      return ms>0 && new Date(ms).getFullYear()===currentYear;
+    }).length;
+    requirementItems.push({
+      id:"emergency-drill",domain:"Acil Durum",title:"Yıllık acil durum tatbikatı",
+      state: emergencyDrillsResult.warning?"UNAVAILABLE":drillsThisYear>0?"OK":"MISSING",
+      severity:drillsThisYear>0?"INFO":"HIGH",
+      current:drillsThisYear,
+      summary:drillsThisYear>0?`${currentYear} yılında ${drillsThisYear} tatbikat kaydı görüldü.`:`${currentYear} yılı için tatbikat kaydı görülmedi.`,
+      reasoning:"DORA tatbikat tarihlerini cari yıl ile karşılaştırdı.",
+      recommendation:drillsThisYear>0?"Tatbikat sonuçları ve iyileştirme kayıtları ayrıca incelenmelidir.":"Cari yıl tatbikat planı/kaydı doğrulanmalıdır.",
+      sourceUrl:"/admin/emergency",
+      evidence:[`Cari yıl: ${currentYear}`,`Tatbikat: ${drillsThisYear}`],
+      confidence:emergencyDrillsResult.warning?"LOW":"HIGH",
+    });
+
+    const companyMissing = [
+      !text(company.nace_kodu) ? "NACE kodu" : "",
+      !text(company.tehlike_sinifi) ? "tehlike sınıfı" : "",
+      !text(company.sgk_sicil_no) ? "SGK sicil no" : "",
+      !text(company.yetkili) ? "işveren/yetkili" : "",
+      !text(company.isg_uzmani) ? "İSG uzmanı" : "",
+      !text(company.isyeri_hekimi) ? "işyeri hekimi" : "",
+    ].filter(Boolean);
+    requirementItems.push({
+      id:"company-master-data",domain:"Firma Profili",title:"İSG ana firma verileri",
+      state:companyMissing.length?"MISSING":"OK",
+      severity:companyMissing.length>=3?"HIGH":companyMissing.length?"MEDIUM":"INFO",
+      current:6-companyMissing.length,required:6,missing:companyMissing.length,
+      summary:companyMissing.length?`${companyMissing.length} temel firma/İSG alanı boş görünüyor: ${companyMissing.join(", ")}.`:"Temel firma ve İSG alanları dolu görünüyor.",
+      reasoning:"DORA mevzuat hesapları ve belge üretiminde kullanılan firma ana verilerini kontrol etti.",
+      recommendation:companyMissing.length?"Eksik ana veriler tamamlanmadan bazı DORA hesaplarının güveni düşük kalacaktır.":"Ana veri bütünlüğü korunmalıdır.",
+      sourceUrl:"/admin/companies",
+      evidence:[`Kontrol edilen alan: 6`,`Eksik: ${companyMissing.length}`],
+      confidence:"HIGH",
+    });
+
+    const docText = documentsResult.rows.map((r)=>normalize(`${text(r.category)} ${text(r.title)} ${text(r.description)}`)).join(" | ");
+    const documentChecks = [
+      {id:"doc-policy",title:"İSG Politikası",tokens:["POLIT"],sev:"MEDIUM" as Severity},
+      {id:"doc-training-plan",title:"Yıllık Eğitim Planı",tokens:["EGITIM","PLAN"],sev:"HIGH" as Severity},
+      {id:"doc-risk-team",title:"Risk Değerlendirme Ekibi / Atama Kaydı",tokens:["RISK","EKIP"],sev:"HIGH" as Severity},
+      {id:"doc-board",title:"İSG Kurulu dokümantasyonu",tokens:["KURUL"],sev:"MEDIUM" as Severity},
+    ];
+    for(const dc of documentChecks){
+      const exists = dc.tokens.every(t=>docText.includes(t));
+      requirementItems.push({
+        id:dc.id,domain:"Dokümantasyon",title:dc.title,
+        state:documentsResult.warning?"UNAVAILABLE":exists?"OK":"MISSING",
+        severity:exists?"INFO":dc.sev,
+        current:exists?1:0,required:1,missing:exists?0:1,
+        summary:exists?"İlgili doküman kaydı eşleştirildi.":"İlgili doküman başlık/kategori eşleşmesi bulunamadı.",
+        reasoning:"DORA Dokümantasyon Merkezi kayıtlarının başlık, kategori ve açıklama alanlarını taradı.",
+        recommendation:exists?"Dokümanın güncellik ve onay durumu ayrıca izlenmelidir.":"Dokümanın başka adla kayıtlı olup olmadığı doğrulanmalı; gerçekten yoksa eksiklik olarak ele alınmalıdır.",
+        sourceUrl:"/admin/documentation",
+        evidence:[`Doküman havuzu: ${documentsResult.rows.length}`],
+        confidence:documentsResult.warning?"LOW":"MEDIUM",
+      });
+    }
+
+
+    // ============================================================
+    // DORA DEEP INTELLIGENCE PACK — Phase 1 / READ ONLY
+    // Existing module data is converted into time, coverage and
+    // cross-module inspection signals. No module write is performed.
+    // ============================================================
+    const nowMs = Date.now();
+    const DAY = 86_400_000;
+
+    const daysUntil = (ms:number) => Math.ceil((ms - nowMs) / DAY);
+    const activeEmployeeIds = new Set(activeEmployees.map((e:any)=>String(e.id)));
+
+    // 1) Employee ↔ Training coverage and completion
+    const linkedTrainingEmployeeIds = new Set(
+      trainingUsersResult.rows
+        .map((u:any)=>u.employee_id ? String(u.employee_id) : "")
+        .filter(Boolean)
+    );
+    const employeesWithoutTrainingAccount = activeEmployees.filter(
+      (e:any)=>!linkedTrainingEmployeeIds.has(String(e.id))
+    );
+    if (employeesWithoutTrainingAccount.length > 0) {
+      requirementItems.push({
+        id:"deep-training-linkage",
+        domain:"Eğitim",
+        title:"Çalışan ↔ eğitim hesabı eşleşme boşluğu",
+        state:"SHORTAGE",
+        severity: employeesWithoutTrainingAccount.length >= Math.max(5, Math.ceil(activeEmployees.length*.20)) ? "HIGH" : "MEDIUM",
+        required:activeEmployees.length,
+        current:activeEmployees.length-employeesWithoutTrainingAccount.length,
+        missing:employeesWithoutTrainingAccount.length,
+        summary:`${activeEmployees.length} aktif çalışanın ${employeesWithoutTrainingAccount.length} tanesi eğitim kullanıcısıyla eşleştirilemedi.`,
+        reasoning:"DORA aktif çalışan ID'lerini training_user hesaplarındaki employee_id alanıyla karşılaştırdı.",
+        recommendation:"Bunun gerçek eğitim eksikliği mi yoksa kullanıcı/eşleştirme eksikliği mi olduğu doğrulanmalıdır.",
+        sourceUrl:"/admin/trainings",
+        evidence:[
+          `Aktif çalışan: ${activeEmployees.length}`,
+          `Eğitim hesabıyla eşleşen: ${activeEmployees.length-employeesWithoutTrainingAccount.length}`,
+          `Eşleşmeyen: ${employeesWithoutTrainingAccount.length}`
+        ],
+        confidence:"HIGH",
+      });
+    }
+
+    const deepIncompleteAssignments = assignmentsResult.rows.filter((x:any)=>{
+      const s=normalize(x.status);
+      return s!=="COMPLETED" && s!=="TAMAMLANDI" && !x.completed_at;
+    });
+    if (deepIncompleteAssignments.length > 0) {
+      requirementItems.push({
+        id:"deep-training-incomplete",
+        domain:"Eğitim",
+        title:"Tamamlanmamış eğitim yükü",
+        state:"WARNING",
+        severity: deepIncompleteAssignments.length >= Math.max(10, Math.ceil(assignmentsResult.rows.length*.25)) ? "HIGH" : "MEDIUM",
+        current:deepIncompleteAssignments.length,
+        summary:`${assignmentsResult.rows.length} eğitim atamasının ${deepIncompleteAssignments.length} tanesi tamamlanmamış görünüyor.`,
+        reasoning:"DORA training_assignments durum, completed_at ve tamamlanma kayıtlarını birlikte okudu.",
+        recommendation:"Öncelikle yüksek riskli görevlerde çalışanların tamamlanmamış eğitimleri incelenmelidir.",
+        sourceUrl:"/admin/trainings",
+        evidence:[`Toplam atama: ${assignmentsResult.rows.length}`,`Tamamlanmamış: ${deepIncompleteAssignments.length}`],
+        confidence:"HIGH",
+      });
+    }
+
+    // 2) Health coverage + expired / upcoming surveillance
+    const healthEmployeeIds = new Set(
+      healthResult.rows.map((h:any)=>h.employee_id ? String(h.employee_id) : "").filter(Boolean)
+    );
+    const healthCoverageMissing = activeEmployees.filter((e:any)=>!healthEmployeeIds.has(String(e.id)));
+    if (healthCoverageMissing.length > 0) {
+      requirementItems.push({
+        id:"deep-health-coverage",
+        domain:"Sağlık",
+        title:"Sağlık gözetimi kayıt kapsamı",
+        state:"SHORTAGE",
+        severity:healthCoverageMissing.length >= Math.max(5,Math.ceil(activeEmployees.length*.20))?"HIGH":"MEDIUM",
+        required:activeEmployees.length,
+        current:activeEmployees.length-healthCoverageMissing.length,
+        missing:healthCoverageMissing.length,
+        summary:`${activeEmployees.length} aktif çalışanın ${healthCoverageMissing.length} tanesi için sağlık muayenesi kaydı eşleştirilemedi.`,
+        reasoning:"DORA employees.id ile health_examinations.employee_id alanını karşılaştırdı. Bu sonuç tek başına kişinin muayenesiz olduğunu kanıtlamaz.",
+        recommendation:"Eksik görünen kişilerin muayene kayıtlarının sistem dışında olup olmadığı doğrulanmalıdır.",
+        sourceUrl:"/admin/health",
+        evidence:[`Aktif çalışan: ${activeEmployees.length}`,`Sağlık kaydı eşleşen: ${healthEmployeeIds.size}`,`Eşleşmeyen: ${healthCoverageMissing.length}`],
+        confidence:"HIGH",
+      });
+    }
+
+    const healthDue = healthResult.rows.map((h:any)=>({
+      row:h,
+      ms:safeDateMillis(h.next_exam_date) ?? 0
+    })).filter((x:any)=>x.ms>0);
+    const healthExpired = healthDue.filter((x:any)=>x.ms<nowMs);
+    const health30 = healthDue.filter((x:any)=>x.ms>=nowMs && x.ms<=nowMs+30*DAY);
+    if (healthExpired.length || health30.length) {
+      requirementItems.push({
+        id:"deep-health-due",
+        domain:"Sağlık",
+        title:"Sağlık muayenesi süre radarı",
+        state:healthExpired.length?"MISSING":"WARNING",
+        severity:healthExpired.length?"CRITICAL":"HIGH",
+        current:healthDue.length,
+        summary:healthExpired.length
+          ? `${healthExpired.length} sağlık kaydında sonraki muayene tarihi geçmiş; ayrıca ${health30.length} kayıt 30 gün içinde yaklaşıyor.`
+          : `${health30.length} sağlık kaydında sonraki muayene tarihi 30 gün içinde.`,
+        reasoning:"DORA next_exam_date alanını bugünün tarihiyle karşılaştırdı.",
+        recommendation:healthExpired.length?"Süresi geçmiş kayıtların gerçek muayene durumu öncelikle doğrulanmalıdır.":"Yaklaşan muayeneler için planlama kontrol edilmelidir.",
+        sourceUrl:"/admin/health",
+        evidence:[`Tarihli kayıt: ${healthDue.length}`,`Süresi geçmiş: ${healthExpired.length}`,`30 gün içinde: ${health30.length}`],
+        confidence:"HIGH",
+      });
+    }
+
+    // 3) Risk: open critical/high concentration + stale review signal
+    const allRiskRows = [...matrixRiskResult.rows,...fineRiskResult.rows];
+    const openRiskRows = allRiskRows.filter((r:any)=>{
+      const s=normalize(r.status);
+      return !["CLOSED","KAPALI","COMPLETED","TAMAMLANDI"].includes(s);
+    });
+    const criticalHighOpen = openRiskRows.filter((r:any)=>{
+      const level=normalize(firstText(r,["level","risk_level","riskLevel","risk_level_label","result"]));
+      const score=numberValue(firstText(r,["score","risk_score","riskScore"]),0);
+      return level.includes("CRITICAL") || level.includes("KRITIK") || level.includes("INTOLERABLE") ||
+             level.includes("HIGH") || level.includes("YUKSEK") || score>=15;
+    });
+    if (criticalHighOpen.length>0) {
+      requirementItems.push({
+        id:"deep-open-high-risk",
+        domain:"Risk",
+        title:"Açık kritik / yüksek risk yoğunluğu",
+        state:"WARNING",
+        severity:criticalHighOpen.length>=10?"CRITICAL":"HIGH",
+        current:criticalHighOpen.length,
+        summary:`${openRiskRows.length} açık risk içinde ${criticalHighOpen.length} kritik/yüksek risk sinyali bulunuyor.`,
+        reasoning:"DORA Matrix ve Fine Kinney kayıtlarını durum, risk seviyesi ve skor alanları üzerinden birlikte taradı.",
+        recommendation:"Kritik/yüksek risklerin kontrol tedbirleri, terminleri ve denetim/kaza sinyalleriyle ilişkisi incelenmelidir.",
+        sourceUrl:"/admin/risk",
+        evidence:[`Toplam risk: ${allRiskRows.length}`,`Açık risk: ${openRiskRows.length}`,`Kritik/yüksek açık: ${criticalHighOpen.length}`],
+        confidence:"MEDIUM",
+      });
+    }
+
+    // 4) Audit / DÖF ageing and recurring nonconformity signal
+    const openDofRows = auditAnswersResult.rows.filter((r:any)=>{
+      const s=normalize(r.dof_status);
+      return s && !["CLOSED","KAPALI","COMPLETED","TAMAMLANDI"].includes(s);
+    });
+    const nonconformingRows = auditAnswersResult.rows.filter((r:any)=>{
+      const v=normalize(firstText(r,["result","answer","status","value"]));
+      return v.includes("UYGUNSUZ") || v.includes("KISMEN") || v.includes("KISMEN UYGUN");
+    });
+    if (openDofRows.length || nonconformingRows.length) {
+      requirementItems.push({
+        id:"deep-audit-dof",
+        domain:"Denetim & DÖF",
+        title:"Açık DÖF ve uygunsuzluk yükü",
+        state:"WARNING",
+        severity:openDofRows.length>=10?"HIGH":"MEDIUM",
+        current:openDofRows.length,
+        summary:`${nonconformingRows.length} uygunsuz/kısmen uygun denetim cevabı ve ${openDofRows.length} açık DÖF sinyali görüldü.`,
+        reasoning:"DORA denetim cevaplarındaki sonuç ve dof_status alanlarını birlikte taradı.",
+        recommendation:"Aynı lokasyon veya konu üzerinde tekrar eden açık bulguların kök neden analiziyle incelenmesi önerilir.",
+        sourceUrl:"/admin/audits",
+        evidence:[`Uygunsuz/kısmen uygun: ${nonconformingRows.length}`,`Açık DÖF: ${openDofRows.length}`],
+        confidence:"HIGH",
+      });
+    }
+
+    // 5) Accident record quality + recurrence readiness
+    const accidentsMissingRoot = accidentRows.filter((r:any)=>!text(r.root_cause_category));
+    const accidentsMissingLocation = accidentRows.filter((r:any)=>!text(r.location));
+    const accidentsMissingEmployee = accidentRows.filter((r:any)=>!text(r.employee_id) && !text(r.employee_name));
+    if (accidentRows.length && (accidentsMissingRoot.length || accidentsMissingLocation.length || accidentsMissingEmployee.length)) {
+      const gap = accidentsMissingRoot.length+accidentsMissingLocation.length+accidentsMissingEmployee.length;
+      requirementItems.push({
+        id:"deep-accident-quality",
+        domain:"Kaza / Olay",
+        title:"Kaza analizini zayıflatan veri boşlukları",
+        state:"WARNING",
+        severity:gap>=accidentRows.length?"HIGH":"MEDIUM",
+        current:accidentRows.length,
+        summary:`Kaza/olay kayıtlarında kök neden, lokasyon veya çalışan eşleşmesini etkileyen veri boşlukları tespit edildi.`,
+        reasoning:"DORA olay kayıtlarının root_cause_category, location ve çalışan alanlarını çapraz analiz için kontrol etti.",
+        recommendation:"Eksik alanlar doğrulanırsa DORA'nın tekrar örüntüsü ve risk-kaza korelasyon güveni artar.",
+        sourceUrl:"/admin/accidents",
+        evidence:[`Olay kaydı: ${accidentRows.length}`,`Kök neden boş: ${accidentsMissingRoot.length}`,`Lokasyon boş: ${accidentsMissingLocation.length}`,`Çalışan boş: ${accidentsMissingEmployee.length}`],
+        confidence:"HIGH",
+      });
+    }
+
+    // 6) Periodic controls and environmental measurements: expired + 7/15/30 day radar
+    const buildDueRequirement = (
+      id:string, domain:string, title:string, rows:any[], field:string, url:string
+    ) => {
+      const dated=rows.map((r:any)=>({r,ms:numberValue(r[field],0)})).filter((x:any)=>x.ms>0);
+      const expired=dated.filter((x:any)=>x.ms<nowMs);
+      const d7=dated.filter((x:any)=>x.ms>=nowMs&&x.ms<=nowMs+7*DAY);
+      const d15=dated.filter((x:any)=>x.ms>nowMs+7*DAY&&x.ms<=nowMs+15*DAY);
+      const d30=dated.filter((x:any)=>x.ms>nowMs+15*DAY&&x.ms<=nowMs+30*DAY);
+      if(!expired.length&&!d7.length&&!d15.length&&!d30.length)return;
+      requirementItems.push({
+        id,domain,title,
+        state:expired.length?"MISSING":"WARNING",
+        severity:expired.length?"CRITICAL":d7.length?"HIGH":"MEDIUM",
+        current:dated.length,
+        summary:expired.length
+          ? `${expired.length} kayıt süresi geçmiş; ${d7.length} kayıt 7 gün, ${d15.length} kayıt 8–15 gün, ${d30.length} kayıt 16–30 gün bandında.`
+          : `${d7.length} kayıt 7 gün, ${d15.length} kayıt 8–15 gün, ${d30.length} kayıt 16–30 gün bandında yaklaşıyor.`,
+        reasoning:`DORA ${field} alanını bugünün tarihiyle karşılaştırarak 7/15/30 günlük erken uyarı bandı oluşturdu.`,
+        recommendation:expired.length?"Süresi geçmiş kayıtların kontrol/ölçüm durumu öncelikle doğrulanmalıdır.":"Yaklaşan kayıtlar için planlama ve hizmet organizasyonu kontrol edilmelidir.",
+        sourceUrl:url,
+        evidence:[`Tarihli kayıt: ${dated.length}`,`Geçmiş: ${expired.length}`,`≤7 gün: ${d7.length}`,`8–15 gün: ${d15.length}`,`16–30 gün: ${d30.length}`],
+        confidence:"HIGH",
+      });
+    };
+    buildDueRequirement("deep-periodic-due","Periyodik Kontrol","Periyodik kontrol süre radarı",periodicResult.rows,"next_due_millis","/admin/documentation/periodic-controls");
+    buildDueRequirement("deep-environment-due","Ortam Ölçümü","Ortam ölçümü süre radarı",measurementResult.rows,"next_due_millis","/admin/documentation/periodic-controls");
+
+    // 7) Emergency team certificate / role quality
+    const emergencyWithoutEmployee = activeEmergency.filter((r:any)=>!text(r.employee_id));
+    const emergencyWithoutCert = activeEmergency.filter((r:any)=>{
+      const t=normalize(r.team_type);
+      const firstAid=t.includes("ILK")||t.includes("İLK")||t.includes("FIRST");
+      return firstAid && !text(r.certificate_info);
+    });
+    if (emergencyWithoutEmployee.length || emergencyWithoutCert.length) {
+      requirementItems.push({
+        id:"deep-emergency-quality",
+        domain:"Acil Durum",
+        title:"Acil durum ekibi kişi / sertifika doğrulama ihtiyacı",
+        state:"VERIFY",
+        severity:emergencyWithoutEmployee.length?"HIGH":"MEDIUM",
+        current:activeEmergency.length,
+        summary:`${emergencyWithoutEmployee.length} aktif ekip kaydında çalışan eşleşmesi, ${emergencyWithoutCert.length} ilkyardım sinyalinde sertifika bilgisi eksik görünüyor.`,
+        reasoning:"DORA aktif destek ekibi kayıtlarını employee_id, team_type ve certificate_info alanlarıyla kontrol etti.",
+        recommendation:"Kişi eşleşmeleri ve özellikle ilkyardım sertifika bilgileri doğrulanmalıdır.",
+        sourceUrl:"/admin/emergency",
+        evidence:[`Aktif ekip kaydı: ${activeEmergency.length}`,`Çalışan eşleşmesi olmayan: ${emergencyWithoutEmployee.length}`,`Sertifika bilgisi eksik ilkyardım sinyali: ${emergencyWithoutCert.length}`],
+        confidence:"HIGH",
+      });
+    }
+
+    // 8) Board role quality — deeper than existence check
+    if (boardNeededByCount && activeBoard.length > 0 && missingBoardRoles.length > 0) {
+      requirementItems.push({
+        id:"deep-board-role-gap",
+        domain:"İSG Kurulu",
+        title:"Kurul rol bütünlüğü",
+        state:"VERIFY",
+        severity:"HIGH",
+        current:activeBoard.length,
+        missing:missingBoardRoles.length,
+        summary:`Kurul üyesi kayıtları mevcut; ancak ${missingBoardRoles.length} temel rol eşleşmedi.`,
+        reasoning:"DORA aktif kurul üyelerindeki board_role alanlarını başkan, İSG uzmanı, işyeri hekimi ve çalışan temsilcisi temel rolleriyle karşılaştırdı.",
+        recommendation:"Eksik görünen rollerin başka adlarla kayıtlı olup olmadığı ve kurul kompozisyonu doğrulanmalıdır.",
+        sourceUrl:"/admin/documentation/board",
+        evidence:[`Aktif kurul üyesi: ${activeBoard.length}`,`Eşleşmeyen roller: ${missingBoardRoles.join(", ")}`],
+        confidence:"MEDIUM",
+      });
+    }
+
+    // 9) DORA readiness: source tables that cannot be read lower the certainty
+    const deepUnavailable = [
+      representativesResult.warning ? "Çalışan Temsilcileri" : "",
+      boardMembersResult.warning ? "İSG Kurulu" : "",
+      emergencyPlansResult.warning ? "Acil Durum Planları" : "",
+      emergencyTeamsResult.warning ? "Acil Durum Ekipleri" : "",
+      emergencyDrillsResult.warning ? "Acil Durum Tatbikatları" : "",
+      documentsResult.warning ? "Dokümantasyon" : "",
+    ].filter(Boolean);
+    if (deepUnavailable.length) {
+      requirementItems.push({
+        id:"deep-source-availability",
+        domain:"DORA Veri Güveni",
+        title:"Sessiz eksiklik taramasında erişilemeyen kaynaklar",
+        state:"UNAVAILABLE",
+        severity:"MEDIUM",
+        current:deepUnavailable.length,
+        summary:`${deepUnavailable.length} gereklilik kaynağı güvenilir biçimde okunamadı.`,
+        reasoning:"DORA kaynak tablo sorgularındaki hata/erişim sinyallerini de analiz sonucunun bir parçası olarak değerlendirir.",
+        recommendation:"Bu kaynaklar erişilebilir hale gelmeden ilgili alanlarda 'uygun' sonucu kesin kabul edilmemelidir.",
+        sourceUrl:"/admin/dora",
+        evidence:deepUnavailable,
+        confidence:"HIGH",
+      });
+    }
+
+    const requirementSummary = {
+      scanned: requirementItems.length,
+      missing: requirementItems.filter(x=>x.state==="MISSING").length,
+      shortage: requirementItems.filter(x=>x.state==="SHORTAGE").length,
+      warning: requirementItems.filter(x=>x.state==="WARNING"||x.state==="VERIFY").length,
+      unavailable: requirementItems.filter(x=>x.state==="UNAVAILABLE").length,
+      ok: requirementItems.filter(x=>x.state==="OK").length,
+      critical: requirementItems.filter(x=>x.severity==="CRITICAL" && x.state!=="OK").length,
+      high: requirementItems.filter(x=>x.severity==="HIGH" && x.state!=="OK").length,
+    };
+    const deepIntelligence = {
+      activeEmployees: activeEmployees.length,
+      trainingLinkageGaps: employeesWithoutTrainingAccount.length,
+      incompleteTrainingAssignments: deepIncompleteAssignments.length,
+      healthCoverageGaps: healthCoverageMissing.length,
+      healthExpired: healthExpired.length,
+      healthDue30: health30.length,
+      openCriticalHighRisks: criticalHighOpen.length,
+      openDofs: openDofRows.length,
+      accidentRootCauseGaps: accidentsMissingRoot.length,
+      unavailableRequirementSources: deepUnavailable.length,
+    };
+
+    const silentGaps = {
+      summary: requirementSummary,
+      deepIntelligence,
+      items: requirementItems.sort((a,b)=>{
+        const rank:any={CRITICAL:5,HIGH:4,MEDIUM:3,LOW:2,INFO:1};
+        return rank[b.severity]-rank[a.severity];
+      }),
+      methodology: "DORA yalnızca sistemdeki mevcut veriyi okur. Mevzuatın ek koşul gerektirdiği alanlarda kesin hüküm yerine doğrulama sinyali üretir.",
+    };
+
     const weightedPenalty = findings.reduce((sum, f) => sum + ({ CRITICAL: 12, HIGH: 7, MEDIUM: 4, LOW: 1, INFO: 0 }[f.severity]), 0);
     const unavailablePenalty = modules.filter((m) => !m.available).length * 4;
     const xrayScore = Math.max(0, Math.min(100, 100 - weightedPenalty - unavailablePenalty));
@@ -1107,8 +1675,8 @@ export async function GET(req: NextRequest) {
     const xray = {
       score: xrayScore,
       status: xrayStatus,
-      criticalIssues: severityCounts.critical,
-      highSignals: severityCounts.high,
+      criticalIssues: severityCounts.critical + requirementSummary.critical,
+      highSignals: severityCounts.high + requirementSummary.high,
       upcoming30: horizon.due30,
       systemicSignals: crossAnalyses.filter((x) => x.status === "SIGNAL").length,
       categories: xrayCategories,
@@ -1141,6 +1709,7 @@ export async function GET(req: NextRequest) {
       dataQuality: { overallScore: overallDataQuality, items: dataQuality },
       xray,
       horizon,
+      silentGaps,
       guardrails: {
         readOnly: true,
         writesToModules: false,

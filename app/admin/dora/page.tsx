@@ -363,16 +363,32 @@ export default function DoraPage(){
             </div>
           </div>
 
-          {activeTab==="XRAY"&&<div style={{...card,marginTop:10,padding:20}}>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
-              {cats.map((c,i)=>{const t=tone(c.status);return <button key={c.key} onClick={()=>openModuleDetail(c)} style={{position:"relative",textAlign:"left",border:`1px solid ${C.line}`,borderRadius:18,padding:17,background:`linear-gradient(145deg,${C.white},${t.b})`,cursor:"pointer",boxShadow:"0 6px 18px rgba(16,24,40,.05)",minHeight:150}}>
-                <div style={{position:"absolute",top:14,right:14,width:11,height:11,borderRadius:99,background:t.c,boxShadow:`0 0 0 6px ${t.b},0 0 18px ${t.c}44`}}/>
-                <div style={{fontSize:9,fontWeight:950,color:C.muted,letterSpacing:.8}}>DORA NODE {String(i+1).padStart(2,"0")}</div>
-                <b style={{display:"block",marginTop:8,fontSize:15,paddingRight:24}}>{c.label}</b>
-                <div style={{marginTop:8,fontSize:11,color:C.muted,lineHeight:1.55}}>{c.headline}</div>
-                <div style={{display:"flex",gap:5,marginTop:12,flexWrap:"wrap"}}><span style={{...badge,background:t.b,color:t.c,border:`1px solid ${t.c}22`}}>{t.t}</span><span style={{...badge,background:"#f2f4f7",color:C.muted}}>K {c.critical} • Y {c.high} • O {c.medium}</span></div>
-                <div style={{position:"absolute",right:15,bottom:13,fontSize:10,fontWeight:900,color:C.burgundy}}>DETAY →</div>
-              </button>})}
+          {activeTab==="XRAY"&&<div style={{marginTop:10}}>
+            <NeuralNetwork
+              categories={cats}
+              crossAnalyses={a.crossAnalyses||[]}
+              score={x?.score??0}
+              status={x?.status??"-"}
+              scanning={scanning}
+              onNodeClick={openModuleDetail}
+              onSignalClick={openCrossDetail}
+            />
+
+            <div style={{...card,marginTop:10,padding:18}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                <Header title="Modül Röntgen Kartları" sub="Sinir ağındaki her düğümün kısa özeti. Kartlara basınca DORA gerekçesi, kanıtları ve önerisi açılır."/>
+                <span style={{...badge,background:"#f2f4f7",color:C.muted}}>{cats.length} AKTİF DÜĞÜM</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginTop:14}}>
+                {cats.map((c,i)=>{const t=tone(c.status);return <button key={c.key} onClick={()=>openModuleDetail(c)} style={{position:"relative",textAlign:"left",border:`1px solid ${C.line}`,borderRadius:18,padding:17,background:`linear-gradient(145deg,${C.white},${t.b})`,cursor:"pointer",boxShadow:"0 6px 18px rgba(16,24,40,.05)",minHeight:150}}>
+                  <div style={{position:"absolute",top:14,right:14,width:11,height:11,borderRadius:99,background:t.c,boxShadow:`0 0 0 6px ${t.b},0 0 18px ${t.c}44`}}/>
+                  <div style={{fontSize:9,fontWeight:950,color:C.muted,letterSpacing:.8}}>DORA NODE {String(i+1).padStart(2,"0")}</div>
+                  <b style={{display:"block",marginTop:8,fontSize:15,paddingRight:24}}>{c.label}</b>
+                  <div style={{marginTop:8,fontSize:11,color:C.muted,lineHeight:1.55}}>{c.headline}</div>
+                  <div style={{display:"flex",gap:5,marginTop:12,flexWrap:"wrap"}}><span style={{...badge,background:t.b,color:t.c,border:`1px solid ${t.c}22`}}>{t.t}</span><span style={{...badge,background:"#f2f4f7",color:C.muted}}>K {c.critical} • Y {c.high} • O {c.medium}</span></div>
+                  <div style={{position:"absolute",right:15,bottom:13,fontSize:10,fontWeight:900,color:C.burgundy}}>DORA DETAY →</div>
+                </button>})}
+              </div>
             </div>
           </div>}
 
@@ -468,6 +484,134 @@ export default function DoraPage(){
   </main>;
 }
 
+function NeuralNetwork({
+  categories,
+  crossAnalyses,
+  score,
+  status,
+  scanning,
+  onNodeClick,
+  onSignalClick,
+}:{
+  categories:XrayCat[];
+  crossAnalyses:Cross[];
+  score:number;
+  status:string;
+  scanning:boolean;
+  onNodeClick:(c:XrayCat)=>void;
+  onSignalClick:(c:Cross)=>void;
+}){
+  const positions = [
+    {x:13,y:22},{x:35,y:12},{x:65,y:12},{x:87,y:22},
+    {x:13,y:76},{x:35,y:87},{x:65,y:87},{x:87,y:76},
+  ];
+  const nodes = categories.slice(0,8);
+  const signalCount = crossAnalyses.filter(x=>x.status==="SIGNAL").length;
+
+  return <section style={{position:"relative",borderRadius:24,overflow:"hidden",background:"linear-gradient(145deg,#0c111d,#151d2d 58%,#251018)",border:"1px solid rgba(255,255,255,.05)",boxShadow:"0 18px 48px rgba(16,24,40,.18)",minHeight:590,color:"#fff"}}>
+    <style>{`
+      @keyframes doraPulse {0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.08);opacity:1}}
+      @keyframes doraOrbit {from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+      @keyframes doraFlow {0%{stroke-dashoffset:40}100%{stroke-dashoffset:0}}
+      @keyframes doraScan {0%{transform:translateY(-120%);opacity:0}25%{opacity:.45}75%{opacity:.18}100%{transform:translateY(520%);opacity:0}}
+    `}</style>
+
+    <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 50% 50%,rgba(127,29,45,.22),transparent 26%),radial-gradient(circle at 20% 20%,rgba(23,92,211,.08),transparent 24%),radial-gradient(circle at 80% 80%,rgba(6,118,71,.06),transparent 22%)"}}/>
+    <div style={{position:"absolute",inset:"0 0 auto 0",height:2,background:"linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent)",animation:scanning?"doraScan 2.2s linear infinite":"none"}}/>
+
+    <div style={{position:"relative",zIndex:2,padding:"20px 22px 0",display:"flex",justifyContent:"space-between",gap:14,alignItems:"start",flexWrap:"wrap"}}>
+      <div>
+        <div style={{fontSize:10,fontWeight:950,letterSpacing:1.3,opacity:.62}}>DORA NEURAL MAP • CANLI SİSTEM TOPOLOJİSİ</div>
+        <div style={{fontSize:22,fontWeight:950,marginTop:4}}>DORA Sistem Sinir Ağı</div>
+        <div style={{fontSize:11,opacity:.62,marginTop:5,maxWidth:700,lineHeight:1.55}}>DORA tüm modülleri merkezde birleştirir. Renkli bağlantılar modülün mevcut sağlık durumunu; AI sinyal kartları ise modüller arasında incelenmesi gereken ilişkileri gösterir.</div>
+      </div>
+      <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+        <span style={{...darkBadge,background:"rgba(180,35,24,.18)",color:"#fda29b"}}>● KRİTİK</span>
+        <span style={{...darkBadge,background:"rgba(181,71,8,.18)",color:"#fec84b"}}>● DİKKAT</span>
+        <span style={{...darkBadge,background:"rgba(6,118,71,.18)",color:"#75e0a7"}}>● NORMAL</span>
+      </div>
+    </div>
+
+    <div style={{position:"relative",height:430,marginTop:8}}>
+      <svg viewBox="0 0 1000 430" preserveAspectRatio="none" style={{position:"absolute",inset:0,width:"100%",height:"100%",overflow:"visible"}}>
+        <defs>
+          <filter id="doraGlow">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <linearGradient id="doraLine" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#667085" stopOpacity=".15"/>
+            <stop offset="48%" stopColor="#d0d5dd" stopOpacity=".5"/>
+            <stop offset="100%" stopColor="#667085" stopOpacity=".12"/>
+          </linearGradient>
+        </defs>
+        {nodes.map((n,i)=>{
+          const p=positions[i]||positions[0];
+          const t=tone(n.status);
+          const x=p.x*10, y=p.y*4.3;
+          return <g key={`line-${n.key}`}>
+            <line x1="500" y1="215" x2={x} y2={y} stroke={t.c} strokeOpacity={n.status==="GOOD"?.28:.58} strokeWidth={n.status==="CRITICAL"?2.5:1.5} strokeDasharray={n.status==="GOOD"?"3 7":"8 7"} filter={n.status==="CRITICAL"?"url(#doraGlow)":undefined} style={{animation:n.status==="GOOD"?"none":"doraFlow 1.8s linear infinite"}}/>
+            <circle cx={x} cy={y} r="3.2" fill={t.c} opacity=".9"/>
+          </g>
+        })}
+        <circle cx="500" cy="215" r="85" fill="none" stroke="url(#doraLine)" strokeWidth="1"/>
+        <circle cx="500" cy="215" r="118" fill="none" stroke="rgba(255,255,255,.08)" strokeDasharray="5 10" strokeWidth="1"/>
+      </svg>
+
+      <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:190,height:190,display:"grid",placeItems:"center"}}>
+        <div style={{position:"absolute",inset:0,borderRadius:"50%",border:"1px solid rgba(255,255,255,.1)",animation:"doraOrbit 18s linear infinite"}}>
+          <span style={{position:"absolute",left:"50%",top:-5,width:10,height:10,borderRadius:99,background:"#fff",boxShadow:"0 0 18px rgba(255,255,255,.8)"}}/>
+        </div>
+        <div style={{position:"absolute",inset:20,borderRadius:"50%",border:"1px dashed rgba(255,255,255,.18)",animation:"doraOrbit 12s linear infinite reverse"}}/>
+        <div style={{position:"relative",width:122,height:122,borderRadius:"50%",display:"grid",placeItems:"center",background:"radial-gradient(circle at 45% 35%,rgba(255,255,255,.2),rgba(127,29,45,.28) 45%,rgba(10,16,28,.92) 72%)",border:"1px solid rgba(255,255,255,.2)",boxShadow:"0 0 55px rgba(127,29,45,.45)",animation:scanning?"doraPulse 1.2s ease-in-out infinite":"doraPulse 3s ease-in-out infinite"}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:10,fontWeight:950,letterSpacing:1.2,opacity:.66}}>DORA CORE</div>
+            <div style={{fontSize:34,fontWeight:950,lineHeight:1,marginTop:5}}>{score}</div>
+            <div style={{fontSize:8,opacity:.7,marginTop:3}}>{status}</div>
+            <div style={{fontSize:8,color:"#75e0a7",marginTop:5}}>● {scanning?"TARANIYOR":"AKTİF"}</div>
+          </div>
+        </div>
+      </div>
+
+      {nodes.map((n,i)=>{
+        const p=positions[i]||positions[0];
+        const t=tone(n.status);
+        return <button key={n.key} onClick={()=>onNodeClick(n)} style={{
+          position:"absolute",left:`${p.x}%`,top:`${p.y}%`,transform:"translate(-50%,-50%)",
+          width:150,minHeight:84,padding:"10px 11px",borderRadius:15,
+          border:`1px solid ${t.c}55`,background:"rgba(17,24,39,.86)",color:"#fff",
+          textAlign:"left",cursor:"pointer",boxShadow:`0 0 0 1px rgba(255,255,255,.025),0 8px 24px rgba(0,0,0,.22),0 0 22px ${t.c}18`,
+          backdropFilter:"blur(10px)"
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:7,alignItems:"center"}}>
+            <span style={{fontSize:8,fontWeight:950,letterSpacing:.8,opacity:.48}}>NODE {String(i+1).padStart(2,"0")}</span>
+            <span style={{width:8,height:8,borderRadius:99,background:t.c,boxShadow:`0 0 12px ${t.c}`}}/>
+          </div>
+          <b style={{display:"block",fontSize:12,marginTop:5,lineHeight:1.2}}>{n.label}</b>
+          <div style={{display:"flex",justifyContent:"space-between",gap:6,marginTop:7,alignItems:"center"}}>
+            <span style={{fontSize:8,fontWeight:900,color:t.c}}>{t.t}</span>
+            <span style={{fontSize:8,opacity:.5}}>K{n.critical} Y{n.high} O{n.medium}</span>
+          </div>
+        </button>
+      })}
+    </div>
+
+    <div style={{position:"relative",zIndex:2,borderTop:"1px solid rgba(255,255,255,.08)",padding:"13px 18px 17px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <div>
+          <div style={{fontSize:10,fontWeight:950}}>DORA ÇAPRAZ SİNYAL HATTI</div>
+          <div style={{fontSize:9,opacity:.52,marginTop:3}}>{signalCount} aktif inceleme sinyali • İlk üç ilişki aşağıda</div>
+        </div>
+        <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+          {crossAnalyses.filter(x=>x.status==="SIGNAL").slice(0,3).map((s,i)=><button key={s.id} onClick={()=>onSignalClick(s)} style={{border:"1px solid rgba(255,255,255,.12)",borderRadius:999,padding:"7px 10px",background:"rgba(255,255,255,.06)",color:"#fff",fontSize:9,fontWeight:850,cursor:"pointer"}}><span style={{color:"#fec84b"}}>⚡</span> {s.title.length>42?s.title.slice(0,42)+"…":s.title}</button>)}
+          {signalCount===0&&<span style={{...darkBadge,background:"rgba(6,118,71,.14)",color:"#75e0a7"}}>Belirgin çapraz sinyal yok</span>}
+        </div>
+      </div>
+    </div>
+  </section>;
+}
+
+
 function RobotCore({state,color,scanning}:{state:string;color:string;scanning:boolean}){
   return <div style={{position:"relative",width:210,height:170,display:"grid",placeItems:"center"}}>
     <div style={{position:"absolute",width:155,height:155,borderRadius:"50%",border:"1px solid rgba(255,255,255,.18)",boxShadow:scanning?"0 0 45px rgba(255,255,255,.25)":"0 0 25px rgba(255,255,255,.12)"}}/>
@@ -535,6 +679,7 @@ function DetailModal({detail,onClose,onOpenSource}:{detail:DetailPanel;onClose:(
   </div>
 }
 
+const darkBadge:React.CSSProperties={display:"inline-flex",alignItems:"center",border:"1px solid rgba(255,255,255,.08)",borderRadius:999,padding:"6px 8px",fontSize:8,fontWeight:950,letterSpacing:.4,whiteSpace:"nowrap"};
 const card:React.CSSProperties={background:C.white,border:`1px solid ${C.line}`,borderRadius:16,padding:16,boxShadow:"0 3px 12px rgba(16,24,40,.035)",minWidth:0};
 const input:React.CSSProperties={width:"100%",boxSizing:"border-box",padding:"11px 12px",border:`1px solid ${C.line}`,borderRadius:10,background:C.white,fontSize:12,outline:"none"};
 const darkButton:React.CSSProperties={border:"none",borderRadius:11,padding:"11px 14px",background:"#101828",color:C.white,fontWeight:900,fontSize:11,cursor:"pointer",whiteSpace:"nowrap"};
