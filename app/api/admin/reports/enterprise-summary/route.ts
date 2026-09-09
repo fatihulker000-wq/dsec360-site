@@ -141,13 +141,16 @@ function riskLevel(
         0
     );
 
-  if (score >= 200) {
-    return "HIGH";
+  // 5x5 matris skorları 1-25 aralığındadır.
+  if (score > 0 && score <= 25) {
+    if (score >= 15) return "HIGH";
+    if (score >= 8) return "MEDIUM";
+    return "LOW";
   }
 
-  if (score >= 70) {
-    return "MEDIUM";
-  }
+  // Fine Kinney için kurumsal özet sınıflaması.
+  if (score >= 200) return "HIGH";
+  if (score >= 70) return "MEDIUM";
 
   return "LOW";
 }
@@ -177,14 +180,19 @@ function isExpired(
   const status =
     normalizedStatus(row);
 
-  return [
+  if ([
     "EXPIRED",
     "OVERDUE",
     "MISSING",
     "SÜRESİ_DOLDU",
     "SÜRESİ DOLDU",
     "EKSİK",
-  ].includes(status);
+  ].includes(status)) return true;
+
+  const expiryValue = row.expiry_date || row.expire_date || row.valid_until || row.next_examination_date || row.next_exam_date;
+  if (!expiryValue) return false;
+  const expiry = new Date(expiryValue).getTime();
+  return Number.isFinite(expiry) && expiry < Date.now();
 }
 
 function isExpiring(
@@ -208,7 +216,8 @@ function isExpiring(
     row.expiry_date ||
     row.expire_date ||
     row.valid_until ||
-    row.next_examination_date;
+    row.next_examination_date ||
+    row.next_exam_date;
 
   if (!expiryValue) {
     return false;
@@ -327,7 +336,7 @@ export async function GET(
       searchParams,
     } = new URL(request.url);
 
-    let companyId =
+    const companyId =
       String(
         searchParams.get(
           "companyId"
@@ -352,26 +361,16 @@ export async function GET(
     const supabase =
       getSupabase();
 
-    // Yetki kapsamını service-role sorgularından ÖNCE doğrula.
-    const reportScope = await resolveReportScope(supabase, companyId);
-    if (!reportScope.ok) {
+    // Service-role sorgularından önce mutlaka rapor kapsamını doğrula.
+    const authResult = await resolveReportScope(supabase, companyId);
+    if (!authResult.ok) {
       return NextResponse.json(
-        { success: false, error: reportScope.error },
-        { status: reportScope.status }
+        { success: false, error: authResult.error },
+        { status: authResult.status }
       );
     }
-    companyId = reportScope.scope.selectedCompanyId;
 
-    // Kaza/Olay tablosunda web firma UUID'si web_firm_id, mobil kimlik firm_id alanındadır.
-    let localFirmId = "";
-    if (companyId !== "ALL" && companyId !== "all") {
-      const { data: companyRow } = await supabase
-        .from("companies")
-        .select("local_firm_id")
-        .eq("id", companyId)
-        .maybeSingle();
-      localFirmId = String(companyRow?.local_firm_id || "").trim();
-    }
+    const effectiveCompanyId = authResult.scope.selectedCompanyId;
 
     let employeeQuery =
       supabase
@@ -379,14 +378,14 @@ export async function GET(
         .select("id, firm_id");
 
     if (
-      companyId !== "ALL" &&
-      companyId !== "all"
+      effectiveCompanyId !== "ALL" &&
+      effectiveCompanyId !== "all"
     ) {
 
       employeeQuery =
         employeeQuery.eq(
           "firm_id",
-          companyId
+          effectiveCompanyId
         );
 
     }
@@ -403,66 +402,44 @@ export async function GET(
           String(row.id)
       );
 
+    const isAll = effectiveCompanyId === "ALL" || effectiveCompanyId === "all";
+
+    const matrixRiskQuery = isAll
+      ? supabase.from("risk_items").select("*").or("is_deleted.is.null,is_deleted.eq.false")
+      : supabase.from("risk_items").select("*").eq("company_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false");
+
+    const fineRiskQuery = isAll
+      ? supabase.from("fine_kinney_risks").select("*").or("is_deleted.is.null,is_deleted.eq.false")
+      : supabase.from("fine_kinney_risks").select("*").eq("company_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false");
+
+    const healthQuery = isAll
+      ? supabase.from("health_examinations").select("*").or("is_deleted.is.null,is_deleted.eq.false")
+      : supabase.from("health_examinations").select("*").eq("company_id", effectiveCompanyId).or("is_deleted.is.null,is_deleted.eq.false");
+
+    const accidentQuery = isAll
+      ? supabase.from("accident_records").select("*").or("is_deleted.is.null,is_deleted.eq.false")
+      : supabase.from("accident_records").select("*").or(`firm_id.eq.${effectiveCompanyId},web_firm_id.eq.${effectiveCompanyId}`).or("is_deleted.is.null,is_deleted.eq.false");
+
     const [
-      riskResult,
+      matrixRiskResult,
+      fineRiskResult,
       healthResult,
       ppeResult,
       accidentResult,
       ibysResult,
     ] = await Promise.all([
-
-      rowsByEmployeeIds(
-        supabase,
-        "employee_risks",
-        employeeIds,
-        "Risk"
-      ),
-
-      rowsByEmployeeIds(
-        supabase,
-        "health_records",
-        employeeIds,
-        "Sağlık"
-      ),
-
-      rowsByEmployeeIds(
-        supabase,
-        "employee_ppe_assignments",
-        employeeIds,
-        "KKD"
-      ),
-
-      companyId === "ALL" ||
-      companyId === "all"
-
-        ? safeRows(
-            "Kaza/Olay",
-            supabase
-              .from("accidents")
-              .select("*")
-          )
-
-        : safeRows(
-            "Kaza/Olay",
-            localFirmId
-              ? supabase
-                  .from("accidents")
-                  .select("*")
-                  .or(`web_firm_id.eq.${companyId},firm_id.eq.${localFirmId}`)
-              : supabase
-                  .from("accidents")
-                  .select("*")
-                  .eq("web_firm_id", companyId)
-          ),
-
-      rowsByEmployeeIds(
-        supabase,
-        "employee_ibys_records",
-        employeeIds,
-        "İBYS"
-      ),
-
+      safeRows("Risk", matrixRiskQuery),
+      safeRows("Risk", fineRiskQuery),
+      safeRows("Sağlık", healthQuery),
+      rowsByEmployeeIds(supabase, "employee_ppe_assignments", employeeIds, "KKD"),
+      safeRows("Kaza/Olay", accidentQuery),
+      rowsByEmployeeIds(supabase, "employee_ibys_records", employeeIds, "İBYS"),
     ]);
+
+    const riskResult: SafeRowsResult = {
+      rows: [...matrixRiskResult.rows, ...fineRiskResult.rows],
+      warning: matrixRiskResult.warning || fineRiskResult.warning,
+    };
 
     const warnings = [
 
@@ -513,7 +490,7 @@ export async function GET(
       success: true,
 
       data: {
-        companyId,
+        companyId: effectiveCompanyId,
 
         employeeCount:
           employeeIds.length,
