@@ -29,6 +29,7 @@ type Analysis = {
   };
 };
 type Scope = { can_view_all_companies?:boolean; allowed_company_id?:string|null; allowed_companies?:CompanyRow[] };
+type QueueSummary = { total:number; waiting:number; approved:number; started:number; completed:number; failed:number };
 type DetailPanel = {
   eyebrow:string;
   title:string;
@@ -82,6 +83,7 @@ export default function DoraPage(){
   const [detail,setDetail]=useState<DetailPanel|null>(null);
   const [thinking,setThinking]=useState(false);
   const [reasonTrail,setReasonTrail]=useState<string[]>([]);
+  const [queueSummary,setQueueSummary]=useState<QueueSummary>({total:0,waiting:0,approved:0,started:0,completed:0,failed:0});
 
   const load=useCallback(async()=>{
     try{
@@ -103,6 +105,20 @@ export default function DoraPage(){
       setScanning(true); setError("");
       const data=await readJson<Analysis>(await fetch(`/api/admin/dora-v2/analysis?companyId=${encodeURIComponent(id)}`,{cache:"no-store",credentials:"include"}));
       setA(data);
+      try{
+        const q:any=await readJson(await fetch(`/api/admin/dora-v2/actions?companyId=${encodeURIComponent(id)}`,{cache:"no-store",credentials:"include"}));
+        const items:Array<{status?:string}>=Array.isArray(q?.items)?q.items:[];
+        setQueueSummary({
+          total:items.length,
+          waiting:items.filter(v=>v.status==="WAITING_APPROVAL").length,
+          approved:items.filter(v=>v.status==="APPROVED").length,
+          started:items.filter(v=>v.status==="STARTED").length,
+          completed:items.filter(v=>v.status==="COMPLETED").length,
+          failed:items.filter(v=>v.status==="FAILED").length,
+        });
+      }catch{
+        setQueueSummary({total:0,waiting:0,approved:0,started:0,completed:0,failed:0});
+      }
       setAnswerTitle("Sistem taraması tamamlandı");
       setAnswer(data.executiveCommentary?.slice(0,3) || ["DORA sistem verilerini taradı."]);
     }catch(e){
@@ -199,10 +215,10 @@ export default function DoraPage(){
     setDetail({
       eyebrow:"DORA YAKLAŞANLAR RADARI",
       title:h.label,
-      status:h.days<=7?"KRİTİK SÜRE":h.days<=30?"YAKLAŞIYOR":"PLANLA",
+      status:h.days<0?"GECİKMİŞ":h.days<=7?"KRİTİK SÜRE":h.days<=30?"YAKLAŞIYOR":"PLANLA",
       statusColor:h.days<=7?C.red:h.days<=30?C.orange:C.blue,
-      description:`${h.module} kaydı için hedef tarihe ${h.days===0?"bugün ulaşılıyor":`${h.days} gün kaldı`}.`,
-      recommendation:h.days<=7?"Kayıt ve planlamanın hemen doğrulanması önerilir.":"İlgili kayıt için planlamanın önceden gözden geçirilmesi önerilir.",
+      description:h.days<0?`${h.module} kaydının hedef tarihi ${Math.abs(h.days)} gün geçmiş.`:`${h.module} kaydı için hedef tarihe ${h.days===0?"bugün ulaşılıyor":`${h.days} gün kaldı`}.`,
+      recommendation:h.days<0?"Gecikmiş kaydın durumu ve tamamlanma/kapanış bilgisi hemen doğrulanmalıdır.":h.days<=7?"Kayıt ve planlamanın hemen doğrulanması önerilir.":"İlgili kayıt için planlamanın önceden gözden geçirilmesi önerilir.",
       metrics:[{label:"Kalan gün",value:h.days,color:h.days<=7?C.red:h.days<=30?C.orange:C.blue},{label:"Modül",value:h.module}],
       sourceUrl:h.sourceUrl
     });
@@ -335,7 +351,7 @@ export default function DoraPage(){
         </div>
         <div style={{borderTop:"1px solid rgba(255,255,255,.14)",padding:"12px 30px",display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontSize:11,opacity:.88}}>
           <span>● DORA {robotState} • Son tarama: {generated}</span>
-          <span>FAZ 1 • SALT OKUNUR • MODÜLLERE YAZMA YETKİSİ KAPALI</span>
+          <span>FAZ 1 ANALİZ + FAZ 2 KONTROLLÜ İŞLEM • YAZMA SADECE KULLANICI ONAYI + BAŞLA İLE</span>
         </div>
       </section>
 
@@ -369,11 +385,12 @@ export default function DoraPage(){
               <Header title="DORA Şu Anda Ne Görüyor?" sub="Yönetici için ilk bakış: ayrıntıya girmeden firmanın dijital röntgeni."/>
               <span style={{...badge,background:"#ecfdf3",color:C.green}}>CANLI ANALİZ</span>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginTop:14}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginTop:14}}>
               <Signal n={x?.criticalIssues??0} t="Kritik eksiklik" c={C.red} onClick={()=>{setActiveTab("GAPS");window.scrollTo({top:900,behavior:"smooth"})}}/>
               <Signal n={x?.highSignals??0} t="Yüksek sinyal" c={C.orange} onClick={()=>{setActiveTab("SIGNALS");window.scrollTo({top:900,behavior:"smooth"})}}/>
               <Signal n={x?.upcoming30??0} t="30 gün radarı" c={C.blue} onClick={()=>{setActiveTab("RADAR");window.scrollTo({top:900,behavior:"smooth"})}}/>
               <Signal n={x?.systemicSignals??0} t="Sistemik bağ" c={C.burgundy} onClick={()=>{setActiveTab("SIGNALS");window.scrollTo({top:900,behavior:"smooth"})}}/>
+              <Signal n={queueSummary.waiting+queueSummary.approved} t="İşlem bekliyor" c={C.green} onClick={()=>router.push(`/admin/dora/actions?companyId=${encodeURIComponent(companyId)}`)}/>
             </div>
             <div style={{marginTop:13,padding:"12px 14px",borderRadius:13,background:C.soft,border:`1px solid #eadde0`,fontSize:12,lineHeight:1.65}}>
               <b style={{color:C.burgundy}}>DORA:</b> {a.executiveCommentary?.[0] || "Sistem taraması tamamlandı."}
@@ -389,6 +406,25 @@ export default function DoraPage(){
               <StatusLine label="Erişilemeyen modül" value={a.summary?.unavailableModules??0} color={C.muted}/>
             </div>
             <button onClick={()=>quickAsk("WHY")} style={{...secondary,width:"100%",marginTop:13}}>DORA neden böyle düşünüyor?</button>
+          </div>
+        </section>
+
+        <section style={{...card,marginTop:13,padding:0,overflow:"hidden",border:"1px solid #b7e4cf",boxShadow:"0 10px 28px rgba(6,118,71,.08)"}}>
+          <div style={{display:"grid",gridTemplateColumns:"220px minmax(0,1fr) auto",gap:16,alignItems:"center"}}>
+            <div style={{padding:"20px 18px",background:"linear-gradient(135deg,#064e3b,#067647)",color:"#fff",alignSelf:"stretch"}}>
+              <div style={{fontSize:9,fontWeight:950,letterSpacing:1.1,opacity:.7}}>DORA FAZ 2</div>
+              <div style={{fontSize:18,fontWeight:950,marginTop:5}}>⚡ İşlem Merkezi</div>
+              <div style={{fontSize:10,opacity:.75,marginTop:6,lineHeight:1.5}}>DORA'nın kullanıcı onayıyla gerçekleştirebileceği işlemler.</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(90px,1fr))",gap:8,padding:"14px 0"}}>
+              <ActionMetric n={queueSummary.waiting} label="Onay bekliyor" color={C.orange}/>
+              <ActionMetric n={queueSummary.approved} label="Başla bekliyor" color={C.blue}/>
+              <ActionMetric n={queueSummary.completed} label="Tamamlandı" color={C.green}/>
+              <ActionMetric n={queueSummary.failed} label="Hata" color={C.red}/>
+            </div>
+            <div style={{paddingRight:18}}>
+              <button onClick={()=>router.push(`/admin/dora/actions?companyId=${encodeURIComponent(companyId)}`)} style={{...darkButton,background:C.green,padding:"12px 15px"}}>İŞLEM MERKEZİNİ AÇ →</button>
+            </div>
           </div>
         </section>
 
@@ -439,6 +475,7 @@ export default function DoraPage(){
               <Tab active={activeTab==="GAPS"} onClick={()=>setActiveTab("GAPS")}>Sessiz Eksiklikler</Tab><Tab active={activeTab==="SIGNALS"} onClick={()=>setActiveTab("SIGNALS")}>AI Sinyalleri</Tab>
               <Tab active={activeTab==="RADAR"} onClick={()=>setActiveTab("RADAR")}>Yaklaşanlar</Tab>
               <Tab active={activeTab==="DATA"} onClick={()=>setActiveTab("DATA")}>Veri Güveni</Tab>
+              <button onClick={()=>router.push(`/admin/dora/actions?companyId=${encodeURIComponent(companyId)}`)} style={{border:`1px solid ${C.green}`,borderRadius:999,padding:"7px 10px",background:"#ecfdf3",color:C.green,fontSize:10,fontWeight:950,cursor:"pointer"}}>⚡ İşlem Merkezi</button>
             </div>
           </div>
 
@@ -516,11 +553,35 @@ export default function DoraPage(){
           </div>}
 
           {activeTab==="RADAR"&&<div style={{...card,marginTop:10}}>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
-              {[[7,a.horizon?.due7],[15,a.horizon?.due15],[30,a.horizon?.due30],[60,a.horizon?.due60],[90,a.horizon?.due90]].map(([d,n])=><div key={String(d)} style={{padding:14,borderRadius:13,background:"#f8fafc",textAlign:"center"}}><b style={{fontSize:27}}>{n??0}</b><div style={{fontSize:9,color:C.muted,fontWeight:900}}>{d} GÜN</div></div>)}
+            <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              <Header title="DORA Zaman Radarı" sub="Periyodik kontrolle sınırlı değildir. Tarih verisi bulunan sağlık, risk/aksiyon, denetim-DÖF, eğitim, ortam ölçümü ve diğer süreli kayıtları tek zaman hattında toplar."/>
+              <span style={{...badge,background:"#eff8ff",color:C.blue}}>ÇOK MODÜLLÜ • 90 GÜN</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,marginTop:13}}>
+              <RadarMetric n={(a.horizon?.items||[]).filter(x=>x.days<0).length} label="GECİKMİŞ" color={C.red}/>
+              <RadarMetric n={a.horizon?.due7??0} label="≤ 7 GÜN" color={C.red}/>
+              <RadarMetric n={a.horizon?.due15??0} label="≤ 15 GÜN" color={C.orange}/>
+              <RadarMetric n={a.horizon?.due30??0} label="≤ 30 GÜN" color={C.orange}/>
+              <RadarMetric n={a.horizon?.due60??0} label="≤ 60 GÜN" color={C.blue}/>
+              <RadarMetric n={a.horizon?.due90??0} label="≤ 90 GÜN" color={C.muted}/>
+            </div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:11}}>
+              {Array.from(new Set((a.horizon?.items||[]).map(x=>x.module))).map(mod=><span key={mod} style={{...badge,background:"#f2f4f7",color:C.ink}}>{mod}</span>)}
             </div>
             <div style={{display:"grid",gap:7,marginTop:12}}>
-              {(a.horizon?.items||[]).slice(0,12).map(h=><button key={h.id} onClick={()=>openHorizonDetail(h)} style={{border:`1px solid ${C.line}`,borderRadius:11,padding:11,background:C.white,textAlign:"left",cursor:"pointer"}}><b style={{fontSize:11,color:h.days<=7?C.red:h.days<=30?C.orange:C.ink}}>{h.days===0?"BUGÜN":`${h.days} GÜN`} • {h.module}</b><div style={{fontSize:11,color:C.muted,marginTop:3}}>{h.label}</div></button>)}
+              {(a.horizon?.items||[]).slice(0,30).map(h=>{
+                const overdue=h.days<0;
+                const col=overdue||h.days<=7?C.red:h.days<=30?C.orange:h.days<=60?C.blue:C.ink;
+                const time=overdue?`${Math.abs(h.days)} GÜN GECİKMİŞ`:h.days===0?"BUGÜN":`${h.days} GÜN`;
+                return <button key={h.id} onClick={()=>openHorizonDetail(h)} style={{border:`1px solid ${C.line}`,borderLeft:`5px solid ${col}`,borderRadius:11,padding:11,background:C.white,textAlign:"left",cursor:"pointer"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                    <b style={{fontSize:11,color:col}}>{time} • {h.module}</b>
+                    <span style={{...badge,background:overdue?"#fef3f2":"#f8fafc",color:col}}>{overdue?"GECİKMİŞ":h.days<=7?"KRİTİK":h.days<=30?"YAKLAŞIYOR":"PLANLA"}</span>
+                  </div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:4}}>{h.label}</div>
+                </button>
+              })}
+              {(a.horizon?.items||[]).length===0&&<div style={{padding:22,textAlign:"center",color:C.muted,fontSize:11}}>90 günlük zaman radarında tarihli kayıt bulunamadı.</div>}
             </div>
           </div>}
 
@@ -552,7 +613,7 @@ export default function DoraPage(){
 
         <section style={{...card,marginTop:14,background:"#101828",color:C.white,border:"none"}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:14,flexWrap:"wrap",alignItems:"center"}}>
-            <div><b>DORA Faz 1 • Güvenli AI sınırı</b><div style={{fontSize:11,opacity:.65,marginTop:4}}>DORA tespit eder ve önerir; hiçbir modülde kayıt oluşturmaz, değiştirmez, kapatmaz veya görev atamaz.</div></div>
+            <div><b>DORA Faz 1 + Faz 2 • Kontrollü AI sınırı</b><div style={{fontSize:11,opacity:.65,marginTop:4}}>Faz 1 salt okunurdur. Faz 2'de yalnızca desteklenen işlemler, kullanıcı seçimi + ONAYLA + BAŞLA sonrasında hedef modüle yazılabilir.</div></div>
             <div style={{fontSize:11,fontWeight:900,letterSpacing:.5}}>OKU → İLİŞKİLENDİR → ANALİZ ET → YORUMLA → ÖNER</div>
           </div>
         </section>
@@ -705,6 +766,8 @@ function RobotCore({state,color,scanning}:{state:string;color:string;scanning:bo
 }
 function Header({title,sub}:{title:string;sub:string}){return <div><div style={{fontSize:18,fontWeight:950}}>{title}</div><div style={{marginTop:4,color:C.muted,fontSize:11,lineHeight:1.5}}>{sub}</div></div>}
 function Signal({n,t,c,onClick}:{n:number;t:string;c:string;onClick?:()=>void}){return <button onClick={onClick} style={{padding:12,border:`1px solid ${C.line}`,borderRadius:14,background:`linear-gradient(145deg,#fff,${c}08)`,textAlign:"left",cursor:onClick?"pointer":"default",boxShadow:"0 5px 14px rgba(16,24,40,.04)"}}><div style={{fontSize:26,fontWeight:950,color:c}}>{n}</div><div style={{fontSize:9,color:C.muted,fontWeight:900}}>{t.toUpperCase()}</div>{onClick&&<div style={{marginTop:7,fontSize:9,fontWeight:900,color:c}}>İNCELE →</div>}</button>}
+function ActionMetric({n,label,color}:{n:number;label:string;color:string}){return <div style={{padding:"10px 11px",border:`1px solid ${C.line}`,borderRadius:12,background:"#fff"}}><b style={{fontSize:22,color}}>{n}</b><div style={{fontSize:8,fontWeight:900,color:C.muted,marginTop:2}}>{label.toUpperCase()}</div></div>}
+function RadarMetric({n,label,color}:{n:number;label:string;color:string}){return <div style={{padding:12,borderRadius:13,background:"#f8fafc",textAlign:"center",border:`1px solid ${C.line}`}}><b style={{fontSize:24,color}}>{n}</b><div style={{fontSize:8,color:C.muted,fontWeight:900}}>{label}</div></div>}
 function StatusLine({label,value,color}:{label:string;value:string|number;color:string}){return <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",fontSize:11}}><span style={{color:C.muted}}>{label}</span><b style={{color}}>{value}</b></div>}
 function Quick({children,onClick}:{children:React.ReactNode;onClick:()=>void}){return <button onClick={onClick} style={{border:`1px solid ${C.line}`,borderRadius:999,padding:"7px 10px",background:C.white,color:C.ink,fontSize:10,fontWeight:800,cursor:"pointer"}}>{children}</button>}
 function Tab({children,active,onClick}:{children:React.ReactNode;active:boolean;onClick:()=>void}){return <button onClick={onClick} style={{border:`1px solid ${active?C.burgundy:C.line}`,borderRadius:999,padding:"7px 10px",background:active?"#fff4f5":C.white,color:active?C.burgundy:C.muted,fontSize:10,fontWeight:900,cursor:"pointer"}}>{children}</button>}
