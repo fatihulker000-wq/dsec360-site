@@ -166,7 +166,7 @@ export function buildExecutiveReportDashboard(
           0,
           100
         )
-      : 100;
+      : 0;
 
   // -------------------------------------------------
   // Sağlık Skoru
@@ -218,15 +218,20 @@ export function buildExecutiveReportDashboard(
   // Kaza Skoru
   // -------------------------------------------------
 
+  const accidentTotal =
+    accidentCount + nearMissCount + occupationalDiseaseCount;
+
   const accidentScore =
-    clamp(
-      100 -
-        accidentCount * 18 -
-        nearMissCount * 7 -
-        occupationalDiseaseCount * 25,
-      0,
-      100
-    );
+    accidentTotal > 0
+      ? clamp(
+          100 -
+            accidentCount * 18 -
+            nearMissCount * 7 -
+            occupationalDiseaseCount * 25,
+          0,
+          100
+        )
+      : 0;
 
   // -------------------------------------------------
   // İBYS Skoru

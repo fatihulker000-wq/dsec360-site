@@ -5,801 +5,126 @@ import { resolveReportScope } from "../_auth";
 export const dynamic = "force-dynamic";
 
 function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
+function clamp(v:number,min=0,max=100){ return Math.max(min,Math.min(max,v)); }
+function startOfMonth(monthsAgo:number){ const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); d.setMonth(d.getMonth()-monthsAgo); return d; }
+function asDate(v:any){ if(v===null||v===undefined||v==="") return null; const n=Number(v); const d=Number.isFinite(n)&&String(v).length<=13?new Date(n):new Date(v); return Number.isFinite(d.getTime())?d:null; }
+function periodKey(v:any){ const d=asDate(v); return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`:""; }
+function periodLabel(d:Date){ return d.toLocaleDateString("tr-TR",{month:"short",year:"2-digit"}); }
+function upper(v:any){ return String(v||"").trim().toUpperCase(); }
+function isCompletedTraining(v:any){ return ["COMPLETED","TAMAMLANDI"].includes(upper(v)); }
+function isCompletedAudit(v:any){ return ["COMPLETED","CLOSED","TAMAMLANDI","KAPALI"].includes(upper(v)); }
+function dofState(answer:any){ const s=upper(answer.dof_status); if(["CLOSED","KAPALI","COMPLETED","TAMAMLANDI"].includes(s)) return "CLOSED"; if(["OPEN","AÇIK","IN_PROGRESS","DEVAM_EDIYOR"].includes(s)) return "OPEN"; const r=upper(answer.result); return (r.includes("UYGUNSUZ")||r.includes("KISMEN"))?"OPEN":"NONE"; }
+function highRisk(row:any){ const l=upper(row.risk_level||row.level||row.priority); return l.includes("HIGH")||l.includes("YÜKSEK")||l.includes("CRITICAL")||l.includes("KRİTİK")||Number(row.score||row.risk_score||0)>=200; }
+function mediumRisk(row:any){ const l=upper(row.risk_level||row.level||row.priority); const score=Number(row.score||row.risk_score||0); return l.includes("MEDIUM")||l.includes("ORTA")||(score>=70&&score<200); }
 
-function startOfMonth(
-  monthsAgo: number
-) {
-  const date = new Date();
+export async function GET(request:Request){
+  try{
+    const {searchParams}=new URL(request.url);
+    let companyId=String(searchParams.get("companyId")||"ALL").trim();
+    const months=clamp(Number(searchParams.get("months")||12),1,24);
+    const supabase=getSupabase();
 
-  date.setDate(1);
+    // KRİTİK: service-role sorgularından önce firma yetkisini doğrula.
+    const scope=await resolveReportScope(supabase,companyId);
+    if(!scope.ok) return NextResponse.json({success:false,error:scope.error},{status:scope.status});
+    companyId=scope.scope.selectedCompanyId;
 
-  date.setHours(
-    0,
-    0,
-    0,
-    0
-  );
+    const periods=Array.from({length:months},(_,i)=>{ const date=startOfMonth(months-i-1); return {key:periodKey(date),label:periodLabel(date)}; });
+    const fromDate=startOfMonth(months-1);
+    const fromIso=fromDate.toISOString();
+    const fromMillis=fromDate.getTime();
 
-  date.setMonth(
-    date.getMonth() -
-      monthsAgo
-  );
+    let companiesQuery=supabase.from("companies").select("id,name,local_firm_id");
+    if(companyId!=="ALL") companiesQuery=companiesQuery.eq("id",companyId);
+    const {data:companies,error:companiesError}=await companiesQuery;
+    if(companiesError) throw new Error(`Firma verisi alınamadı: ${companiesError.message}`);
+    const companyRows=companies||[];
+    const companyIds=companyRows.map((x:any)=>String(x.id));
 
-  return date;
-}
+    let employeeQuery=supabase.from("employees").select("id,firm_id,email");
+    if(companyId!=="ALL") employeeQuery=employeeQuery.eq("firm_id",companyId);
+    const {data:employees,error:employeeError}=await employeeQuery;
+    if(employeeError) throw new Error(`Çalışan verisi alınamadı: ${employeeError.message}`);
+    const employeeRows=employees||[];
+    const employeeIds=employeeRows.map((x:any)=>String(x.id));
 
-function periodKey(
-  value:
-    | Date
-    | string
-    | number
-) {
-  const date =
-    new Date(value);
-
-  return `${date.getFullYear()}-${String(
-    date.getMonth() + 1
-  ).padStart(2, "0")}`;
-}
-
-function periodLabel(
-  date: Date
-) {
-  return date.toLocaleDateString(
-    "tr-TR",
-    {
-      month: "short",
-      year: "2-digit",
+    // Eğitim atamaları employee_id ile değil users.id -> training_assignments.user_id ile bağlıdır.
+    let users:any[]=[];
+    if(employeeIds.length){
+      const {data,error}=await supabase.from("users").select("id,employee_id,company_id,email").eq("role","training_user").in("employee_id",employeeIds);
+      if(error) throw new Error(`Eğitim kullanıcıları alınamadı: ${error.message}`);
+      users=data||[];
     }
-  );
-}
-
-function clamp(
-  value: number,
-  min = 0,
-  max = 100
-) {
-  return Math.max(
-    min,
-    Math.min(
-      max,
-      value
-    )
-  );
-}
-export async function GET(
-  request: Request
-) {
-  try {
-
-    const {
-      searchParams,
-    } = new URL(
-      request.url
-    );
-
-    const companyId =
-      String(
-        searchParams.get(
-          "companyId"
-        ) || "ALL"
-      );
-
-    const months =
-      clamp(
-        Number(
-          searchParams.get(
-            "months"
-          ) || 12
-        ),
-        1,
-        24
-      );
-
-    const supabase =
-      getSupabase();
-
-    const periods =
-      Array.from(
-        {
-          length: months,
-        },
-        (_, index) => {
-
-          const date =
-            startOfMonth(
-              months -
-                index -
-                1
-            );
-
-          return {
-
-            key:
-              periodKey(
-                date
-              ),
-
-            label:
-              periodLabel(
-                date
-              ),
-
-          };
-
-        }
-      );
-
-    const fromDate =
-      startOfMonth(
-        months - 1
-      ).toISOString();
-
-    let employeeQuery =
-      supabase
-
-        .from(
-          "employees"
-        )
-
-        .select(
-          "id,firm_id"
-        );
-
-    if (
-      companyId !==
-        "ALL" &&
-      companyId !==
-        "all"
-    ) {
-
-      employeeQuery =
-        employeeQuery.eq(
-          "firm_id",
-          companyId
-        );
-
+    const userIds=users.map((x:any)=>String(x.id));
+    let trainingRows:any[]=[];
+    if(userIds.length){
+      const {data,error}=await supabase.from("training_assignments").select("user_id,training_id,status,completed_at,created_at").in("user_id",userIds).gte("created_at",fromIso);
+      if(error) throw new Error(`Eğitim analitiği alınamadı: ${error.message}`);
+      trainingRows=data||[];
     }
 
-    const {
-      data: employees,
-    } =
-      await employeeQuery;
-
-    const employeeIds =
-      (
-        employees ||
-        []
-      ).map(
-        (
-          row: any
-        ) =>
-          String(
-            row.id
-          )
-      );
-          const [
-      trainingResult,
-      auditResult,
-      dofResult,
-      riskResult,
-      accidentResult,
-      companyResult,
-    ] = await Promise.all([
-
-      employeeIds.length
-        ? supabase
-            .from("training_assignments")
-            .select(
-              "employee_id,status,completed_at,created_at"
-            )
-            .in(
-              "employee_id",
-              employeeIds
-            )
-            .gte(
-              "created_at",
-              fromDate
-            )
-        : Promise.resolve({
-            data: [],
-            error: null,
-          }),
-
-      supabase
-        .from("inspection_runs")
-        .select(
-          "firm_id,status,completed_at,created_at"
-        )
-        .gte(
-          "created_at",
-          fromDate
-        ),
-
-      supabase
-        .from("inspection_dof")
-        .select(
-          "firm_id,status,closed_at,created_at"
-        )
-        .gte(
-          "created_at",
-          fromDate
-        ),
-
-      employeeIds.length
-        ? supabase
-            .from("employee_risks")
-            .select(
-              "employee_id,risk_level,score,created_at"
-            )
-            .in(
-              "employee_id",
-              employeeIds
-            )
-            .gte(
-              "created_at",
-              fromDate
-            )
-        : Promise.resolve({
-            data: [],
-            error: null,
-          }),
-
-      supabase
-        .from("accidents")
-        .select(
-          "firm_id,event_type,created_at"
-        )
-        .gte(
-          "created_at",
-          fromDate
-        ),
-
-      supabase
-        .from("companies")
-        .select(
-          "id,name"
-        ),
-
-    ]);
-
-    const trainingRows =
-      trainingResult.data || [];
-
-    const auditRows =
-      (
-        auditResult.data || []
-      ).filter(
-        (row: any) =>
-          companyId === "ALL" ||
-          companyId === "all" ||
-          String(row.firm_id) ===
-            companyId
-      );
-
-    const dofRows =
-      (
-        dofResult.data || []
-      ).filter(
-        (row: any) =>
-          companyId === "ALL" ||
-          companyId === "all" ||
-          String(row.firm_id) ===
-            companyId
-      );
-
-    const riskRows =
-      riskResult.data || [];
-
-    const accidentRows =
-      (
-        accidentResult.data || []
-      ).filter(
-        (row: any) =>
-          companyId === "ALL" ||
-          companyId === "all" ||
-          String(row.firm_id) ===
-            companyId
-      );
-
-    const companies =
-      companyResult.data || [];
-          const trends =
-      periods.map((period) => {
-
-        const trainingInPeriod =
-          trainingRows.filter(
-            (row: any) =>
-              periodKey(
-                row.completed_at ||
-                row.created_at
-              ) === period.key
-          );
-
-        const auditsInPeriod =
-          auditRows.filter(
-            (row: any) =>
-              periodKey(
-                row.completed_at ||
-                row.created_at
-              ) === period.key
-          );
-
-        const dofInPeriod =
-          dofRows.filter(
-            (row: any) =>
-              periodKey(
-                row.closed_at ||
-                row.created_at
-              ) === period.key
-          );
-
-        const risksInPeriod =
-          riskRows.filter(
-            (row: any) =>
-              periodKey(
-                row.created_at
-              ) === period.key
-          );
-
-        const accidentsInPeriod =
-          accidentRows.filter(
-            (row: any) =>
-              periodKey(
-                row.created_at
-              ) === period.key
-          );
-
-        return {
-
-          period:
-            period.label,
-
-          trainingCompleted:
-            trainingInPeriod.filter(
-              (row: any) =>
-                String(
-                  row.status
-                ).toUpperCase() ===
-                "COMPLETED"
-            ).length,
-
-          trainingMissing:
-            trainingInPeriod.filter(
-              (row: any) =>
-                String(
-                  row.status
-                ).toUpperCase() !==
-                "COMPLETED"
-            ).length,
-
-          auditsCompleted:
-            auditsInPeriod.filter(
-              (row: any) =>
-                [
-                  "COMPLETED",
-                  "CLOSED",
-                ].includes(
-                  String(
-                    row.status
-                  ).toUpperCase()
-                )
-            ).length,
-
-          openDof:
-            dofInPeriod.filter(
-              (row: any) =>
-                ![
-                  "COMPLETED",
-                  "CLOSED",
-                ].includes(
-                  String(
-                    row.status
-                  ).toUpperCase()
-                )
-            ).length,
-
-          closedDof:
-            dofInPeriod.filter(
-              (row: any) =>
-                [
-                  "COMPLETED",
-                  "CLOSED",
-                ].includes(
-                  String(
-                    row.status
-                  ).toUpperCase()
-                )
-            ).length,
-
-          highRisk:
-            risksInPeriod.filter(
-              (row: any) =>
-                String(
-                  row.risk_level || ""
-                )
-                  .toUpperCase()
-                  .includes("HIGH") ||
-
-                Number(
-                  row.score || 0
-                ) >= 200
-            ).length,
-
-          mediumRisk:
-            risksInPeriod.filter(
-              (row: any) =>
-                String(
-                  row.risk_level || ""
-                )
-                  .toUpperCase()
-                  .includes("MEDIUM") ||
-
-                (
-                  Number(
-                    row.score || 0
-                  ) >= 70 &&
-
-                  Number(
-                    row.score || 0
-                  ) < 200
-                )
-            ).length,
-
-          accident:
-            accidentsInPeriod.filter(
-              (row: any) =>
-                [
-                  "ACCIDENT",
-                  "WORK_ACCIDENT",
-                  "İŞ_KAZASI",
-                ].includes(
-                  String(
-                    row.event_type
-                  ).toUpperCase()
-                )
-            ).length,
-
-          nearMiss:
-            accidentsInPeriod.filter(
-              (row: any) =>
-                [
-                  "NEAR_MISS",
-                  "RAMAK_KALA",
-                ].includes(
-                  String(
-                    row.event_type
-                  ).toUpperCase()
-                )
-            ).length,
-
-        };
-
-      });
-          const comparisons =
-      companies.map(
-        (company: any) => {
-
-          const companyEmployees =
-            (employees || []).filter(
-              (employee: any) =>
-                String(employee.firm_id) ===
-                String(company.id)
-            );
-
-          const employeeCount =
-            companyEmployees.length;
-
-          // ---------------------------------------
-          // Eğitim Skoru
-          // ---------------------------------------
-
-          const trainingScore =
-            employeeCount > 0
-
-              ? clamp(
-
-                  Math.round(
-
-                    (
-
-                      trainingRows.filter(
-
-                        (row: any) =>
-
-                          companyEmployees.some(
-
-                            (employee: any) =>
-
-                              String(employee.id) ===
-
-                              String(row.employee_id)
-
-                          ) &&
-
-                          String(row.status)
-                            .toUpperCase() ===
-                            "COMPLETED"
-
-                      ).length /
-
-                      Math.max(
-
-                        1,
-
-                        trainingRows.filter(
-
-                          (row: any) =>
-
-                            companyEmployees.some(
-
-                              (employee: any) =>
-
-                                String(employee.id) ===
-
-                                String(row.employee_id)
-
-                            )
-
-                        ).length
-
-                      )
-
-                    ) * 100
-
-                  )
-
-                )
-
-              : 0;
-
-          // ---------------------------------------
-          // Denetim Skoru
-          // ---------------------------------------
-
-          const companyAudits =
-            auditRows.filter(
-              (row: any) =>
-                String(row.firm_id) ===
-                String(company.id)
-            );
-
-          const auditScore =
-            companyAudits.length > 0
-
-              ? clamp(
-
-                  Math.round(
-
-                    (
-
-                      companyAudits.filter(
-
-                        (row: any) =>
-
-                          [
-
-                            "COMPLETED",
-
-                            "CLOSED",
-
-                          ].includes(
-
-                            String(row.status)
-                              .toUpperCase()
-
-                          )
-
-                      ).length /
-
-                      companyAudits.length
-
-                    ) * 100
-
-                  )
-
-                )
-
-              : 0;
-
-          // ---------------------------------------
-          // Risk Skoru
-          // ---------------------------------------
-
-          const companyRisks =
-            riskRows.filter(
-              (row: any) =>
-
-                companyEmployees.some(
-
-                  (employee: any) =>
-
-                    String(employee.id) ===
-
-                    String(row.employee_id)
-
-                )
-
-            );
-
-          const riskScore =
-            companyRisks.length > 0
-
-              ? clamp(
-
-                  Math.round(
-
-                    100 -
-
-                    (
-
-                      companyRisks.filter(
-
-                        (row: any) =>
-
-                          Number(row.score || 0) >= 200
-
-                      ).length /
-
-                      companyRisks.length
-
-                    ) * 100
-
-                  )
-
-                )
-
-              : 100;
-
-          // ---------------------------------------
-          // Genel Kurumsal Puan
-          // ---------------------------------------
-
-          const overallScore =
-            Math.round(
-
-              (
-
-                trainingScore +
-
-                auditScore +
-
-                riskScore
-
-              ) / 3
-
-            );
-
-          return {
-
-            companyId:
-              String(company.id),
-
-            companyName:
-              String(company.name || ""),
-
-            employeeCount,
-
-            trainingScore,
-
-            auditScore,
-
-            riskScore,
-
-            overallScore,
-
-          };
-
-        }
-
-      );
-
-    // ---------------------------------------
-    // HeatMap
-    // ---------------------------------------
-
-    const heatmap =
-      comparisons.flatMap(
-        (row: any) => [
-
-          {
-
-            rowLabel:
-              row.companyName,
-
-            columnLabel:
-              "Eğitim",
-
-            value:
-              row.trainingScore,
-
-          },
-
-          {
-
-            rowLabel:
-              row.companyName,
-
-            columnLabel:
-              "Denetim",
-
-            value:
-              row.auditScore,
-
-          },
-
-          {
-
-            rowLabel:
-              row.companyName,
-
-            columnLabel:
-              "Risk",
-
-            value:
-              row.riskScore,
-
-          },
-
-        ]
-      );
-          return NextResponse.json({
-
-      success: true,
-
-      data: {
-
-        periods,
-
-        trends,
-
-        comparisons,
-
-        heatmap,
-
-        generatedAt:
-          new Date().toISOString(),
-
-      },
-
+    // Denetim modülünün gerçek tabloları denetim_runs + denetim_answers.
+    const {data:allRuns,error:runsError}=await supabase.from("denetim_runs").select("*").gte("created_at_millis",fromMillis);
+    if(runsError) throw new Error(`Denetim analitiği alınamadı: ${runsError.message}`);
+    const normalizedIds=new Set(companyRows.flatMap((c:any)=>[String(c.id),String(c.local_firm_id||"")]).filter(Boolean));
+    const normalizedNames=new Set(companyRows.map((c:any)=>String(c.name||"").trim().toLocaleLowerCase("tr-TR")));
+    const auditRows=(allRuns||[]).filter((r:any)=>companyId==="ALL"||normalizedIds.has(String(r.firm_id||""))||normalizedNames.has(String(r.firm_name||"").trim().toLocaleLowerCase("tr-TR")));
+    const runIds=auditRows.map((r:any)=>r.id).filter((x:any)=>x!==null&&x!==undefined);
+    let answerRows:any[]=[];
+    if(runIds.length){
+      const {data,error}=await supabase.from("denetim_answers").select("*").in("run_remote_id",runIds);
+      if(error) throw new Error(`DÖF analitiği alınamadı: ${error.message}`);
+      answerRows=data||[];
+    }
+    const runById=new Map(auditRows.map((r:any)=>[String(r.id),r]));
+
+    let riskRows:any[]=[];
+    if(employeeIds.length){
+      const {data,error}=await supabase.from("employee_risks").select("employee_id,risk_level,score,created_at").in("employee_id",employeeIds).gte("created_at",fromIso);
+      if(error) console.warn("Risk analitiği alınamadı",error.message); else riskRows=data||[];
+    }
+
+    // Kaza tablosunda web UUID web_firm_id alanındadır.
+    let accidentQuery=supabase.from("accidents").select("web_firm_id,firm_id,event_type,created_at").gte("created_at",fromIso);
+    if(companyId!=="ALL"){
+      const c=companyRows[0] as any; const local=String(c?.local_firm_id||"").trim();
+      accidentQuery=local?accidentQuery.or(`web_firm_id.eq.${companyId},firm_id.eq.${local}`):accidentQuery.eq("web_firm_id",companyId);
+    }
+    const {data:accidents,error:accidentError}=await accidentQuery;
+    if(accidentError) console.warn("Kaza analitiği alınamadı",accidentError.message);
+    const accidentRows=accidents||[];
+
+    const trends=periods.map(period=>{
+      const tr=trainingRows.filter((r:any)=>periodKey(r.completed_at||r.created_at)===period.key);
+      const ar=auditRows.filter((r:any)=>periodKey(r.completed_at||r.created_at||r.created_at_millis)===period.key);
+      const ans=answerRows.filter((a:any)=>{ const run=runById.get(String(a.run_remote_id)); return run&&periodKey((run as any).completed_at||(run as any).created_at||(run as any).created_at_millis)===period.key; });
+      const rr=riskRows.filter((r:any)=>periodKey(r.created_at)===period.key);
+      const ac=accidentRows.filter((r:any)=>periodKey(r.created_at)===period.key);
+      return {period:period.label,trainingCompleted:tr.filter((r:any)=>isCompletedTraining(r.status)).length,trainingMissing:tr.filter((r:any)=>!isCompletedTraining(r.status)).length,auditsCompleted:ar.filter((r:any)=>isCompletedAudit(r.status)).length,openDof:ans.filter((a:any)=>dofState(a)==="OPEN").length,closedDof:ans.filter((a:any)=>dofState(a)==="CLOSED").length,highRisk:rr.filter(highRisk).length,mediumRisk:rr.filter(mediumRisk).length,accident:ac.filter((r:any)=>["ACCIDENT","WORK_ACCIDENT","İŞ_KAZASI","IS_KAZASI"].includes(upper(r.event_type))).length,nearMiss:ac.filter((r:any)=>["NEAR_MISS","RAMAK_KALA","RAMAK KALA"].includes(upper(r.event_type))).length};
     });
 
-  } catch (errorValue: unknown) {
+    const userByEmployee=new Map(users.map((u:any)=>[String(u.employee_id),String(u.id)]));
+    const comparisons=companyRows.map((company:any)=>{
+      const ce=employeeRows.filter((e:any)=>String(e.firm_id)===String(company.id));
+      const cu=new Set(ce.map((e:any)=>userByEmployee.get(String(e.id))).filter(Boolean));
+      const ct=trainingRows.filter((r:any)=>cu.has(String(r.user_id)));
+      const trainingScore=ct.length?clamp(Math.round(ct.filter((r:any)=>isCompletedTraining(r.status)).length/ct.length*100)):0;
+      const ca=auditRows.filter((r:any)=>String(r.firm_id)===String(company.id)||String(r.firm_id)===String(company.local_firm_id||"")||String(r.firm_name||"").trim().toLocaleLowerCase("tr-TR")===String(company.name||"").trim().toLocaleLowerCase("tr-TR"));
+      const auditScore=ca.length?clamp(Math.round(ca.filter((r:any)=>isCompletedAudit(r.status)).length/ca.length*100)):0;
+      const ceIds=new Set(ce.map((e:any)=>String(e.id))); const cr=riskRows.filter((r:any)=>ceIds.has(String(r.employee_id)));
+      // Kayıt yoksa 100 değil 0: "ölçülmedi" durumu başarı gibi gösterilmez.
+      const riskScore=cr.length?clamp(Math.round(100-(cr.filter(highRisk).length/cr.length)*100)):0;
+      const measured=[ct.length?trainingScore:null,ca.length?auditScore:null,cr.length?riskScore:null].filter((x):x is number=>x!==null);
+      const overallScore=measured.length?Math.round(measured.reduce((a,b)=>a+b,0)/measured.length):0;
+      return {companyId:String(company.id),companyName:String(company.name||""),employeeCount:ce.length,trainingScore,auditScore,riskScore,overallScore};
+    });
+    const heatmap=comparisons.flatMap((r:any)=>[{rowLabel:r.companyName,columnLabel:"Eğitim",value:r.trainingScore},{rowLabel:r.companyName,columnLabel:"Denetim",value:r.auditScore},{rowLabel:r.companyName,columnLabel:"Risk",value:r.riskScore}]);
 
-    console.error(
-      "Advanced analytics error:",
-      errorValue
-    );
-
-    return NextResponse.json(
-
-      {
-
-        success: false,
-
-        error:
-
-          errorValue instanceof Error
-
-            ? errorValue.message
-
-            : "Gelişmiş analitik verileri alınamadı.",
-
-      },
-
-      {
-
-        status: 500,
-
-      }
-
-    );
-
+    return NextResponse.json({success:true,data:{periods,trends,comparisons,heatmap,generatedAt:new Date().toISOString()}});
+  }catch(errorValue:unknown){
+    console.error("Advanced analytics error:",errorValue);
+    return NextResponse.json({success:false,error:errorValue instanceof Error?errorValue.message:"Gelişmiş analitik verileri alınamadı."},{status:500});
   }
-
 }

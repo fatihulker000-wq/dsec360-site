@@ -327,7 +327,7 @@ export async function GET(
       searchParams,
     } = new URL(request.url);
 
-    const companyId =
+    let companyId =
       String(
         searchParams.get(
           "companyId"
@@ -351,6 +351,27 @@ export async function GET(
 
     const supabase =
       getSupabase();
+
+    // Yetki kapsamını service-role sorgularından ÖNCE doğrula.
+    const reportScope = await resolveReportScope(supabase, companyId);
+    if (!reportScope.ok) {
+      return NextResponse.json(
+        { success: false, error: reportScope.error },
+        { status: reportScope.status }
+      );
+    }
+    companyId = reportScope.scope.selectedCompanyId;
+
+    // Kaza/Olay tablosunda web firma UUID'si web_firm_id, mobil kimlik firm_id alanındadır.
+    let localFirmId = "";
+    if (companyId !== "ALL" && companyId !== "all") {
+      const { data: companyRow } = await supabase
+        .from("companies")
+        .select("local_firm_id")
+        .eq("id", companyId)
+        .maybeSingle();
+      localFirmId = String(companyRow?.local_firm_id || "").trim();
+    }
 
     let employeeQuery =
       supabase
@@ -423,12 +444,15 @@ export async function GET(
 
         : safeRows(
             "Kaza/Olay",
-            supabase
-              .from("accidents")
-              .select("*")
-              .or(
-                `firm_id.eq.${companyId},firmId.eq.${companyId}`
-              )
+            localFirmId
+              ? supabase
+                  .from("accidents")
+                  .select("*")
+                  .or(`web_firm_id.eq.${companyId},firm_id.eq.${localFirmId}`)
+              : supabase
+                  .from("accidents")
+                  .select("*")
+                  .eq("web_firm_id", companyId)
           ),
 
       rowsByEmployeeIds(
