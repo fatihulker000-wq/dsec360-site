@@ -9,7 +9,7 @@ export default function ReportExecutiveHero({ data }: { data: ExecutiveReportDas
       <p style={{ margin:"12px 0 0", maxWidth:880, lineHeight:1.75, opacity:.92 }}>{data.executiveSummary}</p>
       <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:16 }}>
         <span style={chip}>{data.company.employeeCount} çalışan</span>
-        <span style={chip}>{data.moduleScores.length} modül analizi</span>
+        <span style={chip}>{data.moduleScores.filter((item) => item.available !== false).length} modül analiz edildi</span>
         <span style={chip}>{data.priorityActions.length} öncelikli aksiyon</span>
       </div>
     </div>

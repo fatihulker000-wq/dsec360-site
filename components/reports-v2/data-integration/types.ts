@@ -97,4 +97,10 @@ export type ReportEnterpriseDashboardPatch = {
   ibysPendingCount: number;
 
   ibysErrorCount: number;
+
+  riskAvailable: boolean;
+  healthAvailable: boolean;
+  ppeAvailable: boolean;
+  accidentAvailable: boolean;
+  ibysAvailable: boolean;
 };

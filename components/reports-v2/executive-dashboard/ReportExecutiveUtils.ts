@@ -100,6 +100,12 @@ export function buildExecutiveReportDashboard(
   const ibysErrorCount =
     number(input.ibysErrorCount);
 
+  const riskAvailable = input.riskAvailable !== false;
+  const healthAvailable = input.healthAvailable !== false;
+  const ppeAvailable = input.ppeAvailable !== false;
+  const accidentAvailable = input.accidentAvailable !== false;
+  const ibysAvailable = input.ibysAvailable !== false;
+
   // -------------------------------------------------
   // Çalışan Skoru
   // -------------------------------------------------
@@ -292,6 +298,8 @@ export function buildExecutiveReportDashboard(
       "Risk Yönetimi",
       riskScore,
       "Açık risk yoğunluğu"
+    ,
+      riskAvailable
     ),
 
     module(
@@ -299,6 +307,8 @@ export function buildExecutiveReportDashboard(
       "Sağlık Yönetimi",
       healthScore,
       "Muayene uygunluğu"
+    ,
+      healthAvailable
     ),
 
     module(
@@ -306,6 +316,8 @@ export function buildExecutiveReportDashboard(
       "KKD Yönetimi",
       ppeScore,
       "KKD teslim performansı"
+    ,
+      ppeAvailable
     ),
 
     module(
@@ -313,6 +325,8 @@ export function buildExecutiveReportDashboard(
       "İş Kazası Yönetimi",
       accidentScore,
       "Kaza ve ramak kala analizi"
+    ,
+      accidentAvailable
     ),
 
     module(
@@ -320,6 +334,8 @@ export function buildExecutiveReportDashboard(
       "İBYS",
       ibysScore,
       "Bakanlık entegrasyon durumu"
+    ,
+      ibysAvailable
     ),
 
   ];
@@ -328,22 +344,11 @@ export function buildExecutiveReportDashboard(
   // Genel D-SEC Skoru
   // -------------------------------------------------
 
-  const overallScore =
-    Math.round(
+  const measuredModules = moduleScores.filter((item) => item.available !== false);
 
-      moduleScores.reduce(
-
-        (total, item) =>
-
-          total + item.score,
-
-        0
-
-      ) /
-
-      moduleScores.length
-
-    );
+  const overallScore = measuredModules.length
+    ? Math.round(measuredModules.reduce((total, item) => total + item.score, 0) / measuredModules.length)
+    : 0;
 
   const overallTone =
     toneFromScore(
@@ -622,7 +627,9 @@ function module(
 
   score: number,
 
-  summary: string
+  summary: string,
+
+  available = true
 
 ): ExecutiveReportModuleScore {
 
@@ -639,7 +646,9 @@ function module(
         100
       ),
 
-    summary,
+    summary: available ? summary : "Veri alınamadı",
+
+    available,
 
     tone:
       toneFromScore(score),

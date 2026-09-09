@@ -30,6 +30,8 @@ export type ExecutiveReportModuleScore = {
   summary: string;
 
   tone: ExecutiveReportTone;
+
+  available?: boolean;
 };
 
 export type ExecutiveReportCompany = {
@@ -126,4 +128,10 @@ export type ExecutiveReportDashboardInput = {
   ibysPendingCount?: number;
 
   ibysErrorCount?: number;
+
+  riskAvailable?: boolean;
+  healthAvailable?: boolean;
+  ppeAvailable?: boolean;
+  accidentAvailable?: boolean;
+  ibysAvailable?: boolean;
 };

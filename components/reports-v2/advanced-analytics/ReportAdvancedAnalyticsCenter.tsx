@@ -128,6 +128,15 @@ export default function ReportAdvancedAnalyticsCenter({
   const latest =
     data.trends[data.trends.length - 1];
 
+  const totals = data.trends.reduce(
+    (acc, item) => ({
+      trainingCompleted: acc.trainingCompleted + (item.trainingCompleted || 0),
+      auditsCompleted: acc.auditsCompleted + (item.auditsCompleted || 0),
+      accident: acc.accident + (item.accident || 0),
+    }),
+    { trainingCompleted: 0, auditsCompleted: 0, accident: 0 }
+  );
+
   return (
     <section
       style={{
@@ -189,12 +198,12 @@ export default function ReportAdvancedAnalyticsCenter({
       >
         <Metric
           label="Tamamlanan Eğitim"
-          value={latest?.trainingCompleted || 0}
+          value={totals.trainingCompleted}
         />
 
         <Metric
           label="Tamamlanan Denetim"
-          value={latest?.auditsCompleted || 0}
+          value={totals.auditsCompleted}
         />
 
         <Metric
@@ -209,7 +218,7 @@ export default function ReportAdvancedAnalyticsCenter({
 
         <Metric
           label="İş Kazası"
-          value={latest?.accident || 0}
+          value={totals.accident}
         />
       </section>
 

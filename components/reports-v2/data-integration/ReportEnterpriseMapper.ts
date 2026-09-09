@@ -7,6 +7,8 @@ export function mapEnterpriseSummaryToDashboard(
   summary?: ReportEnterpriseSummary | null
 ): ReportEnterpriseDashboardPatch {
 
+  const unavailable = new Set((summary?.warnings || []).map((w) => w.source));
+
   return {
 
     totalRisks:
@@ -53,6 +55,12 @@ export function mapEnterpriseSummaryToDashboard(
 
     ibysErrorCount:
       summary?.ibys.error || 0,
+
+    riskAvailable: !!summary && !unavailable.has("Risk"),
+    healthAvailable: !!summary && !unavailable.has("Sağlık"),
+    ppeAvailable: !!summary && !unavailable.has("KKD"),
+    accidentAvailable: !!summary && !unavailable.has("Kaza/Olay"),
+    ibysAvailable: !!summary && !unavailable.has("İBYS"),
 
   };
 
