@@ -260,6 +260,7 @@ function TinyBar({
 }
 
 export default function AdminCbsPage() {
+const [isMobile, setIsMobile] = useState(false);
 const [records, setRecords] = useState<CbsRecord[]>([]);
 const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
 const [selectedFirmId, setSelectedFirmId] = useState("all");
@@ -282,6 +283,13 @@ const [pageError, setPageError] = useState("");
   const [editResolutionNote, setEditResolutionNote] = useState("");
   const [editFirmId, setEditFirmId] = useState("none");
   const [savingEdit, setSavingEdit] = useState(false);
+
+  useEffect(() => {
+    const syncViewport = () => setIsMobile(window.innerWidth <= 768);
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
 
   const loadRecords = async () => {
     try {
@@ -785,7 +793,28 @@ const categoryStats = useMemo(() => {
   });
 
   return (
-    <main style={{ background: "#f6f7f9", minHeight: "100vh", padding: "20px 16px 48px" }}>
+    <>
+      <style jsx global>{`
+        @media (max-width: 768px) {
+          .cbs-input,
+          .cbs-textarea {
+            width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
+          }
+          .cbs-button {
+            width: 100%;
+            min-width: 0;
+            white-space: normal;
+          }
+          .card {
+            min-width: 0 !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+          }
+        }
+      `}</style>
+    <main style={{ background: "#f6f7f9", minHeight: "100vh", padding: isMobile ? "12px 10px 36px" : "20px 16px 48px", overflowX: "hidden" }}>
       <section style={{ maxWidth: 1440, margin: "0 auto" }}>
         <div
           style={{
@@ -796,8 +825,8 @@ const categoryStats = useMemo(() => {
             marginBottom: 18,
           }}
         >
-          <div style={{ padding: "28px 30px", color: "#fff" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
+          <div style={{ padding: isMobile ? "20px 16px" : "28px 30px", color: "#fff" }}>
+            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "stretch" : "flex-start", gap: 20, flexWrap: "wrap" }}>
               <div style={{ maxWidth: 760 }}>
                 <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", opacity: .78 }}>
                   D-SEC • Çalışan Bildirim Sistemi
@@ -810,14 +839,14 @@ const categoryStats = useMemo(() => {
                 </p>
               </div>
 
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button onClick={loadRecords} style={{ ...actionButton("light"), background: "rgba(255,255,255,.96)" }}>↻&nbsp; Yenile</button>
-                <button onClick={exportPdfReport} style={{ ...actionButton("light"), background: "rgba(255,255,255,.96)" }}>⇩&nbsp; PDF Rapor</button>
-                <button onClick={handleLogout} style={{ ...actionButton("danger"), border: "1px solid rgba(255,255,255,.16)" }}>Çıkış</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", width: isMobile ? "100%" : "auto" }}>
+                <button onClick={loadRecords} style={{ ...actionButton("light"), background: "rgba(255,255,255,.96)", flex: isMobile ? "1 1 30%" : undefined }}>↻&nbsp; Yenile</button>
+                <button onClick={exportPdfReport} style={{ ...actionButton("light"), background: "rgba(255,255,255,.96)", flex: isMobile ? "1 1 30%" : undefined }}>⇩&nbsp; PDF Rapor</button>
+                <button onClick={handleLogout} style={{ ...actionButton("danger"), border: "1px solid rgba(255,255,255,.16)", flex: isMobile ? "1 1 30%" : undefined }}>Çıkış</button>
               </div>
             </div>
 
-            <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 10 }}>
+            <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(auto-fit, minmax(145px, 1fr))", gap: 10 }}>
               {[
                 ["Toplam", countAll],
                 ["Yeni", countNew],
@@ -836,7 +865,7 @@ const categoryStats = useMemo(() => {
         </div>
 
         <div className="page-container" id="cbs-report-area" style={{ maxWidth: "none", padding: 0 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.35fr) minmax(300px, .65fr)", gap: 16, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.35fr) minmax(300px, .65fr)", gap: 16, marginBottom: 16 }}>
             <div className="card" style={{ margin: 0, borderRadius: 20, padding: 20, border: "1px solid #e5e7eb", boxShadow: "0 8px 24px rgba(15,23,42,.04)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
                 <div>
@@ -848,7 +877,7 @@ const categoryStats = useMemo(() => {
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
                 <StatusPill label="Kapanış Oranı" value={`%${closedRate}`} bg="#f8fafc" color="#0f172a" border="#e2e8f0" />
                 <StatusPill label="SLA Sağlıklı" value={slaSafeCount} bg="#ecfdf5" color="#166534" border="#bbf7d0" />
                 <StatusPill label="Yanıt Bekleyen" value={unansweredCount} bg="#fff7ed" color="#9a3412" border="#fed7aa" />
@@ -857,7 +886,7 @@ const categoryStats = useMemo(() => {
                 <StatusPill label="Kritik" value={criticalCount} bg="#fef2f2" color="#b91c1c" border="#fecaca" />
               </div>
 
-              <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
+              <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
                 <div style={{ border: "1px solid #eef2f7", borderRadius: 16, padding: 16, background: "#fbfcfe" }}>
                   <div style={{ fontSize: 13, fontWeight: 900, color: "#111827", marginBottom: 12 }}>Durum Dağılımı</div>
                   <div style={{ display: "flex", gap: 12, alignItems: "end", height: 132 }}>
@@ -915,7 +944,7 @@ const categoryStats = useMemo(() => {
           <div className="card" style={{ marginBottom: 18, borderRadius: 20, padding: 18, border: "1px solid #e5e7eb", boxShadow: "0 8px 24px rgba(15,23,42,.04)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
               <div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:12,marginBottom:16}}>
+                <div style={{display:"grid",gridTemplateColumns:isMobile ? "1fr" : "repeat(auto-fit,minmax(230px,1fr))",gap:12,marginBottom:16}}>
                   <div style={{border:"1px solid #e5e7eb",borderRadius:16,padding:14,background:"#fff"}}>
                     <div style={{fontSize:11,fontWeight:900,color:"#64748b",letterSpacing:".06em",marginBottom:9}}>BAŞVURU TÜRLERİ</div>
                     <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
@@ -936,7 +965,7 @@ const categoryStats = useMemo(() => {
               <div style={{ fontSize: 12, fontWeight: 750, color: "#64748b" }}>Firma, durum ve metin filtresi</div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px,.7fr) minmax(280px,1.3fr)", gap: 10, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(220px,.7fr) minmax(280px,1.3fr)", gap: 10, marginBottom: 12 }}>
               <select value={selectedFirmId} onChange={(e) => setSelectedFirmId(e.target.value)} className="cbs-input" style={{ margin: 0 }}>
                 <option value="all">Tüm Firmalar</option>
                 {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
@@ -1004,7 +1033,7 @@ const categoryStats = useMemo(() => {
                       marginBottom: "14px",
                     }}
                   >
-                    <div style={{ flex: 1, minWidth: 260 }}>
+                    <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
                       <h3
                         className="card-title"
                         style={{ marginBottom: "6px" }}
@@ -1077,7 +1106,7 @@ const categoryStats = useMemo(() => {
                       style={{
                         display: "grid",
                         gap: "10px",
-                        justifyItems: "end",
+                        justifyItems: isMobile ? "start" : "end",
                       }}
                     >
                       <div
@@ -1317,8 +1346,7 @@ const categoryStats = useMemo(() => {
                     <div
   style={{
     display: "grid",
-    gridTemplateColumns:
-      "repeat(auto-fit, minmax(220px, 1fr))",
+    gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))",
     gap: "12px",
   }}
 >
@@ -1584,5 +1612,6 @@ const categoryStats = useMemo(() => {
         </div>
       </section>
     </main>
+    </>
   );
 }
