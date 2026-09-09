@@ -444,11 +444,15 @@ export async function GET(
     if (!isAll) {
       const numericLocalFirmId = Number(localFirmId);
 
-      if (localFirmId && Number.isFinite(numericLocalFirmId)) {
-        accidentQuery = accidentQuery.or(
-          `web_firm_id.eq.${effectiveCompanyId},firm_id.eq.${numericLocalFirmId}`
-        );
+      // accident_records tablosu APP/yerel firma kimliği ile tutuluyor.
+      // Demo ve mobil kayıtlarında hem firm_id hem web_firm_id sayısal olabilir.
+      // UUID'yi web_firm_id ile aynı OR filtresine sokmak bazı şemalarda
+      // PostgREST tip hatası üretip tüm Kaza/Olay sorgusunu düşürüyor.
+      // local_firm_id mevcutsa güvenilir anahtar olarak yalnızca firm_id kullan.
+      if (localFirmId && Number.isFinite(numericLocalFirmId) && numericLocalFirmId > 0) {
+        accidentQuery = accidentQuery.eq("firm_id", numericLocalFirmId);
       } else {
+        // Yerel firma kimliği olmayan eski/web kayıtları için UUID fallback.
         accidentQuery = accidentQuery.eq("web_firm_id", effectiveCompanyId);
       }
     }
