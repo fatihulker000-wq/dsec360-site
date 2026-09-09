@@ -34,6 +34,38 @@ type ModuleResult = {
   warning?: string;
 };
 
+
+type ManagementTopic = {
+  id: string;
+  score: number;
+  severity: Severity;
+  title: string;
+  interpretation: string;
+  recommendation: string;
+  evidence: string[];
+  modules: string[];
+};
+
+type CrossAnalysis = {
+  id: string;
+  title: string;
+  status: "SIGNAL" | "LIMITED" | "POSITIVE";
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  interpretation: string;
+  evidence: string[];
+  recommendation: string;
+  modules: string[];
+};
+
+type DataQualityItem = {
+  key: string;
+  label: string;
+  score: number;
+  status: "GOOD" | "WARNING" | "POOR";
+  interpretation: string;
+  evidence: string[];
+};
+
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -167,6 +199,32 @@ function riskSeverity(row: AnyRow): Severity {
 
 function incidentType(row: AnyRow) {
   return normalize(row.event_type || row.eventType || row.incident_type || row.type);
+}
+
+
+function firstText(row: AnyRow, keys: string[]) {
+  for (const key of keys) {
+    const value = text(row?.[key]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function pct(part: number, total: number) {
+  return total > 0 ? Math.round((part / total) * 100) : 0;
+}
+
+function qualityStatus(score: number): DataQualityItem["status"] {
+  if (score >= 85) return "GOOD";
+  if (score >= 60) return "WARNING";
+  return "POOR";
+}
+
+function topicSeverity(score: number): Severity {
+  if (score >= 90) return "CRITICAL";
+  if (score >= 70) return "HIGH";
+  if (score >= 45) return "MEDIUM";
+  return "LOW";
 }
 
 export async function GET(req: NextRequest) {
@@ -652,6 +710,289 @@ export async function GET(req: NextRequest) {
 
     findings.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
 
+    // ------------------------------------------------------------
+    // DORA DERİN ANALİZ KATMANI
+    // Faz 1 kuralı: yalnızca OKU -> İLİŞKİLENDİR -> ANALİZ ET -> YORUMLA -> ÖNER.
+    // Aşağıdaki hesapların hiçbiri kaynak modüllere yazma işlemi yapmaz.
+    // ------------------------------------------------------------
+    const employeeById = new Map(activeEmployees.map((x) => [text(x.id), x]));
+    const trainingUserByEmployee = new Map(
+      trainingUsersResult.rows.map((x) => [text(x.employee_id), x])
+    );
+    const assignmentsByUser = new Map<string, AnyRow[]>();
+    for (const assignment of assignmentsResult.rows) {
+      const userId = text(assignment.user_id);
+      if (!userId) continue;
+      assignmentsByUser.set(userId, [...(assignmentsByUser.get(userId) || []), assignment]);
+    }
+
+    const accidentsWithEmployee = accidentRows.filter((x) => text(x.employee_id));
+    const accidentsMatchedToEmployee = accidentsWithEmployee.filter((x) => employeeById.has(text(x.employee_id)));
+    const accidentEmployeesWithExam = accidentsMatchedToEmployee.filter((x) => latestExamByEmployee.has(text(x.employee_id)));
+    const accidentEmployeesWithTrainingLink = accidentsMatchedToEmployee.filter((x) => trainingUserByEmployee.has(text(x.employee_id)));
+    const accidentEmployeesWithIncompleteTraining = accidentsMatchedToEmployee.filter((x) => {
+      const user = trainingUserByEmployee.get(text(x.employee_id));
+      if (!user) return false;
+      const rows = assignmentsByUser.get(text(user.id)) || [];
+      return rows.some((a) => !["COMPLETED", "TAMAMLANDI"].includes(normalize(a.status)));
+    });
+
+    const accidentRootCauseFilled = accidentRows.filter((x) => firstText(x, ["root_cause_category", "root_cause", "rootCause"])).length;
+    const accidentLocationFilled = accidentRows.filter((x) => firstText(x, ["location", "area_name", "areaName"])).length;
+    const accidentDepartmentFilled = accidentRows.filter((x) => firstText(x, ["department", "department_name", "departmentName"])).length;
+
+    const riskLocations = new Set(
+      riskRows.map((x) => normalize(firstText(x, ["location", "area", "area_name", "department", "work_area"]))).filter(Boolean)
+    );
+    const auditLocations = new Set(
+      auditRuns.map((x) => normalize(firstText(x, ["location", "area", "department"]))).filter(Boolean)
+    );
+    const periodicLocations = new Set(
+      periodicResult.rows.map((x) => normalize(firstText(x, ["location", "area_name", "areaName"]))).filter(Boolean)
+    );
+    const accidentLocations = accidentRows
+      .map((x) => normalize(firstText(x, ["location", "area_name", "areaName"])))
+      .filter(Boolean);
+
+    const accidentRiskLocationMatches = accidentLocations.filter((x) => riskLocations.has(x)).length;
+    const accidentAuditLocationMatches = accidentLocations.filter((x) => auditLocations.has(x)).length;
+    const accidentPeriodicLocationMatches = accidentLocations.filter((x) => periodicLocations.has(x)).length;
+
+    const crossAnalyses: CrossAnalysis[] = [];
+
+    if (workAccidents.length > 0) {
+      if (accidentsMatchedToEmployee.length > 0) {
+        crossAnalyses.push({
+          id: "ACCIDENT_EMPLOYEE_READINESS",
+          title: "Kaza ↔ Çalışan uygunluk ilişkisi",
+          status: accidentEmployeesWithIncompleteTraining.length > 0 || accidentEmployeesWithExam.length < accidentsMatchedToEmployee.length ? "SIGNAL" : "POSITIVE",
+          confidence: accidentsMatchedToEmployee.length === workAccidents.length ? "HIGH" : "MEDIUM",
+          interpretation:
+            `${workAccidents.length} iş kazasının ${accidentsMatchedToEmployee.length} kaydı aktif çalışanlarla eşleştirilebildi. ` +
+            `${accidentEmployeesWithExam.length} eşleşmede sağlık muayenesi kaydı, ${accidentEmployeesWithTrainingLink.length} eşleşmede eğitim kullanıcı bağlantısı görüldü. ` +
+            `${accidentEmployeesWithIncompleteTraining.length} eşleşmede en az bir tamamlanmamış eğitim ataması var.`,
+          evidence: [
+            `İş kazası: ${workAccidents.length}`,
+            `Çalışanla eşleşen: ${accidentsMatchedToEmployee.length}`,
+            `Sağlık kaydı olan eşleşme: ${accidentEmployeesWithExam.length}`,
+            `Tamamlanmamış eğitimi olan eşleşme: ${accidentEmployeesWithIncompleteTraining.length}`,
+          ],
+          recommendation: "Kaza kayıtları ile çalışan eğitim/sağlık durumlarının olay bazında birlikte incelenmesi; eşleşmeyen kayıtların önce veri bütünlüğü açısından doğrulanması önerilir.",
+          modules: ["Kaza / Olay", "Çalışanlar", "Eğitim", "Sağlık"],
+        });
+      } else {
+        crossAnalyses.push({
+          id: "ACCIDENT_EMPLOYEE_LINK_LIMITED",
+          title: "Kaza ↔ Çalışan ilişkisi kurulamadı",
+          status: "LIMITED",
+          confidence: "LOW",
+          interpretation: `${workAccidents.length} iş kazası bulunmasına rağmen aktif çalışan kaydıyla güvenilir eşleşme kurulamadı. Bu nedenle kişi bazlı eğitim ve sağlık korelasyonu üretmek doğru olmaz.`,
+          evidence: [`İş kazası: ${workAccidents.length}`, `Çalışanla eşleşen: ${accidentsMatchedToEmployee.length}`],
+          recommendation: "Kaza kayıtlarındaki employee_id eşleşmelerinin doğrulanması önerilir.",
+          modules: ["Kaza / Olay", "Çalışanlar"],
+        });
+      }
+
+      if (accidentLocations.length > 0) {
+        crossAnalyses.push({
+          id: "ACCIDENT_LOCATION_CORRELATION",
+          title: "Kaza ↔ Risk / Denetim / Ekipman lokasyon ilişkisi",
+          status: accidentRiskLocationMatches + accidentAuditLocationMatches + accidentPeriodicLocationMatches > 0 ? "SIGNAL" : "LIMITED",
+          confidence: accidentLocationFilled === accidentRows.length ? "HIGH" : "MEDIUM",
+          interpretation:
+            `Lokasyon bilgisi bulunan olaylarda ${accidentRiskLocationMatches} risk, ${accidentAuditLocationMatches} denetim ve ${accidentPeriodicLocationMatches} periyodik kontrol lokasyon eşleşmesi yakalandı. ` +
+            `Bu eşleşmeler nedensellik kanıtı değildir; aynı çalışma alanlarında kayıt yoğunlaşmasını gösteren inceleme sinyalidir.`,
+          evidence: [
+            `Lokasyonu dolu olay: ${accidentLocationFilled}/${accidentRows.length}`,
+            `Risk lokasyon eşleşmesi: ${accidentRiskLocationMatches}`,
+            `Denetim lokasyon eşleşmesi: ${accidentAuditLocationMatches}`,
+            `Periyodik kontrol lokasyon eşleşmesi: ${accidentPeriodicLocationMatches}`,
+          ],
+          recommendation: "Eşleşen lokasyonlarda kaza tarihi öncesi risk, denetim ve ekipman kontrol kayıtlarının kronolojik olarak birlikte incelenmesi önerilir.",
+          modules: ["Kaza / Olay", "Risk Yönetimi", "Denetim & DÖF", "Periyodik Kontrol"],
+        });
+      }
+    }
+
+    const riskAuditLocationOverlap = [...riskLocations].filter((x) => auditLocations.has(x)).length;
+    if (riskLocations.size > 0 && auditLocations.size > 0) {
+      crossAnalyses.push({
+        id: "RISK_AUDIT_LOCATION_OVERLAP",
+        title: "Risk ↔ Denetim ortak çalışma alanları",
+        status: riskAuditLocationOverlap > 0 ? "SIGNAL" : "LIMITED",
+        confidence: "MEDIUM",
+        interpretation: `${riskAuditLocationOverlap} lokasyon/alan hem risk hem denetim kayıtlarında ortak görünüyor. Açık yüksek/kritik risklerle denetim uygunsuzluklarının aynı alanlarda yoğunlaşıp yoğunlaşmadığı detay incelemeye değer.`,
+        evidence: [`Risk lokasyonu: ${riskLocations.size}`, `Denetim lokasyonu: ${auditLocations.size}`, `Ortak lokasyon: ${riskAuditLocationOverlap}`],
+        recommendation: "Ortak lokasyonlardaki yüksek/kritik risklerin açık DÖF ve uygunsuzluk kayıtlarıyla kayıt bazında karşılaştırılması önerilir.",
+        modules: ["Risk Yönetimi", "Denetim & DÖF"],
+      });
+    }
+
+    const dataQuality: DataQualityItem[] = [];
+    const jobTitleScore = activeEmployees.length ? pct(activeEmployees.length - missingJobTitle, activeEmployees.length) : 100;
+    dataQuality.push({
+      key: "EMPLOYEE_IDENTITY",
+      label: "Çalışan temel veri bütünlüğü",
+      score: jobTitleScore,
+      status: qualityStatus(jobTitleScore),
+      interpretation: `Aktif çalışanların %${jobTitleScore} oranında görev/unvan bilgisi mevcut.`,
+      evidence: [`Aktif çalışan: ${activeEmployees.length}`, `Görev/unvan eksik: ${missingJobTitle}`],
+    });
+
+    const trainingLinkScore = activeEmployees.length ? pct(trainingUsersResult.rows.length, activeEmployees.length) : 100;
+    dataQuality.push({
+      key: "TRAINING_LINK",
+      label: "Çalışan ↔ Eğitim eşleşmesi",
+      score: trainingLinkScore,
+      status: qualityStatus(trainingLinkScore),
+      interpretation: `Aktif çalışanların %${trainingLinkScore} oranı eğitim kullanıcısıyla eşleştirilebildi.`,
+      evidence: [`Aktif çalışan: ${activeEmployees.length}`, `Eğitim kullanıcısı eşleşen: ${trainingUsersResult.rows.length}`],
+    });
+
+    const healthCoverageScore = activeEmployees.length ? pct(activeEmployees.length - employeesWithoutExam, activeEmployees.length) : 100;
+    dataQuality.push({
+      key: "HEALTH_COVERAGE",
+      label: "Sağlık kayıt kapsaması",
+      score: healthCoverageScore,
+      status: qualityStatus(healthCoverageScore),
+      interpretation: `Aktif çalışanların %${healthCoverageScore} oranında en az bir sağlık muayenesi kaydı eşleştirilebildi. Bu oran doğrudan “muayene yapılmadı” anlamına gelmez; sistemdeki kayıt kapsamasını gösterir.`,
+      evidence: [`Aktif çalışan: ${activeEmployees.length}`, `Muayene kaydı eşleşen: ${activeEmployees.length - employeesWithoutExam}`],
+    });
+
+    const rootCauseScore = accidentRows.length ? pct(accidentRootCauseFilled, accidentRows.length) : 100;
+    dataQuality.push({
+      key: "ACCIDENT_ROOT_CAUSE",
+      label: "Kaza kök neden veri kalitesi",
+      score: rootCauseScore,
+      status: qualityStatus(rootCauseScore),
+      interpretation: accidentRows.length
+        ? `Olay kayıtlarının %${rootCauseScore} oranında kök neden kategorisi dolu. Derin örüntü analizinin güvenilirliği bu kapsama bağlıdır.`
+        : "Analiz döneminde olay kaydı bulunmadı.",
+      evidence: [`Toplam olay: ${accidentRows.length}`, `Kök nedeni dolu: ${accidentRootCauseFilled}`],
+    });
+
+    const accidentContextFields = accidentRows.length * 2;
+    const accidentContextFilled = accidentLocationFilled + accidentDepartmentFilled;
+    const accidentContextScore = accidentContextFields ? pct(accidentContextFilled, accidentContextFields) : 100;
+    dataQuality.push({
+      key: "ACCIDENT_CONTEXT",
+      label: "Kaza lokasyon/departman kapsaması",
+      score: accidentContextScore,
+      status: qualityStatus(accidentContextScore),
+      interpretation: `Olayların lokasyon ve departman alanlarının toplam doluluk oranı %${accidentContextScore}.`,
+      evidence: [`Lokasyon dolu: ${accidentLocationFilled}/${accidentRows.length}`, `Departman dolu: ${accidentDepartmentFilled}/${accidentRows.length}`],
+    });
+
+    const overallDataQuality = dataQuality.length
+      ? Math.round(dataQuality.reduce((sum, x) => sum + x.score, 0) / dataQuality.length)
+      : 100;
+
+    const managementTopics: ManagementTopic[] = [];
+    if (criticalRisks.length + highRisks.length > 0) {
+      const ratio = riskRows.length ? (criticalRisks.length + highRisks.length) / riskRows.length : 0;
+      const score = Math.min(100, Math.round(55 + ratio * 35 + (criticalRisks.length > 0 ? 10 : 0)));
+      managementTopics.push({
+        id: "RISK_CONCENTRATION",
+        score,
+        severity: topicSeverity(score),
+        title: "Açık kritik/yüksek risk yoğunluğu",
+        interpretation: `${riskRows.length} risk kaydının ${criticalRisks.length + highRisks.length} adedi açık kritik/yüksek seviyede (%${pct(criticalRisks.length + highRisks.length, riskRows.length)}). Bu oran, yalnız toplam risk sayısından daha önemli bir yönetim sinyalidir.`,
+        recommendation: "Öncelikle kritik/yüksek risklerin termin, kontrol tedbiri ve kapanış kanıtı kalitesinin örneklem bazlı doğrulanması önerilir.",
+        evidence: [`Kritik: ${criticalRisks.length}`, `Yüksek: ${highRisks.length}`, `Toplam risk: ${riskRows.length}`],
+        modules: ["Risk Yönetimi"],
+      });
+    }
+
+    if (workAccidents.length > 0) {
+      const score = Math.min(100, 65 + Math.min(25, workAccidents.length * 3) + (nearMisses.length === 0 ? 10 : 0));
+      managementTopics.push({
+        id: "ACCIDENT_PATTERN",
+        score,
+        severity: topicSeverity(score),
+        title: "Kazalarda tekrar ve önleyici veri ilişkisi incelenmeli",
+        interpretation: `${workAccidents.length} iş kazası kaydı bulunuyor. Ramak kala sayısı ${nearMisses.length}. ${nearMisses.length === 0 ? "Kaza varken ramak kala kaydının bulunmaması, bildirim kültürü/veri kaydı açısından ayrıca incelenmesi gereken bir sinyaldir; tek başına ramak kala yaşanmadığını kanıtlamaz." : "Ramak kala kayıtları kazalarla birlikte örüntü analizi için kullanılabilir."}`,
+        recommendation: "Kaza kayıtlarını kök neden, lokasyon, departman, eğitim ve risk verileriyle birlikte inceleyin.",
+        evidence: [`İş kazası: ${workAccidents.length}`, `Ramak kala: ${nearMisses.length}`, `Kök nedeni dolu olay: ${accidentRootCauseFilled}/${accidentRows.length}`],
+        modules: ["Kaza / Olay", "Risk Yönetimi", "Eğitim", "Sağlık"],
+      });
+    }
+
+    if (healthCoverageScore < 85) {
+      const score = Math.min(95, 50 + Math.round((100 - healthCoverageScore) * 0.5));
+      managementTopics.push({
+        id: "HEALTH_DATA_GAP",
+        score,
+        severity: topicSeverity(score),
+        title: "Sağlık uygunluğu analizinde ciddi veri kapsama boşluğu",
+        interpretation: `Aktif çalışanların yalnızca %${healthCoverageScore} oranında sağlık muayenesi kaydı eşleştirilebildi. Bu nedenle DORA sağlık uygunluğu hakkında kesin hüküm vermek yerine önce veri bütünlüğünü işaretliyor.`,
+        recommendation: "Sağlık kayıtlarının çalışanlarla eşleşmesini doğrulayın; gerçek eksiklik ile kayıt/entegrasyon eksikliğini birbirinden ayırın.",
+        evidence: [`Aktif çalışan: ${activeEmployees.length}`, `Muayene kaydı bulunmayan: ${employeesWithoutExam}`],
+        modules: ["Sağlık", "Çalışanlar"],
+      });
+    }
+
+    if (incompleteAssignments.length > 0) {
+      const score = Math.min(90, 45 + Math.round(pct(incompleteAssignments.length, Math.max(assignmentsResult.rows.length, 1)) * 0.45));
+      managementTopics.push({
+        id: "TRAINING_COMPLETION",
+        score,
+        severity: topicSeverity(score),
+        title: "Eğitim tamamlama yükü operasyonel risk oluşturuyor",
+        interpretation: `${assignmentsResult.rows.length} eğitim atamasının ${incompleteAssignments.length} adedi tamamlanmamış (%${pct(incompleteAssignments.length, assignmentsResult.rows.length)}). Bu sayı, kaza ve yüksek risk bulunan bir ortamda daha anlamlı hale gelir.`,
+        recommendation: "Tamamlanmamış eğitimleri yalnız sayı olarak değil; yüksek riskli görevler ve kaza geçmişiyle birlikte önceliklendirin.",
+        evidence: [`Tamamlanmamış: ${incompleteAssignments.length}`, `Başlamadı: ${notStarted}`, `Devam/diğer: ${inProgress}`],
+        modules: ["Eğitim", "Risk Yönetimi", "Kaza / Olay"],
+      });
+    }
+
+    const overdueObligations = overduePeriodic.length + overdueMeasurements.length + expiredExams.length;
+    if (overdueObligations > 0 || due7Periodic.length > 0) {
+      const score = Math.min(95, 55 + overdueObligations * 8 + due7Periodic.length * 4);
+      managementTopics.push({
+        id: "TIME_CRITICAL_OBLIGATIONS",
+        score,
+        severity: topicSeverity(score),
+        title: "Takvim bazlı yükümlülüklerde gecikme/yaklaşan termin",
+        interpretation: `${overdueObligations} kayıt tarihi geçmiş durumda; ayrıca ${due7Periodic.length} periyodik kontrol 7 gün içinde yaklaşıyor.`,
+        recommendation: "Gecikmiş kayıtların gerçek durumunu doğrulayın; 7 günlük pencereye giren kontrolleri yönetim takibine alın.",
+        evidence: [`Gecikmiş periyodik kontrol: ${overduePeriodic.length}`, `Gecikmiş ortam ölçümü: ${overdueMeasurements.length}`, `Süresi geçmiş sağlık: ${expiredExams.length}`, `0-7 gün periyodik: ${due7Periodic.length}`],
+        modules: ["Periyodik Kontrol", "Ortam Ölçümleri", "Sağlık"],
+      });
+    }
+
+    if (openDofs.length > 0) {
+      const score = Math.min(90, 50 + Math.min(40, openDofs.length * 2));
+      managementTopics.push({
+        id: "AUDIT_CLOSURE",
+        score,
+        severity: topicSeverity(score),
+        title: "Denetim bulgularının kapanış kalitesi izlenmeli",
+        interpretation: `${openDofs.length} açık/kapanışı doğrulanmamış DÖF veya uygunsuzluk sinyali var. Açık risk yoğunluğuyla birlikte ele alındığında kontrol tedbirlerinin sahadaki kapanış etkinliği ayrıca incelenmeli.`,
+        recommendation: "Açık DÖF'lerin termin ve kapanış kanıtlarını yüksek/kritik risklerle ortak alan bazında karşılaştırın.",
+        evidence: [`Açık DÖF: ${openDofs.length}`, `Uygunsuz/kısmen uygun cevap: ${nonconformingAnswers.length}`],
+        modules: ["Denetim & DÖF", "Risk Yönetimi"],
+      });
+    }
+
+    managementTopics.sort((a, b) => b.score - a.score);
+    const topManagementTopics = managementTopics.slice(0, 5);
+
+    const executiveCommentary: string[] = [];
+    if (topManagementTopics.length) {
+      executiveCommentary.push(`DORA, 8 modülün verisini birlikte değerlendirerek yönetim açısından ${topManagementTopics.length} öncelikli konu belirledi.`);
+      executiveCommentary.push(`En güçlü sinyal “${topManagementTopics[0].title}” başlığında ${topManagementTopics[0].score}/100 öncelik puanıyla oluştu.`);
+    } else {
+      executiveCommentary.push("DORA mevcut veride belirgin bir yönetim önceliği üretmedi; bu sonuç yalnızca okunabilen sistem verisi kapsamındadır.");
+    }
+    if (overallDataQuality < 70) {
+      executiveCommentary.push(`Veri güvenilirliği ${overallDataQuality}/100 seviyesinde. Bazı sonuçlar operasyonel eksiklikten çok kayıt/entegrasyon boşluğunu yansıtıyor olabilir.`);
+    } else {
+      executiveCommentary.push(`Analiz veri kapsama puanı ${overallDataQuality}/100. Yine de korelasyonlar nedensellik değil, inceleme sinyali olarak yorumlanmalıdır.`);
+    }
+    if (workAccidents.length > 0 && criticalRisks.length + highRisks.length > 0) {
+      executiveCommentary.push(`${workAccidents.length} iş kazası ile ${criticalRisks.length + highRisks.length} açık kritik/yüksek risk aynı yönetim görünümünde bulunduğu için kaza-risk-eğitim ilişkisi öncelikli çapraz inceleme alanıdır.`);
+    }
+
     const moduleDefinitions = [
       { key: "EMPLOYEE", label: "Çalışanlar", result: employeesResult, total: activeEmployees.length },
       { key: "TRAINING", label: "Eğitim", result: assignmentsResult, total: assignmentsResult.rows.length },
@@ -671,11 +1012,7 @@ export async function GET(req: NextRequest) {
         label: m.label,
         available: !unavailable,
         status: unavailable ? "UNAVAILABLE" : moduleStatus(own),
-        summary: unavailable
-          ? "Veri alınamadı"
-          : own.length
-          ? `${own.length} analiz bulgusu`
-          : "Belirgin bulgu yok",
+        summary: unavailable ? "Veri alınamadı" : own.length ? `${own.length} analiz bulgusu` : "Belirgin bulgu yok",
         total: m.total,
         findings: own.length,
         warning: unavailable ? "Veri alınamadı." : undefined,
@@ -711,6 +1048,10 @@ export async function GET(req: NextRequest) {
       },
       modules,
       findings,
+      executiveCommentary,
+      managementTopics: topManagementTopics,
+      crossAnalyses,
+      dataQuality: { overallScore: overallDataQuality, items: dataQuality },
       guardrails: {
         readOnly: true,
         writesToModules: false,

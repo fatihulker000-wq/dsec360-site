@@ -56,6 +56,10 @@ type AnalysisResponse = {
   };
   modules?: ModuleRow[];
   findings?: Finding[];
+  executiveCommentary?: string[];
+  managementTopics?: Array<{ id:string; score:number; severity:Severity; title:string; interpretation:string; recommendation:string; evidence:string[]; modules:string[] }>;
+  crossAnalyses?: Array<{ id:string; title:string; status:"SIGNAL"|"LIMITED"|"POSITIVE"; confidence:"HIGH"|"MEDIUM"|"LOW"; interpretation:string; evidence:string[]; recommendation:string; modules:string[] }>;
+  dataQuality?: { overallScore:number; items:Array<{ key:string; label:string; score:number; status:"GOOD"|"WARNING"|"POOR"; interpretation:string; evidence:string[] }> };
   guardrails?: {
     readOnly: boolean;
     writesToModules: boolean;
@@ -213,9 +217,9 @@ export default function DoraPage() {
           <div style={{ display: "flex", justifyContent: "space-between", gap: 22, alignItems: "flex-start", flexWrap: "wrap" }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 11, fontWeight: 950, letterSpacing: 1.2, opacity: .82 }}>D-SEC • DORA AI</div>
-              <h1 style={{ margin: "8px 0 7px", fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.08 }}>DORA Analiz ve Öneri Merkezi</h1>
+              <h1 style={{ margin: "8px 0 7px", fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.08 }}>DORA Derin Analiz Merkezi</h1>
               <p style={{ margin: 0, maxWidth: 900, lineHeight: 1.65, opacity: .9 }}>
-                DORA bu aşamada D-SEC modüllerini yalnızca okur; eksikleri, riskleri ve yaklaşan yükümlülükleri analiz ederek öneri listeler. Hiçbir modülde kayıt oluşturmaz, değiştirmez veya kapatmaz.
+                Raporlardaki sayıları tekrar etmek yerine modüller arasındaki ilişkileri, veri boşluklarını ve yönetim önceliklerini yorumlar. Faz 1 tamamen salt okunurdur.
               </p>
             </div>
             <button
@@ -247,90 +251,68 @@ export default function DoraPage() {
 
         {!loading && analysis ? (
           <>
-            <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 10, marginTop: 14 }}>
-              <Metric title="Taranan Modül" value={summary?.scannedModules ?? 0} sub={`${summary?.unavailableModules ?? 0} modülden veri alınamadı`} />
-              <Metric title="Toplam Bulgu" value={summary?.totalFindings ?? 0} sub="DORA analiz sonucu" />
-              <Metric title="Kritik" value={summary?.critical ?? 0} sub="Öncelikli inceleme" danger={(summary?.critical ?? 0) > 0} />
-              <Metric title="Yüksek" value={summary?.high ?? 0} sub="Yakın takip" warning={(summary?.high ?? 0) > 0} />
-              <Metric title="Orta" value={summary?.medium ?? 0} sub="Planlı inceleme" />
+            <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginTop: 14 }}>
+              <Metric title="Yönetim Önceliği" value={analysis.managementTopics?.length ?? 0} sub="En kritik konular" />
+              <Metric title="Çapraz Analiz" value={analysis.crossAnalyses?.length ?? 0} sub={`${(analysis.crossAnalyses ?? []).filter(x=>x.status==="SIGNAL").length} inceleme sinyali`} />
+              <Metric title="Veri Güvenilirliği" value={`${analysis.dataQuality?.overallScore ?? 0}/100`} sub="Analiz kapsama puanı" />
+              <Metric title="Okunan Modül" value={summary?.scannedModules ?? 0} sub={`${summary?.unavailableModules ?? 0} erişilemeyen`} />
             </section>
 
-            <section style={{ ...card, marginTop: 14 }}>
-              <Header title="Modül Sağlık Görünümü" sub="DORA'nın hangi modülleri okuyabildiğini ve analiz sonucunu tek ekranda gösterir." />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10, marginTop: 14 }}>
-                {modules.map((module) => {
-                  const tone = moduleTone(module.status);
-                  return (
-                    <button
-                      key={module.key}
-                      onClick={() => setModuleFilter(module.key)}
-                      style={{ ...moduleCard, borderColor: moduleFilter === module.key ? "#d6a6af" : C.line, textAlign: "left" }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-                        <b>{module.label}</b>
-                        <span style={{ ...statusBadge, color: tone.color, background: tone.bg }}>{tone.label}</span>
-                      </div>
-                      <div style={{ marginTop: 13, fontSize: 24, fontWeight: 950 }}>{module.available ? module.total : "—"}</div>
-                      <div style={{ marginTop: 4, color: C.muted, fontSize: 11 }}>{module.summary}</div>
-                    </button>
-                  );
-                })}
+            <section style={{ ...card, marginTop: 14, borderLeft: `5px solid ${C.burgundy}` }}>
+              <Header title="DORA Yönetici Değerlendirmesi" sub="Ham KPI tekrarı değil; birlikte okunan verilerden çıkan yönetim yorumu." />
+              <div style={{ display:"grid", gap:10, marginTop:14 }}>
+                {(analysis.executiveCommentary ?? []).map((x,i)=><div key={i} style={{padding:"12px 14px",borderRadius:12,background:"#faf7f8",lineHeight:1.65,fontSize:13}}><b style={{color:C.burgundy}}>{i+1}.</b> {x}</div>)}
               </div>
             </section>
 
-            <section style={{ ...card, marginTop: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
-                <Header title="DORA Bulguları ve Önerileri" sub="Bulgular yalnızca analiz amaçlıdır; DORA bu ekrandan hiçbir modüle işlem göndermez." />
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <select value={filter} onChange={(e) => setFilter(e.target.value as any)} style={{ ...input, width: 150 }}>
-                    <option value="ALL">Tüm öncelikler</option>
-                    <option value="CRITICAL">Kritik</option>
-                    <option value="HIGH">Yüksek</option>
-                    <option value="MEDIUM">Orta</option>
-                    <option value="LOW">Düşük</option>
-                    <option value="INFO">Bilgi</option>
-                  </select>
-                  <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} style={{ ...input, width: 180 }}>
-                    <option value="ALL">Tüm modüller</option>
-                    {modules.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
-                  </select>
-                  {(filter !== "ALL" || moduleFilter !== "ALL") ? (
-                    <button onClick={() => { setFilter("ALL"); setModuleFilter("ALL"); }} style={secondaryButton}>Filtreyi Temizle</button>
-                  ) : null}
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-                {visibleFindings.length === 0 ? (
-                  <div style={{ padding: 22, border: `1px dashed ${C.line}`, borderRadius: 14, color: C.muted, textAlign: "center" }}>
-                    Seçili filtre kapsamında bulgu bulunmadı.
+            <section style={{ marginTop: 14 }}>
+              <Header title="Yönetimin Dikkat Etmesi Gereken 5 Konu" sub="DORA etki büyüklüğü, kritik seviye ve modüller arası bağlamla inceleme sırası oluşturur." />
+              <div style={{display:"grid",gap:10,marginTop:12}}>
+                {(analysis.managementTopics ?? []).map((t,i)=><article key={t.id} style={card}>
+                  <div style={{display:"grid",gridTemplateColumns:"56px minmax(0,1fr) auto",gap:14,alignItems:"start"}}>
+                    <div style={{width:48,height:48,borderRadius:14,display:"grid",placeItems:"center",background:"#fff4f5",color:C.burgundy,fontWeight:950,fontSize:20}}>{i+1}</div>
+                    <div><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><b style={{fontSize:17}}>{t.title}</b><span style={{...badgeStyle,border:"1px solid",...severityStyle(t.severity)}}>{severityLabel(t.severity)}</span></div>
+                    <p style={{margin:"8px 0",fontSize:12,color:C.muted,lineHeight:1.65}}>{t.interpretation}</p>
+                    <div style={{fontSize:12,lineHeight:1.6}}><b>DORA önerisi:</b> {t.recommendation}</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>{t.modules.map(m=><span key={m} style={{...badgeStyle,background:"#f2f4f7",color:C.muted}}>{m}</span>)}</div></div>
+                    <div style={{textAlign:"center",minWidth:72}}><div style={{fontSize:26,fontWeight:950,color:t.score>=90?C.red:t.score>=70?C.orange:C.blue}}>{t.score}</div><div style={{fontSize:10,color:C.muted}}>ÖNCELİK</div></div>
                   </div>
-                ) : visibleFindings.map((item) => (
-                  <article key={item.id} style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 16, background: C.white }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          <span style={{ ...severityBadge, ...severityStyle(item.severity) }}>{severityLabel(item.severity)}</span>
-                          <span style={{ fontSize: 11, fontWeight: 850, color: C.muted }}>{item.moduleLabel}</span>
-                        </div>
-                        <h3 style={{ margin: "10px 0 5px", fontSize: 17 }}>{item.title}</h3>
-                        <p style={{ margin: 0, color: C.muted, lineHeight: 1.6, fontSize: 12 }}>{item.description}</p>
-                      </div>
-                      <button onClick={() => router.push(item.sourceUrl)} style={secondaryButton}>Kaynak Modülü Aç</button>
-                    </div>
-
-                    <div style={{ marginTop: 13, padding: 12, borderRadius: 12, background: "#f9fafb", fontSize: 12, lineHeight: 1.6 }}>
-                      <b>DORA önerisi:</b> {item.recommendation}
-                    </div>
-
-                    {item.evidence?.length ? (
-                      <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 11 }}>
-                        {item.evidence.map((ev) => <span key={ev} style={evidenceBadge}>{ev}</span>)}
-                      </div>
-                    ) : null}
-                  </article>
-                ))}
+                </article>)}
               </div>
+            </section>
+
+            <section style={{...card,marginTop:14}}>
+              <Header title="Çapraz Modül Analizleri" sub="Aynı olayı farklı modüllerdeki verilerle ilişkilendirir. Eşleşme nedensellik değil, araştırılması gereken sinyaldir." />
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))",gap:10,marginTop:14}}>
+                {(analysis.crossAnalyses ?? []).map(x=><article key={x.id} style={{border:`1px solid ${C.line}`,borderRadius:14,padding:15}}>
+                  <div style={{display:"flex",justifyContent:"space-between",gap:10}}><b>{x.title}</b><span style={{fontSize:11,fontWeight:900,color:x.status==="SIGNAL"?C.orange:x.status==="POSITIVE"?C.green:C.muted}}>{x.status==="SIGNAL"?"İnceleme sinyali":x.status==="POSITIVE"?"Olumlu görünüm":"Veri sınırlı"}</span></div>
+                  <p style={{margin:"8px 0",fontSize:12,color:C.muted,lineHeight:1.65}}>{x.interpretation}</p>
+                  <div style={{fontSize:12,lineHeight:1.6}}><b>Önerilen inceleme:</b> {x.recommendation}</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>{x.evidence.map(e=><span key={e} style={{...badgeStyle,background:"#f2f4f7",color:C.muted}}>{e}</span>)}</div>
+                  <div style={{marginTop:10,fontSize:10,color:C.muted}}>Analiz güveni: {x.confidence==="HIGH"?"Yüksek":x.confidence==="MEDIUM"?"Orta":"Düşük"}</div>
+                </article>)}
+              </div>
+            </section>
+
+            <section style={{...card,marginTop:14}}>
+              <Header title="DORA Veri Güvenilirliği" sub="DORA önce verinin analiz için yeterli olup olmadığını ölçer; kayıt boşluğunu gerçek operasyonel eksiklik gibi sunmaz." />
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:10,marginTop:14}}>
+                {(analysis.dataQuality?.items ?? []).map(q=>{const color=q.status==="GOOD"?C.green:q.status==="WARNING"?C.orange:C.red;return <div key={q.key} style={{border:`1px solid ${C.line}`,borderRadius:14,padding:14}}>
+                  <div style={{display:"flex",justifyContent:"space-between",gap:10}}><b>{q.label}</b><b style={{color}}>{q.score}/100</b></div>
+                  <div style={{height:7,borderRadius:99,background:"#f2f4f7",overflow:"hidden",margin:"11px 0"}}><div style={{height:"100%",width:`${q.score}%`,background:color}}/></div>
+                  <div style={{fontSize:12,lineHeight:1.55,color:C.muted}}>{q.interpretation}</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:9}}>{q.evidence.map(e=><span key={e} style={{...badgeStyle,background:"#f2f4f7",color:C.muted}}>{e}</span>)}</div>
+                </div>})}
+              </div>
+            </section>
+
+            <section style={{...card,marginTop:14}}>
+              <Header title="Detaylı Bulgular" sub="Ana ekranda tekrar yaratmaması için ikincil seviyeye taşındı. Gerektiğinde filtreleyerek inceleyebilirsiniz." />
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
+                <select value={filter} onChange={e=>setFilter(e.target.value as any)} style={input}><option value="ALL">Tüm öncelikler</option><option value="CRITICAL">Kritik</option><option value="HIGH">Yüksek</option><option value="MEDIUM">Orta</option><option value="LOW">Düşük</option></select>
+                <select value={moduleFilter} onChange={e=>setModuleFilter(e.target.value)} style={input}><option value="ALL">Tüm modüller</option>{[...new Map(findings.map(x=>[x.module,x.moduleLabel])).entries()].map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
+              </div>
+              <div style={{display:"grid",gap:9,marginTop:12}}>{visibleFindings.map(f=><div key={f.id} style={{border:`1px solid ${C.line}`,borderRadius:12,padding:13}}><div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><span style={{...badgeStyle,border:"1px solid",...severityStyle(f.severity)}}>{severityLabel(f.severity)}</span><b>{f.title}</b><span style={{fontSize:11,color:C.muted}}>{f.moduleLabel}</span></div><p style={{margin:"8px 0",fontSize:12,color:C.muted,lineHeight:1.65}}>{f.description}</p><div style={{fontSize:12}}><b>DORA önerisi:</b> {f.recommendation}</div></div>)}</div>
             </section>
 
             <section style={{ ...card, marginTop: 14, background: "#fffbfa" }}>
@@ -361,6 +343,7 @@ const moduleCard: React.CSSProperties = { background: C.white, border: `1px soli
 const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", padding: "11px 12px", border: `1px solid ${C.line}`, borderRadius: 10, background: C.white, fontSize: 12, outline: "none" };
 const primaryButton: React.CSSProperties = { border: "1px solid rgba(255,255,255,.3)", borderRadius: 11, padding: "11px 14px", background: "rgba(255,255,255,.14)", color: C.white, fontWeight: 850, cursor: "pointer" };
 const secondaryButton: React.CSSProperties = { border: `1px solid ${C.line}`, borderRadius: 10, padding: "9px 11px", background: C.white, color: C.ink, fontWeight: 800, fontSize: 11, cursor: "pointer" };
+const badgeStyle: React.CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: 999, padding: "5px 8px", fontSize: 10, fontWeight: 850, whiteSpace: "nowrap" };
 const severityBadge: React.CSSProperties = { display: "inline-flex", alignItems: "center", border: "1px solid", borderRadius: 999, padding: "5px 8px", fontSize: 10, fontWeight: 900 };
 const statusBadge: React.CSSProperties = { display: "inline-flex", padding: "5px 8px", borderRadius: 999, fontSize: 10, fontWeight: 900 };
 const evidenceBadge: React.CSSProperties = { display: "inline-flex", padding: "6px 8px", borderRadius: 999, background: "#f2f4f7", color: C.muted, fontSize: 10, fontWeight: 750 };
