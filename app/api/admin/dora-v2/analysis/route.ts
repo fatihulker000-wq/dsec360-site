@@ -66,6 +66,28 @@ type DataQualityItem = {
   evidence: string[];
 };
 
+type XrayCategory = {
+  key: string;
+  label: string;
+  status: ModuleStatus;
+  headline: string;
+  detail: string;
+  sourceUrl: string;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+};
+
+type HorizonItem = {
+  id: string;
+  module: string;
+  label: string;
+  days: number;
+  date?: string;
+  sourceUrl: string;
+};
+
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1027,6 +1049,71 @@ export async function GET(req: NextRequest) {
       info: findings.filter((x) => x.severity === "INFO").length,
     };
 
+    const xrayCategories: XrayCategory[] = modules.map((m) => {
+      const own = findings.filter((f) => f.module === m.key);
+      const counts = {
+        critical: own.filter((f) => f.severity === "CRITICAL").length,
+        high: own.filter((f) => f.severity === "HIGH").length,
+        medium: own.filter((f) => f.severity === "MEDIUM").length,
+        low: own.filter((f) => f.severity === "LOW").length,
+      };
+      const first = own[0];
+      return {
+        key: m.key,
+        label: m.label,
+        status: m.status,
+        headline: first?.title || (m.available ? "Belirgin kritik sinyal görülmedi" : "Veri okunamadı"),
+        detail: first?.description || (m.available ? "DORA bu alanda mevcut veriler içinde öncelikli bir eksiklik üretmedi." : "Bu alan için analiz güvenilir biçimde tamamlanamadı."),
+        sourceUrl: first?.sourceUrl || "/admin/dora",
+        ...counts,
+      };
+    });
+
+    const horizonItems: HorizonItem[] = [];
+    const pushHorizon = (rows: AnyRow[], module: string, sourceUrl: string, dateKeys: string[], labelKeys: string[]) => {
+      rows.forEach((row, index) => {
+        const raw = dateKeys.map((k) => row?.[k]).find((v) => v !== null && v !== undefined && v !== "");
+        const days = daysUntil(raw);
+        if (days === null || days < 0 || days > 90) return;
+        const millis = safeDateMillis(raw);
+        horizonItems.push({
+          id: `${module}:${text(row.id) || index}:${days}`,
+          module,
+          label: firstText(row, labelKeys) || `${module} kaydı`,
+          days,
+          date: millis ? new Date(millis).toISOString() : undefined,
+          sourceUrl,
+        });
+      });
+    };
+    pushHorizon(latestExams, "Sağlık", "/admin/health", ["next_exam_date", "next_examination_date"], ["employee_name", "full_name", "exam_type"]);
+    pushHorizon(periodicResult.rows, "Periyodik Kontrol", "/admin/documentation/periodic-controls", ["next_due_millis", "next_due_date"], ["equipment_name", "equipmentName", "equipment_type", "equipmentType"]);
+    pushHorizon(measurementResult.rows, "Ortam Ölçümü", "/admin/documentation/periodic-controls", ["next_due_millis", "next_due_date"], ["measurement_type", "measurementType", "area_name", "areaName"]);
+    horizonItems.sort((a, b) => a.days - b.days);
+
+    const horizon = {
+      due7: horizonItems.filter((x) => x.days <= 7).length,
+      due15: horizonItems.filter((x) => x.days <= 15).length,
+      due30: horizonItems.filter((x) => x.days <= 30).length,
+      due60: horizonItems.filter((x) => x.days <= 60).length,
+      due90: horizonItems.length,
+      items: horizonItems.slice(0, 30),
+    };
+
+    const weightedPenalty = findings.reduce((sum, f) => sum + ({ CRITICAL: 12, HIGH: 7, MEDIUM: 4, LOW: 1, INFO: 0 }[f.severity]), 0);
+    const unavailablePenalty = modules.filter((m) => !m.available).length * 4;
+    const xrayScore = Math.max(0, Math.min(100, 100 - weightedPenalty - unavailablePenalty));
+    const xrayStatus = xrayScore >= 85 ? "İYİ" : xrayScore >= 70 ? "İZLE" : xrayScore >= 50 ? "DİKKAT" : "KRİTİK";
+    const xray = {
+      score: xrayScore,
+      status: xrayStatus,
+      criticalIssues: severityCounts.critical,
+      highSignals: severityCounts.high,
+      upcoming30: horizon.due30,
+      systemicSignals: crossAnalyses.filter((x) => x.status === "SIGNAL").length,
+      categories: xrayCategories,
+    };
+
     return NextResponse.json({
       success: true,
       mode: "READ_ONLY_ANALYSIS",
@@ -1052,6 +1139,8 @@ export async function GET(req: NextRequest) {
       managementTopics: topManagementTopics,
       crossAnalyses,
       dataQuality: { overallScore: overallDataQuality, items: dataQuality },
+      xray,
+      horizon,
       guardrails: {
         readOnly: true,
         writesToModules: false,

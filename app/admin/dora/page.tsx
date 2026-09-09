@@ -1,349 +1,41 @@
 "use client";
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type CompanyRow = { id: string; name: string };
-type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
-type ModuleStatus = "CRITICAL" | "WARNING" | "GOOD" | "UNAVAILABLE";
-
-type Finding = {
-  id: string;
-  module: string;
-  moduleLabel: string;
-  severity: Severity;
-  title: string;
-  description: string;
-  recommendation: string;
-  sourceUrl: string;
-  evidence: string[];
-  count?: number;
-};
-
-type ModuleRow = {
-  key: string;
-  label: string;
-  available: boolean;
-  status: ModuleStatus;
-  summary: string;
-  total: number;
-  findings: number;
-  warning?: string;
-};
-
-type AnalysisResponse = {
-  success?: boolean;
-  error?: string;
-  mode?: string;
-  generatedAt?: string;
-  company?: {
-    id: string;
-    name: string;
-    employeeCount: number;
-    dangerClass?: string | null;
-    naceCode?: string | null;
-    sector?: string | null;
-  };
-  summary?: {
-    scannedModules: number;
-    unavailableModules: number;
-    totalFindings: number;
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-    info: number;
-  };
-  modules?: ModuleRow[];
-  findings?: Finding[];
-  executiveCommentary?: string[];
-  managementTopics?: Array<{ id:string; score:number; severity:Severity; title:string; interpretation:string; recommendation:string; evidence:string[]; modules:string[] }>;
-  crossAnalyses?: Array<{ id:string; title:string; status:"SIGNAL"|"LIMITED"|"POSITIVE"; confidence:"HIGH"|"MEDIUM"|"LOW"; interpretation:string; evidence:string[]; recommendation:string; modules:string[] }>;
-  dataQuality?: { overallScore:number; items:Array<{ key:string; label:string; score:number; status:"GOOD"|"WARNING"|"POOR"; interpretation:string; evidence:string[] }> };
-  guardrails?: {
-    readOnly: boolean;
-    writesToModules: boolean;
-    createsActions: boolean;
-    closesRecords: boolean;
-    assignsTasks: boolean;
-  };
-};
-
-type ScopeResponse = {
-  success?: boolean;
-  can_view_all_companies?: boolean;
-  allowed_company_id?: string | null;
-  allowed_companies?: CompanyRow[];
-  error?: string;
-};
-
-const C = {
-  bg: "#f6f7f9",
-  ink: "#182230",
-  muted: "#667085",
-  line: "#e4e7ec",
-  burgundy: "#7f1d2d",
-  burgundyDark: "#54101f",
-  red: "#b42318",
-  orange: "#b54708",
-  green: "#067647",
-  blue: "#175cd3",
-  white: "#fff",
-};
-
-async function readJson<T>(res: Response): Promise<T> {
-  const text = await res.text();
-  let json: any = {};
-  try {
-    json = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(`Sunucudan geçersiz yanıt geldi (${res.status}).`);
-  }
-  if (!res.ok) throw new Error(json?.error || `Sunucu hatası (${res.status}).`);
-  return json as T;
-}
-
-function severityLabel(v: Severity) {
-  if (v === "CRITICAL") return "Kritik";
-  if (v === "HIGH") return "Yüksek";
-  if (v === "MEDIUM") return "Orta";
-  if (v === "LOW") return "Düşük";
-  return "Bilgi";
-}
-
-function severityStyle(v: Severity): React.CSSProperties {
-  if (v === "CRITICAL") return { background: "#fef3f2", color: "#b42318", borderColor: "#fecdca" };
-  if (v === "HIGH") return { background: "#fff6ed", color: "#b54708", borderColor: "#fedf89" };
-  if (v === "MEDIUM") return { background: "#fffaeb", color: "#b54708", borderColor: "#fedf89" };
-  if (v === "LOW") return { background: "#eff8ff", color: "#175cd3", borderColor: "#b2ddff" };
-  return { background: "#f2f4f7", color: "#475467", borderColor: "#e4e7ec" };
-}
-
-function moduleTone(status: ModuleStatus) {
-  if (status === "CRITICAL") return { label: "Kritik", color: C.red, bg: "#fef3f2" };
-  if (status === "WARNING") return { label: "Uyarı", color: C.orange, bg: "#fffaeb" };
-  if (status === "GOOD") return { label: "Uygun", color: C.green, bg: "#ecfdf3" };
-  return { label: "Veri Yok", color: C.muted, bg: "#f2f4f7" };
-}
-
-export default function DoraPage() {
-  const router = useRouter();
-  const [companies, setCompanies] = useState<CompanyRow[]>([]);
-  const [companyId, setCompanyId] = useState("");
-  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
-  const [error, setError] = useState("");
-  const [filter, setFilter] = useState<"ALL" | Severity>("ALL");
-  const [moduleFilter, setModuleFilter] = useState("ALL");
-
-  const loadScope = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const scope = await readJson<ScopeResponse>(
-        await fetch("/api/admin/reports/scope", { cache: "no-store", credentials: "include" })
-      );
-
-      let rows = Array.isArray(scope.allowed_companies) ? scope.allowed_companies : [];
-
-      if (scope.can_view_all_companies) {
-        const companyJson: any = await readJson(
-          await fetch("/api/admin/companies", { cache: "no-store", credentials: "include" })
-        );
-        rows = (companyJson?.data ?? companyJson ?? [])
-          .filter((x: any) => x?.id && x?.name)
-          .map((x: any) => ({ id: String(x.id), name: String(x.name) }));
-      }
-
-      setCompanies(rows);
-      const first = scope.allowed_company_id || rows[0]?.id || "";
-      setCompanyId(first);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "DORA firma kapsamı alınamadı.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const runAnalysis = useCallback(async (selectedCompanyId: string) => {
-    if (!selectedCompanyId) return;
-    try {
-      setScanning(true);
-      setError("");
-      const data = await readJson<AnalysisResponse>(
-        await fetch(`/api/admin/dora-v2/analysis?companyId=${encodeURIComponent(selectedCompanyId)}`, {
-          cache: "no-store",
-          credentials: "include",
-        })
-      );
-      setAnalysis(data);
-    } catch (e) {
-      setAnalysis(null);
-      setError(e instanceof Error ? e.message : "DORA analizi oluşturulamadı.");
-    } finally {
-      setScanning(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadScope();
-  }, [loadScope]);
-
-  useEffect(() => {
-    if (companyId) void runAnalysis(companyId);
-  }, [companyId, runAnalysis]);
-
-  const findings = analysis?.findings ?? [];
-  const modules = analysis?.modules ?? [];
-  const summary = analysis?.summary;
-
-  const visibleFindings = useMemo(() => {
-    return findings.filter((x) => {
-      if (filter !== "ALL" && x.severity !== filter) return false;
-      if (moduleFilter !== "ALL" && x.module !== moduleFilter) return false;
-      return true;
-    });
-  }, [findings, filter, moduleFilter]);
-
-  const generatedAt = analysis?.generatedAt
-    ? new Date(analysis.generatedAt).toLocaleString("tr-TR")
-    : "-";
-
-  return (
-    <main style={{ minHeight: "100vh", background: C.bg, padding: "18px 16px 60px", color: C.ink, fontFamily: "Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
-      <div style={{ maxWidth: 1540, margin: "0 auto" }}>
-        <section style={{ borderRadius: 24, padding: "28px 30px", background: `linear-gradient(120deg,${C.burgundyDark},${C.burgundy} 55%,#a61f32)`, color: C.white, boxShadow: "0 18px 45px rgba(83,16,31,.17)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 22, alignItems: "flex-start", flexWrap: "wrap" }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 950, letterSpacing: 1.2, opacity: .82 }}>D-SEC • DORA AI</div>
-              <h1 style={{ margin: "8px 0 7px", fontSize: "clamp(28px,4vw,42px)", lineHeight: 1.08 }}>DORA Derin Analiz Merkezi</h1>
-              <p style={{ margin: 0, maxWidth: 900, lineHeight: 1.65, opacity: .9 }}>
-                Raporlardaki sayıları tekrar etmek yerine modüller arasındaki ilişkileri, veri boşluklarını ve yönetim önceliklerini yorumlar. Faz 1 tamamen salt okunurdur.
-              </p>
-            </div>
-            <button
-              onClick={() => void runAnalysis(companyId)}
-              disabled={!companyId || scanning}
-              style={{ ...primaryButton, opacity: scanning ? .7 : 1 }}
-            >
-              {scanning ? "Analiz yapılıyor..." : "↻ Sistemi Yeniden Analiz Et"}
-            </button>
-          </div>
-        </section>
-
-        <section style={{ ...card, marginTop: 14, display: "grid", gridTemplateColumns: "minmax(220px,420px) minmax(0,1fr)", gap: 16, alignItems: "end" }}>
-          <label style={{ display: "grid", gap: 7, fontSize: 12, fontWeight: 850 }}>
-            Firma
-            <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={input} disabled={loading || scanning}>
-              {companies.map((company) => (
-                <option key={company.id} value={company.id}>{company.name}</option>
-              ))}
-            </select>
-          </label>
-          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.65 }}>
-            <b style={{ color: C.ink }}>Salt okunur mod:</b> DORA yalnızca analiz üretir. Son analiz: {generatedAt}
-          </div>
-        </section>
-
-        {error ? <div style={{ ...card, marginTop: 14, borderColor: "#fecdca", background: "#fef3f2", color: C.red, fontWeight: 750 }}>{error}</div> : null}
-        {loading ? <div style={{ ...card, marginTop: 14, color: C.muted }}>DORA hazırlanıyor...</div> : null}
-
-        {!loading && analysis ? (
-          <>
-            <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginTop: 14 }}>
-              <Metric title="Yönetim Önceliği" value={analysis.managementTopics?.length ?? 0} sub="En kritik konular" />
-              <Metric title="Çapraz Analiz" value={analysis.crossAnalyses?.length ?? 0} sub={`${(analysis.crossAnalyses ?? []).filter(x=>x.status==="SIGNAL").length} inceleme sinyali`} />
-              <Metric title="Veri Güvenilirliği" value={`${analysis.dataQuality?.overallScore ?? 0}/100`} sub="Analiz kapsama puanı" />
-              <Metric title="Okunan Modül" value={summary?.scannedModules ?? 0} sub={`${summary?.unavailableModules ?? 0} erişilemeyen`} />
-            </section>
-
-            <section style={{ ...card, marginTop: 14, borderLeft: `5px solid ${C.burgundy}` }}>
-              <Header title="DORA Yönetici Değerlendirmesi" sub="Ham KPI tekrarı değil; birlikte okunan verilerden çıkan yönetim yorumu." />
-              <div style={{ display:"grid", gap:10, marginTop:14 }}>
-                {(analysis.executiveCommentary ?? []).map((x,i)=><div key={i} style={{padding:"12px 14px",borderRadius:12,background:"#faf7f8",lineHeight:1.65,fontSize:13}}><b style={{color:C.burgundy}}>{i+1}.</b> {x}</div>)}
-              </div>
-            </section>
-
-            <section style={{ marginTop: 14 }}>
-              <Header title="Yönetimin Dikkat Etmesi Gereken 5 Konu" sub="DORA etki büyüklüğü, kritik seviye ve modüller arası bağlamla inceleme sırası oluşturur." />
-              <div style={{display:"grid",gap:10,marginTop:12}}>
-                {(analysis.managementTopics ?? []).map((t,i)=><article key={t.id} style={card}>
-                  <div style={{display:"grid",gridTemplateColumns:"56px minmax(0,1fr) auto",gap:14,alignItems:"start"}}>
-                    <div style={{width:48,height:48,borderRadius:14,display:"grid",placeItems:"center",background:"#fff4f5",color:C.burgundy,fontWeight:950,fontSize:20}}>{i+1}</div>
-                    <div><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><b style={{fontSize:17}}>{t.title}</b><span style={{...badgeStyle,border:"1px solid",...severityStyle(t.severity)}}>{severityLabel(t.severity)}</span></div>
-                    <p style={{margin:"8px 0",fontSize:12,color:C.muted,lineHeight:1.65}}>{t.interpretation}</p>
-                    <div style={{fontSize:12,lineHeight:1.6}}><b>DORA önerisi:</b> {t.recommendation}</div>
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>{t.modules.map(m=><span key={m} style={{...badgeStyle,background:"#f2f4f7",color:C.muted}}>{m}</span>)}</div></div>
-                    <div style={{textAlign:"center",minWidth:72}}><div style={{fontSize:26,fontWeight:950,color:t.score>=90?C.red:t.score>=70?C.orange:C.blue}}>{t.score}</div><div style={{fontSize:10,color:C.muted}}>ÖNCELİK</div></div>
-                  </div>
-                </article>)}
-              </div>
-            </section>
-
-            <section style={{...card,marginTop:14}}>
-              <Header title="Çapraz Modül Analizleri" sub="Aynı olayı farklı modüllerdeki verilerle ilişkilendirir. Eşleşme nedensellik değil, araştırılması gereken sinyaldir." />
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))",gap:10,marginTop:14}}>
-                {(analysis.crossAnalyses ?? []).map(x=><article key={x.id} style={{border:`1px solid ${C.line}`,borderRadius:14,padding:15}}>
-                  <div style={{display:"flex",justifyContent:"space-between",gap:10}}><b>{x.title}</b><span style={{fontSize:11,fontWeight:900,color:x.status==="SIGNAL"?C.orange:x.status==="POSITIVE"?C.green:C.muted}}>{x.status==="SIGNAL"?"İnceleme sinyali":x.status==="POSITIVE"?"Olumlu görünüm":"Veri sınırlı"}</span></div>
-                  <p style={{margin:"8px 0",fontSize:12,color:C.muted,lineHeight:1.65}}>{x.interpretation}</p>
-                  <div style={{fontSize:12,lineHeight:1.6}}><b>Önerilen inceleme:</b> {x.recommendation}</div>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>{x.evidence.map(e=><span key={e} style={{...badgeStyle,background:"#f2f4f7",color:C.muted}}>{e}</span>)}</div>
-                  <div style={{marginTop:10,fontSize:10,color:C.muted}}>Analiz güveni: {x.confidence==="HIGH"?"Yüksek":x.confidence==="MEDIUM"?"Orta":"Düşük"}</div>
-                </article>)}
-              </div>
-            </section>
-
-            <section style={{...card,marginTop:14}}>
-              <Header title="DORA Veri Güvenilirliği" sub="DORA önce verinin analiz için yeterli olup olmadığını ölçer; kayıt boşluğunu gerçek operasyonel eksiklik gibi sunmaz." />
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:10,marginTop:14}}>
-                {(analysis.dataQuality?.items ?? []).map(q=>{const color=q.status==="GOOD"?C.green:q.status==="WARNING"?C.orange:C.red;return <div key={q.key} style={{border:`1px solid ${C.line}`,borderRadius:14,padding:14}}>
-                  <div style={{display:"flex",justifyContent:"space-between",gap:10}}><b>{q.label}</b><b style={{color}}>{q.score}/100</b></div>
-                  <div style={{height:7,borderRadius:99,background:"#f2f4f7",overflow:"hidden",margin:"11px 0"}}><div style={{height:"100%",width:`${q.score}%`,background:color}}/></div>
-                  <div style={{fontSize:12,lineHeight:1.55,color:C.muted}}>{q.interpretation}</div>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:9}}>{q.evidence.map(e=><span key={e} style={{...badgeStyle,background:"#f2f4f7",color:C.muted}}>{e}</span>)}</div>
-                </div>})}
-              </div>
-            </section>
-
-            <section style={{...card,marginTop:14}}>
-              <Header title="Detaylı Bulgular" sub="Ana ekranda tekrar yaratmaması için ikincil seviyeye taşındı. Gerektiğinde filtreleyerek inceleyebilirsiniz." />
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
-                <select value={filter} onChange={e=>setFilter(e.target.value as any)} style={input}><option value="ALL">Tüm öncelikler</option><option value="CRITICAL">Kritik</option><option value="HIGH">Yüksek</option><option value="MEDIUM">Orta</option><option value="LOW">Düşük</option></select>
-                <select value={moduleFilter} onChange={e=>setModuleFilter(e.target.value)} style={input}><option value="ALL">Tüm modüller</option>{[...new Map(findings.map(x=>[x.module,x.moduleLabel])).entries()].map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
-              </div>
-              <div style={{display:"grid",gap:9,marginTop:12}}>{visibleFindings.map(f=><div key={f.id} style={{border:`1px solid ${C.line}`,borderRadius:12,padding:13}}><div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><span style={{...badgeStyle,border:"1px solid",...severityStyle(f.severity)}}>{severityLabel(f.severity)}</span><b>{f.title}</b><span style={{fontSize:11,color:C.muted}}>{f.moduleLabel}</span></div><p style={{margin:"8px 0",fontSize:12,color:C.muted,lineHeight:1.65}}>{f.description}</p><div style={{fontSize:12}}><b>DORA önerisi:</b> {f.recommendation}</div></div>)}</div>
-            </section>
-
-            <section style={{ ...card, marginTop: 14, background: "#fffbfa" }}>
-              <Header title="DORA Faz 1 Güvenlik Sınırı" sub="Bu sürüm analiz motorudur. Otomatik aksiyon ve modül yazma yetkileri bilinçli olarak kapalıdır." />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8, marginTop: 12 }}>
-                {["Modül verisi değiştirmez", "Görev/aksiyon oluşturmaz", "Risk veya DÖF kapatmaz", "Eğitim atamaz", "Sağlık kaydı değiştirmez", "Sadece okur ve önerir"].map((x) => (
-                  <div key={x} style={{ padding: 11, border: `1px solid ${C.line}`, borderRadius: 11, background: C.white, fontSize: 11, fontWeight: 750 }}>✓ {x}</div>
-                ))}
-              </div>
-            </section>
-          </>
-        ) : null}
-      </div>
-    </main>
-  );
-}
-
-function Header({ title, sub }: { title: string; sub: string }) {
-  return <div><div style={{ fontSize: 19, fontWeight: 950 }}>{title}</div><div style={{ marginTop: 5, color: C.muted, fontSize: 12, lineHeight: 1.55 }}>{sub}</div></div>;
-}
-
-function Metric({ title, value, sub, danger = false, warning = false }: { title: string; value: string | number; sub: string; danger?: boolean; warning?: boolean }) {
-  return <div style={card}><div style={{ fontSize: 11, color: C.muted, fontWeight: 800 }}>{title}</div><div style={{ marginTop: 7, fontSize: 29, fontWeight: 950, color: danger ? C.red : warning ? C.orange : C.ink }}>{value}</div><div style={{ marginTop: 5, fontSize: 11, color: C.muted }}>{sub}</div></div>;
-}
-
-const card: React.CSSProperties = { background: C.white, border: `1px solid ${C.line}`, borderRadius: 16, padding: 16, boxShadow: "0 3px 12px rgba(16,24,40,.035)", minWidth: 0 };
-const moduleCard: React.CSSProperties = { background: C.white, border: `1px solid ${C.line}`, borderRadius: 14, padding: 14, cursor: "pointer", minWidth: 0 };
-const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", padding: "11px 12px", border: `1px solid ${C.line}`, borderRadius: 10, background: C.white, fontSize: 12, outline: "none" };
-const primaryButton: React.CSSProperties = { border: "1px solid rgba(255,255,255,.3)", borderRadius: 11, padding: "11px 14px", background: "rgba(255,255,255,.14)", color: C.white, fontWeight: 850, cursor: "pointer" };
-const secondaryButton: React.CSSProperties = { border: `1px solid ${C.line}`, borderRadius: 10, padding: "9px 11px", background: C.white, color: C.ink, fontWeight: 800, fontSize: 11, cursor: "pointer" };
-const badgeStyle: React.CSSProperties = { display: "inline-flex", alignItems: "center", borderRadius: 999, padding: "5px 8px", fontSize: 10, fontWeight: 850, whiteSpace: "nowrap" };
-const severityBadge: React.CSSProperties = { display: "inline-flex", alignItems: "center", border: "1px solid", borderRadius: 999, padding: "5px 8px", fontSize: 10, fontWeight: 900 };
-const statusBadge: React.CSSProperties = { display: "inline-flex", padding: "5px 8px", borderRadius: 999, fontSize: 10, fontWeight: 900 };
-const evidenceBadge: React.CSSProperties = { display: "inline-flex", padding: "6px 8px", borderRadius: 999, background: "#f2f4f7", color: C.muted, fontSize: 10, fontWeight: 750 };
+type Severity="CRITICAL"|"HIGH"|"MEDIUM"|"LOW"|"INFO"; type ModuleStatus="CRITICAL"|"WARNING"|"GOOD"|"UNAVAILABLE";
+type CompanyRow={id:string;name:string};
+type Finding={id:string;module:string;moduleLabel:string;severity:Severity;title:string;description:string;recommendation:string;sourceUrl:string;evidence:string[]};
+type Topic={id:string;score:number;severity:Severity;title:string;interpretation:string;recommendation:string;evidence:string[];modules:string[]};
+type Cross={id:string;title:string;status:"SIGNAL"|"LIMITED"|"POSITIVE";confidence:"HIGH"|"MEDIUM"|"LOW";interpretation:string;evidence:string[];recommendation:string;modules:string[]};
+type XrayCat={key:string;label:string;status:ModuleStatus;headline:string;detail:string;sourceUrl:string;critical:number;high:number;medium:number;low:number};
+type HorizonItem={id:string;module:string;label:string;days:number;date?:string;sourceUrl:string};
+type Analysis={generatedAt?:string;company?:{id:string;name:string;employeeCount:number;dangerClass?:string;naceCode?:string;sector?:string};summary?:{scannedModules:number;unavailableModules:number;totalFindings:number;critical:number;high:number;medium:number;low:number;info:number};findings?:Finding[];executiveCommentary?:string[];managementTopics?:Topic[];crossAnalyses?:Cross[];dataQuality?:{overallScore:number;items:Array<{key:string;label:string;score:number;status:"GOOD"|"WARNING"|"POOR";interpretation:string;evidence:string[]}>};xray?:{score:number;status:string;criticalIssues:number;highSignals:number;upcoming30:number;systemicSignals:number;categories:XrayCat[]};horizon?:{due7:number;due15:number;due30:number;due60:number;due90:number;items:HorizonItem[]}};
+type Scope={can_view_all_companies?:boolean;allowed_company_id?:string|null;allowed_companies?:CompanyRow[]};
+const C={bg:"#f6f7f9",ink:"#182230",muted:"#667085",line:"#e4e7ec",burgundy:"#7f1d2d",dark:"#54101f",red:"#b42318",orange:"#b54708",green:"#067647",blue:"#175cd3",white:"#fff"};
+async function readJson<T>(r:Response){const t=await r.text();let j:any={};try{j=t?JSON.parse(t):{}}catch{throw new Error(`Geçersiz sunucu yanıtı (${r.status}).`)}if(!r.ok)throw new Error(j?.error||`Sunucu hatası (${r.status}).`);return j as T}
+function sev(v:Severity){return v==="CRITICAL"?"Kritik":v==="HIGH"?"Yüksek":v==="MEDIUM"?"Orta":v==="LOW"?"Düşük":"Bilgi"}
+function tone(s:ModuleStatus){return s==="CRITICAL"?{t:"Kritik",c:C.red,b:"#fef3f2"}:s==="WARNING"?{t:"Dikkat",c:C.orange,b:"#fffaeb"}:s==="GOOD"?{t:"Uygun",c:C.green,b:"#ecfdf3"}:{t:"Veri Yok",c:C.muted,b:"#f2f4f7"}}
+function sevStyle(s:Severity):React.CSSProperties{return s==="CRITICAL"?{background:"#fef3f2",color:C.red,borderColor:"#fecdca"}:s==="HIGH"||s==="MEDIUM"?{background:"#fffaeb",color:C.orange,borderColor:"#fedf89"}:{background:"#eff8ff",color:C.blue,borderColor:"#b2ddff"}}
+export default function DoraPage(){const router=useRouter();const[companies,setCompanies]=useState<CompanyRow[]>([]);const[companyId,setCompanyId]=useState("");const[a,setA]=useState<Analysis|null>(null);const[loading,setLoading]=useState(true);const[scanning,setScanning]=useState(false);const[error,setError]=useState("");const[open,setOpen]=useState<string|null>(null);
+ const load=useCallback(async()=>{try{setLoading(true);const s=await readJson<Scope>(await fetch("/api/admin/reports/scope",{cache:"no-store",credentials:"include"}));let rows=s.allowed_companies||[];if(s.can_view_all_companies){const j:any=await readJson(await fetch("/api/admin/companies",{cache:"no-store",credentials:"include"}));rows=(j?.data??j??[]).filter((x:any)=>x?.id&&x?.name).map((x:any)=>({id:String(x.id),name:String(x.name)}))}setCompanies(rows);setCompanyId(s.allowed_company_id||rows[0]?.id||"")}catch(e){setError(e instanceof Error?e.message:"Firma kapsamı alınamadı.")}finally{setLoading(false)}},[]);
+ const scan=useCallback(async(id:string)=>{if(!id)return;try{setScanning(true);setError("");setA(await readJson<Analysis>(await fetch(`/api/admin/dora-v2/analysis?companyId=${encodeURIComponent(id)}`,{cache:"no-store",credentials:"include"})))}catch(e){setA(null);setError(e instanceof Error?e.message:"DORA taraması oluşturulamadı.")}finally{setScanning(false)}},[]);
+ useEffect(()=>{void load()},[load]);useEffect(()=>{if(companyId)void scan(companyId)},[companyId,scan]);
+ const x=a?.xray;const topics=a?.managementTopics||[];const cats=x?.categories||[];const findings=a?.findings||[];const byKind=useMemo(()=>({critical:findings.filter(f=>f.severity==="CRITICAL"),high:findings.filter(f=>f.severity==="HIGH")}),[findings]);const generated=a?.generatedAt?new Date(a.generatedAt).toLocaleString("tr-TR"):"-";
+ return <main style={{minHeight:"100vh",background:C.bg,padding:"18px 16px 60px",color:C.ink,fontFamily:"Inter,system-ui,-apple-system,'Segoe UI',sans-serif"}}><div style={{maxWidth:1540,margin:"0 auto"}}>
+  <section style={{borderRadius:26,padding:"28px 30px",background:`linear-gradient(120deg,${C.dark},${C.burgundy} 58%,#a61f32)`,color:C.white,boxShadow:"0 18px 45px rgba(83,16,31,.17)"}}><div style={{display:"flex",justifyContent:"space-between",gap:20,flexWrap:"wrap"}}><div><div style={{fontSize:11,fontWeight:950,letterSpacing:1.2,opacity:.8}}>D-SEC • DORA AI • FİRMA İSG RÖNTGENİ</div><h1 style={{margin:"8px 0 7px",fontSize:"clamp(28px,4vw,42px)"}}>DORA Sistem Röntgeni</h1><p style={{margin:0,maxWidth:900,lineHeight:1.65,opacity:.9}}>Tüm okunabilir D-SEC verisini tarar; eksikleri, risk sinyallerini, yaklaşan yükümlülükleri ve modüller arası ilişkileri tek yönetim görünümünde toplar.</p></div><button onClick={()=>void scan(companyId)} disabled={!companyId||scanning} style={{...primary,opacity:scanning?.7:1}}>{scanning?"Sistem taranıyor...":"↻ Sistemin Röntgenini Yenile"}</button></div></section>
+  <section style={{...card,marginTop:14,display:"grid",gridTemplateColumns:"minmax(240px,420px) 1fr",gap:16,alignItems:"end"}}><label style={{fontSize:12,fontWeight:850}}>Firma<select value={companyId} onChange={e=>setCompanyId(e.target.value)} style={{...input,marginTop:7}}>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><div style={{fontSize:12,color:C.muted,lineHeight:1.6}}><b style={{color:C.ink}}>Faz 1:</b> OKU → İLİŞKİLENDİR → ANALİZ ET → YORUMLA → ÖNER. Modüllere yazmaz. Son tarama: {generated}</div></section>
+  {error&&<div style={{...card,marginTop:14,color:C.red,background:"#fef3f2"}}>{error}</div>}{loading&&<div style={{...card,marginTop:14}}>DORA hazırlanıyor...</div>}
+  {!loading&&a&&<>
+   <section style={{...card,marginTop:14,padding:20}}><div style={{display:"grid",gridTemplateColumns:"minmax(230px,.8fr) minmax(0,2fr)",gap:20,alignItems:"center"}}><div style={{textAlign:"center",padding:18,borderRadius:18,background:x?.score!==undefined&&x.score<50?"#fef3f2":"#faf7f8"}}><div style={{fontSize:12,fontWeight:900,color:C.muted}}>DORA GENEL DURUM</div><div style={{fontSize:58,lineHeight:1,fontWeight:950,color:(x?.score??0)<50?C.red:(x?.score??0)<70?C.orange:C.green,margin:"10px 0"}}>{x?.score??0}<span style={{fontSize:18}}>/100</span></div><div style={{fontSize:17,fontWeight:950}}>{x?.status??"-"}</div></div><div><Header title={`${a.company?.name||"Firma"} • İSG Röntgeni`} sub="İlk bakışta sistemin nerede dikkat istediğini gösterir; ayrıntıya yalnız gerektiğinde inersiniz."/><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:9,marginTop:15}}><Mini n={x?.criticalIssues??0} t="Kritik Eksiklik" c={C.red}/><Mini n={x?.highSignals??0} t="Yüksek Sinyal" c={C.orange}/><Mini n={x?.upcoming30??0} t="30 Gün İçinde" c={C.blue}/><Mini n={x?.systemicSignals??0} t="Çapraz Sinyal" c={C.burgundy}/></div></div></div></section>
+   <section style={{...card,marginTop:14,borderLeft:`5px solid ${C.burgundy}`}}><Header title="DORA'nın Yönetici Yorumu" sub="Rapor sayılarını tekrar etmez; bütün sistemin birlikte ne söylediğini özetler."/><div style={{display:"grid",gap:9,marginTop:13}}>{(a.executiveCommentary||[]).map((v,i)=><div key={i} style={{padding:"11px 13px",background:"#faf7f8",borderRadius:11,fontSize:13,lineHeight:1.65}}><b style={{color:C.burgundy}}>{i+1}.</b> {v}</div>)}</div></section>
+   <section style={{marginTop:16}}><Header title="Bugün Bakılması Gereken 5 Konu" sub="DORA tüm taramadan sonra yönetimin önce nereye bakması gerektiğini sıralar."/><div style={{display:"grid",gap:9,marginTop:11}}>{topics.map((t,i)=><article key={t.id} style={card}><div style={{display:"grid",gridTemplateColumns:"50px minmax(0,1fr) auto",gap:13}}><div style={rank}>{i+1}</div><div><div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}><b style={{fontSize:16}}>{t.title}</b><span style={{...badge,border:"1px solid",...sevStyle(t.severity)}}>{sev(t.severity)}</span></div><p style={{fontSize:12,color:C.muted,lineHeight:1.6,margin:"7px 0"}}>{t.interpretation}</p><div style={{fontSize:12}}><b>DORA önerisi:</b> {t.recommendation}</div></div><div style={{textAlign:"center"}}><b style={{fontSize:25,color:t.score>=90?C.red:t.score>=70?C.orange:C.blue}}>{t.score}</b><div style={{fontSize:9,color:C.muted}}>ÖNCELİK</div></div></div></article>)}</div></section>
+   <section style={{...card,marginTop:14}}><Header title="Sistemin Röntgeni" sub="Kırmızı ve turuncu alanlara bakın; karta tıklayınca DORA'nın tespitini ve ilgili modül bağlantısını görün."/><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))",gap:9,marginTop:13}}>{cats.map(c=>{const t=tone(c.status);return <button key={c.key} onClick={()=>setOpen(open===c.key?null:c.key)} style={{textAlign:"left",border:`1px solid ${C.line}`,borderTop:`4px solid ${t.c}`,borderRadius:14,padding:14,background:C.white,cursor:"pointer"}}><div style={{display:"flex",justifyContent:"space-between",gap:8}}><b>{c.label}</b><span style={{...badge,background:t.b,color:t.c}}>{t.t}</span></div><div style={{marginTop:8,fontSize:12,fontWeight:800}}>{c.headline}</div><div style={{marginTop:7,fontSize:11,color:C.muted}}>Kritik {c.critical} · Yüksek {c.high} · Orta {c.medium}</div>{open===c.key&&<div style={{marginTop:11,paddingTop:11,borderTop:`1px solid ${C.line}`}}><div style={{fontSize:12,color:C.muted,lineHeight:1.55}}>{c.detail}</div><div onClick={e=>{e.stopPropagation();router.push(c.sourceUrl)}} style={{marginTop:10,color:C.burgundy,fontWeight:900,fontSize:11}}>İlgili modülü aç →</div></div>}</button>})}</div></section>
+   <section style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(330px,1fr))",gap:12,marginTop:14}}><div style={card}><Header title="Yaklaşanlar Radarı" sub="7 / 15 / 30 / 60 / 90 günlük görünüm."/><div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:12}}>{[[7,a.horizon?.due7],[15,a.horizon?.due15],[30,a.horizon?.due30],[60,a.horizon?.due60],[90,a.horizon?.due90]].map(([d,n])=><div key={String(d)} style={{padding:9,borderRadius:10,background:"#f8fafc",textAlign:"center"}}><b style={{fontSize:20}}>{n??0}</b><div style={{fontSize:9,color:C.muted}}>{d} GÜN</div></div>)}</div><div style={{display:"grid",gap:7,marginTop:12}}>{(a.horizon?.items||[]).slice(0,6).map(h=><button key={h.id} onClick={()=>router.push(h.sourceUrl)} style={{border:`1px solid ${C.line}`,borderRadius:10,padding:10,background:C.white,textAlign:"left",cursor:"pointer"}}><b style={{fontSize:11}}>{h.days===0?"Bugün":`${h.days} gün kaldı`} • {h.module}</b><div style={{fontSize:11,color:C.muted,marginTop:3}}>{h.label}</div></button>)}</div></div>
+   <div style={card}><Header title="DORA Ne Görüyor?" sub="Normal raporların ötesindeki çapraz sinyaller."/><div style={{display:"grid",gap:8,marginTop:12}}>{(a.crossAnalyses||[]).slice(0,6).map(c=><div key={c.id} style={{padding:11,border:`1px solid ${C.line}`,borderRadius:11}}><div style={{display:"flex",justifyContent:"space-between",gap:8}}><b style={{fontSize:12}}>{c.title}</b><span style={{...badge,color:c.status==="SIGNAL"?C.orange:c.status==="POSITIVE"?C.green:C.muted}}>{c.status==="SIGNAL"?"Sinyal":c.status==="POSITIVE"?"Olumlu":"Veri sınırlı"}</span></div><div style={{fontSize:11,color:C.muted,lineHeight:1.55,marginTop:6}}>{c.interpretation}</div><div style={{fontSize:10,marginTop:7}}>Güven: <b>{c.confidence==="HIGH"?"Yüksek":c.confidence==="MEDIUM"?"Orta":"Düşük"}</b></div></div>)}</div></div></section>
+   <section style={{...card,marginTop:14}}><Header title="Kritik ve Yüksek Eksiklikler" sub="Ana röntgende özetlenen konuların detay seviyesi. İlgili modüle geçebilirsiniz."/><div style={{display:"grid",gap:8,marginTop:12}}>{[...byKind.critical,...byKind.high].map(f=><div key={f.id} style={{padding:12,border:`1px solid ${C.line}`,borderRadius:11}}><div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}><span style={{...badge,border:"1px solid",...sevStyle(f.severity)}}>{sev(f.severity)}</span><b>{f.title}</b><span style={{fontSize:10,color:C.muted}}>{f.moduleLabel}</span></div><p style={{fontSize:11,color:C.muted,lineHeight:1.55,margin:"7px 0"}}>{f.description}</p><div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center"}}><div style={{fontSize:11}}><b>Öneri:</b> {f.recommendation}</div><button onClick={()=>router.push(f.sourceUrl)} style={secondary}>Detaya Git</button></div></div>)}</div></section>
+   <section style={{...card,marginTop:14,background:"#fffbfa"}}><b>DORA Faz 1 güvenlik sınırı:</b><span style={{fontSize:12,color:C.muted}}> DORA yalnızca okur, ilişkilendirir, analiz eder, yorumlar ve önerir; kayıt oluşturmaz, değiştirmez, kapatmaz veya görev atamaz.</span></section>
+  </>}
+ </div></main>}
+function Header({title,sub}:{title:string;sub:string}){return <div><div style={{fontSize:19,fontWeight:950}}>{title}</div><div style={{marginTop:4,color:C.muted,fontSize:12,lineHeight:1.5}}>{sub}</div></div>}
+function Mini({n,t,c}:{n:number;t:string;c:string}){return <div style={{padding:12,border:`1px solid ${C.line}`,borderRadius:12}}><div style={{fontSize:25,fontWeight:950,color:c}}>{n}</div><div style={{fontSize:10,color:C.muted,fontWeight:800}}>{t}</div></div>}
+const card:React.CSSProperties={background:C.white,border:`1px solid ${C.line}`,borderRadius:16,padding:16,boxShadow:"0 3px 12px rgba(16,24,40,.035)",minWidth:0};const input:React.CSSProperties={width:"100%",boxSizing:"border-box",padding:"11px 12px",border:`1px solid ${C.line}`,borderRadius:10,background:C.white,fontSize:12};const primary:React.CSSProperties={border:"1px solid rgba(255,255,255,.3)",borderRadius:11,padding:"11px 14px",background:"rgba(255,255,255,.14)",color:C.white,fontWeight:850,cursor:"pointer"};const secondary:React.CSSProperties={border:`1px solid ${C.line}`,borderRadius:9,padding:"7px 9px",background:C.white,fontWeight:850,fontSize:10,cursor:"pointer",whiteSpace:"nowrap"};const badge:React.CSSProperties={display:"inline-flex",alignItems:"center",borderRadius:999,padding:"4px 7px",fontSize:9,fontWeight:900,whiteSpace:"nowrap"};const rank:React.CSSProperties={width:44,height:44,borderRadius:13,display:"grid",placeItems:"center",background:"#fff4f5",color:C.burgundy,fontWeight:950,fontSize:19};
