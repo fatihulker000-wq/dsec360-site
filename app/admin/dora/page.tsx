@@ -84,6 +84,7 @@ export default function DoraPage(){
   const [thinking,setThinking]=useState(false);
   const [reasonTrail,setReasonTrail]=useState<string[]>([]);
   const [queueSummary,setQueueSummary]=useState<QueueSummary>({total:0,waiting:0,approved:0,started:0,completed:0,failed:0});
+  const [timeRadar,setTimeRadar]=useState<{overdue:number;due7:number;due15:number;due30:number;due60:number;due90:number;items:HorizonItem[]}>({overdue:0,due7:0,due15:0,due30:0,due60:0,due90:0,items:[]});
 
   const load=useCallback(async()=>{
     try{
@@ -118,6 +119,12 @@ export default function DoraPage(){
         });
       }catch{
         setQueueSummary({total:0,waiting:0,approved:0,started:0,completed:0,failed:0});
+      }
+      try{
+        const tr:any=await readJson(await fetch(`/api/admin/dora-v2/time-radar?companyId=${encodeURIComponent(id)}`,{cache:"no-store",credentials:"include"}));
+        if(tr?.horizon) setTimeRadar(tr.horizon);
+      }catch{
+        setTimeRadar({overdue:0,due7:0,due15:0,due30:0,due60:0,due90:0,items:[]});
       }
       setAnswerTitle("Sistem taraması tamamlandı");
       setAnswer(data.executiveCommentary?.slice(0,3) || ["DORA sistem verilerini taradı."]);
@@ -234,7 +241,7 @@ export default function DoraPage(){
       setAnswerTitle("Kaza / olay çapraz analizi");
       setAnswer(rel.length?rel.map(v=>`${v.title}: ${v.interpretation} Öneri: ${v.recommendation}`):["Kaza/olay için yeterli çapraz analiz sinyali bulunamadı."]);
     }else if(kind==="30D"){
-      const h=(a.horizon?.items||[]).filter(v=>v.days<=30).slice(0,10);
+      const h=timeRadar.items.filter(v=>v.days>=0&&v.days<=30).slice(0,10);
       setAnswerTitle("Önümüzdeki 30 gün");
       setAnswer(h.length?h.map(v=>`${v.days===0?"Bugün":v.days+" gün"} • ${v.module}: ${v.label}`):["Önümüzdeki 30 gün için kayıtlı yaklaşan yükümlülük görünmüyor."]);
     }else if(kind==="GAPS"){
@@ -294,7 +301,7 @@ export default function DoraPage(){
           ? rel.slice(0,5).map(v=>`${v.title}: ${v.interpretation} Öneri: ${v.recommendation}`)
           : ["Kaza/olay kayıtlarında bu soruyu destekleyecek yeterli çapraz ilişki sinyali oluşmadı."];
       }else if(q.includes("30")||q.includes("yaklaş")||q.includes("süre")||q.includes("bit")){
-        const h=(a.horizon?.items||[]).filter(v=>v.days<=30).sort((x,y)=>x.days-y.days).slice(0,10);
+        const h=timeRadar.items.filter(v=>v.days>=0&&v.days<=30).sort((x,y)=>x.days-y.days).slice(0,10);
         result=h.length?h.map(v=>`${v.days===0?"Bugün":v.days+" gün"} • ${v.module}: ${v.label}`):["Önümüzdeki 30 gün için kayıtlı yaklaşan yükümlülük görünmüyor."];
       }else if(q.includes("neden")||q.includes("kanıt")||q.includes("niye")){
         result=[
@@ -388,7 +395,7 @@ export default function DoraPage(){
             <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginTop:14}}>
               <Signal n={x?.criticalIssues??0} t="Kritik eksiklik" c={C.red} onClick={()=>{setActiveTab("GAPS");window.scrollTo({top:900,behavior:"smooth"})}}/>
               <Signal n={x?.highSignals??0} t="Yüksek sinyal" c={C.orange} onClick={()=>{setActiveTab("SIGNALS");window.scrollTo({top:900,behavior:"smooth"})}}/>
-              <Signal n={x?.upcoming30??0} t="30 gün radarı" c={C.blue} onClick={()=>{setActiveTab("RADAR");window.scrollTo({top:900,behavior:"smooth"})}}/>
+              <Signal n={timeRadar.due30} t="30 gün radarı" c={C.blue} onClick={()=>{setActiveTab("RADAR");window.scrollTo({top:900,behavior:"smooth"})}}/>
               <Signal n={x?.systemicSignals??0} t="Sistemik bağ" c={C.burgundy} onClick={()=>{setActiveTab("SIGNALS");window.scrollTo({top:900,behavior:"smooth"})}}/>
               <Signal n={queueSummary.waiting+queueSummary.approved} t="İşlem bekliyor" c={C.green} onClick={()=>router.push(`/admin/dora/actions?companyId=${encodeURIComponent(companyId)}`)}/>
             </div>
@@ -558,18 +565,18 @@ export default function DoraPage(){
               <span style={{...badge,background:"#eff8ff",color:C.blue}}>ÇOK MODÜLLÜ • 90 GÜN</span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,marginTop:13}}>
-              <RadarMetric n={(a.horizon?.items||[]).filter(x=>x.days<0).length} label="GECİKMİŞ" color={C.red}/>
-              <RadarMetric n={a.horizon?.due7??0} label="≤ 7 GÜN" color={C.red}/>
-              <RadarMetric n={a.horizon?.due15??0} label="≤ 15 GÜN" color={C.orange}/>
-              <RadarMetric n={a.horizon?.due30??0} label="≤ 30 GÜN" color={C.orange}/>
-              <RadarMetric n={a.horizon?.due60??0} label="≤ 60 GÜN" color={C.blue}/>
-              <RadarMetric n={a.horizon?.due90??0} label="≤ 90 GÜN" color={C.muted}/>
+              <RadarMetric n={timeRadar.overdue} label="GECİKMİŞ" color={C.red}/>
+              <RadarMetric n={timeRadar.due7} label="≤ 7 GÜN" color={C.red}/>
+              <RadarMetric n={timeRadar.due15} label="≤ 15 GÜN" color={C.orange}/>
+              <RadarMetric n={timeRadar.due30} label="≤ 30 GÜN" color={C.orange}/>
+              <RadarMetric n={timeRadar.due60} label="≤ 60 GÜN" color={C.blue}/>
+              <RadarMetric n={timeRadar.due90} label="≤ 90 GÜN" color={C.muted}/>
             </div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:11}}>
-              {Array.from(new Set((a.horizon?.items||[]).map(x=>x.module))).map(mod=><span key={mod} style={{...badge,background:"#f2f4f7",color:C.ink}}>{mod}</span>)}
+              {Array.from(new Set(timeRadar.items.map(x=>x.module))).map(mod=><span key={mod} style={{...badge,background:"#f2f4f7",color:C.ink}}>{mod}</span>)}
             </div>
             <div style={{display:"grid",gap:7,marginTop:12}}>
-              {(a.horizon?.items||[]).slice(0,30).map(h=>{
+              {timeRadar.items.slice(0,30).map(h=>{
                 const overdue=h.days<0;
                 const col=overdue||h.days<=7?C.red:h.days<=30?C.orange:h.days<=60?C.blue:C.ink;
                 const time=overdue?`${Math.abs(h.days)} GÜN GECİKMİŞ`:h.days===0?"BUGÜN":`${h.days} GÜN`;
@@ -581,7 +588,7 @@ export default function DoraPage(){
                   <div style={{fontSize:11,color:C.muted,marginTop:4}}>{h.label}</div>
                 </button>
               })}
-              {(a.horizon?.items||[]).length===0&&<div style={{padding:22,textAlign:"center",color:C.muted,fontSize:11}}>90 günlük zaman radarında tarihli kayıt bulunamadı.</div>}
+              {timeRadar.items.length===0&&<div style={{padding:22,textAlign:"center",color:C.muted,fontSize:11}}>90 günlük zaman radarında tarihli kayıt bulunamadı.</div>}
             </div>
           </div>}
 
