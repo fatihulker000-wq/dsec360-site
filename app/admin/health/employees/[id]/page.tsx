@@ -11,6 +11,10 @@ import Ek2Tab from "@/components/health/tabs/Ek2Tab";
 import ExaminationTab from "@/components/health/tabs/ExaminationTab";
 import AccidentTab from "@/components/health/tabs/AccidentTab";
 import HealthTimelineTab from "@/components/health/tabs/HealthTimelineTab";
+import LaboratoryTab from "@/components/health/tabs/LaboratoryTab";
+import AudiometryTab from "@/components/health/tabs/AudiometryTab";
+import RespiratoryTab from "@/components/health/tabs/RespiratoryTab";
+import VaccinationTab from "@/components/health/tabs/VaccinationTab";
 
 type Employee = {
   id: string;
@@ -177,6 +181,10 @@ export default function HealthEmployeeDetailPage() {
 {activeTab === "Dosyalar" && (
   <DocumentsTab employee={employee as any} />
 )}
+{activeTab === "Laboratuvar" && <LaboratoryTab employee={employee as any} />}
+{activeTab === "Odyometri" && <AudiometryTab employee={employee as any} />}
+{activeTab === "Solunum" && <RespiratoryTab employee={employee as any} />}
+{activeTab === "Aşılar" && <VaccinationTab employee={employee as any} />}
 
 {![
   "Genel",
@@ -184,6 +192,10 @@ export default function HealthEmployeeDetailPage() {
   "Reçeteler",
   "Muayeneler",
   "Dosyalar",
+  "Laboratuvar",
+  "Odyometri",
+  "Solunum",
+  "Aşılar",
   "İş Kazaları",
   "Geçmiş",
 ].includes(activeTab) && (

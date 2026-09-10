@@ -1,4 +1,4 @@
-  "use client";
+ "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -26,6 +26,7 @@ type HealthEmployee = {
   last_examination_date: string;
   last_examination_decision: string;
   next_examination_date: string;
+  health_status?: "NORMAL"|"WARNING"|"CRITICAL"|"MISSING";
 };
 
 export default function HealthEmployeesPage() {
@@ -84,7 +85,7 @@ export default function HealthEmployeesPage() {
 
       const firmOk = firm === "ALL" || employee.company_name === firm;
 
-      const riskOk = risk === "ALL" || risk === "NORMAL";
+      const riskOk = risk === "ALL" || employee.health_status === risk;
 
       return nameOk && firmOk && riskOk;
     });
@@ -94,6 +95,11 @@ export default function HealthEmployeesPage() {
     firm === "ALL" ? "Tüm Firmalar" : firm;
 
   const totalEmployees = filteredEmployees.length;
+  const today = new Date().toISOString().slice(0,10);
+  const approaching = filteredEmployees.filter(e=>e.next_examination_date && e.next_examination_date>=today).length;
+  const ek2Missing = filteredEmployees.filter(e=>Number(e.ek2_count||0)===0).length;
+  const critical = filteredEmployees.filter(e=>e.health_status==="CRITICAL").length;
+  const missing = filteredEmployees.filter(e=>e.health_status==="MISSING").length;
 
   return (
     <main
@@ -150,12 +156,12 @@ export default function HealthEmployeesPage() {
            <MiniStat
   title="Yaklaşan Muayene"
   value={
-    employees.filter((e) => !!e.next_examination_date).length
+    approaching
   }
 />
-            <MiniStat title="EK-2 Bekleyen" value={0} />
-            <MiniStat title="Aşı Bekleyen" value={0} />
-            <MiniStat title="Kritik" value={0} />
+            <MiniStat title="EK-2 Eksik" value={ek2Missing} />
+            <MiniStat title="Kayıt Eksik" value={missing} />
+            <MiniStat title="Kritik" value={critical} />
           </div>
         </section>
 
@@ -194,6 +200,9 @@ export default function HealthEmployeesPage() {
           >
             <option value="ALL">Tüm Risk Durumları</option>
             <option value="NORMAL">Normal</option>
+            <option value="WARNING">Takip</option>
+            <option value="CRITICAL">Kritik</option>
+            <option value="MISSING">Kayıt Eksik</option>
           </select>
         </section>
 

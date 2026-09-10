@@ -1,45 +1,4 @@
 import type { HealthKpiSummary } from "./types";
-
-export function emptyHealthSummary(): HealthKpiSummary {
-  return {
-    todayExams: 0,
-    upcomingExams: 0,
-    overdueExams: 0,
-    todayPrescriptions: 0,
-    openAccidents: 0,
-    upcomingVaccines: 0,
-    criticalAlerts: 0,
-    riskyEmployees: 0,
-  };
-}
-
-export function healthStatusColor(value: number) {
-  if (value <= 5) {
-    return {
-      color: "#16a34a",
-      background: "#f0fdf4",
-    };
-  }
-
-  if (value <= 15) {
-    return {
-      color: "#d97706",
-      background: "#fff7ed",
-    };
-  }
-
-  return {
-    color: "#dc2626",
-    background: "#fef2f2",
-  };
-}
-
-export function formatHealthDate(value?: string) {
-  if (!value) return "-";
-
-  const d = new Date(value);
-
-  if (Number.isNaN(d.getTime())) return "-";
-
-  return d.toLocaleDateString("tr-TR");
-}
+export function emptyHealthSummary():HealthKpiSummary{return {totalEmployees:0,employeesWithHealthRecord:0,employeesMissingHealthRecord:0,healthCoveragePercent:0,employeesWithExamination:0,employeesMissingExamination:0,ek2Present:0,ek2Missing:0,examinationRecords:0,ek2Records:0,prescriptionRecords:0,todayExams:0,upcomingExams:0,criticalUpcomingExams:0,overdueExams:0,todayPrescriptions:0,openAccidents:0,upcomingVaccines:0,criticalAlerts:0,riskyEmployees:0};}
+export function healthStatusColor(value:number){if(value<=5)return{color:"#16a34a",background:"#f0fdf4"};if(value<=15)return{color:"#d97706",background:"#fff7ed"};return{color:"#dc2626",background:"#fef2f2"};}
+export function formatHealthDate(value?:string){if(!value)return"-";const d=new Date(value);return Number.isNaN(d.getTime())?"-":d.toLocaleDateString("tr-TR");}

@@ -109,6 +109,15 @@ prescription_count: examInfo.prescription_count,
 last_prescription_date: examInfo.last_prescription_date,
 last_prescription_status: examInfo.last_prescription_status,
 last_prescription: examInfo.last_prescription_date || "-",
+    health_status: (() => {
+      const today = new Date().toISOString().slice(0,10);
+      const due = examInfo.next_examination_date || "";
+      const decision = String(examInfo.last_examination_decision || "").toLocaleUpperCase("tr-TR");
+      if ((due && due < today) || decision.includes("UYGUN DEĞİL")) return "CRITICAL";
+      if (!examInfo.examination_count || !examInfo.ek2_count) return "MISSING";
+      if (decision.includes("KISITLI")) return "WARNING";
+      return "NORMAL";
+    })(),
   };
 }
 
@@ -265,26 +274,6 @@ last_prescription_status: "",
     };
   }
 
-  const examTypeRaw = String(exam.exam_type || "").trim();
-const examType = examTypeRaw.toUpperCase();
-
-const isEk2 =
-  examType === "EK2_ISE_GIRIS" ||
-  examType === "EK2_PERIYODIK" ||
-  examTypeRaw === "İşe Giriş" ||
-  examTypeRaw === "Periyodik";
-
-  if (isEk2) {
-    examMap[employeeId].ek2_count += 1;
-
-    if (!examMap[employeeId].last_ek2_date && exam.exam_date) {
-      examMap[employeeId].last_ek2_date = exam.exam_date;
-      examMap[employeeId].last_ek2_status = exam.decision || "";
-    }
-
-    continue;
-  }
-
   examMap[employeeId].examination_count += 1;
 
   if (!examMap[employeeId].last_examination_date && exam.exam_date) {
@@ -297,6 +286,38 @@ const isEk2 =
   }
 }
     }
+
+// EK-2 gerçek kaynağı: health_ek2_forms. Muayene türünden tahmin etmek yerine resmi form tablosunu esas al.
+if (employeeIds.length > 0) {
+  let ek2Query = supabase
+    .from("health_ek2_forms")
+    .select("id,employee_id,company_id,status,exam_date,next_exam_date,is_active,created_at")
+    .in("employee_id", employeeIds)
+    .order("exam_date", { ascending: false });
+
+  if (adminRole === "company_admin") ek2Query = ek2Query.eq("company_id", companyIdFromCookie);
+
+  const { data: ek2Forms, error: ek2Error } = await ek2Query;
+  if (ek2Error) return NextResponse.json({ error:"EK-2 özetleri alınamadı.", detail:ek2Error.message },{status:500});
+
+  for (const form of ek2Forms || []) {
+    if (form.is_active === false) continue;
+    const employeeId = String(form.employee_id || "").trim();
+    if (!employeeId) continue;
+    if (!examMap[employeeId]) {
+      examMap[employeeId] = {
+        examination_count:0,last_examination_date:"",last_examination_decision:"",next_examination_date:"",
+        ek2_count:0,last_ek2_date:"",last_ek2_status:"",
+        prescription_count:0,last_prescription_date:"",last_prescription_status:""
+      };
+    }
+    examMap[employeeId].ek2_count += 1;
+    if (!examMap[employeeId].last_ek2_date) {
+      examMap[employeeId].last_ek2_date = form.exam_date || form.created_at || "";
+      examMap[employeeId].last_ek2_status = form.status || "";
+    }
+  }
+}
 
 const { data: prescriptions, error: prescriptionError } = await supabase
   .from("health_prescriptions")

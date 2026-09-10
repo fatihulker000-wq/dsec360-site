@@ -3,342 +3,123 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
+type Row = Record<string, any>;
 
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+function db(){return createClient(process.env.SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!);}
+function s(v:any){return String(v??"").trim();}
+function dateOnly(d:Date){return d.toISOString().slice(0,10);}
+function daysTo(v:string){const a=new Date();a.setHours(0,0,0,0);const b=new Date(v+"T00:00:00");return Math.ceil((b.getTime()-a.getTime())/86400000);}
+function uniqueEmployeeCount(rows:Row[]){return new Set(rows.map(x=>s(x.employee_id)).filter(Boolean)).size;}
 
-function toDateOnly(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
+export async function GET(){
+ try{
+  const cs=await cookies();
+  const auth=s(cs.get("dsec_admin_auth")?.value||cs.get("dsec_user_auth")?.value);
+  const role=s(cs.get("dsec_admin_role")?.value||cs.get("dsec_user_role")?.value);
+  const cookieCompany=s(cs.get("dsec_company_id")?.value);
+  const allowed=["admin","super_admin","company_admin","demo_user"];
+  if(auth!=="ok"||!allowed.includes(role)) return NextResponse.json({error:"Yetkisiz erişim."},{status:401});
+  const scoped=role==="company_admin"||role==="demo_user";
+  if(scoped&&!cookieCompany) return NextResponse.json({error:"Kullanıcı için firma bilgisi bulunamadı."},{status:403});
 
-function diffDays(from: string) {
-  const today = new Date();
-  const target = new Date(from);
-  const ms = target.getTime() - today.getTime();
-  return Math.ceil(ms / (1000 * 60 * 60 * 24));
-}
+  const supabase=db();
+  let eq=supabase.from("employees").select("id,full_name,firm_id,job_title,active").limit(10000);
+  if(scoped) eq=eq.eq("firm_id",cookieCompany);
+  const {data:employees,error:ee}=await eq;
+  if(ee) throw ee;
+  const activeEmployees=(employees||[]).filter((x:any)=>x.active!==false);
+  const employeeIds=activeEmployees.map((x:any)=>s(x.id)).filter(Boolean);
+  const employeeSet=new Set(employeeIds);
 
-export async function GET() {
-  try {
-    const cookieStore = await cookies();
-    const auth = String(
-  cookieStore.get("dsec_admin_auth")?.value ||
-    cookieStore.get("dsec_user_auth")?.value ||
-    ""
-).trim();
+  let exq=supabase.from("health_examinations").select("id,employee_id,company_id,exam_type,exam_date,next_exam_date,decision,bmi,systolic,diastolic,spo2,created_at,is_deleted").or("is_deleted.eq.false,is_deleted.is.null").limit(10000);
+  let ekq=supabase.from("health_ek2_forms").select("id,employee_id,company_id,status,exam_date,next_exam_date,decision,created_at,is_active").limit(10000);
+  let prq=supabase.from("health_prescriptions").select("id,employee_id,company_id,status,created_at,is_active,health_prescription_items(id)").eq("is_active",true).limit(10000);
+  if(scoped){exq=exq.eq("company_id",cookieCompany);ekq=ekq.eq("company_id",cookieCompany);prq=prq.eq("company_id",cookieCompany);}
+  const [exr,ekr,prr]=await Promise.all([exq,ekq,prq]);
+  if(exr.error) throw exr.error;
+  if(ekr.error) throw ekr.error;
+  if(prr.error) throw prr.error;
 
-const role = String(
-  cookieStore.get("dsec_admin_role")?.value ||
-    cookieStore.get("dsec_user_role")?.value ||
-    ""
-).trim();
+  const exams=(exr.data||[]).filter((x:any)=>employeeSet.has(s(x.employee_id)));
+  const ek2=(ekr.data||[]).filter((x:any)=>x.is_active!==false&&employeeSet.has(s(x.employee_id)));
+  const prescriptions=(prr.data||[]).filter((x:any)=>employeeSet.has(s(x.employee_id)));
 
-const companyIdFromCookie = String(
-  cookieStore.get("dsec_company_id")?.value || ""
-).trim();
+  const today=dateOnly(new Date());
+  const d30=new Date(); d30.setDate(d30.getDate()+30); const day30=dateOnly(d30);
+  const d90=new Date(); d90.setDate(d90.getDate()+90); const day90=dateOnly(d90);
 
-const allowedRoles = [
-  "admin",
-  "super_admin",
-  "company_admin",
-  "demo_user",
-];
+  const healthIds=new Set([...exams,...ek2,...prescriptions].map((x:any)=>s(x.employee_id)).filter(Boolean));
+  const examIds=new Set(exams.map((x:any)=>s(x.employee_id)).filter(Boolean));
+  const ek2Ids=new Set(ek2.map((x:any)=>s(x.employee_id)).filter(Boolean));
 
-if (
-  auth !== "ok" ||
-  !allowedRoles.includes(role)
-) {
-  return NextResponse.json(
-    { error: "Yetkisiz erişim." },
-    { status: 401 }
-  );
-}
-
-const companyScoped =
-  role === "company_admin" ||
-  role === "demo_user";
-
-if (
-  companyScoped &&
-  !companyIdFromCookie
-) {
-  return NextResponse.json(
-    {
-      error:
-        "Kullanıcı için firma bilgisi bulunamadı.",
-    },
-    { status: 403 }
-  );
-}
-
-    const today = new Date();
-const todayStr = toDateOnly(today);
-
-const next30 = new Date();
-next30.setDate(today.getDate() + 90);
-const next30Str = toDateOnly(next30);
-
-const nextCritical = new Date();
-nextCritical.setDate(today.getDate() + 30);
-const nextCriticalStr = toDateOnly(nextCritical);
-
-const supabase = getSupabase();
-
-    let employeesQuery = supabase
-      .from("employees")
-      .select("id, full_name, firm_id, job_title")
-      .limit(10000);
-
-    if (companyScoped) {
-      employeesQuery = employeesQuery.eq("firm_id", companyIdFromCookie);
-    }
-
-    const { data: employees, error: employeesError } = await employeesQuery;
-
-    if (employeesError) {
-      return NextResponse.json(
-        { error: employeesError.message },
-        { status: 500 }
-      );
-    }
-
-    const employeeIds = (employees || []).map((e) => String(e.id));
-
-    let examsQuery = supabase
-  .from("health_examinations")
-  .select(
-    "id, employee_id, company_id, exam_type, exam_date, next_exam_date, decision, bmi, systolic, diastolic, spo2, created_at, is_deleted"
-  )
-  .or("is_deleted.eq.false,is_deleted.is.null")
-  .order("created_at", { ascending: false })
-  .limit(1000);
-
-    if (companyScoped) {
-      examsQuery = examsQuery.eq("company_id", companyIdFromCookie);
-    }
-
-    const { data: exams, error: examsError } = await examsQuery;
-
-    if (examsError) {
-      return NextResponse.json({ error: examsError.message }, { status: 500 });
-    }
-
-   const prescriptions: any[] = [];
-
-    const employeeMap = Object.fromEntries(
-      (employees || []).map((e) => [
-        String(e.id),
-        {
-          name: e.full_name || "Çalışan",
-          companyId: e.firm_id || "",
-          jobTitle: e.job_title || "",
-        },
-      ])
-    );
-
-    const companyIds = Array.from(
-      new Set(
-        [
-          ...(employees || []).map((e) => String(e.firm_id || "")),
-          ...(exams || []).map((x) => String(x.company_id || "")),
-        ].filter(Boolean)
-      )
-    );
-
-    let companyMap: Record<string, string> = {};
-
-    if (companyIds.length > 0) {
-      const { data: companies } = await supabase
-        .from("companies")
-        .select("id, name")
-        .in("id", companyIds);
-
-      companyMap = Object.fromEntries(
-        (companies || []).map((c) => [
-          String(c.id),
-          String(c.name || "Firma Yok"),
-        ])
-      );
-    }
-
-    const todayExams = (exams || []).filter(
-      (e) => e.exam_date === todayStr
-    ).length;
-
-    const upcomingRaw = (exams || []).filter(
-      (e) =>
-        e.next_exam_date &&
-        e.next_exam_date >= todayStr &&
-        e.next_exam_date <= next30Str
-    );
-
-const criticalUpcoming = (exams || []).filter(
-  (e) =>
-    e.next_exam_date &&
-    e.next_exam_date >= todayStr &&
-    e.next_exam_date <= nextCriticalStr
-);
-
-    const overdueRaw = (exams || []).filter(
-      (e) => e.next_exam_date && e.next_exam_date < todayStr
-    );
-
-    const criticalRaw = (exams || []).filter((e) => {
-      const bmi = Number(e.bmi || 0);
-      const sys = Number(e.systolic || 0);
-      const dia = Number(e.diastolic || 0);
-      const spo2 = Number(e.spo2 || 0);
-
-      return (
-        e.decision === "Uygun Değil" ||
-        e.decision === "Kısıtlı Uygun" ||
-        bmi >= 30 ||
-        sys >= 140 ||
-        dia >= 90 ||
-        (spo2 > 0 && spo2 < 92)
-      );
-    });
-
-    const upcomingExams = upcomingRaw.slice(0, 10).map((e) => {
-      const emp = employeeMap[String(e.employee_id)] || {
-        name: "Çalışan",
-        companyId: e.company_id || "",
-      };
-
-      return {
-     id: e.id,
-     employeeName: emp.name,
-     companyName: companyMap[String(e.company_id || emp.companyId)] || "Firma Yok",
-     examType: e.exam_type,
-     dueDate: e.next_exam_date,
-     decision: e.decision,
-     jobTitle: emp.jobTitle || "",
-     daysLeft: diffDays(e.next_exam_date),
-};
-
-    });
-
-    const recentExaminations = [...(exams || [])]
-  .sort(
-    (a, b) =>
-      new Date(b.exam_date).getTime() -
-      new Date(a.exam_date).getTime()
-  )
-  .slice(0, 10)
-  .map((e) => {
-    const emp = employeeMap[String(e.employee_id)] || {
-      name: "Çalışan",
-      companyId: e.company_id || "",
-      jobTitle: "",
-    };
-
-    return {
-      id: e.id,
-      employeeName: emp.name,
-      companyName:
-        companyMap[String(e.company_id || emp.companyId)] || "Firma Yok",
-      examDate: e.exam_date,
-      decision: e.decision,
-      examType: e.exam_type,
-      jobTitle: emp.jobTitle,
-    };
-  });
-    
-const recentPrescriptions = (prescriptions || [])
-  .slice(0, 10)
-  .map((p: any) => {
-    const emp = employeeMap[String(p.employee_id)] || {
-      name: "Çalışan",
-      companyId: p.company_id || "",
-    };
-
-    return {
-      id: p.id,
-      employeeName: emp.name,
-      companyName:
-        companyMap[String(p.company_id || emp.companyId)] || "Firma Yok",
-      medicineCount: 0,
-      createdAt: p.created_at,
-    };
+  // Latest examination per employee prevents an old overdue record from making a currently valid employee overdue.
+  const latestByEmployee=new Map<string,Row>();
+  for(const x of [...exams].sort((a:any,b:any)=>s(b.exam_date).localeCompare(s(a.exam_date)))){
+    const id=s(x.employee_id); if(id&&!latestByEmployee.has(id)) latestByEmployee.set(id,x);
+  }
+  const latest=[...latestByEmployee.values()];
+  const overdue=latest.filter((x:any)=>s(x.next_exam_date)&&s(x.next_exam_date)<today);
+  const upcoming30=latest.filter((x:any)=>s(x.next_exam_date)>=today&&s(x.next_exam_date)<=day30);
+  const upcoming90=latest.filter((x:any)=>s(x.next_exam_date)>=today&&s(x.next_exam_date)<=day90);
+  const critical=latest.filter((x:any)=>{
+    const decision=s(x.decision).toLocaleUpperCase("tr-TR");
+    return decision.includes("UYGUN DEĞİL")||decision.includes("KISITLI")||Number(x.bmi||0)>=30||Number(x.systolic||0)>=140||Number(x.diastolic||0)>=90||(Number(x.spo2||0)>0&&Number(x.spo2||0)<92);
   });
 
-    const alerts = [
-      ...overdueRaw.slice(0, 5).map((e) => {
-        const emp = employeeMap[String(e.employee_id)] || { name: "Çalışan" };
+  const empMap=Object.fromEntries(activeEmployees.map((x:any)=>[s(x.id),x]));
+  const recentExaminations=[...exams].sort((a:any,b:any)=>s(b.exam_date).localeCompare(s(a.exam_date))).slice(0,10).map((x:any)=>({
+    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:"",examType:x.exam_type||"Muayene",examDate:x.exam_date||"",decision:x.decision||"",jobTitle:empMap[s(x.employee_id)]?.job_title||""
+  }));
+  const recentEk2=[...ek2].sort((a:any,b:any)=>s(b.exam_date||b.created_at).localeCompare(s(a.exam_date||a.created_at))).slice(0,10).map((x:any)=>({
+    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:"",decision:x.decision||x.status||"",createdAt:x.exam_date||x.created_at||""
+  }));
+  const recentPrescriptions=[...prescriptions].sort((a:any,b:any)=>s(b.created_at).localeCompare(s(a.created_at))).slice(0,10).map((x:any)=>({
+    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:"",medicineCount:Array.isArray(x.health_prescription_items)?x.health_prescription_items.length:0,createdAt:x.created_at||""
+  }));
+  const upcomingExams=upcoming90.sort((a:any,b:any)=>s(a.next_exam_date).localeCompare(s(b.next_exam_date))).slice(0,10).map((x:any)=>({
+    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:"",examType:x.exam_type||"Muayene",dueDate:x.next_exam_date||"",decision:x.decision||"",jobTitle:empMap[s(x.employee_id)]?.job_title||"",daysLeft:daysTo(x.next_exam_date)
+  }));
 
-        return {
-          id: `overdue-${e.id}`,
-          level: "Kritik",
-          title: "Muayene süresi geçmiş",
-          desc: `${emp.name} için planlanan muayene tarihi geçti: ${e.next_exam_date}`,
-        };
-      }),
-      ...criticalRaw.slice(0, 5).map((e) => {
-        const emp = employeeMap[String(e.employee_id)] || { name: "Çalışan" };
+  const alerts=[
+    ...overdue.slice(0,5).map((x:any)=>({id:`overdue-${x.id}`,level:"Kritik",title:"Muayene süresi geçmiş",desc:`${empMap[s(x.employee_id)]?.full_name||"Çalışan"} için sistemdeki son muayene kaydının takip tarihi geçti: ${x.next_exam_date}`})),
+    ...critical.slice(0,5).map((x:any)=>({id:`critical-${x.id}`,level:"Uyarı",title:"Sağlık kaydı takip gerektiriyor",desc:`${empMap[s(x.employee_id)]?.full_name||"Çalışan"} için kayıtlı karar/bulgular hekim değerlendirmesi gerektiriyor.`}))
+  ];
 
-        return {
-          id: `critical-${e.id}`,
-          level: "Uyarı",
-          title: "Sağlık uyarısı",
-          desc: `${emp.name} için karar/bulgular takip gerektiriyor. Karar: ${
-            e.decision || "Normal"
-          }`,
-        };
-      }),
-    ];
-
-    return NextResponse.json({
-  success: true,
-  role,
-  read_only: role === "demo_user",
-
-      summary: {
-        todayExams,
-        upcomingExams: upcomingRaw.length,
-        criticalUpcomingExams: criticalUpcoming.length,
-        overdueExams: overdueRaw.length,
-        todayPrescriptions: (prescriptions || []).filter(
-  (p: any) => p.created_at?.slice(0, 10) === todayStr
-).length,
-        openAccidents: 0,
-        upcomingVaccines: 0,
-        criticalAlerts: alerts.length,
-        riskyEmployees: criticalRaw.length,
-      },
-
-      upcomingExams,
-
-recentExaminations,
-
-recentPrescriptions,
-
-recentEk2: [],
-
-      alerts:
-        alerts.length > 0
-          ? alerts
-          : [
-              {
-                id: "health-ok",
-                level: "Bilgi",
-                title: "Sağlık kayıtları izleniyor",
-                desc: "Muayene verileri dashboard'a başarıyla bağlandı.",
-              },
-            ],
-    });
-  } catch (e: any) {
-  console.error("HEALTH DASHBOARD ERROR:", e);
-
-  return NextResponse.json(
-    {
-      error: e?.message,
-      stack: e?.stack,
+  const total=activeEmployees.length;
+  return NextResponse.json({
+    success:true,role,read_only:role==="demo_user",
+    summary:{
+      totalEmployees:total,
+      employeesWithHealthRecord:healthIds.size,
+      employeesMissingHealthRecord:Math.max(0,total-healthIds.size),
+      healthCoveragePercent:total?Math.round(healthIds.size*100/total):0,
+      employeesWithExamination:examIds.size,
+      employeesMissingExamination:Math.max(0,total-examIds.size),
+      ek2Present:ek2Ids.size,
+      ek2Missing:Math.max(0,total-ek2Ids.size),
+      examinationRecords:exams.length,
+      ek2Records:ek2.length,
+      prescriptionRecords:prescriptions.length,
+      todayExams:exams.filter((x:any)=>x.exam_date===today).length,
+      upcomingExams:upcoming90.length,
+      criticalUpcomingExams:upcoming30.length,
+      overdueExams:overdue.length,
+      todayPrescriptions:prescriptions.filter((x:any)=>s(x.created_at).slice(0,10)===today).length,
+      openAccidents:0,
+      upcomingVaccines:0,
+      criticalAlerts:alerts.length,
+      riskyEmployees:uniqueEmployeeCount(critical)
     },
-    { status: 500 }
-  );
-}
+    upcomingExams,recentExaminations,recentPrescriptions,recentEk2,
+    alerts:alerts.length?alerts:[{id:"health-ok",level:"Bilgi",title:"Sağlık kayıtları izleniyor",desc:"Aktif çalışan, muayene, EK-2 ve reçete kayıtları dashboard'a bağlandı."}],
+    dataNotes:[
+      "Sağlık kaydı kapsamı; muayene, EK-2 veya reçete kaydı bulunan aktif çalışanları gösterir.",
+      "Eksik ifadesi, D-SEC içinde eşleşen kayıt bulunamadığını ifade eder; tıbbi işlemin gerçekte yapılmadığını tek başına kanıtlamaz.",
+      "Aşı ve iş kazası KPI'ları kaynak tabloları ayrıca doğrulanana kadar 0 olarak klinik sonuç şeklinde yorumlanmamalıdır."
+    ]
+  });
+ }catch(e:any){
+  console.error("HEALTH DASHBOARD ERROR:",e);
+  return NextResponse.json({error:e?.message||"Sağlık dashboard oluşturulamadı."},{status:500});
+ }
 }
