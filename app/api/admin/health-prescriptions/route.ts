@@ -1,257 +1,47 @@
-import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import {createClient} from "@supabase/supabase-js";
+import {NextResponse} from "next/server";
+import {cookies} from "next/headers";
+export const runtime="nodejs";
 
-export const runtime = "nodejs";
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+type AuthScope={role:string;companyId:string;scoped:boolean};
+function s(v:any){return String(v??"").trim()}
+function getSupabase(){return createClient(process.env.SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false}})}
+async function authorize():Promise<AuthScope|null>{
+  const c=await cookies();
+  const auth=c.get("dsec_admin_auth")?.value||c.get("dsec_user_auth")?.value;
+  const role=s(c.get("dsec_admin_role")?.value||c.get("dsec_user_role")?.value);
+  const companyId=s(c.get("dsec_company_id")?.value);
+  if(auth!=="ok") return null;
+  if(!["super_admin","admin","company_admin","demo_user"].includes(role)) return null;
+  return {role,companyId,scoped:role==="company_admin"||role==="demo_user"};
 }
 
-type PrescriptionItemInput = {
-  medicineName: string;
-  activeIngredient?: string;
-  dosage?: string;
-  usageType?: string;
-  duration?: string;
-  morning?: boolean;
-  noon?: boolean;
-  evening?: boolean;
-  night?: boolean;
-  beforeMeal?: boolean;
-  afterMeal?: boolean;
-  notes?: string;
-};
-
-export async function GET(req: Request) {
-  try {
-    const cookieStore = await cookies();
-    const adminAuth =
-  cookieStore.get("dsec_admin_auth")?.value ||
-  cookieStore.get("dsec_user_auth")?.value;
-
- const adminRole =
-  cookieStore.get("dsec_admin_role")?.value ||
-  cookieStore.get("dsec_user_role")?.value;
-    const companyId = String(cookieStore.get("dsec_company_id")?.value || "").trim();
-
-   const roleValue = String(adminRole || "").trim();
-
-const isAllowed =
-  adminAuth === "ok" ||
-  roleValue === "super_admin" ||
-  roleValue === "company_admin" ||
-  roleValue === "demo_user" ||
-  roleValue === "";
-
-if (!isAllowed) {
-  return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
+type Item={medicineName?:string;activeIngredient?:string;dosage?:string;usageType?:string;duration?:string;morning?:boolean;noon?:boolean;evening?:boolean;night?:boolean;beforeMeal?:boolean;afterMeal?:boolean;notes?:string};
+function cleanItems(v:any):Item[]{return Array.isArray(v)?v.filter(x=>s(x?.medicineName)):[]}
+async function verifyEmployee(db:any,employeeId:string,companyId:string){
+  const {data,error}=await db.from("employees").select("id,firm_id").eq("id",employeeId).single();
+  return !error&&data&&s(data.firm_id)===companyId;
 }
-
-    const { searchParams } = new URL(req.url);
-    const employeeId = searchParams.get("employeeId");
-    const limit = Math.min(Number(searchParams.get("limit") || 20), 100);
-    const offset = Math.max(Number(searchParams.get("offset") || 0), 0);
-
-    const supabase = getSupabase();
-
-    let query = supabase
-      .from("health_prescriptions")
-      .select(`
-  *,
-  health_prescription_items(*)
-`)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    if (adminRole === "company_admin") {
-      query = query.eq("company_id", companyId);
-    }
-
-    if (employeeId) {
-      query = query.eq("employee_id", employeeId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-const prescriptions = (data || []).map((p: any) => ({
-  id: p.id,
-  employee_id: p.employee_id,
-  company_id: p.company_id,
-
-  diagnosis_code: p.diagnosis_code,
-  diagnosis_name: p.diagnosis_name,
-
-  notes: p.notes,
-  status: p.status,
-
-  created_at: p.created_at,
-
-  health_prescription_items:
-    p.health_prescription_items || [],
-}));
-
-return NextResponse.json({
-  success: true,
-  prescriptions,
-});
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "Prescriptions could not be loaded." },
-      { status: 500 }
-    );
-  }
+async function audit(db:any,p:any,action:string,role:string,note?:string){
+  await db.from("health_prescription_audit_logs").insert({prescription_id:p.id,company_id:p.company_id,employee_id:p.employee_id,action,old_status:null,new_status:p.status||null,actor_role:role,note:note||null,metadata:{medula_status:p.medula_status||"NOT_SENT"}});
 }
-
-export async function POST(req: Request) {
-  const supabase = getSupabase();
-  let createdPrescriptionId = "";
-
-  try {
-    const cookieStore = await cookies();
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
-    const companyIdFromCookie = String(
-      cookieStore.get("dsec_company_id")?.value || ""
-    ).trim();
-
-    console.log({
-  adminAuth,
-  adminRole,
-  companyIdFromCookie,
-});
-
-   const roleValue = String(adminRole || "").trim();
-
-const isAllowed =
-  adminAuth === "ok" ||
-  roleValue === "super_admin" ||
-  roleValue === "company_admin" ||
-  roleValue === "demo_user" ||
-  roleValue === "";
-
-if (!isAllowed) {
-  return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
-}
-
-    const body = await req.json();
-
-    const companyId = String(body.companyId || companyIdFromCookie).trim();
-    const employeeId = String(body.employeeId || "").trim();
-
-    if (!companyId || !employeeId) {
-      return NextResponse.json(
-        { error: "Firma ve çalışan bilgisi zorunludur." },
-        { status: 400 }
-      );
-    }
-
-    if (adminRole === "company_admin" && companyId !== companyIdFromCookie) {
-      return NextResponse.json(
-        { error: "Bu firma için işlem yetkiniz yok." },
-        { status: 403 }
-      );
-    }
-
-    const items: PrescriptionItemInput[] = Array.isArray(body.items)
-      ? body.items
-      : [];
-
-    const { data: prescription, error: prescriptionError } = await supabase
-      .from("health_prescriptions")
-      .insert({
-        company_id: companyId,
-        employee_id: employeeId,
-        doctor_id: body.doctorId || null,
-        examination_id: body.examinationId || null,
-        ek2_form_id: body.ek2FormId || null,
-        prescription_no: body.prescriptionNo || null,
-        e_prescription_no: body.ePrescriptionNo || null,
-medula_tracking_no: body.medulaTrackingNo || null,
-medula_status: body.ePrescriptionStatus || "NOT_SENT",
-medula_response: body.medulaResponse || null,
-doctor_identity_number: body.doctorIdentityNumber || null,
-doctor_diploma_no: body.doctorDiplomaNo || null,
-        diagnosis_code: body.diagnosisCode || null,
-        diagnosis_name: body.diagnosisName || null,
-        notes: body.notes || null,
-        status: body.status || "draft",
-        created_by: body.createdBy || null,
-        is_active: true,
-      })
-      .select("*")
-      .single();
-
-    if (prescriptionError) {
-      return NextResponse.json(
-        { error: prescriptionError.message },
-        { status: 500 }
-      );
-    }
-
-    createdPrescriptionId = prescription.id;
-
-    if (items.length > 0) {
-      const itemRows = items
-        .filter((item) => String(item.medicineName || "").trim())
-        .map((item) => ({
-          prescription_id: createdPrescriptionId,
-          medicine_name: item.medicineName,
-          active_ingredient: item.activeIngredient || null,
-          dosage: item.dosage || null,
-          usage_type: item.usageType || null,
-          duration: item.duration || null,
-          morning: item.morning || false,
-          noon: item.noon || false,
-          evening: item.evening || false,
-          night: item.night || false,
-          before_meal: item.beforeMeal || false,
-          after_meal: item.afterMeal || false,
-          notes: item.notes || null,
-        }));
-
-      if (itemRows.length > 0) {
-        const { error: itemsError } = await supabase
-          .from("health_prescription_items")
-          .insert(itemRows);
-
-        if (itemsError) {
-          await supabase
-            .from("health_prescriptions")
-            .delete()
-            .eq("id", createdPrescriptionId);
-
-          return NextResponse.json(
-            { error: itemsError.message },
-            { status: 500 }
-          );
-        }
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      prescription,
-    });
-  } catch (e: any) {
-    if (createdPrescriptionId) {
-      await supabase
-        .from("health_prescriptions")
-        .delete()
-        .eq("id", createdPrescriptionId);
-    }
-
-    return NextResponse.json(
-      { error: e?.message || "Prescription could not be created." },
-      { status: 500 }
-    );
-  }
-}
+export async function GET(req:Request){
+ try{const a=await authorize();if(!a)return NextResponse.json({success:false,error:"Yetkisiz erişim."},{status:401});
+ const u=new URL(req.url),employeeId=s(u.searchParams.get("employeeId")),requestedCompany=s(u.searchParams.get("companyId"));const limit=Math.min(Math.max(Number(u.searchParams.get("limit")||20),1),100),offset=Math.max(Number(u.searchParams.get("offset")||0),0);
+ if(a.scoped&&requestedCompany&&requestedCompany!==a.companyId)return NextResponse.json({success:false,error:"Bu firma için yetkiniz yok."},{status:403});
+ const companyId=a.scoped?a.companyId:requestedCompany;let q=getSupabase().from("health_prescriptions").select("*,health_prescription_items(*)").eq("is_active",true).order("created_at",{ascending:false}).range(offset,offset+limit-1);
+ if(companyId)q=q.eq("company_id",companyId);if(employeeId)q=q.eq("employee_id",employeeId);const{data,error}=await q;if(error)throw error;
+ return NextResponse.json({success:true,prescriptions:data||[],integration:{medulaConnected:false,mode:"PREPARATION"}});
+ }catch(e:any){return NextResponse.json({success:false,error:e?.message||"Reçeteler alınamadı."},{status:500})}}
+export async function POST(req:Request){
+ try{const a=await authorize();if(!a)return NextResponse.json({success:false,error:"Yetkisiz erişim."},{status:401});if(a.role==="demo_user")return NextResponse.json({success:false,error:"Demo kullanıcı reçete kaydedemez."},{status:403});
+ const b=await req.json(),requestedCompany=s(b.companyId||b.company_id),companyId=a.scoped?a.companyId:requestedCompany,employeeId=s(b.employeeId||b.employee_id),items=cleanItems(b.items);
+ if(!companyId||!employeeId)return NextResponse.json({success:false,error:"Firma ve çalışan zorunludur."},{status:400});
+ if(a.scoped&&requestedCompany&&requestedCompany!==a.companyId)return NextResponse.json({success:false,error:"Bu firma için işlem yetkiniz yok."},{status:403});
+ const db=getSupabase();if(!(await verifyEmployee(db,employeeId,companyId)))return NextResponse.json({success:false,error:"Çalışan seçili firmaya ait değil."},{status:409});
+ const status=s(b.status||"draft");if(status!=="draft"&&(!s(b.diagnosisCode)||items.length===0))return NextResponse.json({success:false,error:"Tamamlanan reçetede tanı ve en az bir ilaç zorunludur."},{status:400});
+ const requestedMedula=s(b.ePrescriptionStatus||"NOT_SENT");const medulaStatus=["NOT_SENT","READY"].includes(requestedMedula)?requestedMedula:"NOT_SENT";
+ const payload={company_id:companyId,employee_id:employeeId,doctor_id:s(b.doctorId)||null,examination_id:s(b.examinationId)||null,ek2_form_id:s(b.ek2FormId)||null,prescription_no:s(b.prescriptionNo)||null,e_prescription_no:s(b.ePrescriptionNo)||null,medula_tracking_no:s(b.medulaTrackingNo)||null,medula_status:medulaStatus,medula_response:s(b.medulaResponse)||null,doctor_identity_number:s(b.doctorIdentityNumber)||null,doctor_diploma_no:s(b.doctorDiplomaNo)||null,diagnosis_code:s(b.diagnosisCode)||null,diagnosis_name:s(b.diagnosisName)||null,notes:s(b.notes)||null,status,created_by:s(b.createdBy)||null,items};
+ const{data:id,error}=await db.rpc("dsec_health_prescription_save",{p_payload:payload});if(error)throw error;const{data:p,error:loadErr}=await db.from("health_prescriptions").select("*,health_prescription_items(*)").eq("id",id).single();if(loadErr)throw loadErr;await audit(db,p,"CREATED",a.role,"Reçete atomik olarak oluşturuldu.");
+ return NextResponse.json({success:true,prescription:p,integration:{medulaConnected:false,mode:"PREPARATION"}},{status:201});
+ }catch(e:any){return NextResponse.json({success:false,error:e?.message||"Reçete kaydedilemedi."},{status:500})}}
