@@ -41,7 +41,7 @@ export default function HealthTimelineTab({ employee }: Props) {
               cache: "no-store",
               credentials: "include",
             }),
-            fetch(`/api/admin/accidents`, {
+            fetch(`/api/admin/accidents?employeeId=${encodeURIComponent(employee.id)}${employee.company_id?`&firmId=${encodeURIComponent(employee.company_id)}`:""}`, {
               cache: "no-store",
               credentials: "include",
             }),
@@ -51,8 +51,6 @@ export default function HealthTimelineTab({ employee }: Props) {
         const examJson = await examRes.json().catch(() => ({}));
         const prescriptionJson = await prescriptionRes.json().catch(() => ({}));
         const accidentJson = await accidentRes.json().catch(() => ({}));
-
-        const employeeName = normalizeText(employee.full_name || "");
 
         const ek2Items: TimelineItem[] = (ek2Json.forms || []).map((x: any) => ({
           id: `ek2-${x.id}`,
@@ -87,13 +85,7 @@ export default function HealthTimelineTab({ employee }: Props) {
         }));
 
         const accidentItems: TimelineItem[] = (accidentJson.rows || [])
-          .filter((x: any) => {
-            const rowName = normalizeText(x.employeeName || "");
-            const source = normalizeText(x.source || "");
-            if (!rowName || rowName === "-") return false;
-            if (source === "demo") return false;
-            return rowName === employeeName;
-          })
+          .filter((x: any) => String(x.webEmployeeId || "").trim() === String(employee.id || "").trim())
           .map((x: any) => ({
             id: `kaza-${x.id}`,
             type: "KAZA",

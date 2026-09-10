@@ -1,67 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextRequest,NextResponse } from "next/server";
 import { cookies } from "next/headers";
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const cookieStore = await cookies();
-
-    const adminAuth = cookieStore.get("dsec_admin_auth")?.value;
-    const adminRole = cookieStore.get("dsec_admin_role")?.value;
-    const companyId = String(
-      cookieStore.get("dsec_company_id")?.value || ""
-    ).trim();
-
-    if (adminAuth !== "ok" && adminRole) {
-      return NextResponse.json(
-        { success: false, error: "Yetkisiz erişim." },
-        { status: 401 }
-      );
-    }
-
-    const { id } = await params;
-
-    const supabase = getSupabase();
-
-    let query = supabase
-  .from("health_ek2_forms")
-  .select("*")
-  .eq("id", id);
-
-if (adminRole === "company_admin") {
-  query = query.eq("company_id", companyId);
-}
-
-const { data, error } = await query.single();
-
-    if (error) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      form: data,
-    });
-  } catch (e: any) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: e?.message || "Kayıt bulunamadı.",
-      },
-      { status: 500 }
-    );
-  }
-}
+function db(){return createClient(process.env.SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!)}
+function s(v:any){return String(v??"").trim()}
+function normDate(v:any){const x=s(v);return /^\d{4}-\d{2}-\d{2}$/.test(x)?x:null}
+async function auth(){const c=await cookies();const a=c.get("dsec_admin_auth")?.value;const role=s(c.get("dsec_admin_role")?.value||"super_admin");const firm=s(c.get("dsec_company_id")?.value);if(a!=="ok"&&role)return null;if(!["super_admin","admin","company_admin","demo_user"].includes(role))return null;return{role,firm,scoped:role==="company_admin"||role==="demo_user"}}
+function examType(formType:any){return s(formType).toLocaleUpperCase("tr-TR").includes("PERİYOD")||s(formType).toUpperCase().includes("PERIYOD")?"EK2_PERIYODIK":"EK2_ISE_GIRIS"}
+export async function GET(req:NextRequest,{params}:{params:Promise<{id:string}>}){try{const a=await auth();if(!a)return NextResponse.json({success:false,error:"Yetkisiz erişim."},{status:401});const{id}=await params;let q=db().from("health_ek2_forms").select("*").eq("id",id).or("is_active.is.null,is_active.eq.true");if(a.scoped)q=q.eq("company_id",a.firm);const{data,error}=await q.single();if(error)throw error;return NextResponse.json({success:true,form:data})}catch(e:any){return NextResponse.json({success:false,error:e?.message||"EK-2 bulunamadı."},{status:404})}}
+export async function PUT(req:NextRequest,{params}:{params:Promise<{id:string}>}){try{const a=await auth();if(!a)return NextResponse.json({success:false,error:"Yetkisiz erişim."},{status:401});if(a.role==="demo_user")return NextResponse.json({success:false,error:"Demo kullanıcı sağlık kaydı güncelleyemez."},{status:403});const{id}=await params;const body=await req.json();const supabase=db();let get=supabase.from("health_ek2_forms").select("*").eq("id",id).or("is_active.is.null,is_active.eq.true");if(a.scoped)get=get.eq("company_id",a.firm);const{data:current,error:getError}=await get.single();if(getError||!current)return NextResponse.json({success:false,error:"EK-2 bulunamadı."},{status:404});const companyId=s(current.company_id);const employeeId=s(current.employee_id);const status=s(body.status||current.status||"Taslak");const examDate=normDate(body.examDate||body.exam_date)||current.exam_date||new Date().toISOString().slice(0,10);const nextExamDate=normDate(body.nextExamDate||body.next_exam_date)||null;let examinationId=s(current.examination_id)||null;
+ if(status!=="Taslak"&&!examinationId){const{data:exam,error}=await supabase.from("health_examinations").insert({employee_id:employeeId,company_id:companyId,exam_date:examDate,next_exam_date:nextExamDate,decision:body.decision||current.decision||null,exam_type:examType(body.formType||current.form_type),is_deleted:false,created_at:new Date().toISOString(),updated_at:new Date().toISOString()}).select("id").single();if(error)throw error;examinationId=exam.id}
+ else if(examinationId){const{error}=await supabase.from("health_examinations").update({exam_date:examDate,next_exam_date:nextExamDate,decision:body.decision||current.decision||null,exam_type:examType(body.formType||current.form_type),updated_at:new Date().toISOString()}).eq("id",examinationId).eq("company_id",companyId);if(error)throw error}
+ const patch:any={examination_id:examinationId,form_type:body.formType||body.form_type||current.form_type,status,file_no:body.fileNo??body.file_no??current.file_no,revision_no:body.revisionNo??body.revision_no??current.revision_no,exam_date:examDate,next_exam_date:nextExamDate,doctor_name:body.doctorName??body.doctor_name??current.doctor_name,decision:body.decision??current.decision,doctor_opinion:body.doctorOpinion??body.doctor_opinion??current.doctor_opinion,signature_note:body.signatureNote??body.signature_note??current.signature_note,raw_json:{...(current.raw_json||{}),...body},updated_at:new Date().toISOString()};const{data,error}=await supabase.from("health_ek2_forms").update(patch).eq("id",id).eq("company_id",companyId).select("*").single();if(error)throw error;return NextResponse.json({success:true,form:data})}catch(e:any){return NextResponse.json({success:false,error:e?.message||"EK-2 güncellenemedi."},{status:500})}}
+export async function DELETE(req:NextRequest,{params}:{params:Promise<{id:string}>}){try{const a=await auth();if(!a)return NextResponse.json({success:false,error:"Yetkisiz erişim."},{status:401});if(a.role==="demo_user")return NextResponse.json({success:false,error:"Demo kullanıcı sağlık kaydı silemez."},{status:403});const{id}=await params;const supabase=db();let get=supabase.from("health_ek2_forms").select("id,company_id,examination_id").eq("id",id).or("is_active.is.null,is_active.eq.true");if(a.scoped)get=get.eq("company_id",a.firm);const{data:current,error:getError}=await get.single();if(getError||!current)return NextResponse.json({success:false,error:"EK-2 bulunamadı."},{status:404});const now=new Date().toISOString();const{error}=await supabase.from("health_ek2_forms").update({is_active:false,updated_at:now}).eq("id",id).eq("company_id",current.company_id);if(error)throw error;if(current.examination_id)await supabase.from("health_examinations").update({is_deleted:true,updated_at:now}).eq("id",current.examination_id).eq("company_id",current.company_id);return NextResponse.json({success:true})}catch(e:any){return NextResponse.json({success:false,error:e?.message||"EK-2 silinemedi."},{status:500})}}

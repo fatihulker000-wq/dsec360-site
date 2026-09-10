@@ -221,6 +221,8 @@ type Ek2HistoryRow = {
 
 export default function Ek2Tab({ employee }: Ek2TabProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("genel");
+  const [currentFormId,setCurrentFormId]=useState<string>("");
+  const [saving,setSaving]=useState(false);
   const [history, setHistory] = useState<Ek2HistoryRow[]>([]);
 const [historyLoading, setHistoryLoading] = useState(false);
   const [form, setForm] = useState<Ek2Form>({
@@ -290,11 +292,13 @@ const [historyLoading, setHistoryLoading] = useState(false);
 }
 
 function newEntry() {
+  setCurrentFormId("");
   setForm(buildEmployeeForm("İşe Giriş"));
   setActiveTab("genel");
 }
 
 function newPeriodic() {
+  setCurrentFormId("");
   setForm(buildEmployeeForm("Periyodik"));
   setActiveTab("genel");
 }
@@ -306,7 +310,7 @@ async function loadEk2History() {
 
   try {
     const res = await fetch(
-      `/api/admin/ek2?employeeId=${employee.id}`,
+      `/api/admin/ek2?employeeId=${employee.id}${employee.company_id?`&companyId=${encodeURIComponent(employee.company_id)}`:""}`,
       {
         credentials: "include",
       }
@@ -328,50 +332,35 @@ useEffect(() => {
   loadEk2History();
 }, [employee?.id]);
 
-  function saveDraft() {
-    update("status", "Taslak");
-    alert("EK-2 taslak olarak hazırlandı. API bağlantısı sonraki adımda eklenecek.");
+  async function persist(status: FormStatus) {
+    if(!employee?.id||!employee?.company_id){alert("Çalışan veya firma bilgisi eksik.");return;}
+    setSaving(true);
+    try{
+      const payload={...form,status,employeeId:employee.id,companyId:employee.company_id};
+      const url=currentFormId?`/api/admin/ek2/${currentFormId}`:"/api/admin/ek2";
+      const res=await fetch(url,{method:currentFormId?"PUT":"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify(payload)});
+      const json=await res.json().catch(()=>({}));
+      if(!res.ok||!json.success)throw new Error(json?.detail||json?.error||"EK-2 kaydedilemedi.");
+      const saved=json.form||json.ek2;
+      if(saved?.id)setCurrentFormId(String(saved.id));
+      setForm(prev=>({...prev,...payload,status}));
+      await loadEk2History();
+      alert(status==="Taslak"?"EK-2 taslağı kaydedildi.":status==="İmzalandı"?"EK-2 imzalı olarak kaydedildi.":"EK-2 tamamlandı ve kaydedildi.");
+    }catch(e:any){alert(e?.message||"EK-2 kaydedilemedi.");}
+    finally{setSaving(false);}
   }
 
-  async function completeForm() {
-  const payload: Ek2Form = {
-  ...form,
-  status: "Tamamlandı" as FormStatus,
+  async function saveDraft(){await persist("Taslak");}
+  async function completeForm(){await persist("Tamamlandı");}
+  async function signForm(){await persist("İmzalandı");}
 
-};
+  async function loadExisting(id:string){
+    try{const res=await fetch(`/api/admin/ek2/${id}`,{cache:"no-store",credentials:"include"});const json=await res.json();if(!res.ok||!json.success)throw new Error(json?.error||"EK-2 yüklenemedi.");const row=json.form||{};setCurrentFormId(String(row.id||id));setForm(prev=>({...prev,...(row.raw_json||{}),formType:row.form_type||prev.formType,status:row.status||prev.status,fileNo:row.file_no||"",revisionNo:row.revision_no||"0",examDate:row.exam_date||"",nextExamDate:row.next_exam_date||"",doctorName:row.doctor_name||"",decision:row.decision||prev.decision,doctorOpinion:row.doctor_opinion||"",signatureNote:row.signature_note||""}));setActiveTab("genel");}catch(e:any){alert(e?.message||"EK-2 yüklenemedi.")}
+  }
 
-
-
-  const res = await fetch("/api/admin/ek2", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    credentials: "include",
-    body: JSON.stringify(payload),
-  });
-
-  const json = await res.json();
-
-  if (!res.ok || !json.success) {
-  alert(
-    `${json.error || "EK-2 kaydedilemedi."}\n\nDetay: ${
-      json.detail || json.code || json.hint || "Detay yok"
-    }`
-  );
-  return;
-}
-
-  setForm(payload);
-
-await loadEk2History();
-
-alert("EK-2 tamamlandı ve kaydedildi.");
-}
-
-  function signForm() {
-    update("status", "İmzalandı");
-    alert("EK-2 imza akışı sonraki adımda bağlanacak.");
+  async function deleteExisting(id:string){
+    if(!confirm("Bu EK-2 kaydını pasife almak istediğinize emin misiniz?"))return;
+    const res=await fetch(`/api/admin/ek2/${id}`,{method:"DELETE",credentials:"include"});const json=await res.json().catch(()=>({}));if(!res.ok||!json.success){alert(json?.error||"EK-2 silinemedi.");return;}if(currentFormId===id){setCurrentFormId("");setForm(buildEmployeeForm("İşe Giriş"));}await loadEk2History();
   }
 
   function printForm() {
@@ -440,16 +429,16 @@ alert("EK-2 tamamlandı ve kaydedildi.");
         <button type="button" onClick={newPeriodic} style={secondaryButtonStyle}>
           + Yeni Periyodik
         </button>
-        <button type="button" onClick={saveDraft} style={secondaryButtonStyle}>
+        <button type="button" onClick={saveDraft} disabled={saving} style={secondaryButtonStyle}>
           Taslak Kaydet
         </button>
-        <button type="button" onClick={completeForm} style={successButtonStyle}>
+        <button type="button" onClick={completeForm} disabled={saving} style={successButtonStyle}>
           Tamamla
         </button>
         <button type="button" onClick={printForm} style={secondaryButtonStyle}>
           Yazdır
         </button>
-        <button type="button" onClick={signForm} style={darkButtonStyle}>
+        <button type="button" onClick={signForm} disabled={saving} style={darkButtonStyle}>
           İmzala
         </button>
       </section>
@@ -629,14 +618,6 @@ alert("EK-2 tamamlandı ve kaydedildi.");
 
             <div style={gridStyle}>
               <Field label="İşyeri / Firma">
-                <input
-                  value={form.companyName}
-                  onChange={(e) => update("companyName", e.target.value)}
-                  style={inputStyle}
-                />
-              </Field>
-
-              <Field label="İşyeri / Firma">
   <input
     value={form.companyName}
     readOnly
@@ -660,15 +641,6 @@ alert("EK-2 tamamlandı ve kaydedildi.");
     style={readonlyInputStyle}
   />
 </Field>
-
-              <Field label="İşe Giriş Tarihi">
-                <input
-                  type="date"
-                  value={form.startDate}
-                  onChange={(e) => update("startDate", e.target.value)}
-                  style={inputStyle}
-                />
-              </Field>
 
               <Field label="Tehlike Sınıfı">
                 <select
@@ -1130,8 +1102,11 @@ alert("EK-2 tamamlandı ve kaydedildi.");
             </div>
           </div>
 
-          <div style={{ fontWeight: 900 }}>
-            {item.status || "-"}
+          <div style={{ display:"flex",gap:7,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end" }}>
+            <span style={{ fontWeight: 900 }}>{item.status || "-"}</span>
+            <button type="button" onClick={()=>loadExisting(item.id)} style={secondaryButtonStyle}>Düzenle</button>
+            <button type="button" onClick={()=>window.open(`/api/admin/ek2/${item.id}/download`,`_blank`)} style={secondaryButtonStyle}>PDF</button>
+            <button type="button" onClick={()=>deleteExisting(item.id)} style={{...secondaryButtonStyle,color:"#b91c1c",borderColor:"#fecaca"}}>Sil</button>
           </div>
         </div>
       ))}
@@ -1146,7 +1121,7 @@ alert("EK-2 tamamlandı ve kaydedildi.");
               <button type="button" onClick={printForm} style={secondaryButtonStyle}>
                 Yazdır
               </button>
-              <button type="button" onClick={signForm} style={darkButtonStyle}>
+              <button type="button" onClick={signForm} disabled={saving} style={darkButtonStyle}>
                 İmzala
               </button>
             </div>

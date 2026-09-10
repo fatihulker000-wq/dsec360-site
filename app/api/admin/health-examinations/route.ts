@@ -22,7 +22,9 @@ async function getAdminContext() {
 
   const isAllowedRole =
     adminRole === "super_admin" ||
+    adminRole === "admin" ||
     adminRole === "company_admin" ||
+    adminRole === "demo_user" ||
     !adminRole;
 
   if (adminAuth !== "ok" && adminRole) {
@@ -61,9 +63,10 @@ export async function GET(req: Request) {
       .order("exam_date", { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (admin.adminRole === "company_admin") {
-      query = query.eq("company_id", admin.companyIdFromCookie);
-    }
+    const requestedCompanyId=String(searchParams.get("companyId")||"").trim();
+    const scopedRole=admin.adminRole==="company_admin"||admin.adminRole==="demo_user";
+    if(scopedRole){query=query.eq("company_id",admin.companyIdFromCookie)}
+    else if(requestedCompanyId){query=query.eq("company_id",requestedCompanyId)}
 
     if (employeeId) {
       query = query.eq("employee_id", employeeId);
@@ -101,6 +104,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
+    if(admin.adminRole==="demo_user") return NextResponse.json({error:"Demo kullanıcı sağlık kaydı oluşturamaz."},{status:403});
     const body = await req.json();
 
     const companyId = String(body.companyId || admin.companyIdFromCookie).trim();
@@ -114,7 +118,7 @@ export async function POST(req: Request) {
     }
 
     if (
-      admin.adminRole === "company_admin" &&
+      (admin.adminRole === "company_admin" || admin.adminRole === "demo_user") &&
       companyId !== admin.companyIdFromCookie
     ) {
       return NextResponse.json(

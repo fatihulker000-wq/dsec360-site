@@ -22,7 +22,9 @@ async function getAdminContext() {
 
   const isAllowedRole =
     adminRole === "super_admin" ||
+    adminRole === "admin" ||
     adminRole === "company_admin" ||
+    adminRole === "demo_user" ||
     !adminRole;
 
   if (adminAuth !== "ok" && adminRole) return null;
@@ -54,7 +56,7 @@ export async function GET(
       .eq("id", id)
       .eq("is_deleted", false);
 
-    if (admin.adminRole === "company_admin") {
+    if (admin.adminRole === "company_admin" || admin.adminRole === "demo_user") {
       query = query.eq("company_id", admin.companyIdFromCookie);
     }
 
@@ -87,6 +89,7 @@ export async function PUT(
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
+    if(admin.adminRole==="demo_user") return NextResponse.json({error:"Demo kullanıcı sağlık kaydı güncelleyemez."},{status:403});
     const { id } = await params;
     const body = await req.json();
     const supabase = getSupabase();
@@ -120,7 +123,7 @@ export async function PUT(
       .eq("id", id)
       .eq("is_deleted", false);
 
-    if (admin.adminRole === "company_admin") {
+    if (admin.adminRole === "company_admin" || admin.adminRole === "demo_user") {
       query = query.eq("company_id", admin.companyIdFromCookie);
     }
 
@@ -153,6 +156,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
+    if(admin.adminRole==="demo_user") return NextResponse.json({error:"Demo kullanıcı sağlık kaydı silemez."},{status:403});
     const { id } = await params;
     const supabase = getSupabase();
 
@@ -165,7 +169,7 @@ export async function DELETE(
       .eq("id", id)
       .eq("is_deleted", false);
 
-    if (admin.adminRole === "company_admin") {
+    if (admin.adminRole === "company_admin" || admin.adminRole === "demo_user") {
       query = query.eq("company_id", admin.companyIdFromCookie);
     }
 
