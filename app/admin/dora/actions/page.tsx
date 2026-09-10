@@ -21,7 +21,10 @@ type Queue={
   execution_note?:string;execution_result?:any;target_records?:any[];
   executor?:{
     supported?:boolean;kind?:string;label?:string;teamType?:string;candidates?:Candidate[];
-    requiredSelectionCount?:number;requiresQualificationConfirmation?:boolean;qualificationText?:string
+    requiredSelectionCount?:number;allowAnySelectionCount?:boolean;
+    requiresQualificationConfirmation?:boolean;qualificationText?:string;
+    requiresTrainingSelection?:boolean;trainings?:Array<{id:string;title:string;type:string;duration_minutes?:number}>;
+    boardRoles?:Array<{key:string;label:string}>
   };
 };
 
@@ -42,6 +45,8 @@ export default function DoraActionsPage(){
   const [queue,setQueue]=useState<Queue[]>([]);
   const [selected,setSelected]=useState<Record<string,string[]>>({});
   const [confirmed,setConfirmed]=useState<Record<string,boolean>>({});
+  const [selectedTraining,setSelectedTraining]=useState<Record<string,string>>({});
+  const [boardRoles,setBoardRoles]=useState<Record<string,Record<string,string>>>({});
   const [busy,setBusy]=useState(false);
   const [recordsOpen,setRecordsOpen]=useState<Queue|null>(null);
   const [booting,setBooting]=useState(true);
@@ -217,8 +222,11 @@ export default function DoraActionsPage(){
               const executable=Boolean(q.executor?.supported);
               const needed=Math.max(0,Number(q.executor?.requiredSelectionCount||0));
               const requiresConfirmation=Boolean(q.executor?.requiresQualificationConfirmation);
-              const exactSelection=!executable || needed===0 || ids.length===needed;
+              const anyCount=Boolean(q.executor?.allowAnySelectionCount);
+              const exactSelection=!executable || (anyCount?ids.length>0:(needed===0 || ids.length===needed));
               const confirmationOk=!requiresConfirmation || confirmed[q.id]===true;
+              const trainingOk=!q.executor?.requiresTrainingSelection || Boolean(selectedTraining[q.id]);
+              const boardRoleOk=q.executor?.kind!=="ISG_BOARD_MEMBER" || (ids.every(eid=>Boolean(boardRoles[q.id]?.[eid])) && new Set(ids.map(eid=>boardRoles[q.id]?.[eid])).size===ids.length);
               return <div className="dora-action-card" key={q.id} style={{...item,border:q.status==="APPROVED"?`1px solid #84caff`:`1px solid ${C.line}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"start",flexWrap:"wrap"}}><b>{q.title}</b><Status s={q.status}/></div>
                 <div style={small}>{q.source_domain} • {q.severity}{q.executor?.teamType?` • ${q.executor.teamType}`:""}</div>
@@ -229,7 +237,8 @@ export default function DoraActionsPage(){
                   <span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:executable?"#ecfdf3":"#f2f4f7",color:executable?C.green:C.muted}}>
                     {executable?"DORA BU İŞLEMİ YAPABİLİR":"SADECE ÖNERİ / YÜRÜTÜCÜ BEKLİYOR"}
                   </span>
-                  {executable&&needed>0&&<span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:"#eff8ff",color:C.blue}}>SEÇİLMESİ GEREKEN: {needed}</span>}
+                  {executable&&anyCount&&<span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:"#eff8ff",color:C.blue}}>EN AZ 1 ÇALIŞAN SEÇ</span>}
+                  {executable&&!anyCount&&needed>0&&<span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:"#eff8ff",color:C.blue}}>SEÇİLMESİ GEREKEN: {needed}</span>}
                 </div>
 
                 {q.status==="WAITING_APPROVAL"&&executable&&<div style={{marginTop:11,padding:11,borderRadius:11,background:"#f8fafc",border:`1px solid ${C.line}`}}>
@@ -241,6 +250,8 @@ export default function DoraActionsPage(){
                       <span style={{fontSize:11,minWidth:0,overflowWrap:"anywhere"}}><b>{c.full_name}</b><br/><span style={{color:C.muted,fontSize:9}}>{c.department} • {c.job_title}</span></span>
                     </label>)}
                   </div>}
+                  {q.executor?.requiresTrainingSelection&&<div style={{marginTop:10}}><div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:5}}>ATANACAK EĞİTİM</div><select value={selectedTraining[q.id]||""} onChange={e=>setSelectedTraining(prev=>({...prev,[q.id]:e.target.value}))} style={{...input,minWidth:0}}><option value="">Eğitim seçin…</option>{(q.executor.trainings||[]).map(t=><option key={t.id} value={t.id}>{t.title} • {t.type}{t.duration_minutes?` • ${t.duration_minutes} dk`:""}</option>)}</select></div>}
+                  {q.executor?.kind==="ISG_BOARD_MEMBER"&&ids.length>0&&<div style={{display:"grid",gap:7,marginTop:10}}><div style={{fontSize:9,fontWeight:950,color:C.muted}}>SEÇİLEN ÇALIŞANLARA KURUL ROLÜ ATA</div>{ids.map(eid=>{const emp=candidates.find(c=>String(c.id)===eid);return <div key={eid} style={{display:"grid",gridTemplateColumns:"minmax(140px,1fr) minmax(180px,1fr)",gap:8,alignItems:"center"}}><div style={{fontSize:10,fontWeight:800}}>{emp?.full_name||eid}</div><select value={boardRoles[q.id]?.[eid]||""} onChange={e=>setBoardRoles(prev=>({...prev,[q.id]:{...(prev[q.id]||{}),[eid]:e.target.value}}))} style={{...input,minWidth:0}}><option value="">Kurul rolü seçin…</option>{(q.executor?.boardRoles||[]).map(role=><option key={role.key} value={role.key}>{role.label}</option>)}</select></div>})}</div>}
                   {requiresConfirmation&&<label style={{display:"flex",gap:8,alignItems:"flex-start",marginTop:10,padding:9,borderRadius:9,background:"#fffaeb",border:"1px solid #fedf89",fontSize:10,lineHeight:1.5,cursor:"pointer"}}>
                     <input type="checkbox" checked={confirmed[q.id]===true} onChange={e=>setConfirmed(p=>({...p,[q.id]:e.target.checked}))}/>
                     <span><b>Kullanıcı doğrulaması:</b> {q.executor?.qualificationText||"Bu işlem için gerekli uygunluk kullanıcı tarafından doğrulanmalıdır."}</span>
@@ -252,7 +263,7 @@ export default function DoraActionsPage(){
                   <div style={{marginTop:8,fontSize:10,color:C.ink}}><b>İşlem yapılan çalışanlar:</b> {q.execution_result.employeeNames.join(", ")}</div>}
                 <div style={{display:"flex",gap:7,marginTop:10,flexWrap:"wrap"}}>
                   {q.status==="WAITING_APPROVAL"&&<>
-                    <button disabled={busy||!executable||!exactSelection||!confirmationOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
+                    <button disabled={busy||!executable||!exactSelection||!confirmationOk||!trainingOk||!boardRoleOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true,selectedTrainingId:selectedTraining[q.id]||"",roleAssignments:boardRoles[q.id]||{}})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
                     <button disabled={busy} onClick={()=>cmd("SKIP",{id:q.id})} style={secondary}>ATLA</button>
                   </>}
                   {q.status==="APPROVED"&&<button disabled={busy} onClick={()=>cmd("START",{id:q.id})} style={start}>▶ BAŞLA — DORA İŞLEMİ YAPSIN</button>}

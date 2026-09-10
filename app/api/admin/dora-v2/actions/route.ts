@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type AnyRow = Record<string, any>;
-type ExecutorKind = "EMERGENCY_SUPPORT_TEAM" | "EMPLOYEE_REPRESENTATIVE" | "";
+type ExecutorKind = "EMERGENCY_SUPPORT_TEAM" | "EMPLOYEE_REPRESENTATIVE" | "TRAINING_ASSIGNMENT" | "ISG_BOARD_MEMBER" | "";
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,7 +32,9 @@ function employeePhone(e: AnyRow) { return text(e.phone || e.mobile_phone || e.m
 
 function executorKindFor(row:AnyRow):ExecutorKind {
   const h=hay(row);
+  if(text(row.source_gap_id)==="isg-board" || h.includes("ISG_KURULU_YAPISI")) return "ISG_BOARD_MEMBER";
   if(h.includes("CALISAN_TEMSILCI") || text(row.source_gap_id)==="employee-representatives") return "EMPLOYEE_REPRESENTATIVE";
+  if(!h.includes("YILLIK_EGITIM_PLANI") && !h.includes("DOKUMAN") && (h.includes("EGITIM_TAMAMLAMA") || h.includes("TAMAMLANMAMIS_EGITIM") || h.includes("EGITIM_ATAMA") || h.includes("ATANMAMIS_EGITIM"))) return "TRAINING_ASSIGNMENT";
   if(
     h.includes("KORUMA") || h.includes("SONDUR") || h.includes("YANGINLA_MUCADELE") ||
     h.includes("KURTAR") || h.includes("ARAMA_KURTARMA") ||
@@ -91,9 +93,9 @@ async function authorize(supabase:any, requested:any) {
 }
 
 async function companyInfo(supabase:any, companyId:string) {
-  const {data,error}=await supabase.from("companies").select("id,local_firm_id").eq("id",companyId).maybeSingle();
+  const {data,error}=await supabase.from("companies").select("id,name,local_firm_id").eq("id",companyId).maybeSingle();
   if(error) throw error;
-  return {localFirmId:data?.local_firm_id ?? null};
+  return {localFirmId:data?.local_firm_id ?? null,name:text(data?.name)||"Firma"};
 }
 
 async function activeEmployees(supabase:any, companyId:string){
@@ -142,6 +144,39 @@ async function representativeCandidates(supabase:any, companyId:string) {
     .slice(0,250);
 }
 
+
+function parseBoardMissingRoles(row:AnyRow){
+  const evidence=Array.isArray(row?.requested_payload?.evidence)?row.requested_payload.evidence:[];
+  const n=norm([...evidence,text(row.description),text(row.recommendation)].join(" "));
+  const expected=[
+    {key:"BASKAN",label:"Başkan"},
+    {key:"ISG_UZMANI",label:"İSG Uzmanı"},
+    {key:"ISYERI_HEKIMI",label:"İşyeri Hekimi"},
+    {key:"CALISAN_TEMSILCISI",label:"Çalışan Temsilcisi"}
+  ];
+  const found=expected.filter(x=>n.includes(x.key));
+  return found.length?found:expected;
+}
+
+async function boardCandidates(supabase:any,companyId:string){
+  const employees=await activeEmployees(supabase,companyId);
+  const {data,error}=await supabase.from("documentation_board_members").select("employee_id,full_name,is_active,is_deleted").eq("firm_id",companyId).eq("is_active",true).eq("is_deleted",false);
+  if(error)throw error;
+  const usedIds=new Set((data||[]).map((x:any)=>text(x.employee_id)).filter(Boolean));
+  return employees.filter((e:any)=>!usedIds.has(text(e.id))).map((e:any)=>({id:e.id,full_name:employeeName(e),department:employeeDepartment(e),phone:employeePhone(e),job_title:text(e.job_title)||"-"})).filter((e:any)=>e.full_name).slice(0,250);
+}
+
+async function trainingOptions(supabase:any){
+  const {data,error}=await supabase.from("trainings").select("id,title,description,type,duration_minutes,catalog_visible").eq("catalog_visible",true).order("created_at",{ascending:true});
+  if(error)throw error;
+  return (data||[]).map((t:any)=>({id:text(t.id),title:text(t.title)||"Eğitim",type:text(t.type)||"EĞİTİM",duration_minutes:Number(t.duration_minutes||0),description:text(t.description)}));
+}
+
+async function trainingCandidates(supabase:any,companyId:string){
+  const employees=await activeEmployees(supabase,companyId);
+  return employees.map((e:any)=>({id:e.id,full_name:employeeName(e),department:employeeDepartment(e),phone:employeePhone(e),job_title:text(e.job_title)||"-"})).filter((e:any)=>e.full_name).slice(0,500);
+}
+
 async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
   const kind=executorKindFor(row);
   const missingCount=missingCountFrom(row);
@@ -157,13 +192,14 @@ async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
     };
   }
   if(kind==="EMPLOYEE_REPRESENTATIVE"){
-    return {
-      supported:true,kind,label:"Çalışan temsilcisi ata",
-      candidates:await representativeCandidates(supabase,companyId),
-      requiredSelectionCount:missingCount||1,
-      requiresQualificationConfirmation:true,
-      qualificationText:"Çalışan temsilcisinin belirlenme/atama usulünün işyeri kayıtları açısından uygun olduğunu kullanıcı doğrulamalıdır."
-    };
+    return {supported:true,kind,label:"Çalışan temsilcisi ata",candidates:await representativeCandidates(supabase,companyId),requiredSelectionCount:missingCount||1,requiresQualificationConfirmation:true,qualificationText:"Çalışan temsilcisinin belirlenme/atama usulünün işyeri kayıtları açısından uygun olduğunu kullanıcı doğrulamalıdır."};
+  }
+  if(kind==="ISG_BOARD_MEMBER"){
+    const roles=parseBoardMissingRoles(row);
+    return {supported:true,kind,label:"İSG Kurulu eksik rollerini tamamla",candidates:await boardCandidates(supabase,companyId),requiredSelectionCount:roles.length,boardRoles:roles,requiresQualificationConfirmation:true,qualificationText:"İşyerinde 50+ çalışan kriterine ek olarak işin 6 aydan fazla sürekli sürdüğü ve seçilen kurul rollerinin uygun olduğu kullanıcı tarafından doğrulanmalıdır."};
+  }
+  if(kind==="TRAINING_ASSIGNMENT"){
+    return {supported:true,kind,label:"Çalışanlara eğitim ata",candidates:await trainingCandidates(supabase,companyId),trainings:await trainingOptions(supabase),requiredSelectionCount:0,allowAnySelectionCount:true,requiresTrainingSelection:true,requiresQualificationConfirmation:false};
   }
   return {supported:false,kind:"",label:"Sadece öneri",candidates:[],requiredSelectionCount:0,requiresQualificationConfirmation:false};
 }
@@ -182,11 +218,31 @@ async function executionRecords(supabase:any,companyId:string,row:AnyRow){
   }
 
   if(result.executor==="EMPLOYEE_REPRESENTATIVE"){
-    const {data,error}=await supabase.from("employee_representatives")
-      .select("id,employee_id,employee_name,department,job_title,representative_type,determination_method,is_head_representative,selection_date,duty_start_date,duty_end_date,status,source,created_at")
-      .eq("firm_id",companyId).in("employee_id",ids).eq("is_deleted",false);
-    if(error) return [];
-    return data||[];
+    const {data,error}=await supabase.from("employee_representatives").select("id,employee_id,employee_name,department,job_title,representative_type,determination_method,is_head_representative,selection_date,duty_start_date,duty_end_date,status,source,created_at").eq("firm_id",companyId).in("employee_id",ids).eq("is_deleted",false);
+    if(error) return []; return data||[];
+  }
+  if(result.executor==="ISG_BOARD_MEMBER"){
+    const {data,error}=await supabase.from("documentation_board_members").select("id,employee_id,full_name,title,department,board_role,is_active,source,created_at").eq("firm_id",companyId).in("employee_id",ids).eq("is_deleted",false);
+    if(error)return []; return data||[];
+  }
+  if(result.executor==="TRAINING_ASSIGNMENT"){
+    const {data:users,error:userError}=await supabase.from("users").select("id,employee_id,full_name,email").in("employee_id",ids);
+    if(userError)return []; const userIds=(users||[]).map((u:any)=>u.id); if(!userIds.length)return [];
+    const {data:assignments,error:aError}=await supabase.from("training_assignments").select("id,user_id,training_id,status,created_at,completed_at").in("user_id",userIds).eq("training_id",result.trainingId);
+    if(aError)return [];
+    const userMap = new Map<string, AnyRow>(
+      (users || []).map((u:any) => [text(u.id), u as AnyRow])
+    );
+    return (assignments || []).map((a:any) => {
+      const linkedUser = userMap.get(text(a.user_id));
+      return {
+        ...a,
+        employee_id: linkedUser?.employee_id ?? null,
+        full_name: linkedUser?.full_name ?? null,
+        email: linkedUser?.email ?? null,
+        training_title: result.trainingTitle,
+      };
+    });
   }
   return [];
 }
@@ -262,27 +318,36 @@ export async function POST(req:NextRequest) {
       const executor=await buildExecutor(supabase,companyId,current);
       const selectedIds=Array.isArray(body?.selectedEmployeeIds)?body.selectedEmployeeIds.map((x:any)=>text(x)).filter(Boolean):[];
       const qualificationConfirmed=body?.qualificationConfirmed===true;
+      const selectedTrainingId=text(body?.selectedTrainingId);
+      const roleAssignments=body?.roleAssignments&&typeof body.roleAssignments==="object"?body.roleAssignments:{};
 
       let approvalPayload=current.requested_payload||{};
       if(executor.supported){
-        if(selectedIds.length!==executor.requiredSelectionCount)
+        if(executor.allowAnySelectionCount){
+          if(selectedIds.length<1)return NextResponse.json({ok:false,error:"En az bir çalışan seçilmelidir."},{status:400});
+        }else if(selectedIds.length!==executor.requiredSelectionCount){
           return NextResponse.json({ok:false,error:`Bu işlem için ${executor.requiredSelectionCount} çalışan seçilmelidir.`},{status:400});
+        }
         const allowed=new Set(executor.candidates.map((x:any)=>text(x.id)));
         if(selectedIds.some((x:string)=>!allowed.has(x)))
           return NextResponse.json({ok:false,error:"Seçilen çalışanlardan biri artık uygun aday listesinde değil."},{status:409});
         if(executor.requiresQualificationConfirmation&&!qualificationConfirmed)
           return NextResponse.json({ok:false,error:"Bu işlem için kullanıcı doğrulaması işaretlenmelidir."},{status:400});
-
-        approvalPayload={
-          ...approvalPayload,
-          dora_execution:{
-            executor:executor.kind,
-            teamType:executor.teamType||null,
-            selectedEmployeeIds:selectedIds,
-            qualificationConfirmed,
-            approvedAt:new Date().toISOString()
+        if(executor.requiresTrainingSelection){
+          if(!selectedTrainingId)return NextResponse.json({ok:false,error:"Atanacak eğitim seçilmelidir."},{status:400});
+          if(!(executor.trainings||[]).some((t:any)=>text(t.id)===selectedTrainingId))return NextResponse.json({ok:false,error:"Seçilen eğitim artık aktif katalogda bulunmuyor."},{status:409});
+        }
+        if(executor.kind==="ISG_BOARD_MEMBER"){
+          const validRoles=new Set((executor.boardRoles||[]).map((x:any)=>text(x.key)));
+          const chosen=[] as string[];
+          for(const employeeId of selectedIds){
+            const role=text(roleAssignments[employeeId]);
+            if(!role||!validRoles.has(role))return NextResponse.json({ok:false,error:"Her seçilen çalışan için eksik kurul rollerinden biri seçilmelidir."},{status:400});
+            chosen.push(role);
           }
-        };
+          if(new Set(chosen).size!==chosen.length)return NextResponse.json({ok:false,error:"Aynı kurul rolü birden fazla çalışana atanamaz."},{status:400});
+        }
+        approvalPayload={...approvalPayload,dora_execution:{executor:executor.kind,teamType:executor.teamType||null,selectedEmployeeIds:selectedIds,selectedTrainingId:selectedTrainingId||null,roleAssignments,qualificationConfirmed,approvedAt:new Date().toISOString()}};
       }
 
       const {data,error}=await supabase.from("dora_action_queue")
@@ -430,6 +495,24 @@ export async function POST(req:NextRequest) {
         }).eq("id",id).eq("company_id",companyId).select("*").single();
         if(error)throw error;
         return NextResponse.json({ok:true,command,item:done,moduleWritePerformed:true,result});
+      }
+
+      if(exec.executor==="ISG_BOARD_MEMBER"){
+        if(exec.qualificationConfirmed!==true)return NextResponse.json({ok:false,error:"İSG Kurulu uygunluk doğrulaması olmadan işlem yapılamaz."},{status:409});
+        const roleAssignments=exec.roleAssignments||{}; const info=await companyInfo(supabase,companyId); const nowMs=Date.now(); const nowIso=new Date().toISOString(); const endMs=nowMs+(2*365*24*60*60*1000);
+        const rows=(employees||[]).map((e:any)=>{const role=text(roleAssignments[text(e.id)]); return {firm_id:companyId,local_firm_id:info.localFirmId,employee_id:e.id,remote_id:crypto.randomUUID(),web_firm_id:companyId,sync_key:`dora:${companyId}:board:${role}:${e.id}`,member_type:"EMPLOYEE",full_name:employeeName(e),organization_name:info.name,title:text(e.job_title)||role,department:employeeDepartment(e),board_role:role,email:text(e.email)||null,phone:employeePhone(e)==="-"?null:employeePhone(e),notes:"DORA Faz 2 kullanıcı onaylı İSG Kurulu görevlendirmesi.",has_voting_right:true,is_active:true,source:"WEB",version:1,sync_status:"SYNCED",sync_error:null,last_synced_at_millis:nowMs,is_deleted:false,created_at_millis:nowMs,updated_at_millis:nowMs,start_date_millis:nowMs,end_date_millis:endMs};});
+        const keys=rows.map((x:any)=>x.sync_key); const ex=await supabase.from("documentation_board_members").select("sync_key").in("sync_key",keys); if(ex.error)throw ex.error; const existingKeys=new Set((ex.data||[]).map((x:any)=>text(x.sync_key))); const insertRows=rows.filter((x:any)=>!existingKeys.has(x.sync_key)); let inserted:any[]=[]; if(insertRows.length){const ins=await supabase.from("documentation_board_members").insert(insertRows).select("*"); if(ins.error)throw ins.error; inserted=ins.data||[];}
+        const result={executor:"ISG_BOARD_MEMBER",requested:selectedIds.length,inserted:inserted.length,alreadyExisting:rows.length-insertRows.length,employeeIds:selectedIds,employeeNames:(employees||[]).map((e:any)=>employeeName(e)),roleAssignments};
+        const done=await supabase.from("dora_action_queue").update({status:"COMPLETED",started_at:nowIso,completed_at:nowIso,execution_note:`DORA İSG Kurulu için ${inserted.length} kullanıcı onaylı üye/rol kaydı oluşturdu.`,execution_result:result,source_url:"/admin/documentation/board"}).eq("id",id).eq("company_id",companyId).select("*").single(); if(done.error)throw done.error; return NextResponse.json({ok:true,command,item:done.data,moduleWritePerformed:true,result});
+      }
+
+      if(exec.executor==="TRAINING_ASSIGNMENT"){
+        const trainingId=text(exec.selectedTrainingId); if(!trainingId)return NextResponse.json({ok:false,error:"Onaylı eğitim seçimi bulunamadı."},{status:409});
+        const cookie=req.headers.get("cookie")||""; const commonHeaders:Record<string,string>={"content-type":"application/json"}; if(cookie)commonHeaders.cookie=cookie;
+        const linkRes=await fetch(`${req.nextUrl.origin}/api/admin/training-users/link-employees`,{method:"POST",headers:commonHeaders,body:JSON.stringify({employeeIds:selectedIds,companyId})}); const linkJson=await linkRes.json().catch(()=>({})); if(!linkRes.ok)throw new Error(linkJson?.error||"Çalışanlar eğitim kullanıcısına bağlanamadı.");
+        const assignRes=await fetch(`${req.nextUrl.origin}/api/training/assign`,{method:"POST",headers:commonHeaders,body:JSON.stringify({employeeIds:selectedIds,trainingId,companyId})}); const assignJson=await assignRes.json().catch(()=>({})); if(!assignRes.ok)throw new Error(assignJson?.error||"Eğitim ataması başarısız.");
+        const nowIso=new Date().toISOString(); const result={executor:"TRAINING_ASSIGNMENT",trainingId,trainingTitle:text(assignJson?.trainingTitle)||"Eğitim",requested:selectedIds.length,inserted:Number(assignJson?.insertedCount||0),skipped:Number(assignJson?.skippedCount||0),emailed:Number(assignJson?.emailedCount||0),employeeIds:selectedIds,employeeNames:(employees||[]).map((e:any)=>employeeName(e))};
+        const done=await supabase.from("dora_action_queue").update({status:"COMPLETED",started_at:nowIso,completed_at:nowIso,execution_note:`DORA "${result.trainingTitle}" eğitimini kullanıcı onayıyla ${selectedIds.length} çalışana işledi. Yeni atama: ${result.inserted}, zaten atanmış: ${result.skipped}.`,execution_result:result,source_url:"/admin/trainings"}).eq("id",id).eq("company_id",companyId).select("*").single(); if(done.error)throw done.error; return NextResponse.json({ok:true,command,item:done.data,moduleWritePerformed:true,result});
       }
 
       return NextResponse.json({ok:false,error:"Bu işlem türü için yürütücü bulunamadı."},{status:400});
