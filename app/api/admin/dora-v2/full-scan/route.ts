@@ -420,6 +420,7 @@ export async function GET(req:NextRequest){
         medium:findings.filter(x=>x.severity==="MEDIUM").length,
         actionable:actionable.length,
         reviewOnly:reviewOnly.length,
+        unavailableDetails:unavailable.map(x=>({key:x.key,label:x.label,warning:x.warning||"Veri kaynağı okunamadı"})),
       },
       modules,findings,actionable,reviewOnly,
       philosophy:"DORA tarar ve önerir. Hedef modüle yazma yalnız desteklenen yürütücülerde kullanıcı ONAYLA + BAŞLA sonrasında yapılır."
