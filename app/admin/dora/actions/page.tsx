@@ -105,10 +105,31 @@ export default function DoraActionsPage(){
       [...silentGapItems,...fullScanItems].forEach((g:Gap)=>{
         if(g?.id)mergedMap.set(g.id,g);
       });
-      setGaps(Array.from(mergedMap.values()));
+      const mergedGaps=Array.from(mergedMap.values());
+      setGaps(mergedGaps);
 
       if(q?.ok===false)throw new Error(q?.error||"DORA işlem kuyruğu okunamadı.");
-      setQueue(Array.isArray(q?.items)?q.items:[]);
+      let queueItems:Array<Queue>=Array.isArray(q?.items)?q.items:[];
+      const queuedNow=new Set(queueItems.map(x=>x.source_gap_id));
+      const missingFromApproval=mergedGaps.filter(g=>g?.id&&!queuedNow.has(g.id));
+
+      // DORA taraması yalnız onay kuyruğunu senkronlar.
+      // Hedef modüllerde hiçbir işlem burada yapılmaz.
+      if(missingFromApproval.length){
+        const prepared=await readJson<any>(await fetch("/api/admin/dora-v2/actions",{
+          method:"POST",credentials:"include",
+          headers:{"content-type":"application/json"},
+          body:JSON.stringify({companyId:id,command:"PREPARE",gaps:missingFromApproval})
+        }));
+        if(prepared?.ok===false)throw new Error(prepared?.error||"Tarama bulguları onay kuyruğuna aktarılamadı.");
+
+        const fresh=await readJson<any>(await fetch(`/api/admin/dora-v2/actions?companyId=${encodeURIComponent(id)}`,{
+          cache:"no-store",credentials:"include"
+        }));
+        if(fresh?.ok===false)throw new Error(fresh?.error||"Güncel onay kuyruğu okunamadı.");
+        queueItems=Array.isArray(fresh?.items)?fresh.items:[];
+      }
+      setQueue(queueItems);
     }catch(e:any){
       setError(e?.message||"İşlem merkezi verileri yüklenemedi.");
     }finally{setBusy(false);}
@@ -195,7 +216,7 @@ export default function DoraActionsPage(){
           {!companies.length&&<option value="">Firma yükleniyor…</option>}
           {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <button disabled={busy||!companyId||!newGaps.length} onClick={()=>cmd("PREPARE",{gaps:newGaps})} style={primary}>{busy?"DORA ÇALIŞIYOR…":`TARAMA BULGULARINI İŞLEME HAZIRLA (${newGaps.length})`}</button>
+        <button disabled={busy||!companyId} onClick={()=>void load(companyId)} style={primary}>{busy?"DORA ÇALIŞIYOR…":"TARA + ONAY KUYRUĞUNU GÜNCELLE"}</button>
         <button onClick={()=>void load(companyId)} disabled={busy||!companyId} style={secondary}>YENİDEN TARA</button>
         <button onClick={()=>location.href="/admin/dora"} style={secondary}>← DORA'YA DÖN</button>
       </div>
@@ -240,11 +261,11 @@ export default function DoraActionsPage(){
       <div className="dora-actions-grid">
         <section style={card}>
           <h2 style={h2}>1. DORA'nın Bulduğu Eksikler</h2>
-          <p style={sub}>Henüz işlem kuyruğuna alınmamış tespitler. Eğitim tamamlama sinyali varsa DORA bunu kontrollü eğitim atama işlemine dönüştürür.</p>
+          <p style={sub}>Tam sistem taramasında bulunan aktif tespitler. Tarama tamamlanınca bu bulguların tamamı sağdaki kullanıcı onay kuyruğuna otomatik aktarılır.</p>
           <div style={{display:"grid",gap:9,marginTop:12}}>
             {booting||busy&&!companyId?<Empty text="DORA hazırlanıyor…"/>:
-             newGaps.length===0?<Empty text="Yeni eksiklik yok veya tümü işlem kuyruğunda."/>:
-             newGaps.map(g=><div className="dora-action-card" key={g.id} style={item}>
+             gaps.length===0?<Empty text="Aktif tarama bulgusu bulunamadı."/>:
+             gaps.map(g=><div className="dora-action-card" key={g.id} style={item}>
               <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"start",flexWrap:"wrap"}}><b>{g.title}</b><Tag t={g.severity}/></div>
               <div style={small}>{g.domain} • {g.state} • Güven: {g.confidence||"-"}</div>
               <div style={body}>{g.summary}</div>
@@ -254,8 +275,8 @@ export default function DoraActionsPage(){
         </section>
 
         <section style={card}>
-          <h2 style={h2}>2. Onay & Başlatma Kuyruğu</h2>
-          <p style={sub}>Gerçek işlem, kullanıcı açıkça ONAYLA ve ardından BAŞLA demeden yapılmaz.</p>
+          <h2 style={h2}>2. Tüm Bulgular • Onay & Başlatma Kuyruğu</h2>
+          <p style={sub}>DORA taramasındaki tüm bulgular burada tutulur. Yürütücüsü bağlı olanlarda gerçek işlem, kullanıcı açıkça ONAYLA ve ardından BAŞLA demeden yapılmaz.</p>
 
           <div style={{display:"grid",gap:10,marginTop:12}}>
             {queue.length===0?<Empty text="Henüz DORA işlem kuyruğu oluşturulmadı."/>:queue.map(q=>{
@@ -277,7 +298,7 @@ export default function DoraActionsPage(){
 
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:9}}>
                   <span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:executable?"#ecfdf3":"#f2f4f7",color:executable?C.green:C.muted}}>
-                    {executable?"DORA BU İŞLEMİ YAPABİLİR":"SADECE ÖNERİ / YÜRÜTÜCÜ BEKLİYOR"}
+                    {executable?"DORA BU İŞLEMİ YAPABİLİR":"İNCELE / ONAYLA • YÜRÜTÜCÜ BEKLİYOR"}
                   </span>
                   {executable&&anyCount&&<span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:"#eff8ff",color:C.blue}}>EN AZ 1 ÇALIŞAN SEÇ</span>}
                   {executable&&!anyCount&&needed>0&&<span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:"#eff8ff",color:C.blue}}>SEÇİLMESİ GEREKEN: {needed}</span>}

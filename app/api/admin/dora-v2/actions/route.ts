@@ -286,7 +286,7 @@ export async function POST(req:NextRequest) {
     if(command==="PREPARE") {
       const gaps=Array.isArray(body?.gaps)?body.gaps:[];
       if(!gaps.length) return NextResponse.json({ok:false,error:"İşleme hazırlanacak eksiklik bulunamadı."},{status:400});
-      const rows=gaps.slice(0,100).map((g:any)=>({
+      const normalized=gaps.slice(0,200).map((g:any)=>({
         company_id:companyId,
         source_gap_id:text(g.id)||crypto.randomUUID(),
         source_domain:text(g.domain)||"DORA",
@@ -298,10 +298,34 @@ export async function POST(req:NextRequest) {
         status:"WAITING_APPROVAL",
         requested_payload:g,
       }));
-      const {data,error}=await supabase.from("dora_action_queue")
-        .upsert(rows,{onConflict:"company_id,source_gap_id",ignoreDuplicates:false}).select("*");
-      if(error) throw error;
-      return NextResponse.json({ok:true,command,items:data||[]});
+
+      // Tarama tekrarlandığında ONAYLANDI / TAMAMLANDI / ATLANDI kayıtlarını geriye döndürme.
+      // Sadece kuyrukta henüz bulunmayan yeni DORA bulgularını ekle.
+      const gapIds=normalized.map((x:any)=>x.source_gap_id).filter(Boolean);
+      const {data:existing,error:existingError}=gapIds.length
+        ? await supabase.from("dora_action_queue")
+            .select("source_gap_id,status")
+            .eq("company_id",companyId)
+            .in("source_gap_id",gapIds)
+        : {data:[],error:null};
+      if(existingError)throw existingError;
+
+      const existingIds=new Set((existing||[]).map((x:any)=>text(x.source_gap_id)));
+      const rows=normalized.filter((x:any)=>!existingIds.has(x.source_gap_id));
+
+      let inserted:any[]=[];
+      if(rows.length){
+        const ins=await supabase.from("dora_action_queue").insert(rows).select("*");
+        if(ins.error)throw ins.error;
+        inserted=ins.data||[];
+      }
+
+      return NextResponse.json({
+        ok:true,command,
+        items:inserted,
+        inserted:inserted.length,
+        alreadyQueued:normalized.length-inserted.length
+      });
     }
 
     const id=text(body?.id);
