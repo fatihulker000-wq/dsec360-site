@@ -1,11 +1,4 @@
 "use client";
-import { useEffect,useState } from "react";
-
-type HealthTabProps = { employee: { id: string } & Record<string, any> };
-export default function RespiratoryTab({ employee }: HealthTabProps){
- const [rows,setRows]=useState<any[]>([]); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
- useEffect(()=>{let alive=true;(async()=>{try{const r=await fetch(`/api/admin/ek2?employeeId=${encodeURIComponent(employee.id)}`,{cache:"no-store",credentials:"include"});const j=await r.json();if(!r.ok)throw new Error(j?.error||"Kayıtlar alınamadı.");if(alive)setRows(j.forms||[]);}catch(e:any){if(alive)setError(e?.message||"Kayıtlar alınamadı.");}finally{if(alive)setLoading(false);}})();return()=>{alive=false}},[employee.id]);
- const get=(x:any)=>{const raw=x?.raw_json||{}; const v=raw.sft||raw.respiratory||raw.solunum; if(v==null||v===""||(typeof v==="object"&&Object.keys(v).length===0))return "-"; return typeof v==="object"?JSON.stringify(v,null,2):String(v)};
- return <div><h3 style={{marginTop:0}}>Solunum / SFT</h3><p style={{color:"#64748b"}}>EK-2 sağlık kayıtlarındaki Solunum / SFT verileri. Kayıt yoksa sistem bunu tıbbi işlemin yapılmadığı şeklinde yorumlamaz.</p>
- {loading?<p>Yükleniyor...</p>:error?<p style={{color:"#b91c1c"}}>{error}</p>:rows.length===0?<p>Kayıt bulunamadı.</p>:rows.map((x:any)=><div key={x.id} style={{padding:14,border:"1px solid #e5e7eb",borderRadius:14,marginBottom:10,background:"#fff"}}><b>{x.exam_date||x.created_at||"Tarih yok"}</b><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",marginBottom:0,color:"#334155"}}>{get(x)}</pre></div>)}</div>;
-}
+import HealthTestRegistry from "@/components/health/tests/HealthTestRegistry";
+type Props={employee:{id:string;company_id?:string}&Record<string,any>};
+export default function RespiratoryTab({employee}:Props){return <HealthTestRegistry employee={employee} kind="SFT" title="Solunum / SFT" description="Solunum fonksiyon testi sonuçlarını FEV1, FVC, oran ve PEF değerleriyle kalıcı olarak izleyin." legacyKeys={["sft","respiratory","solunum"]} fields={[{key:"fev1",label:"FEV1",unit:"L",type:"number"},{key:"fvc",label:"FVC",unit:"L",type:"number"},{key:"fev1Fvc",label:"FEV1/FVC",unit:"%",type:"number"},{key:"pef",label:"PEF",unit:"L/dk",type:"number"},{key:"conclusion",label:"SFT Sonucu"}]}/>}
