@@ -109,7 +109,14 @@ export default function DoraPage(){
       setA(data);
       setFullScan(fs?.ok===false?null:fs);
       setAnswerTitle("Sistem taraması tamamlandı");
-      setAnswer(data.executiveCommentary?.slice(0,3) || ["DORA sistem verilerini taradı."]);
+      const totalModules=fs?.summary?.modulesScanned??data.summary?.scannedModules??0;
+      const availableModules=fs?.summary?.modulesAvailable??data.summary?.scannedModules??0;
+      const unavailableModules=fs?.summary?.modulesUnavailable??data.summary?.unavailableModules??0;
+      const commentary=(data.executiveCommentary||[]).filter((line:string)=>!/(\b8\s+modül|modülün verisini|modül birlikte)/i.test(line));
+      setAnswer([
+        `DORA Tam Sistem Taramasında ${totalModules} modülü kontrol etti; ${availableModules} modülden veri okunuyor${unavailableModules>0?`, ${unavailableModules} modülde erişim/kapsam doğrulaması gerekiyor`:""}.`,
+        ...commentary
+      ].slice(0,3));
     }catch(e){
       setA(null); setFullScan(null); setError(e instanceof Error?e.message:"DORA taraması oluşturulamadı.");
     }finally{ setScanning(false); }
@@ -233,7 +240,7 @@ export default function DoraPage(){
     }else{
       setAnswerTitle("Bu sonuca neden ulaştım?");
       setAnswer([
-        `${a.summary?.scannedModules??0} modül birlikte okundu; ${a.summary?.unavailableModules??0} modülde veri erişim/kapsama sınırlaması var.`,
+        `${fullScan?.summary?.modulesScanned??a.summary?.scannedModules??0} modül Tam Sistem Taramasında kontrol edildi; ${fullScan?.summary?.modulesAvailable??a.summary?.scannedModules??0} modülden veri okunuyor, ${fullScan?.summary?.modulesUnavailable??a.summary?.unavailableModules??0} modülde erişim/kapsam doğrulaması gerekiyor.`,
         `Veri güvenilirliği ${a.dataQuality?.overallScore??0}/100. DORA veri boşluğunu doğrudan operasyonel uygunsuzluk kabul etmez.`,
         `${topics.length} yönetim önceliği ve ${(a.crossAnalyses||[]).filter(v=>v.status==="SIGNAL").length} çapraz inceleme sinyali üretildi.`,
         "Çapraz eşleşmeler nedensellik olarak değil, doğrulanması gereken araştırma sinyali olarak yorumlanır."
@@ -287,7 +294,7 @@ export default function DoraPage(){
         result=h.length?h.map(v=>`${v.days===0?"Bugün":v.days+" gün"} • ${v.module}: ${v.label}`):["Önümüzdeki 30 gün için kayıtlı yaklaşan yükümlülük görünmüyor."];
       }else if(q.includes("neden")||q.includes("kanıt")||q.includes("niye")){
         result=[
-          `${a.summary?.scannedModules??0} modül birlikte değerlendirildi; ${a.summary?.unavailableModules??0} modülde veri erişim/kapsama sınırlaması bulunuyor.`,
+          `${fullScan?.summary?.modulesScanned??a.summary?.scannedModules??0} modül Tam Sistem Taramasında kontrol edildi; ${fullScan?.summary?.modulesAvailable??a.summary?.scannedModules??0} modülden veri okunuyor, ${fullScan?.summary?.modulesUnavailable??a.summary?.unavailableModules??0} modülde erişim/kapsam doğrulaması gerekiyor.`,
           `Veri güvenilirliği ${a.dataQuality?.overallScore??0}/100. Eksik sistem kaydı doğrudan mevzuata aykırılık olarak yorumlanmıyor.`,
           `${topics.length} yönetim önceliği, ${(a.crossAnalyses||[]).filter(v=>v.status==="SIGNAL").length} çapraz inceleme sinyali ve ${a.silentGaps?.summary?.scanned??0} gereklilik kontrolü değerlendirildi.`,
           "DORA korelasyonları nedensellik olarak değil, doğrulanması gereken araştırma sinyali olarak kullanıyor."
@@ -307,7 +314,7 @@ export default function DoraPage(){
       }
 
       setReasonTrail([
-        `${a.summary?.scannedModules??0} modül tarandı.`,
+        `${fullScan?.summary?.modulesScanned??a.summary?.scannedModules??0} modül Tam Sistem Taramasında kontrol edildi.`,
         `${gapHits.length+findingHits.length} doğrudan eşleşen bulgu/eksiklik bulundu.`,
         `${crossHits.length} ilgili çapraz modül sinyali karşılaştırıldı.`,
         `Yanıt veri güveni ${a.dataQuality?.overallScore??0}/100 dikkate alınarak oluşturuldu.`
