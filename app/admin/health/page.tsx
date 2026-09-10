@@ -20,8 +20,14 @@ import type {
 
 import { emptyHealthSummary } from "@/components/health/healthHelpers";
 
+type CompanyOption = { id:string; name:string };
+
 export default function HealthDashboardPage() {
   const [loading, setLoading] = useState(true);
+  const [companies,setCompanies] = useState<CompanyOption[]>([]);
+  const [companyId,setCompanyId] = useState<string>("ALL");
+  const [companyLoading,setCompanyLoading] = useState(true);
+  const [error,setError] = useState<string>("");
 
   const [summary, setSummary] =
     useState<HealthKpiSummary>(emptyHealthSummary());
@@ -42,16 +48,46 @@ export default function HealthDashboardPage() {
     useState<HealthAlert[]>([]);
 
   useEffect(() => {
+    let alive=true;
+    (async()=>{
+      try{
+        setCompanyLoading(true);
+        const res=await fetch("/api/admin/companies",{cache:"no-store",credentials:"include"});
+        const json=await res.json();
+        if(!res.ok) throw new Error(json?.error||"Firmalar alınamadı.");
+        const rows=Array.isArray(json?.data)?json.data:Array.isArray(json?.companies)?json.companies:Array.isArray(json)?json:[];
+        const opts=rows.map((x:any)=>({id:String(x.id),name:String(x.name||"Firma")})).filter((x:any)=>x.id);
+        if(!alive)return;
+        setCompanies(opts);
+
+        // company_admin/demo_user endpoint only returns their firm. Global admin gets ALL.
+        if(opts.length===1) setCompanyId(opts[0].id);
+        else setCompanyId("ALL");
+      }catch(e:any){
+        if(alive)setError(e?.message||"Firmalar yüklenemedi.");
+      }finally{
+        if(alive)setCompanyLoading(false);
+      }
+    })();
+    return()=>{alive=false};
+  },[]);
+
+  useEffect(() => {
+    if(companyLoading)return;
+    let alive=true;
     async function load() {
+      setLoading(true);
+      setError("");
       try {
-        const res = await fetch("/api/admin/health-dashboard", {
+        const qs=companyId && companyId!=="ALL" ? `?companyId=${encodeURIComponent(companyId)}` : "";
+        const res = await fetch(`/api/admin/health-dashboard${qs}`, {
           cache: "no-store",
           credentials: "include",
         });
 
         const json: HealthDashboardResponse = await res.json();
-
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(json?.error||"Sağlık dashboard alınamadı.");
+        if(!alive)return;
 
         setSummary(json.summary || emptyHealthSummary());
         setUpcomingExams(json.upcomingExams || []);
@@ -59,13 +95,16 @@ export default function HealthDashboardPage() {
         setRecentEk2(json.recentEk2 || []);
         setRecentExaminations(json.recentExaminations || []);
         setAlerts(json.alerts || []);
+      } catch(e:any) {
+        if(alive)setError(e?.message||"Sağlık dashboard alınamadı.");
       } finally {
-        setLoading(false);
+        if(alive)setLoading(false);
       }
     }
 
     void load();
-  }, []);
+    return()=>{alive=false};
+  }, [companyId,companyLoading]);
 
   return (
     <main
@@ -106,9 +145,62 @@ export default function HealthDashboardPage() {
           </div>
         </div>
 
+        {/* Firma filtresi */}
+        <section
+          style={{
+            marginBottom: 18,
+            padding: 18,
+            borderRadius: 18,
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            boxShadow: "0 8px 24px rgba(15,23,42,.05)",
+            display: "grid",
+            gridTemplateColumns: "minmax(220px,420px) minmax(0,1fr)",
+            gap: 18,
+            alignItems: "end",
+          }}
+        >
+          <label style={{display:"grid",gap:7,fontSize:12,fontWeight:900,color:"#334155"}}>
+            FİRMA FİLTRESİ
+            <select
+              value={companyId}
+              onChange={(e)=>setCompanyId(e.target.value)}
+              disabled={companyLoading||companies.length<=1}
+              style={{
+                width:"100%",
+                minHeight:44,
+                padding:"0 12px",
+                borderRadius:12,
+                border:"1px solid #d0d5dd",
+                background:"#fff",
+                color:"#101828",
+                fontWeight:800,
+                outline:"none",
+              }}
+            >
+              {companies.length>1 && <option value="ALL">Tüm Firmalar</option>}
+              {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+
+          <div style={{fontSize:12,color:"#64748b",lineHeight:1.6}}>
+            {companyLoading
+              ? "Firmalar yükleniyor…"
+              : companyId==="ALL"
+                ? "Dashboard tüm erişilebilir firmaların aktif çalışan ve sağlık kayıtlarını birlikte gösteriyor."
+                : <>Dashboard yalnızca <b style={{color:"#101828"}}>{companies.find(c=>c.id===companyId)?.name||"seçili firma"}</b> için hesaplanıyor.</>}
+          </div>
+        </section>
+
+        {error && (
+          <div style={{marginBottom:18,padding:"12px 14px",borderRadius:12,background:"#fef2f2",border:"1px solid #fecaca",color:"#b91c1c",fontWeight:800,fontSize:12}}>
+            {error}
+          </div>
+        )}
+
         {/* Çalışan Sağlık Kartları */}
         <Link
-          href="/admin/health/employees"
+          href={companyId==="ALL"?"/admin/health/employees":`/admin/health/employees?companyId=${encodeURIComponent(companyId)}`}
           style={{
             display: "flex",
             justifyContent: "space-between",
@@ -170,6 +262,12 @@ export default function HealthDashboardPage() {
             Aç →
           </div>
         </Link>
+
+        {loading && (
+          <div style={{marginBottom:14,padding:"10px 12px",borderRadius:10,background:"#eff6ff",color:"#1d4ed8",fontSize:12,fontWeight:800}}>
+            Sağlık verileri hesaplanıyor…
+          </div>
+        )}
 
         <HealthKpiCards
           summary={summary}

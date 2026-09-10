@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ function dateOnly(d:Date){return d.toISOString().slice(0,10);}
 function daysTo(v:string){const a=new Date();a.setHours(0,0,0,0);const b=new Date(v+"T00:00:00");return Math.ceil((b.getTime()-a.getTime())/86400000);}
 function uniqueEmployeeCount(rows:Row[]){return new Set(rows.map(x=>s(x.employee_id)).filter(Boolean)).size;}
 
-export async function GET(){
+export async function GET(req:NextRequest){
  try{
   const cs=await cookies();
   const auth=s(cs.get("dsec_admin_auth")?.value||cs.get("dsec_user_auth")?.value);
@@ -22,9 +22,15 @@ export async function GET(){
   const scoped=role==="company_admin"||role==="demo_user";
   if(scoped&&!cookieCompany) return NextResponse.json({error:"Kullanıcı için firma bilgisi bulunamadı."},{status:403});
 
+  const requestedCompany=s(req.nextUrl.searchParams.get("companyId"));
+  if(scoped && requestedCompany && requestedCompany!=="ALL" && requestedCompany!==cookieCompany){
+    return NextResponse.json({error:"Bu firma için erişim yetkiniz yok."},{status:403});
+  }
+  const selectedCompany=scoped ? cookieCompany : (requestedCompany && requestedCompany!=="ALL" ? requestedCompany : "");
+
   const supabase=db();
   let eq=supabase.from("employees").select("id,full_name,firm_id,job_title,active").limit(10000);
-  if(scoped) eq=eq.eq("firm_id",cookieCompany);
+  if(selectedCompany) eq=eq.eq("firm_id",selectedCompany);
   const {data:employees,error:ee}=await eq;
   if(ee) throw ee;
   const activeEmployees=(employees||[]).filter((x:any)=>x.active!==false);
@@ -34,7 +40,7 @@ export async function GET(){
   let exq=supabase.from("health_examinations").select("id,employee_id,company_id,exam_type,exam_date,next_exam_date,decision,bmi,systolic,diastolic,spo2,created_at,is_deleted").or("is_deleted.eq.false,is_deleted.is.null").limit(10000);
   let ekq=supabase.from("health_ek2_forms").select("id,employee_id,company_id,status,exam_date,next_exam_date,decision,created_at,is_active").limit(10000);
   let prq=supabase.from("health_prescriptions").select("id,employee_id,company_id,status,created_at,is_active,health_prescription_items(id)").eq("is_active",true).limit(10000);
-  if(scoped){exq=exq.eq("company_id",cookieCompany);ekq=ekq.eq("company_id",cookieCompany);prq=prq.eq("company_id",cookieCompany);}
+  if(selectedCompany){exq=exq.eq("company_id",selectedCompany);ekq=ekq.eq("company_id",selectedCompany);prq=prq.eq("company_id",selectedCompany);}
   const [exr,ekr,prr]=await Promise.all([exq,ekq,prq]);
   if(exr.error) throw exr.error;
   if(ekr.error) throw ekr.error;
@@ -67,17 +73,24 @@ export async function GET(){
   });
 
   const empMap=Object.fromEntries(activeEmployees.map((x:any)=>[s(x.id),x]));
+  const firmIds=[...new Set(activeEmployees.map((x:any)=>s(x.firm_id)).filter(Boolean))];
+  let companyMap:Record<string,string>={};
+  if(firmIds.length){
+    const {data:companyRows}=await supabase.from("companies").select("id,name").in("id",firmIds);
+    companyMap=Object.fromEntries((companyRows||[]).map((x:any)=>[s(x.id),s(x.name)||"Firma"]));
+  }
+  const companyNameOf=(employeeId:any)=>companyMap[s(empMap[s(employeeId)]?.firm_id)]||"";
   const recentExaminations=[...exams].sort((a:any,b:any)=>s(b.exam_date).localeCompare(s(a.exam_date))).slice(0,10).map((x:any)=>({
-    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:"",examType:x.exam_type||"Muayene",examDate:x.exam_date||"",decision:x.decision||"",jobTitle:empMap[s(x.employee_id)]?.job_title||""
+    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:companyNameOf(x.employee_id),examType:x.exam_type||"Muayene",examDate:x.exam_date||"",decision:x.decision||"",jobTitle:empMap[s(x.employee_id)]?.job_title||""
   }));
   const recentEk2=[...ek2].sort((a:any,b:any)=>s(b.exam_date||b.created_at).localeCompare(s(a.exam_date||a.created_at))).slice(0,10).map((x:any)=>({
-    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:"",decision:x.decision||x.status||"",createdAt:x.exam_date||x.created_at||""
+    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:companyNameOf(x.employee_id),decision:x.decision||x.status||"",createdAt:x.exam_date||x.created_at||""
   }));
   const recentPrescriptions=[...prescriptions].sort((a:any,b:any)=>s(b.created_at).localeCompare(s(a.created_at))).slice(0,10).map((x:any)=>({
-    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:"",medicineCount:Array.isArray(x.health_prescription_items)?x.health_prescription_items.length:0,createdAt:x.created_at||""
+    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:companyNameOf(x.employee_id),medicineCount:Array.isArray(x.health_prescription_items)?x.health_prescription_items.length:0,createdAt:x.created_at||""
   }));
   const upcomingExams=upcoming90.sort((a:any,b:any)=>s(a.next_exam_date).localeCompare(s(b.next_exam_date))).slice(0,10).map((x:any)=>({
-    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:"",examType:x.exam_type||"Muayene",dueDate:x.next_exam_date||"",decision:x.decision||"",jobTitle:empMap[s(x.employee_id)]?.job_title||"",daysLeft:daysTo(x.next_exam_date)
+    id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:companyNameOf(x.employee_id),examType:x.exam_type||"Muayene",dueDate:x.next_exam_date||"",decision:x.decision||"",jobTitle:empMap[s(x.employee_id)]?.job_title||"",daysLeft:daysTo(x.next_exam_date)
   }));
 
   const alerts=[
@@ -87,7 +100,7 @@ export async function GET(){
 
   const total=activeEmployees.length;
   return NextResponse.json({
-    success:true,role,read_only:role==="demo_user",
+    success:true,role,read_only:role==="demo_user",selectedCompanyId:selectedCompany||"ALL",
     summary:{
       totalEmployees:total,
       employeesWithHealthRecord:healthIds.size,
