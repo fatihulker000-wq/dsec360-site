@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type AnyRow = Record<string, any>;
+type ExecutorKind = "EMERGENCY_SUPPORT_TEAM" | "EMPLOYEE_REPRESENTATIVE" | "";
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,23 +23,61 @@ function norm(v: unknown) {
     .replaceAll("Ü","U").replaceAll("Ö","O").replaceAll("Ç","C")
     .replace(/[^A-Z0-9]+/g,"_");
 }
-function isEmergencyGap(row: AnyRow) {
-  const hay = norm([row.source_domain,row.title,row.description,row.recommendation].join(" "));
-  return hay.includes("ACIL") && (
-    hay.includes("DESTEK") || hay.includes("EKIP") || hay.includes("SONDUR") ||
-    hay.includes("KURTAR") || hay.includes("KORUMA")
-  );
-}
-function teamTypeFrom(row: AnyRow) {
-  const hay = norm([row.title,row.description,row.recommendation,JSON.stringify(row.requested_payload||{})].join(" "));
-  if (hay.includes("SONDUR")) return "SÖNDÜRME";
-  if (hay.includes("KURTAR")) return "KURTARMA";
-  if (hay.includes("KORUMA")) return "KORUMA";
-  return "";
+function hay(row:AnyRow){
+  return norm([row.source_gap_id,row.source_domain,row.title,row.description,row.recommendation,JSON.stringify(row.requested_payload||{})].join(" "));
 }
 function employeeName(e: AnyRow) { return text(e.full_name || e.name || e.employee_name); }
 function employeeDepartment(e: AnyRow) { return text(e.department || e.department_name || e.unit || e.job_title) || "-"; }
 function employeePhone(e: AnyRow) { return text(e.phone || e.mobile_phone || e.mobile || e.telephone) || "-"; }
+
+function executorKindFor(row:AnyRow):ExecutorKind {
+  const h=hay(row);
+  if(h.includes("CALISAN_TEMSILCI") || text(row.source_gap_id)==="employee-representatives") return "EMPLOYEE_REPRESENTATIVE";
+  if(
+    h.includes("KORUMA") || h.includes("SONDUR") || h.includes("YANGINLA_MUCADELE") ||
+    h.includes("KURTAR") || h.includes("ARAMA_KURTARMA") ||
+    h.includes("ILKYARDIM") || h.includes("ILK_YARDIM") || h.includes("FIRST_AID")
+  ) return "EMERGENCY_SUPPORT_TEAM";
+  return "";
+}
+
+function teamTypeFrom(row: AnyRow) {
+  const h=hay(row);
+  if (h.includes("ILKYARDIM") || h.includes("ILK_YARDIM") || h.includes("FIRST_AID")) return "ILK_YARDIM";
+  if (h.includes("SONDUR") || h.includes("YANGINLA_MUCADELE")) return "YANGINLA_MUCADELE";
+  if (h.includes("KURTAR") || h.includes("ARAMA_KURTARMA")) return "ARAMA_KURTARMA_TAHLIYE";
+  if (h.includes("KORUMA")) return "KORUMA";
+  return "";
+}
+function teamLabel(v:string){
+  return v==="YANGINLA_MUCADELE"?"Yangınla Mücadele":
+    v==="ARAMA_KURTARMA_TAHLIYE"?"Arama-Kurtarma-Tahliye":
+    v==="ILK_YARDIM"?"İlk Yardım":
+    v==="KORUMA"?"Koruma":v;
+}
+function missingCountFrom(row:AnyRow){
+  const raw=row?.requested_payload?.missing ?? row?.requested_payload?.required;
+  const n=Number(raw);
+  return Number.isFinite(n)&&n>0?Math.floor(n):null;
+}
+
+function correctedSourceUrl(row:AnyRow){
+  const h=hay(row);
+  if(
+    h.includes("ACIL_DURUM") || h.includes("KORUMA") || h.includes("SONDUR") ||
+    h.includes("YANGINLA_MUCADELE") || h.includes("KURTAR") ||
+    h.includes("ILKYARDIM") || h.includes("ILK_YARDIM") ||
+    h.includes("TATBIKAT") || h.includes("ACIL_DURUM_PLANI")
+  ) return "/admin/emergency";
+  if(h.includes("CALISAN_TEMSILCI") || h.includes("ISG_KURUL") || h.includes("POLITIKA") || h.includes("DOKUMAN"))
+    return "/admin/documentation";
+  const current=text(row.source_url || row?.requested_payload?.sourceUrl);
+  if(!current || current==="/admin/dora") return "/admin/dora";
+  // Known obsolete/non-existent DORA source paths are collapsed to their real module roots.
+  if(current.startsWith("/admin/documentation/employee-representatives")) return "/admin/documentation";
+  if(current.startsWith("/admin/documentation/emergency")) return "/admin/emergency";
+  return current;
+}
 
 async function authorize(supabase:any, requested:any) {
   const resolved = await resolveReportScope(supabase, text(requested) || null);
@@ -49,44 +88,82 @@ async function authorize(supabase:any, requested:any) {
   return { companyId };
 }
 
-async function companyLocalFirmId(supabase:any, companyId:string) {
+async function companyInfo(supabase:any, companyId:string) {
   const {data,error}=await supabase.from("companies").select("id,local_firm_id").eq("id",companyId).maybeSingle();
   if(error) throw error;
-  return data?.local_firm_id ?? null;
+  return {localFirmId:data?.local_firm_id ?? null};
 }
 
-async function getCandidates(supabase:any, companyId:string, current:AnyRow) {
+async function activeEmployees(supabase:any, companyId:string){
+  const {data,error}=await supabase.from("employees").select("*").eq("firm_id",companyId).eq("active",true).order("full_name");
+  if(error) throw error;
+  return data||[];
+}
+
+async function emergencyCandidates(supabase:any, companyId:string, current:AnyRow) {
   const teamType=teamTypeFrom(current);
-  if(!teamType) return {teamType:"", candidates:[]};
+  if(!teamType) return {teamType:"", candidates:[] as AnyRow[]};
 
-  const {data:employees,error:empError}=await supabase
-    .from("employees").select("*").eq("firm_id",companyId).eq("active",true).order("full_name");
-  if(empError) throw empError;
-
-  const {data:members,error:memberError}=await supabase
-    .from("emergency_support_teams")
+  const employees=await activeEmployees(supabase,companyId);
+  const {data:members,error}=await supabase.from("emergency_support_teams")
     .select("employee_id,full_name,team_type,is_active,is_deleted")
-    .eq("company_id",companyId)
-    .eq("is_active",true)
-    .eq("is_deleted",false);
-  if(memberError) throw memberError;
+    .eq("company_id",companyId).eq("is_active",true).eq("is_deleted",false);
+  if(error) throw error;
 
   const usedIds=new Set((members||[]).map((m:any)=>text(m.employee_id)).filter(Boolean));
   const usedNames=new Set((members||[]).map((m:any)=>norm(m.full_name)).filter(Boolean));
 
-  const candidates=(employees||[])
-    .filter((e:any)=>!usedIds.has(text(e.id)) && !usedNames.has(norm(employeeName(e))))
-    .map((e:any)=>({
-      id:e.id,
-      full_name:employeeName(e),
-      department:employeeDepartment(e),
-      phone:employeePhone(e),
-      job_title:text(e.job_title)||"-",
-    }))
-    .filter((e:any)=>e.full_name)
-    .slice(0,100);
+  return {
+    teamType,
+    candidates:employees
+      .filter((e:any)=>!usedIds.has(text(e.id))&&!usedNames.has(norm(employeeName(e))))
+      .map((e:any)=>({id:e.id,full_name:employeeName(e),department:employeeDepartment(e),phone:employeePhone(e),job_title:text(e.job_title)||"-"}))
+      .filter((e:any)=>e.full_name)
+      .slice(0,250)
+  };
+}
 
-  return {teamType,candidates};
+async function representativeCandidates(supabase:any, companyId:string) {
+  const employees=await activeEmployees(supabase,companyId);
+  const {data:reps,error}=await supabase.from("employee_representatives")
+    .select("employee_id,employee_name,status,is_deleted")
+    .eq("firm_id",companyId).eq("status","ACTIVE").eq("is_deleted",false);
+  if(error) throw error;
+
+  const usedIds=new Set((reps||[]).map((r:any)=>text(r.employee_id)).filter(Boolean));
+  const usedNames=new Set((reps||[]).map((r:any)=>norm(r.employee_name)).filter(Boolean));
+
+  return employees
+    .filter((e:any)=>!usedIds.has(text(e.id))&&!usedNames.has(norm(employeeName(e))))
+    .map((e:any)=>({id:e.id,full_name:employeeName(e),department:employeeDepartment(e),phone:employeePhone(e),job_title:text(e.job_title)||"-"}))
+    .filter((e:any)=>e.full_name)
+    .slice(0,250);
+}
+
+async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
+  const kind=executorKindFor(row);
+  const missingCount=missingCountFrom(row);
+  if(kind==="EMERGENCY_SUPPORT_TEAM"){
+    const c=await emergencyCandidates(supabase,companyId,row);
+    if(!c.teamType)return {supported:false,kind:"",label:"Sadece öneri",candidates:[],requiredSelectionCount:0,requiresQualificationConfirmation:false};
+    return {
+      supported:true,kind,label:`${teamLabel(c.teamType)} ekibine çalışan ata`,
+      teamType:c.teamType,candidates:c.candidates,
+      requiredSelectionCount:missingCount||1,
+      requiresQualificationConfirmation:c.teamType==="ILK_YARDIM",
+      qualificationText:c.teamType==="ILK_YARDIM"?"Seçilen çalışanların geçerli ilkyardımcı sertifikası bulunduğunu kullanıcı doğrulamalıdır.":""
+    };
+  }
+  if(kind==="EMPLOYEE_REPRESENTATIVE"){
+    return {
+      supported:true,kind,label:"Çalışan temsilcisi ata",
+      candidates:await representativeCandidates(supabase,companyId),
+      requiredSelectionCount:missingCount||1,
+      requiresQualificationConfirmation:true,
+      qualificationText:"Çalışan temsilcisinin belirlenme/atama usulünün işyeri kayıtları açısından uygun olduğunu kullanıcı doğrulamalıdır."
+    };
+  }
+  return {supported:false,kind:"",label:"Sadece öneri",candidates:[],requiredSelectionCount:0,requiresQualificationConfirmation:false};
 }
 
 export async function GET(req:NextRequest) {
@@ -102,12 +179,7 @@ export async function GET(req:NextRequest) {
 
     const enriched=[];
     for(const row of data||[]) {
-      let executor:any={supported:false,teamType:"",candidates:[]};
-      if(isEmergencyGap(row)) {
-        const c=await getCandidates(supabase,companyId,row);
-        executor={supported:Boolean(c.teamType),...c};
-      }
-      enriched.push({...row,executor});
+      enriched.push({...row,source_url:correctedSourceUrl(row),executor:await buildExecutor(supabase,companyId,row)});
     }
     return NextResponse.json({ok:true,items:enriched});
   } catch(e:any) {
@@ -134,7 +206,7 @@ export async function POST(req:NextRequest) {
         title:text(g.title)||"DORA bulgusu",
         description:text(g.summary),
         recommendation:text(g.recommendation),
-        source_url:g.sourceUrl||null,
+        source_url:correctedSourceUrl({...g,source_url:g.sourceUrl}),
         severity:text(g.severity)||"MEDIUM",
         status:"WAITING_APPROVAL",
         requested_payload:g,
@@ -156,22 +228,34 @@ export async function POST(req:NextRequest) {
       if(current.status!=="WAITING_APPROVAL")
         return NextResponse.json({ok:false,error:"Yalnızca onay bekleyen işlem onaylanabilir."},{status:409});
 
-      const selectedIds=Array.isArray(body?.selectedEmployeeIds)
-        ? body.selectedEmployeeIds.map((x:any)=>text(x)).filter(Boolean) : [];
+      const executor=await buildExecutor(supabase,companyId,current);
+      const selectedIds=Array.isArray(body?.selectedEmployeeIds)?body.selectedEmployeeIds.map((x:any)=>text(x)).filter(Boolean):[];
+      const qualificationConfirmed=body?.qualificationConfirmed===true;
 
       let approvalPayload=current.requested_payload||{};
-      if(isEmergencyGap(current)) {
-        const c=await getCandidates(supabase,companyId,current);
-        if(!c.teamType) return NextResponse.json({ok:false,error:"DORA acil durum ekip türünü güvenli biçimde belirleyemedi."},{status:400});
-        if(!selectedIds.length) return NextResponse.json({ok:false,error:"Onaydan önce en az bir çalışan seçilmelidir."},{status:400});
-        const allowed=new Set(c.candidates.map((x:any)=>text(x.id)));
+      if(executor.supported){
+        if(selectedIds.length!==executor.requiredSelectionCount)
+          return NextResponse.json({ok:false,error:`Bu işlem için ${executor.requiredSelectionCount} çalışan seçilmelidir.`},{status:400});
+        const allowed=new Set(executor.candidates.map((x:any)=>text(x.id)));
         if(selectedIds.some((x:string)=>!allowed.has(x)))
           return NextResponse.json({ok:false,error:"Seçilen çalışanlardan biri artık uygun aday listesinde değil."},{status:409});
-        approvalPayload={...approvalPayload,dora_execution:{executor:"EMERGENCY_SUPPORT_TEAM",teamType:c.teamType,selectedEmployeeIds:selectedIds}};
+        if(executor.requiresQualificationConfirmation&&!qualificationConfirmed)
+          return NextResponse.json({ok:false,error:"Bu işlem için kullanıcı doğrulaması işaretlenmelidir."},{status:400});
+
+        approvalPayload={
+          ...approvalPayload,
+          dora_execution:{
+            executor:executor.kind,
+            teamType:executor.teamType||null,
+            selectedEmployeeIds:selectedIds,
+            qualificationConfirmed,
+            approvedAt:new Date().toISOString()
+          }
+        };
       }
 
       const {data,error}=await supabase.from("dora_action_queue")
-        .update({status:"APPROVED",approved_at:new Date().toISOString(),requested_payload:approvalPayload})
+        .update({status:"APPROVED",approved_at:new Date().toISOString(),requested_payload:approvalPayload,source_url:correctedSourceUrl(current)})
         .eq("id",id).eq("company_id",companyId).select("*").single();
       if(error) throw error;
       return NextResponse.json({ok:true,command,item:data});
@@ -182,19 +266,18 @@ export async function POST(req:NextRequest) {
         return NextResponse.json({ok:false,error:"Kullanıcı onayı olmadan DORA işlemi başlatamaz."},{status:409});
 
       const exec=current.requested_payload?.dora_execution;
-      if(!exec || exec.executor!=="EMERGENCY_SUPPORT_TEAM") {
+      if(!exec?.executor){
         const {data,error}=await supabase.from("dora_action_queue")
           .update({status:"STARTED",started_at:new Date().toISOString(),
-            execution_note:"Kullanıcı Başla komutunu verdi. Bu bulgu için gerçek modül yürütücüsü henüz bağlı değil."})
+            execution_note:"Kullanıcı Başla komutunu verdi. Bu bulgu için gerçek modül yürütücüsü henüz bağlı değil.",
+            source_url:correctedSourceUrl(current)})
           .eq("id",id).eq("company_id",companyId).select("*").single();
         if(error) throw error;
         return NextResponse.json({ok:true,command,item:data,moduleWritePerformed:false});
       }
 
-      const teamType=text(exec.teamType);
       const selectedIds=(exec.selectedEmployeeIds||[]).map((x:any)=>text(x)).filter(Boolean);
-      if(!teamType || !selectedIds.length)
-        return NextResponse.json({ok:false,error:"Onaylı DORA yürütme planı eksik."},{status:409});
+      if(!selectedIds.length)return NextResponse.json({ok:false,error:"Onaylı çalışan seçimi bulunamadı."},{status:409});
 
       const {data:employees,error:empError}=await supabase.from("employees").select("*")
         .eq("firm_id",companyId).in("id",selectedIds).eq("active",true);
@@ -202,77 +285,128 @@ export async function POST(req:NextRequest) {
       if((employees||[]).length!==selectedIds.length)
         return NextResponse.json({ok:false,error:"Onaylanan çalışanlardan biri artık aktif firma çalışanı değil."},{status:409});
 
-      const localFirmId=await companyLocalFirmId(supabase,companyId);
+      const info=await companyInfo(supabase,companyId);
       const now=Date.now();
-      const rows=(employees||[]).map((e:any)=>({
-        sync_key:`dora:${companyId}:${teamType}:${e.id}`,
-        company_id:companyId,
-        local_firm_id:localFirmId,
-        employee_id:Number.isFinite(Number(e.id))?Number(e.id):null,
-        team_type:teamType,
-        team_role:"ÜYE",
-        full_name:employeeName(e),
-        duty:"Acil durum destek elemanı",
-        department:employeeDepartment(e),
-        phone:employeePhone(e),
-        certificate_info:"DORA ataması - belge bilgisi doğrulanmalı",
-        assigned_date_millis:now,
-        signature_status:"BEKLIYOR",
-        is_active:true,
-        version:1,
-        source:"DORA",
-        sync_status:"SYNCED",
-        sync_error:null,
-        is_deleted:false,
-        updated_at:new Date().toISOString(),
-        last_synced_at:new Date().toISOString(),
-      }));
+      const iso=new Date().toISOString();
 
-      // Idempotent: sync_key prevents duplicate DORA assignment if DB has/gets a unique constraint.
-      // Also pre-check exact DORA sync keys so repeated START cannot duplicate rows.
-      const keys=rows.map((r:any)=>r.sync_key);
-      const {data:existing,error:existingError}=await supabase.from("emergency_support_teams")
-        .select("sync_key").in("sync_key",keys);
-      if(existingError) throw existingError;
-      const existingKeys=new Set((existing||[]).map((x:any)=>text(x.sync_key)));
-      const insertRows=rows.filter((r:any)=>!existingKeys.has(r.sync_key));
+      if(exec.executor==="EMERGENCY_SUPPORT_TEAM"){
+        const teamType=text(exec.teamType);
+        if(!teamType)return NextResponse.json({ok:false,error:"Acil durum ekip türü eksik."},{status:409});
+        if(teamType==="ILK_YARDIM"&&exec.qualificationConfirmed!==true)
+          return NextResponse.json({ok:false,error:"İlkyardımcı sertifika doğrulaması olmadan işlem yapılamaz."},{status:409});
 
-      let inserted:any[]=[];
-      if(insertRows.length) {
-        const {data,error}=await supabase.from("emergency_support_teams").insert(insertRows).select("*");
-        if(error) {
-          await supabase.from("dora_action_queue").update({
-            status:"FAILED",failed_at:new Date().toISOString(),
-            execution_note:`Acil durum ekibi kaydı oluşturulamadı: ${error.message}`,
-            execution_result:{executor:"EMERGENCY_SUPPORT_TEAM",error:error.message}
-          }).eq("id",id).eq("company_id",companyId);
-          throw error;
+        const rows=(employees||[]).map((e:any)=>({
+          sync_key:`dora:${companyId}:emergency:${teamType}:${e.id}`,
+          company_id:companyId,
+          local_firm_id:info.localFirmId,
+          employee_id:e.id,
+          team_type:teamType,
+          team_role:"EKIP_UYESI",
+          full_name:employeeName(e),
+          duty:"Acil durum destek elemanı",
+          department:employeeDepartment(e),
+          phone:employeePhone(e),
+          certificate_info:teamType==="ILK_YARDIM"?"İlkyardımcı sertifikası kullanıcı tarafından doğrulandı":"DORA kullanıcı onaylı görevlendirme",
+          assigned_date_millis:now,
+          signature_status:"IMZA_BEKLIYOR",
+          is_active:true,
+          version:1,
+          source:"WEB",
+          sync_status:"SYNCED",
+          sync_error:null,
+          is_deleted:false,
+          updated_at:iso,
+          last_synced_at:iso,
+        }));
+
+        const keys=rows.map((r:any)=>r.sync_key);
+        const {data:existing,error:existingError}=await supabase.from("emergency_support_teams").select("sync_key").in("sync_key",keys);
+        if(existingError) throw existingError;
+        const existingKeys=new Set((existing||[]).map((x:any)=>text(x.sync_key)));
+        const insertRows=rows.filter((r:any)=>!existingKeys.has(r.sync_key));
+        let inserted:any[]=[];
+        if(insertRows.length){
+          const res=await supabase.from("emergency_support_teams").insert(insertRows).select("*");
+          if(res.error)throw res.error;
+          inserted=res.data||[];
         }
-        inserted=data||[];
+
+        const result={
+          executor:"EMERGENCY_SUPPORT_TEAM",teamType,
+          requested:selectedIds.length,inserted:inserted.length,
+          alreadyExisting:rows.length-insertRows.length,
+          employeeIds:selectedIds,employeeNames:(employees||[]).map((e:any)=>employeeName(e))
+        };
+        const {data:done,error}=await supabase.from("dora_action_queue").update({
+          status:"COMPLETED",started_at:iso,completed_at:iso,
+          execution_note:`DORA ${teamLabel(teamType)} ekibine ${inserted.length} çalışan kaydetti.`,
+          execution_result:result,source_url:"/admin/emergency"
+        }).eq("id",id).eq("company_id",companyId).select("*").single();
+        if(error)throw error;
+        return NextResponse.json({ok:true,command,item:done,moduleWritePerformed:true,result});
       }
 
-      const result={
-        executor:"EMERGENCY_SUPPORT_TEAM",
-        teamType,
-        requested:selectedIds.length,
-        inserted:inserted.length,
-        alreadyExisting:rows.length-insertRows.length,
-        employeeIds:selectedIds,
-      };
-      const {data:done,error:doneError}=await supabase.from("dora_action_queue").update({
-        status:"COMPLETED",
-        started_at:new Date().toISOString(),
-        completed_at:new Date().toISOString(),
-        execution_note:`DORA ${teamType} ekibine ${inserted.length} çalışan kaydetti.`,
-        execution_result:result
-      }).eq("id",id).eq("company_id",companyId).select("*").single();
-      if(doneError) throw doneError;
-      return NextResponse.json({ok:true,command,item:done,moduleWritePerformed:inserted.length>0,result});
+      if(exec.executor==="EMPLOYEE_REPRESENTATIVE"){
+        if(exec.qualificationConfirmed!==true)
+          return NextResponse.json({ok:false,error:"Çalışan temsilcisi belirleme usulü kullanıcı tarafından doğrulanmalıdır."},{status:409});
+
+        const rows=(employees||[]).map((e:any)=>({
+          sync_key:`dora:${companyId}:employee-representative:${e.id}`,
+          firm_id:companyId,
+          local_firm_id:info.localFirmId,
+          web_firm_id:companyId,
+          employee_id:e.id,
+          employee_name:employeeName(e),
+          department:employeeDepartment(e),
+          job_title:text(e.job_title)||null,
+          representative_type:"PRIMARY",
+          determination_method:"APPOINTMENT",
+          is_head_representative:false,
+          selection_date:iso.slice(0,10),
+          duty_start_date:iso.slice(0,10),
+          status:"ACTIVE",
+          note:"DORA Faz 2 kullanıcı onaylı atama. İşyerindeki belirleme/atama usulü kullanıcı tarafından doğrulandı.",
+          source:"WEB",
+          version:1,
+          sync_status:"SYNCED",
+          sync_error:null,
+          last_synced_at_millis:now,
+          is_deleted:false,
+          updated_at_millis:now,
+        }));
+
+        const keys=rows.map((r:any)=>r.sync_key);
+        const {data:existing,error:existingError}=await supabase.from("employee_representatives").select("sync_key").in("sync_key",keys);
+        if(existingError)throw existingError;
+        const existingKeys=new Set((existing||[]).map((x:any)=>text(x.sync_key)));
+        const insertRows=rows.filter((r:any)=>!existingKeys.has(r.sync_key));
+        let inserted:any[]=[];
+        if(insertRows.length){
+          const res=await supabase.from("employee_representatives").insert(insertRows).select("*");
+          if(res.error)throw res.error;
+          inserted=res.data||[];
+        }
+
+        const result={
+          executor:"EMPLOYEE_REPRESENTATIVE",requested:selectedIds.length,inserted:inserted.length,
+          alreadyExisting:rows.length-insertRows.length,
+          employeeIds:selectedIds,employeeNames:(employees||[]).map((e:any)=>employeeName(e))
+        };
+        const {data:done,error}=await supabase.from("dora_action_queue").update({
+          status:"COMPLETED",started_at:iso,completed_at:iso,
+          execution_note:`DORA ${inserted.length} çalışanı asıl çalışan temsilcisi olarak kaydetti.`,
+          execution_result:result,source_url:"/admin/documentation"
+        }).eq("id",id).eq("company_id",companyId).select("*").single();
+        if(error)throw error;
+        return NextResponse.json({ok:true,command,item:done,moduleWritePerformed:true,result});
+      }
+
+      return NextResponse.json({ok:false,error:"Bu işlem türü için yürütücü bulunamadı."},{status:400});
     }
 
     if(command==="SKIP") {
       const {data,error}=await supabase.from("dora_action_queue")
-        .update({status:"SKIPPED",skipped_at:new Date().toISOString()})
+        .update({status:"SKIPPED",skipped_at:new Date().toISOString(),source_url:correctedSourceUrl(current)})
         .eq("id",id).eq("company_id",companyId).select("*").single();
       if(error) throw error;
       return NextResponse.json({ok:true,command,item:data});

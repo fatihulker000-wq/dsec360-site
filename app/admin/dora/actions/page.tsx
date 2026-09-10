@@ -19,7 +19,10 @@ type Queue={
   id:string;source_gap_id:string;source_domain:string;title:string;description:string;
   recommendation:string;severity:string;status:string;source_url?:string;
   execution_note?:string;execution_result?:any;
-  executor?:{supported?:boolean;teamType?:string;candidates?:Candidate[]};
+  executor?:{
+    supported?:boolean;kind?:string;label?:string;teamType?:string;candidates?:Candidate[];
+    requiredSelectionCount?:number;requiresQualificationConfirmation?:boolean;qualificationText?:string
+  };
 };
 
 const C={burgundy:"#7f1d2d",ink:"#101828",muted:"#667085",line:"#e4e7ec",green:"#067647",amber:"#b54708",red:"#b42318",blue:"#175cd3",bg:"#f6f7f9"};
@@ -38,6 +41,7 @@ export default function DoraActionsPage(){
   const [gaps,setGaps]=useState<Gap[]>([]);
   const [queue,setQueue]=useState<Queue[]>([]);
   const [selected,setSelected]=useState<Record<string,string[]>>({});
+  const [confirmed,setConfirmed]=useState<Record<string,boolean>>({});
   const [busy,setBusy]=useState(false);
   const [booting,setBooting]=useState(true);
   const [msg,setMsg]=useState("");
@@ -209,15 +213,26 @@ export default function DoraActionsPage(){
             {queue.length===0?<Empty text="Henüz DORA işlem kuyruğu oluşturulmadı."/>:queue.map(q=>{
               const candidates=q.executor?.candidates||[];
               const ids=selected[q.id]||[];
-              const requiresSelection=Boolean(q.executor?.supported);
+              const executable=Boolean(q.executor?.supported);
+              const needed=Math.max(0,Number(q.executor?.requiredSelectionCount||0));
+              const requiresConfirmation=Boolean(q.executor?.requiresQualificationConfirmation);
+              const exactSelection=!executable || needed===0 || ids.length===needed;
+              const confirmationOk=!requiresConfirmation || confirmed[q.id]===true;
               return <div className="dora-action-card" key={q.id} style={{...item,border:q.status==="APPROVED"?`1px solid #84caff`:`1px solid ${C.line}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"start",flexWrap:"wrap"}}><b>{q.title}</b><Status s={q.status}/></div>
                 <div style={small}>{q.source_domain} • {q.severity}{q.executor?.teamType?` • ${q.executor.teamType}`:""}</div>
                 <div style={body}>{q.description}</div>
                 <div style={{...body,color:C.burgundy}}><b>Planlanan yaklaşım:</b> {q.recommendation}</div>
 
-                {q.status==="WAITING_APPROVAL"&&requiresSelection&&<div style={{marginTop:11,padding:11,borderRadius:11,background:"#f8fafc",border:`1px solid ${C.line}`}}>
-                  <div style={{fontSize:10,fontWeight:950,marginBottom:8}}>DORA UYGUN ÇALIŞAN ADAYLARI {q.executor?.teamType?`• ${q.executor.teamType}`:""}</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:9}}>
+                  <span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:executable?"#ecfdf3":"#f2f4f7",color:executable?C.green:C.muted}}>
+                    {executable?"DORA BU İŞLEMİ YAPABİLİR":"SADECE ÖNERİ / YÜRÜTÜCÜ BEKLİYOR"}
+                  </span>
+                  {executable&&needed>0&&<span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:"#eff8ff",color:C.blue}}>SEÇİLMESİ GEREKEN: {needed}</span>}
+                </div>
+
+                {q.status==="WAITING_APPROVAL"&&executable&&<div style={{marginTop:11,padding:11,borderRadius:11,background:"#f8fafc",border:`1px solid ${C.line}`}}>
+                  <div style={{fontSize:10,fontWeight:950,marginBottom:8}}>{q.executor?.label||"DORA ÇALIŞAN SEÇİMİ"}</div>
                   {candidates.length===0?<div style={small}>Atanabilir aktif çalışan bulunamadı.</div>:
                   <div className="dora-candidate-grid">
                     {candidates.map(c=><label key={c.id} style={{display:"flex",alignItems:"center",gap:9,padding:9,borderRadius:9,background:"#fff",border:`1px solid ${C.line}`,cursor:"pointer",minWidth:0}}>
@@ -225,16 +240,22 @@ export default function DoraActionsPage(){
                       <span style={{fontSize:11,minWidth:0,overflowWrap:"anywhere"}}><b>{c.full_name}</b><br/><span style={{color:C.muted,fontSize:9}}>{c.department} • {c.job_title}</span></span>
                     </label>)}
                   </div>}
+                  {requiresConfirmation&&<label style={{display:"flex",gap:8,alignItems:"flex-start",marginTop:10,padding:9,borderRadius:9,background:"#fffaeb",border:"1px solid #fedf89",fontSize:10,lineHeight:1.5,cursor:"pointer"}}>
+                    <input type="checkbox" checked={confirmed[q.id]===true} onChange={e=>setConfirmed(p=>({...p,[q.id]:e.target.checked}))}/>
+                    <span><b>Kullanıcı doğrulaması:</b> {q.executor?.qualificationText||"Bu işlem için gerekli uygunluk kullanıcı tarafından doğrulanmalıdır."}</span>
+                  </label>}
                 </div>}
 
-                {q.execution_note&&<div style={{...small,marginTop:8,padding:8,background:"#f8fafc",borderRadius:8}}>{q.execution_note}</div>}
+                {q.execution_note&&<div style={{...small,marginTop:8,padding:8,background:q.status==="COMPLETED"?"#ecfdf3":"#f8fafc",borderRadius:8,color:q.status==="COMPLETED"?C.green:C.muted}}>{q.execution_note}</div>}
+                {q.status==="COMPLETED"&&Array.isArray(q.execution_result?.employeeNames)&&q.execution_result.employeeNames.length>0&&
+                  <div style={{marginTop:8,fontSize:10,color:C.ink}}><b>İşlem yapılan çalışanlar:</b> {q.execution_result.employeeNames.join(", ")}</div>}
                 <div style={{display:"flex",gap:7,marginTop:10,flexWrap:"wrap"}}>
                   {q.status==="WAITING_APPROVAL"&&<>
-                    <button disabled={busy||(requiresSelection&&ids.length===0)} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length})`:""}</button>
+                    <button disabled={busy||!executable||!exactSelection||!confirmationOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
                     <button disabled={busy} onClick={()=>cmd("SKIP",{id:q.id})} style={secondary}>ATLA</button>
                   </>}
                   {q.status==="APPROVED"&&<button disabled={busy} onClick={()=>cmd("START",{id:q.id})} style={start}>▶ BAŞLA — DORA İŞLEMİ YAPSIN</button>}
-                  {q.source_url&&<button onClick={()=>location.href=q.source_url!} style={secondary}>KAYNAĞA GİT</button>}
+                  {q.source_url&&<button onClick={()=>location.href=q.source_url!} style={secondary}>KAYITLARI AÇ →</button>}
                 </div>
               </div>
             })}
