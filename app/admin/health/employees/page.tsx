@@ -33,10 +33,13 @@ export default function HealthEmployeesPage() {
   const [employees, setEmployees] = useState<HealthEmployee[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [firm, setFirm] = useState("ALL");
   const [risk, setRisk] = useState("ALL");
+  const [department, setDepartment] = useState("ALL");
+  const [job, setJob] = useState("ALL");
   const [sourceCompanyId,setSourceCompanyId] = useState("ALL");
   const [loadError,setLoadError] = useState("");
+  const [page,setPage] = useState(1);
+  const [pageSize,setPageSize] = useState(8);
 
   useEffect(() => {
     async function loadEmployees() {
@@ -62,13 +65,7 @@ export default function HealthEmployeesPage() {
           return;
         }
 
-        const rows:HealthEmployee[]=json.employees || [];
-        setEmployees(rows);
-
-        if(companyId!=="ALL"){
-          const selectedName=rows.find(x=>x.company_id===companyId)?.company_name;
-          if(selectedName) setFirm(selectedName);
-        }
+        setEmployees(json.employees || []);
       } catch(e:any) {
         setEmployees([]);
         setLoadError(e?.message||"Çalışan sağlık kartları alınamadı.");
@@ -80,97 +77,134 @@ export default function HealthEmployeesPage() {
     void loadEmployees();
   }, []);
 
-  const firmOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        employees
-          .map((x) => x.company_name || "Firma Yok")
-          .filter(Boolean)
-      )
-    ).sort((a, b) => a.localeCompare(b, "tr"));
-  }, [employees]);
+  const activeFirmName = useMemo(() => {
+    const names=Array.from(new Set(employees.map(e=>e.company_name).filter(Boolean)));
+    if(names.length===1) return names[0];
+    if(names.length>1) return "Tüm Firmalar";
+    return "Seçili Firma";
+  },[employees]);
+
+  const departmentOptions=useMemo(
+    ()=>Array.from(new Set(employees.map(e=>(e as any).department||"").filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b),"tr")),
+    [employees]
+  );
+  const jobOptions=useMemo(
+    ()=>Array.from(new Set(employees.map(e=>e.job_title||"").filter(Boolean))).sort((a,b)=>String(a).localeCompare(String(b),"tr")),
+    [employees]
+  );
 
   const filteredEmployees = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
+    const q = search.trim().toLocaleLowerCase("tr-TR");
     return employees.filter((employee) => {
-      const nameOk =
-        !q ||
-        employee.full_name.toLowerCase().includes(q) ||
-        employee.email.toLowerCase().includes(q) ||
-        employee.job_title.toLowerCase().includes(q) ||
-        employee.company_name.toLowerCase().includes(q);
+      const haystack=[
+        employee.full_name,employee.email,employee.job_title,employee.company_name,(employee as any).department
+      ].join(" ").toLocaleLowerCase("tr-TR");
 
-      const firmOk = firm === "ALL" || employee.company_name === firm;
+      const searchOk=!q||haystack.includes(q);
+      const riskOk=risk==="ALL"||employee.health_status===risk;
+      const depOk=department==="ALL"||String((employee as any).department||"")===department;
+      const jobOk=job==="ALL"||employee.job_title===job;
 
-      const riskOk = risk === "ALL" || employee.health_status === risk;
-
-      return nameOk && firmOk && riskOk;
+      return searchOk&&riskOk&&depOk&&jobOk;
     });
-  }, [employees, search, firm, risk]);
+  }, [employees, search, risk, department, job]);
 
-  const activeFirmName =
-    firm === "ALL" ? "Tüm Firmalar" : firm;
+  useEffect(()=>{setPage(1)},[search,risk,department,job,pageSize]);
 
   const totalEmployees = filteredEmployees.length;
-  const today = new Date().toISOString().slice(0,10);
-  const day90Date=new Date(); day90Date.setDate(day90Date.getDate()+90);
-  const day90=day90Date.toISOString().slice(0,10);
-  const approaching = filteredEmployees.filter(e=>e.next_examination_date && e.next_examination_date>=today && e.next_examination_date<=day90).length;
-  const ek2Missing = filteredEmployees.filter(e=>Number(e.ek2_count||0)===0).length;
-  const critical = filteredEmployees.filter(e=>e.health_status==="CRITICAL").length;
-  const missing = filteredEmployees.filter(e=>e.health_status==="MISSING").length;
+  const examPresent=filteredEmployees.filter(e=>Number(e.examination_count||0)>0).length;
+  const examMissing=filteredEmployees.filter(e=>Number(e.examination_count||0)===0).length;
+  const ek2Present=filteredEmployees.filter(e=>Number(e.ek2_count||0)>0).length;
+  const ek2Missing=filteredEmployees.filter(e=>Number(e.ek2_count||0)===0).length;
+  const prescriptionCount=filteredEmployees.reduce((n,e)=>n+Number(e.prescription_count||0),0);
+  const critical=filteredEmployees.filter(e=>e.health_status==="CRITICAL").length;
+
+  const pageCount=Math.max(1,Math.ceil(filteredEmployees.length/pageSize));
+  const safePage=Math.min(page,pageCount);
+  const start=(safePage-1)*pageSize;
+  const visibleEmployees=filteredEmployees.slice(start,start+pageSize);
+
+  function clearFilters(){
+    setSearch("");setRisk("ALL");setDepartment("ALL");setJob("ALL");setPage(1);
+  }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#f4f7fb",
-        color: "#101828",
-        fontFamily: "Inter,Arial,sans-serif",
-        padding: "22px 18px 48px",
-      }}
-    >
+    <main className="health-employees-page">
       <style jsx global>{`
         *{box-sizing:border-box}
-        .health-shell{max-width:1500px;margin:0 auto}
-        .health-topbar{display:flex;justify-content:space-between;gap:18px;align-items:center;margin-bottom:16px}
-        .health-title-wrap{display:flex;align-items:center;gap:14px;min-width:0}
-        .health-icon{width:54px;height:54px;border-radius:16px;background:#fff0f2;color:#b42318;display:grid;place-items:center;font-size:26px;border:1px solid #f7d8dc;box-shadow:0 8px 22px rgba(127,29,29,.06)}
-        .health-hero{background:linear-gradient(135deg,#a91519,#c51f22 55%,#8d1218);border-radius:24px;padding:20px;color:white;box-shadow:0 18px 42px rgba(127,29,29,.18)}
-        .health-hero-head{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:16px}
-        .health-kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
-        .health-kpi{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:15px 14px;min-height:98px;backdrop-filter:blur(4px)}
-        .health-kpi-label{font-size:12px;font-weight:800;opacity:.92}
-        .health-kpi-value{font-size:32px;font-weight:950;line-height:1;margin-top:9px}
-        .health-kpi-sub{font-size:11px;opacity:.8;margin-top:7px}
-        .health-filters{display:grid;grid-template-columns:minmax(280px,1.5fr) minmax(180px,.7fr) minmax(180px,.7fr) auto;gap:10px;margin:16px 0}
-        .health-table-card{background:white;border:1px solid #e4e7ec;border-radius:18px;overflow:hidden;box-shadow:0 12px 30px rgba(16,24,40,.05)}
-        .health-table{width:100%;border-collapse:collapse;table-layout:fixed}
-        .health-table th{background:#f8fafc;color:#344054;font-size:12px;font-weight:900;text-align:left;padding:13px 12px;border-bottom:1px solid #e4e7ec}
-        .health-table td{padding:13px 12px;border-bottom:1px solid #eef2f6;vertical-align:middle;font-size:13px;color:#344054;overflow:hidden}
-        .health-table tbody tr:hover{background:#fcfcfd}
-        .person-cell{display:flex;align-items:center;gap:10px;min-width:0}
-        .avatar{width:38px;height:38px;border-radius:50%;background:#f8e3e7;color:#9f1239;display:grid;place-items:center;font-weight:900;flex:0 0 auto}
-        .ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .muted{font-size:11px;color:#667085;margin-top:3px}
-        .action-wrap{display:flex;gap:7px;align-items:center;white-space:nowrap}
-        .badge{display:inline-flex;align-items:center;justify-content:center;min-height:28px;border-radius:999px;padding:0 10px;font-size:11px;font-weight:900;white-space:nowrap}
-        .badge-good{background:#dcfce7;color:#15803d}
-        .badge-warn{background:#fef3c7;color:#b45309}
-        .badge-bad{background:#fee2e2;color:#b91c1c}
-        .badge-neutral{background:#f2f4f7;color:#475467}
-        @media(max-width:1180px){
+        html,body{max-width:100%;overflow-x:hidden}
+        .health-employees-page{
+          min-height:100vh;background:#f4f7fb;color:#101828;
+          font-family:Inter,Arial,sans-serif;padding:18px 14px 42px;
+          width:100%;max-width:100%;overflow-x:hidden
+        }
+        .health-shell{width:100%;max-width:100%;margin:0 auto;min-width:0}
+        .health-topbar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px;min-width:0}
+        .health-title-wrap{display:flex;align-items:center;gap:13px;min-width:0}
+        .health-icon{width:50px;height:50px;border-radius:15px;background:#fff0f2;color:#b42318;display:grid;place-items:center;font-size:24px;border:1px solid #f7d8dc;box-shadow:0 8px 22px rgba(127,29,29,.06);flex:0 0 auto}
+        .health-hero{background:linear-gradient(135deg,#951419,#b91d21 55%,#7f1117);border-radius:20px;padding:15px;color:white;box-shadow:0 16px 38px rgba(127,29,29,.16);min-width:0}
+        .health-hero-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}
+        .health-kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;min-width:0}
+        .health-kpi{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);border-radius:13px;padding:11px 10px;min-width:0;min-height:82px}
+        .health-kpi-label{font-size:10.5px;font-weight:850;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .health-kpi-value{font-size:26px;font-weight:950;line-height:1;margin-top:7px}
+        .health-kpi-sub{font-size:9.5px;opacity:.78;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .health-filters{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(140px,.65fr) minmax(140px,.65fr) minmax(140px,.65fr) auto;gap:8px;margin:12px 0;min-width:0}
+        .health-table-card{background:white;border:1px solid #e4e7ec;border-radius:16px;overflow:hidden;box-shadow:0 10px 28px rgba(16,24,40,.05);min-width:0}
+        .health-grid-row{
+          display:grid;
+          grid-template-columns:36px minmax(155px,1.55fr) minmax(90px,.75fr) minmax(95px,.75fr) minmax(82px,.65fr) minmax(76px,.62fr) minmax(70px,.55fr) minmax(72px,.55fr) minmax(126px,.95fr);
+          gap:7px;align-items:center;min-width:0;padding:10px 11px
+        }
+        .health-grid-head{background:#f8fafc;border-bottom:1px solid #e4e7ec;color:#344054;font-size:11px;font-weight:950}
+        .health-grid-body{border-bottom:1px solid #eef2f6;font-size:12px;color:#344054}
+        .health-grid-body:last-child{border-bottom:0}
+        .health-grid-body:hover{background:#fcfcfd}
+        .cell{min-width:0;overflow:hidden}
+        .person-cell{display:flex;align-items:center;gap:8px;min-width:0}
+        .avatar{width:32px;height:32px;border-radius:50%;background:#f8e3e7;color:#9f1239;display:grid;place-items:center;font-size:11px;font-weight:950;flex:0 0 auto}
+        .ellipsis{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+        .muted{font-size:9.5px;color:#667085;margin-top:2px}
+        .badge{display:inline-flex;align-items:center;justify-content:center;min-height:24px;border-radius:999px;padding:0 8px;font-size:9.5px;font-weight:950;white-space:nowrap;max-width:100%}
+        .badge-good{background:#dcfce7;color:#15803d}.badge-warn{background:#fef3c7;color:#b45309}.badge-bad{background:#fee2e2;color:#b91c1c}.badge-neutral{background:#f2f4f7;color:#475467}
+        .action-wrap{display:flex;gap:5px;align-items:center;min-width:0}
+        .action-link{display:inline-flex;align-items:center;justify-content:center;min-width:55px;height:30px;padding:0 8px;border-radius:8px;text-decoration:none;font-size:9.5px;font-weight:900;white-space:nowrap}
+        .action-detail{background:#fff;color:#344054;border:1px solid #d0d5dd}
+        .action-exam{background:#fff;color:#b42318;border:1px solid #f2b8bd}
+        .health-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 12px;background:#fff;border-top:1px solid #eef2f6;flex-wrap:wrap}
+        .pager{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+        .pager button{width:30px;height:30px;border-radius:8px;border:1px solid #d0d5dd;background:#fff;color:#344054;font-size:11px;font-weight:900;cursor:pointer}
+        .pager button.active{background:#7f1d1d;border-color:#7f1d1d;color:#fff}
+        .pager button:disabled{opacity:.4;cursor:not-allowed}
+
+        @media(max-width:1220px){
           .health-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
-          .health-table-card{overflow:auto}
-          .health-table{min-width:1180px}
+          .health-grid-row{grid-template-columns:32px minmax(150px,1.5fr) minmax(90px,.8fr) minmax(88px,.75fr) minmax(74px,.65fr) minmax(70px,.6fr) minmax(68px,.55fr) minmax(68px,.55fr) minmax(116px,.9fr)}
+          .health-grid-row .company-col{display:none}
+          .health-grid-row{grid-template-columns:32px minmax(155px,1.6fr) minmax(100px,.8fr) minmax(80px,.68fr) minmax(75px,.65fr) minmax(70px,.58fr) minmax(72px,.58fr) minmax(120px,.9fr)}
+        }
+        @media(max-width:980px){
+          .health-filters{grid-template-columns:1fr 1fr 1fr}
+          .health-filters .search-field{grid-column:1/-1}
+          .health-grid-row .rx-col{display:none}
+          .health-grid-row{grid-template-columns:30px minmax(150px,1.65fr) minmax(95px,.85fr) minmax(78px,.7fr) minmax(72px,.65fr) minmax(70px,.6fr) minmax(118px,.95fr)}
         }
         @media(max-width:760px){
-          main{padding:12px 8px 36px!important}
+          .health-employees-page{padding:10px 7px 30px}
           .health-topbar,.health-hero-head{align-items:flex-start;flex-direction:column}
+          .health-title-wrap h1{font-size:25px!important}
+          .health-icon{width:43px;height:43px}
           .health-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
           .health-filters{grid-template-columns:1fr}
-          .health-title-wrap h1{font-size:27px!important}
+          .health-filters .search-field{grid-column:auto}
+          .health-grid-head{display:none}
+          .health-grid-body{grid-template-columns:1fr 1fr;gap:9px;padding:12px}
+          .health-grid-body .index-col,.health-grid-body .job-col,.health-grid-body .exam-col,.health-grid-body .ek2-col,.health-grid-body .risk-col,.health-grid-body .action-col{display:block}
+          .health-grid-body .person-col{grid-column:1/-1}
+          .health-grid-body .job-col,.health-grid-body .exam-col,.health-grid-body .ek2-col,.health-grid-body .risk-col{background:#f8fafc;border-radius:10px;padding:8px}
+          .health-grid-body .action-col{grid-column:1/-1}
+          .health-grid-body .index-col,.health-grid-body .company-col,.health-grid-body .rx-col{display:none}
+          .action-link{height:34px;flex:1;font-size:11px}
         }
       `}</style>
 
@@ -179,81 +213,61 @@ export default function HealthEmployeesPage() {
           <div className="health-title-wrap">
             <div className="health-icon">♡</div>
             <div style={{minWidth:0}}>
-              <h1 style={{fontSize:34,fontWeight:950,margin:0,letterSpacing:"-.4px"}}>
+              <h1 style={{fontSize:31,fontWeight:950,margin:0,letterSpacing:"-.4px"}}>
                 Çalışan Sağlık Kartları
               </h1>
-              <div style={{color:"#667085",fontSize:13,marginTop:5}}>
-                Çalışanların muayene, EK-2, reçete ve sağlık geçmişini tek ekrandan yönetin.
+              <div style={{color:"#667085",fontSize:12,marginTop:4}}>
+                Muayene, EK-2, reçete ve sağlık kayıtlarını tek ekrandan yönetin.
               </div>
             </div>
           </div>
 
           <Link
             href={sourceCompanyId==="ALL"?"/admin/health":`/admin/health?companyId=${encodeURIComponent(sourceCompanyId)}`}
-            style={{
-              textDecoration:"none",border:"1px solid #d0d5dd",background:"#fff",color:"#344054",
-              borderRadius:12,padding:"10px 14px",fontSize:12,fontWeight:900,boxShadow:"0 4px 12px rgba(16,24,40,.04)"
-            }}
+            style={{textDecoration:"none",border:"1px solid #d0d5dd",background:"#fff",color:"#344054",borderRadius:10,padding:"9px 12px",fontSize:11,fontWeight:900}}
           >
-            ← Dashboard'a Dön
+            ← Dashboard
           </Link>
         </div>
 
         <section className="health-hero">
           <div className="health-hero-head">
-            <div>
-              <div style={{fontSize:11,fontWeight:900,letterSpacing:.8,opacity:.78}}>SAĞLIK YÖNETİM MERKEZİ</div>
-              <div style={{fontSize:23,fontWeight:950,marginTop:5}}>{activeFirmName}</div>
-              <div style={{fontSize:12,opacity:.86,marginTop:4}}>Çalışan sağlık kayıtları özeti</div>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:10,fontWeight:900,letterSpacing:.7,opacity:.8}}>SAĞLIK YÖNETİM MERKEZİ</div>
+              <div className="ellipsis" style={{fontSize:20,fontWeight:950,marginTop:4}}>{activeFirmName}</div>
             </div>
+            <div style={{fontSize:10.5,opacity:.78}}>Firma seçimi Sağlık Dashboard’dan devralınır.</div>
           </div>
 
           <div className="health-kpis">
-            <div className="health-kpi">
-              <div className="health-kpi-label">Toplam Çalışan</div>
-              <div className="health-kpi-value">{totalEmployees}</div>
-              <div className="health-kpi-sub">Aktif kapsam</div>
-            </div>
-            <div className="health-kpi">
-              <div className="health-kpi-label">Muayenesi Olan</div>
-              <div className="health-kpi-value">{filteredEmployees.filter(e=>Number(e.examination_count||0)>0).length}</div>
-              <div className="health-kpi-sub">Sistemde kayıtlı</div>
-            </div>
-            <div className="health-kpi">
-              <div className="health-kpi-label">Muayenesi Eksik</div>
-              <div className="health-kpi-value">{filteredEmployees.filter(e=>Number(e.examination_count||0)===0).length}</div>
-              <div className="health-kpi-sub">Kontrol et</div>
-            </div>
-            <div className="health-kpi">
-              <div className="health-kpi-label">EK-2 Mevcut</div>
-              <div className="health-kpi-value">{filteredEmployees.filter(e=>Number(e.ek2_count||0)>0).length}</div>
-              <div className="health-kpi-sub">Çalışan bazında</div>
-            </div>
-            <div className="health-kpi">
-              <div className="health-kpi-label">EK-2 Eksik</div>
-              <div className="health-kpi-value">{ek2Missing}</div>
-              <div className="health-kpi-sub">D-SEC'te kayıt yok</div>
-            </div>
-            <div className="health-kpi">
-              <div className="health-kpi-label">Reçete Kaydı</div>
-              <div className="health-kpi-value">{filteredEmployees.reduce((n,e)=>n+Number(e.prescription_count||0),0)}</div>
-              <div className="health-kpi-sub">Toplam kayıt</div>
-            </div>
-            <div className="health-kpi">
-              <div className="health-kpi-label">Kritik Risk</div>
-              <div className="health-kpi-value">{critical}</div>
-              <div className="health-kpi-sub">Hekim takibi</div>
-            </div>
+            <Kpi title="Toplam Çalışan" value={totalEmployees} sub="Aktif kapsam"/>
+            <Kpi title="Muayenesi Olan" value={examPresent} sub={totalEmployees?`%${Math.round(examPresent*100/totalEmployees)}`:"%0"}/>
+            <Kpi title="Muayenesi Eksik" value={examMissing} sub="Kontrol et"/>
+            <Kpi title="EK-2 Mevcut" value={ek2Present} sub={totalEmployees?`%${Math.round(ek2Present*100/totalEmployees)}`:"%0"}/>
+            <Kpi title="EK-2 Eksik" value={ek2Missing} sub="D-SEC'te kayıt yok"/>
+            <Kpi title="Reçete Kaydı" value={prescriptionCount} sub="Toplam kayıt"/>
+            <Kpi title="Kritik Risk" value={critical} sub="Hekim takibi"/>
           </div>
         </section>
 
         <section className="health-filters">
           <input
+            className="search-field"
             value={search}
             onChange={(e)=>setSearch(e.target.value)}
             placeholder="Çalışan adı, görev veya e-posta ara..."
             style={inputStyle}
           />
+
+          <select value={department} onChange={(e)=>setDepartment(e.target.value)} style={inputStyle}>
+            <option value="ALL">Tüm Departmanlar</option>
+            {departmentOptions.map(x=><option key={String(x)} value={String(x)}>{String(x)}</option>)}
+          </select>
+
+          <select value={job} onChange={(e)=>setJob(e.target.value)} style={inputStyle}>
+            <option value="ALL">Tüm Görevler</option>
+            {jobOptions.map(x=><option key={String(x)} value={String(x)}>{String(x)}</option>)}
+          </select>
 
           <select value={risk} onChange={(e)=>setRisk(e.target.value)} style={inputStyle}>
             <option value="ALL">Tüm Risk Durumları</option>
@@ -263,218 +277,147 @@ export default function HealthEmployeesPage() {
             <option value="MISSING">Kayıt Eksik</option>
           </select>
 
-          <select
-            value="ALL"
-            onChange={()=>{}}
-            style={{...inputStyle,color:"#667085"}}
-            disabled
-            title="Firma seçimi Sağlık Dashboard ekranından yapılır."
-          >
-            <option>Firma: {activeFirmName}</option>
-          </select>
-
           <button
-            onClick={()=>{setSearch("");setRisk("ALL");}}
-            style={{
-              minHeight:44,padding:"0 16px",borderRadius:12,border:"1px solid #d0d5dd",
-              background:"#fff",color:"#344054",fontWeight:900,cursor:"pointer"
-            }}
+            onClick={clearFilters}
+            style={{minHeight:40,padding:"0 13px",borderRadius:10,border:"1px solid #d0d5dd",background:"#fff",color:"#344054",fontWeight:900,cursor:"pointer",whiteSpace:"nowrap"}}
           >
-            Temizle
+            ↻ Temizle
           </button>
         </section>
 
         {loadError && (
-          <div style={{marginBottom:14,padding:"12px 14px",borderRadius:12,background:"#fef2f2",border:"1px solid #fecaca",color:"#b91c1c",fontWeight:800}}>
+          <div style={{marginBottom:12,padding:"11px 13px",borderRadius:11,background:"#fef2f2",border:"1px solid #fecaca",color:"#b91c1c",fontWeight:800,fontSize:11}}>
             {loadError}
           </div>
         )}
 
         <section className="health-table-card">
-          <table className="health-table">
-            <colgroup>
-              <col style={{width:"48px"}}/>
-              <col style={{width:"230px"}}/>
-              <col style={{width:"150px"}}/>
-              <col style={{width:"160px"}}/>
-              <col style={{width:"125px"}}/>
-              <col style={{width:"120px"}}/>
-              <col style={{width:"100px"}}/>
-              <col style={{width:"100px"}}/>
-              <col style={{width:"175px"}}/>
-            </colgroup>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Çalışan</th>
-                <th>Firma</th>
-                <th>Görev</th>
-                <th>Son Muayene</th>
-                <th>EK-2</th>
-                <th>Reçete</th>
-                <th>Risk</th>
-                <th>İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={9} style={{padding:28,textAlign:"center",color:"#667085"}}>Çalışanlar yükleniyor...</td></tr>
-              ) : filteredEmployees.length===0 ? (
-                <tr><td colSpan={9} style={{padding:28,textAlign:"center",color:"#667085"}}>Çalışan bulunamadı.</td></tr>
-              ) : (
-                filteredEmployees.map((employee,index)=>(
-                  <tr key={employee.id}>
-                    <td style={{fontWeight:800,color:"#667085"}}>{index+1}</td>
-                    <td>
-                      <div className="person-cell">
-                        <div className="avatar">{getInitial(employee.full_name)}</div>
-                        <div style={{minWidth:0}}>
-                          <div className="ellipsis" style={{fontWeight:900,color:"#101828"}} title={employee.full_name}>{employee.full_name}</div>
-                          <div className="ellipsis muted" title={employee.email}>{employee.email||"-"}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td><div className="ellipsis" title={employee.company_name}>{employee.company_name||"-"}</div></td>
-                    <td><div className="ellipsis" title={employee.job_title}>{employee.job_title||"-"}</div></td>
-                    <td>
-                      <span className={`badge ${employee.last_examination_date?"badge-neutral":"badge-bad"}`}>
-                        {employee.last_examination_date?formatDate(employee.last_examination_date):"Yok"}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge ${Number(employee.ek2_count||0)>0?"badge-good":"badge-bad"}`}>
-                        {Number(employee.ek2_count||0)>0?"✓ Var":"✕ Yok"}
-                      </span>
-                      {Number(employee.ek2_count||0)>0 && employee.last_ek2_date && (
-                        <div className="muted">{formatDate(employee.last_ek2_date)}</div>
-                      )}
-                    </td>
-                    <td>
-                      {Number(employee.prescription_count||0)>0
-                        ? <span className="badge badge-neutral">{employee.prescription_count} kayıt</span>
-                        : <span className="muted">-</span>}
-                    </td>
-                    <td>
-                      <span className={`badge ${
-                        employee.health_status==="CRITICAL"?"badge-bad":
-                        employee.health_status==="WARNING"||employee.health_status==="MISSING"?"badge-warn":"badge-good"
-                      }`}>
-                        {employee.health_status==="CRITICAL"?"Kritik":
-                         employee.health_status==="WARNING"?"Takip":
-                         employee.health_status==="MISSING"?"Eksik":"Normal"}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="action-wrap">
-                        <Link
-                          href={`/admin/health/employees/${employee.id}${sourceCompanyId!=="ALL"?`?companyId=${encodeURIComponent(sourceCompanyId)}`:""}`}
-                          style={{
-                            ...buttonStyle,
-                            background:"#fff",
-                            color:"#344054",
-                            border:"1px solid #d0d5dd",
-                            padding:"8px 11px",
-                            borderRadius:10,
-                            boxShadow:"none"
-                          }}
-                        >
-                          Detay
-                        </Link>
-                        <Link
-                          href={`/admin/health/employees/${employee.id}?tab=Muayeneler${sourceCompanyId!=="ALL"?`&companyId=${encodeURIComponent(sourceCompanyId)}`:""}`}
-                          style={{
-                            ...lightButtonStyle,
-                            color:"#b42318",
-                            background:"#fff",
-                            border:"1px solid #f2b8bd",
-                            padding:"8px 11px",
-                            borderRadius:10
-                          }}
-                        >
-                          Muayene
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </section>
+          <div className="health-grid-row health-grid-head">
+            <div>#</div>
+            <div>Çalışan</div>
+            <div className="company-col">Firma</div>
+            <div>Görev</div>
+            <div>Son Muayene</div>
+            <div>EK-2</div>
+            <div className="rx-col">Reçete</div>
+            <div>Risk</div>
+            <div>İşlem</div>
+          </div>
 
-        <div style={{marginTop:12,fontSize:11,color:"#667085"}}>
-          Firma seçimi Sağlık Dashboard ekranından devralınır. Bu ekranda firma değiştirilemez; yalnız çalışan ve risk filtreleri uygulanır.
-        </div>
+          {loading ? (
+            <div style={{padding:28,textAlign:"center",color:"#667085",fontSize:12}}>Çalışanlar yükleniyor...</div>
+          ) : visibleEmployees.length===0 ? (
+            <div style={{padding:28,textAlign:"center",color:"#667085",fontSize:12}}>Çalışan bulunamadı.</div>
+          ) : (
+            visibleEmployees.map((employee,index)=>(
+              <div key={employee.id} className="health-grid-row health-grid-body">
+                <div className="cell index-col" style={{fontWeight:850,color:"#667085"}}>{start+index+1}</div>
+
+                <div className="cell person-col">
+                  <div className="person-cell">
+                    <div className="avatar">{getInitial(employee.full_name)}</div>
+                    <div style={{minWidth:0}}>
+                      <div className="ellipsis" style={{fontWeight:900,color:"#101828"}} title={employee.full_name}>{employee.full_name}</div>
+                      <div className="ellipsis muted" title={employee.email}>{employee.email||"-"}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="cell company-col"><span className="ellipsis" title={employee.company_name}>{employee.company_name||"-"}</span></div>
+                <div className="cell job-col"><span className="ellipsis" title={employee.job_title}>{employee.job_title||"-"}</span></div>
+
+                <div className="cell exam-col">
+                  <span className={`badge ${employee.last_examination_date?"badge-neutral":"badge-bad"}`}>
+                    {employee.last_examination_date?formatDate(employee.last_examination_date):"Yok"}
+                  </span>
+                </div>
+
+                <div className="cell ek2-col">
+                  <span className={`badge ${Number(employee.ek2_count||0)>0?"badge-good":"badge-bad"}`}>
+                    {Number(employee.ek2_count||0)>0?"✓ Var":"✕ Yok"}
+                  </span>
+                </div>
+
+                <div className="cell rx-col">
+                  {Number(employee.prescription_count||0)>0
+                    ? <span className="badge badge-neutral">{employee.prescription_count} kayıt</span>
+                    : <span className="muted">-</span>}
+                </div>
+
+                <div className="cell risk-col">
+                  <span className={`badge ${
+                    employee.health_status==="CRITICAL"?"badge-bad":
+                    employee.health_status==="WARNING"||employee.health_status==="MISSING"?"badge-warn":"badge-good"
+                  }`}>
+                    {employee.health_status==="CRITICAL"?"Kritik":
+                     employee.health_status==="WARNING"?"Takip":
+                     employee.health_status==="MISSING"?"Eksik":"Normal"}
+                  </span>
+                </div>
+
+                <div className="cell action-col">
+                  <div className="action-wrap">
+                    <Link
+                      href={`/admin/health/employees/${employee.id}${sourceCompanyId!=="ALL"?`?companyId=${encodeURIComponent(sourceCompanyId)}`:""}`}
+                      className="action-link action-detail"
+                    >
+                      Detay
+                    </Link>
+                    <Link
+                      href={`/admin/health/employees/${employee.id}?tab=Muayeneler${sourceCompanyId!=="ALL"?`&companyId=${encodeURIComponent(sourceCompanyId)}`:""}`}
+                      className="action-link action-exam"
+                    >
+                      Muayene
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+
+          {!loading && filteredEmployees.length>0 && (
+            <div className="health-footer">
+              <div style={{fontSize:10.5,color:"#667085"}}>
+                Toplam {filteredEmployees.length} kayıttan {start+1}-{Math.min(start+pageSize,filteredEmployees.length)} arası gösteriliyor
+              </div>
+
+              <div className="pager">
+                <select
+                  value={pageSize}
+                  onChange={e=>setPageSize(Number(e.target.value))}
+                  style={{height:30,borderRadius:8,border:"1px solid #d0d5dd",background:"#fff",fontSize:10.5,fontWeight:850,padding:"0 7px"}}
+                >
+                  <option value={8}>8 / sayfa</option>
+                  <option value={12}>12 / sayfa</option>
+                  <option value={20}>20 / sayfa</option>
+                </select>
+
+                <button disabled={safePage<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>‹</button>
+                {Array.from({length:pageCount},(_,i)=>i+1)
+                  .filter(n=>pageCount<=7||n===1||n===pageCount||Math.abs(n-safePage)<=2)
+                  .map((n,i,arr)=>{
+                    const prev=arr[i-1];
+                    return <span key={n} style={{display:"contents"}}>
+                      {prev && n-prev>1 && <span style={{fontSize:10,color:"#98a2b3"}}>…</span>}
+                      <button className={n===safePage?"active":""} onClick={()=>setPage(n)}>{n}</button>
+                    </span>
+                  })}
+                <button disabled={safePage>=pageCount} onClick={()=>setPage(p=>Math.min(pageCount,p+1))}>›</button>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
 }
 
-function MiniStat({ title, value }: { title: string; value: number }) {
-  return (
-    <div
-      style={{
-        background: "rgba(255,255,255,.14)",
-        border: "1px solid rgba(255,255,255,.22)",
-        borderRadius: 18,
-        padding: 14,
-      }}
-    >
-      <div style={{ fontSize: 12, opacity: 0.82, fontWeight: 800 }}>
-        {title}
-      </div>
-      <div style={{ fontSize: 26, fontWeight: 950, marginTop: 6 }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function EmptyRow({ text }: { text: string }) {
-  return (
-    <div
-      style={{
-        padding: 40,
-        textAlign: "center",
-        color: "#64748b",
-        fontWeight: 800,
-      }}
-    >
-      {text}
-    </div>
-  );
-}
-
-function Badge({
-  text,
-  tone,
-}: {
-  text: string;
-  tone: "good" | "warning" | "bad" | "neutral";
-}) {
-  const styles = {
-    good: { bg: "#f0fdf4", color: "#15803d" },
-    warning: { bg: "#fff7ed", color: "#c2410c" },
-    bad: { bg: "#fef2f2", color: "#b91c1c" },
-    neutral: { bg: "#f8fafc", color: "#64748b" },
-  }[tone];
-
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        justifyContent: "center",
-        padding: "7px 10px",
-        borderRadius: 999,
-        background: styles.bg,
-        color: styles.color,
-        fontWeight: 900,
-        fontSize: 12,
-      }}
-    >
-      {text}
-    </span>
-  );
+function Kpi({title,value,sub}:{title:string;value:number;sub:string}){
+  return <div className="health-kpi">
+    <div className="health-kpi-label" title={title}>{title}</div>
+    <div className="health-kpi-value">{value}</div>
+    <div className="health-kpi-sub" title={sub}>{sub}</div>
+  </div>
 }
 
 function getInitial(name: string) {
@@ -491,26 +434,7 @@ const inputStyle: React.CSSProperties = {
   background: "#fff",
 };
 
-const buttonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 12,
-  textDecoration: "none",
-  background: "#7f1d1d",
-  color: "#fff",
-  fontWeight: 900,
-  fontSize: 13,
-};
 
-const lightButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 12,
-  textDecoration: "none",
-  background: "#fff1f2",
-  color: "#991b1b",
-  border: "1px solid #fecaca",
-  fontWeight: 900,
-  fontSize: 13,
-};
 function formatDate(value?: string) {
   if (!value || value === "-") return "-";
 
