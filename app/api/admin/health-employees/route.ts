@@ -1,5 +1,5 @@
  import { createClient } from "@supabase/supabase-js";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 function getSupabase() {
@@ -121,7 +121,7 @@ last_prescription: examInfo.last_prescription_date || "-",
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
 
@@ -132,7 +132,11 @@ export async function GET() {
     ).trim();
 
     const isAllowedRole =
-      adminRole === "super_admin" || adminRole === "company_admin" || !adminRole;
+      adminRole === "super_admin" ||
+      adminRole === "admin" ||
+      adminRole === "company_admin" ||
+      adminRole === "demo_user" ||
+      !adminRole;
 
     if (adminAuth !== "ok" && adminRole) {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
@@ -142,12 +146,29 @@ export async function GET() {
       return NextResponse.json({ error: "Yetkisiz erişim." }, { status: 401 });
     }
 
-    if (adminRole === "company_admin" && !companyIdFromCookie) {
+    const scopedRole = adminRole === "company_admin" || adminRole === "demo_user";
+    if (scopedRole && !companyIdFromCookie) {
       return NextResponse.json(
         { error: "Firma bilgisi bulunamadı." },
         { status: 403 }
       );
     }
+
+    const requestedCompanyId = String(req.nextUrl.searchParams.get("companyId") || "").trim();
+    if (
+      scopedRole &&
+      requestedCompanyId &&
+      requestedCompanyId !== "ALL" &&
+      requestedCompanyId !== companyIdFromCookie
+    ) {
+      return NextResponse.json({ error: "Bu firma için erişim yetkiniz yok." }, { status: 403 });
+    }
+
+    const selectedCompanyId = scopedRole
+      ? companyIdFromCookie
+      : requestedCompanyId && requestedCompanyId !== "ALL"
+        ? requestedCompanyId
+        : "";
 
     const supabase = getSupabase();
 
@@ -157,10 +178,10 @@ export async function GET() {
   .from("employees")
   .select("*")
   .order("full_name", { ascending: true })
-  .limit(200);
+  .limit(10000);
 
-if (adminRole === "company_admin") {
-  employeesQuery = employeesQuery.eq("firm_id", companyIdFromCookie);
+if (selectedCompanyId) {
+  employeesQuery = employeesQuery.eq("firm_id", selectedCompanyId);
 }
 
 const { data: employees, error: employeesError } =
@@ -233,6 +254,7 @@ last_prescription_status: string;
   }
 > = {};
 
+    let examinationRows: ExaminationRow[] = [];
     if (employeeIds.length > 0) {
       const { data: examinations, error: examinationsError } = await supabase
         .from("health_examinations")
@@ -254,7 +276,9 @@ last_prescription_status: string;
         );
       }
 
-      for (const exam of examinations || []) {
+      examinationRows = examinations || [];
+
+      for (const exam of examinationRows) {
   const employeeId = String(exam.employee_id || "").trim();
   if (!employeeId) continue;
 
@@ -287,23 +311,33 @@ last_prescription_status: "",
 }
     }
 
-// EK-2 gerçek kaynağı: health_ek2_forms. Muayene türünden tahmin etmek yerine resmi form tablosunu esas al.
+// EK-2 kapsamı: gerçek form tablosu + eski EK2_* muayene kayıtları.
 if (employeeIds.length > 0) {
   let ek2Query = supabase
     .from("health_ek2_forms")
-    .select("id,employee_id,company_id,status,exam_date,next_exam_date,is_active,created_at")
+    .select("id,employee_id,company_id,examination_id,status,decision,exam_date,next_exam_date,is_active,created_at")
     .in("employee_id", employeeIds)
     .order("exam_date", { ascending: false });
 
-  if (adminRole === "company_admin") ek2Query = ek2Query.eq("company_id", companyIdFromCookie);
+  if (selectedCompanyId) ek2Query = ek2Query.eq("company_id", selectedCompanyId);
 
   const { data: ek2Forms, error: ek2Error } = await ek2Query;
-  if (ek2Error) return NextResponse.json({ error:"EK-2 özetleri alınamadı.", detail:ek2Error.message },{status:500});
+  if (ek2Error) {
+    return NextResponse.json(
+      { error:"EK-2 özetleri alınamadı.", detail:ek2Error.message },
+      { status:500 }
+    );
+  }
 
-  for (const form of ek2Forms || []) {
-    if (form.is_active === false) continue;
+  const activeForms=(ek2Forms||[]).filter((form:any)=>form.is_active!==false);
+  const formExamIds=new Set(activeForms.map((form:any)=>String(form.examination_id||"").trim()).filter(Boolean));
+  const employeeHasForm=new Set<string>();
+
+  for (const form of activeForms) {
     const employeeId = String(form.employee_id || "").trim();
     if (!employeeId) continue;
+    employeeHasForm.add(employeeId);
+
     if (!examMap[employeeId]) {
       examMap[employeeId] = {
         examination_count:0,last_examination_date:"",last_examination_decision:"",next_examination_date:"",
@@ -311,20 +345,50 @@ if (employeeIds.length > 0) {
         prescription_count:0,last_prescription_date:"",last_prescription_status:""
       };
     }
+
     examMap[employeeId].ek2_count += 1;
     if (!examMap[employeeId].last_ek2_date) {
       examMap[employeeId].last_ek2_date = form.exam_date || form.created_at || "";
-      examMap[employeeId].last_ek2_status = form.status || "";
+      examMap[employeeId].last_ek2_status = form.decision || form.status || "";
+    }
+  }
+
+  // Eski kayıtların bir kısmında health_ek2_forms satırı oluşmadan
+  // health_examinations.exam_type = EK2_* olarak kaydedilmiş. Bunları kaybetme.
+  for (const exam of examinationRows) {
+    const examType=String(exam.exam_type||"").trim().toLocaleUpperCase("tr-TR");
+    const isEk2=examType.startsWith("EK2_")||examType.includes("EK-2")||examType.includes("EK 2");
+    if(!isEk2 || formExamIds.has(String(exam.id||"").trim())) continue;
+
+    const employeeId=String(exam.employee_id||"").trim();
+    if(!employeeId) continue;
+
+    if (!examMap[employeeId]) {
+      examMap[employeeId] = {
+        examination_count:0,last_examination_date:"",last_examination_decision:"",next_examination_date:"",
+        ek2_count:0,last_ek2_date:"",last_ek2_status:"",
+        prescription_count:0,last_prescription_date:"",last_prescription_status:""
+      };
+    }
+
+    examMap[employeeId].ek2_count += 1;
+    if (!examMap[employeeId].last_ek2_date) {
+      examMap[employeeId].last_ek2_date = exam.exam_date || "";
+      examMap[employeeId].last_ek2_status = exam.decision || "Muayene kaydından";
     }
   }
 }
 
-const { data: prescriptions, error: prescriptionError } = await supabase
+let prescriptionQuery = supabase
   .from("health_prescriptions")
-  .select("employee_id, created_at, status")
+  .select("employee_id, company_id, created_at, status")
   .in("employee_id", employeeIds)
   .eq("is_active", true)
   .order("created_at", { ascending: false });
+
+if (selectedCompanyId) prescriptionQuery = prescriptionQuery.eq("company_id", selectedCompanyId);
+
+const { data: prescriptions, error: prescriptionError } = await prescriptionQuery;
 
 if (prescriptionError) {
   return NextResponse.json(

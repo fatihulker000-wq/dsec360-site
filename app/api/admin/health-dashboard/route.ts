@@ -38,7 +38,7 @@ export async function GET(req:NextRequest){
   const employeeSet=new Set(employeeIds);
 
   let exq=supabase.from("health_examinations").select("id,employee_id,company_id,exam_type,exam_date,next_exam_date,decision,bmi,systolic,diastolic,spo2,created_at,is_deleted").or("is_deleted.eq.false,is_deleted.is.null").limit(10000);
-  let ekq=supabase.from("health_ek2_forms").select("id,employee_id,company_id,status,exam_date,next_exam_date,decision,created_at,is_active").limit(10000);
+  let ekq=supabase.from("health_ek2_forms").select("id,employee_id,company_id,examination_id,status,exam_date,next_exam_date,decision,created_at,is_active").limit(10000);
   let prq=supabase.from("health_prescriptions").select("id,employee_id,company_id,status,created_at,is_active,health_prescription_items(id)").eq("is_active",true).limit(10000);
   if(selectedCompany){exq=exq.eq("company_id",selectedCompany);ekq=ekq.eq("company_id",selectedCompany);prq=prq.eq("company_id",selectedCompany);}
   const [exr,ekr,prr]=await Promise.all([exq,ekq,prq]);
@@ -54,9 +54,16 @@ export async function GET(req:NextRequest){
   const d30=new Date(); d30.setDate(d30.getDate()+30); const day30=dateOnly(d30);
   const d90=new Date(); d90.setDate(d90.getDate()+90); const day90=dateOnly(d90);
 
+  const legacyEk2Exams=exams.filter((x:any)=>{
+    const t=s(x.exam_type).toLocaleUpperCase("tr-TR");
+    return t.startsWith("EK2_")||t.includes("EK-2")||t.includes("EK 2");
+  });
+  const ek2LinkedExamIds=new Set(ek2.map((x:any)=>s(x.examination_id)).filter(Boolean));
+  const legacyEk2Fallback=legacyEk2Exams.filter((x:any)=>!ek2LinkedExamIds.has(s(x.id)));
+
   const healthIds=new Set([...exams,...ek2,...prescriptions].map((x:any)=>s(x.employee_id)).filter(Boolean));
   const examIds=new Set(exams.map((x:any)=>s(x.employee_id)).filter(Boolean));
-  const ek2Ids=new Set(ek2.map((x:any)=>s(x.employee_id)).filter(Boolean));
+  const ek2Ids=new Set([...ek2,...legacyEk2Exams].map((x:any)=>s(x.employee_id)).filter(Boolean));
 
   // Latest examination per employee prevents an old overdue record from making a currently valid employee overdue.
   const latestByEmployee=new Map<string,Row>();
@@ -83,7 +90,10 @@ export async function GET(req:NextRequest){
   const recentExaminations=[...exams].sort((a:any,b:any)=>s(b.exam_date).localeCompare(s(a.exam_date))).slice(0,10).map((x:any)=>({
     id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:companyNameOf(x.employee_id),examType:x.exam_type||"Muayene",examDate:x.exam_date||"",decision:x.decision||"",jobTitle:empMap[s(x.employee_id)]?.job_title||""
   }));
-  const recentEk2=[...ek2].sort((a:any,b:any)=>s(b.exam_date||b.created_at).localeCompare(s(a.exam_date||a.created_at))).slice(0,10).map((x:any)=>({
+  const recentEk2=[
+    ...ek2.map((x:any)=>({...x,_source:"FORM"})),
+    ...legacyEk2Fallback.map((x:any)=>({...x,status:x.decision||"Muayene kaydından",created_at:x.created_at,_source:"LEGACY_EXAM"}))
+  ].sort((a:any,b:any)=>s(b.exam_date||b.created_at).localeCompare(s(a.exam_date||a.created_at))).slice(0,10).map((x:any)=>({
     id:x.id,employeeName:empMap[s(x.employee_id)]?.full_name||"Çalışan",companyName:companyNameOf(x.employee_id),decision:x.decision||x.status||"",createdAt:x.exam_date||x.created_at||""
   }));
   const recentPrescriptions=[...prescriptions].sort((a:any,b:any)=>s(b.created_at).localeCompare(s(a.created_at))).slice(0,10).map((x:any)=>({
@@ -111,7 +121,7 @@ export async function GET(req:NextRequest){
       ek2Present:ek2Ids.size,
       ek2Missing:Math.max(0,total-ek2Ids.size),
       examinationRecords:exams.length,
-      ek2Records:ek2.length,
+      ek2Records:ek2.length+legacyEk2Fallback.length,
       prescriptionRecords:prescriptions.length,
       todayExams:exams.filter((x:any)=>x.exam_date===today).length,
       upcomingExams:upcoming90.length,
@@ -127,6 +137,7 @@ export async function GET(req:NextRequest){
     alerts:alerts.length?alerts:[{id:"health-ok",level:"Bilgi",title:"Sağlık kayıtları izleniyor",desc:"Aktif çalışan, muayene, EK-2 ve reçete kayıtları dashboard'a bağlandı."}],
     dataNotes:[
       "Sağlık kaydı kapsamı; muayene, EK-2 veya reçete kaydı bulunan aktif çalışanları gösterir.",
+      "EK-2 kapsamı önce health_ek2_forms tablosundan okunur; eski kayıtlarda form satırı yoksa EK2_* türündeki health_examinations kayıtları geriye dönük kapsam için kullanılır.",
       "Eksik ifadesi, D-SEC içinde eşleşen kayıt bulunamadığını ifade eder; tıbbi işlemin gerçekte yapılmadığını tek başına kanıtlamaz.",
       "Aşı ve iş kazası KPI'ları kaynak tabloları ayrıca doğrulanana kadar 0 olarak klinik sonuç şeklinde yorumlanmamalıdır."
     ]

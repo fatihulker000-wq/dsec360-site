@@ -35,11 +35,21 @@ export default function HealthEmployeesPage() {
   const [search, setSearch] = useState("");
   const [firm, setFirm] = useState("ALL");
   const [risk, setRisk] = useState("ALL");
+  const [sourceCompanyId,setSourceCompanyId] = useState("ALL");
+  const [loadError,setLoadError] = useState("");
 
   useEffect(() => {
     async function loadEmployees() {
       try {
-        const res = await fetch("/api/admin/health-employees", {
+        setLoading(true);
+        setLoadError("");
+
+        const params=new URLSearchParams(window.location.search);
+        const companyId=String(params.get("companyId")||"ALL").trim()||"ALL";
+        setSourceCompanyId(companyId);
+
+        const qs=companyId!=="ALL"?`?companyId=${encodeURIComponent(companyId)}`:"";
+        const res = await fetch(`/api/admin/health-employees${qs}`, {
           cache: "no-store",
           credentials: "include",
         });
@@ -48,12 +58,20 @@ export default function HealthEmployeesPage() {
 
         if (!res.ok) {
           setEmployees([]);
+          setLoadError(json?.error||"Çalışan sağlık kartları alınamadı.");
           return;
         }
 
-        setEmployees(json.employees || []);
-      } catch {
+        const rows:HealthEmployee[]=json.employees || [];
+        setEmployees(rows);
+
+        if(companyId!=="ALL"){
+          const selectedName=rows.find(x=>x.company_id===companyId)?.company_name;
+          if(selectedName) setFirm(selectedName);
+        }
+      } catch(e:any) {
         setEmployees([]);
+        setLoadError(e?.message||"Çalışan sağlık kartları alınamadı.");
       } finally {
         setLoading(false);
       }
@@ -96,7 +114,9 @@ export default function HealthEmployeesPage() {
 
   const totalEmployees = filteredEmployees.length;
   const today = new Date().toISOString().slice(0,10);
-  const approaching = filteredEmployees.filter(e=>e.next_examination_date && e.next_examination_date>=today).length;
+  const day90Date=new Date(); day90Date.setDate(day90Date.getDate()+90);
+  const day90=day90Date.toISOString().slice(0,10);
+  const approaching = filteredEmployees.filter(e=>e.next_examination_date && e.next_examination_date>=today && e.next_examination_date<=day90).length;
   const ek2Missing = filteredEmployees.filter(e=>Number(e.ek2_count||0)===0).length;
   const critical = filteredEmployees.filter(e=>e.health_status==="CRITICAL").length;
   const missing = filteredEmployees.filter(e=>e.health_status==="MISSING").length;
@@ -104,278 +124,286 @@ export default function HealthEmployeesPage() {
   return (
     <main
       style={{
-        padding: 24,
-        background: "#f8fafc",
         minHeight: "100vh",
+        background: "#f4f7fb",
+        color: "#101828",
+        fontFamily: "Inter,Arial,sans-serif",
+        padding: "22px 18px 48px",
       }}
     >
-      <div style={{ maxWidth: 1500, margin: "0 auto" }}>
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 34, fontWeight: 950, margin: 0 }}>
-            Çalışan Sağlık Kartları
-          </h1>
+      <style jsx global>{`
+        *{box-sizing:border-box}
+        .health-shell{max-width:1500px;margin:0 auto}
+        .health-topbar{display:flex;justify-content:space-between;gap:18px;align-items:center;margin-bottom:16px}
+        .health-title-wrap{display:flex;align-items:center;gap:14px;min-width:0}
+        .health-icon{width:54px;height:54px;border-radius:16px;background:#fff0f2;color:#b42318;display:grid;place-items:center;font-size:26px;border:1px solid #f7d8dc;box-shadow:0 8px 22px rgba(127,29,29,.06)}
+        .health-hero{background:linear-gradient(135deg,#a91519,#c51f22 55%,#8d1218);border-radius:24px;padding:20px;color:white;box-shadow:0 18px 42px rgba(127,29,29,.18)}
+        .health-hero-head{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:16px}
+        .health-kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
+        .health-kpi{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:15px 14px;min-height:98px;backdrop-filter:blur(4px)}
+        .health-kpi-label{font-size:12px;font-weight:800;opacity:.92}
+        .health-kpi-value{font-size:32px;font-weight:950;line-height:1;margin-top:9px}
+        .health-kpi-sub{font-size:11px;opacity:.8;margin-top:7px}
+        .health-filters{display:grid;grid-template-columns:minmax(280px,1.5fr) minmax(180px,.7fr) minmax(180px,.7fr) auto;gap:10px;margin:16px 0}
+        .health-table-card{background:white;border:1px solid #e4e7ec;border-radius:18px;overflow:hidden;box-shadow:0 12px 30px rgba(16,24,40,.05)}
+        .health-table{width:100%;border-collapse:collapse;table-layout:fixed}
+        .health-table th{background:#f8fafc;color:#344054;font-size:12px;font-weight:900;text-align:left;padding:13px 12px;border-bottom:1px solid #e4e7ec}
+        .health-table td{padding:13px 12px;border-bottom:1px solid #eef2f6;vertical-align:middle;font-size:13px;color:#344054;overflow:hidden}
+        .health-table tbody tr:hover{background:#fcfcfd}
+        .person-cell{display:flex;align-items:center;gap:10px;min-width:0}
+        .avatar{width:38px;height:38px;border-radius:50%;background:#f8e3e7;color:#9f1239;display:grid;place-items:center;font-weight:900;flex:0 0 auto}
+        .ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .muted{font-size:11px;color:#667085;margin-top:3px}
+        .action-wrap{display:flex;gap:7px;align-items:center;white-space:nowrap}
+        .badge{display:inline-flex;align-items:center;justify-content:center;min-height:28px;border-radius:999px;padding:0 10px;font-size:11px;font-weight:900;white-space:nowrap}
+        .badge-good{background:#dcfce7;color:#15803d}
+        .badge-warn{background:#fef3c7;color:#b45309}
+        .badge-bad{background:#fee2e2;color:#b91c1c}
+        .badge-neutral{background:#f2f4f7;color:#475467}
+        @media(max-width:1180px){
+          .health-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+          .health-table-card{overflow:auto}
+          .health-table{min-width:1180px}
+        }
+        @media(max-width:760px){
+          main{padding:12px 8px 36px!important}
+          .health-topbar,.health-hero-head{align-items:flex-start;flex-direction:column}
+          .health-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+          .health-filters{grid-template-columns:1fr}
+          .health-title-wrap h1{font-size:27px!important}
+        }
+      `}</style>
 
-          <p style={{ color: "#64748b", marginTop: 8 }}>
-            Çalışanların muayene, EK-2, reçete ve sağlık geçmişi tek ekrandan yönetilir.
-          </p>
-        </div>
-
-        <section
-          style={{
-            background: "linear-gradient(135deg,#7f1d1d,#b91c1c)",
-            color: "#fff",
-            borderRadius: 24,
-            padding: 26,
-            marginBottom: 22,
-            boxShadow: "0 18px 40px rgba(127,29,29,.18)",
-          }}
-        >
-          <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.85 }}>
-            SAĞLIK YÖNETİM MERKEZİ
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "2fr repeat(5, 1fr)",
-              gap: 16,
-              alignItems: "end",
-              marginTop: 14,
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 28, fontWeight: 950 }}>
-                {activeFirmName}
-              </div>
-              <div style={{ marginTop: 6, opacity: 0.9 }}>
-                Çalışan sağlık kayıtları ve hekim çalışma alanı
+      <div className="health-shell">
+        <div className="health-topbar">
+          <div className="health-title-wrap">
+            <div className="health-icon">♡</div>
+            <div style={{minWidth:0}}>
+              <h1 style={{fontSize:34,fontWeight:950,margin:0,letterSpacing:"-.4px"}}>
+                Çalışan Sağlık Kartları
+              </h1>
+              <div style={{color:"#667085",fontSize:13,marginTop:5}}>
+                Çalışanların muayene, EK-2, reçete ve sağlık geçmişini tek ekrandan yönetin.
               </div>
             </div>
+          </div>
 
-            <MiniStat title="Çalışan" value={totalEmployees} />
-           <MiniStat
-  title="Yaklaşan Muayene"
-  value={
-    approaching
-  }
-/>
-            <MiniStat title="EK-2 Eksik" value={ek2Missing} />
-            <MiniStat title="Kayıt Eksik" value={missing} />
-            <MiniStat title="Kritik" value={critical} />
+          <Link
+            href={sourceCompanyId==="ALL"?"/admin/health":`/admin/health?companyId=${encodeURIComponent(sourceCompanyId)}`}
+            style={{
+              textDecoration:"none",border:"1px solid #d0d5dd",background:"#fff",color:"#344054",
+              borderRadius:12,padding:"10px 14px",fontSize:12,fontWeight:900,boxShadow:"0 4px 12px rgba(16,24,40,.04)"
+            }}
+          >
+            ← Dashboard'a Dön
+          </Link>
+        </div>
+
+        <section className="health-hero">
+          <div className="health-hero-head">
+            <div>
+              <div style={{fontSize:11,fontWeight:900,letterSpacing:.8,opacity:.78}}>SAĞLIK YÖNETİM MERKEZİ</div>
+              <div style={{fontSize:23,fontWeight:950,marginTop:5}}>{activeFirmName}</div>
+              <div style={{fontSize:12,opacity:.86,marginTop:4}}>Çalışan sağlık kayıtları özeti</div>
+            </div>
+          </div>
+
+          <div className="health-kpis">
+            <div className="health-kpi">
+              <div className="health-kpi-label">Toplam Çalışan</div>
+              <div className="health-kpi-value">{totalEmployees}</div>
+              <div className="health-kpi-sub">Aktif kapsam</div>
+            </div>
+            <div className="health-kpi">
+              <div className="health-kpi-label">Muayenesi Olan</div>
+              <div className="health-kpi-value">{filteredEmployees.filter(e=>Number(e.examination_count||0)>0).length}</div>
+              <div className="health-kpi-sub">Sistemde kayıtlı</div>
+            </div>
+            <div className="health-kpi">
+              <div className="health-kpi-label">Muayenesi Eksik</div>
+              <div className="health-kpi-value">{filteredEmployees.filter(e=>Number(e.examination_count||0)===0).length}</div>
+              <div className="health-kpi-sub">Kontrol et</div>
+            </div>
+            <div className="health-kpi">
+              <div className="health-kpi-label">EK-2 Mevcut</div>
+              <div className="health-kpi-value">{filteredEmployees.filter(e=>Number(e.ek2_count||0)>0).length}</div>
+              <div className="health-kpi-sub">Çalışan bazında</div>
+            </div>
+            <div className="health-kpi">
+              <div className="health-kpi-label">EK-2 Eksik</div>
+              <div className="health-kpi-value">{ek2Missing}</div>
+              <div className="health-kpi-sub">D-SEC'te kayıt yok</div>
+            </div>
+            <div className="health-kpi">
+              <div className="health-kpi-label">Reçete Kaydı</div>
+              <div className="health-kpi-value">{filteredEmployees.reduce((n,e)=>n+Number(e.prescription_count||0),0)}</div>
+              <div className="health-kpi-sub">Toplam kayıt</div>
+            </div>
+            <div className="health-kpi">
+              <div className="health-kpi-label">Kritik Risk</div>
+              <div className="health-kpi-value">{critical}</div>
+              <div className="health-kpi-sub">Hekim takibi</div>
+            </div>
           </div>
         </section>
 
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 1fr 1fr",
-            gap: 12,
-            marginBottom: 20,
-          }}
-        >
+        <section className="health-filters">
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Çalışan, görev, firma veya e-posta ara..."
+            onChange={(e)=>setSearch(e.target.value)}
+            placeholder="Çalışan adı, görev veya e-posta ara..."
             style={inputStyle}
           />
 
-          <select
-            value={firm}
-            onChange={(e) => setFirm(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="ALL">Tüm Firmalar</option>
-            {firmOptions.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={risk}
-            onChange={(e) => setRisk(e.target.value)}
-            style={inputStyle}
-          >
+          <select value={risk} onChange={(e)=>setRisk(e.target.value)} style={inputStyle}>
             <option value="ALL">Tüm Risk Durumları</option>
             <option value="NORMAL">Normal</option>
             <option value="WARNING">Takip</option>
             <option value="CRITICAL">Kritik</option>
             <option value="MISSING">Kayıt Eksik</option>
           </select>
-        </section>
 
-        <section
-          style={{
-            background: "#fff",
-            borderRadius: 22,
-            border: "1px solid #e5e7eb",
-            overflow: "hidden",
-            boxShadow: "0 14px 34px rgba(15,23,42,.05)",
-          }}
-        >
-          <div
+          <select
+            value="ALL"
+            onChange={()=>{}}
+            style={{...inputStyle,color:"#667085"}}
+            disabled
+            title="Firma seçimi Sağlık Dashboard ekranından yapılır."
+          >
+            <option>Firma: {activeFirmName}</option>
+          </select>
+
+          <button
+            onClick={()=>{setSearch("");setRisk("ALL");}}
             style={{
-              display: "grid",
-              gridTemplateColumns: "2fr 1.2fr 1.1fr 1fr 1fr 1fr 1fr 190px",
-              gap: 10,
-              padding: 16,
-              background: "#f1f5f9",
-              fontWeight: 950,
-              fontSize: 13,
-              color: "#334155",
+              minHeight:44,padding:"0 16px",borderRadius:12,border:"1px solid #d0d5dd",
+              background:"#fff",color:"#344054",fontWeight:900,cursor:"pointer"
             }}
           >
-            <div>Çalışan</div>
-            <div>Firma</div>
-            <div>Görev</div>
-            <div>Son Muayene</div>
-            <div>EK-2</div>
-            <div>Reçete</div>
-            <div>Risk</div>
-            <div>İşlem</div>
+            Temizle
+          </button>
+        </section>
+
+        {loadError && (
+          <div style={{marginBottom:14,padding:"12px 14px",borderRadius:12,background:"#fef2f2",border:"1px solid #fecaca",color:"#b91c1c",fontWeight:800}}>
+            {loadError}
           </div>
+        )}
 
-          {loading ? (
-            <EmptyRow text="Çalışanlar yükleniyor..." />
-          ) : filteredEmployees.length === 0 ? (
-            <EmptyRow text="Çalışan bulunamadı." />
-          ) : (
-            filteredEmployees.map((employee, index) => (
-              <div
-                key={employee.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-  "2fr 1.2fr 1.1fr 1fr 1fr 1fr 1fr 190px",
-                  gap: 10,
-                  padding: 16,
-                  borderTop: "1px solid #e5e7eb",
-                  alignItems: "center",
-                  background: index % 2 === 0 ? "#fff" : "#fbfbfd",
-                  fontSize: 14,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div
-                    style={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: "50%",
-                      background: "#fff1f2",
-                      color: "#7f1d1d",
-                      display: "grid",
-                      placeItems: "center",
-                      fontWeight: 950,
-                    }}
-                  >
-                    {getInitial(employee.full_name)}
-                  </div>
-
-                  <div>
-                    <div style={{ fontWeight: 950, color: "#111827" }}>
-                      {employee.full_name}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>
-                      {employee.email || "-"}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ fontWeight: 800, color: "#334155" }}>
-                  {employee.company_name || "Firma Yok"}
-                </div>
-
-                <div style={{ color: "#475569", fontWeight: 750 }}>
-                  {employee.job_title || "-"}
-                </div>
-
-                <Badge
-  text={employee.last_examination_date || "-"}
-  tone="neutral"
-/>
-
-<Badge
-  text={(employee as any).last_ek2 || (employee as any).last_ek2_date || "-"}
-  tone="neutral"
-/>
-
-
-<Badge
-  text={formatDate(employee.last_prescription_date)}
-  tone={employee.last_prescription_date ? "good" : "neutral"}
-/>
-
-<Badge
-  text={
-    (employee as any).last_ek2_status ||
-    employee.last_examination_decision ||
-    "-"
-  }
-  tone={
-    ((employee as any).last_ek2_status || employee.last_examination_decision) ===
-      "Çalışamaz" ||
-    ((employee as any).last_ek2_status || employee.last_examination_decision) ===
-      "Uygun Değil"
-      ? "bad"
-      : ((employee as any).last_ek2_status || employee.last_examination_decision) ===
-          "Şartlı Çalışabilir" ||
-        ((employee as any).last_ek2_status || employee.last_examination_decision) ===
-          "Kısıtlı Uygun"
-      ? "warning"
-      : "good"
-  }
-/>
-
-                <div
-  style={{
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    justifyContent: "flex-start",
-    alignItems: "center",
-  }}
->
-                  <Link
-                    href={`/admin/health/employees/${employee.id}`}
-                    style={buttonStyle}
-                  >
-                    Detay
-                  </Link>
-
-                  <Link
-                    href={`/admin/health/employees/${employee.id}?tab=Muayeneler`}
-                    style={lightButtonStyle}
-                  >
-                    Muayene
-                  </Link>
-                </div>
-              </div>
-            ))
-          )}
+        <section className="health-table-card">
+          <table className="health-table">
+            <colgroup>
+              <col style={{width:"48px"}}/>
+              <col style={{width:"230px"}}/>
+              <col style={{width:"150px"}}/>
+              <col style={{width:"160px"}}/>
+              <col style={{width:"125px"}}/>
+              <col style={{width:"120px"}}/>
+              <col style={{width:"100px"}}/>
+              <col style={{width:"100px"}}/>
+              <col style={{width:"175px"}}/>
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Çalışan</th>
+                <th>Firma</th>
+                <th>Görev</th>
+                <th>Son Muayene</th>
+                <th>EK-2</th>
+                <th>Reçete</th>
+                <th>Risk</th>
+                <th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={9} style={{padding:28,textAlign:"center",color:"#667085"}}>Çalışanlar yükleniyor...</td></tr>
+              ) : filteredEmployees.length===0 ? (
+                <tr><td colSpan={9} style={{padding:28,textAlign:"center",color:"#667085"}}>Çalışan bulunamadı.</td></tr>
+              ) : (
+                filteredEmployees.map((employee,index)=>(
+                  <tr key={employee.id}>
+                    <td style={{fontWeight:800,color:"#667085"}}>{index+1}</td>
+                    <td>
+                      <div className="person-cell">
+                        <div className="avatar">{getInitial(employee.full_name)}</div>
+                        <div style={{minWidth:0}}>
+                          <div className="ellipsis" style={{fontWeight:900,color:"#101828"}} title={employee.full_name}>{employee.full_name}</div>
+                          <div className="ellipsis muted" title={employee.email}>{employee.email||"-"}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td><div className="ellipsis" title={employee.company_name}>{employee.company_name||"-"}</div></td>
+                    <td><div className="ellipsis" title={employee.job_title}>{employee.job_title||"-"}</div></td>
+                    <td>
+                      <span className={`badge ${employee.last_examination_date?"badge-neutral":"badge-bad"}`}>
+                        {employee.last_examination_date?formatDate(employee.last_examination_date):"Yok"}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge ${Number(employee.ek2_count||0)>0?"badge-good":"badge-bad"}`}>
+                        {Number(employee.ek2_count||0)>0?"✓ Var":"✕ Yok"}
+                      </span>
+                      {Number(employee.ek2_count||0)>0 && employee.last_ek2_date && (
+                        <div className="muted">{formatDate(employee.last_ek2_date)}</div>
+                      )}
+                    </td>
+                    <td>
+                      {Number(employee.prescription_count||0)>0
+                        ? <span className="badge badge-neutral">{employee.prescription_count} kayıt</span>
+                        : <span className="muted">-</span>}
+                    </td>
+                    <td>
+                      <span className={`badge ${
+                        employee.health_status==="CRITICAL"?"badge-bad":
+                        employee.health_status==="WARNING"||employee.health_status==="MISSING"?"badge-warn":"badge-good"
+                      }`}>
+                        {employee.health_status==="CRITICAL"?"Kritik":
+                         employee.health_status==="WARNING"?"Takip":
+                         employee.health_status==="MISSING"?"Eksik":"Normal"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="action-wrap">
+                        <Link
+                          href={`/admin/health/employees/${employee.id}${sourceCompanyId!=="ALL"?`?companyId=${encodeURIComponent(sourceCompanyId)}`:""}`}
+                          style={{
+                            ...buttonStyle,
+                            background:"#fff",
+                            color:"#344054",
+                            border:"1px solid #d0d5dd",
+                            padding:"8px 11px",
+                            borderRadius:10,
+                            boxShadow:"none"
+                          }}
+                        >
+                          Detay
+                        </Link>
+                        <Link
+                          href={`/admin/health/employees/${employee.id}?tab=Muayeneler${sourceCompanyId!=="ALL"?`&companyId=${encodeURIComponent(sourceCompanyId)}`:""}`}
+                          style={{
+                            ...lightButtonStyle,
+                            color:"#b42318",
+                            background:"#fff",
+                            border:"1px solid #f2b8bd",
+                            padding:"8px 11px",
+                            borderRadius:10
+                          }}
+                        >
+                          Muayene
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </section>
 
-        <div
-          style={{
-            marginTop: 28,
-            display: "flex",
-            justifyContent: "flex-end",
-          }}
-        >
-          <Link
-            href="/admin/health"
-            style={{
-              padding: "12px 18px",
-              borderRadius: 14,
-              textDecoration: "none",
-              background: "#7f1d1d",
-              color: "#fff",
-              fontWeight: 900,
-            }}
-          >
-            Sağlık Dashboard'a Dön
-          </Link>
+        <div style={{marginTop:12,fontSize:11,color:"#667085"}}>
+          Firma seçimi Sağlık Dashboard ekranından devralınır. Bu ekranda firma değiştirilemez; yalnız çalışan ve risk filtreleri uygulanır.
         </div>
       </div>
     </main>
