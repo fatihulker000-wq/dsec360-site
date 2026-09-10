@@ -360,6 +360,7 @@ export async function GET(
         firm_id,
         web_firm_id,
         employee_id,
+        web_employee_id,
         event_type,
         event_date,
         title,
@@ -423,28 +424,17 @@ export async function GET(
     }
 
     if (employeeIdParam) {
-      /*
-       * employee_id gerçek çalışan UUID'sidir.
-       * app_record_id yalnızca sayısal değer gönderilmişse
-       * karşılaştırılır.
-       */
-      const numericEmployeeId =
-        Number(employeeIdParam);
-
-      if (
-        Number.isFinite(
-          numericEmployeeId
-        )
-      ) {
-        query = query.eq(
-          "app_record_id",
-          numericEmployeeId
-        );
+      // Kanonik web çalışan kimliği UUID'dir.
+      // Sağlık kartı ve çalışan profili aynı ilişkiyi kullanır:
+      // accident_records.web_employee_id + accident_records.web_firm_id.
+      if (isUuid(employeeIdParam)) {
+        query = query.eq("web_employee_id", employeeIdParam);
       } else {
-        query = query.eq(
-          "employee_id",
-          employeeIdParam
-        );
+        // Eski mobil kayıtlar için yalnız sayısal yerel employee_id fallback'i.
+        const numericEmployeeId=Number(employeeIdParam);
+        if(Number.isFinite(numericEmployeeId)){
+          query=query.eq("employee_id",numericEmployeeId);
+        }
       }
     }
 
@@ -489,6 +479,9 @@ export async function GET(
 
       employeeId:
         item.employee_id,
+
+      webEmployeeId:
+        item.web_employee_id || null,
 
       title:
         item.title || "-",
@@ -572,6 +565,61 @@ export async function GET(
         item.source || "APP",
     }));
 
+
+    // Mükerrerlik analizi yalnız teşhis amaçlıdır; hiçbir kayıt otomatik silinmez.
+    const norm=(v:any)=>String(v??"").trim().toLocaleLowerCase("tr-TR").replace(/\s+/g," ");
+    const eventMillis=(v:any)=>{
+      const n=Number(v);
+      if(Number.isFinite(n)&&n>0) return n;
+      const d=new Date(v);
+      return Number.isNaN(d.getTime())?0:d.getTime();
+    };
+    const dayKey=(v:any)=>{
+      const ms=eventMillis(v);
+      return ms?new Date(ms).toISOString().slice(0,10):"";
+    };
+    const exactGroups=new Map<string,any[]>();
+    const signatureGroups=new Map<string,any[]>();
+
+    for(const row of rows){
+      const person=norm(row.webEmployeeId||row.employeeName);
+      const exactKey=[person,norm(row.eventType),dayKey(row.eventDate),norm(row.title),norm(row.location)].join("|");
+      const sigKey=[person,norm(row.eventType),norm(row.title),norm(row.location),norm(row.injuryBodyPart),norm(row.injuryType)].join("|");
+      if(!exactGroups.has(exactKey)) exactGroups.set(exactKey,[]);
+      exactGroups.get(exactKey)!.push(row);
+      if(!signatureGroups.has(sigKey)) signatureGroups.set(sigKey,[]);
+      signatureGroups.get(sigKey)!.push(row);
+    }
+
+    const exactDuplicateIds=new Set<string>();
+    const possibleDuplicateIds=new Set<string>();
+
+    for(const group of exactGroups.values()){
+      if(group.length>1) group.forEach((x:any)=>exactDuplicateIds.add(String(x.id)));
+    }
+
+    for(const group of signatureGroups.values()){
+      if(group.length<2) continue;
+      const ordered=[...group].sort((a:any,b:any)=>eventMillis(a.eventDate)-eventMillis(b.eventDate));
+      for(let i=1;i<ordered.length;i++){
+        const a=eventMillis(ordered[i-1].eventDate);
+        const b=eventMillis(ordered[i].eventDate);
+        if(a&&b&&Math.abs(b-a)<=3*86400000 && dayKey(ordered[i-1].eventDate)!==dayKey(ordered[i].eventDate)){
+          possibleDuplicateIds.add(String(ordered[i-1].id));
+          possibleDuplicateIds.add(String(ordered[i].id));
+        }
+      }
+    }
+
+    const rowsWithDuplicateState=rows.map((row:any)=>({
+      ...row,
+      duplicateState: exactDuplicateIds.has(String(row.id))
+        ? "EXACT"
+        : possibleDuplicateIds.has(String(row.id))
+          ? "POSSIBLE"
+          : "NONE",
+    }));
+
     return NextResponse.json({
       success: true,
       role,
@@ -579,7 +627,11 @@ export async function GET(
         role === "demo_user",
       selectedCompanyId:
         selectedCompanyId || null,
-      rows,
+      rows: rowsWithDuplicateState,
+      duplicateSummary: {
+        exact: exactDuplicateIds.size,
+        possible: possibleDuplicateIds.size,
+      },
     });
   } catch (errorValue: unknown) {
     console.error(

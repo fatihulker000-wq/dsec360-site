@@ -60,6 +60,7 @@ function normalizeEmployee(
     prescription_count: number;
 last_prescription_date: string;
 last_prescription_status: string;
+    accident_count: number;
   }
 >
 ) {
@@ -79,6 +80,7 @@ last_prescription_status: string;
     prescription_count: 0,
 last_prescription_date: "",
 last_prescription_status: "",
+    accident_count: 0,
   };
 
   return {
@@ -109,6 +111,7 @@ prescription_count: examInfo.prescription_count,
 last_prescription_date: examInfo.last_prescription_date,
 last_prescription_status: examInfo.last_prescription_status,
 last_prescription: examInfo.last_prescription_date || "-",
+    accident_count: examInfo.accident_count || 0,
     health_status: (() => {
       const today = new Date().toISOString().slice(0,10);
       const due = examInfo.next_examination_date || "";
@@ -251,6 +254,7 @@ if (employeesError) {
     prescription_count: number;
 last_prescription_date: string;
 last_prescription_status: string;
+    accident_count: number;
   }
 > = {};
 
@@ -295,6 +299,7 @@ last_prescription_status: string;
       prescription_count: 0,
 last_prescription_date: "",
 last_prescription_status: "",
+      accident_count: 0,
     };
   }
 
@@ -342,7 +347,8 @@ if (employeeIds.length > 0) {
       examMap[employeeId] = {
         examination_count:0,last_examination_date:"",last_examination_decision:"",next_examination_date:"",
         ek2_count:0,last_ek2_date:"",last_ek2_status:"",
-        prescription_count:0,last_prescription_date:"",last_prescription_status:""
+        prescription_count:0,last_prescription_date:"",last_prescription_status:"",
+        accident_count:0
       };
     }
 
@@ -367,7 +373,8 @@ if (employeeIds.length > 0) {
       examMap[employeeId] = {
         examination_count:0,last_examination_date:"",last_examination_decision:"",next_examination_date:"",
         ek2_count:0,last_ek2_date:"",last_ek2_status:"",
-        prescription_count:0,last_prescription_date:"",last_prescription_status:""
+        prescription_count:0,last_prescription_date:"",last_prescription_status:"",
+        accident_count:0
       };
     }
 
@@ -418,6 +425,7 @@ for (const prescription of prescriptions || []) {
       prescription_count: 0,
       last_prescription_date: "",
       last_prescription_status: "",
+      accident_count: 0,
     };
   }
 
@@ -431,6 +439,44 @@ for (const prescription of prescriptions || []) {
       prescription.status || "";
   }
 }
+
+
+    // İş kazası özeti: isim eşleşmesi yerine kanonik web_employee_id kullanılır.
+    // Bu, aynı isimli çalışanlar ve geçmiş mobil kayıtlar nedeniyle oluşabilecek yanlış eşleşmeleri azaltır.
+    if (employeeIds.length > 0) {
+      let accidentQuery = supabase
+        .from("accident_records")
+        .select("id,web_employee_id,web_firm_id,is_deleted")
+        .in("web_employee_id", employeeIds)
+        .or("is_deleted.is.null,is_deleted.eq.false,is_deleted.eq.0");
+
+      if (selectedCompanyId) {
+        accidentQuery = accidentQuery.eq("web_firm_id", selectedCompanyId);
+      }
+
+      const { data: accidentRows, error: accidentError } = await accidentQuery;
+
+      if (accidentError) {
+        return NextResponse.json(
+          { error:"Çalışan iş kazası özetleri alınamadı.", detail:accidentError.message },
+          { status:500 }
+        );
+      }
+
+      for (const accident of accidentRows || []) {
+        const employeeId=String(accident.web_employee_id||"").trim();
+        if(!employeeId) continue;
+        if(!examMap[employeeId]){
+          examMap[employeeId]={
+            examination_count:0,last_examination_date:"",last_examination_decision:"",next_examination_date:"",
+            ek2_count:0,last_ek2_date:"",last_ek2_status:"",
+            prescription_count:0,last_prescription_date:"",last_prescription_status:"",
+            accident_count:0
+          };
+        }
+        examMap[employeeId].accident_count += 1;
+      }
+    }
 
     const normalizedEmployees = rows.map((u) =>
   normalizeEmployee(u, companyMap, examMap)

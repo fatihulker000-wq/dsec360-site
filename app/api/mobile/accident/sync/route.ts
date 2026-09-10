@@ -136,7 +136,10 @@ function mapRecord(r: any, localFirmId: number, webFirmId: string) {
     firm_id: localFirmId,
     web_firm_id: webFirmId,
 
+    // employee_id mobil/yerel kimlik olabilir; web_employee_id kanonik çalışan UUID'sidir.
     employee_id: Number(r.employeeId || 0),
+    web_employee_id:
+      String(r.webEmployeeId || r.employeeRemoteId || r.remoteEmployeeId || "").trim() || null,
 
     event_type: r.eventType || "KAZA",
     event_date: Number(r.eventDate || 0),
@@ -188,6 +191,7 @@ export async function GET(req: NextRequest) {
         firm_id,
         web_firm_id,
         employee_id,
+        web_employee_id,
         event_type,
         event_date,
         title,
