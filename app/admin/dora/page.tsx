@@ -360,7 +360,10 @@ export default function DoraPage(){
         <div style={{fontSize:12,color:C.muted,lineHeight:1.55}}>
           DORA Tam Sistem Taramasında <b style={{color:C.ink}}>{fullScan?.summary?.modulesScanned??a?.summary?.scannedModules??0} modülü</b> kontrol ediyor. <b style={{color:C.green}}>{fullScan?.summary?.modulesAvailable??a?.summary?.scannedModules??0} modülden veri okunuyor</b>{(fullScan?.summary?.modulesUnavailable??a?.summary?.unavailableModules??0)>0&&<>; <b style={{color:C.red}}>{fullScan?.summary?.modulesUnavailable??a?.summary?.unavailableModules??0} modülde erişim/kapsam doğrulaması gerekiyor</b></>}. Veri güvenilirliği <b style={{color:C.ink}}>{a?.dataQuality?.overallScore??0}/100</b>.
         </div>
-        <button onClick={()=>void scan(companyId)} disabled={!companyId||scanning} style={darkButton}>{scanning?"Taranıyor...":"↻ Tam Sistem Taraması"}</button>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+          <button onClick={()=>void scan(companyId)} disabled={!companyId||scanning} style={darkButton}>{scanning?"Taranıyor...":"↻ Tam Sistem Taraması"}</button>
+          <button onClick={()=>{location.href="/admin/dora/actions"}} style={{...darkButton,background:C.burgundy,whiteSpace:"nowrap"}}>DORA Sistem-Analiz Merkezi →</button>
+        </div>
       </section>
 
       {error&&<div style={{...card,marginTop:13,color:C.red,background:"#fef3f2"}}>{error}</div>}
