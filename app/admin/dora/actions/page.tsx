@@ -15,6 +15,8 @@ type Gap={
   summary:string;recommendation:string;sourceUrl?:string;confidence?:string;
 };
 type Candidate={id:string;full_name:string;department:string;phone:string;job_title:string};
+type ModuleScan={key:string;label:string;available:boolean;total:number;findings:number;status:string;sourceUrl:string;warning?:string};
+type FullScan={summary?:{modulesScanned:number;modulesAvailable:number;modulesUnavailable:number;findings:number;critical:number;high:number;medium:number;actionable:number;reviewOnly:number};modules?:ModuleScan[];findings?:Gap[]};
 type Queue={
   id:string;source_gap_id:string;source_domain:string;title:string;description:string;
   recommendation:string;severity:string;status:string;source_url?:string;
@@ -43,6 +45,7 @@ export default function DoraActionsPage(){
   const [companies,setCompanies]=useState<CompanyRow[]>([]);
   const [gaps,setGaps]=useState<Gap[]>([]);
   const [queue,setQueue]=useState<Queue[]>([]);
+  const [fullScan,setFullScan]=useState<FullScan|null>(null);
   const [selected,setSelected]=useState<Record<string,string[]>>({});
   const [confirmed,setConfirmed]=useState<Record<string,boolean>>({});
   const [selectedTraining,setSelectedTraining]=useState<Record<string,string>>({});
@@ -83,10 +86,13 @@ export default function DoraActionsPage(){
     if(!id)return;
     setBusy(true);setError("");
     try{
-      const [a,q]=await Promise.all([
+      const [a,q,fs]=await Promise.all([
         readJson<any>(await fetch(`/api/admin/dora-v2/analysis?companyId=${encodeURIComponent(id)}`,{cache:"no-store",credentials:"include"})),
         readJson<any>(await fetch(`/api/admin/dora-v2/actions?companyId=${encodeURIComponent(id)}`,{cache:"no-store",credentials:"include"})),
+        readJson<any>(await fetch(`/api/admin/dora-v2/full-scan?companyId=${encodeURIComponent(id)}`,{cache:"no-store",credentials:"include"})),
       ]);
+      if(fs?.ok===false)throw new Error(fs?.error||"DORA tam sistem taraması okunamadı.");
+      setFullScan(fs);
 
       // analysis API success contract is success:true (not ok:true)
       if(a?.success===false)throw new Error(a?.error||"DORA analizi okunamadı.");
@@ -94,30 +100,12 @@ export default function DoraActionsPage(){
       const silentGapItems:Gap[]=(a?.silentGaps?.items||[])
         .filter((x:Gap)=>["MISSING","SHORTAGE","WARNING","VERIFY"].includes(x.state));
 
-      // Eğitim tamamlama yükü silentGaps içinde değil, managementTopics içinde üretiliyor.
-      // Faz 2 İşlem Merkezi bu sinyali yürütülebilir "Eğitim Atama" kartına dönüştürür.
-      const managementTopics=Array.isArray(a?.managementTopics)?a.managementTopics:[];
-      const trainingTopic=managementTopics.find((t:any)=>
-        String(t?.id||"").toUpperCase()==="TRAINING_COMPLETION" ||
-        String(t?.title||"").toLocaleUpperCase("tr-TR").includes("EĞİTİM TAMAMLAMA")
-      );
-
-      const actionableTrainingGap:Gap|undefined=trainingTopic ? {
-        id:"dora-egitim-atama",
-        domain:"Eğitim",
-        title:"DORA kontrollü eğitim ataması",
-        state:"WARNING",
-        severity:String(trainingTopic?.severity||"MEDIUM"),
-        summary:String(trainingTopic?.interpretation||"Tamamlanmamış eğitim yükü tespit edildi."),
-        recommendation:"Çalışanları ve atanacak eğitimi seçin. DORA yalnızca ONAYLA + BAŞLA sonrasında gerçek eğitim ataması yapacaktır.",
-        sourceUrl:"/admin/trainings",
-        confidence:"HIGH",
-      } : undefined;
-
-      setGaps(actionableTrainingGap
-        ? [...silentGapItems.filter(x=>x.id!==actionableTrainingGap.id),actionableTrainingGap]
-        : silentGapItems
-      );
+      const fullScanItems:Gap[]=Array.isArray(fs?.findings)?fs.findings:[];
+      const mergedMap=new Map<string,Gap>();
+      [...silentGapItems,...fullScanItems].forEach((g:Gap)=>{
+        if(g?.id)mergedMap.set(g.id,g);
+      });
+      setGaps(Array.from(mergedMap.values()));
 
       if(q?.ok===false)throw new Error(q?.error||"DORA işlem kuyruğu okunamadı.");
       setQueue(Array.isArray(q?.items)?q.items:[]);
@@ -207,7 +195,7 @@ export default function DoraActionsPage(){
           {!companies.length&&<option value="">Firma yükleniyor…</option>}
           {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <button disabled={busy||!companyId||!newGaps.length} onClick={()=>cmd("PREPARE",{gaps:newGaps})} style={primary}>{busy?"DORA ÇALIŞIYOR…":`EKSİKLERİ İŞLEME HAZIRLA (${newGaps.length})`}</button>
+        <button disabled={busy||!companyId||!newGaps.length} onClick={()=>cmd("PREPARE",{gaps:newGaps})} style={primary}>{busy?"DORA ÇALIŞIYOR…":`TARAMA BULGULARINI İŞLEME HAZIRLA (${newGaps.length})`}</button>
         <button onClick={()=>void load(companyId)} disabled={busy||!companyId} style={secondary}>YENİDEN TARA</button>
         <button onClick={()=>location.href="/admin/dora"} style={secondary}>← DORA'YA DÖN</button>
       </div>
@@ -218,6 +206,33 @@ export default function DoraActionsPage(){
         <Kpi n={stats.completed} label="Tamamlandı" color={C.green}/>
         <Kpi n={stats.failed} label="Hata" color={C.red}/>
       </div>
+
+      {fullScan&&<section style={{...card,marginTop:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <h2 style={h2}>DORA Tam Sistem Taraması</h2>
+            <p style={sub}>Ticari/operasyonel modüller tek taramada kontrol edilir; eksikler aşağıdaki işlem havuzuna aktarılır.</p>
+          </div>
+          <div style={{fontSize:10,fontWeight:900,color:C.green}}>{fullScan.summary?.modulesAvailable||0}/{fullScan.summary?.modulesScanned||0} MODÜL OKUNDU</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8,marginTop:12}}>
+          <Kpi n={fullScan.summary?.findings||0} label="Toplam bulgu" color={C.ink}/>
+          <Kpi n={fullScan.summary?.critical||0} label="Kritik" color={C.red}/>
+          <Kpi n={fullScan.summary?.high||0} label="Yüksek" color={C.amber}/>
+          <Kpi n={fullScan.summary?.actionable||0} label="DORA yapabilir" color={C.green}/>
+          <Kpi n={fullScan.summary?.reviewOnly||0} label="İnceleme gerekir" color={C.blue}/>
+          <Kpi n={fullScan.summary?.modulesUnavailable||0} label="Veri alınamadı" color={C.muted}/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:7,marginTop:12}}>
+          {(fullScan.modules||[]).map(m=><div key={m.key} style={{padding:10,border:`1px solid ${C.line}`,borderRadius:10,background:m.status==="CRITICAL"?"#fef3f2":m.status==="WARNING"?"#fffaeb":"#f8fafc",minWidth:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:6}}>
+              <b style={{fontSize:10}}>{m.label}</b>
+              <span style={{fontSize:8,fontWeight:900,color:m.status==="CRITICAL"?C.red:m.status==="WARNING"?C.amber:m.status==="UNAVAILABLE"?C.muted:C.green}}>{m.status}</span>
+            </div>
+            <div style={{fontSize:9,color:C.muted,marginTop:4}}>{m.available?`${m.total} kayıt • ${m.findings} bulgu`:"Veri alınamadı"}</div>
+          </div>)}
+        </div>
+      </section>}
 
       {msg&&<div style={{marginTop:12,padding:12,borderRadius:12,background:"#ecfdf3",border:"1px solid #abefc6",fontSize:12,fontWeight:750,color:C.green}}>{msg}</div>}
       {error&&<div style={{marginTop:12,padding:12,borderRadius:12,background:"#fef3f2",border:"1px solid #fecdca",fontSize:12,fontWeight:750,color:C.red}}>{error}</div>}
