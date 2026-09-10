@@ -26,7 +26,9 @@ type Queue={
     requiredSelectionCount?:number;allowAnySelectionCount?:boolean;
     requiresQualificationConfirmation?:boolean;qualificationText?:string;
     requiresTrainingSelection?:boolean;trainings?:Array<{id:string;title:string;type:string;duration_minutes?:number}>;
-    boardRoles?:Array<{key:string;label:string}>
+    boardRoles?:Array<{key:string;label:string}>;
+    riskItems?:Array<{key:string;id:string;kind:string;title:string;hazard:string;score:number;level:string;department:string;location:string;currentDofStatus:string;currentAction?:string}>;
+    requiresRiskSelection?:boolean;requiresActionText?:boolean;requiresDueDate?:boolean
   };
 };
 
@@ -50,6 +52,9 @@ export default function DoraActionsPage(){
   const [confirmed,setConfirmed]=useState<Record<string,boolean>>({});
   const [selectedTraining,setSelectedTraining]=useState<Record<string,string>>({});
   const [boardRoles,setBoardRoles]=useState<Record<string,Record<string,string>>>({});
+  const [selectedRisks,setSelectedRisks]=useState<Record<string,string[]>>({});
+  const [riskActionText,setRiskActionText]=useState<Record<string,string>>({});
+  const [riskDueDate,setRiskDueDate]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState(false);
   const [recordsOpen,setRecordsOpen]=useState<Queue|null>(null);
   const [booting,setBooting]=useState(true);
@@ -152,6 +157,13 @@ export default function DoraActionsPage(){
     setSelected(prev=>{
       const current=prev[qid]||[];
       return {...prev,[qid]:current.includes(eid)?current.filter(x=>x!==eid):[...current,eid]};
+    });
+  }
+
+  function toggleRisk(qid:string,riskKey:string){
+    setSelectedRisks(prev=>{
+      const current=prev[qid]||[];
+      return {...prev,[qid]:current.includes(riskKey)?current.filter(x=>x!==riskKey):[...current,riskKey]};
     });
   }
 
@@ -290,6 +302,10 @@ export default function DoraActionsPage(){
               const confirmationOk=!requiresConfirmation || confirmed[q.id]===true;
               const trainingOk=!q.executor?.requiresTrainingSelection || Boolean(selectedTraining[q.id]);
               const boardRoleOk=q.executor?.kind!=="ISG_BOARD_MEMBER" || (ids.every(eid=>Boolean(boardRoles[q.id]?.[eid])) && new Set(ids.map(eid=>boardRoles[q.id]?.[eid])).size===ids.length);
+              const riskIds=selectedRisks[q.id]||[];
+              const riskSelectionOk=!q.executor?.requiresRiskSelection || riskIds.length>0;
+              const riskActionOk=!q.executor?.requiresActionText || Boolean((riskActionText[q.id]||"").trim());
+              const riskDueOk=!q.executor?.requiresDueDate || Boolean(riskDueDate[q.id]);
               return <div className="dora-action-card" key={q.id} style={{...item,border:q.status==="APPROVED"?`1px solid #84caff`:`1px solid ${C.line}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"start",flexWrap:"wrap"}}><b>{q.title}</b><Status s={q.status}/></div>
                 <div style={small}>{q.source_domain} • {q.severity}{q.executor?.teamType?` • ${q.executor.teamType}`:""}</div>
@@ -313,6 +329,28 @@ export default function DoraActionsPage(){
                       <span style={{fontSize:11,minWidth:0,overflowWrap:"anywhere"}}><b>{c.full_name}</b><br/><span style={{color:C.muted,fontSize:9}}>{c.department} • {c.job_title}</span></span>
                     </label>)}
                   </div>}
+                  {q.executor?.kind==="RISK_DOF_ACTION"&&<div style={{display:"grid",gap:10,marginTop:10}}>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:6}}>DÖF / AKSİYON AÇILACAK YÜKSEK-KRİTİK RİSKLERİ SEÇ</div>
+                      <div style={{display:"grid",gap:6,maxHeight:260,overflow:"auto",paddingRight:4}}>
+                        {(q.executor.riskItems||[]).map(r=><label key={r.key} style={{display:"flex",gap:9,alignItems:"flex-start",padding:9,borderRadius:9,background:"#fff",border:`1px solid ${C.line}`,cursor:"pointer"}}>
+                          <input type="checkbox" checked={riskIds.includes(r.key)} onChange={()=>toggleRisk(q.id,r.key)}/>
+                          <span style={{fontSize:10,lineHeight:1.45,minWidth:0}}><b>{r.title}</b><br/><span style={{color:C.red,fontWeight:850}}>{r.kind} • Skor {r.score} • {r.level}</span><br/><span style={{color:C.muted}}>{r.department} • {r.location} • DÖF: {r.currentDofStatus}</span></span>
+                        </label>)}
+                      </div>
+                      <div style={{fontSize:9,color:C.blue,fontWeight:850,marginTop:5}}>{riskIds.length} risk seçildi</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:5}}>DÖF / AKSİYON AÇIKLAMASI</div>
+                      <textarea value={riskActionText[q.id]||""} onChange={e=>setRiskActionText(prev=>({...prev,[q.id]:e.target.value}))} placeholder="Önerilen aksiyonu yazın veya düzenleyin…" style={{...input,width:"100%",minHeight:82,resize:"vertical"}}/>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:5}}>TERMİN TARİHİ</div>
+                      <input type="date" value={riskDueDate[q.id]||""} onChange={e=>setRiskDueDate(prev=>({...prev,[q.id]:e.target.value}))} style={{...input,width:"100%"}}/>
+                    </div>
+                    <div style={{fontSize:9,color:C.muted}}>Sorumlu kişi için aşağıdaki çalışan listesinden <b>tam 1 çalışan</b> seçin.</div>
+                  </div>}
+
                   {q.executor?.requiresTrainingSelection&&<div style={{marginTop:10}}><div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:5}}>ATANACAK EĞİTİM</div><select value={selectedTraining[q.id]||""} onChange={e=>setSelectedTraining(prev=>({...prev,[q.id]:e.target.value}))} style={{...input,minWidth:0}}><option value="">Eğitim seçin…</option>{(q.executor.trainings||[]).map(t=><option key={t.id} value={t.id}>{t.title} • {t.type}{t.duration_minutes?` • ${t.duration_minutes} dk`:""}</option>)}</select></div>}
                   {q.executor?.kind==="ISG_BOARD_MEMBER"&&ids.length>0&&<div style={{display:"grid",gap:7,marginTop:10}}><div style={{fontSize:9,fontWeight:950,color:C.muted}}>SEÇİLEN ÇALIŞANLARA KURUL ROLÜ ATA</div>{ids.map(eid=>{const emp=candidates.find(c=>String(c.id)===eid);return <div key={eid} style={{display:"grid",gridTemplateColumns:"minmax(140px,1fr) minmax(180px,1fr)",gap:8,alignItems:"center"}}><div style={{fontSize:10,fontWeight:800}}>{emp?.full_name||eid}</div><select value={boardRoles[q.id]?.[eid]||""} onChange={e=>setBoardRoles(prev=>({...prev,[q.id]:{...(prev[q.id]||{}),[eid]:e.target.value}}))} style={{...input,minWidth:0}}><option value="">Kurul rolü seçin…</option>{(q.executor?.boardRoles||[]).map(role=><option key={role.key} value={role.key}>{role.label}</option>)}</select></div>})}</div>}
                   {requiresConfirmation&&<label style={{display:"flex",gap:8,alignItems:"flex-start",marginTop:10,padding:9,borderRadius:9,background:"#fffaeb",border:"1px solid #fedf89",fontSize:10,lineHeight:1.5,cursor:"pointer"}}>
@@ -326,7 +364,7 @@ export default function DoraActionsPage(){
                   <div style={{marginTop:8,fontSize:10,color:C.ink}}><b>İşlem yapılan çalışanlar:</b> {q.execution_result.employeeNames.join(", ")}</div>}
                 <div style={{display:"flex",gap:7,marginTop:10,flexWrap:"wrap"}}>
                   {q.status==="WAITING_APPROVAL"&&<>
-                    <button disabled={busy||!executable||!exactSelection||!confirmationOk||!trainingOk||!boardRoleOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true,selectedTrainingId:selectedTraining[q.id]||"",roleAssignments:boardRoles[q.id]||{}})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
+                    <button disabled={busy||!executable||!exactSelection||!confirmationOk||!trainingOk||!boardRoleOk||!riskSelectionOk||!riskActionOk||!riskDueOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true,selectedTrainingId:selectedTraining[q.id]||"",roleAssignments:boardRoles[q.id]||{},selectedRiskKeys:riskIds,actionText:riskActionText[q.id]||"",dueDate:riskDueDate[q.id]||""})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
                     <button disabled={busy} onClick={()=>cmd("SKIP",{id:q.id})} style={secondary}>ATLA</button>
                   </>}
                   {q.status==="APPROVED"&&<button disabled={busy} onClick={()=>cmd("START",{id:q.id})} style={start}>▶ BAŞLA — DORA İŞLEMİ YAPSIN</button>}

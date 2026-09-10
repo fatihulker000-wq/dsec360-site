@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type AnyRow = Record<string, any>;
-type ExecutorKind = "EMERGENCY_SUPPORT_TEAM" | "EMPLOYEE_REPRESENTATIVE" | "TRAINING_ASSIGNMENT" | "ISG_BOARD_MEMBER" | "";
+type ExecutorKind = "EMERGENCY_SUPPORT_TEAM" | "EMPLOYEE_REPRESENTATIVE" | "TRAINING_ASSIGNMENT" | "ISG_BOARD_MEMBER" | "RISK_DOF_ACTION" | "";
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,6 +32,7 @@ function employeePhone(e: AnyRow) { return text(e.phone || e.mobile_phone || e.m
 
 function executorKindFor(row:AnyRow):ExecutorKind {
   const h=hay(row);
+  if(text(row.source_gap_id)==="fullscan-high-risk" || h.includes("YUKSEK_KRITIK_RISK_YOGUNLUGU")) return "RISK_DOF_ACTION";
   if(text(row.source_gap_id)==="isg-board" || h.includes("ISG_KURULU_YAPISI")) return "ISG_BOARD_MEMBER";
   if(h.includes("CALISAN_TEMSILCI") || text(row.source_gap_id)==="employee-representatives") return "EMPLOYEE_REPRESENTATIVE";
   if(!h.includes("YILLIK_EGITIM_PLANI") && !h.includes("DOKUMAN") && (h.includes("EGITIM_TAMAMLAMA") || h.includes("TAMAMLANMAMIS_EGITIM") || h.includes("EGITIM_ATAMA") || h.includes("ATANMAMIS_EGITIM"))) return "TRAINING_ASSIGNMENT";
@@ -68,6 +69,7 @@ function correctedSourceUrl(row:AnyRow){
   if(h.includes("CALISAN_TEMSILCI") || text(row.source_gap_id)==="employee-representatives")
     return "/admin/documentation/employee-representatives";
   if(h.includes("ISG_KURUL")) return "/admin/documentation/board";
+  if(text(row.source_gap_id)==="fullscan-high-risk" || h.includes("YUKSEK_KRITIK_RISK")) return "/admin/risk";
   if(h.includes("POLITIKA") || h.includes("DOKUMAN")) return "/admin/documentation";
   if(
     h.includes("ACIL_DURUM") || h.includes("KORUMA") || h.includes("SONDUR") ||
@@ -177,6 +179,42 @@ async function trainingCandidates(supabase:any,companyId:string){
   return employees.map((e:any)=>({id:e.id,full_name:employeeName(e),department:employeeDepartment(e),phone:employeePhone(e),job_title:text(e.job_title)||"-"})).filter((e:any)=>e.full_name).slice(0,500);
 }
 
+
+function riskLevelFrom(row:AnyRow, kind:"MATRIX"|"FINE"){
+  if(kind==="FINE") return text(row.level)||"";
+  const score=Number(row.score||0);
+  if(score>=20)return "KABUL_EDILEMEZ";
+  if(score>=15)return "COK_YUKSEK";
+  if(score>=8)return "YUKSEK";
+  if(score>=4)return "ORTA";
+  return "DUSUK";
+}
+function highRiskSignal(row:AnyRow,kind:"MATRIX"|"FINE"){
+  const n=norm(riskLevelFrom(row,kind));
+  return ["HIGH","CRITICAL","INTOLERABLE","YUKSEK","COK_YUKSEK","KABUL_EDILEMEZ"].some(x=>n.includes(x));
+}
+async function riskDofOptions(supabase:any,companyId:string){
+  const [m,f]=await Promise.all([
+    supabase.from("risk_items").select("id,title,hazard,consequence,score,department,location,responsible,dof_status,dof_action,dof_responsible,dof_due_date_millis,is_deleted").eq("company_id",companyId).eq("is_deleted",false).order("score",{ascending:false}),
+    supabase.from("fine_kinney_risks").select("id,title,hazard,consequence,score,level,action,department,location,responsible,dof_status,dof_action,dof_responsible,dof_due_date_millis,is_deleted").eq("company_id",companyId).eq("is_deleted",false).order("score",{ascending:false})
+  ]);
+  if(m.error)throw m.error;
+  if(f.error)throw f.error;
+  const matrix=(m.data||[]).filter((x:any)=>highRiskSignal(x,"MATRIX")).map((x:any)=>({
+    key:`MATRIX:${x.id}`,id:text(x.id),kind:"MATRIX",title:text(x.title)||text(x.hazard)||"5×5 Risk",
+    hazard:text(x.hazard),score:Number(x.score||0),level:riskLevelFrom(x,"MATRIX"),
+    department:text(x.department)||"-",location:text(x.location)||"-",
+    currentDofStatus:text(x.dof_status)||"YOK",currentAction:text(x.dof_action)
+  }));
+  const fine=(f.data||[]).filter((x:any)=>highRiskSignal(x,"FINE")).map((x:any)=>({
+    key:`FINE:${x.id}`,id:text(x.id),kind:"FINE",title:text(x.title)||text(x.hazard)||"Fine Kinney Risk",
+    hazard:text(x.hazard),score:Number(x.score||0),level:riskLevelFrom(x,"FINE"),
+    department:text(x.department)||"-",location:text(x.location)||"-",
+    currentDofStatus:text(x.dof_status)||"YOK",currentAction:text(x.dof_action)||text(x.action)
+  }));
+  return [...matrix,...fine].sort((a,b)=>b.score-a.score).slice(0,250);
+}
+
 async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
   const kind=executorKindFor(row);
   const missingCount=missingCountFrom(row);
@@ -200,6 +238,18 @@ async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
   }
   if(kind==="TRAINING_ASSIGNMENT"){
     return {supported:true,kind,label:"Çalışanlara eğitim ata",candidates:await trainingCandidates(supabase,companyId),trainings:await trainingOptions(supabase),requiredSelectionCount:0,allowAnySelectionCount:true,requiresTrainingSelection:true,requiresQualificationConfirmation:false};
+  }
+  if(kind==="RISK_DOF_ACTION"){
+    return {
+      supported:true,kind,label:"Riskler için kullanıcı onaylı DÖF / aksiyon aç",
+      candidates:await trainingCandidates(supabase,companyId),
+      riskItems:await riskDofOptions(supabase,companyId),
+      requiredSelectionCount:1,
+      requiresRiskSelection:true,
+      requiresActionText:true,
+      requiresDueDate:true,
+      requiresQualificationConfirmation:false
+    };
   }
   return {supported:false,kind:"",label:"Sadece öneri",candidates:[],requiredSelectionCount:0,requiresQualificationConfirmation:false};
 }
@@ -243,6 +293,21 @@ async function executionRecords(supabase:any,companyId:string,row:AnyRow){
         training_title: result.trainingTitle,
       };
     });
+  }
+  if(result.executor==="RISK_DOF_ACTION"){
+    const refs=Array.isArray(result.riskRefs)?result.riskRefs:[];
+    const matrixIds=refs.filter((x:any)=>x.kind==="MATRIX").map((x:any)=>x.id);
+    const fineIds=refs.filter((x:any)=>x.kind==="FINE").map((x:any)=>x.id);
+    const rows:any[]=[];
+    if(matrixIds.length){
+      const {data,error}=await supabase.from("risk_items").select("id,title,hazard,score,dof_status,dof_action,dof_responsible,dof_due_date_millis,updated_at").eq("company_id",companyId).in("id",matrixIds);
+      if(!error)rows.push(...(data||[]).map((x:any)=>({...x,risk_type:"5x5"})));
+    }
+    if(fineIds.length){
+      const {data,error}=await supabase.from("fine_kinney_risks").select("id,title,hazard,score,level,dof_status,dof_action,dof_responsible,dof_due_date_millis,updated_at").eq("company_id",companyId).in("id",fineIds);
+      if(!error)rows.push(...(data||[]).map((x:any)=>({...x,risk_type:"FINE_KINNEY"})));
+    }
+    return rows;
   }
   return [];
 }
@@ -344,6 +409,9 @@ export async function POST(req:NextRequest) {
       const qualificationConfirmed=body?.qualificationConfirmed===true;
       const selectedTrainingId=text(body?.selectedTrainingId);
       const roleAssignments=body?.roleAssignments&&typeof body.roleAssignments==="object"?body.roleAssignments:{};
+      const selectedRiskKeys=Array.isArray(body?.selectedRiskKeys)?body.selectedRiskKeys.map((x:any)=>text(x)).filter(Boolean):[];
+      const actionText=text(body?.actionText);
+      const dueDate=text(body?.dueDate);
 
       let approvalPayload=current.requested_payload||{};
       if(executor.supported){
@@ -371,7 +439,20 @@ export async function POST(req:NextRequest) {
           }
           if(new Set(chosen).size!==chosen.length)return NextResponse.json({ok:false,error:"Aynı kurul rolü birden fazla çalışana atanamaz."},{status:400});
         }
-        approvalPayload={...approvalPayload,dora_execution:{executor:executor.kind,teamType:executor.teamType||null,selectedEmployeeIds:selectedIds,selectedTrainingId:selectedTrainingId||null,roleAssignments,qualificationConfirmed,approvedAt:new Date().toISOString()}};
+        if(executor.kind==="RISK_DOF_ACTION"){
+          if(selectedRiskKeys.length<1)return NextResponse.json({ok:false,error:"En az bir yüksek/kritik risk seçilmelidir."},{status:400});
+          const allowedRisks=new Set((executor.riskItems||[]).map((x:any)=>text(x.key)));
+          if(selectedRiskKeys.some((x:string)=>!allowedRisks.has(x)))return NextResponse.json({ok:false,error:"Seçilen risklerden biri artık yüksek/kritik risk listesinde değil."},{status:409});
+          if(!actionText)return NextResponse.json({ok:false,error:"DÖF / aksiyon açıklaması zorunludur."},{status:400});
+          if(!dueDate)return NextResponse.json({ok:false,error:"DÖF termin tarihi zorunludur."},{status:400});
+          const dueMs=new Date(`${dueDate}T23:59:59`).getTime();
+          if(!Number.isFinite(dueMs))return NextResponse.json({ok:false,error:"Termin tarihi geçersiz."},{status:400});
+        }
+        approvalPayload={...approvalPayload,dora_execution:{
+          executor:executor.kind,teamType:executor.teamType||null,selectedEmployeeIds:selectedIds,
+          selectedTrainingId:selectedTrainingId||null,roleAssignments,qualificationConfirmed,
+          selectedRiskKeys,actionText,dueDate,approvedAt:new Date().toISOString()
+        }};
       }
 
       const {data,error}=await supabase.from("dora_action_queue")
@@ -528,6 +609,61 @@ export async function POST(req:NextRequest) {
         const keys=rows.map((x:any)=>x.sync_key); const ex=await supabase.from("documentation_board_members").select("sync_key").in("sync_key",keys); if(ex.error)throw ex.error; const existingKeys=new Set((ex.data||[]).map((x:any)=>text(x.sync_key))); const insertRows=rows.filter((x:any)=>!existingKeys.has(x.sync_key)); let inserted:any[]=[]; if(insertRows.length){const ins=await supabase.from("documentation_board_members").insert(insertRows).select("*"); if(ins.error)throw ins.error; inserted=ins.data||[];}
         const result={executor:"ISG_BOARD_MEMBER",requested:selectedIds.length,inserted:inserted.length,alreadyExisting:rows.length-insertRows.length,employeeIds:selectedIds,employeeNames:(employees||[]).map((e:any)=>employeeName(e)),roleAssignments};
         const done=await supabase.from("dora_action_queue").update({status:"COMPLETED",started_at:nowIso,completed_at:nowIso,execution_note:`DORA İSG Kurulu için ${inserted.length} kullanıcı onaylı üye/rol kaydı oluşturdu.`,execution_result:result,source_url:"/admin/documentation/board"}).eq("id",id).eq("company_id",companyId).select("*").single(); if(done.error)throw done.error; return NextResponse.json({ok:true,command,item:done.data,moduleWritePerformed:true,result});
+      }
+
+      if(exec.executor==="RISK_DOF_ACTION"){
+        const riskKeys=Array.isArray(exec.selectedRiskKeys)?exec.selectedRiskKeys.map((x:any)=>text(x)).filter(Boolean):[];
+        const action=text(exec.actionText);
+        const dueDate=text(exec.dueDate);
+        const dueMs=new Date(`${dueDate}T23:59:59`).getTime();
+        if(!riskKeys.length||!action||!Number.isFinite(dueMs))
+          return NextResponse.json({ok:false,error:"Onaylı risk, aksiyon veya termin bilgisi eksik."},{status:409});
+
+        const responsible=(employees||[])[0];
+        if(!responsible)return NextResponse.json({ok:false,error:"Onaylı sorumlu çalışan bulunamadı."},{status:409});
+        const responsibleName=employeeName(responsible);
+        const matrixIds=riskKeys.filter((x:string)=>x.startsWith("MATRIX:")).map((x:string)=>x.slice(7));
+        const fineIds=riskKeys.filter((x:string)=>x.startsWith("FINE:")).map((x:string)=>x.slice(5));
+        const note=`DORA Faz 2 kullanıcı onaylı risk aksiyonu. Sorumlu çalışan ID: ${text(responsible.id)}.`;
+        let updatedMatrix:any[]=[]; let updatedFine:any[]=[];
+
+        if(matrixIds.length){
+          const upd=await supabase.from("risk_items").update({
+            dof_status:"OPEN",dof_action:action,dof_responsible:responsibleName,
+            dof_due_date_millis:dueMs,dof_closed_at_millis:null,dof_note:note,
+            source:"WEB",sync_status:"SYNCED",sync_error:null,last_synced_at:iso,updated_at:iso
+          }).eq("company_id",companyId).eq("is_deleted",false).in("id",matrixIds)
+            .select("id,title,hazard,score,dof_status,dof_action,dof_responsible,dof_due_date_millis");
+          if(upd.error)throw upd.error;
+          updatedMatrix=upd.data||[];
+        }
+        if(fineIds.length){
+          const upd=await supabase.from("fine_kinney_risks").update({
+            dof_status:"OPEN",dof_action:action,dof_responsible:responsibleName,
+            dof_due_date_millis:dueMs,dof_closed_at_millis:null,dof_note:note,
+            source:"WEB",sync_status:"SYNCED",sync_error:null,last_synced_at:iso,updated_at:iso
+          }).eq("company_id",companyId).eq("is_deleted",false).in("id",fineIds)
+            .select("id,title,hazard,score,level,dof_status,dof_action,dof_responsible,dof_due_date_millis");
+          if(upd.error)throw upd.error;
+          updatedFine=upd.data||[];
+        }
+
+        const riskRefs=[
+          ...updatedMatrix.map((x:any)=>({kind:"MATRIX",id:text(x.id),title:text(x.title)||text(x.hazard)})),
+          ...updatedFine.map((x:any)=>({kind:"FINE",id:text(x.id),title:text(x.title)||text(x.hazard)}))
+        ];
+        const result={
+          executor:"RISK_DOF_ACTION",requested:riskKeys.length,updated:riskRefs.length,
+          riskRefs,actionText:action,dueDate,responsibleEmployeeId:text(responsible.id),
+          responsibleName,employeeIds:[text(responsible.id)],employeeNames:[responsibleName]
+        };
+        const done=await supabase.from("dora_action_queue").update({
+          status:"COMPLETED",started_at:iso,completed_at:iso,
+          execution_note:`DORA ${riskRefs.length} yüksek/kritik risk için kullanıcı onaylı DÖF/aksiyon açtı. Sorumlu: ${responsibleName}. Termin: ${dueDate}.`,
+          execution_result:result,source_url:"/admin/risk"
+        }).eq("id",id).eq("company_id",companyId).select("*").single();
+        if(done.error)throw done.error;
+        return NextResponse.json({ok:true,command,item:done.data,moduleWritePerformed:true,result});
       }
 
       if(exec.executor==="TRAINING_ASSIGNMENT"){
