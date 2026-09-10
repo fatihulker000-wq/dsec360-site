@@ -90,7 +90,34 @@ export default function DoraActionsPage(){
 
       // analysis API success contract is success:true (not ok:true)
       if(a?.success===false)throw new Error(a?.error||"DORA analizi okunamadı.");
-      setGaps((a?.silentGaps?.items||[]).filter((x:Gap)=>["MISSING","SHORTAGE","WARNING","VERIFY"].includes(x.state)));
+
+      const silentGapItems:Gap[]=(a?.silentGaps?.items||[])
+        .filter((x:Gap)=>["MISSING","SHORTAGE","WARNING","VERIFY"].includes(x.state));
+
+      // Eğitim tamamlama yükü silentGaps içinde değil, managementTopics içinde üretiliyor.
+      // Faz 2 İşlem Merkezi bu sinyali yürütülebilir "Eğitim Atama" kartına dönüştürür.
+      const managementTopics=Array.isArray(a?.managementTopics)?a.managementTopics:[];
+      const trainingTopic=managementTopics.find((t:any)=>
+        String(t?.id||"").toUpperCase()==="TRAINING_COMPLETION" ||
+        String(t?.title||"").toLocaleUpperCase("tr-TR").includes("EĞİTİM TAMAMLAMA")
+      );
+
+      const actionableTrainingGap:Gap|undefined=trainingTopic ? {
+        id:"dora-egitim-atama",
+        domain:"Eğitim",
+        title:"DORA kontrollü eğitim ataması",
+        state:"WARNING",
+        severity:String(trainingTopic?.severity||"MEDIUM"),
+        summary:String(trainingTopic?.interpretation||"Tamamlanmamış eğitim yükü tespit edildi."),
+        recommendation:"Çalışanları ve atanacak eğitimi seçin. DORA yalnızca ONAYLA + BAŞLA sonrasında gerçek eğitim ataması yapacaktır.",
+        sourceUrl:"/admin/trainings",
+        confidence:"HIGH",
+      } : undefined;
+
+      setGaps(actionableTrainingGap
+        ? [...silentGapItems.filter(x=>x.id!==actionableTrainingGap.id),actionableTrainingGap]
+        : silentGapItems
+      );
 
       if(q?.ok===false)throw new Error(q?.error||"DORA işlem kuyruğu okunamadı.");
       setQueue(Array.isArray(q?.items)?q.items:[]);
@@ -198,7 +225,7 @@ export default function DoraActionsPage(){
       <div className="dora-actions-grid">
         <section style={card}>
           <h2 style={h2}>1. DORA'nın Bulduğu Eksikler</h2>
-          <p style={sub}>Henüz işlem kuyruğuna alınmamış tespitler.</p>
+          <p style={sub}>Henüz işlem kuyruğuna alınmamış tespitler. Eğitim tamamlama sinyali varsa DORA bunu kontrollü eğitim atama işlemine dönüştürür.</p>
           <div style={{display:"grid",gap:9,marginTop:12}}>
             {booting||busy&&!companyId?<Empty text="DORA hazırlanıyor…"/>:
              newGaps.length===0?<Empty text="Yeni eksiklik yok veya tümü işlem kuyruğunda."/>:
