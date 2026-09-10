@@ -31,7 +31,13 @@ type Queue={
     requiresRiskSelection?:boolean;requiresActionText?:boolean;requiresDueDate?:boolean;
     requiresDocumentDraft?:boolean;documentDraft?:{documentType:string;category:string;title:string;content:string;documentNoPrefix:string;tags:string[]};
     agendaItems?:Array<{key:string;id:string;kind:string;employeeId?:string;title:string;detail:string;dueDate:string;location:string;assignedTo:string;sourceUrl:string}>;
-    requiresAgendaItemSelection?:boolean;requiresFollowupDate?:boolean
+    requiresAgendaItemSelection?:boolean;requiresFollowupDate?:boolean;
+    issueItems?:Array<{key:string;kind:string;sourceId:string;title:string;detail:string;severity:string;sourceUrl:string}>;
+    requiresIssueSelection?:boolean;
+    surveyFindings?:Array<{key:string;id:string;surveyId:string;title:string;surveyTitle:string;description:string;severity:string;negativeRate:number;responseCount:number;privacyLocked:boolean;detail:string;sourceUrl:string}>;
+    requiresSurveyFindingSelection?:boolean;
+    cbsItems?:Array<{key:string;id:string;title:string;detail:string;priority:string;status:string;slaDueAt:string;overdue:boolean;sourceUrl:string}>;
+    requiresCbsSelection?:boolean
   };
 };
 
@@ -62,6 +68,9 @@ export default function DoraActionsPage(){
   const [documentContent,setDocumentContent]=useState<Record<string,string>>({});
   const [selectedAgendaItems,setSelectedAgendaItems]=useState<Record<string,string[]>>({});
   const [followupDates,setFollowupDates]=useState<Record<string,string>>({});
+  const [selectedIssues,setSelectedIssues]=useState<Record<string,string[]>>({});
+  const [selectedSurveyFindings,setSelectedSurveyFindings]=useState<Record<string,string[]>>({});
+  const [selectedCbs,setSelectedCbs]=useState<Record<string,string[]>>({});
   const [busy,setBusy]=useState(false);
   const [recordsOpen,setRecordsOpen]=useState<Queue|null>(null);
   const [booting,setBooting]=useState(true);
@@ -160,6 +169,24 @@ export default function DoraActionsPage(){
     failed:queue.filter(x=>x.status==="FAILED").length,
   }),[queue]);
 
+  const dailyPriorities=useMemo(()=>{
+    const severityScore=(s:string)=>s==="CRITICAL"?400:s==="HIGH"?300:s==="MEDIUM"?200:100;
+    return queue
+      .filter(q=>!["COMPLETED","SKIPPED"].includes(q.status))
+      .map(q=>{
+        const score=severityScore(q.severity)
+          +(q.executor?.supported?45:0)
+          +(q.status==="FAILED"?55:q.status==="APPROVED"?40:q.status==="WAITING_APPROVAL"?20:0);
+        return {...q,_priorityScore:score};
+      })
+      .sort((a,b)=>b._priorityScore-a._priorityScore)
+      .slice(0,5);
+  },[queue]);
+
+  function focusQueue(id:string){
+    document.getElementById(`dora-queue-${id}`)?.scrollIntoView({behavior:"smooth",block:"center"});
+  }
+
   function toggle(qid:string,eid:string){
     setSelected(prev=>{
       const current=prev[qid]||[];
@@ -178,6 +205,13 @@ export default function DoraActionsPage(){
     setSelectedAgendaItems(prev=>{
       const current=prev[qid]||[];
       return {...prev,[qid]:current.includes(itemKey)?current.filter(x=>x!==itemKey):[...current,itemKey]};
+    });
+  }
+
+  function toggleList(setter:any,qid:string,key:string){
+    setter((prev:Record<string,string[]>)=>{
+      const current=prev[qid]||[];
+      return {...prev,[qid]:current.includes(key)?current.filter(x=>x!==key):[...current,key]};
     });
   }
 
@@ -254,6 +288,29 @@ export default function DoraActionsPage(){
         <Kpi n={stats.failed} label="Hata" color={C.red}/>
       </div>
 
+      <section style={{...card,marginTop:14,border:"1px solid #f4c7ce",background:"linear-gradient(135deg,#fff,#fff8f9)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:9,fontWeight:950,letterSpacing:1.2,color:C.burgundy}}>DORA GÜNLÜK ÖNCELİK MOTORU</div>
+            <h2 style={{...h2,marginTop:4}}>Bugün Önce Bunlara Odaklanın</h2>
+            <p style={sub}>Kritiklik + işlem yapılabilirlik + onay durumu birlikte puanlanır. Bu sıralama karar desteğidir; otomatik işlem başlatmaz.</p>
+          </div>
+          <span style={{fontSize:10,fontWeight:950,color:C.burgundy}}>{dailyPriorities.length} ÖNCELİK</span>
+        </div>
+        <div style={{display:"grid",gap:8,marginTop:11}}>
+          {dailyPriorities.length===0?<Empty text="Aktif öncelik bulunmuyor."/>:dailyPriorities.map((q,index)=>
+            <button key={q.id} type="button" onClick={()=>focusQueue(q.id)}
+              style={{textAlign:"left",display:"grid",gridTemplateColumns:"36px minmax(0,1fr) auto",gap:10,alignItems:"center",padding:11,borderRadius:12,border:`1px solid ${C.line}`,background:"#fff",cursor:"pointer"}}>
+              <div style={{width:32,height:32,borderRadius:10,display:"grid",placeItems:"center",fontWeight:950,color:"#fff",background:index===0?C.burgundy:C.ink}}>#{index+1}</div>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:950,overflowWrap:"anywhere"}}>{q.title}</div>
+                <div style={{fontSize:9,color:C.muted,marginTop:3}}>{q.source_domain} • {q.executor?.supported?"DORA YAPABİLİR":"KULLANICI İNCELEMESİ"} • {q.status}</div>
+              </div>
+              <Tag t={q.severity}/>
+            </button>)}
+        </div>
+      </section>
+
       {fullScan&&<section style={{...card,marginTop:14}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
           <div>
@@ -326,7 +383,13 @@ export default function DoraActionsPage(){
               const agendaIds=selectedAgendaItems[q.id]||[];
               const agendaItemsOk=!q.executor?.requiresAgendaItemSelection || agendaIds.length>0;
               const followupOk=!q.executor?.requiresFollowupDate || Boolean(followupDates[q.id]);
-              return <div className="dora-action-card" key={q.id} style={{...item,border:q.status==="APPROVED"?`1px solid #84caff`:`1px solid ${C.line}`}}>
+              const issueIds=selectedIssues[q.id]||[];
+              const issueOk=!q.executor?.requiresIssueSelection || issueIds.length>0;
+              const surveyFindingIds=selectedSurveyFindings[q.id]||[];
+              const surveyFindingOk=!q.executor?.requiresSurveyFindingSelection || surveyFindingIds.length>0;
+              const cbsIds=selectedCbs[q.id]||[];
+              const cbsOk=!q.executor?.requiresCbsSelection || cbsIds.length>0;
+              return <div id={`dora-queue-${q.id}`} className="dora-action-card" key={q.id} style={{...item,border:q.status==="APPROVED"?`1px solid #84caff`:`1px solid ${C.line}`,scrollMarginTop:18}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"start",flexWrap:"wrap"}}><b>{q.title}</b><Status s={q.status}/></div>
                 <div style={small}>{q.source_domain} • {q.severity}{q.executor?.teamType?` • ${q.executor.teamType}`:""}</div>
                 <div style={body}>{q.description}</div>
@@ -349,6 +412,51 @@ export default function DoraActionsPage(){
                       <span style={{fontSize:11,minWidth:0,overflowWrap:"anywhere"}}><b>{c.full_name}</b><br/><span style={{color:C.muted,fontSize:9}}>{c.department} • {c.job_title}</span></span>
                     </label>)}
                   </div>}
+                  {q.executor?.kind==="SUBCONTRACTOR_FOLLOWUP"&&<div style={{display:"grid",gap:10,marginTop:10}}>
+                    <div style={{padding:10,borderRadius:10,background:"#fffaeb",border:"1px solid #fedf89",fontSize:10,lineHeight:1.5,color:C.amber}}>
+                      <b>TAŞERON KONTROLÜ:</b> DORA giriş iznini otomatik vermez veya engellemez. Seçtiğiniz uygunsuzlukları kullanıcı onayıyla sorumlu kişiye takip görevi olarak aktarır.
+                    </div>
+                    <div style={{display:"grid",gap:6,maxHeight:300,overflow:"auto"}}>
+                      {(q.executor.issueItems||[]).map(x=><label key={x.key} style={{display:"flex",gap:9,padding:9,borderRadius:9,background:"#fff",border:`1px solid ${C.line}`,cursor:"pointer"}}>
+                        <input type="checkbox" checked={issueIds.includes(x.key)} onChange={()=>toggleList(setSelectedIssues,q.id,x.key)}/>
+                        <span style={{fontSize:10,lineHeight:1.45}}><b>{x.title}</b><br/><span style={{color:x.severity==="HIGH"?C.red:C.muted}}>{x.detail}</span></span>
+                      </label>)}
+                    </div>
+                    <textarea value={riskActionText[q.id]||""} onChange={e=>setRiskActionText(v=>({...v,[q.id]:e.target.value}))} placeholder="Takip aksiyonu / yapılacak işlem…" style={{...input,width:"100%",minHeight:76,resize:"vertical"}}/>
+                    <input type="date" value={followupDates[q.id]||""} onChange={e=>setFollowupDates(v=>({...v,[q.id]:e.target.value}))} style={{...input,width:"100%"}}/>
+                    <div style={small}>{issueIds.length} uygunsuzluk seçildi • Aşağıdan 1 sorumlu çalışan seçin.</div>
+                  </div>}
+
+                  {q.executor?.kind==="SURVEY_ACTION"&&<div style={{display:"grid",gap:10,marginTop:10}}>
+                    <div style={{padding:10,borderRadius:10,background:"#eff8ff",border:"1px solid #b2ddff",fontSize:10,lineHeight:1.5,color:C.blue}}>
+                      <b>ANKET → AKSİYON:</b> Açık MEDIUM/HIGH/CRITICAL bulguları gerçek Anket Aksiyonlarına dönüştürür. Anket bulgusu otomatik kapatılmaz. Anonim gizlilik eşiği korunur.
+                    </div>
+                    <div style={{display:"grid",gap:6,maxHeight:300,overflow:"auto"}}>
+                      {(q.executor.surveyFindings||[]).map(x=><label key={x.key} style={{display:"flex",gap:9,padding:9,borderRadius:9,background:"#fff",border:`1px solid ${C.line}`,cursor:"pointer"}}>
+                        <input type="checkbox" checked={surveyFindingIds.includes(x.key)} onChange={()=>toggleList(setSelectedSurveyFindings,q.id,x.key)}/>
+                        <span style={{fontSize:10,lineHeight:1.45}}><b>{x.surveyTitle} • {x.title}</b><br/><span style={{color:C.red,fontWeight:850}}>{x.severity} • %{x.negativeRate.toFixed(1)}</span><br/><span style={{color:C.muted}}>{x.detail}</span></span>
+                      </label>)}
+                    </div>
+                    <textarea value={riskActionText[q.id]||""} onChange={e=>setRiskActionText(v=>({...v,[q.id]:e.target.value}))} placeholder="DORA aksiyon açıklaması…" style={{...input,width:"100%",minHeight:76,resize:"vertical"}}/>
+                    <input type="date" value={riskDueDate[q.id]||""} onChange={e=>setRiskDueDate(v=>({...v,[q.id]:e.target.value}))} style={{...input,width:"100%"}}/>
+                    <div style={small}>{surveyFindingIds.length} bulgu seçildi • Aşağıdan 1 aksiyon sorumlusu seçin.</div>
+                  </div>}
+
+                  {q.executor?.kind==="CBS_FOLLOWUP"&&<div style={{display:"grid",gap:10,marginTop:10}}>
+                    <div style={{padding:10,borderRadius:10,background:"#fef3f2",border:"1px solid #fecdca",fontSize:10,lineHeight:1.5,color:C.red}}>
+                      <b>ÇBS TAKİBİ:</b> DORA seçilen açık kayıtları kapatmaz; kullanıcı onayıyla <b>processing</b> durumuna alır, sorumlu atar, takip notu ve Ajanda görevi oluşturur.
+                    </div>
+                    <div style={{display:"grid",gap:6,maxHeight:300,overflow:"auto"}}>
+                      {(q.executor.cbsItems||[]).map(x=><label key={x.key} style={{display:"flex",gap:9,padding:9,borderRadius:9,background:"#fff",border:`1px solid ${x.overdue?"#fda29b":C.line}`,cursor:"pointer"}}>
+                        <input type="checkbox" checked={cbsIds.includes(x.key)} onChange={()=>toggleList(setSelectedCbs,q.id,x.key)}/>
+                        <span style={{fontSize:10,lineHeight:1.45}}><b>{x.title}</b><br/><span style={{color:x.overdue?C.red:C.muted}}>{x.detail}</span></span>
+                      </label>)}
+                    </div>
+                    <textarea value={riskActionText[q.id]||""} onChange={e=>setRiskActionText(v=>({...v,[q.id]:e.target.value}))} placeholder="ÇBS takip / çözüm notu…" style={{...input,width:"100%",minHeight:76,resize:"vertical"}}/>
+                    <input type="date" value={followupDates[q.id]||""} onChange={e=>setFollowupDates(v=>({...v,[q.id]:e.target.value}))} style={{...input,width:"100%"}}/>
+                    <div style={small}>{cbsIds.length} kayıt seçildi • Aşağıdan 1 sorumlu çalışan seçin.</div>
+                  </div>}
+
                   {["HEALTH_AGENDA","PERIODIC_AGENDA","ENVIRONMENT_AGENDA"].includes(q.executor?.kind||"")&&<div style={{display:"grid",gap:10,marginTop:10}}>
                     <div style={{padding:10,borderRadius:10,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:10,lineHeight:1.5,color:C.green}}>
                       <b>DORA AJANDA PLANI:</b> Aşağıdaki gecikmiş kayıtları seçin. DORA kaynak modüldeki veriyi değiştirmez; yalnız kullanıcı ONAYLA + BAŞLA sonrasında takip hatırlatması oluşturur.
@@ -430,7 +538,7 @@ export default function DoraActionsPage(){
                   <div style={{marginTop:8,fontSize:10,color:C.ink}}><b>İşlem yapılan çalışanlar:</b> {q.execution_result.employeeNames.join(", ")}</div>}
                 <div style={{display:"flex",gap:7,marginTop:10,flexWrap:"wrap"}}>
                   {q.status==="WAITING_APPROVAL"&&<>
-                    <button disabled={busy||!executable||!exactSelection||!confirmationOk||!trainingOk||!boardRoleOk||!riskSelectionOk||!riskActionOk||!riskDueOk||!documentOk||!agendaItemsOk||!followupOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true,selectedTrainingId:selectedTraining[q.id]||"",roleAssignments:boardRoles[q.id]||{},selectedRiskKeys:riskIds,actionText:riskActionText[q.id]||"",dueDate:riskDueDate[q.id]||"",documentTitle:docTitleValue,documentContent:docContentValue,selectedAgendaKeys:agendaIds,followupDate:followupDates[q.id]||""})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
+                    <button disabled={busy||!executable||!exactSelection||!confirmationOk||!trainingOk||!boardRoleOk||!riskSelectionOk||!riskActionOk||!riskDueOk||!documentOk||!agendaItemsOk||!followupOk||!issueOk||!surveyFindingOk||!cbsOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true,selectedTrainingId:selectedTraining[q.id]||"",roleAssignments:boardRoles[q.id]||{},selectedRiskKeys:riskIds,actionText:riskActionText[q.id]||"",dueDate:riskDueDate[q.id]||"",documentTitle:docTitleValue,documentContent:docContentValue,selectedAgendaKeys:agendaIds,followupDate:followupDates[q.id]||"",selectedIssueKeys:issueIds,selectedSurveyFindingKeys:surveyFindingIds,selectedCbsKeys:cbsIds})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
                     <button disabled={busy} onClick={()=>cmd("SKIP",{id:q.id})} style={secondary}>ATLA</button>
                   </>}
                   {q.status==="APPROVED"&&<button disabled={busy} onClick={()=>cmd("START",{id:q.id})} style={start}>▶ BAŞLA — DORA İŞLEMİ YAPSIN</button>}
