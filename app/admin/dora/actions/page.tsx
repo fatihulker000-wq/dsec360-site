@@ -21,6 +21,8 @@ type Queue={
   id:string;source_gap_id:string;source_domain:string;title:string;description:string;
   recommendation:string;severity:string;status:string;source_url?:string;
   execution_note?:string;execution_result?:any;target_records?:any[];
+  retry_count?:number;last_error?:string;last_attempt_at?:string;
+  audit_logs?:Array<{id:string;event:string;from_status?:string;to_status?:string;actor_label?:string;detail?:any;created_at:string}>;
   executor?:{
     supported?:boolean;kind?:string;label?:string;teamType?:string;candidates?:Candidate[];
     requiredSelectionCount?:number;allowAnySelectionCount?:boolean;
@@ -159,9 +161,6 @@ export default function DoraActionsPage(){
   useEffect(()=>{void boot();},[boot]);
   useEffect(()=>{if(companyId)void load(companyId);},[companyId,load]);
 
-  const queuedIds=useMemo(()=>new Set(queue.map(x=>x.source_gap_id)),[queue]);
-  const newGaps=useMemo(()=>gaps.filter(g=>!queuedIds.has(g.id)),[gaps,queuedIds]);
-
   const stats=useMemo(()=>({
     waiting:queue.filter(x=>x.status==="WAITING_APPROVAL").length,
     approved:queue.filter(x=>x.status==="APPROVED").length,
@@ -230,6 +229,7 @@ export default function DoraActionsPage(){
         command==="PREPARE"?"Eksiklikler DORA işlem kuyruğuna alındı.":
         command==="APPROVE"?"İşlem planı onaylandı. Şimdi BAŞLA komutu verilebilir.":
         command==="START"?(j?.moduleWritePerformed?"DORA işlemi tamamladı ve hedef modüle kaydı yazdı.":"Başla komutu alındı; bu bulgu için gerçek yürütücü henüz bağlı değil."):
+        command==="RETRY"?"İşlem yeniden onaylı duruma alındı. Kontrol edip BAŞLA komutunu verebilirsiniz.":
         "İşlem atlandı."
       );
       await load(companyId);
@@ -277,7 +277,6 @@ export default function DoraActionsPage(){
           {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <button disabled={busy||!companyId} onClick={()=>void load(companyId)} style={primary}>{busy?"DORA ÇALIŞIYOR…":"TARA + ONAY KUYRUĞUNU GÜNCELLE"}</button>
-        <button onClick={()=>void load(companyId)} disabled={busy||!companyId} style={secondary}>YENİDEN TARA</button>
         <button onClick={()=>location.href="/admin/dora"} style={secondary}>← DORA'YA DÖN</button>
       </div>
 
@@ -394,6 +393,7 @@ export default function DoraActionsPage(){
                 <div style={small}>{q.source_domain} • {q.severity}{q.executor?.teamType?` • ${q.executor.teamType}`:""}</div>
                 <div style={body}>{q.description}</div>
                 <div style={{...body,color:C.burgundy}}><b>Planlanan yaklaşım:</b> {q.recommendation}</div>
+                {q.status==="FAILED"&&q.last_error&&<div style={{marginTop:8,padding:9,borderRadius:9,background:"#fef3f2",border:"1px solid #fecdca",fontSize:10,lineHeight:1.5,color:C.red}}><b>Son hata:</b> {q.last_error}{Number(q.retry_count||0)>0?` • Tekrar deneme: ${q.retry_count}`:""}</div>}
 
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:9}}>
                   <span style={{padding:"5px 8px",borderRadius:999,fontSize:9,fontWeight:900,background:executable?"#ecfdf3":"#f2f4f7",color:executable?C.green:C.muted}}>
@@ -542,7 +542,11 @@ export default function DoraActionsPage(){
                     <button disabled={busy} onClick={()=>cmd("SKIP",{id:q.id})} style={secondary}>ATLA</button>
                   </>}
                   {q.status==="APPROVED"&&<button disabled={busy} onClick={()=>cmd("START",{id:q.id})} style={start}>▶ BAŞLA — DORA İŞLEMİ YAPSIN</button>}
-                  {q.status==="COMPLETED"&&<button onClick={()=>setRecordsOpen(q)} style={secondary}>KAYITLARI AÇ →</button>}
+                  {q.status==="FAILED"&&<>
+                    <button disabled={busy} onClick={()=>cmd("RETRY",{id:q.id})} style={approve}>↻ TEKRAR DENE</button>
+                    <button disabled={busy} onClick={()=>cmd("SKIP",{id:q.id})} style={secondary}>ATLA</button>
+                  </>}
+                  {(q.status==="COMPLETED"||q.status==="FAILED")&&<button onClick={()=>setRecordsOpen(q)} style={secondary}>{q.status==="FAILED"?"HATA / GEÇMİŞ →":"KAYITLARI AÇ →"}</button>}
                   {q.source_url&&<button onClick={()=>location.href=q.source_url!} style={secondary}>MODÜLÜ AÇ →</button>}
                 </div>
               </div>

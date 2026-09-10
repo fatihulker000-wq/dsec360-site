@@ -644,13 +644,27 @@ export async function GET(req:NextRequest) {
       .eq("company_id",companyId).order("created_at",{ascending:false});
     if(error) throw error;
 
+    const ids=(data||[]).map((x:any)=>text(x.id)).filter(Boolean);
+    const auditMap=new Map<string,AnyRow[]>();
+    if(ids.length){
+      const auditRes=await supabase.from("dora_action_audit_logs")
+        .select("id,action_id,event,from_status,to_status,actor_label,detail,created_at")
+        .eq("company_id",companyId).in("action_id",ids).order("created_at",{ascending:false});
+      if(!auditRes.error){
+        for(const log of auditRes.data||[]){
+          const key=text(log.action_id); const list=auditMap.get(key)||[];
+          if(list.length<25)list.push(log); auditMap.set(key,list);
+        }
+      }
+    }
     const enriched=[];
     for(const row of data||[]) {
       enriched.push({
         ...row,
         source_url:correctedSourceUrl(row),
         executor:await buildExecutor(supabase,companyId,row),
-        target_records:await executionRecords(supabase,companyId,row)
+        target_records:await executionRecords(supabase,companyId,row),
+        audit_logs:auditMap.get(text(row.id))||[]
       });
     }
     return NextResponse.json({ok:true,items:enriched});
@@ -660,13 +674,20 @@ export async function GET(req:NextRequest) {
 }
 
 export async function POST(req:NextRequest) {
+  let failureSupabase:any=null;
+  let failureCompanyId="";
+  let failureActionId="";
+  let failureCommand="";
   try {
     const body=await req.json();
     const supabase=getSupabase();
+    failureSupabase=supabase;
     const auth=await authorize(supabase,body?.companyId);
     if(auth.error) return auth.error;
     const companyId=auth.companyId!;
+    failureCompanyId=companyId;
     const command=norm(body?.command);
+    failureCommand=command;
 
     if(command==="PREPARE") {
       const gaps=Array.isArray(body?.gaps)?body.gaps:[];
@@ -714,11 +735,24 @@ export async function POST(req:NextRequest) {
     }
 
     const id=text(body?.id);
+    failureActionId=id;
     if(!id) return NextResponse.json({ok:false,error:"İşlem kimliği eksik."},{status:400});
     const {data:current,error:readError}=await supabase.from("dora_action_queue").select("*")
       .eq("id",id).eq("company_id",companyId).maybeSingle();
     if(readError) throw readError;
     if(!current) return NextResponse.json({ok:false,error:"DORA işlemi bulunamadı."},{status:404});
+
+    if(command==="RETRY") {
+      if(current.status!=="FAILED")
+        return NextResponse.json({ok:false,error:"Yalnızca hata durumundaki işlem tekrar denenebilir."},{status:409});
+      const retryCount=Math.max(0,Number(current.retry_count||0))+1;
+      const {data,error}=await supabase.from("dora_action_queue")
+        .update({status:"APPROVED",retry_count:retryCount,last_error:null,execution_note:"Kullanıcı işlemi tekrar denemek üzere yeniden onaylı duruma aldı."})
+        .eq("id",id).eq("company_id",companyId).eq("status","FAILED").select("*").maybeSingle();
+      if(error)throw error;
+      if(!data)return NextResponse.json({ok:false,error:"İşlem durumu değişti; sayfayı yenileyin."},{status:409});
+      return NextResponse.json({ok:true,command,item:data});
+    }
 
     if(command==="APPROVE") {
       if(current.status!=="WAITING_APPROVAL")
@@ -822,8 +856,8 @@ export async function POST(req:NextRequest) {
       }
 
       const {data,error}=await supabase.from("dora_action_queue")
-        .update({status:"APPROVED",approved_at:new Date().toISOString(),requested_payload:approvalPayload,source_url:correctedSourceUrl(current)})
-        .eq("id",id).eq("company_id",companyId).select("*").single();
+        .update({status:"APPROVED",approved_at:new Date().toISOString(),requested_payload:approvalPayload,source_url:correctedSourceUrl(current),last_error:null})
+        .eq("id",id).eq("company_id",companyId).eq("status","WAITING_APPROVAL").select("*").single();
       if(error) throw error;
       return NextResponse.json({ok:true,command,item:data});
     }
@@ -835,26 +869,43 @@ export async function POST(req:NextRequest) {
       const exec=current.requested_payload?.dora_execution;
       if(!exec?.executor){
         const {data,error}=await supabase.from("dora_action_queue")
-          .update({status:"STARTED",started_at:new Date().toISOString(),
+          .update({status:"STARTED",started_at:new Date().toISOString(),last_attempt_at:new Date().toISOString(),last_error:null,
             execution_note:"Kullanıcı Başla komutunu verdi. Bu bulgu için gerçek modül yürütücüsü henüz bağlı değil.",
             source_url:correctedSourceUrl(current)})
-          .eq("id",id).eq("company_id",companyId).select("*").single();
+          .eq("id",id).eq("company_id",companyId).eq("status","APPROVED").select("*").single();
         if(error) throw error;
         return NextResponse.json({ok:true,command,item:data,moduleWritePerformed:false});
       }
 
       const selectedIds=(exec.selectedEmployeeIds||[]).map((x:any)=>text(x)).filter(Boolean);
-      if(!selectedIds.length)return NextResponse.json({ok:false,error:"Onaylı çalışan seçimi bulunamadı."},{status:409});
+      const employeeRequired=[
+        "EMERGENCY_SUPPORT_TEAM","EMPLOYEE_REPRESENTATIVE","TRAINING_ASSIGNMENT","ISG_BOARD_MEMBER",
+        "RISK_DOF_ACTION","SUBCONTRACTOR_FOLLOWUP","SURVEY_ACTION","CBS_FOLLOWUP",
+        "PERIODIC_AGENDA","ENVIRONMENT_AGENDA"
+      ].includes(text(exec.executor));
+      if(employeeRequired&&!selectedIds.length)
+        return NextResponse.json({ok:false,error:"Onaylı çalışan / sorumlu seçimi bulunamadı."},{status:409});
 
-      const {data:employees,error:empError}=await supabase.from("employees").select("*")
-        .eq("firm_id",companyId).in("id",selectedIds).eq("active",true);
-      if(empError) throw empError;
-      if((employees||[]).length!==selectedIds.length)
-        return NextResponse.json({ok:false,error:"Onaylanan çalışanlardan biri artık aktif firma çalışanı değil."},{status:409});
+      let employees:AnyRow[]=[];
+      if(selectedIds.length){
+        const empRes=await supabase.from("employees").select("*")
+          .eq("firm_id",companyId).in("id",selectedIds).eq("active",true);
+        if(empRes.error) throw empRes.error;
+        employees=empRes.data||[];
+        if(employees.length!==selectedIds.length)
+          return NextResponse.json({ok:false,error:"Onaylanan çalışanlardan biri artık aktif firma çalışanı değil."},{status:409});
+      }
 
       const info=await companyInfo(supabase,companyId);
       const now=Date.now();
       const iso=new Date().toISOString();
+
+      // Eşzamanlı iki BAŞLA isteğinin aynı işlemi iki kez yürütmesini engeller.
+      const lock=await supabase.from("dora_action_queue").update({
+        status:"STARTED",started_at:iso,last_attempt_at:iso,last_error:null
+      }).eq("id",id).eq("company_id",companyId).eq("status","APPROVED").select("id,status").maybeSingle();
+      if(lock.error)throw lock.error;
+      if(!lock.data)return NextResponse.json({ok:false,error:"İşlem zaten başlatılmış veya durumu değişmiş. Sayfayı yenileyin."},{status:409});
 
       if(exec.executor==="EMERGENCY_SUPPORT_TEAM"){
         const teamType=text(exec.teamType);
@@ -1301,15 +1352,30 @@ export async function POST(req:NextRequest) {
     }
 
     if(command==="SKIP") {
+      if(!["WAITING_APPROVAL","APPROVED","FAILED"].includes(text(current.status)))
+        return NextResponse.json({ok:false,error:"Bu işlem artık atlanamaz."},{status:409});
       const {data,error}=await supabase.from("dora_action_queue")
         .update({status:"SKIPPED",skipped_at:new Date().toISOString(),source_url:correctedSourceUrl(current)})
-        .eq("id",id).eq("company_id",companyId).select("*").single();
+        .eq("id",id).eq("company_id",companyId).in("status",["WAITING_APPROVAL","APPROVED","FAILED"]).select("*").single();
       if(error) throw error;
       return NextResponse.json({ok:true,command,item:data});
     }
 
     return NextResponse.json({ok:false,error:"Geçersiz DORA komutu."},{status:400});
   } catch(e:any) {
-    return NextResponse.json({ok:false,error:e?.message||"DORA Faz 2 işlemi başarısız."},{status:500});
+    const message=e?.message||"DORA Faz 2 işlemi başarısız.";
+    if(failureSupabase&&failureCompanyId&&failureActionId&&failureCommand==="START"){
+      try{
+        const cur=await failureSupabase.from("dora_action_queue").select("status")
+          .eq("id",failureActionId).eq("company_id",failureCompanyId).maybeSingle();
+        if(cur.data&&["STARTED","APPROVED"].includes(text(cur.data.status))){
+          await failureSupabase.from("dora_action_queue").update({
+            status:"FAILED",last_error:message,last_attempt_at:new Date().toISOString(),
+            execution_note:`DORA yürütme hatası: ${message}`
+          }).eq("id",failureActionId).eq("company_id",failureCompanyId).in("status",["STARTED","APPROVED"]);
+        }
+      }catch{}
+    }
+    return NextResponse.json({ok:false,error:message},{status:500});
   }
 }

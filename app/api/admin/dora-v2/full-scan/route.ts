@@ -70,7 +70,8 @@ async function safe(label:string,promise:any){
   try{
     const {data,error}=await promise;
     if(error)return {rows:[] as AnyRow[],warning:`${label}: ${error.message}`};
-    return {rows:(data||[]) as AnyRow[],warning:""};
+    const rows=Array.isArray(data)?data:(data?[data]:[]);
+    return {rows:rows as AnyRow[],warning:""};
   }catch(e:any){
     return {rows:[] as AnyRow[],warning:`${label}: ${e?.message||"okunamadı"}`};
   }
