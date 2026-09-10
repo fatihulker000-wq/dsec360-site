@@ -29,7 +29,9 @@ type Queue={
     boardRoles?:Array<{key:string;label:string}>;
     riskItems?:Array<{key:string;id:string;kind:string;title:string;hazard:string;score:number;level:string;department:string;location:string;currentDofStatus:string;currentAction?:string}>;
     requiresRiskSelection?:boolean;requiresActionText?:boolean;requiresDueDate?:boolean;
-    requiresDocumentDraft?:boolean;documentDraft?:{documentType:string;category:string;title:string;content:string;documentNoPrefix:string;tags:string[]}
+    requiresDocumentDraft?:boolean;documentDraft?:{documentType:string;category:string;title:string;content:string;documentNoPrefix:string;tags:string[]};
+    agendaItems?:Array<{key:string;id:string;kind:string;employeeId?:string;title:string;detail:string;dueDate:string;location:string;assignedTo:string;sourceUrl:string}>;
+    requiresAgendaItemSelection?:boolean;requiresFollowupDate?:boolean
   };
 };
 
@@ -58,6 +60,8 @@ export default function DoraActionsPage(){
   const [riskDueDate,setRiskDueDate]=useState<Record<string,string>>({});
   const [documentTitle,setDocumentTitle]=useState<Record<string,string>>({});
   const [documentContent,setDocumentContent]=useState<Record<string,string>>({});
+  const [selectedAgendaItems,setSelectedAgendaItems]=useState<Record<string,string[]>>({});
+  const [followupDates,setFollowupDates]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState(false);
   const [recordsOpen,setRecordsOpen]=useState<Queue|null>(null);
   const [booting,setBooting]=useState(true);
@@ -167,6 +171,13 @@ export default function DoraActionsPage(){
     setSelectedRisks(prev=>{
       const current=prev[qid]||[];
       return {...prev,[qid]:current.includes(riskKey)?current.filter(x=>x!==riskKey):[...current,riskKey]};
+    });
+  }
+
+  function toggleAgendaItem(qid:string,itemKey:string){
+    setSelectedAgendaItems(prev=>{
+      const current=prev[qid]||[];
+      return {...prev,[qid]:current.includes(itemKey)?current.filter(x=>x!==itemKey):[...current,itemKey]};
     });
   }
 
@@ -312,6 +323,9 @@ export default function DoraActionsPage(){
               const docTitleValue=documentTitle[q.id]??q.executor?.documentDraft?.title??"";
               const docContentValue=documentContent[q.id]??q.executor?.documentDraft?.content??"";
               const documentOk=!q.executor?.requiresDocumentDraft || (docTitleValue.trim().length>0&&docContentValue.trim().length>=80);
+              const agendaIds=selectedAgendaItems[q.id]||[];
+              const agendaItemsOk=!q.executor?.requiresAgendaItemSelection || agendaIds.length>0;
+              const followupOk=!q.executor?.requiresFollowupDate || Boolean(followupDates[q.id]);
               return <div className="dora-action-card" key={q.id} style={{...item,border:q.status==="APPROVED"?`1px solid #84caff`:`1px solid ${C.line}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"start",flexWrap:"wrap"}}><b>{q.title}</b><Status s={q.status}/></div>
                 <div style={small}>{q.source_domain} • {q.severity}{q.executor?.teamType?` • ${q.executor.teamType}`:""}</div>
@@ -335,6 +349,33 @@ export default function DoraActionsPage(){
                       <span style={{fontSize:11,minWidth:0,overflowWrap:"anywhere"}}><b>{c.full_name}</b><br/><span style={{color:C.muted,fontSize:9}}>{c.department} • {c.job_title}</span></span>
                     </label>)}
                   </div>}
+                  {["HEALTH_AGENDA","PERIODIC_AGENDA","ENVIRONMENT_AGENDA"].includes(q.executor?.kind||"")&&<div style={{display:"grid",gap:10,marginTop:10}}>
+                    <div style={{padding:10,borderRadius:10,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:10,lineHeight:1.5,color:C.green}}>
+                      <b>DORA AJANDA PLANI:</b> Aşağıdaki gecikmiş kayıtları seçin. DORA kaynak modüldeki veriyi değiştirmez; yalnız kullanıcı ONAYLA + BAŞLA sonrasında takip hatırlatması oluşturur.
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:6}}>TAKİBE ALINACAK KAYITLAR</div>
+                      <div style={{display:"grid",gap:6,maxHeight:280,overflow:"auto",paddingRight:4}}>
+                        {(q.executor?.agendaItems||[]).map(item=><label key={item.key} style={{display:"flex",gap:9,alignItems:"flex-start",padding:9,borderRadius:9,background:"#fff",border:`1px solid ${C.line}`,cursor:"pointer"}}>
+                          <input type="checkbox" checked={agendaIds.includes(item.key)} onChange={()=>toggleAgendaItem(q.id,item.key)}/>
+                          <span style={{fontSize:10,lineHeight:1.45,minWidth:0}}>
+                            <b>{item.title}</b><br/>
+                            <span style={{color:C.red,fontWeight:850}}>Kaynak tarih: {item.dueDate||"-"}</span>
+                            {item.location&&<><br/><span style={{color:C.muted}}>Konum: {item.location}</span></>}
+                            {item.detail&&<><br/><span style={{color:C.muted}}>{item.detail}</span></>}
+                          </span>
+                        </label>)}
+                      </div>
+                      <div style={{fontSize:9,color:C.blue,fontWeight:850,marginTop:5}}>{agendaIds.length} kayıt seçildi</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:5}}>TAKİP / HATIRLATMA TARİHİ</div>
+                      <input type="date" value={followupDates[q.id]||""} onChange={e=>setFollowupDates(prev=>({...prev,[q.id]:e.target.value}))} style={{...input,width:"100%"}}/>
+                    </div>
+                    {q.executor?.kind!=="HEALTH_AGENDA"&&<div style={{fontSize:9,color:C.muted}}>Takip sorumlusu için aşağıdaki çalışan listesinden <b>tam 1 çalışan</b> seçin.</div>}
+                    {q.executor?.kind==="HEALTH_AGENDA"&&<div style={{fontSize:9,color:C.muted}}>Sağlık takiplerinde görev ilgili çalışana bağlanır; <b>tıbbi içerik Ajandaya aktarılmaz.</b></div>}
+                  </div>}
+
                   {q.executor?.kind==="DOCUMENT_DRAFT"&&q.executor.documentDraft&&<div style={{display:"grid",gap:10,marginTop:10}}>
                     <div style={{padding:10,borderRadius:10,background:"#eff8ff",border:"1px solid #b2ddff",fontSize:10,lineHeight:1.5,color:C.blue}}>
                       <b>DORA TASLAĞI:</b> DORA metni hazırlar; burada düzenleyebilirsiniz. ONAYLA + BAŞLA sonrasında belge <b>DRAFT</b> olarak Dokümantasyon'a kaydedilir. Nihai yayın/onay ayrı yapılır.
@@ -389,7 +430,7 @@ export default function DoraActionsPage(){
                   <div style={{marginTop:8,fontSize:10,color:C.ink}}><b>İşlem yapılan çalışanlar:</b> {q.execution_result.employeeNames.join(", ")}</div>}
                 <div style={{display:"flex",gap:7,marginTop:10,flexWrap:"wrap"}}>
                   {q.status==="WAITING_APPROVAL"&&<>
-                    <button disabled={busy||!executable||!exactSelection||!confirmationOk||!trainingOk||!boardRoleOk||!riskSelectionOk||!riskActionOk||!riskDueOk||!documentOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true,selectedTrainingId:selectedTraining[q.id]||"",roleAssignments:boardRoles[q.id]||{},selectedRiskKeys:riskIds,actionText:riskActionText[q.id]||"",dueDate:riskDueDate[q.id]||"",documentTitle:docTitleValue,documentContent:docContentValue})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
+                    <button disabled={busy||!executable||!exactSelection||!confirmationOk||!trainingOk||!boardRoleOk||!riskSelectionOk||!riskActionOk||!riskDueOk||!documentOk||!agendaItemsOk||!followupOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true,selectedTrainingId:selectedTraining[q.id]||"",roleAssignments:boardRoles[q.id]||{},selectedRiskKeys:riskIds,actionText:riskActionText[q.id]||"",dueDate:riskDueDate[q.id]||"",documentTitle:docTitleValue,documentContent:docContentValue,selectedAgendaKeys:agendaIds,followupDate:followupDates[q.id]||""})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
                     <button disabled={busy} onClick={()=>cmd("SKIP",{id:q.id})} style={secondary}>ATLA</button>
                   </>}
                   {q.status==="APPROVED"&&<button disabled={busy} onClick={()=>cmd("START",{id:q.id})} style={start}>▶ BAŞLA — DORA İŞLEMİ YAPSIN</button>}

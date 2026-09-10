@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type AnyRow = Record<string, any>;
-type ExecutorKind = "EMERGENCY_SUPPORT_TEAM" | "EMPLOYEE_REPRESENTATIVE" | "TRAINING_ASSIGNMENT" | "ISG_BOARD_MEMBER" | "RISK_DOF_ACTION" | "DOCUMENT_DRAFT" | "";
+type ExecutorKind = "EMERGENCY_SUPPORT_TEAM" | "EMPLOYEE_REPRESENTATIVE" | "TRAINING_ASSIGNMENT" | "ISG_BOARD_MEMBER" | "RISK_DOF_ACTION" | "DOCUMENT_DRAFT" | "HEALTH_AGENDA" | "PERIODIC_AGENDA" | "ENVIRONMENT_AGENDA" | "";
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -33,6 +33,9 @@ function employeePhone(e: AnyRow) { return text(e.phone || e.mobile_phone || e.m
 function executorKindFor(row:AnyRow):ExecutorKind {
   const h=hay(row);
   const gapId=text(row.source_gap_id);
+  if(gapId==="fullscan-health-overdue") return "HEALTH_AGENDA";
+  if(gapId==="fullscan-periodic-overdue") return "PERIODIC_AGENDA";
+  if(gapId==="fullscan-env-overdue") return "ENVIRONMENT_AGENDA";
   if(["fullscan-doc-policy","fullscan-doc-training-plan","fullscan-doc-risk-team","fullscan-emergency-plan"].includes(gapId)) return "DOCUMENT_DRAFT";
   if(gapId==="fullscan-high-risk" || h.includes("YUKSEK_KRITIK_RISK_YOGUNLUGU")) return "RISK_DOF_ACTION";
   if(text(row.source_gap_id)==="isg-board" || h.includes("ISG_KURULU_YAPISI")) return "ISG_BOARD_MEMBER";
@@ -72,6 +75,8 @@ function correctedSourceUrl(row:AnyRow){
     return "/admin/documentation/employee-representatives";
   if(h.includes("ISG_KURUL")) return "/admin/documentation/board";
   if(text(row.source_gap_id)==="fullscan-high-risk" || h.includes("YUKSEK_KRITIK_RISK")) return "/admin/risk";
+  if(text(row.source_gap_id)==="fullscan-health-overdue") return "/admin/health";
+  if(["fullscan-periodic-overdue","fullscan-env-overdue"].includes(text(row.source_gap_id))) return "/admin/documentation/periodic-controls";
   if(h.includes("POLITIKA") || h.includes("DOKUMAN")) return "/admin/documentation";
   if(
     h.includes("ACIL_DURUM") || h.includes("KORUMA") || h.includes("SONDUR") ||
@@ -254,6 +259,76 @@ function documentDraftFor(row:AnyRow, info:AnyRow):DocumentDraft|null{
   return null;
 }
 
+
+function isoDateOnly(v:any){
+  if(v===null||v===undefined||v==="")return "";
+  const n=Number(v);
+  const d=Number.isFinite(n)&&n>1000000000 ? new Date(n>1000000000000?n:n*1000) : new Date(String(v));
+  if(!Number.isFinite(d.getTime()))return "";
+  return d.toISOString().slice(0,10);
+}
+async function agendaFollowupItems(supabase:any,companyId:string,kind:"HEALTH_AGENDA"|"PERIODIC_AGENDA"|"ENVIRONMENT_AGENDA"){
+  if(kind==="HEALTH_AGENDA"){
+    const {data:employees,error:empError}=await supabase.from("employees")
+      .select("id,full_name,name,surname,job_title,department,active")
+      .eq("firm_id",companyId);
+    if(empError)throw empError;
+    const active=(employees||[]).filter((x:any)=>x.active!==false);
+    const ids=active.map((x:any)=>x.id).filter(Boolean);
+    if(!ids.length)return [];
+    const {data,error}=await supabase.from("health_examinations")
+      .select("id,employee_id,exam_date,next_exam_date,is_deleted")
+      .eq("company_id",companyId).eq("is_deleted",false).in("employee_id",ids).not("next_exam_date","is",null)
+      .order("next_exam_date",{ascending:true});
+    if(error)throw error;
+    const byEmp=new Map<string,AnyRow>(active.map((x:any)=>[text(x.id),x as AnyRow]));
+    const today=Date.now();
+    const seen=new Set<string>();
+    return (data||[]).filter((x:any)=>{
+      const emp=text(x.employee_id);
+      if(!emp||seen.has(emp))return false;
+      const t=new Date(String(x.next_exam_date)).getTime();
+      if(!Number.isFinite(t)||t>=today)return false;
+      seen.add(emp);return true;
+    }).map((x:any)=>{
+      const e=byEmp.get(text(x.employee_id));
+      return {
+        key:`HEALTH:${x.id}`,id:text(x.id),kind:"HEALTH",employeeId:text(x.employee_id),
+        title:`Sağlık Takibi • ${text(e?.full_name)||`${text(e?.name)} ${text(e?.surname)}`.trim()||"Çalışan"}`,
+        detail:"Periyodik muayene yenileme tarihi geçmiş görünüyor. Tıbbi içerik Ajandaya taşınmaz.",
+        dueDate:isoDateOnly(x.next_exam_date),location:"",assignedTo:text(e?.full_name)||`${text(e?.name)} ${text(e?.surname)}`.trim(),
+        sourceUrl:`/admin/health/employees/${encodeURIComponent(text(x.employee_id))}?tab=Muayeneler`
+      };
+    }).slice(0,250);
+  }
+  if(kind==="PERIODIC_AGENDA"){
+    const {data,error}=await supabase.from("periodic_control_equipments")
+      .select("id,equipment_name,equipment_type,serial_no,location,next_due_millis,status,deleted")
+      .eq("firm_id",companyId).eq("deleted",false).not("next_due_millis","is",null).order("next_due_millis",{ascending:true});
+    if(error)throw error;
+    const now=Date.now();
+    return (data||[]).filter((x:any)=>Number(x.next_due_millis)<now).map((x:any)=>({
+      key:`PERIODIC:${x.id}`,id:text(x.id),kind:"PERIODIC",
+      title:`Periyodik Kontrol • ${text(x.equipment_name)||text(x.equipment_type)||"Ekipman"}`,
+      detail:[text(x.equipment_type),text(x.serial_no)?`Seri: ${text(x.serial_no)}`:"",text(x.status)].filter(Boolean).join(" • "),
+      dueDate:isoDateOnly(x.next_due_millis),location:text(x.location),assignedTo:"",
+      sourceUrl:"/admin/documentation/periodic-controls"
+    })).slice(0,250);
+  }
+  const {data,error}=await supabase.from("environment_measurements")
+    .select("id,measurement_type,area_name,next_due_millis,measured_by,report_no,result_summary,status,deleted")
+    .eq("firm_id",companyId).eq("deleted",false).not("next_due_millis","is",null).order("next_due_millis",{ascending:true});
+  if(error)throw error;
+  const now=Date.now();
+  return (data||[]).filter((x:any)=>Number(x.next_due_millis)<now).map((x:any)=>({
+    key:`ENV:${x.id}`,id:text(x.id),kind:"ENVIRONMENT",
+    title:`Ortam Ölçümü Yenileme • ${text(x.measurement_type)||"Ölçüm"}`,
+    detail:[text(x.result_summary),text(x.report_no)?`Rapor: ${text(x.report_no)}`:"",text(x.status)].filter(Boolean).join(" • "),
+    dueDate:isoDateOnly(x.next_due_millis),location:text(x.area_name),assignedTo:text(x.measured_by),
+    sourceUrl:"/admin/documentation/periodic-controls"
+  })).slice(0,250);
+}
+
 async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
   const kind=executorKindFor(row);
   const missingCount=missingCountFrom(row);
@@ -290,6 +365,17 @@ async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
       requiresQualificationConfirmation:false
     };
   }
+  if(kind==="HEALTH_AGENDA" || kind==="PERIODIC_AGENDA" || kind==="ENVIRONMENT_AGENDA"){
+    const items=await agendaFollowupItems(supabase,companyId,kind);
+    return {
+      supported:true,kind,
+      label:kind==="HEALTH_AGENDA"?"Sağlık takiplerini Ajandaya planla":kind==="PERIODIC_AGENDA"?"Periyodik kontrol takiplerini Ajandaya planla":"Ortam ölçümü takiplerini Ajandaya planla",
+      candidates:kind==="HEALTH_AGENDA"?[]:await trainingCandidates(supabase,companyId),
+      agendaItems:items,requiredSelectionCount:kind==="HEALTH_AGENDA"?0:1,
+      requiresAgendaItemSelection:true,requiresFollowupDate:true,
+      requiresQualificationConfirmation:false
+    };
+  }
   if(kind==="DOCUMENT_DRAFT"){
     const info=await companyInfo(supabase,companyId);
     const draft=documentDraftFor(row,info);
@@ -306,6 +392,15 @@ async function executionRecords(supabase:any,companyId:string,row:AnyRow){
   if(row?.status!=="COMPLETED") return [];
   const result=row?.execution_result||{};
   const ids=Array.isArray(result.employeeIds)?result.employeeIds.map((x:any)=>text(x)).filter(Boolean):[];
+  if(["HEALTH_AGENDA","PERIODIC_AGENDA","ENVIRONMENT_AGENDA"].includes(text(result.executor))){
+    const keys=Array.isArray(result.agendaSyncKeys)?result.agendaSyncKeys.map((x:any)=>text(x)).filter(Boolean):[];
+    if(!keys.length)return [];
+    const {data,error}=await supabase.from("ajanda_tasks")
+      .select("id,sync_key,title,note,status,priority,type,category,due_at,assigned_employee_remote_id,assigned_to,module_ref,module_remote_id,source,is_archived,is_deleted,created_at")
+      .eq("web_firm_id",companyId).in("sync_key",keys).eq("is_deleted",false);
+    if(error)return [];
+    return data||[];
+  }
   if(result.executor==="DOCUMENT_DRAFT"){
     const syncKey=text(result.documentSyncKey);
     if(!syncKey)return [];
@@ -472,6 +567,8 @@ export async function POST(req:NextRequest) {
       const dueDate=text(body?.dueDate);
       const documentTitle=text(body?.documentTitle);
       const documentContent=text(body?.documentContent);
+      const selectedAgendaKeys=Array.isArray(body?.selectedAgendaKeys)?body.selectedAgendaKeys.map((x:any)=>text(x)).filter(Boolean):[];
+      const followupDate=text(body?.followupDate);
 
       let approvalPayload=current.requested_payload||{};
       if(executor.supported){
@@ -512,13 +609,23 @@ export async function POST(req:NextRequest) {
           if(!documentTitle)return NextResponse.json({ok:false,error:"Doküman başlığı zorunludur."},{status:400});
           if(documentContent.length<80)return NextResponse.json({ok:false,error:"Doküman taslağı çok kısa. İçeriği kontrol edin."},{status:400});
         }
+        if(["HEALTH_AGENDA","PERIODIC_AGENDA","ENVIRONMENT_AGENDA"].includes(executor.kind)){
+          if(selectedAgendaKeys.length<1)return NextResponse.json({ok:false,error:"Ajandaya aktarılacak en az bir kayıt seçilmelidir."},{status:400});
+          const allowed=new Set((executor.agendaItems||[]).map((x:any)=>text(x.key)));
+          if(selectedAgendaKeys.some((x:string)=>!allowed.has(x)))return NextResponse.json({ok:false,error:"Seçilen takip kayıtlarından biri artık geçerli değil."},{status:409});
+          if(!followupDate)return NextResponse.json({ok:false,error:"Takip tarihi zorunludur."},{status:400});
+          const followMs=new Date(`${followupDate}T09:00:00`).getTime();
+          if(!Number.isFinite(followMs))return NextResponse.json({ok:false,error:"Takip tarihi geçersiz."},{status:400});
+          if(executor.kind!=="HEALTH_AGENDA"&&selectedIds.length!==1)return NextResponse.json({ok:false,error:"Bu takip işlemi için bir sorumlu çalışan seçilmelidir."},{status:400});
+        }
         approvalPayload={...approvalPayload,dora_execution:{
           executor:executor.kind,teamType:executor.teamType||null,selectedEmployeeIds:selectedIds,
           selectedTrainingId:selectedTrainingId||null,roleAssignments,qualificationConfirmed,
           selectedRiskKeys,actionText,dueDate,
           documentTitle,documentContent,documentType:executor.documentDraft?.documentType||null,
           documentCategory:executor.documentDraft?.category||null,documentNoPrefix:executor.documentDraft?.documentNoPrefix||null,
-          documentTags:executor.documentDraft?.tags||[],approvedAt:new Date().toISOString()
+          documentTags:executor.documentDraft?.tags||[],
+          selectedAgendaKeys,followupDate,approvedAt:new Date().toISOString()
         }};
       }
 
@@ -676,6 +783,71 @@ export async function POST(req:NextRequest) {
         const keys=rows.map((x:any)=>x.sync_key); const ex=await supabase.from("documentation_board_members").select("sync_key").in("sync_key",keys); if(ex.error)throw ex.error; const existingKeys=new Set((ex.data||[]).map((x:any)=>text(x.sync_key))); const insertRows=rows.filter((x:any)=>!existingKeys.has(x.sync_key)); let inserted:any[]=[]; if(insertRows.length){const ins=await supabase.from("documentation_board_members").insert(insertRows).select("*"); if(ins.error)throw ins.error; inserted=ins.data||[];}
         const result={executor:"ISG_BOARD_MEMBER",requested:selectedIds.length,inserted:inserted.length,alreadyExisting:rows.length-insertRows.length,employeeIds:selectedIds,employeeNames:(employees||[]).map((e:any)=>employeeName(e)),roleAssignments};
         const done=await supabase.from("dora_action_queue").update({status:"COMPLETED",started_at:nowIso,completed_at:nowIso,execution_note:`DORA İSG Kurulu için ${inserted.length} kullanıcı onaylı üye/rol kaydı oluşturdu.`,execution_result:result,source_url:"/admin/documentation/board"}).eq("id",id).eq("company_id",companyId).select("*").single(); if(done.error)throw done.error; return NextResponse.json({ok:true,command,item:done.data,moduleWritePerformed:true,result});
+      }
+
+      if(["HEALTH_AGENDA","PERIODIC_AGENDA","ENVIRONMENT_AGENDA"].includes(text(exec.executor))){
+        const kind=text(exec.executor) as "HEALTH_AGENDA"|"PERIODIC_AGENDA"|"ENVIRONMENT_AGENDA";
+        const selectedKeys=Array.isArray(exec.selectedAgendaKeys)?exec.selectedAgendaKeys.map((x:any)=>text(x)).filter(Boolean):[];
+        const followupDate=text(exec.followupDate);
+        const followIso=new Date(`${followupDate}T09:00:00`).toISOString();
+        const allItems=await agendaFollowupItems(supabase,companyId,kind);
+        const selectedItems=allItems.filter((x:any)=>selectedKeys.includes(text(x.key)));
+        if(!selectedItems.length)return NextResponse.json({ok:false,error:"Seçilen takip kayıtları artık bulunamadı."},{status:409});
+
+        const info=await companyInfo(supabase,companyId);
+        if(!info.localFirmId)return NextResponse.json({ok:false,error:"Ajanda için şirket local_firm_id bilgisi bulunamadı."},{status:409});
+
+        const responsible=kind==="HEALTH_AGENDA"?null:(employees||[])[0];
+        const responsibleName=responsible?employeeName(responsible):"";
+        const rows=selectedItems.map((item:any)=>{
+          const syncKey=`dora:${companyId}:agenda:${kind}:${item.id}`;
+          const assignedEmployeeId=kind==="HEALTH_AGENDA"?text(item.employeeId):text(responsible?.id);
+          const assignedTo=kind==="HEALTH_AGENDA"?text(item.assignedTo):responsibleName;
+          return {
+            sync_key:syncKey,firm_id:Number(info.localFirmId),web_firm_id:companyId,
+            title:item.title,
+            note:kind==="HEALTH_AGENDA"
+              ?"DORA kullanıcı onaylı sağlık takip hatırlatması. Tıbbi içerik Ajandaya aktarılmamıştır."
+              :`DORA kullanıcı onaylı takip kaydı. Kaynak son tarih: ${item.dueDate||"-"}. ${text(item.detail)}`.trim(),
+            status:0,priority:2,progress:0,type:"REMINDER",
+            category:kind==="HEALTH_AGENDA"?"HEALTH":kind==="PERIODIC_AGENDA"?"PERIODIC_CONTROL":"ENVIRONMENT_MEASUREMENT",
+            due_at:followIso,end_at:null,completed_at:null,location:text(item.location)||null,meeting_link:null,
+            assigned_employee_local_id:null,assigned_employee_remote_id:assignedEmployeeId||null,
+            assigned_to:assignedTo||null,assigned_by:"DORA AI İSG Asistanı",created_by_user_id:null,
+            participants_csv:null,is_all_day:true,
+            module_ref:kind==="HEALTH_AGENDA"?"HEALTH_RENEWAL":kind==="PERIODIC_AGENDA"?"PERIODIC_CONTROL":"ENVIRONMENT_MEASUREMENT",
+            module_ref_id:null,module_remote_id:item.id,parent_task_id:null,parent_remote_id:null,
+            remind_minutes_csv:"1440,180",remind_at:null,repeat_type:null,repeat_until:null,
+            source:"WEB",is_archived:false,is_deleted:false,deleted_at:null,
+            app_created_at:Date.now(),app_updated_at:Date.now()
+          };
+        });
+
+        const keys=rows.map((x:any)=>x.sync_key);
+        const {data:existing,error:existingError}=await supabase.from("ajanda_tasks")
+          .select("sync_key").eq("web_firm_id",companyId).in("sync_key",keys).eq("is_deleted",false);
+        if(existingError)throw existingError;
+        const existingKeys=new Set((existing||[]).map((x:any)=>text(x.sync_key)));
+        const inserts=rows.filter((x:any)=>!existingKeys.has(x.sync_key));
+        let inserted:any[]=[];
+        if(inserts.length){
+          const ins=await supabase.from("ajanda_tasks").insert(inserts).select("*");
+          if(ins.error)throw ins.error;
+          inserted=ins.data||[];
+        }
+        const result={
+          executor:kind,requested:selectedItems.length,inserted:inserted.length,
+          alreadyExisting:rows.length-inserts.length,agendaSyncKeys:keys,
+          employeeIds:responsible?[text(responsible.id)]:[],employeeNames:responsible?[responsibleName]:[],
+          followupDate
+        };
+        const done=await supabase.from("dora_action_queue").update({
+          status:"COMPLETED",started_at:iso,completed_at:iso,
+          execution_note:`DORA ${selectedItems.length} takip kaydını kullanıcı onayıyla Ajandaya planladı. Yeni kayıt: ${inserted.length}, mevcut: ${rows.length-inserts.length}.`,
+          execution_result:result,source_url:"/admin/agenda"
+        }).eq("id",id).eq("company_id",companyId).select("*").single();
+        if(done.error)throw done.error;
+        return NextResponse.json({ok:true,command,item:done.data,moduleWritePerformed:inserted.length>0,result});
       }
 
       if(exec.executor==="DOCUMENT_DRAFT"){
