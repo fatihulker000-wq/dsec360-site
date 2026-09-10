@@ -337,14 +337,55 @@ export default function DoraPage(){
     },650);
   };
 
-  return <main style={{minHeight:"100vh",background:C.bg,padding:"16px 14px 60px",color:C.ink,fontFamily:"Inter,system-ui,-apple-system,'Segoe UI',sans-serif"}}>
+  return <main className="dora-main-page" style={{minHeight:"100vh",background:C.bg,padding:"16px 14px 60px",color:C.ink,fontFamily:"Inter,system-ui,-apple-system,'Segoe UI',sans-serif"}}>
+    <style jsx global>{`
+      .dora-main-page *{box-sizing:border-box}
+      .dora-tabs{display:flex;gap:6px;flex-wrap:wrap}
+      @media(max-width:900px){
+        .dora-main-page{padding:10px 8px 42px!important;overflow-x:hidden}
+        .dora-hero-grid{grid-template-columns:1fr!important;padding:20px 18px!important}
+        .dora-hero-robot{display:none!important}
+        .dora-scope-grid{grid-template-columns:1fr!important;align-items:stretch!important}
+        .dora-overview-grid{grid-template-columns:1fr!important}
+        .dora-overview-signals{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+        .dora-action-center-grid{grid-template-columns:1fr!important}
+        .dora-action-center-side{padding:0 16px 16px!important}
+        .dora-action-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important;padding:12px 16px 0!important}
+        .dora-ask-grid{grid-template-columns:1fr!important}
+        .dora-ask-box{min-height:auto!important}
+        .dora-ask-row{display:grid!important;grid-template-columns:1fr!important}
+        .dora-ask-row button{min-height:42px}
+        .dora-tabs{overflow-x:auto;flex-wrap:nowrap!important;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+        .dora-tabs button{flex:0 0 auto}
+        .dora-radar-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+        .dora-gap-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+        .dora-topic-row{grid-template-columns:40px minmax(0,1fr)!important}
+        .dora-topic-score{grid-column:2!important;width:max-content}
+        .dora-neural-stage{height:auto!important;min-height:0!important;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important;padding:12px 14px 16px!important}
+        .dora-neural-svg,.dora-core-mobile-hide{display:none!important}
+        .dora-neural-node{position:relative!important;left:auto!important;top:auto!important;transform:none!important;width:auto!important;min-height:92px!important}
+      }
+      @media(max-width:560px){
+        .dora-main-page{padding:6px 6px 34px!important}
+        .dora-hero{border-radius:18px!important}
+        .dora-hero-grid{padding:18px 14px!important}
+        .dora-hero-title{font-size:28px!important}
+        .dora-hero-footer{padding:10px 14px!important}
+        .dora-overview-signals{grid-template-columns:1fr 1fr!important}
+        .dora-radar-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+        .dora-neural-stage{grid-template-columns:1fr!important}
+        .dora-card-mobile{padding:13px!important;border-radius:14px!important}
+        .dora-scope-grid button,.dora-action-center-side button{width:100%!important}
+        .dora-action-center-grid>div:first-child{padding:16px!important}
+      }
+    `}</style>
     <div style={{maxWidth:1540,margin:"0 auto"}}>
 
-      <section style={{borderRadius:28,overflow:"hidden",background:`radial-gradient(circle at 72% 25%,rgba(255,255,255,.13),transparent 24%),linear-gradient(120deg,${C.dark},${C.burgundy} 58%,#a61f32)`,color:C.white,boxShadow:"0 20px 55px rgba(83,16,31,.22)"}}>
-        <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.55fr) minmax(280px,.7fr)",gap:20,padding:"28px 30px"}}>
+      <section className="dora-hero" style={{borderRadius:28,overflow:"hidden",background:`radial-gradient(circle at 72% 25%,rgba(255,255,255,.13),transparent 24%),linear-gradient(120deg,${C.dark},${C.burgundy} 58%,#a61f32)`,color:C.white,boxShadow:"0 20px 55px rgba(83,16,31,.22)"}}>
+        <div className="dora-hero-grid" style={{display:"grid",gridTemplateColumns:"minmax(0,1.55fr) minmax(280px,.7fr)",gap:20,padding:"28px 30px"}}>
           <div>
             <div style={{fontSize:11,fontWeight:950,letterSpacing:1.5,opacity:.8}}>D-SEC • DORA AI COMMAND CENTER</div>
-            <h1 style={{margin:"8px 0 7px",fontSize:"clamp(30px,4vw,46px)",lineHeight:1.05}}>DORA AI İSG Komuta Merkezi</h1>
+            <h1 className="dora-hero-title" style={{margin:"8px 0 7px",fontSize:"clamp(30px,4vw,46px)",lineHeight:1.05}}>DORA AI İSG Komuta Merkezi</h1>
             <p style={{margin:0,maxWidth:880,lineHeight:1.65,opacity:.9}}>
               Firmanın dijital İSG röntgenini çıkarır. Sistemi okur, ilişkileri kurar, sessiz eksikleri ve risk sinyallerini bulur, neden önemli olduğunu açıklar ve inceleme önerir.
             </p>
@@ -352,17 +393,17 @@ export default function DoraPage(){
               <span style={heroChip}>OKU</span><span style={heroArrow}>→</span><span style={heroChip}>İLİŞKİLENDİR</span><span style={heroArrow}>→</span><span style={heroChip}>ANALİZ ET</span><span style={heroArrow}>→</span><span style={heroChip}>YORUMLA</span><span style={heroArrow}>→</span><span style={heroChip}>ÖNER</span>
             </div>
           </div>
-          <div style={{display:"grid",placeItems:"center"}}>
+          <div className="dora-hero-robot" style={{display:"grid",placeItems:"center"}}>
             <RobotCore state={robotState} color={robotColor} scanning={scanning}/>
           </div>
         </div>
-        <div style={{borderTop:"1px solid rgba(255,255,255,.14)",padding:"12px 30px",display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontSize:11,opacity:.88}}>
+        <div className="dora-hero-footer" style={{borderTop:"1px solid rgba(255,255,255,.14)",padding:"12px 30px",display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontSize:11,opacity:.88}}>
           <span>● DORA {robotState} • Son tarama: {generated}</span>
           <span>FAZ 1 ANALİZ + FAZ 2 KONTROLLÜ İŞLEM • YAZMA SADECE KULLANICI ONAYI + BAŞLA İLE</span>
         </div>
       </section>
 
-      <section style={{...card,marginTop:13,display:"grid",gridTemplateColumns:"minmax(230px,420px) minmax(0,1fr) auto",gap:12,alignItems:"end"}}>
+      <section className="dora-scope-grid dora-card-mobile" style={{...card,marginTop:13,display:"grid",gridTemplateColumns:"minmax(230px,420px) minmax(0,1fr) auto",gap:12,alignItems:"end"}}>
         <label style={{fontSize:11,fontWeight:900}}>ANALİZ EDİLEN FİRMA
           <select value={companyId} onChange={e=>setCompanyId(e.target.value)} style={{...input,marginTop:7}} disabled={scanning}>
             {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
@@ -378,7 +419,7 @@ export default function DoraPage(){
       {loading&&<div style={{...card,marginTop:13}}>DORA sistemi hazırlıyor...</div>}
 
       {!loading&&a&&<>
-        <section style={{display:"grid",gridTemplateColumns:"minmax(250px,.72fr) minmax(0,1.5fr) minmax(250px,.72fr)",gap:12,marginTop:13}}>
+        <section className="dora-overview-grid" style={{display:"grid",gridTemplateColumns:"minmax(250px,.72fr) minmax(0,1.5fr) minmax(250px,.72fr)",gap:12,marginTop:13}}>
           <div style={{...card,background:"#101828",color:C.white}}>
             <div style={{fontSize:10,fontWeight:900,letterSpacing:1.1,opacity:.7}}>DORA İSG SAĞLIK SKORU</div>
             <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:10}}><b style={{fontSize:54,lineHeight:1,color:(x?.score??0)<50?"#ff8a80":(x?.score??0)<70?"#fdb022":"#75e0a7"}}>{x?.score??0}</b><span style={{fontSize:16,opacity:.6}}>/100</span></div>
@@ -392,7 +433,7 @@ export default function DoraPage(){
               <Header title="DORA Şu Anda Ne Görüyor?" sub="Yönetici için ilk bakış: ayrıntıya girmeden firmanın dijital röntgeni."/>
               <span style={{...badge,background:"#ecfdf3",color:C.green}}>CANLI ANALİZ</span>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginTop:14}}>
+            <div className="dora-overview-signals" style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginTop:14}}>
               <Signal n={x?.criticalIssues??0} t="Kritik eksiklik" c={C.red} onClick={()=>{setActiveTab("GAPS");window.scrollTo({top:900,behavior:"smooth"})}}/>
               <Signal n={x?.highSignals??0} t="Yüksek sinyal" c={C.orange} onClick={()=>{setActiveTab("SIGNALS");window.scrollTo({top:900,behavior:"smooth"})}}/>
               <Signal n={timeRadar.due30} t="30 gün radarı" c={C.blue} onClick={()=>{setActiveTab("RADAR");window.scrollTo({top:900,behavior:"smooth"})}}/>
@@ -417,33 +458,33 @@ export default function DoraPage(){
         </section>
 
         <section style={{...card,marginTop:13,padding:0,overflow:"hidden",border:"1px solid #b7e4cf",boxShadow:"0 10px 28px rgba(6,118,71,.08)"}}>
-          <div style={{display:"grid",gridTemplateColumns:"220px minmax(0,1fr) auto",gap:16,alignItems:"center"}}>
+          <div className="dora-action-center-grid" style={{display:"grid",gridTemplateColumns:"220px minmax(0,1fr) auto",gap:16,alignItems:"center"}}>
             <div style={{padding:"20px 18px",background:"linear-gradient(135deg,#064e3b,#067647)",color:"#fff",alignSelf:"stretch"}}>
               <div style={{fontSize:9,fontWeight:950,letterSpacing:1.1,opacity:.7}}>DORA FAZ 2</div>
               <div style={{fontSize:18,fontWeight:950,marginTop:5}}>⚡ İşlem Merkezi</div>
               <div style={{fontSize:10,opacity:.75,marginTop:6,lineHeight:1.5}}>DORA'nın kullanıcı onayıyla gerçekleştirebileceği işlemler.</div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(90px,1fr))",gap:8,padding:"14px 0"}}>
+            <div className="dora-action-metrics" style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(90px,1fr))",gap:8,padding:"14px 0"}}>
               <ActionMetric n={queueSummary.waiting} label="Onay bekliyor" color={C.orange}/>
               <ActionMetric n={queueSummary.approved} label="Başla bekliyor" color={C.blue}/>
               <ActionMetric n={queueSummary.completed} label="Tamamlandı" color={C.green}/>
               <ActionMetric n={queueSummary.failed} label="Hata" color={C.red}/>
             </div>
-            <div style={{paddingRight:18}}>
+            <div className="dora-action-center-side" style={{paddingRight:18}}>
               <button onClick={()=>router.push(`/admin/dora/actions?companyId=${encodeURIComponent(companyId)}`)} style={{...darkButton,background:C.green,padding:"12px 15px"}}>İŞLEM MERKEZİNİ AÇ →</button>
             </div>
           </div>
         </section>
 
         <section style={{...card,marginTop:13,border:"1px solid #d8c4c9",boxShadow:"0 8px 30px rgba(83,16,31,.06)"}}>
-          <div style={{display:"grid",gridTemplateColumns:"180px minmax(0,1fr)",gap:16}}>
-            <div style={{padding:"15px 12px",borderRadius:16,background:"#101828",color:C.white,textAlign:"center"}}>
+          <div className="dora-ask-grid" style={{display:"grid",gridTemplateColumns:"180px minmax(0,1fr)",gap:16}}>
+            <div className="dora-ask-box" style={{padding:"15px 12px",borderRadius:16,background:"#101828",color:C.white,textAlign:"center"}}>
               <div style={{fontSize:28}}>◉</div>
               <div style={{fontWeight:950,marginTop:5}}>DORA'YA SOR</div>
               <div style={{fontSize:10,opacity:.65,marginTop:6,lineHeight:1.45}}>Firma verilerinin içinden cevap üretir.</div>
             </div>
             <div>
-              <div style={{display:"flex",gap:8}}>
+              <div className="dora-ask-row" style={{display:"flex",gap:8}}>
                 <input value={question} onChange={e=>setQuestion(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")askCustom()}} placeholder="Örn: En kritik eksiklerim ne? Kazalarda ortak nokta var mı? 30 günde ne yaklaşacak?" style={{...input,fontSize:13,padding:"13px 14px"}}/>
                 <button onClick={askCustom} style={askButton}>DORA'YA SOR →</button>
               </div>
@@ -477,7 +518,7 @@ export default function DoraPage(){
         <section style={{marginTop:15}}>
           <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"end",flexWrap:"wrap"}}>
             <Header title="DORA Sistem Sinir Ağı" sub="Modülleri ayrı kutular olarak değil, birbirini etkileyen tek bir İSG sistemi olarak görür."/>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <div className="dora-tabs" style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               <Tab active={activeTab==="XRAY"} onClick={()=>setActiveTab("XRAY")}>Sistem Röntgeni</Tab>
               <Tab active={activeTab==="GAPS"} onClick={()=>setActiveTab("GAPS")}>Sessiz Eksiklikler</Tab><Tab active={activeTab==="SIGNALS"} onClick={()=>setActiveTab("SIGNALS")}>AI Sinyalleri</Tab>
               <Tab active={activeTab==="RADAR"} onClick={()=>setActiveTab("RADAR")}>Yaklaşanlar</Tab>
@@ -517,7 +558,7 @@ export default function DoraPage(){
 
 
           {activeTab==="GAPS"&&<div style={{...card,marginTop:10}}>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
+            <div className="dora-gap-summary" style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
               <Signal n={a.silentGaps?.summary.critical??0} t="Kritik gereklilik" c={C.red}/>
               <Signal n={a.silentGaps?.summary.high??0} t="Yüksek gereklilik" c={C.orange}/>
               <Signal n={a.silentGaps?.summary.missing??0} t="Hiç bulunamadı" c={C.burgundy}/>
@@ -564,7 +605,7 @@ export default function DoraPage(){
               <Header title="DORA Zaman Radarı" sub="Periyodik kontrolle sınırlı değildir. Tarih verisi bulunan sağlık, risk/aksiyon, denetim-DÖF, eğitim, ortam ölçümü ve diğer süreli kayıtları tek zaman hattında toplar."/>
               <span style={{...badge,background:"#eff8ff",color:C.blue}}>ÇOK MODÜLLÜ • 90 GÜN</span>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,marginTop:13}}>
+            <div className="dora-radar-metrics" style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,marginTop:13}}>
               <RadarMetric n={timeRadar.overdue} label="GECİKMİŞ" color={C.red}/>
               <RadarMetric n={timeRadar.due7} label="≤ 7 GÜN" color={C.red}/>
               <RadarMetric n={timeRadar.due15} label="≤ 15 GÜN" color={C.orange}/>
@@ -605,14 +646,14 @@ export default function DoraPage(){
           <Header title="DORA'nın Önceliklendirdiği Yönetim Konuları" sub="Uzun rapor yerine, yönetimin önce incelemesi gereken konular."/>
           <div style={{display:"grid",gap:9,marginTop:10}}>
             {topics.slice(0,5).map((t,i)=><article key={t.id} onClick={()=>openTopicDetail(t,i)} style={{...card,cursor:"pointer",boxShadow:"0 7px 20px rgba(16,24,40,.045)"}}>
-              <div style={{display:"grid",gridTemplateColumns:"52px minmax(0,1fr) 90px",gap:13,alignItems:"start"}}>
+              <div className="dora-topic-row" style={{display:"grid",gridTemplateColumns:"52px minmax(0,1fr) 90px",gap:13,alignItems:"start"}}>
                 <div style={rank}>{i+1}</div>
                 <div>
                   <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}><b style={{fontSize:15}}>{t.title}</b><span style={{...badge,border:"1px solid",...sevStyle(t.severity)}}>{sev(t.severity)}</span></div>
                   <p style={{fontSize:11,color:C.muted,lineHeight:1.6,margin:"7px 0"}}>{t.interpretation}</p>
                   <div style={{fontSize:11}}><b>DORA önerisi:</b> {t.recommendation}</div>
                 </div>
-                <div style={{textAlign:"center",padding:"8px 4px",borderRadius:12,background:"#f8fafc"}}><b style={{fontSize:24,color:t.score>=90?C.red:t.score>=70?C.orange:C.blue}}>{t.score}</b><div style={{fontSize:8,color:C.muted,fontWeight:900}}>ÖNCELİK</div></div>
+                <div className="dora-topic-score" style={{textAlign:"center",padding:"8px 4px",borderRadius:12,background:"#f8fafc"}}><b style={{fontSize:24,color:t.score>=90?C.red:t.score>=70?C.orange:C.blue}}>{t.score}</b><div style={{fontSize:8,color:C.muted,fontWeight:900}}>ÖNCELİK</div></div>
               </div>
             </article>)}
           </div>
@@ -679,8 +720,8 @@ function NeuralNetwork({
       </div>
     </div>
 
-    <div style={{position:"relative",height:430,marginTop:8}}>
-      <svg viewBox="0 0 1000 430" preserveAspectRatio="none" style={{position:"absolute",inset:0,width:"100%",height:"100%",overflow:"visible"}}>
+    <div className="dora-neural-stage" style={{position:"relative",height:430,marginTop:8}}>
+      <svg className="dora-neural-svg" viewBox="0 0 1000 430" preserveAspectRatio="none" style={{position:"absolute",inset:0,width:"100%",height:"100%",overflow:"visible"}}>
         <defs>
           <filter id="doraGlow">
             <feGaussianBlur stdDeviation="3" result="blur"/>
@@ -705,7 +746,7 @@ function NeuralNetwork({
         <circle cx="500" cy="215" r="118" fill="none" stroke="rgba(255,255,255,.08)" strokeDasharray="5 10" strokeWidth="1"/>
       </svg>
 
-      <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:190,height:190,display:"grid",placeItems:"center"}}>
+      <div className="dora-core-mobile-hide" style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:190,height:190,display:"grid",placeItems:"center"}}>
         <div style={{position:"absolute",inset:0,borderRadius:"50%",border:"1px solid rgba(255,255,255,.1)",animation:"doraOrbit 18s linear infinite"}}>
           <span style={{position:"absolute",left:"50%",top:-5,width:10,height:10,borderRadius:99,background:"#fff",boxShadow:"0 0 18px rgba(255,255,255,.8)"}}/>
         </div>
@@ -723,7 +764,7 @@ function NeuralNetwork({
       {nodes.map((n,i)=>{
         const p=positions[i]||positions[0];
         const t=tone(n.status);
-        return <button key={n.key} onClick={()=>onNodeClick(n)} style={{
+        return <button className="dora-neural-node" key={n.key} onClick={()=>onNodeClick(n)} style={{
           position:"absolute",left:`${p.x}%`,top:`${p.y}%`,transform:"translate(-50%,-50%)",
           width:150,minHeight:84,padding:"10px 11px",borderRadius:15,
           border:`1px solid ${t.c}55`,background:"rgba(17,24,39,.86)",color:"#fff",
