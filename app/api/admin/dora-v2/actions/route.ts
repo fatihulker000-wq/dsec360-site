@@ -63,19 +63,21 @@ function missingCountFrom(row:AnyRow){
 
 function correctedSourceUrl(row:AnyRow){
   const h=hay(row);
+  if(h.includes("CALISAN_TEMSILCI") || text(row.source_gap_id)==="employee-representatives")
+    return "/admin/documentation/employee-representatives";
+  if(h.includes("ISG_KURUL")) return "/admin/documentation/board";
+  if(h.includes("POLITIKA") || h.includes("DOKUMAN")) return "/admin/documentation";
   if(
     h.includes("ACIL_DURUM") || h.includes("KORUMA") || h.includes("SONDUR") ||
     h.includes("YANGINLA_MUCADELE") || h.includes("KURTAR") ||
     h.includes("ILKYARDIM") || h.includes("ILK_YARDIM") ||
     h.includes("TATBIKAT") || h.includes("ACIL_DURUM_PLANI")
-  ) return "/admin/emergency";
-  if(h.includes("CALISAN_TEMSILCI") || h.includes("ISG_KURUL") || h.includes("POLITIKA") || h.includes("DOKUMAN"))
-    return "/admin/documentation";
+  ) return "";
   const current=text(row.source_url || row?.requested_payload?.sourceUrl);
   if(!current || current==="/admin/dora") return "/admin/dora";
   // Known obsolete/non-existent DORA source paths are collapsed to their real module roots.
-  if(current.startsWith("/admin/documentation/employee-representatives")) return "/admin/documentation";
-  if(current.startsWith("/admin/documentation/emergency")) return "/admin/emergency";
+  if(current.startsWith("/admin/documentation/employee-representatives")) return "/admin/documentation/employee-representatives";
+  if(current.startsWith("/admin/documentation/emergency")) return "";
   return current;
 }
 
@@ -165,6 +167,30 @@ async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
   }
   return {supported:false,kind:"",label:"Sadece öneri",candidates:[],requiredSelectionCount:0,requiresQualificationConfirmation:false};
 }
+async function executionRecords(supabase:any,companyId:string,row:AnyRow){
+  if(row?.status!=="COMPLETED") return [];
+  const result=row?.execution_result||{};
+  const ids=Array.isArray(result.employeeIds)?result.employeeIds.map((x:any)=>text(x)).filter(Boolean):[];
+  if(!ids.length) return [];
+
+  if(result.executor==="EMERGENCY_SUPPORT_TEAM"){
+    const q=supabase.from("emergency_support_teams").select("id,employee_id,full_name,team_type,team_role,duty,department,phone,certificate_info,signature_status,is_active,source,created_at")
+      .eq("company_id",companyId).in("employee_id",ids).eq("is_deleted",false);
+    const {data,error}=await q;
+    if(error) return [];
+    return data||[];
+  }
+
+  if(result.executor==="EMPLOYEE_REPRESENTATIVE"){
+    const {data,error}=await supabase.from("employee_representatives")
+      .select("id,employee_id,employee_name,department,job_title,representative_type,determination_method,is_head_representative,selection_date,duty_start_date,duty_end_date,status,source,created_at")
+      .eq("firm_id",companyId).in("employee_id",ids).eq("is_deleted",false);
+    if(error) return [];
+    return data||[];
+  }
+  return [];
+}
+
 
 export async function GET(req:NextRequest) {
   try {
@@ -179,7 +205,12 @@ export async function GET(req:NextRequest) {
 
     const enriched=[];
     for(const row of data||[]) {
-      enriched.push({...row,source_url:correctedSourceUrl(row),executor:await buildExecutor(supabase,companyId,row)});
+      enriched.push({
+        ...row,
+        source_url:correctedSourceUrl(row),
+        executor:await buildExecutor(supabase,companyId,row),
+        target_records:await executionRecords(supabase,companyId,row)
+      });
     }
     return NextResponse.json({ok:true,items:enriched});
   } catch(e:any) {
@@ -340,7 +371,7 @@ export async function POST(req:NextRequest) {
         const {data:done,error}=await supabase.from("dora_action_queue").update({
           status:"COMPLETED",started_at:iso,completed_at:iso,
           execution_note:`DORA ${teamLabel(teamType)} ekibine ${inserted.length} çalışan kaydetti.`,
-          execution_result:result,source_url:"/admin/emergency"
+          execution_result:result,source_url:null
         }).eq("id",id).eq("company_id",companyId).select("*").single();
         if(error)throw error;
         return NextResponse.json({ok:true,command,item:done,moduleWritePerformed:true,result});
@@ -395,7 +426,7 @@ export async function POST(req:NextRequest) {
         const {data:done,error}=await supabase.from("dora_action_queue").update({
           status:"COMPLETED",started_at:iso,completed_at:iso,
           execution_note:`DORA ${inserted.length} çalışanı asıl çalışan temsilcisi olarak kaydetti.`,
-          execution_result:result,source_url:"/admin/documentation"
+          execution_result:result,source_url:"/admin/documentation/employee-representatives"
         }).eq("id",id).eq("company_id",companyId).select("*").single();
         if(error)throw error;
         return NextResponse.json({ok:true,command,item:done,moduleWritePerformed:true,result});

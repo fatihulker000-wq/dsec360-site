@@ -18,7 +18,7 @@ type Candidate={id:string;full_name:string;department:string;phone:string;job_ti
 type Queue={
   id:string;source_gap_id:string;source_domain:string;title:string;description:string;
   recommendation:string;severity:string;status:string;source_url?:string;
-  execution_note?:string;execution_result?:any;
+  execution_note?:string;execution_result?:any;target_records?:any[];
   executor?:{
     supported?:boolean;kind?:string;label?:string;teamType?:string;candidates?:Candidate[];
     requiredSelectionCount?:number;requiresQualificationConfirmation?:boolean;qualificationText?:string
@@ -43,6 +43,7 @@ export default function DoraActionsPage(){
   const [selected,setSelected]=useState<Record<string,string[]>>({});
   const [confirmed,setConfirmed]=useState<Record<string,boolean>>({});
   const [busy,setBusy]=useState(false);
+  const [recordsOpen,setRecordsOpen]=useState<Queue|null>(null);
   const [booting,setBooting]=useState(true);
   const [msg,setMsg]=useState("");
   const [error,setError]=useState("");
@@ -255,7 +256,8 @@ export default function DoraActionsPage(){
                     <button disabled={busy} onClick={()=>cmd("SKIP",{id:q.id})} style={secondary}>ATLA</button>
                   </>}
                   {q.status==="APPROVED"&&<button disabled={busy} onClick={()=>cmd("START",{id:q.id})} style={start}>▶ BAŞLA — DORA İŞLEMİ YAPSIN</button>}
-                  {q.source_url&&<button onClick={()=>location.href=q.source_url!} style={secondary}>KAYITLARI AÇ →</button>}
+                  {q.status==="COMPLETED"&&<button onClick={()=>setRecordsOpen(q)} style={secondary}>KAYITLARI AÇ →</button>}
+                  {q.source_url&&<button onClick={()=>location.href=q.source_url!} style={secondary}>MODÜLÜ AÇ →</button>}
                 </div>
               </div>
             })}
@@ -266,6 +268,42 @@ export default function DoraActionsPage(){
       <div style={{marginTop:14,padding:14,borderRadius:14,background:"#ecfdf3",border:"1px solid #abefc6",fontSize:11,lineHeight:1.65,color:"#05603a"}}>
         <b>Faz 2 güvenlik kilidi:</b> DORA yalnızca desteklenen yürütücülerde, seçili firma kapsamında ve kullanıcı ONAYLA + BAŞLA verdiğinde hedef modüle yazabilir. Desteklenmeyen bulgular hedef modülü değiştirmez.
       </div>
+
+      {recordsOpen&&<div onClick={()=>setRecordsOpen(null)} style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(16,24,40,.62)",display:"grid",placeItems:"center",padding:16}}>
+        <div onClick={e=>e.stopPropagation()} style={{width:"min(900px,96vw)",maxHeight:"88vh",overflow:"auto",background:"#fff",borderRadius:18,padding:18,boxShadow:"0 24px 70px rgba(0,0,0,.28)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"start"}}>
+            <div>
+              <div style={{fontSize:10,fontWeight:900,color:C.green}}>DORA GERÇEK KAYIT DOĞRULAMA</div>
+              <h2 style={{margin:"5px 0 0",fontSize:20}}>{recordsOpen.title}</h2>
+              <div style={{fontSize:11,color:C.muted,marginTop:5}}>{recordsOpen.execution_note||"İşlem tamamlandı."}</div>
+            </div>
+            <button onClick={()=>setRecordsOpen(null)} style={secondary}>KAPAT ✕</button>
+          </div>
+
+          <div style={{marginTop:14,padding:12,borderRadius:12,background:"#ecfdf3",border:"1px solid #abefc6",fontSize:11,color:C.green}}>
+            <b>Hedef tabloya yazılan kayıtlar</b> • {recordsOpen.target_records?.length||0} kayıt doğrulandı.
+          </div>
+
+          <div style={{display:"grid",gap:9,marginTop:12}}>
+            {(recordsOpen.target_records||[]).map((rec:any,index:number)=><div key={rec.id||index} style={{padding:12,border:`1px solid ${C.line}`,borderRadius:12,background:"#fff"}}>
+              <div style={{fontSize:13,fontWeight:900}}>{rec.full_name||rec.employee_name||`Kayıt ${index+1}`}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8,marginTop:9}}>
+                {Object.entries(rec).filter(([k,v])=>!["id","employee_id","created_at"].includes(k)&&v!==null&&v!==""&&typeof v!=="object").map(([k,v])=>
+                  <div key={k} style={{padding:8,borderRadius:8,background:"#f8fafc"}}>
+                    <div style={{fontSize:8,fontWeight:900,color:C.muted,textTransform:"uppercase"}}>{k.replaceAll("_"," ")}</div>
+                    <div style={{fontSize:10,fontWeight:700,marginTop:3,overflowWrap:"anywhere"}}>{String(v)}</div>
+                  </div>
+                )}
+              </div>
+            </div>)}
+            {(recordsOpen.target_records||[]).length===0&&<Empty text="Kayıt hedef tablodan doğrulanamadı. İşlem günlüğünü kontrol edin."/>}
+          </div>
+
+          {recordsOpen.source_url&&<div style={{marginTop:14}}>
+            <button onClick={()=>location.href=recordsOpen.source_url!} style={primary}>İLGİLİ MODÜLÜ AÇ →</button>
+          </div>}
+        </div>
+      </div>}
     </div>
   </main>;
 }
