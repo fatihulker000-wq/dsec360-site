@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type AnyRow = Record<string, any>;
-type ExecutorKind = "EMERGENCY_SUPPORT_TEAM" | "EMPLOYEE_REPRESENTATIVE" | "TRAINING_ASSIGNMENT" | "ISG_BOARD_MEMBER" | "RISK_DOF_ACTION" | "";
+type ExecutorKind = "EMERGENCY_SUPPORT_TEAM" | "EMPLOYEE_REPRESENTATIVE" | "TRAINING_ASSIGNMENT" | "ISG_BOARD_MEMBER" | "RISK_DOF_ACTION" | "DOCUMENT_DRAFT" | "";
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -32,7 +32,9 @@ function employeePhone(e: AnyRow) { return text(e.phone || e.mobile_phone || e.m
 
 function executorKindFor(row:AnyRow):ExecutorKind {
   const h=hay(row);
-  if(text(row.source_gap_id)==="fullscan-high-risk" || h.includes("YUKSEK_KRITIK_RISK_YOGUNLUGU")) return "RISK_DOF_ACTION";
+  const gapId=text(row.source_gap_id);
+  if(["fullscan-doc-policy","fullscan-doc-training-plan","fullscan-doc-risk-team","fullscan-emergency-plan"].includes(gapId)) return "DOCUMENT_DRAFT";
+  if(gapId==="fullscan-high-risk" || h.includes("YUKSEK_KRITIK_RISK_YOGUNLUGU")) return "RISK_DOF_ACTION";
   if(text(row.source_gap_id)==="isg-board" || h.includes("ISG_KURULU_YAPISI")) return "ISG_BOARD_MEMBER";
   if(h.includes("CALISAN_TEMSILCI") || text(row.source_gap_id)==="employee-representatives") return "EMPLOYEE_REPRESENTATIVE";
   if(!h.includes("YILLIK_EGITIM_PLANI") && !h.includes("DOKUMAN") && (h.includes("EGITIM_TAMAMLAMA") || h.includes("TAMAMLANMAMIS_EGITIM") || h.includes("EGITIM_ATAMA") || h.includes("ATANMAMIS_EGITIM"))) return "TRAINING_ASSIGNMENT";
@@ -95,9 +97,9 @@ async function authorize(supabase:any, requested:any) {
 }
 
 async function companyInfo(supabase:any, companyId:string) {
-  const {data,error}=await supabase.from("companies").select("id,name,local_firm_id").eq("id",companyId).maybeSingle();
+  const {data,error}=await supabase.from("companies").select("id,name,local_firm_id,calisan_sayisi,nace_kodu,tehlike_sinifi,sektor,address,isg_uzmani,isyeri_hekimi,dsp").eq("id",companyId).maybeSingle();
   if(error) throw error;
-  return {localFirmId:data?.local_firm_id ?? null,name:text(data?.name)||"Firma"};
+  return {localFirmId:data?.local_firm_id ?? null,name:text(data?.name)||"Firma",employeeCount:Number(data?.calisan_sayisi||0),naceCode:text(data?.nace_kodu),dangerClass:text(data?.tehlike_sinifi),sector:text(data?.sektor),address:text(data?.address),isgSpecialist:text(data?.isg_uzmani),workplaceDoctor:text(data?.isyeri_hekimi),dsp:text(data?.dsp)};
 }
 
 async function activeEmployees(supabase:any, companyId:string){
@@ -215,6 +217,43 @@ async function riskDofOptions(supabase:any,companyId:string){
   return [...matrix,...fine].sort((a,b)=>b.score-a.score).slice(0,250);
 }
 
+
+type DocumentDraft={documentType:string;category:string;title:string;content:string;documentNoPrefix:string;tags:string[]};
+
+function documentDraftFor(row:AnyRow, info:AnyRow):DocumentDraft|null{
+  const id=text(row.source_gap_id);
+  const company=text(info.name)||"İşletme";
+  const context=[
+    `İşletme: ${company}`,
+    info.sector?`Sektör: ${info.sector}`:"",
+    info.dangerClass?`Tehlike sınıfı: ${info.dangerClass}`:"",
+    info.naceCode?`NACE: ${info.naceCode}`:"",
+    info.employeeCount?`Çalışan sayısı: ${info.employeeCount}`:"",
+  ].filter(Boolean).join("\n");
+
+  if(id==="fullscan-doc-policy") return {
+    documentType:"ISG_POLITIKASI",category:"ISG_POLITIKASI",title:`${company} - İSG Politikası`,documentNoPrefix:"DSEC-ISG-POL",
+    tags:["İSG Politikası","DORA","Taslak"],
+    content:`İŞ SAĞLIĞI VE GÜVENLİĞİ POLİTİKASI\n\n${context}\n\n1. AMAÇ VE KAPSAM\nBu taslak, işletmenin iş sağlığı ve güvenliği yaklaşımını yönetim taahhüdü, çalışan katılımı, risklerin önlenmesi ve sürekli iyileştirme başlıkları altında yapılandırmak amacıyla DORA tarafından hazırlanmıştır.\n\n2. YÖNETİM TAAHHÜDÜ\nİş sağlığı ve güvenliği hedeflerinin işletme süreçlerine dahil edilmesi, uygun kaynakların sağlanması ve performansın düzenli izlenmesi esastır.\n\n3. RİSKLERİN ÖNLENMESİ\nTehlikelerin kaynağında kontrolü, risk değerlendirmelerinin güncelliği ve düzeltici/önleyici faaliyetlerin izlenmesi önceliklidir.\n\n4. ÇALIŞAN KATILIMI\nÇalışan görüşleri, temsil mekanizmaları, bildirimler ve geri bildirim kanalları karar süreçlerinde dikkate alınır.\n\n5. EĞİTİM VE FARKINDALIK\nGöreve ve riske uygun eğitimlerin planlanması, tamamlanması ve etkinliğinin izlenmesi sağlanır.\n\n6. SÜREKLİ İYİLEŞTİRME\nDenetim, olay, risk, sağlık gözetimi ve performans verileri yönetim gözden geçirmelerinde kullanılır.\n\nDORA NOTU: Bu metin kullanıcı onaylı TASLAKTIR. Yayınlanmadan önce işveren/işveren vekili ve yetkili İSG profesyonellerince işletmeye özel şartlar ve yürürlükteki mevzuat açısından doğrulanmalıdır.`
+  };
+  if(id==="fullscan-doc-training-plan") return {
+    documentType:"YILLIK_EGITIM_PLANI",category:"EGITIM",title:`${company} - Yıllık İSG Eğitim Planı`,documentNoPrefix:"DSEC-EGT-PLN",
+    tags:["Yıllık Eğitim Planı","İSG Eğitim","DORA","Taslak"],
+    content:`YILLIK İSG EĞİTİM PLANI - TASLAK\n\n${context}\n\n1. AMAÇ\nÇalışanların görev, tehlike sınıfı ve maruziyetlerine uygun İSG eğitimlerinin yıllık plan içinde izlenmesini sağlamak.\n\n2. PLANLAMA GİRDİLERİ\n- Risk değerlendirmesi bulguları\n- Kaza / olay / ramak kala kayıtları\n- Denetim ve DÖF sonuçları\n- Çalışan görevleri ve özel riskler\n- Önceki eğitim tamamlama kayıtları\n\n3. EĞİTİM GRUPLARI\n- Genel İSG konuları\n- Sağlık konuları\n- Teknik konular\n- İşe / göreve özgü konular\n\n4. UYGULAMA\nHer eğitim için hedef grup, yöntem, planlanan dönem, eğitici/sorumlu, süre ve ölçme-değerlendirme yöntemi ayrıca tanımlanmalıdır.\n\n5. İZLEME\nAtanan, başlanan, tamamlanan ve başarısız/eksik eğitimler aylık olarak izlenmeli; yüksek riskli görevlerdeki eksikler önceliklendirilmelidir.\n\nDORA NOTU: Bu metin plan iskeletidir; zorunlu süre, periyot ve konu dağılımı işletmenin tehlike sınıfı ve çalışan profiline göre yetkili kullanıcı tarafından doğrulanmalıdır.`
+  };
+  if(id==="fullscan-doc-risk-team") return {
+    documentType:"RISK_DEGERLENDIRME_EKIBI",category:"RISK",title:`${company} - Risk Değerlendirme Ekibi Görevlendirme Taslağı`,documentNoPrefix:"DSEC-RSK-EKP",
+    tags:["Risk Değerlendirme Ekibi","Görevlendirme","DORA","Taslak"],
+    content:`RİSK DEĞERLENDİRME EKİBİ GÖREVLENDİRME TASLAĞI\n\n${context}\n\n1. AMAÇ\nİşyerindeki risk değerlendirme çalışmalarının disiplinler arası katılımla yürütülmesi için ekip yapısını tanımlamak.\n\n2. EKİP YAPISI\nEkip üyeleri yetkili kullanıcı tarafından işletme organizasyonu ve mevzuat gereklilikleri dikkate alınarak ayrıca belirlenmelidir.\n\nÖnerilen kayıt alanları:\n- İşveren / işveren vekili\n- İş güvenliği uzmanı\n- İşyeri hekimi\n- Çalışan temsilcisi\n- Destek elemanları\n- İşyerindeki birim ve süreçleri temsil eden çalışanlar\n\n3. GÖREVLER\nTehlikeleri belirlemek, mevcut kontrolleri değerlendirmek, risk seviyelerini analiz etmek, gerekli ilave önlemleri belirlemek ve uygulama sonuçlarını izlemek.\n\n4. ÇALIŞMA ESASLARI\nSaha verileri, kaza/olay kayıtları, sağlık gözetimi, denetim bulguları, çalışan geri bildirimleri ve değişiklik yönetimi girdileri dikkate alınmalıdır.\n\nDORA NOTU: Bu belge yalnızca kullanıcı onaylı TASLAKTIR; ekip üyeleri ve hukuki yeterlilikler ayrıca doğrulanmadan yayımlanmamalıdır.`
+  };
+  if(id==="fullscan-emergency-plan") return {
+    documentType:"ACIL_DURUM_EYLEM_PLANI",category:"ACIL_DURUM",title:`${company} - Acil Durum Eylem Planı Taslağı`,documentNoPrefix:"DSEC-AD-PLN",
+    tags:["Acil Durum Planı","DORA","Taslak"],
+    content:`ACİL DURUM EYLEM PLANI - TASLAK\n\n${context}\n${info.address?`Adres: ${info.address}\n`:""}\n1. AMAÇ VE KAPSAM\nİşyerinde meydana gelebilecek acil durumlarda çalışanların, ziyaretçilerin ve iş sürekliliğinin korunmasına yönelik organizasyon çerçevesini tanımlar.\n\n2. SENARYOLAR\nYangın, tahliye, doğal afet, kimyasal/tehlikeli madde olayı, elektrik kaynaklı olaylar ve işyerine özgü diğer senaryolar saha risklerine göre ayrıca doğrulanmalıdır.\n\n3. ORGANİZASYON\nSöndürme, arama-kurtarma-tahliye, koruma ve ilk yardım organizasyonu mevcut çalışan/sertifika kayıtlarıyla doğrulanmalıdır.\n\n4. TAHLİYE VE TOPLANMA\nKaçış yolları, acil çıkışlar, toplanma alanı, sayım yöntemi ve engelli/özel destek gerektiren kişiler için prosedür işletmeye özel olarak tamamlanmalıdır.\n\n5. HABERLEŞME\nAcil çağrı zinciri, sorumlular, dış kurum iletişim bilgileri ve vardiya bazlı haberleşme yöntemi tanımlanmalıdır.\n\n6. TATBİKAT VE GÖZDEN GEÇİRME\nTatbikat sonuçları, eksiklikler ve düzeltici faaliyetler planın revizyon girdisi olarak kullanılmalıdır.\n\nDORA NOTU: Bu içerik saha keşfi, bina/yerleşim bilgileri, acil durum senaryoları ve yetkili kişilerin doğrulaması olmadan nihai plan değildir. DORA yalnızca düzenlenebilir taslak üretmiştir.`
+  };
+  return null;
+}
+
 async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
   const kind=executorKindFor(row);
   const missingCount=missingCountFrom(row);
@@ -251,12 +290,31 @@ async function buildExecutor(supabase:any,companyId:string,row:AnyRow){
       requiresQualificationConfirmation:false
     };
   }
+  if(kind==="DOCUMENT_DRAFT"){
+    const info=await companyInfo(supabase,companyId);
+    const draft=documentDraftFor(row,info);
+    if(!draft)return {supported:false,kind:"",label:"Sadece öneri",candidates:[],requiredSelectionCount:0,requiresQualificationConfirmation:false};
+    return {
+      supported:true,kind,label:"Doküman taslağı oluştur ve Dokümantasyon'a kaydet",
+      candidates:[],requiredSelectionCount:0,allowAnySelectionCount:false,
+      requiresDocumentDraft:true,documentDraft:draft,requiresQualificationConfirmation:false
+    };
+  }
   return {supported:false,kind:"",label:"Sadece öneri",candidates:[],requiredSelectionCount:0,requiresQualificationConfirmation:false};
 }
 async function executionRecords(supabase:any,companyId:string,row:AnyRow){
   if(row?.status!=="COMPLETED") return [];
   const result=row?.execution_result||{};
   const ids=Array.isArray(result.employeeIds)?result.employeeIds.map((x:any)=>text(x)).filter(Boolean):[];
+  if(result.executor==="DOCUMENT_DRAFT"){
+    const syncKey=text(result.documentSyncKey);
+    if(!syncKey)return [];
+    const {data,error}=await supabase.from("documentation_records")
+      .select("id,sync_key,category,title,description,document_no,revision_no,prepared_by,approved_by,department,status,tags,notes,source,version,sync_status,created_at_millis,updated_at_millis")
+      .eq("firm_id",companyId).eq("sync_key",syncKey).eq("is_deleted",false);
+    if(error)return [];
+    return data||[];
+  }
   if(!ids.length) return [];
 
   if(result.executor==="EMERGENCY_SUPPORT_TEAM"){
@@ -412,6 +470,8 @@ export async function POST(req:NextRequest) {
       const selectedRiskKeys=Array.isArray(body?.selectedRiskKeys)?body.selectedRiskKeys.map((x:any)=>text(x)).filter(Boolean):[];
       const actionText=text(body?.actionText);
       const dueDate=text(body?.dueDate);
+      const documentTitle=text(body?.documentTitle);
+      const documentContent=text(body?.documentContent);
 
       let approvalPayload=current.requested_payload||{};
       if(executor.supported){
@@ -448,10 +508,17 @@ export async function POST(req:NextRequest) {
           const dueMs=new Date(`${dueDate}T23:59:59`).getTime();
           if(!Number.isFinite(dueMs))return NextResponse.json({ok:false,error:"Termin tarihi geçersiz."},{status:400});
         }
+        if(executor.kind==="DOCUMENT_DRAFT"){
+          if(!documentTitle)return NextResponse.json({ok:false,error:"Doküman başlığı zorunludur."},{status:400});
+          if(documentContent.length<80)return NextResponse.json({ok:false,error:"Doküman taslağı çok kısa. İçeriği kontrol edin."},{status:400});
+        }
         approvalPayload={...approvalPayload,dora_execution:{
           executor:executor.kind,teamType:executor.teamType||null,selectedEmployeeIds:selectedIds,
           selectedTrainingId:selectedTrainingId||null,roleAssignments,qualificationConfirmed,
-          selectedRiskKeys,actionText,dueDate,approvedAt:new Date().toISOString()
+          selectedRiskKeys,actionText,dueDate,
+          documentTitle,documentContent,documentType:executor.documentDraft?.documentType||null,
+          documentCategory:executor.documentDraft?.category||null,documentNoPrefix:executor.documentDraft?.documentNoPrefix||null,
+          documentTags:executor.documentDraft?.tags||[],approvedAt:new Date().toISOString()
         }};
       }
 
@@ -609,6 +676,55 @@ export async function POST(req:NextRequest) {
         const keys=rows.map((x:any)=>x.sync_key); const ex=await supabase.from("documentation_board_members").select("sync_key").in("sync_key",keys); if(ex.error)throw ex.error; const existingKeys=new Set((ex.data||[]).map((x:any)=>text(x.sync_key))); const insertRows=rows.filter((x:any)=>!existingKeys.has(x.sync_key)); let inserted:any[]=[]; if(insertRows.length){const ins=await supabase.from("documentation_board_members").insert(insertRows).select("*"); if(ins.error)throw ins.error; inserted=ins.data||[];}
         const result={executor:"ISG_BOARD_MEMBER",requested:selectedIds.length,inserted:inserted.length,alreadyExisting:rows.length-insertRows.length,employeeIds:selectedIds,employeeNames:(employees||[]).map((e:any)=>employeeName(e)),roleAssignments};
         const done=await supabase.from("dora_action_queue").update({status:"COMPLETED",started_at:nowIso,completed_at:nowIso,execution_note:`DORA İSG Kurulu için ${inserted.length} kullanıcı onaylı üye/rol kaydı oluşturdu.`,execution_result:result,source_url:"/admin/documentation/board"}).eq("id",id).eq("company_id",companyId).select("*").single(); if(done.error)throw done.error; return NextResponse.json({ok:true,command,item:done.data,moduleWritePerformed:true,result});
+      }
+
+      if(exec.executor==="DOCUMENT_DRAFT"){
+        const info=await companyInfo(supabase,companyId);
+        const title=text(exec.documentTitle);
+        const content=text(exec.documentContent);
+        const documentType=text(exec.documentType);
+        const category=text(exec.documentCategory)||"DOKUMAN";
+        const prefix=text(exec.documentNoPrefix)||"DSEC-DOC";
+        const tags=Array.isArray(exec.documentTags)?exec.documentTags.map((x:any)=>text(x)).filter(Boolean):["DORA","Taslak"];
+        if(!title||content.length<80||!documentType)
+          return NextResponse.json({ok:false,error:"Onaylı doküman taslağı bilgisi eksik."},{status:409});
+
+        const syncKey=`dora:${companyId}:doc:${documentType}`;
+        const {data:existing,error:existingError}=await supabase.from("documentation_records")
+          .select("id,sync_key,title,status")
+          .eq("firm_id",companyId).eq("sync_key",syncKey).eq("is_deleted",false).maybeSingle();
+        if(existingError)throw existingError;
+
+        let record:any=existing||null;
+        let inserted=0;
+        if(!record){
+          const nowMs=Date.now();
+          const docNo=`${prefix}-${new Date().getFullYear()}-${String(nowMs).slice(-6)}`;
+          const ins=await supabase.from("documentation_records").insert({
+            id:crypto.randomUUID(),sync_key:syncKey,firm_id:companyId,local_firm_id:info.localFirmId,
+            category,title,description:content,document_no:docNo,revision_no:"R0",
+            prepared_by:"DORA AI İSG Asistanı",approved_by:null,department:"İSG",
+            published_at_millis:null,revision_date_millis:nowMs,status:"DRAFT",tags,
+            notes:"DORA Faz 2 kullanıcı onayıyla oluşturulmuş TASLAK. Nihai yayın/onay işlemi Dokümantasyon modülünde yetkili kullanıcı tarafından yapılmalıdır.",
+            read_approval_required:false,qr_enabled:false,source:"WEB",version:1,sync_status:"SYNCED",
+            is_deleted:false,created_at_millis:nowMs,updated_at_millis:nowMs
+          }).select("*").single();
+          if(ins.error)throw ins.error;
+          record=ins.data; inserted=1;
+        }
+
+        const result={
+          executor:"DOCUMENT_DRAFT",inserted,alreadyExisting:inserted?0:1,
+          documentId:text(record?.id),documentSyncKey:syncKey,documentType,
+          documentTitle:text(record?.title)||title,status:text(record?.status)||"DRAFT",employeeIds:[],employeeNames:[]
+        };
+        const done=await supabase.from("dora_action_queue").update({
+          status:"COMPLETED",started_at:iso,completed_at:iso,
+          execution_note:inserted?`DORA "${title}" dokümanını kullanıcı onayıyla TASLAK olarak Dokümantasyon'a kaydetti.`:`Aynı DORA doküman taslağı zaten Dokümantasyon'da mevcut; mükerrer kayıt oluşturulmadı.`,
+          execution_result:result,source_url:"/admin/documentation"
+        }).eq("id",id).eq("company_id",companyId).select("*").single();
+        if(done.error)throw done.error;
+        return NextResponse.json({ok:true,command,item:done.data,moduleWritePerformed:inserted===1,result});
       }
 
       if(exec.executor==="RISK_DOF_ACTION"){

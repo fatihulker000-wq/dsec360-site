@@ -28,7 +28,8 @@ type Queue={
     requiresTrainingSelection?:boolean;trainings?:Array<{id:string;title:string;type:string;duration_minutes?:number}>;
     boardRoles?:Array<{key:string;label:string}>;
     riskItems?:Array<{key:string;id:string;kind:string;title:string;hazard:string;score:number;level:string;department:string;location:string;currentDofStatus:string;currentAction?:string}>;
-    requiresRiskSelection?:boolean;requiresActionText?:boolean;requiresDueDate?:boolean
+    requiresRiskSelection?:boolean;requiresActionText?:boolean;requiresDueDate?:boolean;
+    requiresDocumentDraft?:boolean;documentDraft?:{documentType:string;category:string;title:string;content:string;documentNoPrefix:string;tags:string[]}
   };
 };
 
@@ -55,6 +56,8 @@ export default function DoraActionsPage(){
   const [selectedRisks,setSelectedRisks]=useState<Record<string,string[]>>({});
   const [riskActionText,setRiskActionText]=useState<Record<string,string>>({});
   const [riskDueDate,setRiskDueDate]=useState<Record<string,string>>({});
+  const [documentTitle,setDocumentTitle]=useState<Record<string,string>>({});
+  const [documentContent,setDocumentContent]=useState<Record<string,string>>({});
   const [busy,setBusy]=useState(false);
   const [recordsOpen,setRecordsOpen]=useState<Queue|null>(null);
   const [booting,setBooting]=useState(true);
@@ -306,6 +309,9 @@ export default function DoraActionsPage(){
               const riskSelectionOk=!q.executor?.requiresRiskSelection || riskIds.length>0;
               const riskActionOk=!q.executor?.requiresActionText || Boolean((riskActionText[q.id]||"").trim());
               const riskDueOk=!q.executor?.requiresDueDate || Boolean(riskDueDate[q.id]);
+              const docTitleValue=documentTitle[q.id]??q.executor?.documentDraft?.title??"";
+              const docContentValue=documentContent[q.id]??q.executor?.documentDraft?.content??"";
+              const documentOk=!q.executor?.requiresDocumentDraft || (docTitleValue.trim().length>0&&docContentValue.trim().length>=80);
               return <div className="dora-action-card" key={q.id} style={{...item,border:q.status==="APPROVED"?`1px solid #84caff`:`1px solid ${C.line}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"start",flexWrap:"wrap"}}><b>{q.title}</b><Status s={q.status}/></div>
                 <div style={small}>{q.source_domain} • {q.severity}{q.executor?.teamType?` • ${q.executor.teamType}`:""}</div>
@@ -329,6 +335,25 @@ export default function DoraActionsPage(){
                       <span style={{fontSize:11,minWidth:0,overflowWrap:"anywhere"}}><b>{c.full_name}</b><br/><span style={{color:C.muted,fontSize:9}}>{c.department} • {c.job_title}</span></span>
                     </label>)}
                   </div>}
+                  {q.executor?.kind==="DOCUMENT_DRAFT"&&q.executor.documentDraft&&<div style={{display:"grid",gap:10,marginTop:10}}>
+                    <div style={{padding:10,borderRadius:10,background:"#eff8ff",border:"1px solid #b2ddff",fontSize:10,lineHeight:1.5,color:C.blue}}>
+                      <b>DORA TASLAĞI:</b> DORA metni hazırlar; burada düzenleyebilirsiniz. ONAYLA + BAŞLA sonrasında belge <b>DRAFT</b> olarak Dokümantasyon'a kaydedilir. Nihai yayın/onay ayrı yapılır.
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:5}}>DOKÜMAN BAŞLIĞI</div>
+                      <input value={docTitleValue} onChange={e=>setDocumentTitle(prev=>({...prev,[q.id]:e.target.value}))} style={{...input,width:"100%"}}/>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:5}}>DOKÜMAN TASLAĞI • ÖNİZLE / DÜZENLE</div>
+                      <textarea value={docContentValue} onChange={e=>setDocumentContent(prev=>({...prev,[q.id]:e.target.value}))} style={{...input,width:"100%",minHeight:330,resize:"vertical",lineHeight:1.55,fontFamily:"inherit"}}/>
+                    </div>
+                    <div style={{display:"flex",gap:7,flexWrap:"wrap",fontSize:9,color:C.muted}}>
+                      <span><b>Tür:</b> {q.executor.documentDraft.documentType}</span>
+                      <span>•</span><span><b>Kategori:</b> {q.executor.documentDraft.category}</span>
+                      <span>•</span><span><b>Kayıt durumu:</b> DRAFT</span>
+                    </div>
+                  </div>}
+
                   {q.executor?.kind==="RISK_DOF_ACTION"&&<div style={{display:"grid",gap:10,marginTop:10}}>
                     <div>
                       <div style={{fontSize:9,fontWeight:950,color:C.muted,marginBottom:6}}>DÖF / AKSİYON AÇILACAK YÜKSEK-KRİTİK RİSKLERİ SEÇ</div>
@@ -364,7 +389,7 @@ export default function DoraActionsPage(){
                   <div style={{marginTop:8,fontSize:10,color:C.ink}}><b>İşlem yapılan çalışanlar:</b> {q.execution_result.employeeNames.join(", ")}</div>}
                 <div style={{display:"flex",gap:7,marginTop:10,flexWrap:"wrap"}}>
                   {q.status==="WAITING_APPROVAL"&&<>
-                    <button disabled={busy||!executable||!exactSelection||!confirmationOk||!trainingOk||!boardRoleOk||!riskSelectionOk||!riskActionOk||!riskDueOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true,selectedTrainingId:selectedTraining[q.id]||"",roleAssignments:boardRoles[q.id]||{},selectedRiskKeys:riskIds,actionText:riskActionText[q.id]||"",dueDate:riskDueDate[q.id]||""})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
+                    <button disabled={busy||!executable||!exactSelection||!confirmationOk||!trainingOk||!boardRoleOk||!riskSelectionOk||!riskActionOk||!riskDueOk||!documentOk} onClick={()=>cmd("APPROVE",{id:q.id,selectedEmployeeIds:ids,qualificationConfirmed:confirmed[q.id]===true,selectedTrainingId:selectedTraining[q.id]||"",roleAssignments:boardRoles[q.id]||{},selectedRiskKeys:riskIds,actionText:riskActionText[q.id]||"",dueDate:riskDueDate[q.id]||"",documentTitle:docTitleValue,documentContent:docContentValue})} style={approve}>✓ ONAYLA {ids.length?`(${ids.length}/${needed||ids.length})`:""}</button>
                     <button disabled={busy} onClick={()=>cmd("SKIP",{id:q.id})} style={secondary}>ATLA</button>
                   </>}
                   {q.status==="APPROVED"&&<button disabled={busy} onClick={()=>cmd("START",{id:q.id})} style={start}>▶ BAŞLA — DORA İŞLEMİ YAPSIN</button>}
@@ -398,7 +423,7 @@ export default function DoraActionsPage(){
 
           <div style={{display:"grid",gap:9,marginTop:12}}>
             {(recordsOpen.target_records||[]).map((rec:any,index:number)=><div key={rec.id||index} style={{padding:12,border:`1px solid ${C.line}`,borderRadius:12,background:"#fff"}}>
-              <div style={{fontSize:13,fontWeight:900}}>{rec.full_name||rec.employee_name||`Kayıt ${index+1}`}</div>
+              <div style={{fontSize:13,fontWeight:900}}>{rec.full_name||rec.employee_name||rec.title||`Kayıt ${index+1}`}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8,marginTop:9}}>
                 {Object.entries(rec).filter(([k,v])=>!["id","employee_id","created_at"].includes(k)&&v!==null&&v!==""&&typeof v!=="object").map(([k,v])=>
                   <div key={k} style={{padding:8,borderRadius:8,background:"#f8fafc"}}>
