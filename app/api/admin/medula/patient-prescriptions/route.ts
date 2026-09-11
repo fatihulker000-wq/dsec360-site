@@ -1,25 +1,11 @@
+import {createClient} from "@supabase/supabase-js";
 import {NextResponse} from "next/server";
+import {cookies} from "next/headers";
 import {readMedulaSession} from "@/lib/medula/session";
 import {callMedula} from "@/lib/medula/client";
-
-import {cookies} from "next/headers";
+export const runtime="nodejs";export const dynamic="force-dynamic";
 function s(v:any){return String(v??"").trim()}
-async function dsecAuth(){
- const c=await cookies();
- const auth=c.get("dsec_admin_auth")?.value||c.get("dsec_user_auth")?.value;
- const role=s(c.get("dsec_admin_role")?.value||c.get("dsec_user_role")?.value);
- const companyId=s(c.get("dsec_company_id")?.value);
- if(auth!=="ok"||!["super_admin","admin","company_admin"].includes(role))return null;
- return {role,companyId,scoped:role==="company_admin"};
-}
-
+function db(){return createClient(process.env.SUPABASE_URL!,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false}})}
+async function ctx(){const c=await cookies();const auth=c.get("dsec_admin_auth")?.value||c.get("dsec_user_auth")?.value;const role=s(c.get("dsec_admin_role")?.value||c.get("dsec_user_role")?.value);const companyId=s(c.get("dsec_company_id")?.value);if(auth!=="ok"||!["super_admin","admin","company_admin"].includes(role))return null;return{role,companyId,scoped:role==="company_admin",simulation:c.get("dsec_medula_sim")?.value==="1",scenario:s(c.get("dsec_medula_sim_scenario")?.value||"SUCCESS")}}
 function deep(o:any,k:string):any{if(!o||typeof o!=="object")return undefined;if(Object.prototype.hasOwnProperty.call(o,k))return o[k];for(const v of Object.values(o)){const r=deep(v,k);if(r!==undefined)return r}}
-export async function POST(req:Request){
- try{
-  const a=await dsecAuth();if(!a)return NextResponse.json({success:false,error:"Yetkisiz erişim."},{status:401});
-  const session=await readMedulaSession();if(!session)return NextResponse.json({success:false,error:"Önce MEDULA hekim oturumu açılmalıdır."},{status:401});
-  const b=await req.json(),patientTc=s(b.patientTc);if(!/^\d{10,11}$/.test(patientTc))return NextResponse.json({success:false,error:"Geçerli hasta T.C. girilmelidir."},{status:400});
-  const result=await callMedula(session,"ereceteListeSorgula",{tesisKodu:Number(session.facilityCode),doktorTcKimlikNo:Number(session.doctorTc),hastaTcKimlikNo:Number(patientTc)});
-  const found=deep(result.data,"ereceteListesi")||[];
-  return NextResponse.json({success:result.ok,resultCode:result.resultCode,resultMessage:result.resultMessage,warningMessage:result.warningMessage,prescriptions:Array.isArray(found)?found:[found]},{status:result.ok?200:422});
- }catch(e:any){return NextResponse.json({success:false,error:e?.message||"MEDULA reçete listesi alınamadı."},{status:502})}}
+export async function POST(req:Request){try{const a=await ctx();if(!a)return NextResponse.json({success:false,error:"Yetkisiz erişim."},{status:401});const b=await req.json(),patientTc=s(b.patientTc);if(!/^\d{10,11}$/.test(patientTc))return NextResponse.json({success:false,error:"Geçerli hasta T.C. girilmelidir."},{status:400});if(a.simulation){if(a.scenario==="TIMEOUT")return NextResponse.json({success:false,simulation:true,error:"Simülasyon: MEDULA bağlantı zaman aşımı."},{status:504});if(a.scenario==="AUTH_ERROR")return NextResponse.json({success:false,simulation:true,error:"Simülasyon: hekim yetki hatası."},{status:401});if(a.scenario==="SEND_ERROR")return NextResponse.json({success:false,simulation:true,resultMessage:"Simülasyon: liste sorgu iş kuralı hatası."},{status:422});let q=db().from("health_prescriptions").select("id,e_prescription_no,prescription_date,diagnosis_code,diagnosis_name,medula_status,patient_identity_number,company_id").eq("patient_identity_number",patientTc).eq("is_active",true).order("created_at",{ascending:false}).limit(20);if(a.scoped)q=q.eq("company_id",a.companyId);const{data,error}=await q;if(error)throw error;return NextResponse.json({success:true,simulation:true,externalNetwork:false,resultCode:"SIM-L-0000",resultMessage:"Simülasyon hasta reçete listesi D-SEC kayıtlarından üretildi.",prescriptions:(data||[]).map((x:any)=>({ereceteNo:x.e_prescription_no||`SIM-DRAFT-${String(x.id).slice(0,8)}`,receteTarihi:x.prescription_date,taniKodu:x.diagnosis_code,taniAdi:x.diagnosis_name,durum:x.medula_status}))})}const session=await readMedulaSession();if(!session)return NextResponse.json({success:false,error:"Önce MEDULA hekim oturumu açılmalıdır."},{status:401});const result=await callMedula(session,"ereceteListeSorgula",{tesisKodu:Number(session.facilityCode),doktorTcKimlikNo:Number(session.doctorTc),hastaTcKimlikNo:Number(patientTc)});const found=deep(result.data,"ereceteListesi")||[];return NextResponse.json({success:result.ok,resultCode:result.resultCode,resultMessage:result.resultMessage,warningMessage:result.warningMessage,prescriptions:Array.isArray(found)?found:[found],simulation:false},{status:result.ok?200:422})}catch(e:any){return NextResponse.json({success:false,error:e?.message||"MEDULA reçete listesi alınamadı."},{status:502})}}
