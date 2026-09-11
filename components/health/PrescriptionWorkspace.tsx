@@ -13,6 +13,30 @@ type Item={
 type Props={employee:{id:string;full_name:string;company_id?:string;company_name?:string;job_title?:string;identity_number?:string;tc_identity_number?:string}};
 const blank:Item={medicineName:"",activeIngredient:"",dosage:"",usageType:"",duration:"",morning:false,noon:false,evening:false,night:false,beforeMeal:false,afterMeal:false,notes:"",barcode:"",quantity:1,usageForm:"",dose1:"",dose2:"",usagePeriod:"",usagePeriodUnit:"",reimbursementFlag:"E"};
 
+
+const COMMON_DIAGNOSES=[
+ {code:"I10",name:"Esansiyel (primer) hipertansiyon"},
+ {code:"E11.9",name:"Tip 2 diabetes mellitus, komplikasyonsuz"},
+ {code:"E78.5",name:"Hiperlipidemi, tanımlanmamış"},
+ {code:"K29.7",name:"Gastrit, tanımlanmamış"},
+ {code:"K21.9",name:"Gastroözofageal reflü hastalığı, özofajitsiz"},
+ {code:"J06.9",name:"Akut üst solunum yolu enfeksiyonu, tanımlanmamış"},
+ {code:"J30.9",name:"Alerjik rinit, tanımlanmamış"},
+ {code:"J45.9",name:"Astım, tanımlanmamış"},
+ {code:"M54.5",name:"Bel ağrısı"},
+ {code:"M54.2",name:"Servikalji"},
+ {code:"M25.5",name:"Eklem ağrısı"},
+ {code:"R51",name:"Baş ağrısı"},
+ {code:"R42",name:"Baş dönmesi ve sersemlik"},
+ {code:"R53",name:"Halsizlik ve yorgunluk"},
+ {code:"H10.9",name:"Konjonktivit, tanımlanmamış"},
+ {code:"H91.9",name:"İşitme kaybı, tanımlanmamış"},
+ {code:"L30.9",name:"Dermatit, tanımlanmamış"},
+ {code:"Z00.0",name:"Genel tıbbi muayene"},
+ {code:"Z02.1",name:"İşe giriş öncesi muayene"},
+ {code:"Z10.0",name:"Mesleki sağlık muayenesi"}
+] as const;
+
 export default function PrescriptionWorkspace({employee}:Props){
  const [id,setId]=useState("");
  const [diagnosisCode,setDiagnosisCode]=useState(""),[diagnosisName,setDiagnosisName]=useState(""),[diagnosisQuery,setDiagnosisQuery]=useState(""),[diagnosisManual,setDiagnosisManual]=useState(false),[notes,setNotes]=useState("");
@@ -29,12 +53,19 @@ export default function PrescriptionWorkspace({employee}:Props){
  const upd=<K extends keyof Item>(i:number,k:K,v:Item[K])=>setItems(p=>p.map((x,n)=>n===i?{...x,[k]:v}:x));
  async function searchIcd(q:string){
   setDiagnosisQuery(q);
-  if(q.length<2){setIcd([]);return}
+  const local=q.trim().length<2
+    ? COMMON_DIAGNOSES.slice(0,12)
+    : COMMON_DIAGNOSES.filter(x=>`${x.code} ${x.name}`.toLocaleLowerCase("tr-TR").includes(q.toLocaleLowerCase("tr-TR")));
+  if(q.trim().length<2){setIcd([...local]);return}
   try{
     const r=await fetch(`/api/admin/icd10/search?q=${encodeURIComponent(q)}`,{cache:"no-store",credentials:"include"});
     const j=await r.json().catch(()=>({}));
-    setIcd(Array.isArray(j.items)?j.items:[]);
-  }catch{setIcd([])}
+    const remote=Array.isArray(j.items)?j.items:[];
+    const merged=[...remote,...local].filter((x:any,i:number,a:any[])=>a.findIndex((y:any)=>String(y.code)===String(x.code)&&String(y.name)===String(x.name))===i);
+    setIcd(merged);
+  }catch{
+    setIcd([...local]);
+  }
  }
  async function searchDrug(i:number,q:string){upd(i,"medicineName",q);if(q.length<2){setDrug(p=>({...p,[i]:[]}));return}try{const r=await fetch(`/api/admin/drugs/search?q=${encodeURIComponent(q)}`);const j=await r.json();setDrug(p=>({...p,[i]:j.items||[]}))}catch{}}
  function selectDrug(i:number,d:any){
@@ -98,7 +129,7 @@ export default function PrescriptionWorkspace({employee}:Props){
     <div style={head}>
       <div>
         <h3 style={h3}>Tanı / Hastalık Havuzu</h3>
-        <div style={muted}>ICD-10 kodu veya hastalık adıyla ara. Havuzda yoksa manuel giriş yap.</div>
+        <div style={muted}>Hazır tanılardan seç, ICD-10/hastalık adıyla ara; bulunmuyorsa manuel ekle.</div>
       </div>
       <button type="button" style={btn} onClick={()=>{setDiagnosisManual(v=>!v);setIcd([])}}>
         {diagnosisManual?"Havuzdan Seç":"Manuel Giriş"}
@@ -106,15 +137,33 @@ export default function PrescriptionWorkspace({employee}:Props){
     </div>
 
     {!diagnosisManual ? <div style={{display:"grid",gap:10,marginTop:10}}>
-      <Field label="Tanı / hastalık ara">
+      <Field label="Hazır tanı seç">
+        <select
+          value={diagnosisCode&&diagnosisName?`${diagnosisCode}|||${diagnosisName}`:""}
+          onChange={e=>{
+            const [code,name]=e.target.value.split("|||");
+            setDiagnosisCode(code||"");
+            setDiagnosisName(name||"");
+            setDiagnosisQuery(code&&name?`${code} — ${name}`:"");
+            setIcd([]);
+          }}
+          style={input}
+        >
+          <option value="">Tanı / hastalık seçiniz...</option>
+          {COMMON_DIAGNOSES.map(x=><option key={x.code} value={`${x.code}|||${x.name}`}>{x.code} — {x.name}</option>)}
+        </select>
+      </Field>
+
+      <Field label="ICD-10 kodu veya hastalık adıyla ara">
         <input
           value={diagnosisQuery}
+          onFocus={()=>{if(!icd.length)setIcd([...COMMON_DIAGNOSES.slice(0,12)])}}
           onChange={e=>searchIcd(e.target.value)}
-          placeholder="Örn: J06.9, hipertansiyon, gastrit..."
+          placeholder="Örn: I10, hipertansiyon, gastrit..."
           style={input}
         />
         {icd.length>0&&<div style={drop}>
-          {icd.slice(0,15).map((x:any)=><button
+          {icd.slice(0,20).map((x:any)=><button
             key={`${x.code}-${x.name}`}
             type="button"
             style={option}
@@ -128,16 +177,17 @@ export default function PrescriptionWorkspace({employee}:Props){
         </div>}
       </Field>
 
-      {diagnosisQuery.length>=2&&icd.length===0&&<div style={manualHint}>
-        Havuzda sonuç görünmüyorsa <button type="button" style={linkBtn} onClick={()=>{
-          setDiagnosisManual(true);
-          if(!diagnosisName) setDiagnosisName(diagnosisQuery);
-        }}>manuel tanı olarak kullan</button>.
-      </div>}
-
       <div style={grid}>
         <Info label="Seçilen ICD-10" value={diagnosisCode||"-"}/>
         <Info label="Seçilen Tanı / Hastalık" value={diagnosisName||"-"}/>
+      </div>
+
+      <div style={manualHint}>
+        Aradığın tanı havuzda yoksa <button type="button" style={linkBtn} onClick={()=>{
+          setDiagnosisManual(true);
+          if(!diagnosisName&&diagnosisQuery) setDiagnosisName(diagnosisQuery);
+          setIcd([]);
+        }}>manuel tanı gir</button>.
       </div>
     </div> : <div style={{...grid,marginTop:10}}>
       <Field label="ICD-10 (opsiyonel)">
