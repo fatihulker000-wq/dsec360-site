@@ -1,451 +1,101 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+type Row = Record<string, any>;
+type Session = { userId:string; role:string; email:string };
 
-type RouteContext = {
-  params: Promise<{
-    id: string;
-  }>;
-};
-
-function nullableString(value: unknown): string | null {
-  const text = String(value ?? "").trim();
-  return text.length > 0 ? text : null;
+function text(v:any){ return String(v ?? "").trim(); }
+function db(){
+  const url=process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!key) throw new Error("Supabase ortam değişkenleri eksik.");
+  return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
 }
-
-function nullableDate(value: unknown): string | null {
-  const text = nullableString(value);
-
-  if (!text) {
-    return null;
+async function session():Promise<Session|null>{
+  const cs=await cookies();
+  const auth=text(cs.get("dsec_admin_auth")?.value||cs.get("dsec_user_auth")?.value);
+  if(auth!=="ok") return null;
+  const role=text(cs.get("dsec_admin_role")?.value||cs.get("dsec_user_role")?.value).toLowerCase();
+  let userId=text(cs.get("dsec_user_id")?.value);
+  const email=text(cs.get("dsec_user_email")?.value||cs.get("dsec_admin_email")?.value).toLowerCase();
+  if(!userId&&email){
+    const s=db();
+    const {data}=await s.from("users").select("id").ilike("email",email).limit(1).maybeSingle();
+    userId=text(data?.id);
   }
-
-  const millis = new Date(text).getTime();
-
-  if (!Number.isFinite(millis)) {
-    return null;
-  }
-
-  return new Date(millis).toISOString();
+  if(!userId) return null;
+  return {userId,role,email};
 }
-
-function normalizeStatus(value: unknown): number | null {
-  if (value === undefined || value === null) {
-    return null;
+async function activeFirmIds(sess:Session):Promise<string[]>{
+  const s=db();
+  if(sess.role==="super_admin"){
+    const {data,error}=await s.from("companies").select("id").eq("is_active",true);
+    if(error) throw error;
+    return (data||[]).map((x:any)=>text(x.id)).filter(Boolean);
   }
-
-  return Number(value) === 1 ? 1 : 0;
+  const {data:access,error:accessError}=await s.from("user_firm_access").select("firm_id").eq("user_id",sess.userId);
+  if(accessError) throw accessError;
+  let ids=(access||[]).map((x:any)=>text(x.firm_id)).filter(Boolean);
+  if(!ids.length){
+    const {data:user,error:userError}=await s.from("users").select("company_id").eq("id",sess.userId).maybeSingle();
+    if(userError) throw userError;
+    const fallbackCompanyId=text(user?.company_id);
+    if(fallbackCompanyId) ids=[fallbackCompanyId];
+  }
+  ids=[...new Set(ids)];
+  if(!ids.length) return [];
+  const {data:companies,error}=await s.from("companies").select("id").in("id",ids).eq("is_active",true);
+  if(error) throw error;
+  return (companies||[]).map((x:any)=>text(x.id)).filter(Boolean);
 }
+function unauthorized(){ return NextResponse.json({success:false,error:"Yetkisiz erişim."},{status:401}); }
 
-function normalizePriority(value: unknown): number | null {
-  if (value === undefined || value === null) {
-    return null;
-  }
+export const dynamic="force-dynamic";
+export const revalidate=0;
 
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-
-  return Math.min(2, Math.max(0, Math.trunc(parsed)));
+async function getRecord(id:string){
+ const s=db();
+ const {data,error}=await s.from("ajanda_tasks").select("*").eq("id",id).maybeSingle();
+ if(error)throw error;
+ return data as Row|null;
 }
-
-function normalizeProgress(value: unknown): number | null {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-
-  return Math.min(100, Math.max(0, Math.trunc(parsed)));
+async function authorize(record:Row,sess:Session){
+ const firmId=text(record.web_firm_id);
+ const allowed=await activeFirmIds(sess);
+ if(!firmId||!allowed.includes(firmId))return false;
+ if(text(record.category).toUpperCase()==="PERSONAL"&&text(record.created_by_user_id)!==sess.userId)return false;
+ return true;
 }
-
-function normalizeTaskType(value: unknown): string | null {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  const allowed = new Set([
-    "TASK",
-    "MEETING",
-    "INSPECTION",
-    "TRAINING",
-    "VISIT",
-    "REMINDER",
-  ]);
-
-  const normalized = String(value)
-    .trim()
-    .toUpperCase();
-
-  return allowed.has(normalized) ? normalized : null;
+export async function PATCH(req:NextRequest,{params}:{params:Promise<{id:string}>}){
+ try{
+  const sess=await session();if(!sess)return unauthorized();
+  const {id}=await params; const record=await getRecord(id);
+  if(!record)return NextResponse.json({success:false,error:"Ajanda kaydı bulunamadı."},{status:404});
+  if(!(await authorize(record,sess)))return NextResponse.json({success:false,error:"Bu kayıt için yetkiniz bulunmuyor."},{status:403});
+  if(text(record.source).toUpperCase()!=="WEB")return NextResponse.json({success:false,error:"Sistem kaynaklı kayıt doğrudan değiştirilemez."},{status:409});
+  const b=await req.json().catch(()=>({})); const patch:Record<string,any>={app_updated_at:Date.now(),updated_at:new Date().toISOString()};
+  if(b.status!==undefined){patch.status=Number(b.status)===1?1:0;patch.completed_at=patch.status===1?new Date().toISOString():null}
+  if(b.progress!==undefined)patch.progress=Math.min(100,Math.max(0,Number(b.progress)||0));
+  if(b.title!==undefined&&text(b.title))patch.title=text(b.title);
+  if(b.note!==undefined)patch.note=text(b.note)||null;
+  if(b.priority!==undefined)patch.priority=Math.min(2,Math.max(0,Math.trunc(Number(b.priority)||0)));
+  if(b.due_at!==undefined)patch.due_at=b.due_at?new Date(b.due_at).toISOString():null;
+  if(b.end_at!==undefined)patch.end_at=b.end_at?new Date(b.end_at).toISOString():null;
+  if(b.location!==undefined)patch.location=text(b.location)||null;
+  if(b.meeting_link!==undefined)patch.meeting_link=text(b.meeting_link)||null;
+  const s=db();const {data,error}=await s.from("ajanda_tasks").update(patch).eq("id",id).select("*").single();if(error)throw error;
+  return NextResponse.json({success:true,record:data});
+ }catch(e){console.error("Agenda PATCH",e);return NextResponse.json({success:false,error:e instanceof Error?e.message:"Ajanda kaydı güncellenemedi."},{status:500})}
 }
-
-export async function PATCH(
-  req: NextRequest,
-  context: RouteContext
-) {
-  try {
-    const { id } = await context.params;
-
-    const recordId = String(id ?? "").trim();
-
-    if (!recordId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Ajanda kayıt ID bilgisi eksik.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const webFirmId = String(
-      req.nextUrl.searchParams.get("firmId") ?? ""
-    ).trim();
-
-    if (!webFirmId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Firma UUID bilgisi zorunludur.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const body = await req.json();
-
-    const { data: current, error: currentError } = await supabase
-      .from("ajanda_tasks")
-      .select("*")
-      .eq("id", recordId)
-      .eq("web_firm_id", webFirmId)
-      .maybeSingle();
-
-    if (currentError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: currentError.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!current) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Ajanda kaydı bulunamadı.",
-        },
-        { status: 404 }
-      );
-    }
-
-    const payload: Record<string, unknown> = {
-      app_updated_at: Date.now(),
-    };
-
-    const status = normalizeStatus(body?.status);
-    const priority = normalizePriority(body?.priority);
-    const progress = normalizeProgress(body?.progress);
-    const taskType = normalizeTaskType(body?.type);
-
-    if (body?.title !== undefined) {
-      const title = String(body.title ?? "").trim();
-
-      if (!title) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Görev başlığı zorunludur.",
-          },
-          { status: 400 }
-        );
-      }
-
-      payload.title = title;
-    }
-
-    if (body?.note !== undefined) {
-      payload.note = nullableString(body.note);
-    }
-
-    if (status !== null) {
-      payload.status = status;
-
-      if (status === 1) {
-        payload.progress = 100;
-        payload.completed_at = new Date().toISOString();
-      } else {
-        payload.progress = progress !== null ? progress : 0;
-        payload.completed_at = null;
-      }
-    } else if (progress !== null) {
-      payload.progress = progress;
-    }
-
-    if (priority !== null) {
-      payload.priority = priority;
-    }
-
-    if (taskType !== null) {
-      payload.type = taskType;
-    }
-
-    if (body?.category !== undefined) {
-      payload.category = nullableString(body.category);
-    }
-
-    if (body?.due_at !== undefined) {
-      payload.due_at = nullableDate(body.due_at);
-    }
-
-    if (body?.end_at !== undefined) {
-      payload.end_at = nullableDate(body.end_at);
-    }
-
-    if (body?.location !== undefined) {
-      payload.location = nullableString(body.location);
-    }
-
-    if (body?.meeting_link !== undefined) {
-      payload.meeting_link = nullableString(body.meeting_link);
-    }
-
-    if (body?.assigned_to !== undefined) {
-      payload.assigned_to = nullableString(body.assigned_to);
-    }
-
-    if (body?.assigned_by !== undefined) {
-      payload.assigned_by = nullableString(body.assigned_by);
-    }
-
-    if (body?.participants_csv !== undefined) {
-      payload.participants_csv = nullableString(
-        body.participants_csv
-      );
-    }
-
-    if (body?.is_all_day !== undefined) {
-      payload.is_all_day = body.is_all_day === true;
-    }
-
-    if (body?.module_ref !== undefined) {
-      payload.module_ref = nullableString(body.module_ref);
-    }
-
-    if (body?.module_ref_id !== undefined) {
-      const moduleRefId = Number(body.module_ref_id);
-
-      payload.module_ref_id =
-        Number.isFinite(moduleRefId) && moduleRefId > 0
-          ? Math.trunc(moduleRefId)
-          : null;
-    }
-
-    if (body?.remind_minutes_csv !== undefined) {
-      payload.remind_minutes_csv = nullableString(
-        body.remind_minutes_csv
-      );
-    }
-
-    if (body?.remind_at !== undefined) {
-      payload.remind_at = nullableDate(body.remind_at);
-    }
-
-    if (body?.repeat_type !== undefined) {
-      const repeatType = nullableString(
-        body.repeat_type
-      )?.toUpperCase();
-
-      payload.repeat_type =
-        repeatType &&
-        ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"].includes(
-          repeatType
-        )
-          ? repeatType
-          : null;
-    }
-
-    if (body?.repeat_until !== undefined) {
-      payload.repeat_until = nullableDate(body.repeat_until);
-    }
-
-    const dueAt =
-      payload.due_at !== undefined
-        ? payload.due_at
-        : current.due_at;
-
-    const endAt =
-      payload.end_at !== undefined
-        ? payload.end_at
-        : current.end_at;
-
-    if (
-      dueAt &&
-      endAt &&
-      new Date(String(endAt)).getTime() <
-        new Date(String(dueAt)).getTime()
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Bitiş zamanı başlangıç zamanından önce olamaz.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const { data, error } = await supabase
-      .from("ajanda_tasks")
-      .update(payload)
-      .eq("id", recordId)
-      .eq("web_firm_id", webFirmId)
-      .eq("is_deleted", false)
-      .select("*")
-      .maybeSingle();
-
-    if (error) {
-      console.error("Admin agenda PATCH error:", error);
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!data) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Ajanda kaydı güncellenemedi.",
-        },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      record: data,
-    });
-  } catch (error) {
-    console.error("Admin agenda PATCH exception:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Ajanda kaydı güncellenemedi.",
-      },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(
-  req: NextRequest,
-  context: RouteContext
-) {
-  try {
-    const { id } = await context.params;
-
-    const recordId = String(id ?? "").trim();
-
-    if (!recordId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Ajanda kayıt ID bilgisi eksik.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const webFirmId = String(
-      req.nextUrl.searchParams.get("firmId") ?? ""
-    ).trim();
-
-    if (!webFirmId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Firma UUID bilgisi zorunludur.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const nowIso = new Date().toISOString();
-
-    const { data, error } = await supabase
-      .from("ajanda_tasks")
-      .update({
-        is_deleted: true,
-        deleted_at: nowIso,
-        app_updated_at: Date.now(),
-      })
-      .eq("id", recordId)
-      .eq("web_firm_id", webFirmId)
-      .eq("is_deleted", false)
-      .select("id")
-      .maybeSingle();
-
-    if (error) {
-      console.error("Admin agenda DELETE error:", error);
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: error.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!data) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Ajanda kaydı bulunamadı veya daha önce silindi.",
-        },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      deleted_id: recordId,
-    });
-  } catch (error) {
-    console.error("Admin agenda DELETE exception:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Ajanda kaydı silinemedi.",
-      },
-      { status: 500 }
-    );
-  }
+export async function DELETE(_req:NextRequest,{params}:{params:Promise<{id:string}>}){
+ try{
+  const sess=await session();if(!sess)return unauthorized();
+  const {id}=await params; const record=await getRecord(id);
+  if(!record)return NextResponse.json({success:false,error:"Ajanda kaydı bulunamadı."},{status:404});
+  if(!(await authorize(record,sess)))return NextResponse.json({success:false,error:"Bu kayıt için yetkiniz bulunmuyor."},{status:403});
+  if(text(record.source).toUpperCase()!=="WEB")return NextResponse.json({success:false,error:"Sistem kaynaklı kayıt doğrudan silinemez."},{status:409});
+  const s=db();const {error}=await s.from("ajanda_tasks").update({is_deleted:true,deleted_at:new Date().toISOString(),app_updated_at:Date.now(),updated_at:new Date().toISOString()}).eq("id",id);if(error)throw error;
+  return NextResponse.json({success:true});
+ }catch(e){console.error("Agenda DELETE",e);return NextResponse.json({success:false,error:e instanceof Error?e.message:"Ajanda kaydı silinemedi."},{status:500})}
 }

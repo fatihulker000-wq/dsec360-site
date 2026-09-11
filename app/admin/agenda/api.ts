@@ -9,3 +9,5 @@ export async function getEmployees(webFirmId:string):Promise<EmployeesResponse>{
 export async function createAgenda(payload:CreateAgendaRequest){return parseJson<{success:boolean}>(await fetch("/api/admin/agenda",{method:"POST",credentials:"include",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}))}
 export async function patchAgenda(id:string,webFirmId:string,payload:Record<string,unknown>){const q=new URLSearchParams({firmId:webFirmId});return parseJson<{success:boolean}>(await fetch(`/api/admin/agenda/${id}?${q}`,{method:"PATCH",credentials:"include",cache:"no-store",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}))}
 export async function removeAgenda(id:string,webFirmId:string){const q=new URLSearchParams({firmId:webFirmId});return parseJson<{success:boolean}>(await fetch(`/api/admin/agenda/${id}?${q}`,{method:"DELETE",credentials:"include",cache:"no-store"}))}
+
+export async function getPersonalAgenda():Promise<AgendaResponse>{return parseJson(await fetch("/api/admin/agenda/personal",{credentials:"include",cache:"no-store"}))}

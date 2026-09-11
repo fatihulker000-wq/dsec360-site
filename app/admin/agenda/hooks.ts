@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getAgenda, getCompanies, getEmployees } from "./api";
+import { getAgenda, getCompanies, getEmployees, getPersonalAgenda } from "./api";
 import type { AgendaTask, AgendaViewer, CompanyItem, EmployeeItem, TaskFilter } from "./types";
 
 function startOfToday(){const d=new Date();d.setHours(0,0,0,0);return d}
@@ -19,6 +19,13 @@ export function useAgendaData(webFirmId:string){
  const[tasks,setTasks]=useState<AgendaTask[]>([]);const[viewer,setViewer]=useState<AgendaViewer|null>(null);const[loading,setLoading]=useState(false);const[loadError,setLoadError]=useState("");
  const refresh=useCallback(async()=>{if(!webFirmId){setTasks([]);setViewer(null);setLoadError("");return}setLoading(true);setLoadError("");try{const r=await getAgenda(webFirmId);setTasks(Array.isArray(r.records)?r.records:[]);setViewer(r.viewer??null)}catch(e){setTasks([]);setViewer(null);setLoadError(e instanceof Error?e.message:"Ajanda yüklenemedi.")}finally{setLoading(false)}},[webFirmId]);
  useEffect(()=>{void refresh()},[refresh]);return{tasks,viewer,loading,loadError,refresh}
+}
+
+
+export function usePersonalAgendaData(){
+ const[tasks,setTasks]=useState<AgendaTask[]>([]);const[loading,setLoading]=useState(false);const[loadError,setLoadError]=useState("");
+ const refresh=useCallback(async()=>{setLoading(true);setLoadError("");try{const r=await getPersonalAgenda();setTasks(Array.isArray(r.records)?r.records:[])}catch(e){setTasks([]);setLoadError(e instanceof Error?e.message:"Kişisel ajanda yüklenemedi.")}finally{setLoading(false)}},[]);
+ useEffect(()=>{void refresh()},[refresh]);return{tasks,loading,loadError,refresh}
 }
 
 export function useCompanyData(){const[companies,setCompanies]=useState<CompanyItem[]>([]);const[loading,setLoading]=useState(true);const refresh=useCallback(async()=>{setLoading(true);try{const r=await getCompanies();setCompanies((r.data??[]).filter(x=>x.is_active!==false).map(x=>({...x,id:String(x.id||"").trim(),name:String(x.name||"").trim(),localId:x.localId??x.local_firm_id??null})).filter(x=>x.id&&x.name))}finally{setLoading(false)}},[]);useEffect(()=>{void refresh()},[refresh]);return{companies,loading,refresh}}
