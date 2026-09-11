@@ -144,23 +144,68 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const firmId = parsePositiveLong(searchParams.get("firm_id"));
     const webFirmId = text(searchParams.get("web_firm_id")) || null;
+    const scope = text(searchParams.get("scope") || "FIRM").toUpperCase();
     const cursor = Math.max(0, Number(searchParams.get("updated_after_millis") ?? 0) || 0);
     const requestedLimit = Number(searchParams.get("limit") ?? 250);
     const limit = Math.min(500, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 250));
-
-    if (!firmId && !webFirmId) return NextResponse.json({ success: false, error: "firm_id or web_firm_id required" }, { status: 400 });
-    const resolved = await resolveFirm(firmId, webFirmId, viewer.allowedFirmIds);
     const afterIso = cursor > 0 ? new Date(cursor).toISOString() : null;
 
-    let personalQuery = supabase
-      .from("ajanda_tasks")
-      .select(SELECT)
-      .eq("web_firm_id", resolved.webFirmId)
-      .eq("category", "PERSONAL")
-      .eq("created_by_user_id", viewer.userId)
-      .order("app_updated_at", { ascending: true, nullsFirst: false })
-      .order("updated_at", { ascending: true, nullsFirst: false })
-      .limit(limit);
+    // PERSONAL_ALL: seçili firmadan bağımsız, oturum kullanıcısının
+    // bütün AKTİF ve YETKİLİ firmalarındaki kişisel kayıtlarını tek akışta döndürür.
+    if (scope === "PERSONAL_ALL") {
+      if (!viewer.allowedFirmIds.length) {
+        return NextResponse.json({
+          success: true, count: 0, records: [],
+          next_updated_after_millis: cursor, has_more: false
+        });
+      }
+
+      let query = supabase
+        .from("ajanda_tasks")
+        .select(SELECT)
+        .in("web_firm_id", viewer.allowedFirmIds)
+        .eq("category", "PERSONAL")
+        .eq("created_by_user_id", viewer.userId)
+        .order("app_updated_at", { ascending: true, nullsFirst: false })
+        .order("updated_at", { ascending: true, nullsFirst: false })
+        .limit(limit);
+
+      if (cursor > 0 && afterIso) {
+        query = query.or(`app_updated_at.gt.${cursor},updated_at.gt.${afterIso}`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const rows = (data ?? []) as RawRow[];
+      const records = rows.map((x) => {
+        const localId = Number(x.firm_id ?? 0);
+        return toRecord(x, Number.isFinite(localId) && localId > 0 ? Math.trunc(localId) : 0);
+      });
+
+      const nextCursor = rows.length
+        ? Math.max(cursor, ...rows.map(syncMillis))
+        : cursor;
+
+      return NextResponse.json({
+        success: true,
+        count: records.length,
+        records,
+        next_updated_after_millis: nextCursor,
+        has_more: rows.length >= limit,
+        scope: "PERSONAL_ALL"
+      });
+    }
+
+    // FIRM: yalnız seçili firmanın ortak ajandası; PERSONAL kayıtlar hariç.
+    if (!firmId && !webFirmId) {
+      return NextResponse.json(
+        { success: false, error: "firm_id or web_firm_id required" },
+        { status: 400 }
+      );
+    }
+
+    const resolved = await resolveFirm(firmId, webFirmId, viewer.allowedFirmIds);
 
     let firmQuery = supabase
       .from("ajanda_tasks")
@@ -172,26 +217,17 @@ export async function GET(req: NextRequest) {
       .order("updated_at", { ascending: true, nullsFirst: false })
       .limit(limit);
 
-    if (cursor > 0) {
-      const cursorFilter = `app_updated_at.gt.${cursor},updated_at.gt.${afterIso}`;
-      personalQuery = personalQuery.or(cursorFilter);
-      firmQuery = firmQuery.or(cursorFilter);
+    if (cursor > 0 && afterIso) {
+      firmQuery = firmQuery.or(`app_updated_at.gt.${cursor},updated_at.gt.${afterIso}`);
     }
 
-    const [personalRes, firmRes] = await Promise.all([personalQuery, firmQuery]);
-    if (personalRes.error) throw personalRes.error;
+    const firmRes = await firmQuery;
     if (firmRes.error) throw firmRes.error;
 
-    const byId = new Map<string, RawRow>();
-    for (const row of [...(personalRes.data ?? []), ...(firmRes.data ?? [])]) byId.set(text(row.id), row);
-
-    const merged = [...byId.values()]
-      .sort((a, b) => syncMillis(a) - syncMillis(b))
-      .slice(0, limit);
-
-    const records = merged.map((x) => toRecord(x, resolved.localFirmId));
-    const nextCursor = merged.length
-      ? Math.max(cursor, ...merged.map(syncMillis))
+    const rows = (firmRes.data ?? []) as RawRow[];
+    const records = rows.map((x) => toRecord(x, resolved.localFirmId));
+    const nextCursor = rows.length
+      ? Math.max(cursor, ...rows.map(syncMillis))
       : cursor;
 
     return NextResponse.json({
@@ -199,7 +235,8 @@ export async function GET(req: NextRequest) {
       count: records.length,
       records,
       next_updated_after_millis: nextCursor,
-      has_more: (personalRes.data?.length ?? 0) >= limit || (firmRes.data?.length ?? 0) >= limit || byId.size > limit,
+      has_more: rows.length >= limit,
+      scope: "FIRM"
     });
   } catch (error: any) {
     console.error("Ajanda mobile pull exception:", error);
