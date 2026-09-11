@@ -94,6 +94,7 @@ export async function POST(req:NextRequest){
   if(dueAt&&endAt&&new Date(endAt).getTime()<new Date(dueAt).getTime())return NextResponse.json({success:false,error:"Bitiş zamanı başlangıç zamanından önce olamaz."},{status:400});
   const personal=body?.personal===true;
   const now=Date.now();
+  const nowIso=new Date(now).toISOString();
   const payload={
    sync_key:randomUUID(),firm_id:Math.trunc(firmId),web_firm_id:webFirmId,title,
    note:nullableString(body?.note),status:0,priority:normalizePriority(body?.priority),progress:0,
@@ -106,7 +107,8 @@ export async function POST(req:NextRequest){
    module_ref:personal?"PERSONAL":nullableString(body?.module_ref),module_ref_id:null,module_remote_id:null,parent_task_id:null,parent_remote_id:null,
    remind_minutes_csv:nullableString(body?.remind_minutes_csv),remind_at:nullableDate(body?.remind_at),
    repeat_type:nullableString(body?.repeat_type)?.toUpperCase()??null,repeat_until:nullableDate(body?.repeat_until),
-   source:"WEB",is_archived:false,is_deleted:false,deleted_at:null,app_created_at:now,app_updated_at:now
+   source:"WEB",is_archived:false,is_deleted:false,deleted_at:null,
+   app_created_at:now,app_updated_at:now,created_at:nowIso,updated_at:nowIso
   };
   const s=db(); const {data,error}=await s.from("ajanda_tasks").insert(payload).select("*").single(); if(error)throw error;
   return NextResponse.json({success:true,record:data},{status:201});

@@ -20,6 +20,17 @@ const parsePositiveLong = (v: string | null) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+const syncMillis = (row: RawRow) => {
+  const appMs = Number(row.app_updated_at ?? 0);
+  const dbMs = isoToMillis(row.updated_at) ?? 0;
+  const createdMs = Number(row.app_created_at ?? 0) || (isoToMillis(row.created_at) ?? 0);
+  return Math.max(
+    Number.isFinite(appMs) ? appMs : 0,
+    dbMs,
+    Number.isFinite(createdMs) ? createdMs : 0
+  );
+};
+
 function requireMobileKey(req: NextRequest) {
   const configured = text(process.env.DSEC_MOBILE_API_KEY || "dsec_mobile_123");
   if (text(req.headers.get("x-api-key")) !== configured) {
@@ -120,7 +131,7 @@ function toRecord(item: RawRow, localFirmId: number) {
     deleted_at_millis: isoToMillis(item.deleted_at),
     created_at_millis: item.app_created_at ?? isoToMillis(item.created_at) ?? Date.now(),
     updated_at_millis: item.app_updated_at ?? isoToMillis(item.updated_at) ?? Date.now(),
-    server_updated_at_millis: isoToMillis(item.updated_at),
+    server_updated_at_millis: syncMillis(item),
   };
 }
 
@@ -147,7 +158,8 @@ export async function GET(req: NextRequest) {
       .eq("web_firm_id", resolved.webFirmId)
       .eq("category", "PERSONAL")
       .eq("created_by_user_id", viewer.userId)
-      .order("updated_at", { ascending: true })
+      .order("app_updated_at", { ascending: true, nullsFirst: false })
+      .order("updated_at", { ascending: true, nullsFirst: false })
       .limit(limit);
 
     let firmQuery = supabase
@@ -156,12 +168,14 @@ export async function GET(req: NextRequest) {
       .eq("web_firm_id", resolved.webFirmId)
       .in("source", ["APP", "WEB"])
       .or("category.is.null,category.neq.PERSONAL")
-      .order("updated_at", { ascending: true })
+      .order("app_updated_at", { ascending: true, nullsFirst: false })
+      .order("updated_at", { ascending: true, nullsFirst: false })
       .limit(limit);
 
-    if (afterIso) {
-      personalQuery = personalQuery.gt("updated_at", afterIso);
-      firmQuery = firmQuery.gt("updated_at", afterIso);
+    if (cursor > 0) {
+      const cursorFilter = `app_updated_at.gt.${cursor},updated_at.gt.${afterIso}`;
+      personalQuery = personalQuery.or(cursorFilter);
+      firmQuery = firmQuery.or(cursorFilter);
     }
 
     const [personalRes, firmRes] = await Promise.all([personalQuery, firmQuery]);
@@ -172,11 +186,13 @@ export async function GET(req: NextRequest) {
     for (const row of [...(personalRes.data ?? []), ...(firmRes.data ?? [])]) byId.set(text(row.id), row);
 
     const merged = [...byId.values()]
-      .sort((a, b) => (isoToMillis(a.updated_at) ?? 0) - (isoToMillis(b.updated_at) ?? 0))
+      .sort((a, b) => syncMillis(a) - syncMillis(b))
       .slice(0, limit);
 
     const records = merged.map((x) => toRecord(x, resolved.localFirmId));
-    const nextCursor = records.length ? records[records.length - 1].server_updated_at_millis ?? cursor : cursor;
+    const nextCursor = merged.length
+      ? Math.max(cursor, ...merged.map(syncMillis))
+      : cursor;
 
     return NextResponse.json({
       success: true,
