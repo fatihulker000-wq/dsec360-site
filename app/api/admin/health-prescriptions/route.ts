@@ -42,6 +42,21 @@ export async function POST(req:Request){
  const status=s(b.status||"draft");if(status!=="draft"&&(!s(b.diagnosisCode)||items.length===0))return NextResponse.json({success:false,error:"Tamamlanan reçetede tanı ve en az bir ilaç zorunludur."},{status:400});
  const requestedMedula=s(b.ePrescriptionStatus||"NOT_SENT");const medulaStatus=["NOT_SENT","READY"].includes(requestedMedula)?requestedMedula:"NOT_SENT";
  const payload={company_id:companyId,employee_id:employeeId,doctor_id:s(b.doctorId)||null,examination_id:s(b.examinationId)||null,ek2_form_id:s(b.ek2FormId)||null,prescription_no:s(b.prescriptionNo)||null,e_prescription_no:s(b.ePrescriptionNo)||null,medula_tracking_no:s(b.medulaTrackingNo)||null,medula_status:medulaStatus,medula_response:s(b.medulaResponse)||null,doctor_identity_number:s(b.doctorIdentityNumber)||null,doctor_diploma_no:s(b.doctorDiplomaNo)||null,diagnosis_code:s(b.diagnosisCode)||null,diagnosis_name:s(b.diagnosisName)||null,notes:s(b.notes)||null,status,created_by:s(b.createdBy)||null,items};
- const{data:id,error}=await db.rpc("dsec_health_prescription_save",{p_payload:payload});if(error)throw error;const{data:p,error:loadErr}=await db.from("health_prescriptions").select("*,health_prescription_items(*)").eq("id",id).single();if(loadErr)throw loadErr;await audit(db,p,"CREATED",a.role,"Reçete atomik olarak oluşturuldu.");
+ const{data:id,error}=await db.rpc("dsec_health_prescription_save",{p_payload:payload});if(error)throw error;
+ const medulaPatch={
+  patient_identity_number:s(b.patientIdentityNumber)||null,facility_code:s(b.facilityCode)||null,
+  provision_type:s(b.provisionType)||null,prescription_date:s(b.prescriptionDate)||null,
+  prescription_type:s(b.prescriptionType)||null,prescription_subtype:s(b.prescriptionSubtype)||null,
+  protocol_no:s(b.protocolNo)||null,doctor_branch_code:s(b.doctorBranchCode)||null,
+  doctor_certificate_code:s(b.doctorCertificateCode)||null,medula_environment:s(b.medulaEnvironment||"TEST")||"TEST"
+ };
+ const{error:medulaErr}=await db.from("health_prescriptions").update(medulaPatch).eq("id",id);if(medulaErr)throw medulaErr;
+ const{data:savedItems,error:itemLoadErr}=await db.from("health_prescription_items").select("id,created_at").eq("prescription_id",id).order("created_at",{ascending:true});if(itemLoadErr)throw itemLoadErr;
+ for(let i=0;i<(savedItems||[]).length;i++){const x:any=items[i]||{};const{error:itemErr}=await db.from("health_prescription_items").update({
+  barcode:s(x.barcode)||null,quantity:Number(x.quantity||1),usage_form:s(x.usageForm)||null,
+  dose1:s(x.dose1)||null,dose2:s(x.dose2)||null,usage_period:s(x.usagePeriod)||null,
+  usage_period_unit:s(x.usagePeriodUnit)||null,reimbursement_flag:s(x.reimbursementFlag||"E")||"E"
+ }).eq("id",(savedItems as any[])[i].id);if(itemErr)throw itemErr}
+ const{data:p,error:loadErr}=await db.from("health_prescriptions").select("*,health_prescription_items(*)").eq("id",id).single();if(loadErr)throw loadErr;await audit(db,p,"CREATED",a.role,"Reçete atomik olarak oluşturuldu.");
  return NextResponse.json({success:true,prescription:p,integration:{medulaConnected:false,mode:"PREPARATION"}},{status:201});
  }catch(e:any){return NextResponse.json({success:false,error:e?.message||"Reçete kaydedilemedi."},{status:500})}}
