@@ -29,6 +29,7 @@ function buildPayload(body: any) {
   return {
     firm_id: String(body?.firm_id || "").trim(),
     full_name: String(body?.full_name || "").trim(),
+    department: clean(body?.department ?? body?.department_name ?? body?.departmentName),
     job_title: clean(body?.job_title),
     start_date: clean(body?.start_date),
     exit_date: clean(body?.exit_date),
