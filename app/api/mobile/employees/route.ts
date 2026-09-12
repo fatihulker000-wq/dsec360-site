@@ -143,15 +143,18 @@ export async function POST(req: Request) {
         }
 
         if (remoteId) {
-          const { error } = await supabase
+          const { data: updatedRow, error } = await supabase
             .from("employees")
             .update(payload)
-            .eq("id", remoteId);
+            .eq("id", remoteId)
+            .select("id, department")
+            .single();
 
           results.push({
             localId,
             remoteId,
-            success: !error,
+            success: !error && !!updatedRow?.id,
+            department: updatedRow?.department ?? null,
             error: error?.message || null,
           });
 
@@ -161,15 +164,18 @@ export async function POST(req: Request) {
         const duplicateId = await findDuplicate(supabase, payload);
 
         if (duplicateId) {
-          const { error } = await supabase
+          const { data: updatedRow, error } = await supabase
             .from("employees")
             .update(payload)
-            .eq("id", duplicateId);
+            .eq("id", duplicateId)
+            .select("id, department")
+            .single();
 
           results.push({
             localId,
             remoteId: duplicateId,
-            success: !error,
+            success: !error && !!updatedRow?.id,
+            department: updatedRow?.department ?? null,
             duplicateProtected: true,
             error: error?.message || null,
           });
@@ -180,13 +186,14 @@ export async function POST(req: Request) {
         const { data, error } = await supabase
           .from("employees")
           .insert([{ ...payload, created_at: new Date().toISOString() }])
-          .select("id")
+          .select("id, department")
           .single();
 
         results.push({
           localId,
           remoteId: data?.id || null,
           success: !error && !!data?.id,
+          department: data?.department ?? null,
           error: error?.message || null,
         });
       }
@@ -258,10 +265,12 @@ export async function PUT(req: Request) {
     const supabase = getSupabase();
     const payload = buildPayload(body);
 
-    const { error } = await supabase
+    const { data: updatedRow, error } = await supabase
       .from("employees")
       .update(payload)
-      .eq("id", id);
+      .eq("id", id)
+      .select("id, department")
+      .single();
 
     if (error) {
       return NextResponse.json(
@@ -270,7 +279,11 @@ export async function PUT(req: Request) {
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      remoteId: updatedRow?.id || id,
+      department: updatedRow?.department ?? null,
+    });
   } catch (e: any) {
     return NextResponse.json(
       { error: "Sunucu hatası.", detail: e?.message || null },

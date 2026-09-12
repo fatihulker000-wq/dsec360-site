@@ -605,6 +605,13 @@ function buildEmployeePayload(body: any) {
     payload.full_name = clean(body.full_name);
   }
 
+  // KRİTİK: Web düzenleme formunda departman alanı vardı fakat
+  // buildEmployeePayload() içine hiç alınmadığı için PUT/POST sırasında
+  // Supabase'e yazılmıyor ve ekran yenilenince eski değer geri geliyordu.
+  if (body?.department !== undefined) {
+    payload.department = clean(body.department);
+  }
+
   if (body?.job_title !== undefined) {
     payload.job_title = clean(body.job_title);
   }
