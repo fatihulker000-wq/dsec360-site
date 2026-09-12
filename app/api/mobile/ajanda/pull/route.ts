@@ -72,7 +72,7 @@ async function buildFirmSourceRecords(
   viewerUserId: string,
   viewerEmail: string
 ): Promise<AgendaSourceRecord[]> {
-  const s=supabase; const records:AgendaSourceRecord[]=[];
+const s=supabase; const records:AgendaSourceRecord[]=[];
   const isPhysician=["workplace_physician","workplace_doctor","isyeri_hekimi","işyeri_hekimi"].includes(role);
   const canOperational=!isPhysician;
   const canHealth=["super_admin","company_admin","demo_user","workplace_physician","workplace_doctor","isyeri_hekimi","işyeri_hekimi"].includes(role);
@@ -85,13 +85,46 @@ async function buildFirmSourceRecords(
   for(const m of meetings as Row[]){const due=m.meeting_date_millis??m.meeting_date;const st=text(m.status).toUpperCase();if(!due||!within(due,90)||["COMPLETED","CANCELLED","CLOSED"].includes(st))continue;records.push(base(firmId,"BOARD_MEETING",m.id,{title:`İSG Kurul Toplantısı • ${text(m.meeting_title)||text(m.meeting_no)||"Planlı toplantı"}`,note:text(m.meeting_no)?`Toplantı No: ${text(m.meeting_no)}`:null,type:"MEETING",category:"BOARD",due_at:iso(due),priority:1,location:text(m.location)||null,module_ref:"BOARD_MEETING",source_url:`/admin/documentation/board/${encodeURIComponent(text(m.id))}`}))}
   if(meetingIds.length){const decisions=await safe(s.from("documentation_board_decisions").select("*").in("meeting_id",meetingIds).eq("firm_id",firmId).eq("is_deleted",false));for(const d of decisions as Row[]){const st=text(d.decision_status).toUpperCase();const due=d.due_date_millis??d.due_date;if(!due||["COMPLETED","CANCELLED","CLOSED"].includes(st))continue;const pri=priority(d.priority);if(!within(due,45)&&pri<2)continue;records.push(base(firmId,"BOARD_DECISION",d.id,{title:`Kurul Aksiyonu • ${text(d.decision_title)||text(d.decision_no)||"Karar"}`,note:text(d.decision_text)||null,type:"TASK",category:"BOARD_ACTION",due_at:iso(due),priority:pri,assigned_to:text(d.responsible_person)||text(d.responsible_department)||null,module_ref:"BOARD_DECISION",source_url:`/admin/documentation/board/${encodeURIComponent(text(d.meeting_id))}`}))}}
 
-  // 2) Periyodik kontrol ve ortam ölçümü: yaklaşan 45 gün + gecikmiş
+  // 2) Periyodik kontrol ve ortam ölçümü: 30 / 15 / 7 günlük uyarı + gecikmiş kayıtlar
   const [eqs,measures]=canOperational?await Promise.all([
    safe(s.from("periodic_control_equipments").select("*").eq("firm_id",firmId).eq("deleted",false)),
    safe(s.from("environment_measurements").select("*").eq("firm_id",firmId).eq("deleted",false))
   ]):[[],[]];
-  for(const r of eqs as Row[]){if(!r.next_due_millis||!within(r.next_due_millis,45))continue;const overdue=Number(r.next_due_millis)<now();records.push(base(firmId,"PERIODIC_CONTROL",r.id,{title:`Periyodik Kontrol • ${text(r.equipment_name)||text(r.equipment_type)||"İş ekipmanı"}`,note:text(r.report_no)?`Rapor No: ${text(r.report_no)}`:null,type:"REMINDER",category:"PERIODIC_CONTROL",due_at:iso(r.next_due_millis),priority:overdue?2:1,location:text(r.location)||null,module_ref:"PERIODIC_CONTROL",source_url:"/admin/documentation/periodic-controls"}))}
-  for(const r of measures as Row[]){if(!r.next_due_millis||!within(r.next_due_millis,45))continue;const overdue=Number(r.next_due_millis)<now();records.push(base(firmId,"ENVIRONMENT_MEASUREMENT",r.id,{title:`Ortam Ölçümü Yenileme • ${text(r.measurement_type)||"Ölçüm"}`,note:text(r.result_summary)||null,type:"REMINDER",category:"ENVIRONMENT_MEASUREMENT",due_at:iso(r.next_due_millis),priority:overdue?2:1,location:text(r.area_name)||null,assigned_to:text(r.measured_by)||null,module_ref:"ENVIRONMENT_MEASUREMENT",source_url:"/admin/documentation/periodic-controls"}))}
+
+  const dueBand=(value:any)=>{
+    const dueIso=iso(value);
+    if(!dueIso)return null;
+    const diff=Math.ceil((new Date(dueIso).getTime()-now())/86400000);
+    if(diff<0)return{label:`${Math.abs(diff)} gün gecikti`,priority:2};
+    if(diff<=7)return{label:`${diff} gün kaldı • 7 günlük kritik uyarı`,priority:2};
+    if(diff<=15)return{label:`${diff} gün kaldı • 15 günlük uyarı`,priority:1};
+    if(diff<=30)return{label:`${diff} gün kaldı • 30 günlük uyarı`,priority:1};
+    return null;
+  };
+
+  for(const r of eqs as Row[]){
+    const band=dueBand(r.next_due_millis);
+    if(!band)continue;
+    const report=text(r.report_no);
+    records.push(base(firmId,"PERIODIC_CONTROL",r.id,{
+      title:`Periyodik Kontrol • ${text(r.equipment_name)||text(r.equipment_type)||"İş ekipmanı"}`,
+      note:[band.label,report?`Rapor No: ${report}`:""].filter(Boolean).join(" • "),
+      type:"REMINDER",category:"PERIODIC_CONTROL",due_at:iso(r.next_due_millis),priority:band.priority,
+      location:text(r.location)||null,module_ref:"PERIODIC_CONTROL",source_url:"/admin/documentation/periodic-controls"
+    }))
+  }
+
+  for(const r of measures as Row[]){
+    const band=dueBand(r.next_due_millis);
+    if(!band)continue;
+    const summary=text(r.result_summary);
+    records.push(base(firmId,"ENVIRONMENT_MEASUREMENT",r.id,{
+      title:`Ortam Ölçümü Yenileme • ${text(r.measurement_type)||"Ölçüm"}`,
+      note:[band.label,summary].filter(Boolean).join(" • ")||band.label,
+      type:"REMINDER",category:"ENVIRONMENT_MEASUREMENT",due_at:iso(r.next_due_millis),priority:band.priority,
+      location:text(r.area_name)||null,assigned_to:text(r.measured_by)||null,module_ref:"ENVIRONMENT_MEASUREMENT",source_url:"/admin/documentation/periodic-controls"
+    }))
+  }
 
   // 3) Sağlık: yalnızca muayene yenileme tarihi. Tıbbi detay AJANDAYA TAŞINMAZ.
   const employees=canHealth?await safe(s.from("employees").select("*").eq("firm_id",firmId)):[];
@@ -181,8 +214,7 @@ async function buildFirmSourceRecords(
     }
   }
 
-
-  records.sort((a,b)=>(b.priority-a.priority)||((a.due_at?new Date(a.due_at).getTime():9e15)-(b.due_at?new Date(b.due_at).getTime():9e15)));
+    records.sort((a,b)=>(b.priority-a.priority)||((a.due_at?new Date(a.due_at).getTime():9e15)-(b.due_at?new Date(b.due_at).getTime():9e15)));
   return records;
 }
 
@@ -457,7 +489,7 @@ export async function GET(req: NextRequest) {
       next_updated_after_millis: Date.now(),
       scope: "FIRM",
       parity: "WEB_AGENDA_CANONICAL_SNAPSHOT"
-    });
+    }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
   } catch (error: any) {
     console.error("Ajanda mobile pull exception:", error);
     return NextResponse.json(
