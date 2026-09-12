@@ -370,9 +370,10 @@ export async function GET(req: NextRequest) {
       .from("ajanda_tasks")
       .select(SELECT)
       .eq("web_firm_id", resolved.webFirmId)
-      // Web Firma Ajandası /api/admin/agenda ile aynı kapsam:
-      // source APP/WEB ile sınırlandırılmaz. DORA/SYSTEM vb. ajanda_tasks
-      // kayıtları da firma görünümünün parçasıdır.
+      // Web /api/admin/agenda ile BİREBİR aktif kayıt filtresi.
+      // null / silinmiş / arşivlenmiş eski satırlar mobil sayımı şişirmesin.
+      .eq("is_deleted", false)
+      .eq("is_archived", false)
       .or("category.is.null,category.neq.PERSONAL")
       .order("app_updated_at", { ascending: true, nullsFirst: false })
       .order("updated_at", { ascending: true, nullsFirst: false })
@@ -441,4 +442,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
