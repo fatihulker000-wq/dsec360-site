@@ -187,91 +187,8 @@ async function buildFirmSourceRecords(
 }
 
 function sourceIdentity(item: any) {
-  const firm = text(item.web_firm_id);
-
-  // Aynı gerçek modül kaydı Web/APP/üretilmiş kaynak olarak farklı
-  // module_ref/source etiketiyle gelebilir. Eski anahtar bu durumda aynı
-  // kaydı iki kez sayıyordu. Gerçek uzak kayıt kimliği varsa modül
-  // etiketinden bağımsız tekilleştir.
-  const remoteId = text(item.module_remote_id);
-  if (remoteId) return `${firm}|REMOTE|${remoteId}`;
-
-  const syncKey = text(item.sync_key);
-  if (syncKey) return `${firm}|SYNC|${syncKey}`;
-
-  const refId = text(item.module_ref_id);
-  if (refId) return `${firm}|REF|${text(item.module_ref || item.source)}|${refId}`;
-
-  return `${firm}|ROW|${text(item.module_ref || item.source)}|${text(item.id)}`;
-}
-
-function normToken(v:any){
-  return text(v).toLocaleUpperCase("tr-TR").replace(/\s+/g," ").trim();
-}
-function normTitle(v:any){
-  return normToken(v)
-    .replace(/[•·|–—-]+/g," ")
-    .replace(/\s+/g," ")
-    .trim();
-}
-function idTokens(item:any){
-  const values=[
-    text(item.id),
-    text(item.module_remote_id),
-    text(item.module_ref_id)
-  ].filter(Boolean);
-  const out=new Set<string>();
-  for(const value of values){
-    out.add(value);
-    const parts=value.split(":").filter(Boolean);
-    if(parts.length>1) out.add(parts[parts.length-1]);
-  }
-  return out;
-}
-function moduleFamily(item:any){
-  return normToken(item.module_ref || item.category || item.source)
-    .replace(/^WEB$/,"")
-    .replace(/^APP$/,"");
-}
-function dueDay(v:any){
-  const s=iso(v);
-  return s ? s.slice(0,10) : "";
-}
-function sameLogicalTask(a:any,b:any){
-  if(text(a.web_firm_id)!==text(b.web_firm_id)) return false;
-
-  const aRemote=text(a.module_remote_id);
-  const bRemote=text(b.module_remote_id);
-  if(aRemote && bRemote && aRemote===bRemote) return true;
-
-  const aSync=text(a.sync_key);
-  const bSync=text(b.sync_key);
-  if(aSync && bSync && aSync===bSync) return true;
-
-  const af=moduleFamily(a), bf=moduleFamily(b);
-  const familyCompatible=!af || !bf || af===bf ||
-    af.includes(bf) || bf.includes(af) ||
-    (af.includes("RISK") && bf.includes("RISK")) ||
-    (af.includes("TRAINING") && bf.includes("TRAINING")) ||
-    (af.includes("CBS") && bf.includes("CBS")) ||
-    (af.includes("PERIODIC") && bf.includes("PERIODIC")) ||
-    (af.includes("ENVIRONMENT") && bf.includes("ENVIRONMENT")) ||
-    (af.includes("BOARD") && bf.includes("BOARD")) ||
-    (af.includes("HEALTH") && bf.includes("HEALTH")) ||
-    (af.includes("INSPECTION") && bf.includes("INSPECTION"));
-
-  if(familyCompatible){
-    const ai=idTokens(a), bi=idTokens(b);
-    for(const x of ai) if(bi.has(x)) return true;
-  }
-
-  const at=normTitle(a.title), bt=normTitle(b.title);
-  if(at && bt && at===bt){
-    const ad=dueDay(a.due_at), bd=dueDay(b.due_at);
-    if(!ad || !bd || ad===bd) return true;
-  }
-
-  return false;
+  // Web app/admin/agenda/api.ts ile BİREBİR aynı kimlik.
+  return `${text(item.web_firm_id)}|${text(item.module_ref || item.source)}|${text(item.module_remote_id || item.module_ref_id || item.id)}`;
 }
 
 function requireMobileKey(req: NextRequest) {
@@ -450,24 +367,21 @@ export async function GET(req: NextRequest) {
 
     const resolved = await resolveFirm(firmId, webFirmId, viewer.allowedFirmIds);
 
-    let firmQuery = supabase
-      .from("ajanda_tasks")
-      .select(SELECT)
-      .eq("web_firm_id", resolved.webFirmId)
-      // Web Firma Ajandası /api/admin/agenda ile aynı kapsam:
-      // source APP/WEB ile sınırlandırılmaz. DORA/SYSTEM vb. ajanda_tasks
-      // kayıtları da firma görünümünün parçasıdır.
-      .or("category.is.null,category.neq.PERSONAL")
-      .order("app_updated_at", { ascending: true, nullsFirst: false })
-      .order("updated_at", { ascending: true, nullsFirst: false })
-      .limit(limit);
-
-    if (cursor > 0 && afterIso) {
-      firmQuery = firmQuery.or(`app_updated_at.gt.${cursor},updated_at.gt.${afterIso}`);
-    }
-
+    // FIRM incremental değildir. Firma Ajandası; Web'deki gibi her yenilemede
+    // güncel TAM SNAPSHOT olarak üretilir. Çünkü /agenda/sources kayıtları
+    // dinamik kaynaklardan hesaplanır ve bir kayıt artık üretilmiyorsa App'in
+    // eski kopyayı saklamaması gerekir.
     const [firmRes, generatedSources] = await Promise.all([
-      firmQuery,
+      supabase
+        .from("ajanda_tasks")
+        .select(SELECT)
+        .eq("web_firm_id", resolved.webFirmId)
+        .eq("is_deleted", false)
+        .eq("is_archived", false)
+        .or("category.is.null,category.neq.PERSONAL")
+        .order("status", { ascending: true })
+        .order("due_at", { ascending: true, nullsFirst: false })
+        .order("updated_at", { ascending: false }),
       buildFirmSourceRecords(
         resolved.webFirmId,
         viewer.role,
@@ -478,8 +392,6 @@ export async function GET(req: NextRequest) {
 
     if (firmRes.error) throw firmRes.error;
 
-    // Web tarafındaki Firma Ajandası manual + /agenda/sources birleşimidir.
-    // Mobil de AYNI veri kümesini kullanır.
     const manualRows = (firmRes.data ?? []) as RawRow[];
     const sourceRows: RawRow[] = generatedSources.map((x) => ({
       ...x,
@@ -488,42 +400,11 @@ export async function GET(req: NextRequest) {
       app_updated_at: isoToMillis(x.updated_at)
     }));
 
+    // Web app/admin/agenda/api.ts ile aynı merge:
+    // önce otomatik kaynak, sonra aynı identity varsa gerçek/manual kayıt üstün gelir.
     const merged = new Map<string, RawRow>();
-
-    // Önce Web'deki üretilmiş kaynakları ekle.
     for (const row of sourceRows) merged.set(sourceIdentity(row), row);
-
-    // APP/WEB üzerinden daha önce ajanda_tasks'a yazılmış bir modül kaydı,
-    // üretilmiş kaynakla aynı işi temsil ediyorsa ikinci kez sayılmamalıdır.
-    // Eski kod yalnızca tek bir identity anahtarına bakıyordu; bu nedenle
-    // farklı module_ref/id biçimindeki iki kayıt "Açık" sayısını şişiriyordu.
-    let dedupedManualCount = 0;
-    const dedupedManual: Array<{id:string; title:string; sourceId:string; sourceTitle:string}> = [];
-
-    for (const manual of manualRows) {
-      const directKey = sourceIdentity(manual);
-
-      if (merged.has(directKey)) {
-        merged.set(directKey, manual);
-        continue;
-      }
-
-      const matchedSource = sourceRows.find((source) => sameLogicalTask(manual, source));
-      if (matchedSource) {
-        const sourceKey = sourceIdentity(matchedSource);
-        merged.set(sourceKey, manual);
-        dedupedManualCount++;
-        dedupedManual.push({
-          id: text(manual.id),
-          title: text(manual.title),
-          sourceId: text(matchedSource.id),
-          sourceTitle: text(matchedSource.title)
-        });
-        continue;
-      }
-
-      merged.set(directKey, manual);
-    }
+    for (const row of manualRows) merged.set(sourceIdentity(row), row);
 
     const rows = [...merged.values()].sort((a,b) =>
       (Number(b.priority ?? 0) - Number(a.priority ?? 0)) ||
@@ -533,8 +414,8 @@ export async function GET(req: NextRequest) {
 
     const records = rows.map((x) => toRecord(x, resolved.localFirmId));
 
-    // Web useAgendaStats ile AYNI KPI kuralları burada sunucu tarafında hesaplanır.
-    // App artık kendi tarafında tekrar hesaplayıp sapma üretmez.
+    // Web useAgendaStats ile aynı kurallar. Tanılama ve geriye uyumluluk için
+    // yanıtta tutuluyor; Android ekranı artık ayrı veri seti kullanmıyor.
     const activeRows = rows.filter((x) => !x.is_deleted && !x.is_archived);
     const openRows = activeRows.filter((x) => Number(x.status) === 0);
     const doneRows = activeRows.filter((x) => Number(x.status) === 1);
@@ -565,28 +446,17 @@ export async function GET(req: NextRequest) {
       critical: openRows.filter((x) => Number(x.priority) >= 2).length
     };
 
-    // Generated source rows her çağrıda güncel snapshot olduğu için cursor'u da ilerletir.
-    const nextCursor = rows.length
-      ? Math.max(cursor, ...rows.map(syncMillis))
-      : cursor;
-
     return NextResponse.json({
       success: true,
       count: records.length,
       records,
       stats,
-      next_updated_after_millis: nextCursor,
-      // Kaynak kayıtlar snapshot olarak tek cevapta gelir; pagination yalnız manual kayıt için gerekir.
-      has_more: manualRows.length >= limit,
-      debug_dedupe: {
-        manual_count: manualRows.length,
-        generated_count: sourceRows.length,
-        merged_count: rows.length,
-        deduped_manual_count: dedupedManualCount,
-        deduped_manual: dedupedManual
-      },
+      // FIRM her zaman tek parça TAM snapshot'tır.
+      snapshot: true,
+      has_more: false,
+      next_updated_after_millis: Date.now(),
       scope: "FIRM",
-      parity: "WEB_AGENDA_MANUAL_PLUS_SOURCES"
+      parity: "WEB_AGENDA_CANONICAL_SNAPSHOT"
     });
   } catch (error: any) {
     console.error("Ajanda mobile pull exception:", error);
