@@ -187,7 +187,22 @@ async function buildFirmSourceRecords(
 }
 
 function sourceIdentity(item: any) {
-  return `${text(item.web_firm_id)}|${text(item.module_ref || item.source)}|${text(item.module_remote_id || item.module_ref_id || item.id)}`;
+  const firm = text(item.web_firm_id);
+
+  // Aynı gerçek modül kaydı Web/APP/üretilmiş kaynak olarak farklı
+  // module_ref/source etiketiyle gelebilir. Eski anahtar bu durumda aynı
+  // kaydı iki kez sayıyordu. Gerçek uzak kayıt kimliği varsa modül
+  // etiketinden bağımsız tekilleştir.
+  const remoteId = text(item.module_remote_id);
+  if (remoteId) return `${firm}|REMOTE|${remoteId}`;
+
+  const syncKey = text(item.sync_key);
+  if (syncKey) return `${firm}|SYNC|${syncKey}`;
+
+  const refId = text(item.module_ref_id);
+  if (refId) return `${firm}|REF|${text(item.module_ref || item.source)}|${refId}`;
+
+  return `${firm}|ROW|${text(item.module_ref || item.source)}|${text(item.id)}`;
 }
 
 function requireMobileKey(req: NextRequest) {
@@ -370,10 +385,9 @@ export async function GET(req: NextRequest) {
       .from("ajanda_tasks")
       .select(SELECT)
       .eq("web_firm_id", resolved.webFirmId)
-      // Web /api/admin/agenda ile BİREBİR aktif kayıt filtresi.
-      // null / silinmiş / arşivlenmiş eski satırlar mobil sayımı şişirmesin.
-      .eq("is_deleted", false)
-      .eq("is_archived", false)
+      // Web Firma Ajandası /api/admin/agenda ile aynı kapsam:
+      // source APP/WEB ile sınırlandırılmaz. DORA/SYSTEM vb. ajanda_tasks
+      // kayıtları da firma görünümünün parçasıdır.
       .or("category.is.null,category.neq.PERSONAL")
       .order("app_updated_at", { ascending: true, nullsFirst: false })
       .order("updated_at", { ascending: true, nullsFirst: false })
@@ -419,6 +433,38 @@ export async function GET(req: NextRequest) {
 
     const records = rows.map((x) => toRecord(x, resolved.localFirmId));
 
+    // Web useAgendaStats ile AYNI KPI kuralları burada sunucu tarafında hesaplanır.
+    // App artık kendi tarafında tekrar hesaplayıp sapma üretmez.
+    const activeRows = rows.filter((x) => !x.is_deleted && !x.is_archived);
+    const openRows = activeRows.filter((x) => Number(x.status) === 0);
+    const doneRows = activeRows.filter((x) => Number(x.status) === 1);
+
+    const startToday = new Date(); startToday.setHours(0,0,0,0);
+    const endToday = new Date(); endToday.setHours(23,59,59,999);
+    const end7 = new Date(endToday.getTime() + 7 * 86400000);
+
+    const stats = {
+      total: activeRows.length,
+      open: openRows.length,
+      done: doneRows.length,
+      today: openRows.filter((x) => {
+        if (!x.due_at) return false;
+        const d = new Date(x.due_at);
+        return Number.isFinite(d.getTime()) && d >= startToday && d <= endToday;
+      }).length,
+      upcoming: openRows.filter((x) => {
+        if (!x.due_at) return false;
+        const d = new Date(x.due_at);
+        return Number.isFinite(d.getTime()) && d > endToday && d <= end7;
+      }).length,
+      overdue: openRows.filter((x) => {
+        if (!x.due_at) return false;
+        const ms = new Date(x.due_at).getTime();
+        return Number.isFinite(ms) && ms < Date.now();
+      }).length,
+      critical: openRows.filter((x) => Number(x.priority) >= 2).length
+    };
+
     // Generated source rows her çağrıda güncel snapshot olduğu için cursor'u da ilerletir.
     const nextCursor = rows.length
       ? Math.max(cursor, ...rows.map(syncMillis))
@@ -428,6 +474,7 @@ export async function GET(req: NextRequest) {
       success: true,
       count: records.length,
       records,
+      stats,
       next_updated_after_millis: nextCursor,
       // Kaynak kayıtlar snapshot olarak tek cevapta gelir; pagination yalnız manual kayıt için gerekir.
       has_more: manualRows.length >= limit,
