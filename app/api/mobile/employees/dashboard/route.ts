@@ -109,16 +109,45 @@ function trainingStatus(rows: any[]) {
 
 function missingDataCount(employee: any) {
   const fields = [
+    employee?.blood_type,
+    employee?.birth_date,
+    employee?.start_date,
     employee?.department ?? employee?.department_name ?? employee?.birim,
     employee?.job_title ?? employee?.title ?? employee?.position,
-    employee?.start_date,
-    employee?.birth_date,
-    employee?.phone,
-    employee?.email,
-    employee?.blood_type,
   ];
   return fields.filter((v) => !clean(v)).length;
 }
+
+function years(value: unknown) {
+  if (!value) return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.max(0, (Date.now() - d.getTime()) / 31557600000);
+}
+
+function age(value: unknown) {
+  if (!value) return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return null;
+  const n = new Date();
+  let a = n.getFullYear() - d.getFullYear();
+  const m = n.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && n.getDate() < d.getDate())) a--;
+  return a >= 0 && a < 100 ? a : null;
+}
+
+function countBy(rows: any[], getter: (row: any) => unknown, unknown = "Bilinmiyor") {
+  const map = new Map<string, number>();
+  for (const row of rows) {
+    const raw = String(getter(row) ?? "").trim();
+    const key = raw || unknown;
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+  return [...map.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, count]) => ({ label, count }));
+}
+
 
 export async function GET(req: Request) {
   try {
@@ -144,7 +173,9 @@ export async function GET(req: Request) {
         success: true,
         firmId,
         generatedAt: new Date().toISOString(),
-        stats: { total: 0, active: 0, passive: 0, trainingAction: 0, healthAction: 0, ppeAction: 0, documentAction: 0, riskAction: 0, dataMissing: 0, dataQuality: 100 },
+        stats: { total: 0, active: 0, passive: 0, trainingAction: 0, healthAction: 0, ppeAction: 0, documentAction: 0, riskAction: 0, dataMissing: 0, dataQuality: 100, newStarts: 0, highRisk: 0, accidentPeople: 0, accidentRecords: 0 },
+        dataQualityDetails: { bloodMissing: 0, birthMissing: 0, startMissing: 0, orgMissing: 0 },
+        distributions: { department: [], jobTitle: [], seniority: [], age: [], blood: [], education: [], gender: [] },
         employees: [],
       });
     }
@@ -204,6 +235,11 @@ export async function GET(req: Request) {
         full_name: String(employee.full_name || "").trim(),
         department: clean(employee.department ?? employee.department_name ?? employee.departmentName ?? employee.birim ?? employee.unit_name),
         job_title: clean(employee.job_title ?? employee.title ?? employee.position ?? employee.position_name),
+        start_date: clean(employee.start_date),
+        birth_date: clean(employee.birth_date),
+        gender: clean(employee.gender),
+        education_level: clean(employee.education_level),
+        blood_type: clean(employee.blood_type),
         active: Boolean(employee.active ?? true) && !clean(employee.exit_date),
         training_status: training,
         health_status: health,
@@ -217,9 +253,61 @@ export async function GET(req: Request) {
 
     const activeRows = summaries.filter((e) => e.active);
     const actionStatus = (v: string) => ["MISSING", "EXPIRING", "HIGH", "CRITICAL"].includes(v);
-    const totalFields = activeRows.length * 7;
+
+    // Web EmployeeExecutiveDashboard ile AYNI veri kalitesi hesabı: 5 temel alan.
+    const totalFields = activeRows.length * 5;
     const missingFields = activeRows.reduce((sum, e) => sum + Number(e.missing_data_count || 0), 0);
-    const dataQuality = totalFields <= 0 ? 100 : Math.max(0, Math.min(100, Math.round(((totalFields - missingFields) * 100) / totalFields)));
+    const dataQuality = totalFields <= 0
+      ? 100
+      : Math.max(0, Math.min(100, Math.round(((totalFields - missingFields) * 100) / totalFields)));
+
+    const bloodMissing = activeRows.filter((e) => !clean(e.blood_type)).length;
+    const birthMissing = activeRows.filter((e) => !clean(e.birth_date)).length;
+    const startMissing = activeRows.filter((e) => !clean(e.start_date)).length;
+    const orgMissing = activeRows.filter((e) => !clean(e.department) || !clean(e.job_title)).length;
+    const highRisk = activeRows.filter((e) => ["HIGH", "CRITICAL"].includes(String(e.risk_status))).length;
+    const accidentPeople = activeRows.filter((e) => Number(e.accident_count || 0) > 0).length;
+    const accidentRecords = activeRows.reduce((sum, e) => sum + Math.max(0, Number(e.accident_count || 0)), 0);
+    const newStarts = activeRows.filter((e) => {
+      const y = years(e.start_date);
+      return y !== null && y <= 0.25;
+    }).length;
+
+    const ageBuckets: Record<string, number> = {
+      "18–24": 0, "25–34": 0, "35–44": 0, "45–54": 0, "55+": 0, "Bilinmiyor": 0,
+    };
+    for (const employee of activeRows) {
+      const a = age(employee.birth_date);
+      if (a === null) ageBuckets["Bilinmiyor"]++;
+      else if (a < 25) ageBuckets["18–24"]++;
+      else if (a < 35) ageBuckets["25–34"]++;
+      else if (a < 45) ageBuckets["35–44"]++;
+      else if (a < 55) ageBuckets["45–54"]++;
+      else ageBuckets["55+"]++;
+    }
+
+    const seniorityBuckets: Record<string, number> = {
+      "0–1 yıl": 0, "1–3 yıl": 0, "3–5 yıl": 0, "5–10 yıl": 0, "10+ yıl": 0, "Bilinmiyor": 0,
+    };
+    for (const employee of activeRows) {
+      const y = years(employee.start_date);
+      if (y === null) seniorityBuckets["Bilinmiyor"]++;
+      else if (y < 1) seniorityBuckets["0–1 yıl"]++;
+      else if (y < 3) seniorityBuckets["1–3 yıl"]++;
+      else if (y < 5) seniorityBuckets["3–5 yıl"]++;
+      else if (y < 10) seniorityBuckets["5–10 yıl"]++;
+      else seniorityBuckets["10+ yıl"]++;
+    }
+
+    const distributions = {
+      department: countBy(activeRows, (e) => e.department),
+      jobTitle: countBy(activeRows, (e) => e.job_title),
+      seniority: Object.entries(seniorityBuckets).filter(([, count]) => count > 0).map(([label, count]) => ({ label, count })),
+      age: Object.entries(ageBuckets).filter(([, count]) => count > 0).map(([label, count]) => ({ label, count })),
+      blood: countBy(activeRows, (e) => e.blood_type),
+      education: countBy(activeRows, (e) => e.education_level),
+      gender: countBy(activeRows, (e) => e.gender),
+    };
 
     return NextResponse.json({
       success: true,
@@ -236,7 +324,18 @@ export async function GET(req: Request) {
         riskAction: activeRows.filter((e) => actionStatus(e.risk_status)).length,
         dataMissing: activeRows.filter((e) => Number(e.missing_data_count || 0) > 0).length,
         dataQuality,
+        newStarts,
+        highRisk,
+        accidentPeople,
+        accidentRecords,
       },
+      dataQualityDetails: {
+        bloodMissing,
+        birthMissing,
+        startMissing,
+        orgMissing,
+      },
+      distributions,
       employees: summaries,
     });
   } catch (e: any) {
@@ -246,4 +345,3 @@ export async function GET(req: Request) {
     );
   }
 }
-

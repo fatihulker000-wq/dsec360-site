@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { analyzeEmployeeWithDora } from "@/components/employees-v2/dora-analysis/DoraEmployeeScoreEngine";
 
 export const dynamic = "force-dynamic";
 
@@ -1450,215 +1451,133 @@ export async function GET(
       })),
 
     ];
-        return NextResponse.json({
-      success: true,
-
-      data: {
-        employeeId: id,
-
-        summary: {
-          training_status:
-            legalTrainingSummary.status,
-
-          health_status:
-            healthSummary.status,
-
-          health_record_count:
-            healthSummary.recordCount,
-
-          health_examination_count:
-            nonEk2Examinations.length,
-
-          health_ek2_count:
-            canonicalEk2Rows.length,
-
-          health_last_exam_at:
-            healthSummary.lastExamAt,
-
-          health_last_ek2_at:
-            lastEk2At,
-
-          health_next_due_at:
-            nextHealthDueAt ||
-            healthSummary.nextDueAt,
-
-          health_days_until_due:
-            healthSummary.daysUntilDue,
-
-          health_details_allowed:
-            access.canViewSensitiveHealth,
-
-          health_privacy_level:
-            access.canViewSensitiveHealth
-              ? "FULL"
-              : "METADATA_ONLY",
-
-          ppe_status:
-            buildStatus(ppeResult.data),
-
-          document_status:
-            buildStatus(documentResult.data),
-
-          risk_status:
-            riskResult.data.some(
-              (row) =>
-                Number(
-                  row.score ||
-                  row.risk_score ||
-                  0
-                ) >= 200 ||
-                [
-                  "HIGH",
-                  "CRITICAL",
-                  "YÜKSEK",
-                  "YUKSEK",
-                  "ÇOK YÜKSEK",
-                  "COK YUKSEK",
-                ].includes(
-                  String(
-                    row.risk_level ||
-                    row.level ||
-                    ""
-                  ).toUpperCase()
-                )
+        const summaryPayload = {
+          training_status: legalTrainingSummary.status,
+          health_status: healthSummary.status,
+          health_record_count: healthSummary.recordCount,
+          health_examination_count: nonEk2Examinations.length,
+          health_ek2_count: canonicalEk2Rows.length,
+          health_last_exam_at: healthSummary.lastExamAt,
+          health_last_ek2_at: lastEk2At,
+          health_next_due_at: nextHealthDueAt || healthSummary.nextDueAt,
+          health_days_until_due: healthSummary.daysUntilDue,
+          health_details_allowed: access.canViewSensitiveHealth,
+          health_privacy_level: access.canViewSensitiveHealth ? "FULL" : "METADATA_ONLY",
+          ppe_status: buildStatus(ppeResult.data),
+          document_status: buildStatus(documentResult.data),
+          risk_status: riskResult.data.some((row) =>
+            Number(row.score || row.risk_score || 0) >= 200 ||
+            ["HIGH", "CRITICAL", "YÜKSEK", "YUKSEK", "ÇOK YÜKSEK", "COK YUKSEK"].includes(
+              String(row.risk_level || row.level || "").toUpperCase()
             )
-              ? "HIGH"
-              : riskResult.data.length
-              ? "MEDIUM"
-              : "UNKNOWN",
-
-          training_completion_rate:
-            legalTrainingSummary.completionRate,
-
-          legal_training_completed_minutes:
-            legalTrainingSummary.completedMinutes,
-
-          legal_training_required_minutes:
-            legalTrainingSummary.requiredMinutes,
-
-          legal_training_missing_minutes:
-            legalTrainingSummary.missingMinutes,
-
-          legal_training_validity_years:
-            legalTrainingSummary.validityYears,
-
-          legal_training_hazard_class:
-            legalTrainingSummary.hazardClass,
-
-          legal_training_valid_count:
-            legalTrainingSummary.validTrainingCount,
-
-          ppe_completion_rate:
-            ppeResult.data.length
-              ? Math.round(
-                  (
-                    ppeResult.data.filter(
-                      (row) =>
-                        [
-                          "COMPLETE",
-                          "COMPLETED",
-                          "ACTIVE",
-                          "ASSIGNED",
-                          "ZİMMETLENDİ",
-                          "ZIMMETLENDI",
-                        ].includes(
-                          String(
-                            row.status || ""
-                          ).toUpperCase()
-                        )
-                    ).length /
-                    ppeResult.data.length
-                  ) * 100
+          ) ? "HIGH" : riskResult.data.length ? "MEDIUM" : "UNKNOWN",
+          training_completion_rate: legalTrainingSummary.completionRate,
+          legal_training_completed_minutes: legalTrainingSummary.completedMinutes,
+          legal_training_required_minutes: legalTrainingSummary.requiredMinutes,
+          legal_training_missing_minutes: legalTrainingSummary.missingMinutes,
+          legal_training_validity_years: legalTrainingSummary.validityYears,
+          legal_training_hazard_class: legalTrainingSummary.hazardClass,
+          legal_training_valid_count: legalTrainingSummary.validTrainingCount,
+          ppe_completion_rate: ppeResult.data.length
+            ? Math.round((ppeResult.data.filter((row) =>
+                ["COMPLETE", "COMPLETED", "ACTIVE", "ASSIGNED", "ZİMMETLENDİ", "ZIMMETLENDI"].includes(
+                  String(row.status || "").toUpperCase()
                 )
-              : undefined,
+              ).length / ppeResult.data.length) * 100)
+            : undefined,
+          open_risk_count: countOpen(riskResult.data),
+          open_action_count: countOpen(agendaResult.data),
+          accident_count: accidentResult.data.length,
+          upcoming_count: agendaResult.data.length,
+        };
 
-          open_risk_count:
-            countOpen(riskResult.data),
+        const trainingItems = mapGenericItems(trainingResult.data, "TRAINING");
+        const ppeItems = mapGenericItems(ppeResult.data, "PPE");
+        const riskItems = mapGenericItems(riskResult.data, "RISK");
+        const auditItems = mapGenericItems(auditResult.data, "AUDIT");
+        const accidentItems = mapGenericItems(accidentResult.data, "ACCIDENT");
+        const documentItems = mapGenericItems(documentResult.data, "DOCUMENT");
+        const agendaItems = mapGenericItems(agendaResult.data, "AGENDA");
+        const sgkItems = mapGenericItems(sgkResult.data, "SGK");
+        const ibysItems = mapGenericItems(ibysResult.data, "IBYS");
 
-          open_action_count:
-            countOpen(agendaResult.data),
+        const missingProfileFields: string[] = [];
+        if (!String(employee.full_name || "").trim()) missingProfileFields.push("Ad Soyad");
+        if (!String(employee.job_title || "").trim()) missingProfileFields.push("Ünvan");
+        if (!String(employee.department || "").trim()) missingProfileFields.push("Departman");
+        if (!String(employee.phone || "").trim()) missingProfileFields.push("Telefon");
+        if (!String(employee.email || "").trim()) missingProfileFields.push("E-posta");
+        if (!String(employee.registry_no || "").trim()) missingProfileFields.push("Sicil");
+        if (!String(employee.tc_no || "").trim()) missingProfileFields.push("T.C.");
+        if (!String(employee.start_date || "").trim()) missingProfileFields.push("İşe giriş");
+        if (!String(employee.birth_date || "").trim()) missingProfileFields.push("Doğum tarihi");
 
-          accident_count:
-            accidentResult.data.length,
+        const integrationDataForDora: any = {
+          employeeId: id,
+          summary: summaryPayload,
+          trainingItems,
+          healthItems,
+          ppeItems,
+          riskItems,
+          auditItems,
+          accidentItems,
+          documentItems,
+          agendaItems,
+          sgkItems,
+          ibysItems,
+          activityItems,
+          loadedAt: new Date().toISOString(),
+          warnings,
+          access: {
+            role: access.role,
+            health_details_allowed: access.canViewSensitiveHealth,
+            health_privacy_level: access.canViewSensitiveHealth ? "FULL" : "METADATA_ONLY",
+          },
+        };
 
-          upcoming_count:
-            agendaResult.data.length,
-        },
+        const doraAnalysis = analyzeEmployeeWithDora({
+          employeeId: id,
+          employeeName: String(employee.full_name || ""),
+          jobTitle: employee.job_title || null,
+          department: employee.department || null,
+          active: Boolean(employee.active ?? true) && !employee.exit_date,
+          integration: integrationDataForDora,
+          missingProfileFields,
+        });
 
-        trainingItems:
-          mapGenericItems(
-            trainingResult.data,
-            "TRAINING"
-          ),
-
-        healthItems,
-
-        ppeItems:
-          mapGenericItems(
-            ppeResult.data,
-            "PPE"
-          ),
-
-        riskItems:
-          mapGenericItems(
-            riskResult.data,
-            "RISK"
-          ),
-
-        auditItems:
-          mapGenericItems(
-            auditResult.data,
-            "AUDIT"
-          ),
-
-        accidentItems:
-          mapGenericItems(
-            accidentResult.data,
-            "ACCIDENT"
-          ),
-
-        documentItems:
-          mapGenericItems(
-            documentResult.data,
-            "DOCUMENT"
-          ),
-
-        agendaItems:
-          mapGenericItems(
-            agendaResult.data,
-            "AGENDA"
-          ),
-
-        sgkItems:
-          mapGenericItems(
-            sgkResult.data,
-            "SGK"
-          ),
-
-        ibysItems:
-          mapGenericItems(
-            ibysResult.data,
-            "IBYS"
-          ),
-
-        activityItems,
-
-        loadedAt:
-          new Date().toISOString(),
-
-        access: {
-          role: access.role,
-          health_details_allowed:
-            access.canViewSensitiveHealth,
-          health_privacy_level:
-            access.canViewSensitiveHealth
-              ? "FULL"
-              : "METADATA_ONLY",
-        },
-
-        warnings,
-      },
-    });
+        return NextResponse.json({
+          success: true,
+          data: {
+            employeeId: id,
+            employee: {
+              id,
+              full_name: String(employee.full_name || ""),
+              department: employee.department || null,
+              job_title: employee.job_title || null,
+              active: Boolean(employee.active ?? true) && !employee.exit_date,
+            },
+            summary: summaryPayload,
+            trainingItems,
+            healthItems,
+            ppeItems,
+            riskItems,
+            auditItems,
+            accidentItems,
+            documentItems,
+            agendaItems,
+            sgkItems,
+            ibysItems,
+            activityItems,
+            doraAnalysis,
+            loadedAt: new Date().toISOString(),
+            access: {
+              role: access.role,
+              health_details_allowed: access.canViewSensitiveHealth,
+              health_privacy_level: access.canViewSensitiveHealth ? "FULL" : "METADATA_ONLY",
+            },
+            warnings,
+          },
+        });
       } catch (error: any) {
     console.error(
       "Employee Profile Integration Error:",
