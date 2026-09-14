@@ -281,7 +281,15 @@ export async function GET(req: Request) {
       safeRows("ppe", supabase.from("employee_ppe_assignments").select("id,employee_id,status").in("employee_id", employeeIds)),
       safeRows("documents", supabase.from("employee_document_assignments").select("id,employee_id,status,is_cancelled").in("employee_id", employeeIds).or("is_cancelled.is.null,is_cancelled.eq.false")),
       safeRows("risks", supabase.from("employee_risks").select("id,employee_id,status,score,risk_score,risk_level").in("employee_id", employeeIds)),
-      safeRows("accidents", supabase.from("accident_records").select("id,employee_id").in("employee_id", employeeIds)),
+      safeRows(
+        "accidents",
+        supabase
+          .from("accident_records")
+          .select("id,web_employee_id,web_firm_id,is_deleted")
+          .in("web_employee_id", employeeIds)
+          .eq("web_firm_id", firmId)
+          .or("is_deleted.is.null,is_deleted.eq.false")
+      ),
     ]);
 
     const hazardClass = companyRows[0]?.tehlike_sinifi ?? null;
@@ -350,7 +358,13 @@ export async function GET(req: Request) {
     const ppeByEmployee = groupByEmployee(ppeRows);
     const documentByEmployee = groupByEmployee(documentRows);
     const riskByEmployee = groupByEmployee(riskRows);
-    const accidentByEmployee = groupByEmployee(accidentRows);
+    // Web Çalışanlar ekranıyla aynı kanonik ilişki:
+    // accident_records.web_employee_id -> employees.id
+    const canonicalAccidentRows = accidentRows.map((row) => ({
+      ...row,
+      employee_id: String(row?.web_employee_id || "").trim(),
+    }));
+    const accidentByEmployee = groupByEmployee(canonicalAccidentRows);
 
     const summaries = employees.map((employee) => {
       const employeeId = String(employee.id);
@@ -416,6 +430,32 @@ export async function GET(req: Request) {
       return y !== null && y <= 0.25;
     }).length;
 
+    // EmployeeExecutiveDashboard.tsx ile birebir aynı Workforce Score formülü.
+    const trainingAction = activeRows.filter((e) => actionStatus(e.training_status)).length;
+    const healthAction = activeRows.filter((e) => actionStatus(e.health_status)).length;
+    const ppeAction = activeRows.filter((e) => actionStatus(e.ppe_status)).length;
+    const documentAction = activeRows.filter((e) => actionStatus(e.document_status)).length;
+    const compliancePenalty =
+      trainingAction * 1.05 +
+      healthAction * 1.15 +
+      ppeAction * 0.8 +
+      documentAction * 0.65 +
+      highRisk * 2.1 +
+      accidentPeople * 1.4 +
+      activeRows.filter((e) => Number(e.missing_data_count || 0) > 0).length * 0.45;
+    const workforceScore = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          100 -
+            (activeRows.length > 0
+              ? (compliancePenalty / activeRows.length) * 12
+              : 0)
+        )
+      )
+    );
+
     const ageBuckets: Record<string, number> = {
       "18–24": 0, "25–34": 0, "35–44": 0, "45–54": 0, "55+": 0, "Bilinmiyor": 0,
     };
@@ -460,10 +500,10 @@ export async function GET(req: Request) {
         total: summaries.length,
         active: activeRows.length,
         passive: summaries.length - activeRows.length,
-        trainingAction: activeRows.filter((e) => actionStatus(e.training_status)).length,
-        healthAction: activeRows.filter((e) => actionStatus(e.health_status)).length,
-        ppeAction: activeRows.filter((e) => actionStatus(e.ppe_status)).length,
-        documentAction: activeRows.filter((e) => actionStatus(e.document_status)).length,
+        trainingAction,
+        healthAction,
+        ppeAction,
+        documentAction,
         riskAction: activeRows.filter((e) => actionStatus(e.risk_status)).length,
         dataMissing: activeRows.filter((e) => Number(e.missing_data_count || 0) > 0).length,
         dataQuality,
@@ -471,6 +511,7 @@ export async function GET(req: Request) {
         highRisk,
         accidentPeople,
         accidentRecords,
+        workforceScore,
       },
       dataQualityDetails: { bloodMissing, birthMissing, startMissing, orgMissing },
       distributions,
