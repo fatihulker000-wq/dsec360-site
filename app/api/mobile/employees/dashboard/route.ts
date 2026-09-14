@@ -51,6 +51,109 @@ function groupByEmployee(rows: any[]) {
   return map;
 }
 
+function normalizeHazardClass(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleUpperCase("tr-TR")
+    .replace(/\s+/g, " ");
+}
+
+function getLegalTrainingRule(hazardClass: unknown) {
+  const normalized = normalizeHazardClass(hazardClass);
+
+  if (
+    normalized.includes("ÇOK TEHLİKELİ") ||
+    normalized.includes("COK TEHLIKELI")
+  ) {
+    return { requiredMinutes: 16 * 60, validityYears: 1, label: "Çok Tehlikeli" };
+  }
+
+  if (
+    normalized.includes("AZ TEHLİKELİ") ||
+    normalized.includes("AZ TEHLIKELI")
+  ) {
+    return { requiredMinutes: 8 * 60, validityYears: 3, label: "Az Tehlikeli" };
+  }
+
+  if (
+    normalized.includes("TEHLİKELİ") ||
+    normalized.includes("TEHLIKELI")
+  ) {
+    return { requiredMinutes: 12 * 60, validityYears: 2, label: "Tehlikeli" };
+  }
+
+  return { requiredMinutes: 0, validityYears: 0, label: "" };
+}
+
+function isTrainingCompleted(row: any) {
+  const status = norm(row?.status);
+  if (["COMPLETED", "TAMAMLANDI", "BAŞARILI", "BASARILI", "PASSED"].includes(status)) {
+    return true;
+  }
+  if (row?.completed_at) return true;
+  return row?.watch_completed === true && row?.final_exam_passed === true;
+}
+
+function getTrainingCompletionDate(row: any) {
+  const raw = row?.completed_at || row?.date || row?.started_at || row?.created_at || null;
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isTrainingLegallyValid(row: any, validityYears: number, now = new Date()) {
+  if (!isTrainingCompleted(row) || validityYears <= 0) return false;
+  const completedAt = getTrainingCompletionDate(row);
+  if (!completedAt) return false;
+  const validUntil = new Date(completedAt);
+  validUntil.setFullYear(validUntil.getFullYear() + validityYears);
+  return validUntil >= now;
+}
+
+function calculateLegalTrainingSummary(rows: any[], hazardClass: unknown) {
+  const rule = getLegalTrainingRule(hazardClass);
+
+  if (rule.requiredMinutes <= 0) {
+    return {
+      status: "UNKNOWN" as const,
+      completionRate: 0,
+      completedMinutes: 0,
+      requiredMinutes: 0,
+      missingMinutes: 0,
+      validityYears: 0,
+      hazardClass: normalizeHazardClass(hazardClass),
+      validTrainingCount: 0,
+    };
+  }
+
+  const validRows = (rows || []).filter((row) =>
+    isTrainingLegallyValid(row, rule.validityYears)
+  );
+
+  const completedMinutes = validRows.reduce(
+    (sum, row) => sum + Math.max(0, Number(row?.duration_minutes ?? 0) || 0),
+    0
+  );
+
+  const completionRate = Math.max(
+    0,
+    Math.min(100, Math.round((completedMinutes / rule.requiredMinutes) * 100))
+  );
+
+  const missingMinutes = Math.max(0, rule.requiredMinutes - completedMinutes);
+
+  return {
+    status: completedMinutes >= rule.requiredMinutes ? ("COMPLETE" as const) : ("MISSING" as const),
+    completionRate,
+    completedMinutes,
+    requiredMinutes: rule.requiredMinutes,
+    missingMinutes,
+    validityYears: rule.validityYears,
+    hazardClass: rule.label,
+    validTrainingCount: validRows.length,
+  };
+}
+
 function moduleStatus(rows: any[]) {
   if (!rows.length) return "UNKNOWN";
   const statuses = rows.map((row) => norm(row?.status));
@@ -96,17 +199,6 @@ function riskStatus(rows: any[]) {
   return high ? "HIGH" : "COMPLETE";
 }
 
-function trainingStatus(rows: any[]) {
-  if (!rows.length) return "UNKNOWN";
-  const completed = rows.some((row) => {
-    const status = norm(row?.status);
-    return ["COMPLETED", "TAMAMLANDI", "BAŞARILI", "BASARILI", "PASSED"].includes(status) ||
-      Boolean(row?.completed_at) ||
-      (row?.watch_completed === true && row?.final_exam_passed === true);
-  });
-  return completed ? "COMPLETE" : "MISSING";
-}
-
 function missingDataCount(employee: any) {
   const fields = [
     employee?.blood_type,
@@ -148,7 +240,6 @@ function countBy(rows: any[], getter: (row: any) => unknown, unknown = "Bilinmiy
     .map(([label, count]) => ({ label, count }));
 }
 
-
 export async function GET(req: Request) {
   try {
     if (!authorized(req)) {
@@ -162,6 +253,7 @@ export async function GET(req: Request) {
     }
 
     const supabase = getSupabase();
+
     const employees = await safeRows(
       "employees",
       supabase.from("employees").select("*").eq("firm_id", firmId).order("full_name", { ascending: true })
@@ -180,8 +272,9 @@ export async function GET(req: Request) {
       });
     }
 
-    const [users, healthRows, examRows, ek2Rows, ppeRows, documentRows, riskRows, accidentRows] = await Promise.all([
-      safeRows("users", supabase.from("users").select("id,employee_id").in("employee_id", employeeIds)),
+    const [users, companyRows, healthRows, examRows, ek2Rows, ppeRows, documentRows, riskRows, accidentRows] = await Promise.all([
+      safeRows("users", supabase.from("users").select("id,employee_id,company_id").in("employee_id", employeeIds)),
+      safeRows("company hazard", supabase.from("companies").select("id,tehlike_sinifi").eq("id", firmId)),
       safeRows("health_records", supabase.from("health_records").select("id,employee_id,status,exam_date_millis,next_due_millis").in("employee_id", employeeIds)),
       safeRows("health_examinations", supabase.from("health_examinations").select("id,employee_id,exam_date,next_exam_date,decision,is_deleted").in("employee_id", employeeIds).eq("is_deleted", false)),
       safeRows("health_ek2_forms", supabase.from("health_ek2_forms").select("id,employee_id,status,exam_date,next_exam_date,is_active,created_at").in("employee_id", employeeIds).or("is_active.is.null,is_active.eq.true")),
@@ -191,6 +284,8 @@ export async function GET(req: Request) {
       safeRows("accidents", supabase.from("accident_records").select("id,employee_id").in("employee_id", employeeIds)),
     ]);
 
+    const hazardClass = companyRows[0]?.tehlike_sinifi ?? null;
+
     const userToEmployee = new Map<string, string>();
     for (const user of users) {
       const employeeId = String(user?.employee_id || "").trim();
@@ -199,15 +294,51 @@ export async function GET(req: Request) {
 
     const userIds = Array.from(userToEmployee.keys());
     let trainingRows: any[] = [];
+
     if (userIds.length > 0) {
       const assignments = await safeRows(
         "training_assignments",
-        supabase.from("training_assignments").select("id,user_id,status,watch_completed,final_exam_passed,completed_at,started_at,created_at").in("user_id", userIds)
+        supabase
+          .from("training_assignments")
+          .select("id,user_id,training_id,status,watch_completed,final_exam_passed,completed_at,started_at,created_at")
+          .in("user_id", userIds)
       );
-      trainingRows = assignments.map((row) => ({
-        ...row,
-        employee_id: userToEmployee.get(String(row.user_id)) || null,
-      })).filter((row) => row.employee_id);
+
+      const trainingIds = Array.from(
+        new Set(
+          assignments
+            .map((row) => String(row.training_id || "").trim())
+            .filter(Boolean)
+        )
+      );
+
+      const definitions = trainingIds.length > 0
+        ? await safeRows(
+            "training definitions",
+            supabase
+              .from("trainings")
+              .select("id,title,duration_minutes,type,created_at")
+              .in("id", trainingIds)
+          )
+        : [];
+
+      const definitionMap = new Map(definitions.map((row) => [String(row.id), row]));
+
+      trainingRows = assignments
+        .map((row) => {
+          const employeeId = userToEmployee.get(String(row.user_id));
+          if (!employeeId) return null;
+          const training = definitionMap.get(String(row.training_id));
+          return {
+            ...row,
+            employee_id: employeeId,
+            duration_minutes: Number(training?.duration_minutes ?? 0) || 0,
+            title: training?.title || "Eğitim",
+            type: training?.type || "EĞİTİM",
+            date: row.completed_at || row.started_at || row.created_at || training?.created_at || null,
+          };
+        })
+        .filter(Boolean) as any[];
     }
 
     const healthByEmployee = groupByEmployee([
@@ -223,7 +354,10 @@ export async function GET(req: Request) {
 
     const summaries = employees.map((employee) => {
       const employeeId = String(employee.id);
-      const training = trainingStatus(trainingByEmployee.get(employeeId) || []);
+      const legalTraining = calculateLegalTrainingSummary(
+        trainingByEmployee.get(employeeId) || [],
+        hazardClass
+      );
       const health = healthStatus(healthByEmployee.get(employeeId) || []);
       const ppe = moduleStatus(ppeByEmployee.get(employeeId) || []);
       const documents = moduleStatus(documentByEmployee.get(employeeId) || []);
@@ -241,7 +375,17 @@ export async function GET(req: Request) {
         education_level: clean(employee.education_level),
         blood_type: clean(employee.blood_type),
         active: Boolean(employee.active ?? true) && !clean(employee.exit_date),
-        training_status: training,
+
+        // CANONICAL: Web ile aynı yasal eğitim hesabı
+        training_status: legalTraining.status,
+        training_completion_rate: legalTraining.completionRate,
+        legal_training_completed_minutes: legalTraining.completedMinutes,
+        legal_training_required_minutes: legalTraining.requiredMinutes,
+        legal_training_missing_minutes: legalTraining.missingMinutes,
+        legal_training_validity_years: legalTraining.validityYears,
+        legal_training_hazard_class: legalTraining.hazardClass,
+        legal_training_valid_count: legalTraining.validTrainingCount,
+
         health_status: health,
         ppe_status: ppe,
         document_status: documents,
@@ -254,7 +398,6 @@ export async function GET(req: Request) {
     const activeRows = summaries.filter((e) => e.active);
     const actionStatus = (v: string) => ["MISSING", "EXPIRING", "HIGH", "CRITICAL"].includes(v);
 
-    // Web EmployeeExecutiveDashboard ile AYNI veri kalitesi hesabı: 5 temel alan.
     const totalFields = activeRows.length * 5;
     const missingFields = activeRows.reduce((sum, e) => sum + Number(e.missing_data_count || 0), 0);
     const dataQuality = totalFields <= 0
@@ -329,12 +472,7 @@ export async function GET(req: Request) {
         accidentPeople,
         accidentRecords,
       },
-      dataQualityDetails: {
-        bloodMissing,
-        birthMissing,
-        startMissing,
-        orgMissing,
-      },
+      dataQualityDetails: { bloodMissing, birthMissing, startMissing, orgMissing },
       distributions,
       employees: summaries,
     });
